@@ -13,8 +13,8 @@
 
 export const SITE = {
   name: "EasyQuran",
-  domain: "easyquran.app",
-  url: "https://easyquran.app",
+  domain: "easyquran.fyi",
+  url: "https://easyquran.fyi",
   github: "https://github.com/hmziqrs",
   tagline: "the Quran, made easy to read",
 } as const;

@@ -177,8 +177,17 @@ llms.txt, and both text variants — no endpoint edits needed.
 `static/` carries the full icon/PWA set — `favicon.ico`, `apple-touch-icon.png`,
 `icons/icon-{16,32,192,512}.png`, `logo.png` (JSON-LD), `og.png` (1200×630 social
 card), `manifest.webmanifest`, plus `_headers` and `_redirects` (Cloudflare Pages /
-Netlify; mirror them in `vercel.json` on Vercel). All were generated from the
-placeholder mark in `lib/assets/favicon.svg` — regenerate them if the mark changes.
+Netlify; mirror them in `vercel.json` on Vercel).
+
+Every raster asset is generated from the two SVG sources in `design/`:
+
+```bash
+./design/generate.sh   # needs rsvg-convert (brew install librsvg) + python3/Pillow
+```
+
+Re-run it after editing `design/mark.svg` or `design/og.svg`. **`og.svg` has the
+domain rendered into the image**, so it also needs a re-run whenever `SITE.domain`
+changes — that string is pixels, not markup, and nothing else will catch it.
 
 ## Not ported from oxlabs.dev
 
@@ -191,7 +200,7 @@ want any of these.
 
 ## Placeholders to replace
 
-- `SITE.domain` / `SITE.url` in `lib/config/site.ts` (currently `easyquran.app`) —
+- `SITE.domain` / `SITE.url` in `lib/config/site.ts` (currently `easyquran.fyi`) —
   also update the `Sitemap:` line in `static/robots.txt` and `static/_redirects`.
 - `.env` Firebase credentials (see above).
 - `lib/assets/favicon.svg` + the generated `static/` images, and the page copy.
