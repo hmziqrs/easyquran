@@ -1,11 +1,18 @@
+<!--
+  Root layout — everything that is true of every route in both groups: the
+  stylesheet, the icon/manifest head, site-level structured data, preference
+  application and analytics.
+
+  The page chrome lives in the group layouts instead:
+    • (marketing)/+layout.svelte  — Nav + Footer + Tweaks
+    • (application)/app/+layout.svelte — the app shell
+  Each of those renders its own <main id="main">, which the skip link targets.
+-->
 <script lang="ts">
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
   import { onMount } from "svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
-  import { Nav } from "$lib/components/nav";
-  import { Footer } from "$lib/components/footer";
-  import { Tweaks } from "$lib/components/tweaks";
   import { SITE } from "$lib/config/site";
 
   let { children } = $props();
@@ -75,7 +82,4 @@
   class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[100] focus:rounded focus:bg-bg-1 focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:shadow-lg"
   >Skip to content</a
 >
-<Nav />
-<main id="main" tabindex="-1">{@render children()}</main>
-<Footer />
-<Tweaks />
+{@render children()}

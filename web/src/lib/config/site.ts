@@ -1,12 +1,14 @@
 /* ════════════════════════════════════════════════════════════════════════
    site.ts — the single source of truth for the EasyQuran site.
-   Nav, footer, accent palette, and page metadata all derive from the values
-   declared here. Nothing about the site's structure is duplicated across
-   components.
+
+   The route tree is split into two groups (see src/routes):
+     • (marketing) — public, indexable pages. These drive the nav, the
+       sitemap, llms.txt and the .md/.txt text variants.
+     • (application) — the /app product UI. Deliberately kept OUT of the
+       sitemap, llms.txt and text variants, and marked noindex via <Seo>.
 
    ⚠ Placeholders: `domain` / `url` / the social handles below are stand-ins.
-   Set them once here and the Seo component, sitemap.xml, llms.txt and
-   robots.txt all follow.
+   Set them once here and <Seo>, sitemap.xml, llms.txt and robots.txt follow.
    ════════════════════════════════════════════════════════════════════════ */
 
 export const SITE = {
@@ -20,26 +22,40 @@ export const SITE = {
 export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
 
-export type PageId = "home" | "about";
+export type MarketingPageId = "home" | "about" | "download" | "privacy";
+export type AppPageId = "app" | "read" | "bookmarks" | "settings";
+export type PageId = MarketingPageId | AppPageId;
 
-export interface NavPage {
-  id: PageId;
+export interface SitePage<Id extends string = PageId> {
+  id: Id;
   href: string;
   label: string;
+  /** show in the primary nav (marketing) / app nav (application) */
+  nav?: boolean;
 }
 
-/** Primary navigation (Home is rendered as the brand, so it's listed but
- *  not always shown as a text link). */
-export const NAV_PAGES: NavPage[] = [
-  { id: "home", href: "/", label: "Home" },
-  { id: "about", href: "/about", label: "About" },
+/** Every public page. Drives the sitemap, llms.txt and the .md/.txt variants.
+ *  `nav: true` additionally puts it in the top bar. */
+export const MARKETING_PAGES: SitePage<MarketingPageId>[] = [
+  { id: "home", href: "/", label: "Home", nav: true },
+  { id: "about", href: "/about", label: "About", nav: true },
+  { id: "download", href: "/download", label: "Download", nav: true },
+  { id: "privacy", href: "/privacy", label: "Privacy" },
 ];
 
-export type PageSlug = PageId;
+/** The subset rendered as links in the primary nav. */
+export const NAV_PAGES: SitePage<MarketingPageId>[] = MARKETING_PAGES.filter((p) => p.nav);
 
-/** Page-level SEO metadata (title, description, canonical path). The single
- *  source of truth for the <Seo> component and the llms.txt endpoint. */
-export const PAGE_META: Record<PageSlug, { title: string; description: string; path: string }> = {
+/** The /app product UI. Never indexed, never in the sitemap or text variants. */
+export const APP_PAGES: SitePage<AppPageId>[] = [
+  { id: "read", href: "/app/read", label: "Read", nav: true },
+  { id: "bookmarks", href: "/app/bookmarks", label: "Bookmarks", nav: true },
+  { id: "settings", href: "/app/settings", label: "Settings", nav: true },
+];
+
+/** Page-level metadata (title, description, canonical path). The single source
+ *  of truth for <Seo> and, for marketing pages, the llms.txt index. */
+export const PAGE_META: Record<PageId, { title: string; description: string; path: string }> = {
   home: {
     title: "EasyQuran · the Quran, made easy to read",
     description: "Read the Quran. Free, no ads, and fast — nothing in the way of the text.",
@@ -49,6 +65,29 @@ export const PAGE_META: Record<PageSlug, { title: string; description: string; p
     title: "About · EasyQuran",
     description: "What EasyQuran is, who it's for, and how it's built.",
     path: "/about",
+  },
+  download: {
+    title: "Download · EasyQuran",
+    description: "Get EasyQuran on your device, or just open it in the browser.",
+    path: "/download",
+  },
+  privacy: {
+    title: "Privacy · EasyQuran",
+    description: "What EasyQuran collects, what it doesn't, and why.",
+    path: "/privacy",
+  },
+  // ── application (noindex) ──────────────────────────────────────────────
+  app: { title: "EasyQuran", description: "Your reading home.", path: "/app" },
+  read: { title: "Read · EasyQuran", description: "Read the Quran.", path: "/app/read" },
+  bookmarks: {
+    title: "Bookmarks · EasyQuran",
+    description: "Saved ayahs and places you left off.",
+    path: "/app/bookmarks",
+  },
+  settings: {
+    title: "Settings · EasyQuran",
+    description: "Appearance, script, and reading preferences.",
+    path: "/app/settings",
   },
 };
 

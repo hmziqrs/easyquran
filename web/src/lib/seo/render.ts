@@ -13,7 +13,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import TurndownService from "turndown";
-import { NAV_PAGES, PAGE_META, SITE } from "$lib/config/site";
+import { MARKETING_PAGES, PAGE_META, SITE } from "$lib/config/site";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -76,7 +76,7 @@ function mdVariantUrl(href: string): string {
  * pointer to /llms-full.txt. Built from metadata only (no page fetch).
  */
 export function renderLlmsIndex(): string {
-  const pageLines = NAV_PAGES.map(
+  const pageLines = MARKETING_PAGES.map(
     (p) => `- [${p.label}](${mdVariantUrl(p.href)}): ${PAGE_META[p.id].description}`,
   );
   return (
@@ -138,7 +138,16 @@ export function mdToPlain(md: string): string {
 /** Route slug ↔ page path. `index` is the home page. */
 export const pagePath = (slug: string): string => (slug === "index" ? "/" : `/${slug}`);
 
-/** Prerender entries for the [slug].md / [slug].txt endpoints, derived from
- *  NAV_PAGES so adding a page to the config is enough. */
+/**
+ * Prerender entries for the [slug].md / [slug].txt endpoints, derived from
+ * MARKETING_PAGES so adding a public page to the config is enough. Application
+ * (/app/**) routes are not in MARKETING_PAGES and so never get text variants.
+ *
+ * `[slug]` is a single non-nested segment, so a nested marketing page (e.g.
+ * "/guides/tajweed") cannot be served by this endpoint and is skipped here —
+ * it would need its own nested `[...rest].md` route.
+ */
 export const textVariantEntries = (): { slug: string }[] =>
-  NAV_PAGES.map((p) => ({ slug: p.href === "/" ? "index" : p.href.replace(/^\//, "") }));
+  MARKETING_PAGES.filter((p) => p.href === "/" || !p.href.slice(1).includes("/")).map((p) => ({
+    slug: p.href === "/" ? "index" : p.href.replace(/^\//, ""),
+  }));

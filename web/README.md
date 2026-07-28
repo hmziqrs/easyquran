@@ -83,20 +83,36 @@ was installed straight from the registry to verify the wiring end to end.
 
 ## Architecture
 
+The route tree is split into two **route groups**. Group names in parentheses do
+not appear in URLs — `(marketing)/about` serves `/about`, and
+`(application)/app/read` serves `/app/read`.
+
 ```
 src/
 ├─ app.html                    # <html data-theme/data-accent> + no-FOUC inline script
 ├─ routes/
 │  ├─ layout.css               # THE design system: Tailwind v4 @theme + token values + base
-│  ├─ +layout.svelte           # Nav + <main> + Footer + Tweaks, analytics start, JSON-LD @graph
-│  ├─ +layout.ts               # prerender = true (static)
+│  ├─ +layout.svelte           # GLOBAL only: css, icons/manifest, site JSON-LD, prefs, analytics
+│  ├─ +layout.ts               # trailingSlash (prerender is declared per group)
 │  ├─ +error.svelte            # 404 / error page (noindex)
-│  ├─ +page.svelte, about/     # pages
-│  ├─ sitemap.xml/+server.ts   # derived from NAV_PAGES
-│  ├─ llms.txt/+server.ts      # LLM index, derived from PAGE_META
-│  ├─ llms-full.txt/+server.ts # every page's markdown, concatenated
-│  ├─ [slug].md/+server.ts     # markdown variant of each page  (/index.md, /about.md)
-│  └─ [slug].txt/+server.ts    # plain-text variant of each page (/index.txt, /about.txt)
+│  │
+│  ├─ (marketing)/             # ── public, indexable ──────────────────────────
+│  │  ├─ +layout.svelte        #    Nav + <main id="main"> + Footer + Tweaks
+│  │  ├─ +layout.ts            #    prerender = true
+│  │  ├─ +page.svelte          #    /
+│  │  ├─ about/ download/ privacy/
+│  │
+│  ├─ (application)/app/       # ── product UI, noindex ────────────────────────
+│  │  ├─ +layout.svelte        #    app shell: tabs + <main id="main"> + mobile tab bar
+│  │  ├─ +layout.ts            #    prerender = true
+│  │  ├─ +page.svelte          #    /app
+│  │  └─ read/ bookmarks/ settings/
+│  │
+│  ├─ sitemap.xml/+server.ts   # derived from MARKETING_PAGES
+│  ├─ llms.txt/+server.ts      # LLM index, derived from MARKETING_PAGES + PAGE_META
+│  ├─ llms-full.txt/+server.ts # every marketing page's markdown, concatenated
+│  ├─ [slug].md/+server.ts     # markdown variant  (/index.md, /about.md, …)
+│  └─ [slug].txt/+server.ts    # plain-text variant (/index.txt, /about.txt, …)
 └─ lib/
    ├─ config/site.ts           # single source of truth: nav, accents, page metadata
    ├─ firebase.ts              # Firebase Analytics (SSR-safe, fully lazy, env-driven)
@@ -110,6 +126,25 @@ src/
       ├─ nav/ footer/ tweaks/       # site chrome + appearance panel
       └─ seo/                       # <Seo path="…" /> — meta, OG, JSON-LD, alternates
 ```
+
+### Marketing vs. application
+
+`lib/config/site.ts` keeps the two halves apart, and everything else derives from
+that split:
+
+|                         | `MARKETING_PAGES`                      | `APP_PAGES`                               |
+| ----------------------- | -------------------------------------- | ----------------------------------------- |
+| URLs                    | `/`, `/about`, `/download`, `/privacy` | `/app`, `/app/read`, …                    |
+| Top nav                 | `NAV_PAGES` (the `nav: true` subset)   | app shell tabs                            |
+| Sitemap / llms.txt      | yes                                    | **no**                                    |
+| `.md` / `.txt` variants | yes                                    | **no**                                    |
+| Robots                  | `index, follow`                        | `noindex, follow` via `<Seo … noindex />` |
+
+So adding a public page to `MARKETING_PAGES` + `PAGE_META` extends the nav,
+sitemap, llms.txt and both text variants at once, while `/app` routes stay out of
+search results by construction. App pages still get the site-level
+WebSite/Organization JSON-LD (that's site identity, not page content), but no
+per-page `WebPage`/`BreadcrumbList` node, canonical, or social card.
 
 ### Text variants (for LLMs and crawlers)
 

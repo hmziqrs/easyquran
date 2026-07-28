@@ -75,6 +75,9 @@
       >
         <Icon name="gh" size={14} /> <span class="hidden lg:inline">GitHub</span>
       </Button>
+      <Button variant="accent" size="sm" href="/app" arrow class="hidden sm:inline-flex">
+        Open app
+      </Button>
       <button
         type="button"
         onclick={toggle}
@@ -120,6 +123,9 @@
       <div class="mt-2 grid gap-2 border-t border-line pt-3 sm:grid-cols-2">
         <Button variant="ghost" size="sm" href={SITE.github} class="w-full justify-center">
           <Icon name="gh" size={14} /> GitHub
+        </Button>
+        <Button variant="accent" size="sm" href="/app" arrow class="w-full justify-center">
+          Open app
         </Button>
       </div>
     </div>

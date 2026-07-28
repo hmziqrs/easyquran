@@ -3,7 +3,7 @@
   config so it never drifts from the nav.
 -->
 <script lang="ts">
-  import { NAV_PAGES, SITE } from "$lib/config/site";
+  import { MARKETING_PAGES, SITE } from "$lib/config/site";
   import { Brand } from "$lib/components/brand";
   import { StatusDot } from "$lib/components/status";
   import { externalLinkAttrs } from "$lib/utils";
@@ -26,7 +26,7 @@
       <div>
         <h2 class={colHeading}>Site</h2>
         <ul class="grid gap-2">
-          {#each NAV_PAGES as p (p.id)}
+          {#each MARKETING_PAGES as p (p.id)}
             <li><a class={link} href={p.href}>{p.label}</a></li>
           {/each}
         </ul>

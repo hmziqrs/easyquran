@@ -3,4 +3,10 @@
 # these 301s make the host agree on a single URL per page.
 # Effective on Cloudflare Pages / Netlify (copied to build/_redirects). For
 # Vercel, mirror these in vercel.json `redirects`.
-/about/  /about  301
+/about/            /about            301
+/download/         /download         301
+/privacy/          /privacy          301
+/app/              /app              301
+/app/read/         /app/read         301
+/app/bookmarks/    /app/bookmarks    301
+/app/settings/     /app/settings     301
