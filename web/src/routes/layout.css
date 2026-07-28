@@ -123,14 +123,15 @@
 }
 
 /* ─── 4. Token values — DARK (default) ──────────────────────────────────
-   Quiet near-black base, teal brand accent, warm gold pop. */
+   Neutral near-black base (accent-agnostic — only --accent / --accent-soft
+   carry the brand colour), teal brand accent, warm gold pop. */
 :root,
 [data-theme="dark"] {
-  --bg: #0c1110;
-  --bg-1: #101716; /* panel — slightly raised surface */
-  --bg-2: #121a18; /* soft — inset wells */
-  --bg-3: #151e1c; /* raise — hover / selected */
-  --bg-elev: #0a0f0e; /* nav, footer — a touch deeper than bg */
+  --bg: #0b0c0e;
+  --bg-1: #131417; /* panel — slightly raised surface */
+  --bg-2: #18191c; /* soft — inset wells */
+  --bg-3: #1d1e22; /* raise — hover / selected */
+  --bg-elev: #08090a; /* nav, footer — a touch deeper than bg */
 
   --line: rgba(255, 255, 255, 0.06);
   --line-2: rgba(255, 255, 255, 0.1);
@@ -157,9 +158,9 @@
 /* ─── 4b. Token values — LIGHT ────────────────────────────────────────── */
 [data-theme="light"] {
   --bg: #ffffff;
-  --bg-1: #fbfdfc; /* panel */
-  --bg-2: #f7faf9; /* soft */
-  --bg-3: #eef3f1; /* raise */
+  --bg-1: #fbfbfc; /* panel */
+  --bg-2: #f6f7f8; /* soft */
+  --bg-3: #ecedf0; /* raise */
   --bg-elev: #ffffff;
 
   --line: rgba(16, 20, 24, 0.07);

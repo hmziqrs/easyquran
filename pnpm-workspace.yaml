@@ -1,9 +1,11 @@
 packages:
   - web
+  - db/quran/tanzil/translations
 
 allowBuilds:
   '@firebase/util': false
   "@tailwindcss/oxide": true
+  esbuild: true
   protobufjs: false
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@0.2.5
