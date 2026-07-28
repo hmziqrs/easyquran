@@ -6,18 +6,11 @@
   let { class: className = "" }: { class?: string } = $props();
 </script>
 
-<span class={cn("status-dot", className)} aria-hidden="true"></span>
-
-<style>
-  .status-dot {
-    display: inline-block;
-    flex: 0 0 auto;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--ok);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 22%, transparent);
-    margin-right: 4px;
-    vertical-align: middle;
-  }
-</style>
+<span
+  class={cn(
+    "mr-1 inline-block size-2 shrink-0 grow-0 rounded-full bg-ok align-middle",
+    "shadow-[0_0_0_3px_color-mix(in_oklab,var(--ok)_22%,transparent)]",
+    className,
+  )}
+  aria-hidden="true"
+></span>

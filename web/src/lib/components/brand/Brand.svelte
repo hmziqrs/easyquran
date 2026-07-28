@@ -1,6 +1,7 @@
 <!--
   Brand — the EasyQuran logo lockup: a rotated accent square with a soft
-  glow, plus the wordmark. The dot is bespoke, so it lives in a scoped style.
+  glow, plus the wordmark. The square rotates further on hover, driven by
+  `group-hover` on the anchor.
 -->
 <script lang="ts">
   import { cn } from "$lib/utils";
@@ -8,33 +9,16 @@
   let { class: className = "", href = "/" }: { class?: string; href?: string } = $props();
 </script>
 
-<a class={cn("brand", className)} {href} aria-label={`${SITE.name} · home`}>
-  <span class="dot" aria-hidden="true"></span>
+<a
+  class={cn("group inline-flex items-center gap-2.5", className)}
+  {href}
+  aria-label={`${SITE.name} · home`}
+>
+  <span
+    class="size-2.5 rotate-45 rounded-[2px] bg-accent shadow-[0_0_0_3px_var(--accent-soft)] transition-transform duration-[400ms] ease-out group-hover:rotate-[135deg]"
+    aria-hidden="true"
+  ></span>
   <span class="font-mono text-sm tracking-tight"
-    ><b class="font-medium">Easy</b><span class="tail">Quran</span></span
+    ><b class="font-medium">Easy</b><span class="font-normal text-fg-3">Quran</span></span
   >
 </a>
-
-<style>
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .dot {
-    width: 10px;
-    height: 10px;
-    background: var(--accent);
-    border-radius: 2px;
-    box-shadow: 0 0 0 3px var(--accent-soft);
-    transform: rotate(45deg);
-    transition: transform 0.4s var(--ease-out);
-  }
-  .brand:hover .dot {
-    transform: rotate(135deg);
-  }
-  .tail {
-    color: var(--fg-3);
-    font-weight: 400;
-  }
-</style>
