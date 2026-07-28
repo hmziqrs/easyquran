@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Section, Seo } from "$lib/components";
+  import { Button, Chip, Section, Seo } from "$lib/components";
   import { SITE } from "$lib/config/site";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { track } from "$lib/firebase";
@@ -16,6 +16,12 @@
   <p class="eyebrow">{SITE.domain}</p>
   <h1 class="mt-4 text-2xl">{SITE.name}</h1>
   <p class="mt-4 text-fg-2">{SITE.tagline}</p>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <Chip dot>Free</Chip>
+    <Chip dot>No ads</Chip>
+    <Chip dot>Very fast</Chip>
+  </div>
 
   <p class="arabic mt-10 text-accent">بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</p>
 

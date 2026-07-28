@@ -1,0 +1,10 @@
+# Text-variant alternates (/*.md, /*.txt) duplicate the HTML pages' content as
+# markdown/plain text for LLMs and crawlers. Keep them crawlable (follow) but
+# out of the search index (noindex) so the canonical HTML is what ranks.
+# Effective on Cloudflare Pages / Netlify (copied to build/_headers). For
+# Vercel, mirror these in vercel.json `headers`.
+/*.md
+  X-Robots-Tag: noindex, follow
+
+/*.txt
+  X-Robots-Tag: noindex, follow

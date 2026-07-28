@@ -7,14 +7,9 @@
     <meta name="theme-color" content="#0c0d0c" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
 
-    <!-- Geist + Geist Mono for UI, Amiri for Arabic — the type system the design is built on -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Amiri:wght@400;700&display=swap"
-    />
-
+    <!-- Geist + Geist Mono (UI) and Amiri (Arabic) are bundled (self-hosted) via
+         @fontsource in layout.css — no render-blocking external stylesheet, no
+         third-party request, fonts travel same-origin with the HTML. -->
     <script>
       // Apply saved theme + accent before first paint to avoid a flash.
       // Kept tiny and inline on purpose — it runs synchronously in <head>.

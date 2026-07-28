@@ -42,7 +42,7 @@ export type PageSlug = PageId;
 export const PAGE_META: Record<PageSlug, { title: string; description: string; path: string }> = {
   home: {
     title: "EasyQuran · the Quran, made easy to read",
-    description: "A calm, fast, distraction-free way to read the Quran.",
+    description: "Read the Quran. Free, no ads, and fast — nothing in the way of the text.",
     path: "/",
   },
   about: {

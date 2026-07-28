@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════════
    firebase.ts — Firebase Analytics, wired for SvelteKit.
 
-   `initializeApp` is pure config and safe on the server. Analytics is
-   browser-only — it injects gtag.js and touches window/cookies/localStorage —
-   so we init the app lazily but start analytics only in the browser, gated on
-   `isSupported()`. Nothing here runs during SSR, and nothing here can take the
-   page down: every entry point is guarded and wrapped in try/catch.
+   Both the firebase/app core and firebase/analytics are browser-only and are
+   loaded LAZILY via dynamic import from inside initAnalytics() — so neither
+   ships in the page's critical modulepreload graph or runs during SSR. Nothing
+   here can take the page down: every entry point is guarded and wrapped in
+   try/catch.
 
    The web config is *not* a secret — by Firebase's design it ships in the
    client bundle; access is gated by Security Rules / App Check, not by hiding
@@ -16,7 +16,7 @@
 
 import { browser } from "$app/environment";
 import { env } from "$env/dynamic/public";
-import { getApps, getApp, initializeApp, type FirebaseApp } from "firebase/app";
+import type { FirebaseApp } from "firebase/app";
 import type { Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -32,34 +32,28 @@ const firebaseConfig = {
 /** True once the env vars are filled in. Until then everything no-ops. */
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.appId);
 
-let cachedApp: FirebaseApp | null = null;
-
-/**
- * The shared FirebaseApp, created on first use. Returns null when the project
- * isn't configured yet, so callers never have to special-case a half-built env.
- * Keeps a single instance across hot reloads and repeated imports.
- */
-export function getFirebaseApp(): FirebaseApp | null {
-  if (!isConfigured) return null;
-  if (!cachedApp) {
-    cachedApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  }
-  return cachedApp;
-}
-
+let app: FirebaseApp | null = null;
 let analytics: Analytics | null = null;
 let initPromise: Promise<Analytics | null> | null = null;
 
+/** The shared FirebaseApp once initAnalytics() has run, else null. */
+export function getFirebaseApp(): FirebaseApp | null {
+  return app;
+}
+
 /** Start analytics in the browser, exactly once. No-op during SSR. */
 export function initAnalytics(): Promise<Analytics | null> {
-  if (!browser) return Promise.resolve(null);
-  const app = getFirebaseApp();
-  if (!app) return Promise.resolve(null);
+  if (!browser || !isConfigured) return Promise.resolve(null);
   if (!initPromise) {
     initPromise = (async () => {
       try {
+        // Dynamic-import the core + analytics so they only download after
+        // hydration, never on the critical path.
+        const { getApps, getApp, initializeApp } = await import("firebase/app");
         const { isSupported, getAnalytics } = await import("firebase/analytics");
-        if (await isSupported()) analytics = getAnalytics(app);
+        const core = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        app = core;
+        if (await isSupported()) analytics = getAnalytics(core);
       } catch (err) {
         console.warn("[firebase] analytics failed to start:", err);
       }

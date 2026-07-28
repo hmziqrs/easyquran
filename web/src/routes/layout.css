@@ -16,6 +16,12 @@
 
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Self-hosted type — bundled same-origin by Vite, no render-blocking external
+   request. Geist variable woff2 covers the full weight range; Amiri is the
+   Arabic/Quranic face. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource/amiri";
 
 /* shadcn-svelte dark mode is driven by our [data-theme] attribute, not a .dark class. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -83,6 +89,32 @@
 
   --color-pop: var(--pop);
   --color-pop-soft: var(--pop-soft);
+
+  --color-ok: var(--ok);
+
+  /* shadcn-svelte semantic names. These MUST live in @theme inline (not just
+     as :root custom properties) or Tailwind v4 never generates the
+     `bg-background` / `border-border` / `ring-ring` utilities the registry
+     components are written against, and they render unstyled. The values
+     themselves are mapped onto our tokens in section 5 below. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 /* ─── 4. Token values — DARK (default) ──────────────────────────────────
@@ -112,6 +144,8 @@
   --pop: #e3b341; /* warm gold pop */
   --pop-soft: rgba(227, 179, 65, 0.12);
 
+  --ok: #8fc88a; /* "available / healthy" indicator (StatusDot) */
+
   color-scheme: dark;
 }
 
@@ -139,6 +173,8 @@
 
   --pop: #a6781b;
   --pop-soft: rgba(166, 120, 27, 0.1);
+
+  --ok: #3b7a3b;
 
   color-scheme: light;
 }
@@ -205,6 +241,9 @@
   --secondary-foreground: var(--fg);
   --muted: var(--bg-2);
   --muted-foreground: var(--fg-3);
+  /* registry `accent` maps onto our brand accent (--accent is already the
+     token value); it only needs its foreground pair. */
+  --accent-foreground: var(--accent-fg);
   --destructive: #ef4444;
   --destructive-foreground: var(--fg);
   --border: var(--line);

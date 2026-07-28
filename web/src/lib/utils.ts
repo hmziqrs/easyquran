@@ -12,9 +12,17 @@ export function cn(...inputs: ClassValue[]): string {
  * hash links, and `mailto:`/`tel:` schemes stay in-tab. Returns `{}` when
  * there's nothing to add, so it spreads cleanly onto any `<a>`.
  */
-export function externalLinkAttrs(href?: string): { target?: "_blank"; rel?: string } {
+export function externalLinkAttrs(
+  href?: string,
+  opts: { me?: boolean } = {},
+): { target?: "_blank"; rel?: string } {
   if (typeof href === "string" && /^https?:\/\//i.test(href)) {
-    return { target: "_blank", rel: "noopener noreferrer" };
+    // `rel="me"` corroborates these profile links as the owner's identity
+    // (applied only to profile/sameAs anchors, never blanket).
+    return {
+      target: "_blank",
+      rel: opts.me ? "me noopener noreferrer" : "noopener noreferrer",
+    };
   }
   return {};
 }

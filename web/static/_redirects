@@ -1,0 +1,6 @@
+# Collapse trailing-slash duplicates to the canonical (no-slash) URL. The site
+# canonicalizes to no-slash everywhere (canonical, sitemap, internal links);
+# these 301s make the host agree on a single URL per page.
+# Effective on Cloudflare Pages / Netlify (copied to build/_redirects). For
+# Vercel, mirror these in vercel.json `redirects`.
+/about/  /about  301
