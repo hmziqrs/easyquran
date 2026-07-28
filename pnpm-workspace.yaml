@@ -1,0 +1,17 @@
+packages:
+  - web
+
+allowBuilds:
+  '@firebase/util': false
+  "@tailwindcss/oxide": true
+  protobufjs: false
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.5
+  vite-plus: 0.2.5
+overrides:
+  vite: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

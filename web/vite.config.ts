@@ -1,0 +1,32 @@
+import tailwindcss from "@tailwindcss/vite";
+import adapter from "@sveltejs/adapter-static";
+import { sveltekit } from "@sveltejs/kit/vite";
+import { defineConfig, lazyPlugins } from "vite-plus";
+
+export default defineConfig({
+  fmt: {},
+  lint: {
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    options: { typeAware: true, typeCheck: true },
+  },
+  plugins: lazyPlugins(() => [
+    tailwindcss(),
+    sveltekit({
+      // Force runes mode everywhere except vendored libraries (can be removed in Svelte 6).
+      compilerOptions: {
+        runes: ({ filename }) =>
+          filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
+      },
+      // Fully prerendered static site — deployable to any static host
+      // (Cloudflare Pages, Vercel, Netlify, GitHub Pages, S3…).
+      adapter: adapter({
+        pages: "build",
+        assets: "build",
+        fallback: "404.html",
+        precompress: false,
+        strict: true,
+      }),
+    }),
+  ]),
+});

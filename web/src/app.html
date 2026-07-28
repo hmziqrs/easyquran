@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-accent="emerald">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0c0d0c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+
+    <!-- Geist + Geist Mono for UI, Amiri for Arabic — the type system the design is built on -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Amiri:wght@400;700&display=swap"
+    />
+
+    <script>
+      // Apply saved theme + accent before first paint to avoid a flash.
+      // Kept tiny and inline on purpose — it runs synchronously in <head>.
+      (function () {
+        try {
+          var p = JSON.parse(localStorage.getItem("easyquran.prefs") || "{}");
+          var d = document.documentElement;
+          if (p.theme) d.dataset.theme = p.theme;
+          if (p.accent) d.dataset.accent = p.accent;
+        } catch (e) {}
+      })();
+    </script>
+
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

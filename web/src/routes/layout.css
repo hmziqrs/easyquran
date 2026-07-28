@@ -1,0 +1,324 @@
+/* ════════════════════════════════════════════════════════════════════════
+   EasyQuran — global stylesheet & design system
+   ────────────────────────────────────────────────────────────────────────
+   Layered:
+     1. Tailwind v4 + tw-animate-css
+     2. @theme            — static design tokens (type scale, radii, fonts,
+                            breakpoints, keyframes) → Tailwind utilities
+     3. @theme inline     — theme-AWARE colors mapped to CSS vars that change
+                            with [data-theme] / [data-accent] on <html>
+     4. :root / [data-*]  — the actual token values (dark default, light,
+                            accent variants) — single source of truth
+     5. shadcn semantic   — maps our tokens onto shadcn-svelte's variable
+                            names so registry components inherit the look
+     6. base              — reset, typography, selection, scrollbar
+   ════════════════════════════════════════════════════════════════════════ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn-svelte dark mode is driven by our [data-theme] attribute, not a .dark class. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ─── 2. Static tokens ─────────────────────────────────────────────────── */
+@theme {
+  --font-sans:
+    "Geist", "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  /* Arabic/Quranic text — used via `font-arabic` on mushaf content */
+  --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
+
+  /* fluid type scale (rem-based, ~1.2 ratio) */
+  --text-xs: 0.75rem; /* 12 — captions, eyebrows */
+  --text-sm: 0.8125rem; /* 13 — meta, code chips */
+  --text-base: 0.9375rem; /* 15 — body */
+  --text-lg: 1.375rem; /* 22 — small headings */
+  --text-xl: 1.875rem; /* 30 — section h2 */
+  --text-2xl: 2.625rem; /* 42 — page h1 */
+  --text-3xl: 3.75rem; /* 60 — display */
+  --text-4xl: 5rem; /* 80 — hero display */
+
+  /* radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+
+  /* extra breakpoint for the wide container */
+  --breakpoint-3xl: 1440px;
+
+  /* named motion curves */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+
+  /* animations used by components */
+  --animate-pulse-ring: pulse-ring 2.2s var(--ease-out) infinite;
+  --animate-blink: blink 1.1s steps(2, end) infinite;
+}
+
+/* ─── 3. Theme-aware colors (mapped, not copied) ────────────────────────
+   Utilities generated: bg-bg, bg-bg-1 … text-fg-3, text-accent,
+   bg-accent-soft, border-line, etc. They resolve through the CSS vars below,
+   so they react to [data-theme] / [data-accent] at runtime. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-bg-3: var(--bg-3);
+  --color-bg-elev: var(--bg-elev);
+
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-line-3: var(--line-3);
+
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-pop: var(--pop);
+  --color-pop-soft: var(--pop-soft);
+}
+
+/* ─── 4. Token values — DARK (default) ──────────────────────────────────
+   Warm-tinted near-black, single bright accent. */
+:root,
+[data-theme="dark"] {
+  --bg: #0c0d0c;
+  --bg-1: #111312; /* card, slightly raised */
+  --bg-2: #161a18; /* inset */
+  --bg-3: #1c211e; /* hover, selected */
+  --bg-elev: #0a0b0a; /* nav, footer — slightly deeper */
+
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --line-3: rgba(255, 255, 255, 0.18);
+
+  --fg: #ededee;
+  --fg-2: #b9b9bd; /* secondary */
+  --fg-3: #84848b; /* tertiary, meta */
+  --fg-4: #5a5a62; /* quaternary, labels */
+
+  --accent: #4ade80; /* emerald */
+  --accent-soft: rgba(74, 222, 128, 0.12);
+  --accent-line: rgba(74, 222, 128, 0.32);
+  --accent-fg: #0a0b0a;
+
+  --pop: #e3b341; /* warm gold pop */
+  --pop-soft: rgba(227, 179, 65, 0.12);
+
+  color-scheme: dark;
+}
+
+/* ─── 4b. Token values — LIGHT ────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #fbfaf7;
+  --bg-1: #ffffff;
+  --bg-2: #f2f1ec;
+  --bg-3: #eae8e1;
+  --bg-elev: #ffffff;
+
+  --line: rgba(20, 18, 14, 0.08);
+  --line-2: rgba(20, 18, 14, 0.14);
+  --line-3: rgba(20, 18, 14, 0.22);
+
+  --fg: #14120e;
+  --fg-2: #44423d;
+  --fg-3: #73706a;
+  --fg-4: #9a978f;
+
+  --accent: #1a7a45;
+  --accent-soft: rgba(26, 122, 69, 0.1);
+  --accent-line: rgba(26, 122, 69, 0.3);
+  --accent-fg: #ffffff;
+
+  --pop: #a6781b;
+  --pop-soft: rgba(166, 120, 27, 0.1);
+
+  color-scheme: light;
+}
+
+/* ─── 4c. Accent variants (driven by prefs) ───────────────────────────── */
+[data-accent="gold"] {
+  --accent: #e3b341;
+  --accent-soft: rgba(227, 179, 65, 0.14);
+  --accent-line: rgba(227, 179, 65, 0.32);
+  --accent-fg: #0a0b0a;
+}
+[data-theme="light"][data-accent="gold"] {
+  --accent: #a6781b;
+  --accent-soft: rgba(166, 120, 27, 0.1);
+  --accent-line: rgba(166, 120, 27, 0.3);
+  --accent-fg: #ffffff;
+}
+[data-accent="azure"] {
+  --accent: #6fb0e8;
+  --accent-soft: rgba(111, 176, 232, 0.14);
+  --accent-line: rgba(111, 176, 232, 0.32);
+  --accent-fg: #0a0b0a;
+}
+[data-theme="light"][data-accent="azure"] {
+  --accent: #2563b8;
+  --accent-soft: rgba(37, 99, 184, 0.1);
+  --accent-line: rgba(37, 99, 184, 0.3);
+  --accent-fg: #ffffff;
+}
+[data-accent="plum"] {
+  --accent: #c08cff;
+  --accent-soft: rgba(192, 140, 255, 0.14);
+  --accent-line: rgba(192, 140, 255, 0.32);
+  --accent-fg: #0a0b0a;
+}
+[data-theme="light"][data-accent="plum"] {
+  --accent: #7a3fd6;
+  --accent-soft: rgba(122, 63, 214, 0.1);
+  --accent-line: rgba(122, 63, 214, 0.3);
+  --accent-fg: #ffffff;
+}
+/* emerald is the dark-mode default; in light it needs the deeper green */
+[data-theme="light"][data-accent="emerald"] {
+  --accent: #1a7a45;
+  --accent-soft: rgba(26, 122, 69, 0.1);
+  --accent-line: rgba(26, 122, 69, 0.3);
+  --accent-fg: #ffffff;
+}
+
+/* ─── 5. shadcn-svelte semantic layer (mapped onto our tokens) ──────────
+   So any registry component (bg-background, text-foreground, bg-primary,
+   border-border, ring-ring …) inherits the look and stays theme-aware. */
+:root,
+[data-theme="dark"] {
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card: var(--bg-1);
+  --card-foreground: var(--fg);
+  --popover: var(--bg-2);
+  --popover-foreground: var(--fg);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-fg);
+  --secondary: var(--bg-2);
+  --secondary-foreground: var(--fg);
+  --muted: var(--bg-2);
+  --muted-foreground: var(--fg-3);
+  --destructive: #ef4444;
+  --destructive-foreground: var(--fg);
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--accent);
+  --radius: 0.625rem;
+}
+[data-theme="light"] {
+  --destructive: #dc2626;
+}
+
+/* ─── 6. Base ─────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    font-size: var(--text-base);
+    line-height: 1.6;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--fg);
+  }
+  p {
+    margin: 0;
+  }
+  img,
+  svg,
+  canvas {
+    display: block;
+    max-width: 100%;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* thin, themed scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-3) transparent;
+  }
+}
+
+/* ─── Keyframes ───────────────────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ─── A few global utilities for patterns that read better as CSS ─────── */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@utility mono {
+  font-family: var(--font-mono);
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "ss02", "calt";
+}
+/* Quranic / Arabic body text — right-to-left, generous leading */
+@utility arabic {
+  font-family: var(--font-arabic);
+  direction: rtl;
+  text-align: right;
+  line-height: 2.1;
+  font-size: 1.75rem;
+  font-feature-settings: "calt", "liga";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
