@@ -1,0 +1,2425 @@
+{
+  "source": "Tanzil.net",
+  "sourceUrl": "https://tanzil.net/trans/",
+  "format": "sql (MySQL phpMyAdmin dump)",
+  "license": "Tanzil Terms of Use — non-commercial use; attribution + backlink to tanzil.net required when redistributing more than three translations.",
+  "note": "name = SQL-header name (authoritative); nameNative = display name from the /trans/ page (often the original script).",
+  "count": 115,
+  "translations": [
+    {
+      "id": "sq.nahi",
+      "language": "Albanian",
+      "languageCode": "sq",
+      "direction": "ltr",
+      "name": "Efendi Nahi",
+      "translator": "Hasan Efendi Nahi",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sq.nahi.sql",
+        "sizeBytes": 1106435,
+        "sha256": "ecd1dae992a48a870c72a345fdfa27d5956d3fcf853195331629b1a02f44a7c8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sq.nahi",
+        "download": "https://tanzil.net/trans/sq.nahi?type=sql",
+        "browse": "https://tanzil.net/#trans/sq.nahi/1:1",
+        "changelog": "https://tanzil.net/trans/log/sq.nahi"
+      }
+    },
+    {
+      "id": "sq.mehdiu",
+      "language": "Albanian",
+      "languageCode": "sq",
+      "direction": "ltr",
+      "name": "Feti Mehdiu",
+      "translator": "Feti Mehdiu",
+      "lastUpdate": "December 1, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sq.mehdiu.sql",
+        "sizeBytes": 988792,
+        "sha256": "6952d54f94b8659de082459821fa8a3d4fa6e0074c1bf49b9dcd8442bda0db60"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sq.mehdiu",
+        "download": "https://tanzil.net/trans/sq.mehdiu?type=sql",
+        "browse": "https://tanzil.net/#trans/sq.mehdiu/1:1",
+        "changelog": "https://tanzil.net/trans/log/sq.mehdiu"
+      }
+    },
+    {
+      "id": "sq.ahmeti",
+      "language": "Albanian",
+      "languageCode": "sq",
+      "direction": "ltr",
+      "name": "Sherif Ahmeti",
+      "translator": "Sherif Ahmeti",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sq.ahmeti.sql",
+        "sizeBytes": 1075689,
+        "sha256": "632ee309f136f20fc2044b4324423a6094c1efdced32cd717f8ed3cd716b7c7f"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sq.ahmeti",
+        "download": "https://tanzil.net/trans/sq.ahmeti?type=sql",
+        "browse": "https://tanzil.net/#trans/sq.ahmeti/1:1",
+        "changelog": "https://tanzil.net/trans/log/sq.ahmeti"
+      }
+    },
+    {
+      "id": "ber.mensur",
+      "language": "Amazigh",
+      "languageCode": "ber",
+      "direction": "ltr",
+      "name": "At Mensur",
+      "translator": "Ramdane At Mansour",
+      "lastUpdate": "July 24, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ber.mensur.sql",
+        "sizeBytes": 744414,
+        "sha256": "51f73f070c3133ac7ad423eaa72a401221d66d8aad949f676fcf0254a1de3653"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ber.mensur",
+        "download": "https://tanzil.net/trans/ber.mensur?type=sql",
+        "browse": "https://tanzil.net/#trans/ber.mensur/1:1",
+        "changelog": "https://tanzil.net/trans/log/ber.mensur"
+      }
+    },
+    {
+      "id": "ar.jalalayn",
+      "language": "Arabic",
+      "languageCode": "ar",
+      "direction": "rtl",
+      "name": "تفسير الجلالين",
+      "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti",
+      "lastUpdate": "December 1, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ar.jalalayn.sql",
+        "sizeBytes": 2034346,
+        "sha256": "aa1b5193a2cab0ee496efc15ec3ae47ea880d16ce4c7b5bbdd2d16476c30ca34"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ar.jalalayn",
+        "download": "https://tanzil.net/trans/ar.jalalayn?type=sql",
+        "browse": "https://tanzil.net/#trans/ar.jalalayn/1:1",
+        "changelog": "https://tanzil.net/trans/log/ar.jalalayn"
+      }
+    },
+    {
+      "id": "ar.muyassar",
+      "language": "Arabic",
+      "languageCode": "ar",
+      "direction": "rtl",
+      "name": "تفسير المیسر",
+      "translator": "King Fahad Quran Complex",
+      "lastUpdate": "January 7, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ar.muyassar.sql",
+        "sizeBytes": 2626244,
+        "sha256": "116afcd884ba2cfe6cf61c09e2580d752d2ad4dfbf4a84159beb6cbee5b777ca"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ar.muyassar",
+        "download": "https://tanzil.net/trans/ar.muyassar?type=sql",
+        "browse": "https://tanzil.net/#trans/ar.muyassar/1:1",
+        "changelog": "https://tanzil.net/trans/log/ar.muyassar"
+      }
+    },
+    {
+      "id": "am.sadiq",
+      "language": "Amharic",
+      "languageCode": "am",
+      "direction": "ltr",
+      "name": "ሳዲቅ & ሳኒ ሐቢብ",
+      "translator": "Muhammed Sadiq and Muhammed Sani Habib",
+      "lastUpdate": "August 3, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/am.sadiq.sql",
+        "sizeBytes": 1432810,
+        "sha256": "4fa9043e06137757290ec4596948bbb18f38178d08dd41b08935dd6076386af6"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/am.sadiq",
+        "download": "https://tanzil.net/trans/am.sadiq?type=sql",
+        "browse": "https://tanzil.net/#trans/am.sadiq/1:1",
+        "changelog": "https://tanzil.net/trans/log/am.sadiq"
+      }
+    },
+    {
+      "id": "az.mammadaliyev",
+      "language": "Azerbaijani",
+      "languageCode": "az",
+      "direction": "ltr",
+      "name": "Məmmədəliyev & Bünyadov",
+      "translator": "Vasim Mammadaliyev and Ziya Bunyadov",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/az.mammadaliyev.sql",
+        "sizeBytes": 1450686,
+        "sha256": "c7870aa307b0f8a9e67d1dee746e6ecf9e07925ce68a41ad37ed2c7e533366bd"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/az.mammadaliyev",
+        "download": "https://tanzil.net/trans/az.mammadaliyev?type=sql",
+        "browse": "https://tanzil.net/#trans/az.mammadaliyev/1:1",
+        "changelog": "https://tanzil.net/trans/log/az.mammadaliyev"
+      }
+    },
+    {
+      "id": "az.musayev",
+      "language": "Azerbaijani",
+      "languageCode": "az",
+      "direction": "ltr",
+      "name": "Musayev",
+      "translator": "Alikhan Musayev",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/az.musayev.sql",
+        "sizeBytes": 1057256,
+        "sha256": "9a8b0a985cc755e2dfba02ef9fe50527151bd7edbc9d091c49ff2959e49cb0b3"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/az.musayev",
+        "download": "https://tanzil.net/trans/az.musayev?type=sql",
+        "browse": "https://tanzil.net/#trans/az.musayev/1:1",
+        "changelog": "https://tanzil.net/trans/log/az.musayev"
+      }
+    },
+    {
+      "id": "bn.hoque",
+      "language": "Bengali",
+      "languageCode": "bn",
+      "direction": "ltr",
+      "name": "জহুরুল হক",
+      "translator": "Zohurul Hoque",
+      "lastUpdate": "July 19, 2013",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/bn.hoque.sql",
+        "sizeBytes": 2440393,
+        "sha256": "81c20c276ad69d7cce5eca39628ae9d89ca189c40524623997d8f7f07889df11"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/bn.hoque",
+        "download": "https://tanzil.net/trans/bn.hoque?type=sql",
+        "browse": "https://tanzil.net/#trans/bn.hoque/1:1",
+        "changelog": "https://tanzil.net/trans/log/bn.hoque"
+      }
+    },
+    {
+      "id": "bn.bengali",
+      "language": "Bengali",
+      "languageCode": "bn",
+      "direction": "ltr",
+      "name": "মুহিউদ্দীন খান",
+      "translator": "Muhiuddin Khan",
+      "lastUpdate": "April 30, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/bn.bengali.sql",
+        "sizeBytes": 2247317,
+        "sha256": "a3ff9f0c860b7244dc40aa2b566e42bc56057d549eb7b7a5bf321f8f1bb094ee"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/bn.bengali",
+        "download": "https://tanzil.net/trans/bn.bengali?type=sql",
+        "browse": "https://tanzil.net/#trans/bn.bengali/1:1",
+        "changelog": "https://tanzil.net/trans/log/bn.bengali"
+      }
+    },
+    {
+      "id": "bs.korkut",
+      "language": "Bosnian",
+      "languageCode": "bs",
+      "direction": "ltr",
+      "name": "Korkut",
+      "translator": "Besim Korkut",
+      "lastUpdate": "May 22, 2013",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/bs.korkut.sql",
+        "sizeBytes": 886598,
+        "sha256": "6e31556e66b3a6e38045d4519ec209f28d1e4ed2c383cd8e373f7b9d4903d21b"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/bs.korkut",
+        "download": "https://tanzil.net/trans/bs.korkut?type=sql",
+        "browse": "https://tanzil.net/#trans/bs.korkut/1:1",
+        "changelog": "https://tanzil.net/trans/log/bs.korkut"
+      }
+    },
+    {
+      "id": "bs.mlivo",
+      "language": "Bosnian",
+      "languageCode": "bs",
+      "direction": "ltr",
+      "name": "Mlivo",
+      "translator": "Mustafa Mlivo",
+      "lastUpdate": "August 24, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/bs.mlivo.sql",
+        "sizeBytes": 839623,
+        "sha256": "491a47fb72e322c5e317a69768b49f84da2706364545e95f492c7e68ded000f1"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/bs.mlivo",
+        "download": "https://tanzil.net/trans/bs.mlivo?type=sql",
+        "browse": "https://tanzil.net/#trans/bs.mlivo/1:1",
+        "changelog": "https://tanzil.net/trans/log/bs.mlivo"
+      }
+    },
+    {
+      "id": "bg.theophanov",
+      "language": "Bulgarian",
+      "languageCode": "bg",
+      "direction": "ltr",
+      "name": "Теофанов",
+      "translator": "Tzvetan Theophanov",
+      "lastUpdate": "August 12, 2014",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/bg.theophanov.sql",
+        "sizeBytes": 1374087,
+        "sha256": "c971633e760517d547d24a625ec363918bdeea7cf207a7f91c7f08b85c96280f"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/bg.theophanov",
+        "download": "https://tanzil.net/trans/bg.theophanov?type=sql",
+        "browse": "https://tanzil.net/#trans/bg.theophanov/1:1",
+        "changelog": "https://tanzil.net/trans/log/bg.theophanov"
+      }
+    },
+    {
+      "id": "zh.jian",
+      "language": "Chinese",
+      "languageCode": "zh",
+      "direction": "ltr",
+      "name": "Ma Jian",
+      "translator": "Ma Jian",
+      "lastUpdate": "March 13, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/zh.jian.sql",
+        "sizeBytes": 855035,
+        "sha256": "e951e130aee944d40ab5367d707ccfea023b855c20869c5e7f3ac0ab55b79c44"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/zh.jian",
+        "download": "https://tanzil.net/trans/zh.jian?type=sql",
+        "browse": "https://tanzil.net/#trans/zh.jian/1:1",
+        "changelog": "https://tanzil.net/trans/log/zh.jian"
+      }
+    },
+    {
+      "id": "zh.majian",
+      "language": "Chinese",
+      "languageCode": "zh",
+      "direction": "ltr",
+      "name": "Ma Jian (Traditional)",
+      "translator": "Ma Jian",
+      "lastUpdate": "January 7, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/zh.majian.sql",
+        "sizeBytes": 866335,
+        "sha256": "143c0d294e0ccd624cd08f567f3f4ce17ce46f0c30f6d537b18fe9022f63cfbf"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/zh.majian",
+        "download": "https://tanzil.net/trans/zh.majian?type=sql",
+        "browse": "https://tanzil.net/#trans/zh.majian/1:1",
+        "changelog": "https://tanzil.net/trans/log/zh.majian"
+      }
+    },
+    {
+      "id": "cs.hrbek",
+      "language": "Czech",
+      "languageCode": "cs",
+      "direction": "ltr",
+      "name": "Hrbek",
+      "translator": "Preklad I. Hrbek",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/cs.hrbek.sql",
+        "sizeBytes": 951919,
+        "sha256": "18e3d6c7c785a4e69cb626fe090adcc733d47eee04d13d7c179d3bdbee3e8df0"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/cs.hrbek",
+        "download": "https://tanzil.net/trans/cs.hrbek?type=sql",
+        "browse": "https://tanzil.net/#trans/cs.hrbek/1:1",
+        "changelog": "https://tanzil.net/trans/log/cs.hrbek"
+      }
+    },
+    {
+      "id": "cs.nykl",
+      "language": "Czech",
+      "languageCode": "cs",
+      "direction": "ltr",
+      "name": "Nykl",
+      "translator": "A. R. Nykl",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/cs.nykl.sql",
+        "sizeBytes": 958457,
+        "sha256": "0b46d1bd84f460065ac2d2c198f7ac5feaa332df2718e2b4d698cd65a8864d70"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/cs.nykl",
+        "download": "https://tanzil.net/trans/cs.nykl?type=sql",
+        "browse": "https://tanzil.net/#trans/cs.nykl/1:1",
+        "changelog": "https://tanzil.net/trans/log/cs.nykl"
+      }
+    },
+    {
+      "id": "dv.divehi",
+      "language": "Divehi",
+      "languageCode": "dv",
+      "direction": "rtl",
+      "name": "ދިވެހި",
+      "translator": "Office of the President of Maldives",
+      "lastUpdate": "May 3, 2022",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/dv.divehi.sql",
+        "sizeBytes": 2774188,
+        "sha256": "cd366eb24b050eb056f4947929093918fa5ecaa2ec8d7a431675c279c0d1fbe9"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/dv.divehi",
+        "download": "https://tanzil.net/trans/dv.divehi?type=sql",
+        "browse": "https://tanzil.net/#trans/dv.divehi/1:1",
+        "changelog": "https://tanzil.net/trans/log/dv.divehi"
+      }
+    },
+    {
+      "id": "nl.keyzer",
+      "language": "Dutch",
+      "languageCode": "nl",
+      "direction": "ltr",
+      "name": "Keyzer",
+      "translator": "Salomo Keyzer",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/nl.keyzer.sql",
+        "sizeBytes": 1092501,
+        "sha256": "1dbeaca35cbd6518ea1d7f8b65a4edf0ac192428e4d3fc8d4eeb1a77db2ba32e"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/nl.keyzer",
+        "download": "https://tanzil.net/trans/nl.keyzer?type=sql",
+        "browse": "https://tanzil.net/#trans/nl.keyzer/1:1",
+        "changelog": "https://tanzil.net/trans/log/nl.keyzer"
+      }
+    },
+    {
+      "id": "nl.leemhuis",
+      "language": "Dutch",
+      "languageCode": "nl",
+      "direction": "ltr",
+      "name": "Leemhuis",
+      "translator": "Fred Leemhuis",
+      "lastUpdate": "August 5, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/nl.leemhuis.sql",
+        "sizeBytes": 999276,
+        "sha256": "164e0a623fb87c2028f7f48de485f5b9146fa57dd537ab17c729d62debaacc0e"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/nl.leemhuis",
+        "download": "https://tanzil.net/trans/nl.leemhuis?type=sql",
+        "browse": "https://tanzil.net/#trans/nl.leemhuis/1:1",
+        "changelog": "https://tanzil.net/trans/log/nl.leemhuis"
+      }
+    },
+    {
+      "id": "nl.siregar",
+      "language": "Dutch",
+      "languageCode": "nl",
+      "direction": "ltr",
+      "name": "Siregar",
+      "translator": "Sofian S. Siregar",
+      "lastUpdate": "August 5, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/nl.siregar.sql",
+        "sizeBytes": 1067379,
+        "sha256": "eaeccd17f19b37d5a0e4075a15ecb10154a7327ae2fb5c6aecc41783cd02ea06"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/nl.siregar",
+        "download": "https://tanzil.net/trans/nl.siregar?type=sql",
+        "browse": "https://tanzil.net/#trans/nl.siregar/1:1",
+        "changelog": "https://tanzil.net/trans/log/nl.siregar"
+      }
+    },
+    {
+      "id": "en.ahmedali",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Ahmed Ali",
+      "translator": "Ahmed Ali",
+      "lastUpdate": "August 28, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.ahmedali.sql",
+        "sizeBytes": 916092,
+        "sha256": "3f57fec02512065cf80d4d3fee4d0550e6eb82283addd818a06e1dd0d7c5d4e8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.ahmedali",
+        "download": "https://tanzil.net/trans/en.ahmedali?type=sql",
+        "browse": "https://tanzil.net/#trans/en.ahmedali/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.ahmedali"
+      }
+    },
+    {
+      "id": "en.ahmedraza",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Ahmed Raza Khan",
+      "translator": "Ahmed Raza Khan",
+      "lastUpdate": "July 17, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.ahmedraza.sql",
+        "sizeBytes": 1047978,
+        "sha256": "9d3ab57f5fe30d56e46cdee89432818ce67326540fd552f4f13e4c7712761713"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.ahmedraza",
+        "download": "https://tanzil.net/trans/en.ahmedraza?type=sql",
+        "browse": "https://tanzil.net/#trans/en.ahmedraza/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.ahmedraza"
+      }
+    },
+    {
+      "id": "en.arberry",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Arberry",
+      "translator": "A. J. Arberry",
+      "lastUpdate": "July 31, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.arberry.sql",
+        "sizeBytes": 914321,
+        "sha256": "4392ed86d2dacbcafac75ad5cb49440c4baa9a64600b8ae68a6f9dc5004682ea"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.arberry",
+        "download": "https://tanzil.net/trans/en.arberry?type=sql",
+        "browse": "https://tanzil.net/#trans/en.arberry/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.arberry"
+      }
+    },
+    {
+      "id": "en.daryabadi",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Daryabadi",
+      "translator": "Abdul Majid Daryabadi",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.daryabadi.sql",
+        "sizeBytes": 971870,
+        "sha256": "28e08af488ade4fd4c63a11d14f30b05f1c62ee313b6909244984c1c13c50e62"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.daryabadi",
+        "download": "https://tanzil.net/trans/en.daryabadi?type=sql",
+        "browse": "https://tanzil.net/#trans/en.daryabadi/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.daryabadi"
+      }
+    },
+    {
+      "id": "en.hilali",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Hilali & Khan",
+      "translator": "Muhammad Taqi-ud-Din al-Hilali and Muhammad Muhsin Khan",
+      "lastUpdate": "December 13, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.hilali.sql",
+        "sizeBytes": 1236497,
+        "sha256": "8981ab0a4e42734daf67a3ea4ebc52176d328f36961dbc3d548f6452b05c9712"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.hilali",
+        "download": "https://tanzil.net/trans/en.hilali?type=sql",
+        "browse": "https://tanzil.net/#trans/en.hilali/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.hilali"
+      }
+    },
+    {
+      "id": "en.itani",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Itani",
+      "translator": "Talal Itani",
+      "lastUpdate": "July 19, 2013",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.itani.sql",
+        "sizeBytes": 887198,
+        "sha256": "c4a7a9c6a1e6425e5f5975d45f550d4094dcf9ddcd547e10d2beadd24a97ab1d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.itani",
+        "download": "https://tanzil.net/trans/en.itani?type=sql",
+        "browse": "https://tanzil.net/#trans/en.itani/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.itani"
+      }
+    },
+    {
+      "id": "en.maududi",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Maududi",
+      "translator": "Abul Ala Maududi",
+      "lastUpdate": "May 10, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.maududi.sql",
+        "sizeBytes": 1052366,
+        "sha256": "bcb6811cba494b4311b9b81dd9ca5bf89b93c39e9e0a1aeab7456d30fd45f846"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.maududi",
+        "download": "https://tanzil.net/trans/en.maududi?type=sql",
+        "browse": "https://tanzil.net/#trans/en.maududi/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.maududi"
+      }
+    },
+    {
+      "id": "en.mubarakpuri",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Mubarakpuri",
+      "translator": "Safi-ur-Rahman al-Mubarakpuri",
+      "lastUpdate": "June 20, 2015",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.mubarakpuri.sql",
+        "sizeBytes": 998763,
+        "sha256": "a1db5c2fc07d6a53f6405ec2b9041128904d5a2250661ec25673f16fb3b9ae00"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.mubarakpuri",
+        "download": "https://tanzil.net/trans/en.mubarakpuri?type=sql",
+        "browse": "https://tanzil.net/#trans/en.mubarakpuri/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.mubarakpuri"
+      }
+    },
+    {
+      "id": "en.pickthall",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Pickthall",
+      "translator": "Mohammed Marmaduke William Pickthall",
+      "lastUpdate": "September 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.pickthall.sql",
+        "sizeBytes": 955389,
+        "sha256": "6eca82c8dc49193d53a4effb065156e4844de9eaac5e852f614cfd266e2f8cbd"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.pickthall",
+        "download": "https://tanzil.net/trans/en.pickthall?type=sql",
+        "browse": "https://tanzil.net/#trans/en.pickthall/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.pickthall"
+      }
+    },
+    {
+      "id": "en.qarai",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Qarai",
+      "translator": "Ali Quli Qarai",
+      "lastUpdate": "April 11, 2022",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.qarai.sql",
+        "sizeBytes": 956378,
+        "sha256": "58020b4d0ac1e1990d505881221f1594096fc8f4730b1086354248fddfbdf41d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.qarai",
+        "download": "https://tanzil.net/trans/en.qarai?type=sql",
+        "browse": "https://tanzil.net/#trans/en.qarai/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.qarai"
+      }
+    },
+    {
+      "id": "en.qaribullah",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Qaribullah & Darwish",
+      "translator": "Hasan al-Fatih Qaribullah and Ahmad Darwish",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.qaribullah.sql",
+        "sizeBytes": 909015,
+        "sha256": "a4ddd62e3d847f611962b0c6e85ee8d693be32926d069655b93464f926ea521d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.qaribullah",
+        "download": "https://tanzil.net/trans/en.qaribullah?type=sql",
+        "browse": "https://tanzil.net/#trans/en.qaribullah/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.qaribullah"
+      }
+    },
+    {
+      "id": "en.sahih",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Saheeh International",
+      "translator": "Saheeh International",
+      "lastUpdate": "April 24, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.sahih.sql",
+        "sizeBytes": 987955,
+        "sha256": "50220e7811cefbb53e6217ff70ba52fc0eb4198e498ca5e0cde6a1d03625790c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.sahih",
+        "download": "https://tanzil.net/trans/en.sahih?type=sql",
+        "browse": "https://tanzil.net/#trans/en.sahih/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.sahih"
+      }
+    },
+    {
+      "id": "en.sarwar",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Sarwar",
+      "translator": "Muhammad Sarwar",
+      "lastUpdate": "July 30, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.sarwar.sql",
+        "sizeBytes": 965679,
+        "sha256": "7466d98d3eaba9b6cbd46ebbf553693d19a089465949027716526d0d0b6cbfe2"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.sarwar",
+        "download": "https://tanzil.net/trans/en.sarwar?type=sql",
+        "browse": "https://tanzil.net/#trans/en.sarwar/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.sarwar"
+      }
+    },
+    {
+      "id": "en.shakir",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Shakir",
+      "translator": "Mohammad Habib Shakir",
+      "lastUpdate": "June 22, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.shakir.sql",
+        "sizeBytes": 972889,
+        "sha256": "99874920034b90bf1ff8af441836cc9fc74d300067f5b9acffa1baf87a7a64e5"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.shakir",
+        "download": "https://tanzil.net/trans/en.shakir?type=sql",
+        "browse": "https://tanzil.net/#trans/en.shakir/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.shakir"
+      }
+    },
+    {
+      "id": "en.transliteration",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Transliteration",
+      "translator": "English Transliteration",
+      "lastUpdate": "September 6, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.transliteration.sql",
+        "sizeBytes": 1135617,
+        "sha256": "1a6cfcbe73e35865baaaf2e8cc6def435243c741b1a255c518da573413d0fc12"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.transliteration",
+        "download": "https://tanzil.net/trans/en.transliteration?type=sql",
+        "browse": "https://tanzil.net/#trans/en.transliteration/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.transliteration"
+      }
+    },
+    {
+      "id": "en.wahiduddin",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Wahiduddin Khan",
+      "translator": "Wahiduddin Khan",
+      "lastUpdate": "August 25, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.wahiduddin.sql",
+        "sizeBytes": 951248,
+        "sha256": "470d1b6f17df1645bc1e427404ddedc05a81245a7f3d580d776322f204b44419"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.wahiduddin",
+        "download": "https://tanzil.net/trans/en.wahiduddin?type=sql",
+        "browse": "https://tanzil.net/#trans/en.wahiduddin/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.wahiduddin"
+      }
+    },
+    {
+      "id": "en.yusufali",
+      "language": "English",
+      "languageCode": "en",
+      "direction": "ltr",
+      "name": "Yusuf Ali",
+      "translator": "Abdullah Yusuf Ali",
+      "lastUpdate": "May 10, 2013",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/en.yusufali.sql",
+        "sizeBytes": 1030017,
+        "sha256": "531088796a512a00149b94301556f9241de2d572cb8d00ccad4df955c2bd7f28"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/en.yusufali",
+        "download": "https://tanzil.net/trans/en.yusufali?type=sql",
+        "browse": "https://tanzil.net/#trans/en.yusufali/1:1",
+        "changelog": "https://tanzil.net/trans/log/en.yusufali"
+      }
+    },
+    {
+      "id": "fr.hamidullah",
+      "language": "French",
+      "languageCode": "fr",
+      "direction": "ltr",
+      "name": "Hamidullah",
+      "translator": "Muhammad Hamidullah",
+      "lastUpdate": "July 18, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fr.hamidullah.sql",
+        "sizeBytes": 1047552,
+        "sha256": "e34fb41138c88f432ea6972d416d22b1f935f520b69edf796176275e503d845c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fr.hamidullah",
+        "download": "https://tanzil.net/trans/fr.hamidullah?type=sql",
+        "browse": "https://tanzil.net/#trans/fr.hamidullah/1:1",
+        "changelog": "https://tanzil.net/trans/log/fr.hamidullah"
+      }
+    },
+    {
+      "id": "de.aburida",
+      "language": "German",
+      "languageCode": "de",
+      "direction": "ltr",
+      "name": "Abu Rida",
+      "translator": "Abu Rida Muhammad ibn Ahmad ibn Rassoul",
+      "lastUpdate": "August 19, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/de.aburida.sql",
+        "sizeBytes": 1055932,
+        "sha256": "f34295256c57e321c5c54fcd0966b75a6bba319d3a8ccb52e015f29031c8a20a"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/de.aburida",
+        "download": "https://tanzil.net/trans/de.aburida?type=sql",
+        "browse": "https://tanzil.net/#trans/de.aburida/1:1",
+        "changelog": "https://tanzil.net/trans/log/de.aburida"
+      }
+    },
+    {
+      "id": "de.bubenheim",
+      "language": "German",
+      "languageCode": "de",
+      "direction": "ltr",
+      "name": "Bubenheim & Elyas",
+      "translator": "A. S. F. Bubenheim and N. Elyas",
+      "lastUpdate": "July 17, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/de.bubenheim.sql",
+        "sizeBytes": 1072756,
+        "sha256": "9ebf7e1c232cf4afdf34a4019c9d9d7ac5ef0c818af37d38cec18b22ec3ef440"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/de.bubenheim",
+        "download": "https://tanzil.net/trans/de.bubenheim?type=sql",
+        "browse": "https://tanzil.net/#trans/de.bubenheim/1:1",
+        "changelog": "https://tanzil.net/trans/log/de.bubenheim"
+      }
+    },
+    {
+      "id": "de.khoury",
+      "language": "German",
+      "languageCode": "de",
+      "direction": "ltr",
+      "name": "Khoury",
+      "translator": "Adel Theodor Khoury",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/de.khoury.sql",
+        "sizeBytes": 1042664,
+        "sha256": "5ae9fa34acad861fe7d675a590f146691a7bf43e7d07273fd2d6ce571fbdb878"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/de.khoury",
+        "download": "https://tanzil.net/trans/de.khoury?type=sql",
+        "browse": "https://tanzil.net/#trans/de.khoury/1:1",
+        "changelog": "https://tanzil.net/trans/log/de.khoury"
+      }
+    },
+    {
+      "id": "de.zaidan",
+      "language": "German",
+      "languageCode": "de",
+      "direction": "ltr",
+      "name": "Zaidan",
+      "translator": "Amir Zaidan",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/de.zaidan.sql",
+        "sizeBytes": 1097864,
+        "sha256": "cb977268c67a8bffc43270f82930ebcd78218f83ba6a060b01ee0b19d71783d3"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/de.zaidan",
+        "download": "https://tanzil.net/trans/de.zaidan?type=sql",
+        "browse": "https://tanzil.net/#trans/de.zaidan/1:1",
+        "changelog": "https://tanzil.net/trans/log/de.zaidan"
+      }
+    },
+    {
+      "id": "ha.gumi",
+      "language": "Hausa",
+      "languageCode": "ha",
+      "direction": "ltr",
+      "name": "Gumi",
+      "translator": "Abubakar Mahmoud Gumi",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ha.gumi.sql",
+        "sizeBytes": 1038174,
+        "sha256": "7bfbef85305b3296bc42ed0fc2672bef8582b3bebea673dd8a280883758f9744"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ha.gumi",
+        "download": "https://tanzil.net/trans/ha.gumi?type=sql",
+        "browse": "https://tanzil.net/#trans/ha.gumi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ha.gumi"
+      }
+    },
+    {
+      "id": "hi.farooq",
+      "language": "Hindi",
+      "languageCode": "hi",
+      "direction": "ltr",
+      "name": "फ़ारूक़ ख़ान & अहमद",
+      "translator": "Muhammad Farooq Khan and Muhammad Ahmed",
+      "lastUpdate": "March 18, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/hi.farooq.sql",
+        "sizeBytes": 2267566,
+        "sha256": "424c8a9b0ceca90eb4262687dadd7b4cdd66a47617fb974492869d1d3b163497"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/hi.farooq",
+        "download": "https://tanzil.net/trans/hi.farooq?type=sql",
+        "browse": "https://tanzil.net/#trans/hi.farooq/1:1",
+        "changelog": "https://tanzil.net/trans/log/hi.farooq"
+      }
+    },
+    {
+      "id": "hi.hindi",
+      "language": "Hindi",
+      "languageCode": "hi",
+      "direction": "ltr",
+      "name": "फ़ारूक़ ख़ान & नदवी",
+      "translator": "Suhel Farooq Khan and Saifur Rahman Nadwi",
+      "lastUpdate": "January 12, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/hi.hindi.sql",
+        "sizeBytes": 2502686,
+        "sha256": "36970501726c0bf9242bd3efaf13706142f276629c582ac39a56606d0738c928"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/hi.hindi",
+        "download": "https://tanzil.net/trans/hi.hindi?type=sql",
+        "browse": "https://tanzil.net/#trans/hi.hindi/1:1",
+        "changelog": "https://tanzil.net/trans/log/hi.hindi"
+      }
+    },
+    {
+      "id": "id.indonesian",
+      "language": "Indonesian",
+      "languageCode": "id",
+      "direction": "ltr",
+      "name": "Bahasa Indonesia",
+      "translator": "Indonesian Ministry of Religious Affairs",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/id.indonesian.sql",
+        "sizeBytes": 1249992,
+        "sha256": "cd8eb506dc394f707f5494332f841fc791cf947390800def122296f4fd4f6216"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/id.indonesian",
+        "download": "https://tanzil.net/trans/id.indonesian?type=sql",
+        "browse": "https://tanzil.net/#trans/id.indonesian/1:1",
+        "changelog": "https://tanzil.net/trans/log/id.indonesian"
+      }
+    },
+    {
+      "id": "id.muntakhab",
+      "language": "Indonesian",
+      "languageCode": "id",
+      "direction": "ltr",
+      "name": "Quraish Shihab",
+      "translator": "Muhammad Quraish Shihab et al.",
+      "lastUpdate": "April 28, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/id.muntakhab.sql",
+        "sizeBytes": 2633164,
+        "sha256": "59103a98ae823575d888254772b3d090fe1de8157088853bd3fb0c1ba98c8800"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/id.muntakhab",
+        "download": "https://tanzil.net/trans/id.muntakhab?type=sql",
+        "browse": "https://tanzil.net/#trans/id.muntakhab/1:1",
+        "changelog": "https://tanzil.net/trans/log/id.muntakhab"
+      }
+    },
+    {
+      "id": "id.jalalayn",
+      "language": "Indonesian",
+      "languageCode": "id",
+      "direction": "ltr",
+      "name": "Tafsir Jalalayn",
+      "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti",
+      "lastUpdate": "July 27, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/id.jalalayn.sql",
+        "sizeBytes": 2846234,
+        "sha256": "90b90542a2eaaf33c13c75471ac3f1d04fc64a4c569266d2e9a4263dec58a237"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/id.jalalayn",
+        "download": "https://tanzil.net/trans/id.jalalayn?type=sql",
+        "browse": "https://tanzil.net/#trans/id.jalalayn/1:1",
+        "changelog": "https://tanzil.net/trans/log/id.jalalayn"
+      }
+    },
+    {
+      "id": "it.piccardo",
+      "language": "Italian",
+      "languageCode": "it",
+      "direction": "ltr",
+      "name": "Piccardo",
+      "translator": "Hamza Roberto Piccardo",
+      "lastUpdate": "January 2, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/it.piccardo.sql",
+        "sizeBytes": 940346,
+        "sha256": "c377586d13abb3b76614f2b8bd90990fb78221ee98f4e9f496608c58e19750a8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/it.piccardo",
+        "download": "https://tanzil.net/trans/it.piccardo?type=sql",
+        "browse": "https://tanzil.net/#trans/it.piccardo/1:1",
+        "changelog": "https://tanzil.net/trans/log/it.piccardo"
+      }
+    },
+    {
+      "id": "ja.japanese",
+      "language": "Japanese",
+      "languageCode": "ja",
+      "direction": "ltr",
+      "name": "Japanese",
+      "translator": "Unknown",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ja.japanese.sql",
+        "sizeBytes": 1349821,
+        "sha256": "d71690d3db152e5d3e9b7cc7d1be344c367f047d97ec917d8109d94cebc1a909"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ja.japanese",
+        "download": "https://tanzil.net/trans/ja.japanese?type=sql",
+        "browse": "https://tanzil.net/#trans/ja.japanese/1:1",
+        "changelog": "https://tanzil.net/trans/log/ja.japanese"
+      }
+    },
+    {
+      "id": "ko.korean",
+      "language": "Korean",
+      "languageCode": "ko",
+      "direction": "ltr",
+      "name": "Korean",
+      "translator": "Unknown",
+      "lastUpdate": "July 15, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ko.korean.sql",
+        "sizeBytes": 1169665,
+        "sha256": "48503bd61be29aa05b9eb9ea1798585923e1857120fc32d37d799bd7963e9b68"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ko.korean",
+        "download": "https://tanzil.net/trans/ko.korean?type=sql",
+        "browse": "https://tanzil.net/#trans/ko.korean/1:1",
+        "changelog": "https://tanzil.net/trans/log/ko.korean"
+      }
+    },
+    {
+      "id": "ku.asan",
+      "language": "Kurdish",
+      "languageCode": "ku",
+      "direction": "rtl",
+      "name": "ته‌فسیری ئاسان",
+      "translator": "Burhan Muhammad-Amin",
+      "lastUpdate": "September 14, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ku.asan.sql",
+        "sizeBytes": 2652749,
+        "sha256": "c3ac65008595d97647ee409cd9232498b798316e5d23c361fe0899886a7ac0d9"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ku.asan",
+        "download": "https://tanzil.net/trans/ku.asan?type=sql",
+        "browse": "https://tanzil.net/#trans/ku.asan/1:1",
+        "changelog": "https://tanzil.net/trans/log/ku.asan"
+      }
+    },
+    {
+      "id": "ms.basmeih",
+      "language": "Malay",
+      "languageCode": "ms",
+      "direction": "ltr",
+      "name": "Basmeih",
+      "translator": "Abdullah Muhammad Basmeih",
+      "lastUpdate": "September 7, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ms.basmeih.sql",
+        "sizeBytes": 1578565,
+        "sha256": "423d9266b6b2530214e140c10e018edceb58f2bca0144ced2c6557ee3b3744fe"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ms.basmeih",
+        "download": "https://tanzil.net/trans/ms.basmeih?type=sql",
+        "browse": "https://tanzil.net/#trans/ms.basmeih/1:1",
+        "changelog": "https://tanzil.net/trans/log/ms.basmeih"
+      }
+    },
+    {
+      "id": "ml.abdulhameed",
+      "language": "Malayalam",
+      "languageCode": "ml",
+      "direction": "ltr",
+      "name": "അബ്ദുല്‍ ഹമീദ് & പറപ്പൂര്‍",
+      "translator": "Cheriyamundam Abdul Hameed and Kunhi Mohammed Parappoor",
+      "lastUpdate": "April 2, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ml.abdulhameed.sql",
+        "sizeBytes": 3321617,
+        "sha256": "a992230b4078f60ab0e2ff81e32a3827dcc68e8e930c97f340a38fb946538e92"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ml.abdulhameed",
+        "download": "https://tanzil.net/trans/ml.abdulhameed?type=sql",
+        "browse": "https://tanzil.net/#trans/ml.abdulhameed/1:1",
+        "changelog": "https://tanzil.net/trans/log/ml.abdulhameed"
+      }
+    },
+    {
+      "id": "ml.karakunnu",
+      "language": "Malayalam",
+      "languageCode": "ml",
+      "direction": "ltr",
+      "name": "കാരകുന്ന് & എളയാവൂര്",
+      "translator": "Muhammad Karakunnu and Vanidas Elayavoor",
+      "lastUpdate": "April 2, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ml.karakunnu.sql",
+        "sizeBytes": 2928228,
+        "sha256": "de3f2807229a9293967d4a32d55a543807d46ab21a3c74f834472289da58f06f"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ml.karakunnu",
+        "download": "https://tanzil.net/trans/ml.karakunnu?type=sql",
+        "browse": "https://tanzil.net/#trans/ml.karakunnu/1:1",
+        "changelog": "https://tanzil.net/trans/log/ml.karakunnu"
+      }
+    },
+    {
+      "id": "no.berg",
+      "language": "Norwegian",
+      "languageCode": "no",
+      "direction": "ltr",
+      "name": "Einar Berg",
+      "translator": "Einar Berg",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/no.berg.sql",
+        "sizeBytes": 857107,
+        "sha256": "90adb61f54636acee74fe71a10c3185d0bed4e0e7e53fcfca9d97a5d965a159c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/no.berg",
+        "download": "https://tanzil.net/trans/no.berg?type=sql",
+        "browse": "https://tanzil.net/#trans/no.berg/1:1",
+        "changelog": "https://tanzil.net/trans/log/no.berg"
+      }
+    },
+    {
+      "id": "ps.abdulwali",
+      "language": "Pashto",
+      "languageCode": "ps",
+      "direction": "rtl",
+      "name": "عبدالولي",
+      "translator": "Abdulwali Khan",
+      "lastUpdate": "June 29, 2016",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ps.abdulwali.sql",
+        "sizeBytes": 1657358,
+        "sha256": "a143571ef185c0c18f1599ff336417fa2671e89149f54527c14a377425e03c3d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ps.abdulwali",
+        "download": "https://tanzil.net/trans/ps.abdulwali?type=sql",
+        "browse": "https://tanzil.net/#trans/ps.abdulwali/1:1",
+        "changelog": "https://tanzil.net/trans/log/ps.abdulwali"
+      }
+    },
+    {
+      "id": "fa.ansarian",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "انصاریان",
+      "translator": "Hussain Ansarian",
+      "lastUpdate": "July 6, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.ansarian.sql",
+        "sizeBytes": 1738531,
+        "sha256": "625c96abbc6a529efa11e5ebf715eb67900b44ff3735318854726caebcc65ba7"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.ansarian",
+        "download": "https://tanzil.net/trans/fa.ansarian?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.ansarian/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.ansarian"
+      }
+    },
+    {
+      "id": "fa.ayati",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "آیتی",
+      "translator": "AbdolMohammad Ayati",
+      "lastUpdate": "August 1, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.ayati.sql",
+        "sizeBytes": 1285340,
+        "sha256": "8e51795f7e803d9bb6e4b1e778a7b32dcaec57b95ab10347764c804df5db2c07"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.ayati",
+        "download": "https://tanzil.net/trans/fa.ayati?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.ayati/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.ayati"
+      }
+    },
+    {
+      "id": "fa.bahrampour",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "بهرام‌پور",
+      "translator": "Abolfazl Bahrampour",
+      "lastUpdate": "November 29, 2013",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.bahrampour.sql",
+        "sizeBytes": 1322935,
+        "sha256": "2e553df6b902653e5d9049632b1a9ba17201dbcb13e1c2f01c5342df552975ec"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.bahrampour",
+        "download": "https://tanzil.net/trans/fa.bahrampour?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.bahrampour/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.bahrampour"
+      }
+    },
+    {
+      "id": "fa.gharaati",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "قرائتی",
+      "translator": "Mohsen Gharaati",
+      "lastUpdate": "April 11, 2022",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.gharaati.sql",
+        "sizeBytes": 1579560,
+        "sha256": "2685205838b9290a32ca4c33c8fee9b274ccd55a79b22cc8a7aad7304a8d6784"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.gharaati",
+        "download": "https://tanzil.net/trans/fa.gharaati?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.gharaati/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.gharaati"
+      }
+    },
+    {
+      "id": "fa.ghomshei",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "الهی قمشه‌ای",
+      "translator": "Mahdi Elahi Ghomshei",
+      "lastUpdate": "July 17, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.ghomshei.sql",
+        "sizeBytes": 1671968,
+        "sha256": "327c3587baf6bfc177f7e9c8a8114ad874208c616ea278be09bb24ca82d0b8e4"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.ghomshei",
+        "download": "https://tanzil.net/trans/fa.ghomshei?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.ghomshei/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.ghomshei"
+      }
+    },
+    {
+      "id": "fa.khorramdel",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "خرمدل",
+      "translator": "Mostafa Khorramdel",
+      "lastUpdate": "March 19, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.khorramdel.sql",
+        "sizeBytes": 4960326,
+        "sha256": "5f58e21ff5795380f84947784531910f3f11a2555883aa6dc767af4eaf37814c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.khorramdel",
+        "download": "https://tanzil.net/trans/fa.khorramdel?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.khorramdel/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.khorramdel"
+      }
+    },
+    {
+      "id": "fa.khorramshahi",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "خرمشاهی",
+      "translator": "Baha'oddin Khorramshahi",
+      "lastUpdate": "July 27, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.khorramshahi.sql",
+        "sizeBytes": 1388377,
+        "sha256": "be1afeb01a920911f2a599ace4aa081ef1025e674aaf442e3ee2fa011243d6ce"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.khorramshahi",
+        "download": "https://tanzil.net/trans/fa.khorramshahi?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.khorramshahi/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.khorramshahi"
+      }
+    },
+    {
+      "id": "fa.sadeqi",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "صادقی تهرانی",
+      "translator": "Mohammad Sadeqi Tehrani",
+      "lastUpdate": "August 1, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.sadeqi.sql",
+        "sizeBytes": 1586278,
+        "sha256": "952fc492127974090ab85eb83a09424b9127372d04dd9fd1317bf54633018560"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.sadeqi",
+        "download": "https://tanzil.net/trans/fa.sadeqi?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.sadeqi/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.sadeqi"
+      }
+    },
+    {
+      "id": "fa.safavi",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "صفوی",
+      "translator": "Sayyed Mohammad Reza Safavi",
+      "lastUpdate": "April 11, 2022",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.safavi.sql",
+        "sizeBytes": 2038636,
+        "sha256": "2459fdab9c8be2176d11febe1eb600aadc90c5af1f407c28143011d7c0cd5b16"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.safavi",
+        "download": "https://tanzil.net/trans/fa.safavi?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.safavi/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.safavi"
+      }
+    },
+    {
+      "id": "fa.fooladvand",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "فولادوند",
+      "translator": "Mohammad Mahdi Fooladvand",
+      "lastUpdate": "May 3, 2022",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.fooladvand.sql",
+        "sizeBytes": 1429289,
+        "sha256": "701708264d24e95454734d2c99a74ec30a4c4113d05b40f97a74478f92da2b67"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.fooladvand",
+        "download": "https://tanzil.net/trans/fa.fooladvand?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.fooladvand/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.fooladvand"
+      }
+    },
+    {
+      "id": "fa.mojtabavi",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "مجتبوی",
+      "translator": "Sayyed Jalaloddin Mojtabavi",
+      "lastUpdate": "April 16, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.mojtabavi.sql",
+        "sizeBytes": 1482107,
+        "sha256": "861be89dabb6eb61a6f1ef2cff03911f344955fa585798dc1c07e41063744e61"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.mojtabavi",
+        "download": "https://tanzil.net/trans/fa.mojtabavi?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.mojtabavi/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.mojtabavi"
+      }
+    },
+    {
+      "id": "fa.moezzi",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "معزی",
+      "translator": "Mohammad Kazem Moezzi",
+      "lastUpdate": "August 24, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.moezzi.sql",
+        "sizeBytes": 1230549,
+        "sha256": "c6213d3f2498edc41df3ead1d687a9a3f54e219108df9468325572269606bfdc"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.moezzi",
+        "download": "https://tanzil.net/trans/fa.moezzi?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.moezzi/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.moezzi"
+      }
+    },
+    {
+      "id": "fa.makarem",
+      "language": "Persian",
+      "languageCode": "fa",
+      "direction": "rtl",
+      "name": "مکارم شیرازی",
+      "translator": "Naser Makarem Shirazi",
+      "lastUpdate": "January 22, 2014",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/fa.makarem.sql",
+        "sizeBytes": 1599886,
+        "sha256": "6c60d8d085d61aac9fb360df7f2c8dcd417f2b0392f8bf40a1be4154f437edc8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/fa.makarem",
+        "download": "https://tanzil.net/trans/fa.makarem?type=sql",
+        "browse": "https://tanzil.net/#trans/fa.makarem/1:1",
+        "changelog": "https://tanzil.net/trans/log/fa.makarem"
+      }
+    },
+    {
+      "id": "pl.bielawskiego",
+      "language": "Polish",
+      "languageCode": "pl",
+      "direction": "ltr",
+      "name": "Bielawskiego",
+      "translator": "Józefa Bielawskiego",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/pl.bielawskiego.sql",
+        "sizeBytes": 991357,
+        "sha256": "c8969504e4f0fd1d45cdeefc43514e1b2247a271d92f1e6f6b4794cf5e50efb0"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/pl.bielawskiego",
+        "download": "https://tanzil.net/trans/pl.bielawskiego?type=sql",
+        "browse": "https://tanzil.net/#trans/pl.bielawskiego/1:1",
+        "changelog": "https://tanzil.net/trans/log/pl.bielawskiego"
+      }
+    },
+    {
+      "id": "pt.elhayek",
+      "language": "Portuguese",
+      "languageCode": "pt",
+      "direction": "ltr",
+      "name": "El-Hayek",
+      "translator": "Samir El-Hayek",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/pt.elhayek.sql",
+        "sizeBytes": 941634,
+        "sha256": "8547cca493b1bed91fc09e3cea5116598d82a81a59d63d3da9841c360c93b67e"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/pt.elhayek",
+        "download": "https://tanzil.net/trans/pt.elhayek?type=sql",
+        "browse": "https://tanzil.net/#trans/pt.elhayek/1:1",
+        "changelog": "https://tanzil.net/trans/log/pt.elhayek"
+      }
+    },
+    {
+      "id": "ro.grigore",
+      "language": "Romanian",
+      "languageCode": "ro",
+      "direction": "ltr",
+      "name": "Grigore",
+      "translator": "George Grigore",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ro.grigore.sql",
+        "sizeBytes": 952905,
+        "sha256": "0d9d92c5234547d18f23e9d227767f69ec1e42716435df378fd9139593539f7c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ro.grigore",
+        "download": "https://tanzil.net/trans/ro.grigore?type=sql",
+        "browse": "https://tanzil.net/#trans/ro.grigore/1:1",
+        "changelog": "https://tanzil.net/trans/log/ro.grigore"
+      }
+    },
+    {
+      "id": "ru.abuadel",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Абу Адель",
+      "translator": "Abu Adel",
+      "lastUpdate": "September 15, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.abuadel.sql",
+        "sizeBytes": 2901573,
+        "sha256": "7434c7c0cf82ad3701b876d5339f6b2706ad637bb3466ff08dc43ef0d0b60a12"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.abuadel",
+        "download": "https://tanzil.net/trans/ru.abuadel?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.abuadel/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.abuadel"
+      }
+    },
+    {
+      "id": "ru.muntahab",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Аль-Мунтахаб",
+      "translator": "Ministry of Awqaf, Egypt",
+      "lastUpdate": "May 29, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.muntahab.sql",
+        "sizeBytes": 3240497,
+        "sha256": "4a3910c796e57d3e4494b7ff3d62cd6f83d95d214dbe3b8768a7ec8cb26030ff"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.muntahab",
+        "download": "https://tanzil.net/trans/ru.muntahab?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.muntahab/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.muntahab"
+      }
+    },
+    {
+      "id": "ru.kalam",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Калям Шариф",
+      "translator": "Muslim Religious Board of the Republiс of Tatarstan",
+      "lastUpdate": "April 12, 2023",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.kalam.sql",
+        "sizeBytes": 1904474,
+        "sha256": "f8f2976159fd92d815c3cf08ef8c91546b6f40ba65311c2759a51d972af1e90c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.kalam",
+        "download": "https://tanzil.net/trans/ru.kalam?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.kalam/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.kalam"
+      }
+    },
+    {
+      "id": "ru.krachkovsky",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Крачковский",
+      "translator": "Ignaty Yulianovich Krachkovsky",
+      "lastUpdate": "September 20, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.krachkovsky.sql",
+        "sizeBytes": 1381583,
+        "sha256": "e2d3165df21edb948412c741b78dd90c83eccf05592daf340251c0adb942c709"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.krachkovsky",
+        "download": "https://tanzil.net/trans/ru.krachkovsky?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.krachkovsky/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.krachkovsky"
+      }
+    },
+    {
+      "id": "ru.kuliev",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Кулиев",
+      "translator": "Elmir Kuliev",
+      "lastUpdate": "May 29, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.kuliev.sql",
+        "sizeBytes": 1543994,
+        "sha256": "bec88cd675ecbd06e5c353414374970900ff18242f58450da25df0c651f2479b"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.kuliev",
+        "download": "https://tanzil.net/trans/ru.kuliev?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.kuliev/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.kuliev"
+      }
+    },
+    {
+      "id": "ru.kuliev-alsaadi",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Кулиев + ас-Саади",
+      "translator": "Elmir Kuliev (with Abd ar-Rahman as-Saadi's commentaries)",
+      "lastUpdate": "October 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.kuliev-alsaadi.sql",
+        "sizeBytes": 10552198,
+        "sha256": "ccab2d10c1f1a332343587db5945957d7cf20cf06a4d11add98603621aec2542"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.kuliev-alsaadi",
+        "download": "https://tanzil.net/trans/ru.kuliev-alsaadi?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.kuliev-alsaadi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.kuliev-alsaadi"
+      }
+    },
+    {
+      "id": "ru.osmanov",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Османов",
+      "translator": "Magomed-Nuri Osmanovich Osmanov",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.osmanov.sql",
+        "sizeBytes": 1597196,
+        "sha256": "1a2629319455b2357e251b70a8e254ae4086ae234aed601b6d400048dcd60446"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.osmanov",
+        "download": "https://tanzil.net/trans/ru.osmanov?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.osmanov/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.osmanov"
+      }
+    },
+    {
+      "id": "ru.porokhova",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Порохова",
+      "translator": "V. Porokhova",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.porokhova.sql",
+        "sizeBytes": 1637536,
+        "sha256": "3ca2ac5b0d0652543753464133250643c1488f6d87549f3cbeb5de3eb657dcb4"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.porokhova",
+        "download": "https://tanzil.net/trans/ru.porokhova?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.porokhova/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.porokhova"
+      }
+    },
+    {
+      "id": "ru.sablukov",
+      "language": "Russian",
+      "languageCode": "ru",
+      "direction": "ltr",
+      "name": "Саблуков",
+      "translator": "Gordy Semyonovich Sablukov",
+      "lastUpdate": "October 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ru.sablukov.sql",
+        "sizeBytes": 1481400,
+        "sha256": "0c8bca5fee8d287e6b1bfc6f6d55e4d237b9a2258426e6c84fd643bf6b5897d3"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ru.sablukov",
+        "download": "https://tanzil.net/trans/ru.sablukov?type=sql",
+        "browse": "https://tanzil.net/#trans/ru.sablukov/1:1",
+        "changelog": "https://tanzil.net/trans/log/ru.sablukov"
+      }
+    },
+    {
+      "id": "sd.amroti",
+      "language": "Sindhi",
+      "languageCode": "sd",
+      "direction": "rtl",
+      "name": "امروٽي",
+      "translator": "Taj Mehmood Amroti",
+      "lastUpdate": "April 9, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sd.amroti.sql",
+        "sizeBytes": 1487076,
+        "sha256": "4ad69b8f51f8b02dc86da1614ede4f1ce3d27ca4de7ee6bb002bdb38390bac5d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sd.amroti",
+        "download": "https://tanzil.net/trans/sd.amroti?type=sql",
+        "browse": "https://tanzil.net/#trans/sd.amroti/1:1",
+        "changelog": "https://tanzil.net/trans/log/sd.amroti"
+      }
+    },
+    {
+      "id": "so.abduh",
+      "language": "Somali",
+      "languageCode": "so",
+      "direction": "ltr",
+      "name": "Abduh",
+      "translator": "Mahmud Muhammad Abduh",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/so.abduh.sql",
+        "sizeBytes": 869966,
+        "sha256": "8d70b758950393a0f16cbe81a53534e49bbac8fbc521055e7ab8a0acad015c1f"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/so.abduh",
+        "download": "https://tanzil.net/trans/so.abduh?type=sql",
+        "browse": "https://tanzil.net/#trans/so.abduh/1:1",
+        "changelog": "https://tanzil.net/trans/log/so.abduh"
+      }
+    },
+    {
+      "id": "es.bornez",
+      "language": "Spanish",
+      "languageCode": "es",
+      "direction": "ltr",
+      "name": "Bornez",
+      "translator": "Raúl González Bórnez",
+      "lastUpdate": "July 15, 2014",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/es.bornez.sql",
+        "sizeBytes": 973533,
+        "sha256": "5edf7517af0e7f89944b634d5d90a24c2aa937877a6a9dbec5a170202db3a22d"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/es.bornez",
+        "download": "https://tanzil.net/trans/es.bornez?type=sql",
+        "browse": "https://tanzil.net/#trans/es.bornez/1:1",
+        "changelog": "https://tanzil.net/trans/log/es.bornez"
+      }
+    },
+    {
+      "id": "es.cortes",
+      "language": "Spanish",
+      "languageCode": "es",
+      "direction": "ltr",
+      "name": "Cortes",
+      "translator": "Julio Cortes",
+      "lastUpdate": "August 12, 2014",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/es.cortes.sql",
+        "sizeBytes": 893385,
+        "sha256": "dcb9c62ce152252cb67826d1692fb9f8ba75adc1e0855e5058ce2ee3b9e55f13"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/es.cortes",
+        "download": "https://tanzil.net/trans/es.cortes?type=sql",
+        "browse": "https://tanzil.net/#trans/es.cortes/1:1",
+        "changelog": "https://tanzil.net/trans/log/es.cortes"
+      }
+    },
+    {
+      "id": "es.garcia",
+      "language": "Spanish",
+      "languageCode": "es",
+      "direction": "ltr",
+      "name": "Garcia",
+      "translator": "Muhammad Isa García",
+      "lastUpdate": "July 15, 2014",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/es.garcia.sql",
+        "sizeBytes": 1015666,
+        "sha256": "f65e3584ef576eb252e20d55f773accaabd431f0e751acc26a485a2b16573fc7"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/es.garcia",
+        "download": "https://tanzil.net/trans/es.garcia?type=sql",
+        "browse": "https://tanzil.net/#trans/es.garcia/1:1",
+        "changelog": "https://tanzil.net/trans/log/es.garcia"
+      }
+    },
+    {
+      "id": "sw.barwani",
+      "language": "Swahili",
+      "languageCode": "sw",
+      "direction": "ltr",
+      "name": "Al-Barwani",
+      "translator": "Ali Muhsin Al-Barwani",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sw.barwani.sql",
+        "sizeBytes": 890668,
+        "sha256": "ea441b1d1966ca7ae94277c6d83ae8200bdfa499d6cb68745ebb4b320058a34c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sw.barwani",
+        "download": "https://tanzil.net/trans/sw.barwani?type=sql",
+        "browse": "https://tanzil.net/#trans/sw.barwani/1:1",
+        "changelog": "https://tanzil.net/trans/log/sw.barwani"
+      }
+    },
+    {
+      "id": "sv.bernstrom",
+      "language": "Swedish",
+      "languageCode": "sv",
+      "direction": "ltr",
+      "name": "Bernström",
+      "translator": "Knut Bernström",
+      "lastUpdate": "July 30, 2012",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/sv.bernstrom.sql",
+        "sizeBytes": 1117203,
+        "sha256": "7fcdca577e590a1dd6c5ecc85d66f6b254bc9d6a1f2c383cde5c516c56c501c8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/sv.bernstrom",
+        "download": "https://tanzil.net/trans/sv.bernstrom?type=sql",
+        "browse": "https://tanzil.net/#trans/sv.bernstrom/1:1",
+        "changelog": "https://tanzil.net/trans/log/sv.bernstrom"
+      }
+    },
+    {
+      "id": "tg.ayati",
+      "language": "Tajik",
+      "languageCode": "tg",
+      "direction": "ltr",
+      "name": "Оятӣ",
+      "translator": "AbdolMohammad Ayati",
+      "lastUpdate": "August 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tg.ayati.sql",
+        "sizeBytes": 1463735,
+        "sha256": "15ec4f89bc1d0df131a548844c7b0f1a361f6743c9b5ddb675d172b3194cfa1c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tg.ayati",
+        "download": "https://tanzil.net/trans/tg.ayati?type=sql",
+        "browse": "https://tanzil.net/#trans/tg.ayati/1:1",
+        "changelog": "https://tanzil.net/trans/log/tg.ayati"
+      }
+    },
+    {
+      "id": "ta.tamil",
+      "language": "Tamil",
+      "languageCode": "ta",
+      "direction": "ltr",
+      "name": "ஜான் டிரஸ்ட்",
+      "translator": "Jan Turst Foundation",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ta.tamil.sql",
+        "sizeBytes": 3435669,
+        "sha256": "559233bbcb436f0c73fb96f35b25d5e1be58e4260404359758b99d269a15a0e7"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ta.tamil",
+        "download": "https://tanzil.net/trans/ta.tamil?type=sql",
+        "browse": "https://tanzil.net/#trans/ta.tamil/1:1",
+        "changelog": "https://tanzil.net/trans/log/ta.tamil"
+      }
+    },
+    {
+      "id": "tt.nugman",
+      "language": "Tatar",
+      "languageCode": "tt",
+      "direction": "ltr",
+      "name": "Yakub Ibn Nugman",
+      "translator": "Yakub Ibn Nugman",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tt.nugman.sql",
+        "sizeBytes": 2307773,
+        "sha256": "e8f8d97d5c3c40713df9ca528ded30f0f5fc953aedf4b40ed428e3431fa431f1"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tt.nugman",
+        "download": "https://tanzil.net/trans/tt.nugman?type=sql",
+        "browse": "https://tanzil.net/#trans/tt.nugman/1:1",
+        "changelog": "https://tanzil.net/trans/log/tt.nugman"
+      }
+    },
+    {
+      "id": "th.thai",
+      "language": "Thai",
+      "languageCode": "th",
+      "direction": "ltr",
+      "name": "ภาษาไทย",
+      "translator": "King Fahad Quran Complex",
+      "lastUpdate": "October 10, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/th.thai.sql",
+        "sizeBytes": 2760810,
+        "sha256": "a0ce06b835c00bc96f4b53b6b8da515cbc8c6daf2551c36af1d27c8f0c615307"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/th.thai",
+        "download": "https://tanzil.net/trans/th.thai?type=sql",
+        "browse": "https://tanzil.net/#trans/th.thai/1:1",
+        "changelog": "https://tanzil.net/trans/log/th.thai"
+      }
+    },
+    {
+      "id": "tr.golpinarli",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Abdulbakî Gölpınarlı",
+      "translator": "Abdulbaki Golpinarli",
+      "lastUpdate": "September 14, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.golpinarli.sql",
+        "sizeBytes": 1006660,
+        "sha256": "4c7b628bc0beabe6e992850d7109162b2916abbf494abd5e6047c8e48672dfa8"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.golpinarli",
+        "download": "https://tanzil.net/trans/tr.golpinarli?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.golpinarli/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.golpinarli"
+      }
+    },
+    {
+      "id": "tr.bulac",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Alİ Bulaç",
+      "translator": "Alİ Bulaç",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.bulac.sql",
+        "sizeBytes": 1057189,
+        "sha256": "0d23ed72e315cdb5d83ee24fe5d642f3df67131070387b75cad75e5e2dfbdb20"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.bulac",
+        "download": "https://tanzil.net/trans/tr.bulac?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.bulac/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.bulac"
+      }
+    },
+    {
+      "id": "tr.transliteration",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Çeviriyazı",
+      "translator": "Muhammet Abay",
+      "lastUpdate": "September 15, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.transliteration.sql",
+        "sizeBytes": 824316,
+        "sha256": "3270c93c373182acce9010bf74d5a9d707d5f5e583fe317408a3300b58c61308"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.transliteration",
+        "download": "https://tanzil.net/trans/tr.transliteration?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.transliteration/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.transliteration"
+      }
+    },
+    {
+      "id": "tr.diyanet",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Diyanet İşleri",
+      "translator": "Diyanet Isleri",
+      "lastUpdate": "December 27, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.diyanet.sql",
+        "sizeBytes": 1106965,
+        "sha256": "419fdec17b10ee40d6d5f179555515f70e4ce53825d49f0b8336fb9aafae784e"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.diyanet",
+        "download": "https://tanzil.net/trans/tr.diyanet?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.diyanet/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.diyanet"
+      }
+    },
+    {
+      "id": "tr.vakfi",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Diyanet Vakfı",
+      "translator": "Diyanet Vakfi",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.vakfi.sql",
+        "sizeBytes": 1027489,
+        "sha256": "d24cb1df5733ad69d9d4681025e0cd073091e1b0376990fa8c8df9e521dd1d9c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.vakfi",
+        "download": "https://tanzil.net/trans/tr.vakfi?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.vakfi/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.vakfi"
+      }
+    },
+    {
+      "id": "tr.yuksel",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Edip Yüksel",
+      "translator": "Edip Yüksel",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.yuksel.sql",
+        "sizeBytes": 895126,
+        "sha256": "9d4bc017bf0580d25c6c9887f03070ead9f1951d1fb1e3118f388e348db4764a"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.yuksel",
+        "download": "https://tanzil.net/trans/tr.yuksel?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.yuksel/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.yuksel"
+      }
+    },
+    {
+      "id": "tr.yazir",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Elmalılı Hamdi Yazır",
+      "translator": "Elmalili Hamdi Yazir",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.yazir.sql",
+        "sizeBytes": 1036981,
+        "sha256": "7a311b9eabe78119d3dad7a2c0c40b8328963de92ad2f1b21832b35ffd9f603e"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.yazir",
+        "download": "https://tanzil.net/trans/tr.yazir?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.yazir/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.yazir"
+      }
+    },
+    {
+      "id": "tr.ozturk",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Öztürk",
+      "translator": "Yasar Nuri Ozturk",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.ozturk.sql",
+        "sizeBytes": 1025485,
+        "sha256": "cb5a2aa12dc204cafc9a51650e18621092eca190c7bd994d4f08eba63939fea3"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.ozturk",
+        "download": "https://tanzil.net/trans/tr.ozturk?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.ozturk/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.ozturk"
+      }
+    },
+    {
+      "id": "tr.yildirim",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Suat Yıldırım",
+      "translator": "Suat Yildirim",
+      "lastUpdate": "September 14, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.yildirim.sql",
+        "sizeBytes": 1365822,
+        "sha256": "064cd601925adf9b3e845e0d977eff67d216f9878f6d526d61978dd5b050c81c"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.yildirim",
+        "download": "https://tanzil.net/trans/tr.yildirim?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.yildirim/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.yildirim"
+      }
+    },
+    {
+      "id": "tr.ates",
+      "language": "Turkish",
+      "languageCode": "tr",
+      "direction": "ltr",
+      "name": "Süleyman Ateş",
+      "translator": "Suleyman Ates",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/tr.ates.sql",
+        "sizeBytes": 1001806,
+        "sha256": "eee934fed70558411fe85ab357f74456371f067eeb1aaf8506a1fbdbcf91d223"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/tr.ates",
+        "download": "https://tanzil.net/trans/tr.ates?type=sql",
+        "browse": "https://tanzil.net/#trans/tr.ates/1:1",
+        "changelog": "https://tanzil.net/trans/log/tr.ates"
+      }
+    },
+    {
+      "id": "ur.maududi",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "ابوالاعلی مودودی",
+      "translator": "Abul A'ala Maududi",
+      "lastUpdate": "November 15, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.maududi.sql",
+        "sizeBytes": 1645544,
+        "sha256": "c2201ffa317f95a9a6eb887bb171a833ae560de8ad900b1503cfddbee615141a"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.maududi",
+        "download": "https://tanzil.net/trans/ur.maududi?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.maududi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.maududi"
+      }
+    },
+    {
+      "id": "ur.kanzuliman",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "احمد رضا خان",
+      "translator": "Ahmed Raza Khan",
+      "lastUpdate": "March 17, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.kanzuliman.sql",
+        "sizeBytes": 1325347,
+        "sha256": "d29104332b1d2abc1392f77acfe89e85244aafac48362a337d54ecbccefc9ed7"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.kanzuliman",
+        "download": "https://tanzil.net/trans/ur.kanzuliman?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.kanzuliman/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.kanzuliman"
+      }
+    },
+    {
+      "id": "ur.ahmedali",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "احمد علی",
+      "translator": "Ahmed Ali",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.ahmedali.sql",
+        "sizeBytes": 1388331,
+        "sha256": "40a80a0272ca10a703eeeeb65f69930eefa0503c10a818e765af25306ffebe84"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.ahmedali",
+        "download": "https://tanzil.net/trans/ur.ahmedali?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.ahmedali/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.ahmedali"
+      }
+    },
+    {
+      "id": "ur.jalandhry",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "جالندہری",
+      "translator": "Fateh Muhammad Jalandhry",
+      "lastUpdate": "December 24, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.jalandhry.sql",
+        "sizeBytes": 1540391,
+        "sha256": "85348bd1fcba32a38cccc2e3dd582fc2e98ed926101c94ab17bc0d664f26b199"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.jalandhry",
+        "download": "https://tanzil.net/trans/ur.jalandhry?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.jalandhry/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.jalandhry"
+      }
+    },
+    {
+      "id": "ur.qadri",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "طاہر القادری",
+      "translator": "Tahir ul Qadri",
+      "lastUpdate": "August 16, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.qadri.sql",
+        "sizeBytes": 1926081,
+        "sha256": "f716511927dac248c24977d4e43ff1e1966763f31f474f3fa32c0e346ff19003"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.qadri",
+        "download": "https://tanzil.net/trans/ur.qadri?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.qadri/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.qadri"
+      }
+    },
+    {
+      "id": "ur.jawadi",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "علامہ جوادی",
+      "translator": "Syed Zeeshan Haider Jawadi",
+      "lastUpdate": "December 24, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.jawadi.sql",
+        "sizeBytes": 1536429,
+        "sha256": "6b50edd61a5e96366cefcae9eab6cd46b8a9a9bef3c18f34cfc4b575214ae8c5"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.jawadi",
+        "download": "https://tanzil.net/trans/ur.jawadi?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.jawadi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.jawadi"
+      }
+    },
+    {
+      "id": "ur.junagarhi",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "محمد جوناگڑھی",
+      "translator": "Muhammad Junagarhi",
+      "lastUpdate": "April 25, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.junagarhi.sql",
+        "sizeBytes": 1541268,
+        "sha256": "ed11cb661e616374e5854bd91ed006a74264275a52f79b4f505b042895260929"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.junagarhi",
+        "download": "https://tanzil.net/trans/ur.junagarhi?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.junagarhi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.junagarhi"
+      }
+    },
+    {
+      "id": "ur.najafi",
+      "language": "Urdu",
+      "languageCode": "ur",
+      "direction": "rtl",
+      "name": "محمد حسین نجفی",
+      "translator": "Muhammad Hussain Najafi",
+      "lastUpdate": "August 19, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ur.najafi.sql",
+        "sizeBytes": 1707973,
+        "sha256": "68768cc5ab78fb52a20338db5bd915e393478c5f739252a1031230dcd5c0421f"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ur.najafi",
+        "download": "https://tanzil.net/trans/ur.najafi?type=sql",
+        "browse": "https://tanzil.net/#trans/ur.najafi/1:1",
+        "changelog": "https://tanzil.net/trans/log/ur.najafi"
+      }
+    },
+    {
+      "id": "ug.saleh",
+      "language": "Uyghur",
+      "languageCode": "ug",
+      "direction": "rtl",
+      "name": "محمد صالح",
+      "translator": "Muhammad Saleh",
+      "lastUpdate": "June 4, 2010",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/ug.saleh.sql",
+        "sizeBytes": 2191387,
+        "sha256": "e2eac0bc8abd6b8a8c3d1d093bf3db4b597d75d47b4ff6485dfcc8a87b5d935a"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/ug.saleh",
+        "download": "https://tanzil.net/trans/ug.saleh?type=sql",
+        "browse": "https://tanzil.net/#trans/ug.saleh/1:1",
+        "changelog": "https://tanzil.net/trans/log/ug.saleh"
+      }
+    },
+    {
+      "id": "uz.sodik",
+      "language": "Uzbek",
+      "languageCode": "uz",
+      "direction": "ltr",
+      "name": "Мухаммад Содик",
+      "translator": "Muhammad Sodik Muhammad Yusuf",
+      "lastUpdate": "July 17, 2011",
+      "ayaCount": 6236,
+      "file": {
+        "sql": "sql/uz.sodik.sql",
+        "sizeBytes": 2618026,
+        "sha256": "7b587496ff7d02fb593ab5e80ebfa1a1713b96d0fcae48601f6397655fbb9a97"
+      },
+      "urls": {
+        "tanzil": "https://tanzil.net/trans/uz.sodik",
+        "download": "https://tanzil.net/trans/uz.sodik?type=sql",
+        "browse": "https://tanzil.net/#trans/uz.sodik/1:1",
+        "changelog": "https://tanzil.net/trans/log/uz.sodik"
+      }
+    }
+  ]
+}
