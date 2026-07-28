@@ -22,6 +22,7 @@
   // `onMount` only runs in the browser, so this is also where analytics is
   // safe to start (gtag.js + cookies can't run during SSR).
   onMount(() => {
+    prefs.hydrate();
     prefs.apply();
     // Firebase is imported dynamically so its SDK + config never enter the
     // critical modulepreload graph — analytics starts only after hydration.

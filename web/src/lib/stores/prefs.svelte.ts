@@ -30,7 +30,17 @@ function load(): Prefs {
 }
 
 class PrefsStore {
-  #prefs = $state<Prefs>(load());
+  // SSR renders from DEFAULTS; saved prefs hydrate after mount so the theme
+  // icon (and any pref-derived UI) matches the prerendered HTML on first paint.
+  #prefs = $state<Prefs>({ ...DEFAULTS } as Prefs);
+  #hydrated = false;
+
+  /** Hydrate from localStorage after mount (SSR used DEFAULTS). */
+  hydrate(): void {
+    if (this.#hydrated || !browser) return;
+    this.#hydrated = true;
+    this.#prefs = { ...this.#prefs, ...load() };
+  }
 
   get current(): Readonly<Prefs> {
     return this.#prefs;

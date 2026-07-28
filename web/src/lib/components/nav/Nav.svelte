@@ -1,20 +1,25 @@
 <!--
-  Nav — sticky, blurred top bar. Brand + section links (from site config) +
-  theme toggle and GitHub. The active link mirrors the current route via
-  SvelteKit's `page` state. Below `md` the links collapse into a hamburger
-  drawer (the bar keeps brand + theme toggle).
+  Nav — sticky, blurred top bar. Brand + the primary links (NAV_LINKS from the
+  site config) + theme toggle and the "Open the app" CTA. The active link
+  mirrors the current route via SvelteKit's `page` state; /app is active for
+  any path under it. Below `md` the links collapse into a hamburger drawer
+  (the bar keeps brand + toggle + CTA).
 -->
 <script lang="ts">
   import { page } from "$app/state";
-  import { NAV_PAGES, SITE } from "$lib/config/site";
+  import { NAV_LINKS } from "$lib/config/site";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { cn } from "$lib/utils";
   import { Button } from "$lib/components/ui/button";
   import { Brand } from "$lib/components/brand";
   import { Icon } from "$lib/components/icon";
 
-  const links = NAV_PAGES.filter((p) => p.id !== "home");
   let open = $state(false);
+
+  // /app is active on every reader route; the marketing links are exact matches.
+  function isActive(href: string) {
+    return href === "/app" ? page.url.pathname.startsWith("/app") : page.url.pathname === href;
+  }
 
   // Close the drawer whenever the route changes (link taps + back/forward).
   $effect(() => {
@@ -38,45 +43,35 @@
 <nav
   aria-label="Primary"
   class="sticky top-0 z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150"
-  style="--nav-h:60px"
 >
-  <div class="mx-auto flex h-[60px] max-w-[1440px] items-center gap-4 px-6 md:gap-8">
-    <Brand />
+  <div class="mx-auto flex h-[60px] max-w-[1180px] items-center gap-6 px-6 sm:px-7">
+    <Brand class="mr-auto" />
 
-    <div class="ml-4 hidden items-center gap-0.5 md:flex">
-      {#each links as p (p.id)}
-        {@const active = page.url.pathname === p.href}
+    <div class="hidden items-center gap-0.5 md:flex">
+      {#each NAV_LINKS as p (p.href)}
+        {@const active = isActive(p.href)}
         <a
           href={p.href}
           aria-current={active ? "page" : undefined}
           class={cn(
-            "rounded px-3 py-1.5 text-sm transition-colors duration-150",
-            active ? "bg-bg-2 text-fg" : "text-fg-3 hover:bg-bg-2 hover:text-fg",
+            "rounded-md px-3 py-1.5 text-sm transition-colors duration-150",
+            active ? "bg-bg-2 text-fg" : "text-fg-2 hover:bg-bg-2 hover:text-fg",
           )}>{p.label}</a
         >
       {/each}
     </div>
 
-    <div class="ml-auto flex items-center gap-2">
+    <div class="flex items-center gap-2">
       <button
         type="button"
         onclick={() => prefs.toggleTheme()}
         aria-label="Toggle theme"
-        class="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors duration-150 hover:text-fg"
+        class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg"
       >
         <Icon name={prefs.theme === "dark" ? "sun" : "moon"} size={16} />
       </button>
-      <Button
-        variant="ghost"
-        size="sm"
-        href={SITE.github}
-        aria-label="GitHub (opens in a new tab)"
-        class="hidden md:inline-flex"
-      >
-        <Icon name="gh" size={14} /> <span class="hidden lg:inline">GitHub</span>
-      </Button>
-      <Button variant="accent" size="sm" href="/app" arrow class="hidden sm:inline-flex">
-        Open app
+      <Button variant="accent" size="sm" href="/app" class="hidden sm:inline-flex">
+        Open the app
       </Button>
       <button
         type="button"
@@ -84,7 +79,7 @@
         aria-expanded={open}
         aria-controls="mobile-menu"
         aria-label="Menu"
-        class="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors duration-150 hover:bg-bg-2 hover:text-fg md:hidden"
+        class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg md:hidden"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
       </button>
@@ -105,10 +100,10 @@
     id="mobile-menu"
     class="fixed inset-x-0 top-[60px] z-50 border-b border-line bg-bg/95 backdrop-blur-xl md:hidden"
   >
-    <div class="mx-auto max-w-[1440px] px-6 py-3">
+    <div class="mx-auto max-w-[1180px] px-6 py-3 sm:px-7">
       <div class="grid gap-1">
-        {#each links as p (p.id)}
-          {@const active = page.url.pathname === p.href}
+        {#each NAV_LINKS as p (p.href)}
+          {@const active = isActive(p.href)}
           <a
             href={p.href}
             aria-current={active ? "page" : undefined}
@@ -120,12 +115,9 @@
           >
         {/each}
       </div>
-      <div class="mt-2 grid gap-2 border-t border-line pt-3 sm:grid-cols-2">
-        <Button variant="ghost" size="sm" href={SITE.github} class="w-full justify-center">
-          <Icon name="gh" size={14} /> GitHub
-        </Button>
-        <Button variant="accent" size="sm" href="/app" arrow class="w-full justify-center">
-          Open app
+      <div class="mt-2 border-t border-line pt-3">
+        <Button variant="accent" size="sm" href="/app" class="w-full justify-center">
+          Open the app
         </Button>
       </div>
     </div>

@@ -12,14 +12,18 @@
      5. shadcn semantic   — maps our tokens onto shadcn-svelte's variable
                             names so registry components inherit the look
      6. base              — reset, typography, selection, scrollbar
+
+   Palette follows the EasyQuran design comp: a calm near-black / paper-white
+   base with a teal brand accent and a warm gold pop. Outfit carries the UI;
+   Amiri carries the Arabic / Quranic text.
    ════════════════════════════════════════════════════════════════════════ */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 /* Self-hosted type — bundled same-origin by Vite, no render-blocking external
-   request. Geist variable woff2 covers the full weight range; Amiri is the
-   Arabic/Quranic face. */
-@import "@fontsource-variable/geist";
+   request. Outfit (variable) covers the full UI weight range; Geist Mono is
+   the mono accent face; Amiri is the Arabic / Quranic face. */
+@import "@fontsource-variable/outfit";
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/amiri";
 
@@ -29,7 +33,7 @@
 /* ─── 2. Static tokens ─────────────────────────────────────────────────── */
 @theme {
   --font-sans:
-    "Geist", "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    "Outfit Variable", "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   /* Arabic/Quranic text — used via `font-arabic` on mushaf content */
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
@@ -60,6 +64,7 @@
   /* animations used by components */
   --animate-pulse-ring: pulse-ring 2.2s var(--ease-out) infinite;
   --animate-blink: blink 1.1s steps(2, end) infinite;
+  --animate-fade-up: fade-up 0.18s var(--ease-out) both;
 }
 
 /* ─── 3. Theme-aware colors (mapped, not copied) ────────────────────────
@@ -118,85 +123,97 @@
 }
 
 /* ─── 4. Token values — DARK (default) ──────────────────────────────────
-   Warm-tinted near-black, single bright accent. */
+   Quiet near-black base, teal brand accent, warm gold pop. */
 :root,
 [data-theme="dark"] {
-  --bg: #0c0d0c;
-  --bg-1: #111312; /* card, slightly raised */
-  --bg-2: #161a18; /* inset */
-  --bg-3: #1c211e; /* hover, selected */
-  --bg-elev: #0a0b0a; /* nav, footer — slightly deeper */
+  --bg: #0c1110;
+  --bg-1: #101716; /* panel — slightly raised surface */
+  --bg-2: #121a18; /* soft — inset wells */
+  --bg-3: #151e1c; /* raise — hover / selected */
+  --bg-elev: #0a0f0e; /* nav, footer — a touch deeper than bg */
 
-  --line: rgba(255, 255, 255, 0.07);
-  --line-2: rgba(255, 255, 255, 0.12);
-  --line-3: rgba(255, 255, 255, 0.18);
+  --line: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.1);
+  --line-3: rgba(255, 255, 255, 0.16);
 
-  --fg: #ededee;
-  --fg-2: #b9b9bd; /* secondary */
-  --fg-3: #84848b; /* tertiary, meta */
-  --fg-4: #5a5a62; /* quaternary, labels */
+  --fg: #ecf1ef;
+  --fg-2: #a5b2ae; /* secondary */
+  --fg-3: #7e8b87; /* tertiary, meta */
+  --fg-4: #515b58; /* quaternary, labels */
 
-  --accent: #4ade80; /* emerald */
-  --accent-soft: rgba(74, 222, 128, 0.12);
-  --accent-line: rgba(74, 222, 128, 0.32);
-  --accent-fg: #0a0b0a;
+  --accent: #3fbfa6; /* teal */
+  --accent-soft: rgba(63, 191, 166, 0.13);
+  --accent-line: rgba(63, 191, 166, 0.32);
+  --accent-fg: #06120f;
 
-  --pop: #e3b341; /* warm gold pop */
-  --pop-soft: rgba(227, 179, 65, 0.12);
+  --pop: #d9af6a; /* warm gold */
+  --pop-soft: rgba(217, 175, 106, 0.12);
 
-  --ok: #8fc88a; /* "available / healthy" indicator (StatusDot) */
+  --ok: #7fd1b8;
 
   color-scheme: dark;
 }
 
 /* ─── 4b. Token values — LIGHT ────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg: #fbfaf7;
-  --bg-1: #ffffff;
-  --bg-2: #f2f1ec;
-  --bg-3: #eae8e1;
+  --bg: #ffffff;
+  --bg-1: #fbfdfc; /* panel */
+  --bg-2: #f7faf9; /* soft */
+  --bg-3: #eef3f1; /* raise */
   --bg-elev: #ffffff;
 
-  --line: rgba(20, 18, 14, 0.08);
-  --line-2: rgba(20, 18, 14, 0.14);
-  --line-3: rgba(20, 18, 14, 0.22);
+  --line: rgba(16, 20, 24, 0.07);
+  --line-2: rgba(16, 20, 24, 0.11);
+  --line-3: rgba(16, 20, 24, 0.18);
 
-  --fg: #14120e;
-  --fg-2: #44423d;
-  --fg-3: #73706a;
-  --fg-4: #9a978f;
+  --fg: #101418;
+  --fg-2: #4c565c;
+  --fg-3: #6e777c;
+  --fg-4: #8a9298;
 
-  --accent: #1a7a45;
-  --accent-soft: rgba(26, 122, 69, 0.1);
-  --accent-line: rgba(26, 122, 69, 0.3);
+  --accent: #0e7c6b; /* teal */
+  --accent-soft: rgba(14, 124, 107, 0.1);
+  --accent-line: rgba(14, 124, 107, 0.28);
   --accent-fg: #ffffff;
 
-  --pop: #a6781b;
-  --pop-soft: rgba(166, 120, 27, 0.1);
+  --pop: #b98a4b; /* gold */
+  --pop-soft: rgba(185, 138, 75, 0.1);
 
-  --ok: #3b7a3b;
+  --ok: #2f8f6e;
 
   color-scheme: light;
 }
 
 /* ─── 4c. Accent variants (driven by prefs) ───────────────────────────── */
+[data-accent="emerald"] {
+  --accent: #3fbfa6;
+  --accent-soft: rgba(63, 191, 166, 0.13);
+  --accent-line: rgba(63, 191, 166, 0.32);
+  --accent-fg: #06120f;
+}
+[data-theme="light"][data-accent="emerald"] {
+  --accent: #0e7c6b;
+  --accent-soft: rgba(14, 124, 107, 0.1);
+  --accent-line: rgba(14, 124, 107, 0.28);
+  --accent-fg: #ffffff;
+}
 [data-accent="gold"] {
-  --accent: #e3b341;
-  --accent-soft: rgba(227, 179, 65, 0.14);
-  --accent-line: rgba(227, 179, 65, 0.32);
-  --accent-fg: #0a0b0a;
+  --accent: #d9af6a;
+  --accent-soft: rgba(217, 175, 106, 0.14);
+  --accent-line: rgba(217, 175, 106, 0.32);
+  --accent-fg: #1a1408;
 }
 [data-theme="light"][data-accent="gold"] {
-  --accent: #a6781b;
-  --accent-soft: rgba(166, 120, 27, 0.1);
-  --accent-line: rgba(166, 120, 27, 0.3);
+  --accent: #b98a4b;
+  --accent-soft: rgba(185, 138, 75, 0.1);
+  --accent-line: rgba(185, 138, 75, 0.3);
   --accent-fg: #ffffff;
 }
 [data-accent="azure"] {
   --accent: #6fb0e8;
   --accent-soft: rgba(111, 176, 232, 0.14);
   --accent-line: rgba(111, 176, 232, 0.32);
-  --accent-fg: #0a0b0a;
+  --accent-fg: #06121f;
 }
 [data-theme="light"][data-accent="azure"] {
   --accent: #2563b8;
@@ -208,19 +225,12 @@
   --accent: #c08cff;
   --accent-soft: rgba(192, 140, 255, 0.14);
   --accent-line: rgba(192, 140, 255, 0.32);
-  --accent-fg: #0a0b0a;
+  --accent-fg: #160a24;
 }
 [data-theme="light"][data-accent="plum"] {
   --accent: #7a3fd6;
   --accent-soft: rgba(122, 63, 214, 0.1);
   --accent-line: rgba(122, 63, 214, 0.3);
-  --accent-fg: #ffffff;
-}
-/* emerald is the dark-mode default; in light it needs the deeper green */
-[data-theme="light"][data-accent="emerald"] {
-  --accent: #1a7a45;
-  --accent-soft: rgba(26, 122, 69, 0.1);
-  --accent-line: rgba(26, 122, 69, 0.3);
   --accent-fg: #ffffff;
 }
 
@@ -282,7 +292,7 @@
   h3,
   h4 {
     margin: 0;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.05;
     color: var(--fg);
@@ -326,6 +336,16 @@
 @keyframes blink {
   50% {
     opacity: 0;
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

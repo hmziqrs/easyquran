@@ -27,7 +27,9 @@ export function externalLinkAttrs(
   return {};
 }
 
-export type WithElementRef<T, U = HTMLElement> = T & { elementref?: U | null };
+// `ref` is the prop shadcn-svelte registry components destructure ($bindable);
+// `elementref` is the legacy spelling still used by some hand-written components.
+export type WithElementRef<T, U = HTMLElement> = T & { ref?: U | null; elementref?: U | null };
 export type WithoutChild<T> = T extends { child?: any } ? Omit<T, "child"> : T;
 export type WithoutChildren<T> = T extends { children?: any } ? Omit<T, "children"> : T;
 export type WithoutChildrenOrChild<T> = WithoutChildren<WithoutChild<T>>;

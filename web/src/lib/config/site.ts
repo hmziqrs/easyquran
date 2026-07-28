@@ -4,7 +4,7 @@
    The route tree is split into two groups (see src/routes):
      • (marketing) — public, indexable pages. These drive the nav, the
        sitemap, llms.txt and the .md/.txt text variants.
-     • (application) — the /app product UI. Deliberately kept OUT of the
+     • (application) — the /app reader. Deliberately kept OUT of the
        sitemap, llms.txt and text variants, and marked noindex via <Seo>.
 
    ⚠ Placeholders: `domain` / `url` / the social handles below are stand-ins.
@@ -17,13 +17,18 @@ export const SITE = {
   url: "https://easyquran.fyi",
   github: "https://github.com/hmziqrs",
   tagline: "the Quran, made easy to read",
+  /** one-line value prop used in the footer (distinct from the hero tagline). */
+  footerBlurb: "A quiet Qur'an reader. Free, ad-free, and stored on your device.",
+  /** inbox shown on the contact page. */
+  email: "salam@easyquran.app",
+  correctionsEmail: "corrections@easyquran.app",
 } as const;
 
 export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
 
-export type MarketingPageId = "home" | "about" | "download" | "privacy";
-export type AppPageId = "app" | "read" | "bookmarks" | "settings";
+export type MarketingPageId = "home" | "about" | "faq" | "contact" | "privacy" | "terms";
+export type AppPageId = "app";
 export type PageId = MarketingPageId | AppPageId;
 
 export interface SitePage<Id extends string = PageId> {
@@ -39,19 +44,27 @@ export interface SitePage<Id extends string = PageId> {
 export const MARKETING_PAGES: SitePage<MarketingPageId>[] = [
   { id: "home", href: "/", label: "Home", nav: true },
   { id: "about", href: "/about", label: "About", nav: true },
-  { id: "download", href: "/download", label: "Download", nav: true },
+  { id: "faq", href: "/faq", label: "FAQ", nav: true },
+  { id: "contact", href: "/contact", label: "Contact", nav: true },
   { id: "privacy", href: "/privacy", label: "Privacy" },
+  { id: "terms", href: "/terms", label: "Terms" },
 ];
 
-/** The subset rendered as links in the primary nav. */
-export const NAV_PAGES: SitePage<MarketingPageId>[] = MARKETING_PAGES.filter((p) => p.nav);
-
-/** The /app product UI. Never indexed, never in the sitemap or text variants. */
-export const APP_PAGES: SitePage<AppPageId>[] = [
-  { id: "read", href: "/app/read", label: "Read", nav: true },
-  { id: "bookmarks", href: "/app/bookmarks", label: "Bookmarks", nav: true },
-  { id: "settings", href: "/app/settings", label: "Settings", nav: true },
+/** The links rendered in the primary nav. Read jumps into the (noindex) reader;
+ *  the rest are marketing pages. */
+export interface NavLink {
+  href: string;
+  label: string;
+}
+export const NAV_LINKS: NavLink[] = [
+  { href: "/app", label: "Read" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
 ];
+
+/** The /app reader. Never indexed, never in the sitemap or text variants. */
+export const APP_PAGES: SitePage<AppPageId>[] = [{ id: "app", href: "/app", label: "Read" }];
 
 /** Page-level metadata (title, description, canonical path). The single source
  *  of truth for <Seo> and, for marketing pages, the llms.txt index. */
@@ -66,29 +79,28 @@ export const PAGE_META: Record<PageId, { title: string; description: string; pat
     description: "What EasyQuran is, who it's for, and how it's built.",
     path: "/about",
   },
-  download: {
-    title: "Download · EasyQuran",
-    description: "Get EasyQuran on your device, or just open it in the browser.",
-    path: "/download",
+  faq: {
+    title: "FAQ · EasyQuran",
+    description: "Questions about EasyQuran, answered plainly.",
+    path: "/faq",
+  },
+  contact: {
+    title: "Contact · EasyQuran",
+    description: "Get in touch — bug reports, script corrections and feature ideas.",
+    path: "/contact",
   },
   privacy: {
     title: "Privacy · EasyQuran",
     description: "What EasyQuran collects, what it doesn't, and why.",
     path: "/privacy",
   },
+  terms: {
+    title: "Terms · EasyQuran",
+    description: "The terms under which EasyQuran is provided.",
+    path: "/terms",
+  },
   // ── application (noindex) ──────────────────────────────────────────────
-  app: { title: "EasyQuran", description: "Your reading home.", path: "/app" },
-  read: { title: "Read · EasyQuran", description: "Read the Quran.", path: "/app/read" },
-  bookmarks: {
-    title: "Bookmarks · EasyQuran",
-    description: "Saved ayahs and places you left off.",
-    path: "/app/bookmarks",
-  },
-  settings: {
-    title: "Settings · EasyQuran",
-    description: "Appearance, script, and reading preferences.",
-    path: "/app/settings",
-  },
+  app: { title: "EasyQuran", description: "Read the Quran.", path: "/app" },
 };
 
 export interface AccentDef {
@@ -99,8 +111,8 @@ export interface AccentDef {
 
 /** The accent palette. Hex values are the dark-mode swatch colours. */
 export const ACCENTS: AccentDef[] = [
-  { id: "emerald", label: "Emerald", hex: "#4ade80" },
-  { id: "gold", label: "Gold", hex: "#e3b341" },
+  { id: "emerald", label: "Teal", hex: "#3fbfa6" },
+  { id: "gold", label: "Gold", hex: "#d9af6a" },
   { id: "azure", label: "Azure", hex: "#6fb0e8" },
   { id: "plum", label: "Plum", hex: "#c08cff" },
 ];

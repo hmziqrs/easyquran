@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  :root {
+    --bg:#FFFFFF; --bg-soft:#F7FAF9; --bg-panel:#FBFDFC; --bg-raise:#FFFFFF;
+    --line:#E4EAE8; --line-soft:#EDF0EF;
+    --ink:#101418; --ink-2:#4C565C; --ink-3:#8B959A;
+    --brand:#0E7C6B; --brand-ink:#0B6759; --brand-soft:#EAF5F2;
+    --gold:#B98A4B;
+    --btn:#101418; --btn-ink:#FFFFFF;
+    --shadow:0 24px 50px -22px rgba(16,20,24,.26);
+  }
+  [data-theme="dark"] {
+    --bg:#0C1110; --bg-soft:#121A18; --bg-panel:#101716; --bg-raise:#151E1C;
+    --line:#25302D; --line-soft:#1B2422;
+    --ink:#ECF1EF; --ink-2:#A5B2AE; --ink-3:#76837F;
+    --brand:#3FBFA6; --brand-ink:#6FD6BF; --brand-soft:rgba(63,191,166,.13);
+    --gold:#D9AF6A;
+    --btn:#3FBFA6; --btn-ink:#06120F;
+    --shadow:0 24px 50px -22px rgba(0,0,0,.6);
+  }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Outfit',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--brand-ink); text-decoration:none; }
+  a:hover { color:var(--brand); }
+  ::selection { background:var(--brand-soft); }
+  input, textarea, button { font-family:inherit; }
+  @keyframes eqfade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height:100vh; background:var(--bg); color:var(--ink); transition:background .25s ease;">
+
+  <header style="position:sticky; top:0; z-index:40; background:var(--bg); border-bottom:1px solid var(--line-soft);">
+    <div style="max-width:1180px; margin:0 auto; padding:16px 28px; display:flex; align-items:center; gap:28px;">
+      <div onClick="{{ goHome }}" style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-right:auto;">
+        <div style="width:32px; height:32px; border-radius:10px; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Amiri',serif; font-size:18px; line-height:1;">ق</div>
+        <span style="font-size:19px; font-weight:600; letter-spacing:-.02em;">easyquran</span>
+      </div>
+      <nav style="display:flex; gap:26px; font-size:15px;">
+        <span onClick="{{ goApp }}" style="cursor:pointer; color:var(--ink-2);" style-hover="color:var(--ink)">Read</span>
+        <span onClick="{{ goAbout }}" style="cursor:pointer; color:var(--ink-2);" style-hover="color:var(--ink)">About</span>
+        <span onClick="{{ goFaq }}" style="cursor:pointer; color:var(--ink-2);" style-hover="color:var(--ink)">FAQ</span>
+        <span onClick="{{ goContact }}" style="cursor:pointer; color:var(--ink-2);" style-hover="color:var(--ink)">Contact</span>
+      </nav>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div onClick="{{ toggleTheme }}" title="Toggle dark mode" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-2);" style-hover="background:var(--bg-soft); color:var(--ink)">
+          <span style="font-size:15px; line-height:1;">{{ themeIcon }}</span>
+        </div>
+        <div onClick="{{ goApp }}" style="padding:10px 20px; border-radius:10px; background:var(--btn); color:var(--btn-ink); font-size:14px; font-weight:500; cursor:pointer;" style-hover="opacity:.88">Open the app</div>
+      </div>
+    </div>
+  </header>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <main>
+      <section style="max-width:1180px; margin:0 auto; padding:88px 28px 28px; display:flex; flex-direction:column; align-items:center; gap:22px; text-align:center;">
+        <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:13px; font-weight:500;">Free forever &middot; no ads &middot; works offline</div>
+        <h1 style="margin:0; font-size:64px; font-weight:600; line-height:1.05; letter-spacing:-.035em; max-width:19ch; text-wrap:balance;">The simplest way to read the Qur&rsquo;an.</h1>
+        <p style="margin:0; font-size:19px; line-height:1.6; color:var(--ink-2); max-width:52ch; text-wrap:pretty;">Open it, read, close it. Search, bookmarks and recitation are there when you need them &mdash; invisible when you don&rsquo;t.</p>
+        <div style="display:flex; gap:10px; padding-top:6px;">
+          <div onClick="{{ goApp }}" style="padding:14px 26px; border-radius:11px; background:var(--btn); color:var(--btn-ink); font-size:16px; font-weight:500; cursor:pointer;" style-hover="opacity:.88">Start reading</div>
+          <div onClick="{{ goAbout }}" style="padding:14px 26px; border-radius:11px; background:var(--bg-soft); border:1px solid var(--line); color:var(--ink); font-size:16px; font-weight:500; cursor:pointer;" style-hover="background:var(--bg-raise)">Why we built it</div>
+        </div>
+      </section>
+
+      <section style="max-width:1180px; margin:0 auto; padding:44px 28px 0; display:flex; justify-content:center;">
+        <div style="width:100%; max-width:880px; border:1px solid var(--line); border-bottom:none; border-radius:18px 18px 0 0; background:var(--bg-panel); padding:20px 20px 40px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;">
+          <div onClick="{{ goApp }}" style="display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:10px; background:var(--bg-raise); border:1px solid var(--line); color:var(--ink-3); font-size:15px; cursor:pointer;">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="6"></circle><path d="M13.5 13.5 17.5 17.5"></path></svg>
+            <span>Search a surah, verse or word&hellip;</span>
+            <span style="margin-left:auto; font-size:12px; padding:3px 7px; border-radius:5px; background:var(--bg-soft); color:var(--ink-3);">&#8984;K</span>
+          </div>
+          <div style="display:grid; grid-template-columns:220px 1fr; gap:14px;">
+            <div style="display:flex; flex-direction:column; gap:5px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 13px; border-radius:9px; background:var(--brand-soft);">
+                <span style="font-size:14px; font-weight:600; color:var(--brand-ink);">1 &middot; Al-Fatihah</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:16px; color:var(--brand-ink);">الفاتحة</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 13px;">
+                <span style="font-size:14px; color:var(--ink-2);">2 &middot; Al-Baqarah</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:16px; color:var(--ink-3);">البقرة</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 13px;">
+                <span style="font-size:14px; color:var(--ink-2);">103 &middot; Al-&rsquo;Asr</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:16px; color:var(--ink-3);">العصر</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 13px;">
+                <span style="font-size:14px; color:var(--ink-2);">112 &middot; Al-Ikhlas</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:16px; color:var(--ink-3);">الإخلاص</span>
+              </div>
+            </div>
+            <div style="border-radius:12px; background:var(--bg-raise); border:1px solid var(--line); padding:26px 30px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--brand);">Al-Fatihah</span>
+                <div style="display:flex; gap:7px;">
+                  <div style="width:26px; height:26px; border-radius:7px; background:var(--brand-soft);"></div>
+                  <div style="width:26px; height:26px; border-radius:7px; background:var(--bg-soft);"></div>
+                </div>
+              </div>
+              <div dir="rtl" style="font-family:'Amiri',serif; font-size:31px; line-height:2.1; color:var(--ink);">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+              <div style="height:1px; background:var(--line-soft);"></div>
+              <div dir="rtl" style="font-family:'Amiri',serif; font-size:31px; line-height:2.1; color:var(--ink); opacity:.55;">الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style="max-width:1180px; margin:0 auto; padding:64px 28px;">
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:18px;">
+          <div style="border-radius:14px; background:var(--bg-soft); padding:30px 28px; display:flex; flex-direction:column; gap:8px;">
+            <div style="width:32px; height:32px; border-radius:9px; background:var(--brand); display:flex; align-items:center; justify-content:center; margin-bottom:8px; color:#fff;">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="6"></circle><path d="M13.5 13.5 17.5 17.5"></path></svg>
+            </div>
+            <div style="font-size:18px; font-weight:600;">Instant search</div>
+            <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">Type a surah name, a number, or a few Arabic words. Results appear as you type.</div>
+          </div>
+          <div style="border-radius:14px; background:var(--bg-soft); padding:30px 28px; display:flex; flex-direction:column; gap:8px;">
+            <div style="width:32px; height:32px; border-radius:9px; background:var(--ink); display:flex; align-items:center; justify-content:center; margin-bottom:8px; color:var(--bg);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h8a1 1 0 011 1v13l-5-3.3L5 17V4a1 1 0 011-1z"></path></svg>
+            </div>
+            <div style="font-size:18px; font-weight:600;">Bookmarks &amp; notes</div>
+            <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">Save the verses you return to and write your own reflection beside them.</div>
+          </div>
+          <div style="border-radius:14px; background:var(--bg-soft); padding:30px 28px; display:flex; flex-direction:column; gap:8px;">
+            <div style="width:32px; height:32px; border-radius:9px; background:var(--gold); display:flex; align-items:center; justify-content:center; margin-bottom:8px; color:#fff;">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 5v5l3.5 2"></path><circle cx="10" cy="10" r="7"></circle></svg>
+            </div>
+            <div style="font-size:18px; font-weight:600;">Picks up where you left</div>
+            <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">Your last read position is remembered, so you never hunt for your place.</div>
+          </div>
+        </div>
+      </section>
+
+      <section style="background:var(--bg-soft); border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line-soft);">
+        <div style="max-width:1180px; margin:0 auto; padding:76px 28px; display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center;">
+          <div style="display:flex; flex-direction:column; gap:26px;">
+            <h2 style="margin:0; font-size:40px; font-weight:600; letter-spacing:-.03em; line-height:1.12; max-width:20ch;">Three taps from opening the app to reading.</h2>
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div style="display:flex; gap:16px;">
+                <div style="flex:none; width:28px; height:28px; border-radius:8px; background:var(--brand-soft); color:var(--brand-ink); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600;">1</div>
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                  <div style="font-size:17px; font-weight:600;">Open &mdash; no sign-up</div>
+                  <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">No account, no onboarding tour. The reader is the first thing you see.</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <div style="flex:none; width:28px; height:28px; border-radius:8px; background:var(--brand-soft); color:var(--brand-ink); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600;">2</div>
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                  <div style="font-size:17px; font-weight:600;">Pick a surah, or continue</div>
+                  <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">The list is always one click away, and &ldquo;continue reading&rdquo; sits at the top.</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <div style="flex:none; width:28px; height:28px; border-radius:8px; background:var(--brand-soft); color:var(--brand-ink); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600;">3</div>
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                  <div style="font-size:17px; font-weight:600;">Read at your own size</div>
+                  <div style="font-size:15px; line-height:1.6; color:var(--ink-2);">Scale the Arabic script, dim the page, and let the recitation follow along.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="border-radius:16px; background:var(--bg-raise); border:1px solid var(--line); padding:44px 46px; display:flex; flex-direction:column; gap:24px; box-shadow:var(--shadow);">
+            <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold);">
+              <span>Ar-Ra&rsquo;d &middot; 28</span>
+              <span style="color:var(--ink-3);">Verse of the day</span>
+            </div>
+            <div dir="rtl" style="font-family:'Amiri',serif; font-size:37px; line-height:2.05; color:var(--ink);">أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ</div>
+            <div style="height:1px; background:var(--line-soft);"></div>
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="width:42px; height:42px; border-radius:999px; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff;">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5 12 7l-9 5.5z"></path></svg>
+              </div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:7px;">
+                <div style="height:4px; border-radius:999px; background:var(--line); overflow:hidden;"><div style="width:38%; height:100%; background:var(--gold);"></div></div>
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--ink-3);">
+                  <span>Mishary Rashid</span><span>0:14 / 0:37</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style="max-width:1180px; margin:0 auto; padding:80px 28px 96px; display:flex; flex-direction:column; align-items:center; gap:20px; text-align:center;">
+        <h2 style="margin:0; font-size:38px; font-weight:600; letter-spacing:-.03em;">Start with Al-Fatihah.</h2>
+        <p style="margin:0; font-size:17px; color:var(--ink-2); max-width:44ch; line-height:1.6;">The whole app runs in your browser. Nothing to install, nothing to sign up for.</p>
+        <div onClick="{{ goApp }}" style="margin-top:6px; padding:15px 30px; border-radius:11px; background:var(--btn); color:var(--btn-ink); font-size:16px; font-weight:500; cursor:pointer;" style-hover="opacity:.88">Open the app</div>
+      </section>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:1320px; margin:0 auto; padding:22px 28px 120px; display:grid; grid-template-columns:288px 1fr; gap:22px; align-items:start;">
+      <aside style="position:sticky; top:88px; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:9px; padding:11px 13px; border-radius:11px; background:var(--bg-soft); border:1px solid var(--line);">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--ink-3); flex:none;"><circle cx="9" cy="9" r="6"></circle><path d="M13.5 13.5 17.5 17.5"></path></svg>
+          <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="Search surah, number or Arabic&hellip;" style="flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--ink); font-size:14px;">
+          <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+            <span onClick="{{ clearQuery }}" style="cursor:pointer; color:var(--ink-3); font-size:15px; line-height:1;">&times;</span>
+          </sc-if>
+        </div>
+
+        <div style="display:flex; gap:4px; padding:4px; border-radius:10px; background:var(--bg-soft);">
+          <div onClick="{{ showSurahs }}" style="flex:1; text-align:center; padding:8px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; background:{{ tabSurahBg }}; color:{{ tabSurahInk }};">Surahs</div>
+          <div onClick="{{ showBookmarks }}" style="flex:1; text-align:center; padding:8px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; background:{{ tabBmBg }}; color:{{ tabBmInk }};">Bookmarks {{ bmCountLabel }}</div>
+        </div>
+
+        <sc-if value="{{ isSurahTab }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:3px; max-height:calc(100vh - 240px); overflow-y:auto; padding-right:2px;">
+            <sc-for list="{{ surahList }}" as="s" hint-placeholder-count="9">
+              <div onClick="{{ s.open }}" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 13px; border-radius:9px; cursor:pointer; background:{{ s.bg }};" style-hover="background:var(--bg-soft)">
+                <div style="display:flex; flex-direction:column; gap:1px; min-width:0;">
+                  <span style="font-size:14px; font-weight:500; color:{{ s.ink }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.label }}</span>
+                  <span style="font-size:11.5px; color:var(--ink-3);">{{ s.meta }}</span>
+                </div>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:17px; color:{{ s.ink }}; flex:none;">{{ s.arabic }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isBookmarkTab }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <sc-if value="{{ noBookmarks }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:24px 16px; border-radius:11px; border:1px dashed var(--line); text-align:center; font-size:13.5px; line-height:1.6; color:var(--ink-3);">No bookmarks yet. Tap the ribbon beside any verse to save it here.</div>
+            </sc-if>
+            <sc-for list="{{ bookmarkList }}" as="b" hint-placeholder-count="0">
+              <div onClick="{{ b.open }}" style="padding:12px 13px; border-radius:10px; background:var(--bg-soft); cursor:pointer; display:flex; flex-direction:column; gap:6px;" style-hover="background:var(--brand-soft)">
+                <span style="font-size:12px; font-weight:600; color:var(--brand-ink);">{{ b.ref }}</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:18px; line-height:1.9; color:var(--ink-2); display:block; max-height:34px; overflow:hidden;">{{ b.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </aside>
+
+      <section style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+        <sc-if value="{{ showResults }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="font-size:14px; color:var(--ink-2);">{{ resultsLabel }}</div>
+            <sc-for list="{{ results }}" as="r" hint-placeholder-count="3">
+              <div onClick="{{ r.open }}" style="padding:20px 24px; border-radius:13px; border:1px solid var(--line); background:var(--bg-panel); cursor:pointer; display:flex; flex-direction:column; gap:10px;" style-hover="border-color:var(--brand)">
+                <span style="font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--brand);">{{ r.ref }}</span>
+                <span dir="rtl" style="font-family:'Amiri',serif; font-size:26px; line-height:2; color:var(--ink);">{{ r.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showReader }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <sc-if value="{{ hasLastRead }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ continueReading }}" style="display:flex; align-items:center; gap:12px; padding:13px 18px; border-radius:12px; background:var(--brand-soft); cursor:pointer;">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--brand-ink); flex:none;"><path d="M10 5v5l3.5 2"></path><circle cx="10" cy="10" r="7"></circle></svg>
+                <span style="font-size:14px; color:var(--brand-ink);">Continue reading &mdash; {{ lastReadRef }}</span>
+                <span style="margin-left:auto; font-size:13px; color:var(--brand-ink); opacity:.75;">Jump &rarr;</span>
+              </div>
+            </sc-if>
+
+            <div style="border:1px solid var(--line); border-radius:16px; background:var(--bg-panel); overflow:hidden;">
+              <div style="padding:30px 36px 26px; border-bottom:1px solid var(--line-soft); display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap;">
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                  <span style="font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--brand);">Surah {{ current.num }}</span>
+                  <div style="display:flex; align-items:baseline; gap:14px;">
+                    <h1 style="margin:0; font-size:32px; font-weight:600; letter-spacing:-.025em;">{{ current.name }}</h1>
+                    <span dir="rtl" style="font-family:'Amiri',serif; font-size:30px; color:var(--ink-2);">{{ current.arabic }}</span>
+                  </div>
+                  <span style="font-size:14px; color:var(--ink-3);">{{ current.meta }}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:2px; padding:4px; border-radius:9px; background:var(--bg-soft);">
+                    <div onClick="{{ smaller }}" title="Smaller Arabic" style="width:28px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; color:var(--ink-2);" style-hover="background:var(--bg-raise); color:var(--ink)">A&minus;</div>
+                    <div onClick="{{ bigger }}" title="Larger Arabic" style="width:28px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; color:var(--ink-2);" style-hover="background:var(--bg-raise); color:var(--ink)">A+</div>
+                  </div>
+                  <div onClick="{{ playSurah }}" style="display:flex; align-items:center; gap:8px; padding:9px 16px; border-radius:9px; background:var(--btn); color:var(--btn-ink); font-size:13.5px; font-weight:500; cursor:pointer;" style-hover="opacity:.88">
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5 12 7l-9 5.5z"></path></svg>
+                    <span>Play surah</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column;">
+                <sc-for list="{{ verses }}" as="v" hint-placeholder-count="7">
+                  <div style="padding:26px 36px; border-bottom:1px solid var(--line-soft); background:{{ v.rowBg }};">
+                    <div style="display:flex; gap:22px; align-items:flex-start;">
+                      <div style="flex:none; width:34px; height:34px; border-radius:999px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12.5px; color:var(--ink-3);">{{ v.n }}</div>
+                      <div dir="rtl" style="flex:1; min-width:0; font-family:'Amiri',serif; font-size:{{ arabicSize }}; line-height:2.15; color:var(--ink); text-align:right;">{{ v.text }}</div>
+                      <div style="flex:none; display:flex; flex-direction:column; gap:6px;">
+                        <div onClick="{{ v.toggleBookmark }}" title="Bookmark" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ v.bmColor }};" style-hover="background:var(--bg-soft)">
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="{{ v.bmFill }}" stroke="currentColor" stroke-width="1.6"><path d="M6 3h8a1 1 0 011 1v13l-5-3.3L5 17V4a1 1 0 011-1z"></path></svg>
+                        </div>
+                        <div onClick="{{ v.play }}" title="Play verse" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ v.playColor }};" style-hover="background:var(--bg-soft)">
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5 12 7l-9 5.5z"></path></svg>
+                        </div>
+                        <div onClick="{{ v.toggleNote }}" title="Note &amp; tafsir" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ v.noteColor }};" style-hover="background:var(--bg-soft)">
+                          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4.5 3.5h11v9l-3.5 4h-7.5z"></path><path d="M7 7.5h6M7 10.5h4"></path></svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    <sc-if value="{{ v.noteOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin:18px 0 0 56px; display:flex; flex-direction:column; gap:14px; animation:eqfade .18s ease both;">
+                        <div style="padding:16px 18px; border-radius:11px; background:var(--bg-soft); display:flex; flex-direction:column; gap:6px;">
+                          <span style="font-size:11.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--gold);">Tafsir</span>
+                          <span style="font-size:14.5px; line-height:1.65; color:var(--ink-2);">{{ v.tafsir }}</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                          <span style="font-size:11.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);">Your note</span>
+                          <textarea value="{{ v.note }}" onInput="{{ v.onNote }}" placeholder="Write a reflection&hellip;" rows="3" style="width:100%; border:1px solid var(--line); border-radius:11px; background:var(--bg-raise); color:var(--ink); font-size:14.5px; line-height:1.6; padding:12px 14px; outline:none; resize:vertical;"></textarea>
+                          <span style="font-size:12.5px; color:var(--ink-3);">Saved on this device as you type.</span>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="padding:22px 36px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+                <div onClick="{{ prevSurah }}" style="font-size:14px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">&larr; {{ prevLabel }}</div>
+                <div onClick="{{ nextSurah }}" style="font-size:14px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">{{ nextLabel }} &rarr;</div>
+              </div>
+            </div>
+            <div style="font-size:12.5px; line-height:1.6; color:var(--ink-3); padding:0 4px;">This demo carries a selection of surahs and sample tafsir text. Recitation audio is simulated.</div>
+          </div>
+        </sc-if>
+      </section>
+    </main>
+
+    <sc-if value="{{ isPlaying }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed; left:0; right:0; bottom:0; z-index:50; background:var(--bg-raise); border-top:1px solid var(--line); box-shadow:0 -12px 30px -20px rgba(0,0,0,.35);">
+        <div style="max-width:1320px; margin:0 auto; padding:14px 28px; display:flex; align-items:center; gap:18px;">
+          <div onClick="{{ togglePlay }}" style="flex:none; width:38px; height:38px; border-radius:999px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <span style="font-size:13px; line-height:1;">{{ playGlyph }}</span>
+          </div>
+          <div style="flex:none; display:flex; flex-direction:column; gap:2px; width:180px;">
+            <span style="font-size:13.5px; font-weight:500;">{{ nowPlayingRef }}</span>
+            <span style="font-size:12px; color:var(--ink-3);">Mishary Rashid Alafasy</span>
+          </div>
+          <div style="flex:1; height:4px; border-radius:999px; background:var(--line); overflow:hidden;">
+            <div style="width:{{ progressPct }}; height:100%; background:var(--gold);"></div>
+          </div>
+          <span style="flex:none; font-size:12px; color:var(--ink-3); width:78px; text-align:right;">{{ timeLabel }}</span>
+          <div onClick="{{ stopPlay }}" style="flex:none; cursor:pointer; color:var(--ink-3); font-size:17px; line-height:1;" style-hover="color:var(--ink)">&times;</div>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ isAbout }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:760px; margin:0 auto; padding:72px 28px 96px; display:flex; flex-direction:column; gap:30px;">
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--brand);">About</span>
+        <h1 style="margin:0; font-size:46px; font-weight:600; letter-spacing:-.03em; line-height:1.1;">A reader, not a platform.</h1>
+        <p style="margin:0; font-size:19px; line-height:1.65; color:var(--ink-2);">easyquran is a small, free Qur&rsquo;an reader for everyday use &mdash; the kind you open for five minutes after Fajr and don&rsquo;t think about again.</p>
+      </div>
+      <div style="height:1px; background:var(--line);"></div>
+      <div style="display:flex; flex-direction:column; gap:22px; font-size:16.5px; line-height:1.75; color:var(--ink-2);">
+        <p style="margin:0;">Most Qur&rsquo;an apps grow until they are libraries: feeds, streaks, leaderboards, five kinds of notification. Useful for some people. We wanted the opposite &mdash; a page that opens fast, shows the script clearly, and gets out of the way.</p>
+        <p style="margin:0;">So the whole app is three things: a list of surahs, a reader, and a place to keep what you bookmark. Search is one keystroke. Notes are yours and stay on your device. There is no account to make, because we don&rsquo;t need to know who you are to show you a page.</p>
+        <p style="margin:0;">The Arabic text follows the Uthmani script. Recitation, tafsir and translations are added carefully and credited &mdash; we&rsquo;d rather ship fewer sources well than many sources loosely.</p>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px; padding-top:8px;">
+        <div style="border-radius:13px; background:var(--bg-soft); padding:22px; display:flex; flex-direction:column; gap:5px;">
+          <span style="font-size:26px; font-weight:600; letter-spacing:-.02em;">0</span>
+          <span style="font-size:14px; color:var(--ink-2);">Ads, ever</span>
+        </div>
+        <div style="border-radius:13px; background:var(--bg-soft); padding:22px; display:flex; flex-direction:column; gap:5px;">
+          <span style="font-size:26px; font-weight:600; letter-spacing:-.02em;">0</span>
+          <span style="font-size:14px; color:var(--ink-2);">Trackers or analytics SDKs</span>
+        </div>
+        <div style="border-radius:13px; background:var(--bg-soft); padding:22px; display:flex; flex-direction:column; gap:5px;">
+          <span style="font-size:26px; font-weight:600; letter-spacing:-.02em;">100%</span>
+          <span style="font-size:14px; color:var(--ink-2);">Stored on your device</span>
+        </div>
+      </div>
+      <div style="margin-top:8px; padding:26px 30px; border-radius:14px; border:1px solid var(--line); display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px; font-size:16px; line-height:1.6; color:var(--ink-2);">Built by two people who wanted this to exist. Suggestions genuinely get read.</div>
+        <div onClick="{{ goContact }}" style="padding:12px 22px; border-radius:10px; background:var(--btn); color:var(--btn-ink); font-size:15px; font-weight:500; cursor:pointer;" style-hover="opacity:.88">Get in touch</div>
+      </div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ isFaq }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:760px; margin:0 auto; padding:72px 28px 96px; display:flex; flex-direction:column; gap:30px;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <span style="font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--brand);">FAQ</span>
+        <h1 style="margin:0; font-size:46px; font-weight:600; letter-spacing:-.03em; line-height:1.1;">Questions, answered plainly.</h1>
+      </div>
+      <div style="display:flex; flex-direction:column; border-top:1px solid var(--line);">
+        <sc-for list="{{ faqs }}" as="f" hint-placeholder-count="6">
+          <div style="border-bottom:1px solid var(--line);">
+            <div onClick="{{ f.toggle }}" style="padding:22px 4px; display:flex; align-items:center; gap:18px; cursor:pointer;">
+              <span style="flex:1; font-size:17.5px; font-weight:500; color:var(--ink);">{{ f.q }}</span>
+              <span style="flex:none; font-size:19px; color:var(--ink-3); line-height:1;">{{ f.sign }}</span>
+            </div>
+            <sc-if value="{{ f.open }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 60px 24px 4px; font-size:16px; line-height:1.7; color:var(--ink-2); animation:eqfade .18s ease both;">{{ f.a }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:16px; color:var(--ink-2);">Didn&rsquo;t find it? <span onClick="{{ goContact }}" style="color:var(--brand-ink); cursor:pointer; text-decoration:underline;">Send us a question</span>.</div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ isContact }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:1000px; margin:0 auto; padding:72px 28px 96px; display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:start;">
+      <div style="display:flex; flex-direction:column; gap:24px;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <span style="font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--brand);">Contact</span>
+          <h1 style="margin:0; font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1.1;">Say salam.</h1>
+          <p style="margin:0; font-size:18px; line-height:1.65; color:var(--ink-2);">Bug reports, script corrections, or a feature you keep wishing for &mdash; all welcome.</p>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:13px; color:var(--ink-3);">Email</span>
+            <span style="font-size:16px;">salam@easyquran.app</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:13px; color:var(--ink-3);">Text corrections</span>
+            <span style="font-size:16px;">corrections@easyquran.app</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:13px; color:var(--ink-3);">Typical reply time</span>
+            <span style="font-size:16px;">Two or three days</span>
+          </div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--line); border-radius:16px; background:var(--bg-panel); padding:30px;">
+        <sc-if value="{{ contactSent }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:10px; padding:24px 4px; animation:eqfade .2s ease both;">
+            <div style="width:38px; height:38px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); display:flex; align-items:center; justify-content:center; font-size:17px;">&#10003;</div>
+            <div style="font-size:20px; font-weight:600;">Message sent</div>
+            <div style="font-size:15.5px; line-height:1.65; color:var(--ink-2);">Jazakallahu khayran &mdash; we&rsquo;ll reply to you shortly.</div>
+            <div onClick="{{ resetContact }}" style="margin-top:6px; font-size:14.5px; color:var(--brand-ink); cursor:pointer; text-decoration:underline;">Send another</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ contactOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <label style="font-size:13px; color:var(--ink-2);">Your name</label>
+              <input placeholder="Aisha" style="border:1px solid var(--line); border-radius:10px; background:var(--bg-raise); color:var(--ink); font-size:15px; padding:12px 14px; outline:none;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <label style="font-size:13px; color:var(--ink-2);">Email</label>
+              <input placeholder="you@example.com" style="border:1px solid var(--line); border-radius:10px; background:var(--bg-raise); color:var(--ink); font-size:15px; padding:12px 14px; outline:none;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <label style="font-size:13px; color:var(--ink-2);">What&rsquo;s this about?</label>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <sc-for list="{{ topics }}" as="t" hint-placeholder-count="4">
+                  <div onClick="{{ t.select }}" style="padding:8px 14px; border-radius:999px; font-size:13.5px; cursor:pointer; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.ink }};">{{ t.label }}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <label style="font-size:13px; color:var(--ink-2);">Message</label>
+              <textarea rows="5" placeholder="Tell us as much as you like&hellip;" style="border:1px solid var(--line); border-radius:10px; background:var(--bg-raise); color:var(--ink); font-size:15px; line-height:1.6; padding:12px 14px; outline:none; resize:vertical;"></textarea>
+            </div>
+            <div onClick="{{ sendContact }}" style="padding:13px; border-radius:10px; background:var(--btn); color:var(--btn-ink); font-size:15px; font-weight:500; text-align:center; cursor:pointer;" style-hover="opacity:.88">Send message</div>
+          </div>
+        </sc-if>
+      </div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ isPrivacy }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:720px; margin:0 auto; padding:72px 28px 96px; display:flex; flex-direction:column; gap:26px;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <span style="font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--brand);">Legal</span>
+        <h1 style="margin:0; font-size:42px; font-weight:600; letter-spacing:-.03em;">Privacy Policy</h1>
+        <span style="font-size:14px; color:var(--ink-3);">Last updated 12 July 2026 &middot; placeholder text, not legal advice</span>
+      </div>
+      <div style="padding:20px 22px; border-radius:12px; background:var(--brand-soft); font-size:15.5px; line-height:1.65; color:var(--brand-ink);">The short version: we don&rsquo;t collect anything about you. Bookmarks, notes and reading position stay in your browser.</div>
+      <div style="display:flex; flex-direction:column; gap:26px;">
+        <sc-for list="{{ privacySections }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <h2 style="margin:0; font-size:19px; font-weight:600;">{{ s.h }}</h2>
+            <p style="margin:0; font-size:16px; line-height:1.75; color:var(--ink-2);">{{ s.p }}</p>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height:1px; background:var(--line);"></div>
+      <div style="font-size:15px; color:var(--ink-2);">Questions about this policy? <span onClick="{{ goContact }}" style="color:var(--brand-ink); cursor:pointer; text-decoration:underline;">Contact us</span>.</div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ isTerms }}" hint-placeholder-val="{{ false }}">
+    <main style="max-width:720px; margin:0 auto; padding:72px 28px 96px; display:flex; flex-direction:column; gap:26px;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <span style="font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--brand);">Legal</span>
+        <h1 style="margin:0; font-size:42px; font-weight:600; letter-spacing:-.03em;">Terms of Service</h1>
+        <span style="font-size:14px; color:var(--ink-3);">Last updated 12 July 2026 &middot; placeholder text, not legal advice</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:26px;">
+        <sc-for list="{{ termsSections }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <h2 style="margin:0; font-size:19px; font-weight:600;">{{ s.h }}</h2>
+            <p style="margin:0; font-size:16px; line-height:1.75; color:var(--ink-2);">{{ s.p }}</p>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height:1px; background:var(--line);"></div>
+      <div style="font-size:15px; color:var(--ink-2);">See also our <span onClick="{{ goPrivacy }}" style="color:var(--brand-ink); cursor:pointer; text-decoration:underline;">Privacy Policy</span>.</div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ showFooter }}" hint-placeholder-val="{{ true }}">
+    <footer style="border-top:1px solid var(--line); background:var(--bg-soft);">
+      <div style="max-width:1180px; margin:0 auto; padding:52px 28px 40px; display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:36px;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; align-items:center; gap:9px;">
+            <div style="width:28px; height:28px; border-radius:9px; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Amiri',serif; font-size:16px; line-height:1;">ق</div>
+            <span style="font-size:17px; font-weight:600; letter-spacing:-.02em;">easyquran</span>
+          </div>
+          <p style="margin:0; font-size:14.5px; line-height:1.6; color:var(--ink-2); max-width:30ch;">A quiet Qur&rsquo;an reader. Free, ad-free, and stored on your device.</p>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <span style="font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);">Product</span>
+          <span onClick="{{ goApp }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">Read the Qur&rsquo;an</span>
+          <span onClick="{{ goApp }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">Bookmarks</span>
+          <span onClick="{{ goHome }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">What&rsquo;s inside</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <span style="font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);">Company</span>
+          <span onClick="{{ goAbout }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">About</span>
+          <span onClick="{{ goFaq }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">FAQ</span>
+          <span onClick="{{ goContact }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">Contact</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <span style="font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);">Legal</span>
+          <span onClick="{{ goPrivacy }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">Privacy Policy</span>
+          <span onClick="{{ goTerms }}" style="font-size:14.5px; color:var(--ink-2); cursor:pointer;" style-hover="color:var(--ink)">Terms of Service</span>
+        </div>
+      </div>
+      <div style="max-width:1180px; margin:0 auto; padding:0 28px 44px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-3);">
+        <span>&copy; 2026 easyquran. Made with care.</span>
+        <span dir="rtl" style="font-family:'Amiri',serif; font-size:17px;">وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ</span>
+      </div>
+    </footer>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#0E7C6B&quot;,&quot;#1F4D3A&quot;,&quot;#3F6FBF&quot;,&quot;#8A5CC4&quot;],&quot;default&quot;:&quot;#8A5CC4&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;arabicSize&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:22,&quot;max&quot;:56,&quot;step&quot;:1,&quot;default&quot;:33,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Reading&quot;}}">
+const SURAHS = [
+  { num: 1, name: "Al-Fatihah", arabic: "الفاتحة", place: "Meccan", verses: [
+    "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+    "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
+    "الرَّحْمَٰنِ الرَّحِيمِ",
+    "مَالِكِ يَوْمِ الدِّينِ",
+    "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
+    "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ",
+    "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ"
+  ]},
+  { num: 2, name: "Al-Baqarah", arabic: "البقرة", place: "Medinan", partial: true, verses: [
+    "الٓمٓ",
+    "ذَٰلِكَ الْكِتَابُ لَا رَيْبَ فِيهِ هُدًى لِّلْمُتَّقِينَ",
+    "الَّذِينَ يُؤْمِنُونَ بِالْغَيْبِ وَيُقِيمُونَ الصَّلَاةَ وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ",
+    "وَالَّذِينَ يُؤْمِنُونَ بِمَا أُنزِلَ إِلَيْكَ وَمَا أُنزِلَ مِن قَبْلِكَ وَبِالْآخِرَةِ هُمْ يُوقِنُونَ",
+    "أُولَٰئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ وَأُولَٰئِكَ هُمُ الْمُفْلِحُونَ"
+  ]},
+  { num: 103, name: "Al-'Asr", arabic: "العصر", place: "Meccan", verses: [
+    "وَالْعَصْرِ",
+    "إِنَّ الْإِنسَانَ لَفِي خُسْرٍ",
+    "إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ"
+  ]},
+  { num: 105, name: "Al-Fil", arabic: "الفيل", place: "Meccan", verses: [
+    "أَلَمْ تَرَ كَيْفَ فَعَلَ رَبُّكَ بِأَصْحَابِ الْفِيلِ",
+    "أَلَمْ يَجْعَلْ كَيْدَهُمْ فِي تَضْلِيلٍ",
+    "وَأَرْسَلَ عَلَيْهِمْ طَيْرًا أَبَابِيلَ",
+    "تَرْمِيهِم بِحِجَارَةٍ مِّن سِجِّيلٍ",
+    "فَجَعَلَهُمْ كَعَصْفٍ مَّأْكُولٍ"
+  ]},
+  { num: 106, name: "Quraysh", arabic: "قريش", place: "Meccan", verses: [
+    "لِإِيلَافِ قُرَيْشٍ",
+    "إِيلَافِهِمْ رِحْلَةَ الشِّتَاءِ وَالصَّيْفِ",
+    "فَلْيَعْبُدُوا رَبَّ هَٰذَا الْبَيْتِ",
+    "الَّذِي أَطْعَمَهُم مِّن جُوعٍ وَآمَنَهُم مِّنْ خَوْفٍ"
+  ]},
+  { num: 108, name: "Al-Kawthar", arabic: "الكوثر", place: "Meccan", verses: [
+    "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
+    "فَصَلِّ لِرَبِّكَ وَانْحَرْ",
+    "إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ"
+  ]},
+  { num: 109, name: "Al-Kafirun", arabic: "الكافرون", place: "Meccan", verses: [
+    "قُلْ يَا أَيُّهَا الْكَافِرُونَ",
+    "لَا أَعْبُدُ مَا تَعْبُدُونَ",
+    "وَلَا أَنتُمْ عَابِدُونَ مَا أَعْبُدُ",
+    "وَلَا أَنَا عَابِدٌ مَّا عَبَدْتُّمْ",
+    "وَلَا أَنتُمْ عَابِدُونَ مَا أَعْبُدُ",
+    "لَكُمْ دِينُكُمْ وَلِيَ دِينِ"
+  ]},
+  { num: 110, name: "An-Nasr", arabic: "النصر", place: "Medinan", verses: [
+    "إِذَا جَاءَ نَصْرُ اللَّهِ وَالْفَتْحُ",
+    "وَرَأَيْتَ النَّاسَ يَدْخُلُونَ فِي دِينِ اللَّهِ أَفْوَاجًا",
+    "فَسَبِّحْ بِحَمْدِ رَبِّكَ وَاسْتَغْفِرْهُ إِنَّهُ كَانَ تَوَّابًا"
+  ]},
+  { num: 112, name: "Al-Ikhlas", arabic: "الإخلاص", place: "Meccan", verses: [
+    "قُلْ هُوَ اللَّهُ أَحَدٌ",
+    "اللَّهُ الصَّمَدُ",
+    "لَمْ يَلِدْ وَلَمْ يُولَدْ",
+    "وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ"
+  ]},
+  { num: 113, name: "Al-Falaq", arabic: "الفلق", place: "Meccan", verses: [
+    "قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
+    "مِن شَرِّ مَا خَلَقَ",
+    "وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ",
+    "وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ",
+    "وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ"
+  ]},
+  { num: 114, name: "An-Nas", arabic: "الناس", place: "Meccan", verses: [
+    "قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
+    "مَلِكِ النَّاسِ",
+    "إِلَٰهِ النَّاسِ",
+    "مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ",
+    "الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ",
+    "مِنَ الْجِنَّةِ وَالنَّاسِ"
+  ]}
+];
+
+const FAQS = [
+  { q: "Is easyquran free?", a: "Yes, and it stays free. No ads, no paid tier, no upsell inside the reader. If we ever need help with hosting we'll ask openly rather than sell your attention." },
+  { q: "Do I need an account?", a: "No. Bookmarks, notes and your last read position are saved in your browser. Nothing is sent to a server, so there is nothing to log into." },
+  { q: "Which Arabic text do you use?", a: "The Uthmani script, matching the standard printed mushaf. If you spot a discrepancy, email corrections@easyquran.app — we treat script accuracy as the highest priority in the project." },
+  { q: "Does it work offline?", a: "Once the app has loaded, the surahs you've opened stay available offline. Recitation audio needs a connection the first time you play it." },
+  { q: "Will you add translations and tafsir?", a: "Translations and short tafsir summaries are being added surah by surah, each credited to its source. This demo shows sample text in those slots." },
+  { q: "How do I back up my bookmarks?", a: "Because everything lives on your device, clearing browser data clears your bookmarks too. An export-to-file option is on the way." }
+];
+
+const PRIVACY = [
+  { h: "1. What we collect", p: "Nothing that identifies you. easyquran has no accounts, no sign-in, no advertising SDKs and no third-party analytics. We do not build a profile of your reading." },
+  { h: "2. What stays on your device", p: "Bookmarks, personal notes, reading position, chosen script size and light or dark preference are written to your browser's local storage. They never leave your device unless you copy them yourself." },
+  { h: "3. Hosting logs", p: "Our host records standard, short-lived server logs (approximate region, browser type, requested file) to keep the service running and to detect abuse. These are not linked to any individual and are discarded on a rolling basis." },
+  { h: "4. Recitation audio", p: "When you play recitation, audio files are requested from our content delivery network. That request includes your IP address, as any web request does. The CDN does not receive your bookmarks, notes or reading history." },
+  { h: "5. Children", p: "The app is suitable for all ages and, because it collects no personal information, is safe for children to use without supervision or consent flows." },
+  { h: "6. Your choices", p: "Clearing your browser data removes everything easyquran has stored. There is no server-side copy for us to delete on your behalf, and no export we can be compelled to hand over." },
+  { h: "7. Changes to this policy", p: "If this policy changes we will update the date at the top and note what changed. Substantive changes will be announced in the app before they take effect." }
+];
+
+const TERMS = [
+  { h: "1. Acceptance", p: "By using easyquran you agree to these terms. If you do not agree with them, please do not use the app. They apply to the website and the reader alike." },
+  { h: "2. The service", p: "easyquran provides a Qur'an reading interface, search, bookmarks, personal notes and optional recitation audio, free of charge and without warranty of uninterrupted availability." },
+  { h: "3. Accuracy of text", p: "We take great care with the Arabic text, translations and tafsir, but errors are possible. For matters of ruling or recitation, please rely on a printed mushaf and qualified scholarship." },
+  { h: "4. Your content", p: "Notes you write remain yours and stay on your device. We claim no licence over them and, because we never receive them, we cannot moderate, restore or recover them." },
+  { h: "5. Acceptable use", p: "Please do not attempt to disrupt the service, scrape it at abusive volume, or redistribute the app while presenting it as your own product. Quoting and sharing verses is, of course, encouraged." },
+  { h: "6. Third-party content", p: "Recitations, translations and tafsir are used with permission from their respective holders and remain their property. Credits are listed beside each source in the app." },
+  { h: "7. Liability", p: "The app is provided 'as is'. To the extent permitted by law, we are not liable for any loss arising from its use, including loss of locally stored notes or bookmarks." },
+  { h: "8. Contact", p: "Questions about these terms can be sent to salam@easyquran.app and we will respond within a few days." }
+];
+
+const TOPICS = ["Bug report", "Text correction", "Feature idea", "Something else"];
+const STORE = "easyquran:v1";
+
+class Component extends DCLogic {
+  state = {
+    route: "home", theme: null, current: 1, query: "", tab: "surahs",
+    bookmarks: {}, notes: {}, openNote: null, fontSize: 33,
+    playing: null, progress: 0, paused: false, lastRead: null,
+    faqOpen: 0, topic: "Bug report", contactSent: false
+  };
+
+  componentDidMount() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) { saved = {}; }
+    this.setState({
+      theme: saved.theme || this.props.defaultTheme || "light",
+      bookmarks: saved.bookmarks || {},
+      notes: saved.notes || {},
+      lastRead: saved.lastRead || null,
+      fontSize: saved.fontSize || this.props.arabicSize || 33
+    });
+    if (this.props.accent) document.documentElement.style.setProperty("--brand", this.props.accent);
+  }
+
+  componentWillUnmount() { clearInterval(this._t); }
+
+  persist(patch) {
+    this.setState(patch, () => {
+      const s = this.state;
+      try {
+        localStorage.setItem(STORE, JSON.stringify({
+          theme: s.theme, bookmarks: s.bookmarks, notes: s.notes, lastRead: s.lastRead, fontSize: s.fontSize
+        }));
+      } catch (e) {}
+    });
+  }
+
+  surah(num) { return SURAHS.find(s => s.num === num) || SURAHS[0]; }
+
+  go(route) { this.setState({ route: route }); window.scrollTo(0, 0); }
+
+  openVerse(num, n) {
+    this.setState({ route: "app", query: "", tab: "surahs", current: num });
+    this.persist({ lastRead: { num: num, n: n } });
+    window.scrollTo(0, 0);
+  }
+
+  tick(key, total, resume) {
+    clearInterval(this._t);
+    this._total = total;
+    this.setState(resume ? { paused: false } : { playing: key, progress: 0, paused: false });
+    this._t = setInterval(() => {
+      this.setState(s => {
+        const next = s.progress + 100 / (total * 10);
+        if (next >= 100) { clearInterval(this._t); return { progress: 100, paused: true }; }
+        return { progress: next };
+      });
+    }, 100);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const cur = this.surah(st.current);
+    const q = st.query.trim().toLowerCase();
+    const theme = st.theme || this.props.defaultTheme || "light";
+
+    const results = [];
+    if (q) {
+      SURAHS.forEach(s => {
+        const nameHit = s.name.toLowerCase().includes(q) || s.arabic.includes(st.query.trim()) || String(s.num) === q;
+        s.verses.forEach((t, i) => {
+          const hit = nameHit || t.includes(st.query.trim());
+          if (hit && results.length < 24) {
+            results.push({
+              key: s.num + ":" + (i + 1),
+              ref: s.name + " " + s.num + ":" + (i + 1),
+              text: t,
+              open: () => this.openVerse(s.num, i + 1)
+            });
+          }
+        });
+      });
+    }
+
+    const bookmarkList = Object.keys(st.bookmarks).filter(k => st.bookmarks[k]).map(k => {
+      const parts = k.split(":");
+      const s = this.surah(Number(parts[0]));
+      return {
+        key: k, ref: s.name + " " + parts[0] + ":" + parts[1],
+        text: s.verses[Number(parts[1]) - 1] || "",
+        open: () => this.openVerse(s.num, Number(parts[1]))
+      };
+    });
+
+    const idx = SURAHS.findIndex(s => s.num === cur.num);
+    const prev = SURAHS[(idx - 1 + SURAHS.length) % SURAHS.length];
+    const next = SURAHS[(idx + 1) % SURAHS.length];
+    const active = theme === "dark";
+    const lr = st.lastRead;
+    const total = st.playing ? Math.max(6, (this.surah(Number(String(st.playing).split(":")[0])).verses[Number(String(st.playing).split(":")[1]) - 1] || "").length / 6) : 10;
+    const secs = Math.round(total * st.progress / 100);
+    const fmt = n => Math.floor(n / 60) + ":" + String(Math.round(n % 60)).padStart(2, "0");
+
+    return {
+      theme: theme,
+      themeIcon: active ? "☀" : "☾",
+      toggleTheme: () => this.persist({ theme: active ? "light" : "dark" }),
+
+      isHome: st.route === "home", isApp: st.route === "app", isAbout: st.route === "about",
+      isFaq: st.route === "faq", isContact: st.route === "contact",
+      isPrivacy: st.route === "privacy", isTerms: st.route === "terms",
+      showFooter: st.route !== "app",
+      goHome: () => this.go("home"), goApp: () => this.go("app"), goAbout: () => this.go("about"),
+      goFaq: () => this.go("faq"), goContact: () => this.go("contact"),
+      goPrivacy: () => this.go("privacy"), goTerms: () => this.go("terms"),
+
+      query: st.query,
+      hasQuery: st.query.length > 0,
+      onQuery: e => this.setState({ query: e.target.value }),
+      clearQuery: () => this.setState({ query: "" }),
+      showResults: q.length > 0,
+      showReader: q.length === 0,
+      results: results,
+      resultsLabel: results.length ? results.length + " verse" + (results.length === 1 ? "" : "s") + " matching “" + st.query.trim() + "”" : "No verses match “" + st.query.trim() + "” in this demo selection.",
+
+      tab: st.tab,
+      isSurahTab: st.tab === "surahs",
+      isBookmarkTab: st.tab === "bookmarks",
+      showSurahs: () => this.setState({ tab: "surahs" }),
+      showBookmarks: () => this.setState({ tab: "bookmarks" }),
+      tabSurahBg: st.tab === "surahs" ? "var(--bg-raise)" : "transparent",
+      tabSurahInk: st.tab === "surahs" ? "var(--ink)" : "var(--ink-3)",
+      tabBmBg: st.tab === "bookmarks" ? "var(--bg-raise)" : "transparent",
+      tabBmInk: st.tab === "bookmarks" ? "var(--ink)" : "var(--ink-3)",
+      bmCountLabel: bookmarkList.length ? "(" + bookmarkList.length + ")" : "",
+      bookmarkList: bookmarkList,
+      noBookmarks: bookmarkList.length === 0,
+
+      surahList: SURAHS.map(s => ({
+        key: s.num,
+        label: s.num + " · " + s.name,
+        meta: s.place + " · " + s.verses.length + (s.partial ? " of 286 verses" : " verses"),
+        arabic: s.arabic,
+        bg: s.num === cur.num ? "var(--brand-soft)" : "transparent",
+        ink: s.num === cur.num ? "var(--brand-ink)" : "var(--ink-2)",
+        open: () => this.setState({ current: s.num, query: "", openNote: null })
+      })),
+
+      current: {
+        num: cur.num, name: cur.name, arabic: cur.arabic,
+        meta: cur.place + " · " + cur.verses.length + (cur.partial ? " of 286 verses in this demo" : " verses")
+      },
+      arabicSize: st.fontSize + "px",
+      bigger: () => this.persist({ fontSize: Math.min(56, st.fontSize + 3) }),
+      smaller: () => this.persist({ fontSize: Math.max(22, st.fontSize - 3) }),
+
+      verses: cur.verses.map((t, i) => {
+        const key = cur.num + ":" + (i + 1);
+        const bm = !!st.bookmarks[key];
+        const noteOpen = st.openNote === key;
+        return {
+          key: key, n: i + 1, text: t,
+          rowBg: st.playing === key ? "var(--brand-soft)" : "transparent",
+          bmFill: bm ? "currentColor" : "none",
+          bmColor: bm ? "var(--gold)" : "var(--ink-3)",
+          playColor: st.playing === key ? "var(--brand)" : "var(--ink-3)",
+          noteColor: noteOpen || st.notes[key] ? "var(--brand)" : "var(--ink-3)",
+          noteOpen: noteOpen,
+          note: st.notes[key] || "",
+          tafsir: "Sample commentary for " + cur.name + " " + key + " — in the full app this slot carries a short, credited tafsir summary.",
+          toggleBookmark: () => {
+            const b = Object.assign({}, st.bookmarks);
+            if (b[key]) { delete b[key]; } else { b[key] = true; }
+            this.persist({ bookmarks: b });
+          },
+          toggleNote: () => this.setState({ openNote: noteOpen ? null : key }),
+          onNote: e => {
+            const n = Object.assign({}, st.notes);
+            n[key] = e.target.value;
+            this.persist({ notes: n });
+          },
+          play: () => { this.tick(key, Math.max(6, t.length / 6)); this.persist({ lastRead: { num: cur.num, n: i + 1 } }); }
+        };
+      }),
+
+      prevSurah: () => this.setState({ current: prev.num, query: "" }),
+      nextSurah: () => this.setState({ current: next.num, query: "" }),
+      prevLabel: prev.name,
+      nextLabel: next.name,
+      playSurah: () => this.tick(cur.num + ":1", 40),
+
+      hasLastRead: !!lr,
+      lastReadRef: lr ? this.surah(lr.num).name + " " + lr.num + ":" + lr.n : "",
+      continueReading: () => lr && this.openVerse(lr.num, lr.n),
+
+      isPlaying: !!st.playing,
+      playGlyph: st.paused || st.progress >= 100 ? "▶" : "❙❙",
+      nowPlayingRef: st.playing ? this.surah(Number(String(st.playing).split(":")[0])).name + " " + String(st.playing).replace(":", ":") : "",
+      progressPct: st.progress + "%",
+      timeLabel: fmt(secs) + " / " + fmt(total),
+      togglePlay: () => {
+        clearInterval(this._t);
+        if (st.progress >= 100) this.tick(st.playing, total);
+        else if (st.paused) this.tick(st.playing, total, true);
+        else this.setState({ paused: true });
+      },
+      stopPlay: () => { clearInterval(this._t); this.setState({ playing: null, progress: 0, paused: false }); },
+
+      faqs: FAQS.map((f, i) => ({
+        key: i, q: f.q, a: f.a,
+        open: st.faqOpen === i,
+        sign: st.faqOpen === i ? "−" : "+",
+        toggle: () => this.setState({ faqOpen: st.faqOpen === i ? -1 : i })
+      })),
+
+      topics: TOPICS.map(t => ({
+        key: t, label: t,
+        bg: st.topic === t ? "var(--brand-soft)" : "transparent",
+        ink: st.topic === t ? "var(--brand-ink)" : "var(--ink-2)",
+        border: st.topic === t ? "var(--brand)" : "var(--line)",
+        select: () => this.setState({ topic: t })
+      })),
+      contactSent: st.contactSent,
+      contactOpen: !st.contactSent,
+      sendContact: () => this.setState({ contactSent: true }),
+      resetContact: () => this.setState({ contactSent: false }),
+
+      privacySections: PRIVACY.map((s, i) => ({ key: i, h: s.h, p: s.p })),
+      termsSections: TERMS.map((s, i) => ({ key: i, h: s.h, p: s.p }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
