@@ -7,15 +7,18 @@ default:
 
 # ── Setup ───────────────────────────────────────────────────────────────────
 
-# One-time local setup: create rust/.env (with a generated COOKIE_KEY) + install
-# web deps. Safe to re-run.
-setup:
+# Ensure rust/.env exists; created from .env.example with a generated COOKIE_KEY
+# if missing. (Private; depended on by the api/migrate recipes.)
+_env:
     @if [ ! -f rust/.env ]; then \
         cp rust/.env.example rust/.env; \
-        KEY=$$(openssl rand -hex 32); \
-        perl -pi -e "s/^COOKIE_KEY=.*/COOKIE_KEY=$$KEY/" rust/.env; \
+        KEY=$(openssl rand -hex 32); \
+        perl -pi -e "s/^COOKIE_KEY=.*/COOKIE_KEY=$KEY/" rust/.env; \
         echo "Created rust/.env (COOKIE_KEY generated). Edit S3_/SMTP_* before running the api."; \
-    else echo "rust/.env already exists — skipping."; fi
+    fi
+
+# One-time local setup: rust/.env + web deps. Safe to re-run.
+setup: _env
     cd web && pnpm install
 
 # ── Web (SvelteKit + Vite, in ./web) ─────────────────────────────────────────
@@ -42,7 +45,7 @@ web-check:
 # (DATABASE_URL, COOKIE_KEY, S3_*, SMTP_*). `api-dev` also runs migrations on boot.
 
 # Run the api (boots, runs pending migrations, serves on HOST:PORT from rust/.env).
-api-dev:
+api-dev: _env
     cd rust && cargo run -p ruxlog
 
 # Debug build of the api binary.
@@ -62,16 +65,16 @@ api-test:
     cd rust && cargo test --workspace
 
 # Apply pending SQLite migrations without starting the server.
-api-migrate:
+api-migrate: _env
     cd rust && cargo run -p migration --bin migrate -- up
 
 # Wipe and re-apply migrations against the dev DB. DANGER: deletes the file.
-api-migrate-fresh db="data/easyquran.db":
+api-migrate-fresh db="data/easyquran.db": _env
     rm -f rust/{{db}}*
     cd rust && cargo run -p migration --bin migrate -- fresh
 
 # Show migration status.
-api-migrate-status:
+api-migrate-status: _env
     cd rust && cargo run -p migration --bin migrate -- status
 
 # Lint (clippy) + format check.

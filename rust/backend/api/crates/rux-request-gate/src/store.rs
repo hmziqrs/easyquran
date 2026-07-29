@@ -179,7 +179,6 @@ impl RateLimitStore for InMemoryStore {
         let now = SystemTime::now();
         let now_e = now_epoch();
         let short_window = Duration::from_secs(cfg.temp_block_range as u64);
-        let long_window = Duration::from_secs(cfg.block_range as u64);
         let mut map = self.limits.lock().expect("rate-limit map poisoned");
         let b = map.entry(key.to_string()).or_default();
 
