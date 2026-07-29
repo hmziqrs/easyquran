@@ -9,12 +9,10 @@ use axum_macros::debug_handler;
 use axum_client_ip::ClientIp;
 
 use rux_auth::AuthBackend as AuthBackendTrait;
-#[cfg_attr(not(feature = "full"), allow(unused_imports))]
 use sea_orm::{ActiveModelTrait, EntityTrait};
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
-#[cfg_attr(not(feature = "full"), allow(unused_imports))]
 use crate::{
     db::sea_models::{email_verification, user, user_session},
     error::{ErrorCode, ErrorResponse},
@@ -399,7 +397,6 @@ pub async fn login_totp(
     }
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(state, payload), fields(user_id, result))]
 pub async fn register(
@@ -460,7 +457,6 @@ pub async fn register(
     }
 }
 
-#[cfg(feature = "auth-2fa")]
 #[debug_handler]
 #[instrument(skip(state, auth), fields(user_id))]
 pub async fn twofa_setup(
@@ -522,7 +518,6 @@ pub async fn twofa_setup(
     ))
 }
 
-#[cfg(feature = "auth-2fa")]
 #[debug_handler]
 pub async fn twofa_verify(
     State(state): State<AppState>,
@@ -657,7 +652,6 @@ pub async fn twofa_verify(
     Err(ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid 2FA code"))
 }
 
-#[cfg(feature = "auth-2fa")]
 #[debug_handler]
 pub async fn twofa_disable(
     State(state): State<AppState>,
@@ -908,7 +902,6 @@ pub(crate) use crate::services::auth::{lookup_session_mapping, record_session_ma
 /// a 500 here would mislead the client about an otherwise-complete operation.
 /// `auth` is taken by `&mut` only so the borrow checker allows a subsequent
 /// `auth.session()` call; the mutation is to interior session state.
-#[cfg_attr(not(feature = "full"), allow(dead_code))]
 async fn rotate_session_after_trust_change(auth: &mut AuthSession) {
     if let Err(err) = auth.session().cycle_id().await {
         warn!(error = %err, "F#16: failed to re-rotate session id at trust transition; CSRF token NOT rebound");

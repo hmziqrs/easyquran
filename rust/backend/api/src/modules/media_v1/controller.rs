@@ -31,13 +31,10 @@ use crate::{
     AppState,
 };
 
-#[cfg(feature = "image-optimization")]
 use crate::db::sea_models::media_variant::{Entity as MediaVariant, NewMediaVariant};
-#[cfg(feature = "image-optimization")]
 use crate::services::image_optimizer;
 use tracing::{debug, error, info, instrument, warn};
 
-#[cfg(feature = "image-optimization")]
 use super::validator::is_allowed_mime;
 use super::validator::{
     allowlisted_extension, validate_upload, MediaUploadMetadata, V1MediaListQuery,
@@ -294,7 +291,6 @@ pub async fn create(
     // skips push rather than blocking notifications). When the feature is on but
     // no provider is configured (`state.storage.image_moderator` is None), the block is
     // skipped entirely and uploads behave as the NoOp default.
-    #[cfg(feature = "image-moderation")]
     if let Some(moderator) = state.storage.image_moderator.as_ref() {
         match moderator.classify(&file_bytes, &declared_mime).await {
             Ok(verdict) => {
@@ -344,18 +340,12 @@ pub async fn create(
         }
     }
 
-    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
     let mut extension = Some(declared_extension.clone());
-    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
     let mut content_type = declared_mime.clone();
-    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
     let mut final_bytes = file_bytes.clone();
-    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
     let mut is_optimized = false;
-    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
     let mut optimized_at = None;
 
-    #[cfg(feature = "image-optimization")]
     struct PreparedVariant {
         object_key: String,
         mime_type: String,
@@ -367,13 +357,10 @@ pub async fn create(
         variant_type: String,
     }
 
-    #[cfg(feature = "image-optimization")]
     let mut prepared_variants: Vec<PreparedVariant> = Vec::new();
 
-    #[cfg(feature = "image-optimization")]
     let mut variants_to_upload: Vec<image_optimizer::OptimizedImage> = Vec::new();
 
-    #[cfg(feature = "image-optimization")]
     if content_type.starts_with("image/") {
         // DOS-MEDIA-OPTIMIZER: the `image` crate work (full RGBA decode +
         // Lanczos3 resize/re-encode for up to 6 variants + a second validation
@@ -447,7 +434,6 @@ pub async fn create(
     })?;
 
     let object_key = build_object_key(extension.as_deref());
-    #[cfg(feature = "image-optimization")]
     let base_object_key = object_key
         .rsplit_once('.')
         .map(|(prefix, _)| prefix.to_string())
@@ -471,7 +457,6 @@ pub async fn create(
                 .with_details(err.to_string())
         })?;
 
-    #[cfg(feature = "image-optimization")]
     for variant in variants_to_upload {
         let suffix = match variant.label {
             image_optimizer::VariantLabel::Width(width) => format!("@{}w", width),
@@ -550,7 +535,6 @@ pub async fn create(
         &stored.object_key,
     );
 
-    #[cfg(feature = "image-optimization")]
     if !prepared_variants.is_empty() {
         let records = prepared_variants
             .into_iter()
@@ -968,7 +952,6 @@ fn build_object_key(extension: Option<&str>) -> String {
     }
 }
 
-#[cfg(feature = "image-optimization")]
 fn label_to_variant_type(label: &image_optimizer::VariantLabel) -> String {
     match label {
         image_optimizer::VariantLabel::Width(width) => format!("{}w", width),

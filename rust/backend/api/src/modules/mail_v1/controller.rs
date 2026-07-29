@@ -28,8 +28,7 @@ use crate::{
 
 use super::validator::{V1CreateSuppression, V1DeleteSuppression, V1ListSuppressionsQuery};
 
-// Imports used only by the `mail-cloudflare` webhook receiver.
-#[cfg(feature = "mail-cloudflare")]
+// Imports used by the webhook receiver.
 use {
     crate::{
         db::sea_models::email_suppression::{SuppressionReason, SuppressionUpsert},
@@ -106,7 +105,6 @@ pub async fn mail_webhook_receiver(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    #[cfg(feature = "mail-cloudflare")]
     {
         use crate::services::mail::MailProvider;
 
@@ -148,18 +146,10 @@ pub async fn mail_webhook_receiver(
 
         Ok(Json(json!({ "received": true })))
     }
-
-    #[cfg(not(feature = "mail-cloudflare"))]
-    {
-        let _ = (state, provider, headers, body);
-        Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Mail webhooks are not enabled on this server"))
-    }
 }
 
 /// Upsert a suppression row for bounce/complaint events; delivered is a metric
 /// only.
-#[cfg(feature = "mail-cloudflare")]
 async fn apply_mail_event(
     state: &AppState,
     ev: &crate::services::mail::provider::ParsedMailEvent,

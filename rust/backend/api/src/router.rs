@@ -16,39 +16,28 @@ use crate::modules::{
     auth_v1, category_v1, csrf_v1, feed_v1, mail_v1, media_v1, post_v1, search_v1, tag_v1, user_v1,
 };
 
-#[cfg(feature = "auth-oauth")]
 use crate::modules::google_auth_v1;
 
-#[cfg(feature = "user-management")]
 use crate::modules::{email_verification_v1, forgot_password_v1};
 
-#[cfg(feature = "comments")]
 use crate::modules::post_comment_v1;
 
-#[cfg(feature = "newsletter")]
 use crate::modules::newsletter_v1;
 
-#[cfg(feature = "analytics")]
 use crate::modules::analytics_v1;
 
-#[cfg(feature = "admin-acl")]
 use crate::modules::admin_acl_v1;
 
-#[cfg(feature = "admin-routes")]
 use crate::modules::admin_route_v1;
 
 #[cfg(feature = "seed-system")]
 use crate::modules::seed_v1;
 
-#[cfg(feature = "billing")]
 use crate::modules::billing_v1;
 
 // --- Modules added for the issues batch (2026-07-27) ---
-#[cfg(feature = "auth-passkey")]
 use crate::modules::passkey_v1;
-#[cfg(feature = "auth-oauth")]
 use crate::modules::{apple_auth_v1, facebook_auth_v1, github_auth_v1};
-#[cfg(feature = "notifications")]
 use crate::modules::{device_v1, notification_v1};
 
 use crate::utils::sanitize::xml_escape;
@@ -70,21 +59,15 @@ pub fn router(state: AppState) -> Router<AppState> {
             auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         );
 
-    #[cfg(feature = "auth-oauth")]
-    {
-        router = router.nest("/auth/google/v1", google_auth_v1::routes());
-    }
+    router = router.nest("/auth/google/v1", google_auth_v1::routes());
 
     // User profile routes - always available for authenticated users
     router = router.nest("/user/v1", user_v1::routes());
 
-    // Email verification and password reset - only with user-management feature
-    #[cfg(feature = "user-management")]
-    {
-        router = router
-            .nest("/email_verification/v1", email_verification_v1::routes())
-            .nest("/forgot_password/v1", forgot_password_v1::routes());
-    }
+    // Email verification and password reset
+    router = router
+        .nest("/email_verification/v1", email_verification_v1::routes())
+        .nest("/forgot_password/v1", forgot_password_v1::routes());
 
     // DOS-TRACKVIEW-1: the public `track_view` endpoint writes a DB transaction
     // per call, so the whole post nest gets a generous per-IP cap (reads are
@@ -95,13 +78,10 @@ pub fn router(state: AppState) -> Router<AppState> {
         post_v1::routes().layer(rate_limit::rate_limit_layer(&state, 200, 60)),
     );
 
-    #[cfg(feature = "comments")]
-    {
-        router = router.nest(
-            "/post/comment/v1",
-            post_comment_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
-        );
-    }
+    router = router.nest(
+        "/post/comment/v1",
+        post_comment_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
+    );
 
     router = router
         .nest("/category/v1", category_v1::routes())
@@ -123,65 +103,41 @@ pub fn router(state: AppState) -> Router<AppState> {
             search_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
         );
 
-    #[cfg(feature = "newsletter")]
-    {
-        router = router.nest(
-            "/newsletter/v1",
-            newsletter_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
-        );
-    }
+    router = router.nest(
+        "/newsletter/v1",
+        newsletter_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
+    );
 
-    #[cfg(feature = "analytics")]
-    {
-        router = router.nest("/analytics/v1", analytics_v1::routes());
-    }
+    router = router.nest("/analytics/v1", analytics_v1::routes());
 
-    #[cfg(feature = "admin-routes")]
-    {
-        router = router.nest("/admin/route/v1", admin_route_v1::routes());
-    }
+    router = router.nest("/admin/route/v1", admin_route_v1::routes());
 
-    #[cfg(feature = "admin-acl")]
-    {
-        router = router.nest("/admin/acl/v1", admin_acl_v1::routes());
-    }
+    router = router.nest("/admin/acl/v1", admin_acl_v1::routes());
 
     #[cfg(feature = "seed-system")]
     {
         router = router.nest("/admin/seed/v1", seed_v1::routes());
     }
 
-    #[cfg(feature = "billing")]
-    {
-        router = router.nest("/billing/v1", billing_v1::routes());
-    }
+    router = router.nest("/billing/v1", billing_v1::routes());
 
     // --- Nests added for the issues batch (2026-07-27) ---
-    #[cfg(feature = "notifications")]
-    {
-        router = router
-            .nest(
-                "/device/v1",
-                device_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
-            )
-            .nest(
-                "/notification/v1",
-                notification_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
-            );
-    }
+    router = router
+        .nest(
+            "/device/v1",
+            device_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+        )
+        .nest(
+            "/notification/v1",
+            notification_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+        );
 
-    #[cfg(feature = "auth-passkey")]
-    {
-        router = router.nest("/passkey/v1", passkey_v1::routes());
-    }
+    router = router.nest("/passkey/v1", passkey_v1::routes());
 
-    #[cfg(feature = "auth-oauth")]
-    {
-        router = router
-            .nest("/auth/facebook/v1", facebook_auth_v1::routes())
-            .nest("/auth/github/v1", github_auth_v1::routes())
-            .nest("/auth/apple/v1", apple_auth_v1::routes());
-    }
+    router = router
+        .nest("/auth/facebook/v1", facebook_auth_v1::routes())
+        .nest("/auth/github/v1", github_auth_v1::routes())
+        .nest("/auth/apple/v1", apple_auth_v1::routes());
 
     #[cfg(feature = "openapi")]
     {

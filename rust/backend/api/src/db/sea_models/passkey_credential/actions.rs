@@ -24,10 +24,6 @@ impl Entity {
     /// counter directly. The first successful assertion's counter is written by
     /// [`Entity::touch_counter`]; 0 also means "not enforced" in the clone-
     /// detection check (a 0 counter is spec-exempt), so this is safe.
-    ///
-    /// Gated behind `auth-passkey` because it references `Passkey`; the model
-    /// itself (and the lookup/delete functions below) are feature-agnostic.
-    #[cfg(feature = "auth-passkey")]
     pub async fn create<T: ConnectionTrait>(
         conn: &T,
         user_id: i32,

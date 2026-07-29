@@ -18,7 +18,6 @@ use axum_macros::debug_handler;
 // impl in services/auth.rs), not an inherent method on `AuthBackend`, so the
 // trait must be in scope for `auth.backend().check_ban(...)` to resolve. This
 // mirrors auth_v1/controller.rs.
-#[cfg_attr(not(feature = "full"), allow(unused_imports))]
 use rux_auth::AuthBackend as AuthBackendTrait;
 use serde_json::json;
 use tracing::{info, instrument, warn};

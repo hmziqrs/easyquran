@@ -1,44 +1,27 @@
 // Always enabled
 pub mod abuse_limiter;
+pub mod acl_service;
 pub mod auth;
+pub mod billing;
+pub mod image_moderation;
+pub mod image_optimizer;
 pub mod mail;
 pub mod media;
+pub mod notification;
+pub mod oauth;
 pub mod paywall;
 pub mod rate_limit_store;
+pub mod route_blocker_config;
+pub mod route_blocker_service;
+pub mod scheduler;
 pub mod session_store;
 pub mod webhook_util;
+pub mod webauthn;
 
-// Feature-gated
-#[cfg(feature = "image-optimization")]
-pub mod image_optimizer;
-
-#[cfg(feature = "admin-acl")]
-pub mod acl_service;
-
-#[cfg(feature = "admin-routes")]
-pub mod route_blocker_config;
-
-#[cfg(feature = "admin-routes")]
-pub mod route_blocker_service;
-
+// Security-gated: the predictable-RNG seeder + admin TUI never ship in a
+// release binary. Keep these gates intact.
 #[cfg(feature = "seed-system")]
 pub mod seed;
 
 #[cfg(feature = "seed-system")]
 pub mod seed_config;
-
-#[cfg(feature = "billing")]
-pub mod billing;
-
-#[cfg(feature = "scheduler")]
-pub mod scheduler;
-
-// --- Services added for the issues batch (2026-07-27) ---
-#[cfg(feature = "image-moderation")]
-pub mod image_moderation;
-#[cfg(feature = "notifications")]
-pub mod notification;
-#[cfg(feature = "auth-oauth")]
-pub mod oauth;
-#[cfg(feature = "auth-passkey")]
-pub mod webauthn;

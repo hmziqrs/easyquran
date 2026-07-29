@@ -6,9 +6,7 @@
 pub mod env;
 pub mod settings;
 
-pub use settings::{HttpSettings, ObjectStorageConfig, Settings, SiteSettings};
-#[cfg(feature = "image-optimization")]
-pub use settings::OptimizerConfig;
+pub use settings::{HttpSettings, ObjectStorageConfig, OptimizerConfig, Settings, SiteSettings};
 
 /// Request body size limits (bytes) applied per route group.
 pub mod body_limits {

@@ -1,22 +1,15 @@
 pub mod controller;
 pub mod validator;
 
-#[cfg(feature = "post-management")]
 use crate::config;
 use crate::{middlewares::auth_guard, AppState};
-#[cfg(feature = "post-management")]
 use axum::extract::DefaultBodyLimit;
 use axum::{middleware, routing::post, Router};
 
 pub fn routes() -> Router<AppState> {
     // The author-only `protected` sub-router always carries the read/query,
-    // revision, schedule and series routes. The write routes (create / update /
-    // autosave / delete) are gated by the `post-management` feature so an
-    // operator can produce a stripped build (`--no-default-features
-    // --features <subset>`) that disables post CRUD while keeping reads alive.
-    // `post-management` is included in both `basic` and `full`, so a default
-    // `cargo build` keeps all current write behavior.
-    #[cfg_attr(not(feature = "post-management"), allow(unused_mut))]
+    // revision, schedule and series routes plus the write routes (create /
+    // update / autosave / delete).
     let mut protected = Router::<AppState>::new()
         .route("/query", post(controller::query))
         .route(
@@ -47,7 +40,6 @@ pub fn routes() -> Router<AppState> {
             post(controller::series_remove),
         );
 
-    #[cfg(feature = "post-management")]
     {
         // Author-facing write paths with the larger body limit for post bodies.
         let post_limited = Router::<AppState>::new()

@@ -28,8 +28,6 @@ mod store;
 pub use abuse::{check, dedup_nx, release_dedup, AbuseLimiterConfig, BlockScope, LimiterDecision};
 pub use error::GateError;
 pub use hooks::{LimiterHooks, NoHooks};
-pub use ip::{FnIpSource, IpSource};
-#[cfg(feature = "axum-client-ip")]
-pub use ip::ClientIpSource;
+pub use ip::{ClientIpSource, FnIpSource, IpSource};
 pub use layer::{BlockInfo, RateLimitLayer, RateLimitLayerBuilder};
 pub use store::{BucketSnapshot, InMemoryStore, RateLimitStore};

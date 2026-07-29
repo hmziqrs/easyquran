@@ -21,9 +21,7 @@
 
 use axum_client_ip::ClientIpSource;
 
-use crate::config::env::{env_bool, env_with_fallback};
-#[cfg(feature = "image-optimization")]
-use crate::config::env::{env_u64, env_u8};
+use crate::config::env::{env_bool, env_u64, env_u8, env_with_fallback};
 
 // V-MED-8: `ObjectStorageConfig` holds `access_key` + `secret_key`. A derived
 // `Debug` would print them in full. The manual impl below redacts the secrets
@@ -101,9 +99,8 @@ impl ObjectStorageConfig {
     }
 }
 
-/// Image-optimization tuning (cfg `image-optimization`). Moved here from
-/// `state.rs`; `state` re-exports it for source-compatible access.
-#[cfg(feature = "image-optimization")]
+/// Image-optimization tuning. Moved here from `state.rs`; `state` re-exports it
+/// for source-compatible access.
 #[derive(Clone, Debug)]
 pub struct OptimizerConfig {
     pub enabled: bool,
@@ -112,7 +109,6 @@ pub struct OptimizerConfig {
     pub default_webp_quality: u8,
 }
 
-#[cfg(feature = "image-optimization")]
 impl OptimizerConfig {
     pub fn from_env() -> Self {
         Self {
@@ -142,7 +138,14 @@ impl HttpSettings {
         let ip_source = std::env::var("IP_SOURCE")
             .unwrap_or_else(|_| "ConnectInfo".to_string())
             .parse::<ClientIpSource>()
-            .expect("Invalid IP_SOURCE value");
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Invalid IP_SOURCE value: {e}. Valid: ConnectInfo (default, TCP peer) | \
+                     CfConnectingIp (Cloudflare CF-Connecting-IP — use behind Cloudflare→Traefik) \
+                     | XRealIp | TrueClientIp | FlyClientIp | RightmostXForwardedFor | \
+                     RightmostForwarded | CloudFrontViewerAddress."
+                )
+            });
         let cookie_secure = env_bool("COOKIE_SECURE", true);
         Self {
             host,
@@ -187,7 +190,6 @@ pub struct Settings {
     pub http: HttpSettings,
     pub site: SiteSettings,
     pub object_storage: ObjectStorageConfig,
-    #[cfg(feature = "image-optimization")]
     pub optimizer: OptimizerConfig,
 }
 
@@ -214,7 +216,6 @@ impl Settings {
 
         let object_storage = ObjectStorageConfig::from_env();
 
-        #[cfg(feature = "image-optimization")]
         let optimizer = OptimizerConfig::from_env();
 
         let http = HttpSettings::from_env();
@@ -225,7 +226,6 @@ impl Settings {
             http,
             site,
             object_storage,
-            #[cfg(feature = "image-optimization")]
             optimizer,
         }
     }

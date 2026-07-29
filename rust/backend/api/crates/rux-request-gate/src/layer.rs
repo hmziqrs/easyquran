@@ -51,7 +51,6 @@ pub struct RateLimitLayer {
 impl RateLimitLayer {
     /// Construct with the default `ClientIpSource` IP resolver and the crate's
     /// default 429/503 response bodies.
-    #[cfg(feature = "axum-client-ip")]
     pub fn new(store: Arc<dyn RateLimitStore>, max_requests: u64, window_secs: u64) -> Self {
         Self {
             store,
@@ -63,8 +62,7 @@ impl RateLimitLayer {
         }
     }
 
-    /// Construct with a custom IP source (always available, even without the
-    /// `axum-client-ip` feature).
+    /// Construct with a custom IP source.
     pub fn with_ip(
         store: Arc<dyn RateLimitStore>,
         max_requests: u64,
@@ -82,7 +80,6 @@ impl RateLimitLayer {
     }
 
     /// Start a builder to override IP source / response closures.
-    #[cfg(feature = "axum-client-ip")]
     pub fn builder(
         store: Arc<dyn RateLimitStore>,
         max_requests: u64,
@@ -95,12 +92,10 @@ impl RateLimitLayer {
 }
 
 /// Builder for [`RateLimitLayer`].
-#[cfg(feature = "axum-client-ip")]
 pub struct RateLimitLayerBuilder {
     layer: RateLimitLayer,
 }
 
-#[cfg(feature = "axum-client-ip")]
 impl RateLimitLayerBuilder {
     pub fn ip_source(mut self, ip: Arc<dyn IpSource>) -> Self {
         self.layer.ip_source = ip;

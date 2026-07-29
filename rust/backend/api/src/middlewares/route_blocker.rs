@@ -1,5 +1,3 @@
-#![cfg(feature = "admin-routes")]
-
 use crate::error::RouteBlockerError;
 use crate::services::route_blocker_service::RouteBlockerService;
 use crate::state::AppState;

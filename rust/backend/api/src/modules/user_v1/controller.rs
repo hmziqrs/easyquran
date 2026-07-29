@@ -1,4 +1,3 @@
-#[cfg_attr(not(feature = "full"), allow(unused_imports))]
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -10,7 +9,6 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use super::validator::*;
-#[cfg_attr(not(feature = "full"), allow(unused_imports))]
 use crate::{
     db::sea_models::user::{Entity as User, UserRole},
     error::{ErrorCode, ErrorResponse},
@@ -65,7 +63,6 @@ pub async fn update_profile(
     }
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(auth, state, payload))]
 pub async fn admin_create(
@@ -98,7 +95,6 @@ pub async fn admin_create(
     Ok((StatusCode::CREATED, Json(json!(user))))
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(auth, state), fields(user_id))]
 pub async fn admin_delete(
@@ -159,7 +155,6 @@ pub async fn admin_delete(
     }
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(auth, state, payload), fields(user_id))]
 pub async fn admin_update(
@@ -231,7 +226,6 @@ pub async fn admin_update(
     }
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(auth, state, payload), fields(user_id))]
 pub async fn admin_change_password(
@@ -268,7 +262,6 @@ pub async fn admin_change_password(
     ))
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(state, payload))]
 pub async fn admin_list(
@@ -294,7 +287,6 @@ pub async fn admin_list(
     ))
 }
 
-#[cfg(feature = "user-management")]
 #[debug_handler]
 #[instrument(skip(state), fields(user_id))]
 pub async fn admin_view(

@@ -21,8 +21,7 @@ pub fn routes() -> Router<AppState> {
                 .route_layer(middleware::from_fn(auth_guard::authenticated)),
         );
 
-    // Admin routes - only available when user-management feature is enabled
-    #[cfg(feature = "user-management")]
+    // Admin routes - role-gated via the ROLE_ADMIN middleware
     let admin = Router::<AppState>::new()
         .route("/list", post(controller::admin_list))
         .route("/view/{user_id}", post(controller::admin_view))
@@ -37,14 +36,5 @@ pub fn routes() -> Router<AppState> {
             auth_guard::verified_with_role::<{ auth_guard::ROLE_ADMIN }>,
         ));
 
-    // Merge admin routes if feature is enabled
-    #[cfg(feature = "user-management")]
-    {
-        base.nest("/admin", admin)
-    }
-
-    #[cfg(not(feature = "user-management"))]
-    {
-        base
-    }
+    base.nest("/admin", admin)
 }
