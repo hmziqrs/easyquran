@@ -3,10 +3,9 @@
 //! `MailRouter` (always-on) runs the cross-cutting send-time guards and holds
 //! the active provider(s). The public transactional helpers below build an
 //! [`OutboundEmail`] and hand it to the router, returning [`MailError`]; callers
-//! map that via [`mail_error_to_response`]. SMTP is always available; the
-//! Cloudflare provider compiles under the `mail-cloudflare` feature.
+//! map that via [`mail_error_to_response`]. SMTP and the Cloudflare provider
+//! are both always available.
 
-#[cfg(feature = "mail-cloudflare")]
 pub mod cloudflare;
 pub mod error_map;
 mod html_templates;

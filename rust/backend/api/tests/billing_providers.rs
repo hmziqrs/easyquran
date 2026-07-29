@@ -1,9 +1,8 @@
 //! Mock HTTP tests for billing providers.
 //!
 //! Uses wiremock to simulate provider APIs without real credentials.
-//! Run: cargo test --test billing_providers --features "full"
+//! Run: cargo test --test billing_providers
 
-#[cfg(feature = "billing")]
 mod billing_mock_tests {
     use base64::Engine;
     use hmac::{Hmac, Mac};
@@ -26,11 +25,8 @@ mod billing_mock_tests {
     }
 
     // Import providers
-    #[cfg(feature = "billing")]
     use ruxlog::services::billing::lemon_squeezy::LemonSqueezyProvider;
-    #[cfg(feature = "billing")]
     use ruxlog::services::billing::paddle::PaddleProvider;
-    #[cfg(feature = "billing")]
     use ruxlog::services::billing::polar::PolarProvider;
 
     fn sign_payload(secret: &str, payload: &[u8]) -> String {
@@ -1900,13 +1896,5 @@ mod billing_mock_tests {
         assert!(eth_session.checkout_url.starts_with("ethereum:"));
         assert!(xmr_session.checkout_url.starts_with("monero:"));
         assert!(sol_session.checkout_url.starts_with("solana:"));
-    }
-}
-
-#[cfg(not(feature = "billing"))]
-mod billing_no_feature {
-    #[test]
-    fn billing_tests_require_feature() {
-        eprintln!("NOTE: Run with --features full to enable billing provider tests");
     }
 }

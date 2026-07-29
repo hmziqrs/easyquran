@@ -30,7 +30,6 @@ use crate::services::auth::AuthSession;
 use crate::services::paywall;
 use crate::AppState;
 
-#[cfg(feature = "billing")]
 use crate::services::billing::provider::{
     canonical, canonical_subscription_status, BillingProvider, ParsedWebhook, WebhookEvent,
 };
@@ -46,7 +45,6 @@ use super::validator::*;
 // this intent and grants from it — never from client-shapeable `metadata`,
 // which is how a forged/legit-but-tampered session could otherwise grant
 // access to the wrong user or a different post.
-#[cfg(feature = "billing")]
 mod checkout_intent {
     use super::*;
     use std::collections::HashMap;
@@ -307,7 +305,6 @@ pub async fn admin_cancel_subscription(
         })?;
 
     // Also cancel at the provider
-    #[cfg(feature = "billing")]
     if let Some(provider_sub_id) = &sub.provider_subscription_id {
         let immediately = payload.immediately.unwrap_or(false);
         let provider_name = sub.provider.clone();
@@ -468,7 +465,6 @@ pub async fn create_checkout(
         .cancel_url
         .unwrap_or_else(|| "/billing/cancel".to_string());
 
-    #[cfg(feature = "billing")]
     {
         let session = state
             .billing_router
@@ -509,13 +505,6 @@ pub async fn create_checkout(
                 "checkout_url": session.checkout_url,
             }
         })))
-    }
-
-    #[cfg(not(feature = "billing"))]
-    {
-        let _ = (user_id, user_email, success_url, cancel_url);
-        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Billing is not enabled on this server"));
     }
 }
 
@@ -561,7 +550,6 @@ pub async fn create_post_checkout(
         .cancel_url
         .unwrap_or_else(|| "/billing/cancel".to_string());
 
-    #[cfg(feature = "billing")]
     {
         let session = state
             .billing_router
@@ -601,20 +589,6 @@ pub async fn create_post_checkout(
                 "checkout_url": session.checkout_url,
             }
         })))
-    }
-
-    #[cfg(not(feature = "billing"))]
-    {
-        let _ = (
-            user_id,
-            user_email,
-            amount_cents,
-            currency,
-            success_url,
-            cancel_url,
-        );
-        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Billing is not enabled on this server"));
     }
 }
 
@@ -667,7 +641,6 @@ pub async fn webhook_receiver(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    #[cfg(feature = "billing")]
     {
         // Pass the full header map so each provider reads the headers its scheme
         // actually needs (Stripe `Stripe-Signature`, Paddle `Paddle-Signature`,
@@ -720,13 +693,6 @@ pub async fn webhook_receiver(
 
         Ok(Json(json!({ "received": true })))
     }
-
-    #[cfg(not(feature = "billing"))]
-    {
-        let _ = (state, provider, headers, body, raw_query);
-        Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Billing is not enabled on this server"))
-    }
 }
 
 /// Resolve the checkout-intent key for a webhook event, in the order the
@@ -736,7 +702,6 @@ pub async fn webhook_receiver(
 /// which the dispatch treats as "no intent ⇒ refuse". Pure (no I/O) so it can
 /// be unit-tested directly — the session-id resolution is the input to the
 /// intent gate, and locking it keeps the V-MED-12 fail-closed guarantee.
-#[cfg(feature = "billing")]
 fn resolve_intent_session_id(event: &ParsedWebhook) -> &str {
     event
         .checkout_session_id
@@ -747,7 +712,6 @@ fn resolve_intent_session_id(event: &ParsedWebhook) -> &str {
         .unwrap_or("")
 }
 
-#[cfg(feature = "billing")]
 async fn process_webhook_event(
     state: &AppState,
     event: &ParsedWebhook,
@@ -1381,7 +1345,7 @@ pub async fn admin_set_post_access(
     Ok(Json(json!({ "message": "Post access updated" })))
 }
 
-#[cfg(all(test, feature = "billing"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::services::billing::provider::BillingProvider;

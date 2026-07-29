@@ -132,13 +132,6 @@ impl IntoErrorResponse for DbErr {
                 .with_message("Database migration error")
                 .with_details(err.to_string()),
 
-            // TxIsolationLevel errors
-            // #[cfg(feature = "sea-orm-active-enums")]
-            // },
-
-            // Pool error
-            // #[cfg(feature = "sea-orm-active-enums")]
-            // },
             _ => ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Unknown database error")
                 .with_details(self.to_string()),

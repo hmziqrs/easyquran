@@ -1,4 +1,3 @@
-#[cfg(feature = "admin-acl")]
 use axum::extract::State;
 use axum::{http::HeaderName, middleware};
 use axum_extra::extract::cookie::SameSite;
@@ -10,14 +9,9 @@ use tower_http::{
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
 
 // `env_bool`/`parse_env_u64` are used by the always-on mail-router builder;
-// `env_u64`/`env_with_fallback` are only reached under their respective features
-// (admin-routes route-blocker sync, image-moderation URL/key), so they are
-// cfg-gated here to avoid unused-import warnings in slim feature builds.
-use ruxlog::config::env::{env_bool, parse_env_u64};
-#[cfg(feature = "admin-routes")]
-use ruxlog::config::env::env_u64;
-#[cfg(feature = "image-moderation")]
-use ruxlog::config::env::env_with_fallback;
+// `env_u64`/`env_with_fallback` are reached by the route-blocker sync and the
+// image-moderation URL/key wiring respectively.
+use ruxlog::config::env::{env_bool, env_u64, env_with_fallback, parse_env_u64};
 use ruxlog::utils::cors::get_allowed_origins;
 use ruxlog::{
     config::Settings,
@@ -27,16 +21,12 @@ use ruxlog::{
     utils::telemetry,
 };
 
-#[cfg(feature = "admin-acl")]
 use ruxlog::services::acl_service::AclService;
 
-#[cfg(feature = "admin-routes")]
 use ruxlog::services::{route_blocker_config, route_blocker_service::RouteBlockerService};
 
-#[cfg(feature = "billing")]
 use ruxlog::services::billing::BillingProvider;
 
-#[cfg(feature = "billing")]
 use ruxlog::services::billing::router::{BillingRouter, GeoRouter, GeoRulesConfig};
 
 /// Build the [`MailRouter`] from `MAIL_PROVIDER` + provider-specific env. The
@@ -71,7 +61,6 @@ async fn build_mail_router(
     let mut providers: HashMap<String, std::sync::Arc<dyn MailProvider>> = HashMap::new();
     let default = match selected.as_str() {
         "cloudflare" => {
-            #[cfg(feature = "mail-cloudflare")]
             {
                 use ruxlog::services::mail::cloudflare::CloudflareMailProvider;
                 use secrecy::SecretString;
@@ -108,13 +97,6 @@ async fn build_mail_router(
                 .expect("failed to build Cloudflare mail provider");
                 providers.insert("cloudflare".to_string(), std::sync::Arc::new(cf));
                 "cloudflare"
-            }
-            #[cfg(not(feature = "mail-cloudflare"))]
-            {
-                let _ = http_client;
-                panic!(
-                    "MAIL_PROVIDER=cloudflare but the 'mail-cloudflare' feature is not enabled in this build"
-                );
             }
         }
         // default (and explicit "smtp")
@@ -239,7 +221,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // http_client since the Cloudflare provider reuses the shared client.
     let mailer = build_mail_router(sea_db.clone(), gate_store.clone(), http_client.clone()).await;
 
-    #[cfg(feature = "billing")]
     let billing_router: std::sync::Arc<BillingRouter> = {
         use ruxlog::services::billing::{
             airwallex::AirwallexProvider, crypto::CryptoProvider,
@@ -442,7 +423,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Service construction added for the issues batch (2026-07-27) ──
     // #29 Firebase Cloud Messaging (in-app/push). Stays None unless
     // FCM_ENABLED + a service-account JSON are present; in-app rows still persist.
-    #[cfg(feature = "notifications")]
     let fcm: Option<std::sync::Arc<rux_fcm::FcmClient>> = {
         if env_bool("FCM_ENABLED", false) {
             let project_id = env::var("FCM_PROJECT_ID")
@@ -481,7 +461,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // #4 passkey/WebAuthn service.
-    #[cfg(feature = "auth-passkey")]
     let webauthn_service: Option<std::sync::Arc<ruxlog::services::webauthn::WebauthnService>> =
         match ruxlog::services::webauthn::WebauthnService::from_env() {
             Ok(svc) => {
@@ -498,7 +477,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
     // #9 image moderation gate (HttpModerator hits a configurable provider).
-    #[cfg(feature = "image-moderation")]
     let image_moderator: Option<
         std::sync::Arc<dyn ruxlog::services::image_moderation::ImageModerator + Send + Sync>,
     > = {
@@ -538,24 +516,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         storage: StorageState {
             config: object_storage,
             client: s3_client,
-            #[cfg(feature = "image-optimization")]
             optimizer: settings.optimizer.clone(),
-            #[cfg(feature = "image-moderation")]
             image_moderator,
         },
         secret_key: settings.cookie_key.as_bytes().to_vec(),
         http_client,
-        #[cfg(feature = "billing")]
         billing_router,
         // --- Fields added for the issues batch (2026-07-27) ---
-        #[cfg(feature = "notifications")]
         fcm,
-        #[cfg(feature = "auth-passkey")]
         webauthn: webauthn_service,
     };
 
     // Bootstrap application constants from environment (only fills missing keys) and warm the in-memory constant cache.
-    #[cfg(feature = "admin-acl")]
     {
         if let Err(err) = AclService::bootstrap_from_env(State(state.clone())).await {
             tracing::error!(error = %err, "Failed to bootstrap ACL constants from env");
@@ -564,7 +536,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    #[cfg(feature = "admin-routes")]
     {
         let sync_interval_secs = env_u64("ROUTE_BLOCKER_SYNC_INTERVAL_SECS", 60 * 30);
         route_blocker_config::set_sync_interval_secs(sync_interval_secs);
@@ -638,7 +609,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    #[cfg(feature = "scheduler")]
     ruxlog::services::scheduler::start_scheduler(state.clone());
 
     tracing::info!("SQLite session store established.");
@@ -711,8 +681,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // it off the shared `Arc<Settings>` (cheap) for `into_extension`.
     let ip_source = settings.http.ip_source.clone();
 
-    #[cfg_attr(not(feature = "full"), allow(unused_mut))]
     let mut app = router::router(state.clone())
+        // Resolve the real client IP (per IP_SOURCE) into the `ClientIp`
+        // extension BEFORE per-route rate-limit layers read it. Sits INNER to
+        // `ip_source` so the `ClientIpSource` config is present when it runs.
+        .layer(middleware::from_fn(
+            middlewares::client_ip::resolve_client_ip,
+        ))
         .layer(ip_source.into_extension())
         // `from_fn` middlewares (e.g. auth_guard) cannot extract `State`; they
         // read AppState through this Extension instead.
@@ -736,7 +711,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(session_layer)
         .layer(cors);
 
-    #[cfg(feature = "admin-routes")]
     {
         app = app.layer(middlewares::route_blocker::RouteBlockerLayer::new(
             state.clone(),

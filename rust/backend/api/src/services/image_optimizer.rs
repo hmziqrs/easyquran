@@ -1,5 +1,3 @@
-#![cfg(feature = "image-optimization")]
-
 use std::borrow::Cow;
 use std::time::Instant;
 

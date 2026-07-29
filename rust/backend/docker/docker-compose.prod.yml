@@ -40,6 +40,10 @@ services:
       # and defaults to sqlite:./data/easyquran.db?mode=rwc. Force it here so
       # the path always resolves under the mounted /app/data volume.
       DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
+      # Behind Cloudflare → Traefik → backend, the TCP peer is Traefik. Read the
+      # real client IP from Cloudflare's CF-Connecting-IP so the rate-limit /
+      # abuse limiter keys on the true client (Traefik passes this header through).
+      IP_SOURCE: "CfConnectingIp"
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       # Persistent SQLite store (replaces the prior postgres_data volume).

@@ -1,9 +1,9 @@
 //! Pluggable client-IP resolution for the rate-limit layer.
 //!
-//! The default ([`ClientIpSource`], behind the `axum-client-ip` feature) reads
-//! the `axum_client_ip::ClientIp` extension populated by the app's trusted-proxy
-//! layer — NOT raw `X-Forwarded-For`, which would be spoofable. Consumers not
-//! using `axum-client-ip` supply their own [`IpSource`] (e.g. via [`FnIpSource`]).
+//! The default ([`ClientIpSource`]) reads the `axum_client_ip::ClientIp`
+//! extension populated by the app's trusted-proxy layer — NOT raw
+//! `X-Forwarded-For`, which would be spoofable. Consumers not using
+//! `axum-client-ip` supply their own [`IpSource`] (e.g. via [`FnIpSource`]).
 
 /// Resolve the client IP for a request. Used as the rate-limit key namespace.
 pub trait IpSource: Send + Sync {
@@ -11,11 +11,9 @@ pub trait IpSource: Send + Sync {
 }
 
 /// Reads the `axum_client_ip::ClientIp` extension; falls back to `"unknown"`.
-#[cfg(feature = "axum-client-ip")]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct ClientIpSource;
 
-#[cfg(feature = "axum-client-ip")]
 impl IpSource for ClientIpSource {
     fn resolve(&self, request: &axum::extract::Request) -> String {
         request
@@ -41,7 +39,7 @@ where
     }
 }
 
-#[cfg(all(test, feature = "axum-client-ip"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};

@@ -31,7 +31,6 @@ The billing system uses a trait-based provider pattern. Each payment provider im
 
 3. **Register in** `src/services/billing/mod.rs`:
    ```rust
-   #[cfg(feature = "billing-yourprovider")]
    pub mod yourprovider;
    ```
 

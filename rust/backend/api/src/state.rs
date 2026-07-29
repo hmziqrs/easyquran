@@ -5,13 +5,10 @@ use crate::config::{ObjectStorageConfig, Settings};
 use crate::services::auth::AuthBackend;
 use crate::services::session_store::SqliteSessionStore;
 
-#[cfg(feature = "billing")]
 use crate::services::billing::BillingRouter;
 
 // --- Optional service types for the issues batch (2026-07-27) ---
-#[cfg(feature = "image-moderation")]
 use crate::services::image_moderation::ImageModerator;
-#[cfg(feature = "notifications")]
 use rux_fcm::FcmClient;
 
 // `OptimizerConfig` previously lived in `state` and still has an in-tree
@@ -20,7 +17,6 @@ use rux_fcm::FcmClient;
 // has no such `state::`-path consumer (all call sites read the typed config
 // directly via `state.storage.config.*`), so it is imported privately above for
 // the `StorageState::config` field only.
-#[cfg(feature = "image-optimization")]
 pub use crate::config::OptimizerConfig;
 
 /// V-MED-10: build a single `reqwest::Client` with sane connect/request timeouts
@@ -60,9 +56,7 @@ pub fn build_http_client() -> reqwest::Client {
 pub struct StorageState {
     pub config: ObjectStorageConfig,
     pub client: aws_sdk_s3::Client,
-    #[cfg(feature = "image-optimization")]
     pub optimizer: OptimizerConfig,
-    #[cfg(feature = "image-moderation")]
     pub image_moderator: Option<std::sync::Arc<dyn ImageModerator + Send + Sync>>,
 }
 
@@ -97,12 +91,9 @@ pub struct AppState {
     /// providers and the Google userinfo/JWKS fetch so no handler thread can
     /// be pinned by a hanging upstream.
     pub http_client: reqwest::Client,
-    #[cfg(feature = "billing")]
     pub billing_router: std::sync::Arc<BillingRouter>,
     // --- Fields added for the issues batch (2026-07-27) ---
-    #[cfg(feature = "notifications")]
     pub fcm: Option<std::sync::Arc<FcmClient>>,
-    #[cfg(feature = "auth-passkey")]
     pub webauthn: Option<std::sync::Arc<crate::services::webauthn::WebauthnService>>,
 }
 
