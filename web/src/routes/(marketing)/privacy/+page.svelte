@@ -27,8 +27,10 @@
     variant="soft"
     class="rounded-xl border-0 px-[22px] py-5 text-[15.5px] leading-relaxed text-accent"
   >
-    The short version: we don&rsquo;t collect anything about you. Bookmarks, notes and
-    reading position stay in your browser.
+    The short version: we collect anonymous usage analytics, performance metrics,
+    and — only if you turn them on — push notifications. Nothing is used to build
+    an ad profile or sold. Your bookmarks, notes and reading position stay in your
+    browser until you choose to sync, and you can switch analytics off in Settings.
   </Panel>
 
   <div class="flex flex-col gap-[26px]">

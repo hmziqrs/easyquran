@@ -1,0 +1,68 @@
+<!--
+  NotificationToast — surfaces push messages received while the page is in the
+  foreground (background pushes are shown by the service worker). Mounted once in
+  the root layout so it appears on every route. Reacts to the notifications
+  store's `lastMessage`, auto-dismisses after a few seconds, and offers an
+  "Open" link when the payload carries a destination URL.
+-->
+<script lang="ts">
+  import { notifications } from "$lib/stores/notifications.svelte";
+  import { cn } from "$lib/utils";
+
+  let visible = $state(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  // Re-arm the toast whenever a new foreground message lands.
+  $effect(() => {
+    const msg = notifications.lastMessage;
+    if (!msg) return;
+    visible = true;
+    clearTimeout(timer);
+    timer = setTimeout(dismiss, 7000);
+  });
+
+  function dismiss() {
+    visible = false;
+    clearTimeout(timer);
+    notifications.clearMessage();
+  }
+</script>
+
+{#if visible && notifications.lastMessage}
+  {@const n = notifications.lastMessage.notification}
+  {@const data = notifications.lastMessage.data ?? {}}
+  {@const title = n?.title ?? "EasyQuran"}
+  {@const body = n?.body ?? ""}
+  {@const url = typeof data.url === "string" ? data.url : undefined}
+
+  <div
+    role="status"
+    aria-live="polite"
+    class="fixed left-1/2 top-4 z-[1001] flex w-[min(92vw,380px)] -translate-x-1/2 items-start gap-3 rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
+  >
+    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+      <span class="text-base leading-none">✦</span>
+    </div>
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium text-fg">{title}</p>
+      {#if body}
+        <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-fg-2">{body}</p>
+      {/if}
+      {#if url}
+        <a
+          href={url}
+          onclick={dismiss}
+          class="mt-1.5 inline-block text-xs text-accent underline underline-offset-2 hover:text-accent/80"
+        >
+          Open
+        </a>
+      {/if}
+    </div>
+    <button
+      type="button"
+      onclick={dismiss}
+      aria-label="Dismiss notification"
+      class="shrink-0 text-fg-3 transition-colors hover:text-fg">✕</button
+    >
+  </div>
+{/if}

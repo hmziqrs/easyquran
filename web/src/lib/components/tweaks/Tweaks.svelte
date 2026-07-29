@@ -1,11 +1,14 @@
 <!--
-  Tweaks — floating appearance panel: theme and accent. Wired straight to the
-  prefs store. The round button toggles it; everything persists to
-  localStorage and applies live.
+  Tweaks — floating settings panel: appearance (theme, accent), notifications,
+  and data & privacy. Wired straight to the prefs/consent/notifications stores.
+  The round button toggles it; everything persists to localStorage and applies
+  live.
 -->
 <script lang="ts">
   import { prefs } from "$lib/stores/prefs.svelte";
+  import { consent } from "$lib/stores/consent.svelte";
   import { ACCENTS, type ThemeMode } from "$lib/config/site";
+  import { Notifications } from "$lib/components/notifications";
   import { cn } from "$lib/utils";
 
   let open = $state(false);
@@ -14,6 +17,11 @@
   const pill = "rounded-md border px-3 py-1 text-xs capitalize transition-colors duration-150";
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
+
+  // A privacy toggle reuses the accent pill: ON = data shared, OFF = opted out.
+  function consentPill(value: boolean): string {
+    return cn(pill, value ? on : off);
+  }
 </script>
 
 <div class="fixed bottom-5 right-5 z-[1000] flex flex-col items-end gap-3">
@@ -22,7 +30,7 @@
       class="w-[260px] rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >
       <div class="mb-3 flex items-center justify-between">
-        <span class="font-mono text-xs uppercase tracking-wide text-fg-3">Appearance</span>
+        <span class="font-mono text-xs uppercase tracking-wide text-fg-3">Settings</span>
         <button
           type="button"
           class="text-fg-3 transition-colors hover:text-fg"
@@ -61,6 +69,36 @@
                 aria-pressed={prefs.accent === a.id}
               ></button>
             {/each}
+          </div>
+        </div>
+
+        <Notifications />
+
+        <div>
+          <div class="mb-1.5 text-xs text-fg-3">Data &amp; privacy</div>
+          <div class="flex flex-col gap-1.5">
+            <button
+              type="button"
+              aria-pressed={consent.analytics}
+              onclick={() => consent.setAnalytics(!consent.analytics)}
+              class={consentPill(consent.analytics)}
+            >
+              Analytics {consent.analytics ? "on" : "off"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={consent.performance}
+              title="Reloads the page to apply — Firebase Performance can only be switched at startup"
+              onclick={() => {
+                consent.setPerformance(!consent.performance);
+                // The Performance SDK can't be toggled after init, so reload to
+                // re-run initPerformance() with the new consent flag.
+                location.reload();
+              }}
+              class={consentPill(consent.performance)}
+            >
+              Performance {consent.performance ? "on" : "off"}
+            </button>
           </div>
         </div>
       </div>
