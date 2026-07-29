@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "plan_interval")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PlanInterval {
@@ -21,14 +18,7 @@ pub enum PlanInterval {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(
-        rs_type = "String",
-        db_type = "Enum",
-        enum_name = "subscription_status"
-    )
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionStatus {
@@ -48,10 +38,7 @@ pub enum SubscriptionStatus {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "payment_status")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PaymentStatus {
@@ -69,10 +56,7 @@ pub enum PaymentStatus {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "discount_type")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscountType {
@@ -86,10 +70,7 @@ pub enum DiscountType {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "invoice_status")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InvoiceStatus {
@@ -107,14 +88,7 @@ pub enum InvoiceStatus {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(
-        rs_type = "String",
-        db_type = "Enum",
-        enum_name = "payout_account_status"
-    )
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PayoutAccountStatus {
@@ -130,10 +104,7 @@ pub enum PayoutAccountStatus {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "ledger_entry_type")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LedgerEntryType {
@@ -149,14 +120,7 @@ pub enum LedgerEntryType {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(
-        rs_type = "String",
-        db_type = "Enum",
-        enum_name = "scheduled_post_status"
-    )
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ScheduledPostStatus {
     #[serde(rename = "Pending")]
@@ -189,10 +153,7 @@ impl std::fmt::Display for ScheduledPostStatus {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "post_access_type")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PostAccessType {

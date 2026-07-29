@@ -1,9 +1,9 @@
 use axum::extract::FromRef;
 use sea_orm::DatabaseConnection;
-use tower_sessions_redis_store::fred::prelude::Pool as RedisPool;
 
 use crate::config::{ObjectStorageConfig, Settings};
 use crate::services::auth::AuthBackend;
+use crate::services::session_store::SqliteSessionStore;
 
 #[cfg(feature = "billing")]
 use crate::services::billing::BillingRouter;
@@ -69,10 +69,17 @@ pub struct StorageState {
 #[derive(Clone)]
 pub struct AppState {
     pub sea_db: DatabaseConnection,
-    pub redis_pool: RedisPool,
     /// In-memory rate-limit / abuse / dedup store (the L1 enforcement engine).
     /// A SQLite durability layer is wired on top from `main`.
     pub gate_store: std::sync::Arc<rux_request_gate::InMemoryStore>,
+    /// tower-sessions store backed by the shared SQLite connection (replaces the
+    /// prior Redis session store on the default build).
+    pub session_store: std::sync::Arc<SqliteSessionStore>,
+    /// Process-wide set of administratively-revoked tower-session ids. The
+    /// per-request `is_session_revoked` check consults this (fail-open on lock
+    /// poisoning, matching the prior Redis-blip behavior).
+    pub revoked_sessions:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     pub mailer: std::sync::Arc<crate::services::mail::MailRouter>,
     /// Typed, fail-closed boot configuration constructed once at startup (see
     /// [`crate::config::Settings`]). Replaces the previously-scattered
@@ -101,10 +108,14 @@ pub struct AppState {
 
 impl FromRef<AppState> for AuthBackend {
     fn from_ref(state: &AppState) -> Self {
-        // V-HIGH-2: AuthBackend needs BOTH the DB and the Redis pool so the
-        // per-request `is_session_revoked` check can run a real Redis
-        // `SISMEMBER` against the revocation set.
-        AuthBackend::new(&state.sea_db, state.redis_pool.clone())
+        // V-HIGH-2: AuthBackend needs the DB, the session store (to terminate a
+        // live tower-session record), and the revoked-session set (for the
+        // per-request `is_session_revoked` check).
+        AuthBackend::new(
+            &state.sea_db,
+            state.session_store.clone(),
+            state.revoked_sessions.clone(),
+        )
     }
 }
 

@@ -1,6 +1,6 @@
 #[cfg(feature = "admin-acl")]
 use axum::extract::State;
-use axum::{http::HeaderName, middleware, Extension};
+use axum::{http::HeaderName, middleware};
 use axum_extra::extract::cookie::SameSite;
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use tower_http::{
@@ -8,7 +8,6 @@ use tower_http::{
     cors::{AllowOrigin, CorsLayer},
 };
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
-use tower_sessions_redis_store::RedisStore;
 
 // `env_bool`/`parse_env_u64` are used by the always-on mail-router builder;
 // `env_u64`/`env_with_fallback` are only reached under their respective features
@@ -23,7 +22,7 @@ use ruxlog::utils::cors::get_allowed_origins;
 use ruxlog::{
     config::Settings,
     db, middlewares, router,
-    services::redis::init_redis_store,
+    services::session_store::SqliteSessionStore,
     state::{AppState, StorageState},
     utils::telemetry,
 };
@@ -164,8 +163,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sea_db = db::sea_connect::get_sea_connection().await;
 
-    let (redis_pool, redis_connection) = init_redis_store().await?;
-
     // In-memory rate-limit / abuse / dedup store (replaces Redis for the gate).
     let gate_store = std::sync::Arc::new(rux_request_gate::InMemoryStore::default());
 
@@ -175,6 +172,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ruxlog::services::rate_limit_store::ensure_table(&sea_db).await;
     gate_store.restore(ruxlog::services::rate_limit_store::load(&sea_db).await);
     ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
+
+    // tower-sessions store over the shared SQLite connection (replaces the prior
+    // Redis session store). `new` runs `CREATE TABLE IF NOT EXISTS sessions`.
+    let session_store =
+        Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
+
+    // Process-wide set of administratively-revoked tower-session ids (replaces
+    // the Redis revocation set). Consulted fail-open by the per-request
+    // `is_session_revoked` check.
+    let revoked_sessions: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashSet<String>>,
+    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
 
     // Object storage config is parsed fail-closed inside `Settings::from_env`;
     // re-derive it here only to build the AWS client from its fields.
@@ -519,16 +528,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // #5/#10 install the shared redis pool into the cache service's process-global slot.
-    #[cfg(feature = "cache")]
-    {
-        ruxlog::services::cache::install_pool(redis_pool.clone());
-    }
-
     let state = AppState {
         sea_db,
-        redis_pool: redis_pool.clone(),
         gate_store,
+        session_store: session_store.clone(),
+        revoked_sessions: revoked_sessions.clone(),
         mailer,
         settings: settings.clone(),
         storage: StorageState {
@@ -637,8 +641,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "scheduler")]
     ruxlog::services::scheduler::start_scheduler(state.clone());
 
-    tracing::info!("Redis successfully established.");
-    let session_store = RedisStore::new(redis_pool);
+    tracing::info!("SQLite session store established.");
+    // Periodic sweep of expired session rows. With the Redis TTL gone, the
+    // sessions table would otherwise grow without bound; this reaps lapsed rows
+    // hourly. Errors are non-fatal (logged) — a missed sweep just leaves stale
+    // rows that `load` already filters out by `expiry_date`.
+    {
+        let sweep_store = session_store.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(3600));
+            loop {
+                ticker.tick().await;
+                if let Err(e) = sweep_store.delete_expired().await {
+                    tracing::warn!(error = %e, "session store expired-row sweep failed (non-fatal)");
+                }
+            }
+        });
+    }
     // Derive the cookie signing+encryption key via HKDF-SHA256 rather than the
     // previous raw SHA-512 of COOKIE_KEY (a fast hash is the wrong tool for key
     // derivation: a weak COOKIE_KEY collapses to a brute-forceable key). cookie's
@@ -651,7 +670,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // .with_secure(false) blocked the Secure flag in production. See plan 2e.
     let cookie_secure = settings.http.cookie_secure;
 
-    let session_layer = SessionManagerLayer::new(session_store)
+    let session_layer = SessionManagerLayer::new((*session_store).clone())
         .with_expiry(Expiry::OnInactivity(time::Duration::hours(24 * 14)))
         .with_same_site(SameSite::Lax)
         .with_secure(cookie_secure)
@@ -692,18 +711,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // it off the shared `Arc<Settings>` (cheap) for `into_extension`.
     let ip_source = settings.http.ip_source.clone();
 
-    // Clone the database connection for the Extension layer (used by auth middleware)
-    let db_extension = Extension(state.sea_db.clone());
-    // V-HIGH-2: also provide the Redis pool as an Extension so the auth guards
-    // can build `AuthBackend` with the Redis handle required for the
-    // per-request session-revocation `SISMEMBER`.
-    let redis_extension = Extension(state.redis_pool.clone());
-
     #[cfg_attr(not(feature = "full"), allow(unused_mut))]
     let mut app = router::router(state.clone())
         .layer(ip_source.into_extension())
-        .layer(db_extension)
-        .layer(redis_extension)
+        // `from_fn` middlewares (e.g. auth_guard) cannot extract `State`; they
+        // read AppState through this Extension instead.
+        .layer(axum::Extension(state.clone()))
         // NOTE: `session_layer` is applied *after* `csrf_guard` below so that it
         // is the OUTER layer. Order matters: later `.layer()` calls wrap the
         // earlier ones, so a request flows session_layer → csrf_guard → router.
@@ -743,8 +756,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
-
-    redis_connection.await??;
 
     Ok(())
 }

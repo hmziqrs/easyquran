@@ -350,26 +350,19 @@ pub struct HttpMetrics {
 
 /// Shared observable gauges for pool metrics
 pub struct PoolMetrics {
-    _redis_gauge: ObservableGauge<u64>,
     _db_gauge: ObservableGauge<u64>,
 }
 
 impl PoolMetrics {
     pub fn new(meter: &Meter) -> Self {
-        let redis_gauge = meter
-            .u64_observable_gauge("redis.pool.connections")
-            .with_description("Number of active Redis pool connections")
-            .build();
-
+        // The `redis.pool.connections` gauge was removed along with the Redis
+        // pool — the default build has no Redis. SQLite is the only pool.
         let db_gauge = meter
             .u64_observable_gauge("db.pool.connections")
             .with_description("Number of active database pool connections")
             .build();
 
-        Self {
-            _redis_gauge: redis_gauge,
-            _db_gauge: db_gauge,
-        }
+        Self { _db_gauge: db_gauge }
     }
 }
 

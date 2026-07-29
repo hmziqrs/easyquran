@@ -557,17 +557,20 @@ impl Entity {
 
         if let Some(tag_ids_filter) = query.tag_ids {
             if !tag_ids_filter.is_empty() {
-                // Convert the Vec<i32> to a formatted string for PostgreSQL array containment
-                let tag_ids_str = tag_ids_filter
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",");
-
-                post_query = post_query.filter(Expr::cust(format!(
-                    "posts.tag_ids && ARRAY[{}]::int[]",
-                    tag_ids_str
-                )));
+                // `tag_ids` is stored as a JSON TEXT array; test for overlap with
+                // the requested ids via SQLite's `json_each` table-valued function.
+                // The ids are bound as parameters (never string-interpolated) so the
+                // filter stays injection-safe. `json_each.value` yields each element
+                // of the `[1, 5, 9]` array as an integer, compared against the bound
+                // i32 ids with `IN (...)`.
+                let placeholders = vec!["?"; tag_ids_filter.len()].join(", ");
+                post_query = post_query.filter(Expr::cust_with_values(
+                    format!(
+                        "EXISTS (SELECT 1 FROM json_each(posts.tag_ids) \
+                         WHERE json_each.value IN ({placeholders}))"
+                    ),
+                    tag_ids_filter,
+                ));
             }
         }
 

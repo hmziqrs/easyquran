@@ -1,4 +1,4 @@
-//! Raw-SQL pagination helpers (Postgres).
+//! Raw-SQL pagination helpers (SQLite).
 //!
 //! These helpers centralize the `LIMIT`/`OFFSET` placeholder arithmetic and the
 //! total-row `COUNT` that were previously duplicated by every analytics handler
@@ -16,24 +16,23 @@ struct CountRow {
     total: i64,
 }
 
-/// Paginate a raw Postgres `SELECT` body.
+/// Paginate a raw SQLite `SELECT` body.
 ///
 /// `data_sql` must be the statement that produces the result rows — including
 /// any CTEs, `WHERE`, `GROUP BY` and `ORDER BY` — **without** a `LIMIT`/
 /// `OFFSET` clause and **without** a `COUNT(*) OVER ()` window column. It must
-/// use Postgres positional placeholders `$1 .. $N` matching the order of
-/// `params`.
+/// use SQLite positional placeholders `?` matching the order of `params`.
 ///
 /// The helper issues two statements against `conn`:
-///  1. `SELECT COUNT(*)::BIGINT AS total FROM (<data_sql>) AS __ruxlog_pg_inner`
+///  1. `SELECT CAST(COUNT(*) AS INTEGER) AS total FROM (<data_sql>) AS __ruxlog_inner`
 ///     bound with `params` → total row count.
-///  2. `<data_sql>` with `LIMIT $N+1 OFFSET $N+2` appended, binding `params`
+///  2. `<data_sql>` with `LIMIT ? OFFSET ?` appended, binding `params`
 ///     followed by `per_page` and the computed row offset → the page window.
 ///
 /// `page` is 1-indexed (a value of `0` is treated as `1`); `per_page` of `0` is
 /// treated as `1` to avoid emitting an invalid `LIMIT 0`.
 ///
-/// This removes the per-handler `LIMIT $N OFFSET $N` plumbing, the
+/// This removes the per-handler `LIMIT ? OFFSET ?` plumbing, the
 /// `let limit = ...; let offset = ...;` arithmetic and the
 /// `COUNT(*) OVER () AS total` column that were duplicated across the analytics
 /// handlers (see GitHub issue #23).
@@ -61,10 +60,12 @@ where
     // --- total row count -------------------------------------------------
     // Wrapping the unbounded body in a COUNT subquery is equivalent to the old
     // `COUNT(*) OVER () AS total` window column, but computed once and reused.
+    // SQLite has no `::BIGINT` cast — `CAST(... AS INTEGER)` is the portable
+    // equivalent and yields an i64-compatible result.
     let count_sql =
-        format!("SELECT COUNT(*)::BIGINT AS total FROM (\n{data_sql}\n) AS __ruxlog_pg_inner");
+        format!("SELECT CAST(COUNT(*) AS INTEGER) AS total FROM (\n{data_sql}\n) AS __ruxlog_inner");
     let count_stmt =
-        Statement::from_sql_and_values(DatabaseBackend::Postgres, count_sql, params.clone());
+        Statement::from_sql_and_values(DatabaseBackend::Sqlite, count_sql, params.clone());
     let total = CountRow::find_by_statement(count_stmt)
         .one(conn)
         .await?
@@ -73,19 +74,14 @@ where
         .max(0) as u64;
 
     // --- page window -----------------------------------------------------
-    // `LIMIT`/`OFFSET` are appended as the next two placeholders after the
-    // caller-supplied bind parameters, so the original `$1..$N` stay stable.
-    let placeholder = params.len();
-    let paged_sql = format!(
-        "{data_sql}\nLIMIT ${limit_ph} OFFSET ${offset_ph}",
-        limit_ph = placeholder + 1,
-        offset_ph = placeholder + 2,
-    );
+    // `LIMIT`/`OFFSET` are appended as the next two `?` placeholders after the
+    // caller-supplied bind parameters, so the original `?`..`?` stay stable.
+    let paged_sql = format!("{data_sql}\nLIMIT ? OFFSET ?");
     let mut paged_params = params;
     paged_params.push(Value::BigInt(Some(limit)));
     paged_params.push(Value::BigInt(Some(offset)));
     let paged_stmt =
-        Statement::from_sql_and_values(DatabaseBackend::Postgres, paged_sql, paged_params);
+        Statement::from_sql_and_values(DatabaseBackend::Sqlite, paged_sql, paged_params);
     let rows = T::find_by_statement(paged_stmt).all(conn).await?;
 
     Ok(PaginatedList::new(rows, total, current_page, page_size))

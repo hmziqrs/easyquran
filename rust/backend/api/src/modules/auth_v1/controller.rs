@@ -136,7 +136,7 @@ pub async fn log_in(
             // compatible). See `login_totp` below and `docs/CRYPTO_AUDIT.md`.
             if user.two_fa_enabled {
                 tracing::Span::current().record("result", "totp_required");
-                let totp_token = login_totp_token::mint(&state, user.id).await?;
+                let totp_token = login_totp_token::mint(user.id).await?;
                 info!(user_id = user.id, "Login requires TOTP (2FA enrolled)");
                 return Ok((
                     StatusCode::OK,
@@ -190,12 +190,7 @@ pub async fn log_in(
                         if let (Some(row), Some(tower_sid)) =
                             (session_row.as_ref(), auth.session().id())
                         {
-                            record_session_mapping(
-                                &state.redis_pool,
-                                row.id,
-                                &tower_sid.to_string(),
-                            )
-                            .await;
+                            record_session_mapping(row.id, &tower_sid.to_string());
                         }
                     }
 
@@ -259,8 +254,8 @@ pub async fn login_totp(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let payload = payload.0;
 
-    // Single-use: GETDEL so a replayed token is gone and observed as None.
-    let user_id = match login_totp_token::take(&state, &payload.totp_token).await? {
+    // Single-use: atomically consume the pending token so a replay observes None.
+    let user_id = match login_totp_token::take(&payload.totp_token).await? {
         Some(id) => id,
         None => {
             warn!("login/totp: pending token missing/expired/replayed");
@@ -384,11 +379,11 @@ pub async fn login_totp(
             .ok();
 
             // V-HIGH-2: record the PG-row -> tower-session-id mapping (same as
-            // the password-login path) so sessions_terminate can later DEL the
-            // live record.
+            // the password-login path) so sessions_terminate can later delete the
+            // live record from the session store.
             if (auth.session().save().await).is_ok() {
                 if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-                    record_session_mapping(&state.redis_pool, row.id, &tower_sid.to_string()).await;
+                    record_session_mapping(row.id, &tower_sid.to_string());
                 }
             }
 
@@ -871,17 +866,15 @@ pub async fn sessions_terminate(
         // V-HIGH-2: actually invalidate the live tower-sessions record.
         // `Entity::revoke` only stamps `user_sessions.revoked_at` (audit/
         // UI-only — nothing on the auth path reads it); the tower-sessions
-        // Redis key remains, so the cookie keeps authenticating. Look up the
-        // tower-session id captured at login and DEL it from Redis (plus
-        // add it to a revocation set as defense-in-depth). A missing mapping
-        // (a session whose login path didn't record one, or a pre-fix row)
-        // means we CANNOT DEL the live record — the cookie then stays valid
-        // until its 14-day inactivity expiry. `revoked_at` does NOT enforce
-        // that window; it is audit-only.
-        if let Some(tower_sid) = lookup_session_mapping(&state.redis_pool, id).await {
-            auth.backend()
-                .delete_tower_session(&state.redis_pool, &tower_sid)
-                .await;
+        // store record remains, so the cookie keeps authenticating. Look up the
+        // tower-session id captured at login and delete it from the session
+        // store (plus add it to the revoked set as defense-in-depth). A missing
+        // mapping (a session whose login path didn't record one, lost to a
+        // restart, or a pre-fix row) means we CANNOT delete the live record —
+        // the cookie then stays valid until its 14-day inactivity expiry.
+        // `revoked_at` does NOT enforce that window; it is audit-only.
+        if let Some(tower_sid) = lookup_session_mapping(id) {
+            auth.backend().terminate(&tower_sid).await;
         } else {
             warn!(
                 session_id = id,
@@ -936,17 +929,24 @@ async fn rotate_session_after_trust_change(auth: &mut AuthSession) {
 /// instead of issuing a full session. The token is the ONLY thing the caller
 /// can use to reach the TOTP step — it authenticates nothing else, and it is
 /// consumed on first use. Mirrors the `reset_token` single-use pattern in
-/// `forgot_password_v1` (32 random bytes → 256-bit hex, GETDEL on take).
+/// `forgot_password_v1` (32 random bytes → 256-bit hex, removed-on-take).
+///
+/// Backed by a process-global in-memory TTL map (previously a Redis `SET`/`GETDEL`
+/// pair). Single-use is preserved by removing the entry on `take`; a replayed
+/// token observes `None`. Tokens live in-memory only, so a restart drops all
+/// pending tokens (acceptable — the user just re-logs-in).
 mod login_totp_token {
     use super::*;
     use rand::Rng;
-    use tower_sessions_redis_store::fred::prelude::*;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
     use zeroize::Zeroize;
 
     /// Pending-TOTP credential TTL, in seconds. 5 minutes is long enough to
     /// switch to the authenticator app and type a code, short enough to bound
     /// an attacker's window if a token is intercepted.
-    const TTL_SECS: i64 = 300;
+    const TTL_SECS: u64 = 300;
 
     /// Compile-time marker that this module is wired (referenced by the unit
     /// test so a rename/removal fails the build rather than silently dropping
@@ -955,57 +955,60 @@ mod login_totp_token {
     #[allow(dead_code)] // referenced via type_name::<AssertWired> only (compile-time wiring check)
     pub struct AssertWired;
 
-    fn redis_key(token: &str) -> String {
-        // Namespaced so it cannot collide with session/oauth/reset keys.
+    type TokenMap = HashMap<String, (i32, Instant)>;
+
+    static TOKENS: OnceLock<Mutex<TokenMap>> = OnceLock::new();
+
+    fn tokens() -> &'static Mutex<TokenMap> {
+        TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    /// Drop entries older than `TTL_SECS`. Called under the lock so the
+    /// housekeeping is consistent with the insert/take. Bounded by the
+    /// (small) number of in-flight 2FA logins.
+    fn reap_stale(map: &mut TokenMap) {
+        map.retain(|_, (_, at)| at.elapsed().as_secs() < TTL_SECS);
+    }
+
+    fn namespaced_key(token: &str) -> String {
+        // Namespaced so it cannot collide with session/oauth/reset keys. The
+        // in-memory map is keyed directly by this string.
         format!("auth:login_totp:{token}")
     }
 
     /// Mint a fresh single-use pending credential bound to `user_id`.
     /// 32 random bytes → 256 bits, hex-encoded. Returned to the client in the
     /// `totp_required` response. The raw bytes are zeroized once hex-encoded.
-    pub async fn mint(state: &AppState, user_id: i32) -> Result<String, ErrorResponse> {
+    pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
         let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
         rand::rng().fill(bytes.as_mut());
         let token = hex::encode(*bytes);
         bytes.zeroize();
-        state
-            .redis_pool
-            .set::<(), _, _>(
-                redis_key(&token),
-                user_id.to_string(),
-                Some(fred::types::Expiration::EX(TTL_SECS)),
-                None,
-                false,
-            )
-            .await
+
+        let mut map = tokens()
+            .lock()
             .map_err(|e| {
-                error!(error = ?e, "Failed to store login TOTP pending token");
+                error!(error = %e, "login_totp token map poisoned");
                 ErrorResponse::new(ErrorCode::InternalServerError)
             })?;
+        reap_stale(&mut map);
+        map.insert(namespaced_key(&token), (user_id, Instant::now()));
         Ok(token)
     }
 
     /// Atomically consume the pending credential, returning the bound
     /// `user_id` if the token was valid and present, or `None` if it was
-    /// already used / unknown / expired. `GETDEL` guarantees a replayed token
-    /// can never be observed twice (the single-use guarantee).
-    pub async fn take(state: &AppState, token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let stored: Option<String> =
-            state
-                .redis_pool
-                .getdel(redis_key(token))
-                .await
-                .map_err(|e| {
-                    error!(error = ?e, "Failed to consume login TOTP pending token");
-                    ErrorResponse::new(ErrorCode::InternalServerError)
-                })?;
-        match stored {
-            Some(s) => s.parse::<i32>().map(Some).map_err(|e| {
-                error!(error = ?e, "Stored login TOTP token value was not a user id");
+    /// already used / unknown / expired. Removal on take guarantees a replayed
+    /// token can never be observed twice (the single-use guarantee).
+    pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
+        let mut map = tokens()
+            .lock()
+            .map_err(|e| {
+                error!(error = %e, "login_totp token map poisoned");
                 ErrorResponse::new(ErrorCode::InternalServerError)
-            }),
-            None => Ok(None),
-        }
+            })?;
+        reap_stale(&mut map);
+        Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
     }
 }
 

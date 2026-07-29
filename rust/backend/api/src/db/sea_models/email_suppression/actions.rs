@@ -51,9 +51,13 @@ impl Entity {
         // permanent (no soft-cooldown semantics for them).
         let perm = up.permanent || up.reason != SuppressionReason::Bounce;
 
+        // SQLite `?` placeholders are purely positional (no `$N` re-use), so the
+        // three trailing timestamp columns each consume their own bind slot.
+        // `ON CONFLICT (col) DO UPDATE SET col = EXCLUDED.col` is valid SQLite
+        // UPSERT (>= 3.24) and is kept verbatim from the Postgres version.
         const SQL: &str = r#"INSERT INTO email_suppression
             (recipient, reason, source, diagnostic, permanent, last_seen, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $6, $6)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (recipient) DO UPDATE SET
                 permanent = email_suppression.permanent OR EXCLUDED.permanent,
                 reason = CASE WHEN email_suppression.permanent
@@ -63,7 +67,7 @@ impl Entity {
                 last_seen = EXCLUDED.last_seen,
                 updated_at = EXCLUDED.updated_at"#;
         conn.execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
+            DatabaseBackend::Sqlite,
             SQL,
             vec![
                 recipient.into(),
@@ -71,6 +75,8 @@ impl Entity {
                 up.source.into(),
                 up.diagnostic.into(),
                 perm.into(),
+                now.clone().into(),
+                now.clone().into(),
                 now.into(),
             ],
         ))

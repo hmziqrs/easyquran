@@ -4,7 +4,18 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, DeleteResult, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
-use tower_sessions_redis_store::fred::interfaces::{KeysInterface, SetsInterface};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Process-global in-memory route cache (replaces the prior Redis SETs). Keyed
+/// by `{known_routes_key}:{pattern}` / `{blocked_routes_key}:{pattern}` so the
+/// two logical sets share one map without collision. Readers consult this
+/// directly; there is no Redis round-trip on the default build.
+static ROUTE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn route_cache() -> &'static Mutex<HashMap<String, String>> {
+    ROUTE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 impl Entity {
     pub const PER_PAGE: u64 = 20;
@@ -151,9 +162,12 @@ impl Entity {
             .await
     }
 
-    pub async fn sync_all_to_redis(
+    /// Rebuild the process-global route cache from the DB. `known_routes_key`
+    /// and `blocked_routes_key` are used as namespace prefixes for the two
+    /// logical sets (previously Redis SET keys). The whole rebuild happens
+    /// under one lock acquisition so a reader never observes a half-built cache.
+    pub async fn sync_all_to_cache(
         db: &DatabaseConnection,
-        redis_pool: tower_sessions_redis_store::fred::prelude::Pool,
         known_routes_key: &str,
         blocked_routes_key: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -162,18 +176,22 @@ impl Entity {
             .all(db)
             .await?;
 
-        redis_pool.del::<(), _>(known_routes_key).await?;
-        redis_pool.del::<(), _>(blocked_routes_key).await?;
+        let mut cache = route_cache()
+            .lock()
+            .map_err(|e| format!("route cache lock poisoned: {e}"))?;
+        // Drop only this cache's namespaces, leaving any unrelated keys intact.
+        cache.retain(|k, _| !(k.starts_with(known_routes_key) || k.starts_with(blocked_routes_key)));
 
         for route in routes {
-            redis_pool
-                .sadd::<(), _, _>(known_routes_key, route.route_pattern.clone())
-                .await?;
-
+            cache.insert(
+                format!("{}:{}", known_routes_key, route.route_pattern),
+                route.route_pattern.clone(),
+            );
             if route.is_blocked {
-                redis_pool
-                    .sadd::<(), _, _>(blocked_routes_key, route.route_pattern.clone())
-                    .await?;
+                cache.insert(
+                    format!("{}:{}", blocked_routes_key, route.route_pattern),
+                    route.route_pattern.clone(),
+                );
             }
         }
 

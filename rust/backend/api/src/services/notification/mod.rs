@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
-use tower_sessions_redis_store::fred::prelude::Pool as RedisPool;
 
 use crate::db::sea_models::{device, notification};
 use crate::error::DbResult;
@@ -23,9 +22,7 @@ use ruxlog_types::enums::NotificationKind;
 /// Stateless-ish helper holding the DB handle and an optional FCM client.
 ///
 /// Constructed per request from `AppState`; the expensive parts (DB pool, FCM
-/// client) are `Clone`-cheap. The optional `redis` parameter on the free
-/// [`notify_user`] helper is reserved for a future pub/sub broadcast path and
-/// is currently unused.
+/// client) are `Clone`-cheap.
 pub struct NotificationService {
     db: DatabaseConnection,
     fcm: Option<Arc<rux_fcm::FcmClient>>,
@@ -60,15 +57,10 @@ impl NotificationService {
 }
 
 /// Free helper for cross-module notification dispatch.
-///
-/// `redis` is accepted (and ignored) so a future pub/sub broadcast can be
-/// layered in without changing call sites. Callers that have no `RedisPool`
-/// handy may pass `None`.
 #[allow(clippy::too_many_arguments)]
 pub async fn notify_user(
     db: &DatabaseConnection,
     fcm: Option<&Arc<rux_fcm::FcmClient>>,
-    _redis: Option<&RedisPool>,
     user_id: i32,
     kind: NotificationKind,
     title: impl Into<String>,

@@ -5091,6 +5091,7 @@ dependencies = [
  "ratatui",
  "regex",
  "reqwest 0.12.28",
+ "rmp-serde",
  "rux-auth",
  "rux-fcm",
  "rux-provider-core",

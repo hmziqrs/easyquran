@@ -32,8 +32,8 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 ///
 /// The emailed code is deleted from the DB the moment `verify` accepts it; the
 /// only thing that can subsequently change the password is this opaque token,
-/// which is stored in Redis with a short TTL and burned (atomic `GETDEL`) on
-/// first use. Consequences:
+/// which is stored in a process-global in-memory TTL map and removed on first
+/// use. Consequences:
 ///   - the emailed code can never be **replayed** against `verify` or `reset`
 ///     once the legitimate user has verified;
 ///   - the reset token itself is strictly single-use — a replayed `reset`
@@ -41,75 +41,79 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 ///
 /// This closes the window the old flow left open, where `verify` merely *checked*
 /// the code and left it live so the (single) `reset` could re-check it — meaning
-/// the code stayed reusable until consumed.
+/// the code stayed reusable until consumed. Backed by an in-memory map (previously
+/// Redis `SET`/`GETDEL`); a restart drops outstanding tokens, which just forces
+/// the user to re-request a reset.
 mod reset_token {
     use super::*;
-    // fred's `set`/`getdel` are trait methods on the Pool.
     use rand::Rng;
-    use tower_sessions_redis_store::fred::prelude::*;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
     // GAP-016: `Zeroize` (the trait) must be in scope for the `.zeroize()`
     // call on the `Zeroizing<[u8;32]>` random-source wrapper below.
     use zeroize::Zeroize;
 
-    fn redis_key(token: &str) -> String {
+    /// Reset-token TTL, in seconds. 10 minutes: longer than a user spends typing
+    /// a new password, short enough to bound an attacker's replay window.
+    const TTL_SECS: u64 = 600;
+
+    type TokenMap = HashMap<String, (i32, Instant)>;
+
+    static TOKENS: OnceLock<Mutex<TokenMap>> = OnceLock::new();
+
+    fn tokens() -> &'static Mutex<TokenMap> {
+        TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    fn reap_stale(map: &mut TokenMap) {
+        map.retain(|_, (_, at)| at.elapsed().as_secs() < TTL_SECS);
+    }
+
+    fn namespaced_key(token: &str) -> String {
         // Namespaced so it can't collide with session/checkout/oauth keys.
         format!("forgot_password:reset_token:{token}")
     }
 
     /// Mint a fresh single-use token bound to `user_id`. 32 random bytes → 256
     /// bits, hex-encoded. Returned to the client in the `verify` response.
-    /// 10-minute TTL: longer than a user spends typing a new password, short
-    /// enough to bound an attacker's replay window.
     ///
     /// GAP-016 (CWE-316/459): the 32-byte random source is zeroized the moment
     /// it has been hex-encoded, so the raw token material is not left on the
     /// stack/heap longer than necessary. The hex `String` itself is returned to
     /// the caller (it MUST reach the client JSON), so it is not zeroized here —
-    /// its lifetime is bounded by the short Redis TTL and the single-use GETDEL
-    /// on consumption.
-    pub async fn mint(state: &AppState, user_id: i32) -> Result<String, ErrorResponse> {
+    /// its lifetime is bounded by the short TTL and the single-use removal on
+    /// consumption.
+    pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
         let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
         rand::rng().fill(bytes.as_mut());
         let token = hex::encode(*bytes);
         bytes.zeroize();
-        state
-            .redis_pool
-            .set::<(), _, _>(
-                redis_key(&token),
-                user_id.to_string(),
-                Some(fred::types::Expiration::EX(600)),
-                None,
-                false,
-            )
-            .await
+
+        let mut map = tokens()
+            .lock()
             .map_err(|e| {
-                error!(error = ?e, "Failed to store reset token in Redis");
+                error!(error = %e, "reset_token map poisoned");
                 ErrorResponse::new(ErrorCode::InternalServerError)
             })?;
+        reap_stale(&mut map);
+        map.insert(namespaced_key(&token), (user_id, Instant::now()));
         Ok(token)
     }
 
     /// Atomically consume the token, returning the bound `user_id` if the token
     /// was valid and present, or `None` if it was already used / unknown / expired.
-    /// `GETDEL` guarantees a replayed `reset` can never observe the same token
-    /// twice (the same atomic-take guarantee used for checkout intents).
-    pub async fn take(state: &AppState, token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let stored: Option<String> =
-            state
-                .redis_pool
-                .getdel(redis_key(token))
-                .await
-                .map_err(|e| {
-                    error!(error = ?e, "Failed to consume reset token from Redis");
-                    ErrorResponse::new(ErrorCode::InternalServerError)
-                })?;
-        match stored {
-            Some(s) => s.parse::<i32>().map(Some).map_err(|e| {
-                error!(error = ?e, "Stored reset token value was not a user id");
+    /// Removal on take guarantees a replayed `reset` can never observe the same
+    /// token twice (the same atomic-take guarantee used for checkout intents).
+    pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
+        let mut map = tokens()
+            .lock()
+            .map_err(|e| {
+                error!(error = %e, "reset_token map poisoned");
                 ErrorResponse::new(ErrorCode::InternalServerError)
-            }),
-            None => Ok(None),
-        }
+            })?;
+        reap_stale(&mut map);
+        Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
     }
 }
 
@@ -319,7 +323,7 @@ pub async fn verify(
         return Err(err);
     }
 
-    let reset_token = reset_token::mint(&state, user_id).await?;
+    let reset_token = reset_token::mint(user_id).await?;
 
     info!(user_id, email = %payload.email, "Forgot password code verified and consumed; reset token issued");
     Ok((StatusCode::OK, Json(V1VerifyResponse { reset_token })))
@@ -345,14 +349,14 @@ pub async fn reset(
 
     // V-HIGH-4: the password can ONLY be changed through the one-time
     // `reset_token` issued by `verify`. That token is bound to a user and is
-    // atomically consumed here (single-use `GETDEL`). There is NO fallback to a
+    // atomically consumed here (single-use removal). There is NO fallback to a
     // raw emailed `code` + `email`: `/request`, `/verify` and `/reset` are
     // independently-reachable routes, so accepting the emailed code at `/reset`
     // would let an attacker who merely intercepted the reset email skip
     // `/verify` entirely and take over the account. The `reset_token` is a
     // required (non-optional) field on `V1ResetPayload`, so a tokenless request
     // fails at deserialization before reaching this handler.
-    let user_id = match reset_token::take(&state, &payload.reset_token).await? {
+    let user_id = match reset_token::take(&payload.reset_token).await? {
         Some(id) => id,
         None => {
             warn!("Reset attempted with an unknown or already-used reset token");

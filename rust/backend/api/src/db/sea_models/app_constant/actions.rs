@@ -4,7 +4,17 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
-use tower_sessions_redis_store::fred::interfaces::{HashesInterface, KeysInterface};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Process-global in-memory constant cache (replaces the prior Redis HASHes).
+/// Keyed by `{value_hash}:{key}` (raw value) and `{meta_hash}:{key}` (JSON
+/// metadata blob) so the two logical hashes share one map without collision.
+static CONSTANT_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn constant_cache() -> &'static Mutex<HashMap<String, String>> {
+    CONSTANT_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 impl Entity {
     pub async fn find_by_key(db: &DatabaseConnection, key: &str) -> Result<Option<Model>, DbErr> {
@@ -122,30 +132,32 @@ impl Entity {
         Ok(PaginatedList::new(items, total, page, per_page))
     }
 
-    pub async fn sync_all_to_redis(
+    /// Rebuild the process-global constant cache from the DB. `value_hash` and
+    /// `meta_hash` are used as namespace prefixes for the two logical hashes
+    /// (previously Redis HASH keys). The whole rebuild happens under one lock
+    /// acquisition so a reader never observes a half-built cache.
+    pub async fn sync_all_to_cache(
         db: &DatabaseConnection,
-        redis_pool: tower_sessions_redis_store::fred::prelude::Pool,
         value_hash: &str,
         meta_hash: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let all = Entity::find().order_by_asc(Column::Key).all(db).await?;
 
-        redis_pool.del::<(), _>(value_hash).await?;
-        redis_pool.del::<(), _>(meta_hash).await?;
+        let mut cache = constant_cache()
+            .lock()
+            .map_err(|e| format!("constant cache lock poisoned: {e}"))?;
+        // Drop only this cache's namespaces, leaving any unrelated keys intact.
+        cache.retain(|k, _v| !(k.starts_with(value_hash) || k.starts_with(meta_hash)));
 
         for item in all {
-            redis_pool
-                .hset::<(), _, _>(value_hash, vec![(&item.key, &item.value)])
-                .await?;
+            cache.insert(format!("{}:{}", value_hash, item.key), item.value.clone());
             let meta = serde_json::json!({
                 "value_type": item.value_type,
                 "is_sensitive": item.is_sensitive,
                 "updated_at": item.updated_at,
             })
             .to_string();
-            redis_pool
-                .hset::<(), _, _>(meta_hash, vec![(&item.key, meta)])
-                .await?;
+            cache.insert(format!("{}:{}", meta_hash, item.key), meta);
         }
         Ok(())
     }

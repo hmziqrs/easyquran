@@ -5,7 +5,7 @@ pub mod mail;
 pub mod media;
 pub mod paywall;
 pub mod rate_limit_store;
-pub mod redis;
+pub mod session_store;
 pub mod webhook_util;
 
 // Feature-gated

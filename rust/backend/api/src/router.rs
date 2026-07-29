@@ -15,7 +15,6 @@ use crate::middlewares::{http_metrics, rate_limit, request_id_middleware, securi
 use crate::modules::{
     auth_v1, category_v1, csrf_v1, feed_v1, mail_v1, media_v1, post_v1, search_v1, tag_v1, user_v1,
 };
-use fred::interfaces::ClientLike;
 
 #[cfg(feature = "auth-oauth")]
 use crate::modules::google_auth_v1;
@@ -226,17 +225,16 @@ pub fn router(state: AppState) -> Router<AppState> {
 }
 
 async fn health_check(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
+    // SQLite is the sole backing store on the default build (sessions +
+    // rate-limit L2 + canonical data all share this connection), so a DB ping
+    // is the single liveness signal. The prior Redis ping was removed with the
+    // Redis pool.
     let db_status = match state.sea_db.ping().await {
         Ok(()) => "ok",
         Err(_) => "error",
     };
 
-    let redis_status: &str = match state.redis_pool.ping::<()>(None).await {
-        Ok(_) => "ok",
-        Err(_) => "error",
-    };
-
-    let healthy = db_status == "ok" && redis_status == "ok";
+    let healthy = db_status == "ok";
     let status = if healthy {
         StatusCode::OK
     } else {
@@ -249,7 +247,6 @@ async fn health_check(State(state): State<AppState>) -> (StatusCode, Json<serde_
             "status": if healthy { "healthy" } else { "degraded" },
             "components": {
                 "database": db_status,
-                "redis": redis_status,
             }
         })),
     )

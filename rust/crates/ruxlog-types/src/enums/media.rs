@@ -5,14 +5,7 @@ use std::fmt;
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(
-        rs_type = "String",
-        db_type = "Enum",
-        enum_name = "media_reference_type"
-    )
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MediaReference {
@@ -66,10 +59,7 @@ impl fmt::Display for MediaReference {
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)
 )]
-#[cfg_attr(
-    feature = "backend",
-    sea_orm(rs_type = "String", db_type = "Enum", enum_name = "entity_type")
-)]
+#[cfg_attr(feature = "backend", sea_orm(rs_type = "String", db_type = "Text"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EntityType {

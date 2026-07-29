@@ -4,24 +4,22 @@
 
 use axum::{extract::Request, middleware::Next, response::Response, Extension};
 use rux_auth::{auth_requirements, check_requirements, AuthError, AuthSession};
-use sea_orm::DatabaseConnection;
 use tower_sessions::Session;
-use tower_sessions_redis_store::fred::prelude::Pool as RedisPool;
 
-use crate::services::auth::AuthBackend;
+use crate::{services::auth::AuthBackend, AppState};
 
-/// Helper to create AuthSession from DB + Redis extensions and a Session.
+/// Helper to create AuthSession from `AppState` and a Session.
 ///
-/// V-HIGH-2: `AuthBackend` requires the Redis pool so the per-request
-/// `is_session_revoked` `SISMEMBER` can run. The router layers BOTH a
-/// `DatabaseConnection` extension and a `RedisPool` extension
-/// (see `main.rs`); every guard below consumes both.
-async fn make_auth_session(
-    db: &DatabaseConnection,
-    redis_pool: RedisPool,
-    session: Session,
-) -> AuthSession<AuthBackend> {
-    let backend = AuthBackend::new(db, redis_pool);
+/// V-HIGH-2: `AuthBackend` needs the session store + revoked-session set so the
+/// per-request `is_session_revoked` check and live-record termination can run.
+/// Both live on `AppState` (clones of the shared `Arc`s); every guard below
+/// builds a one-shot backend from the request's `State<AppState>`.
+async fn make_auth_session(state: &AppState, session: Session) -> AuthSession<AuthBackend> {
+    let backend = AuthBackend::new(
+        &state.sea_db,
+        state.session_store.clone(),
+        state.revoked_sessions.clone(),
+    );
     AuthSession::new(backend, session).await
 }
 
@@ -38,39 +36,36 @@ pub const ROLE_SUPER_ADMIN: i32 = 4;
 
 /// Require user to be authenticated only
 pub async fn authenticated(
-    Extension(db): Extension<DatabaseConnection>,
-    Extension(redis_pool): Extension<RedisPool>,
+    Extension(state): Extension<AppState>,
     session: Session,
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let mut auth = make_auth_session(&db, redis_pool, session).await;
+    let mut auth = make_auth_session(&state, session).await;
     check_requirements(&mut auth, &auth_requirements().authenticated().not_banned()).await?;
     Ok(next.run(request).await)
 }
 
 /// Require user to NOT be authenticated (for login/register routes)
 pub async fn unauthenticated(
-    Extension(db): Extension<DatabaseConnection>,
-    Extension(redis_pool): Extension<RedisPool>,
+    Extension(state): Extension<AppState>,
     session: Session,
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let mut auth = make_auth_session(&db, redis_pool, session).await;
+    let mut auth = make_auth_session(&state, session).await;
     check_requirements(&mut auth, &auth_requirements().unauthenticated()).await?;
     Ok(next.run(request).await)
 }
 
 /// Require user to be authenticated but NOT verified (for verification routes)
 pub async fn unverified(
-    Extension(db): Extension<DatabaseConnection>,
-    Extension(redis_pool): Extension<RedisPool>,
+    Extension(state): Extension<AppState>,
     session: Session,
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let mut auth = make_auth_session(&db, redis_pool, session).await;
+    let mut auth = make_auth_session(&state, session).await;
     check_requirements(&mut auth, &auth_requirements().authenticated().unverified()).await?;
     Ok(next.run(request).await)
 }
@@ -81,13 +76,12 @@ pub async fn unverified(
 
 /// Require authenticated + verified user
 pub async fn verified(
-    Extension(db): Extension<DatabaseConnection>,
-    Extension(redis_pool): Extension<RedisPool>,
+    Extension(state): Extension<AppState>,
     session: Session,
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let mut auth = make_auth_session(&db, redis_pool, session).await;
+    let mut auth = make_auth_session(&state, session).await;
     check_requirements(
         &mut auth,
         &auth_requirements().authenticated().verified().not_banned(),
@@ -98,13 +92,12 @@ pub async fn verified(
 
 /// Require authenticated + verified + minimum role (single middleware)
 pub async fn verified_with_role<const LEVEL: i32>(
-    Extension(db): Extension<DatabaseConnection>,
-    Extension(redis_pool): Extension<RedisPool>,
+    Extension(state): Extension<AppState>,
     session: Session,
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    let mut auth = make_auth_session(&db, redis_pool, session).await;
+    let mut auth = make_auth_session(&state, session).await;
     check_requirements(
         &mut auth,
         &auth_requirements()

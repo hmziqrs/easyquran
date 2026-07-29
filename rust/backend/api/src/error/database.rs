@@ -6,21 +6,32 @@ use sea_orm::DbErr;
 /// Map SQLSTATE codes and common database error messages to ErrorCode
 fn classify_db_error(msg: &str) -> ErrorCode {
     let lower = msg.to_lowercase();
-    // Duplicate / unique constraint violations (Postgres 23505)
+    // Duplicate / unique constraint violations
+    //   Postgres: SQLSTATE 23505 / "duplicate key value" / "unique constraint"
+    //   SQLite : "unique constraint failed: <table>.<col>" (matched by the
+    //            "unique constraint" substring below)
     if msg.contains("23505")
         || lower.contains("duplicate key value")
         || lower.contains("unique constraint")
     {
         return ErrorCode::DuplicateEntry;
     }
-    // Foreign key violations (Postgres 23503)
-    if msg.contains("23503") || lower.contains("violates foreign key constraint") {
+    // Foreign key violations
+    //   Postgres: SQLSTATE 23503 / "violates foreign key constraint"
+    //   SQLite : "foreign key constraint failed"
+    if msg.contains("23503")
+        || lower.contains("violates foreign key constraint")
+        || lower.contains("foreign key constraint failed")
+    {
         return ErrorCode::IntegrityError;
     }
-    // Not-null violations (Postgres 23502)
+    // Not-null violations
+    //   Postgres: SQLSTATE 23502 / "not-null constraint" / "null value in column"
+    //   SQLite : "not null constraint failed: <table>.<col>"
     if msg.contains("23502")
         || lower.contains("not-null constraint")
         || lower.contains("null value in column")
+        || lower.contains("not null constraint failed")
     {
         return ErrorCode::IntegrityError;
     }
@@ -32,8 +43,13 @@ fn classify_db_error(msg: &str) -> ErrorCode {
     {
         return ErrorCode::IntegrityError;
     }
-    // Deadlock detected (Postgres 40P01)
-    if msg.contains("40P01") || lower.contains("deadlock detected") {
+    // Deadlock / lock contention
+    //   Postgres: SQLSTATE 40P01 / "deadlock detected"
+    //   SQLite : "database is locked" / "database table is locked" (SQLITE_BUSY/LOCKED)
+    if msg.contains("40P01")
+        || lower.contains("deadlock detected")
+        || lower.contains("database is locked")
+    {
         return ErrorCode::TransactionError;
     }
     // Serialization failure (Postgres 40001)
@@ -291,6 +307,42 @@ mod tests {
     fn test_classify_serialization_failure_lowercase() {
         assert_eq!(
             classify_db_error("serialization failure"),
+            ErrorCode::TransactionError
+        );
+    }
+
+    #[test]
+    fn test_classify_sqlite_unique_constraint_failed() {
+        assert_eq!(
+            classify_db_error("UNIQUE constraint failed: users.email"),
+            ErrorCode::DuplicateEntry
+        );
+    }
+
+    #[test]
+    fn test_classify_sqlite_foreign_key_constraint_failed() {
+        assert_eq!(
+            classify_db_error("FOREIGN KEY constraint failed"),
+            ErrorCode::IntegrityError
+        );
+    }
+
+    #[test]
+    fn test_classify_sqlite_not_null_constraint_failed() {
+        assert_eq!(
+            classify_db_error("NOT NULL constraint failed: posts.title"),
+            ErrorCode::IntegrityError
+        );
+    }
+
+    #[test]
+    fn test_classify_sqlite_database_locked() {
+        assert_eq!(
+            classify_db_error("database is locked"),
+            ErrorCode::TransactionError
+        );
+        assert_eq!(
+            classify_db_error("database table is locked"),
             ErrorCode::TransactionError
         );
     }
