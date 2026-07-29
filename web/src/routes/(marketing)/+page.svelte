@@ -46,8 +46,8 @@
   const steps = [
     {
       n: 1,
-      title: "Open — no sign-up",
-      body: "No account, no onboarding tour. The reader is the first thing you see.",
+      title: "Open — straight into the text",
+      body: "No tour, no friction. The reader is the first thing you see.",
     },
     {
       n: 2,
@@ -257,8 +257,8 @@
   <Container class="max-w-[1180px] flex flex-col items-center gap-5 text-center">
     <h2 class="text-[38px] tracking-[-0.03em]">Start with Al-Fatihah.</h2>
     <p class="max-w-[44ch] text-[17px] leading-[1.6] text-fg-2">
-      The whole app runs in your browser. Nothing to install, nothing to sign up
-      for.
+      Today it runs right in your browser &mdash; nothing to install. Native desktop
+      and mobile apps are next, with hadith, audio and translations to follow.
     </p>
     <div class="mt-1.5">
       <Button variant="accent" size="lg" href="/app">Open the app</Button>

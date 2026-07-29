@@ -554,7 +554,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         webauthn: webauthn_service,
     };
 
-    // Bootstrap application constants from environment (only fills missing keys) and warm Redis.
+    // Bootstrap application constants from environment (only fills missing keys) and warm the in-memory constant cache.
     #[cfg(feature = "admin-acl")]
     {
         if let Err(err) = AclService::bootstrap_from_env(State(state.clone())).await {
@@ -569,13 +569,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sync_interval_secs = env_u64("ROUTE_BLOCKER_SYNC_INTERVAL_SECS", 60 * 30);
         route_blocker_config::set_sync_interval_secs(sync_interval_secs);
 
-        if let Err(err) = RouteBlockerService::initialize_redis_sync(&state).await {
+        if let Err(err) = RouteBlockerService::initialize_cache(&state).await {
             tracing::error!(
                 error = %err,
-                "Initial route blocker Redis sync failed; continuing without warm cache"
+                "Initial route blocker cache sync failed; continuing without warm cache"
             );
         } else {
-            tracing::info!("Initial route blocker Redis sync completed successfully");
+            tracing::info!("Initial route blocker cache sync completed successfully");
         }
 
         let state_for_blocker = state.clone();
@@ -621,14 +621,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let sync_start = chrono::Utc::now();
 
                 if let Err(err) =
-                    RouteBlockerService::initialize_redis_sync(&state_for_blocker).await
+                    RouteBlockerService::initialize_cache(&state_for_blocker).await
                 {
                     tracing::error!(
                         error = %err,
-                        "Periodic route blocker Redis sync failed"
+                        "Periodic route blocker cache sync failed"
                     );
                 } else {
-                    tracing::info!("Periodic route blocker Redis sync completed successfully");
+                    tracing::info!("Periodic route blocker cache sync completed successfully");
                 }
 
                 route_blocker_config::set_last_sync_at(sync_start);

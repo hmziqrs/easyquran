@@ -5,11 +5,7 @@ use axum::{
     routing::post,
     Router,
 };
-mod size_config {
-    include!("../src/config.rs");
-}
-
-use size_config::body_limits;
+use ruxlog::config::body_limits;
 use tower::ServiceExt;
 use tower_http::limit::RequestBodyLimitLayer;
 

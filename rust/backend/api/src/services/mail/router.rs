@@ -1,11 +1,11 @@
 //! Multi-provider mail router with the cross-cutting send-time guards.
 //!
 //! `MailRouter` holds the initialized [`MailProvider`]s and, unlike the billing
-//! router, also owns the Redis pool + DB connection so the four guards run in
+//! router, also owns the rate-limit store + DB connection so the four guards run in
 //! exactly one place for every provider:
 //! 1. recipient canonicalization + RFC-5321 validation (header-injection safe),
 //! 2. suppression-list pre-check (fail-open on DB error),
-//! 3. per-recipient + provider-quota rate limiting (fail-closed on Redis error;
+//! 3. per-recipient + provider-quota rate limiting (fail-closed on a rate-limit store error;
 //!    skipped for transactional templates already bounded at the controller),
 //! 4. content dedup (newsletter only).
 //!
@@ -142,7 +142,7 @@ impl MailRouter {
     }
 
     /// Enforce per-recipient + provider-quota buckets. Fail-closed (503) on a
-    /// Redis eval error — the limiter itself returns 503 for the same case.
+    /// rate-limit store error — the limiter itself returns 503 for the same case.
     async fn check_rate(&self, recipient: &str) -> Result<(), MailError> {
         self.enforce(&format!("mail:send:rcpt:{recipient}"), self.limits.rcpt)
             .await?;
@@ -172,7 +172,7 @@ impl MailRouter {
 
     /// Best-effort release of a dedup claim so a failed send (throttle / provider
     /// error) can be retried within the window instead of being suppressed as a
-    /// duplicate. Fail-open: a Redis blip just leaves the key to TTL (worst case
+    /// duplicate. Fail-open: a store error just leaves the key to TTL (worst case
     /// a near-term retry is deduped; the next send after the TTL proceeds).
     async fn release_dedup(&self, key: Option<&str>) {
         if let Some(key) = key {

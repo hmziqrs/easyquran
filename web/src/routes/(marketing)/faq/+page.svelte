@@ -20,7 +20,8 @@
 
 <Seo path="/faq" faq={FAQS} />
 
-<Container width="narrow" class="max-w-[760px] flex flex-col gap-[30px] pt-[72px] pb-[96px]">
+<Container class="max-w-[1180px] pt-[72px] pb-[96px]">
+  <div class="flex w-full flex-col gap-[30px]">
   <div class="flex flex-col gap-3">
     <Eyebrow class="text-accent">FAQ</Eyebrow>
     <h1 class="text-[40px] leading-[1.1] tracking-[-0.03em] sm:text-[46px]">
@@ -58,4 +59,5 @@
       Send us a question</a
     >.
   </p>
+  </div>
 </Container>

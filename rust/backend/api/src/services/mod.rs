@@ -34,10 +34,6 @@ pub mod billing;
 pub mod scheduler;
 
 // --- Services added for the issues batch (2026-07-27) ---
-#[cfg(feature = "cache")]
-pub mod api_cache;
-#[cfg(feature = "cache")]
-pub mod cache;
 #[cfg(feature = "image-moderation")]
 pub mod image_moderation;
 #[cfg(feature = "notifications")]

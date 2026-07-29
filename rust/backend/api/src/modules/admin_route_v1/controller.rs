@@ -166,19 +166,19 @@ pub async fn list_routes(
 
 #[debug_handler]
 #[instrument(skip(state, _auth))]
-pub async fn sync_routes_to_redis(
+pub async fn sync_routes_to_cache(
     State(state): State<AppState>,
     _auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let result = RouteBlockerService::sync_all_routes_to_redis(State(state)).await;
+    let result = RouteBlockerService::sync_all_routes_to_cache(State(state)).await;
 
     match result {
         Ok(response) => {
-            info!("Successfully synced all routes to Redis");
+            info!("Successfully synced all routes to the in-memory cache");
             Ok(Json(response))
         }
         Err(err) => {
-            error!(error = %err, "Failed to sync routes to Redis");
+            error!(error = %err, "Failed to sync routes to the in-memory cache");
             Err(err)
         }
     }

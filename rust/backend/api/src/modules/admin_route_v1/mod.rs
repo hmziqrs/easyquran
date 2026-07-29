@@ -16,7 +16,7 @@ pub fn routes() -> Router<AppState> {
         .route("/update", post(controller::update_route_status))
         .route("/delete", post(controller::delete_route))
         .route("/list", post(controller::list_routes))
-        .route("/sync", get(controller::sync_routes_to_redis))
+        .route("/sync", get(controller::sync_routes_to_cache))
         .route(
             "/sync_interval",
             get(controller::get_sync_interval).post(controller::update_sync_interval),

@@ -744,7 +744,7 @@ impl Entity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::sea_query::PostgresQueryBuilder;
+    use sea_orm::sea_query::SqliteQueryBuilder;
     use sea_orm::QueryTrait;
 
     /// V-MED-6 TOCTOU fix: `advance_totp_counter_if_higher` must emit a SINGLE
@@ -767,7 +767,7 @@ mod tests {
                     sea_orm::sea_query::Expr::col(Column::TwoFaLastTotpCounter).lt(1_000_042_i64),
                 ))
                 .into_query()
-                .to_string(PostgresQueryBuilder);
+                .to_string(SqliteQueryBuilder);
 
         // The SET targets exactly the watermark column with the new counter.
         assert!(

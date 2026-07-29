@@ -1,4 +1,4 @@
-# Production application stack: backend API + Postgres + Valkey + Watchtower.
+# Production application stack: backend API + Watchtower.
 #
 # This is the FULL app stack. The Traefik edge proxy is a SEPARATE compose
 # project (backend/traefik/docker-compose.prod.yml) that brings up the
@@ -18,9 +18,10 @@
 #   docker compose --env-file deploy.env -f backend/docker/docker-compose.prod.yml up -d
 #
 # `deploy.env` is the single source for compose interpolation vars
-# (PROJECT, BACKEND_IMAGE, BACKEND_DOMAIN, ...) and for the secrets/credentials
-# the containers read at runtime (DB, Redis, SMTP, S3, FCM, ...). See
-# deploy.env.example.
+# (PROJECT, BACKEND_IMAGE, BACKEND_DOMAIN, ...) and for the values the
+# containers read at runtime (DATABASE_URL, SMTP, S3, FCM, ...). See
+# deploy.env.example. The database is a single SQLite file mounted under
+# /app/data — no separate DB or cache container is part of this stack.
 
 name: ${PROJECT}
 
@@ -35,16 +36,14 @@ services:
       # http://api:8888 target are always correct regardless of deploy.env).
       HOST: "0.0.0.0"
       PORT: "8888"
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      REDIS_HOST: valkey
-      REDIS_PORT: "6379"
+      # SQLite is a file: the app reads DATABASE_URL (see db/sea_connect.rs)
+      # and defaults to sqlite:./data/easyquran.db?mode=rwc. Force it here so
+      # the path always resolves under the mounted /app/data volume.
+      DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
       RUST_LOG: ${RUST_LOG:-info}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
+    volumes:
+      # Persistent SQLite store (replaces the prior postgres_data volume).
+      - backend_data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8888/healthz || exit 1"]
       interval: 30s
@@ -73,51 +72,6 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
 
-  postgres:
-    image: postgres:18.1-alpine
-    container_name: ${PROJECT}_postgres
-    env_file: [deploy.env]
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      # Same init scripts as the dev stack (uuid-ossp, pgcrypto, seed guards).
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [internal]
-    security_opt: [no-new-privileges:true]
-    restart: unless-stopped
-
-  valkey:
-    image: valkey/valkey:8.0-alpine
-    container_name: ${PROJECT}_valkey
-    env_file: [deploy.env]
-    command:
-      - valkey-server
-      - --requirepass
-      - ${REDIS_PASSWORD}
-      - --acl-pubsub-default
-      - allchannels
-      - --aclfile
-      - /etc/valkey/users.acl
-    volumes:
-      - valkey_data:/data
-      - ./redis/users.acl:/etc/valkey/users.acl:ro
-    healthcheck:
-      test: ["CMD", "valkey-cli", "-u", "redis://${REDIS_USER}:${REDIS_PASSWORD}@localhost:6379", "PING"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [internal]
-    security_opt: [no-new-privileges:true]
-    restart: unless-stopped
-
   watchtower:
     # Zero-SSH auto-updates: polls GHCR for new tags on labeled containers only.
     image: containrrr/watchtower:latest
@@ -137,9 +91,11 @@ networks:
   external_network:
     name: ${PROJECT}_network
     external: true
-  # Data-plane isolation: Postgres/Valkey are NOT reachable from the proxy net.
+  # Private bridge for the backend, kept off the external proxy net
+  # (no DB/cache sidecars since the move to file-based SQLite).
   internal: {}
 
 volumes:
-  postgres_data: {}
-  valkey_data: {}
+  # Persistent SQLite database file, mounted at the app's ./data dir
+  # (replaces the prior postgres_data / valkey_data named volumes).
+  backend_data: {}

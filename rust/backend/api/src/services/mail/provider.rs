@@ -139,7 +139,7 @@ pub enum MailError {
     #[error("rate limited; retry in {retry_after_secs}s")]
     Throttled { retry_after_secs: u64 },
 
-    /// The rate limiter's Redis backend is unavailable. Fail-closed (503) to
+    /// The rate-limit store is unavailable. Fail-closed (503) to
     /// match the limiter's own contract — see `abuse_limiter.rs`.
     #[error("mail rate limiter unavailable")]
     LimiterUnavailable,

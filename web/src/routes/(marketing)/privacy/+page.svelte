@@ -11,10 +11,8 @@
 
 <Seo path="/privacy" />
 
-<Container
-  width="narrow"
-  class="flex max-w-[720px] flex-col gap-[26px] pt-[72px] pb-[96px]"
->
+<Container class="max-w-[1180px] pt-[72px] pb-[96px]">
+  <div class="flex w-full flex-col gap-[26px]">
   <div class="flex flex-col gap-2.5">
     <Eyebrow class="text-accent">Legal</Eyebrow>
     <h1 class="text-[36px] leading-[1.1] tracking-[-0.03em] sm:text-[42px]">
@@ -53,4 +51,5 @@
       Contact us</a
     >.
   </p>
+  </div>
 </Container>

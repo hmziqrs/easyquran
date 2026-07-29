@@ -29,9 +29,9 @@ use super::{
 /// `GET /auth/github/v1/login` — begin the GitHub OAuth flow with PKCE +
 /// session-bound CSRF state.
 #[debug_handler]
-#[instrument(skip(state, session), fields(result))]
+#[instrument(skip(_state, session), fields(result))]
 pub async fn github_login(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     session: Session,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Initiating GitHub OAuth login");
@@ -47,13 +47,11 @@ pub async fn github_login(
 
     let session_id = oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(
-        &state,
         &session_id,
         csrf_token.secret(),
         pkce_verifier.secret(),
         None,
-    )
-    .await?;
+    )?;
 
     info!("Generated GitHub auth URL with PKCE + session-bound CSRF state");
     tracing::Span::current().record("result", "success");
@@ -72,7 +70,7 @@ pub async fn github_callback(
     info!("Processing GitHub OAuth callback");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&state, &session_id, &query.state).await?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
 
     let client = get_github_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(query.code));
@@ -112,7 +110,7 @@ pub async fn github_exchange(
     info!("Processing GitHub OAuth code exchange from client");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&state, &session_id, &payload.state).await?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
 
     let client = get_github_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(payload.code));

@@ -107,8 +107,8 @@ highlight = "all"
 # any *new* duplicate that a dependency change might introduce.
 skip = [
     # aws-smithy-http-client still pulls hyper-rustls 0.24 (rustls 0.21) for one
-    # internal HTTP path while the rest of the graph (fred, newer AWS connectors)
-    # is on rustls 0.23.
+    # internal HTTP path while the rest of the graph (newer AWS connectors and
+    # other rustls-0.23 consumers) is on rustls 0.23.
     { name = "rustls", version = "0.21" },
     # getrandom resolves to THREE transitive versions, all pulled by the AWS SDK
     # stack and impossible to collapse from this crate:

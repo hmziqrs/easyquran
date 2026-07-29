@@ -44,8 +44,6 @@ use crate::modules::seed_v1;
 use crate::modules::billing_v1;
 
 // --- Modules added for the issues batch (2026-07-27) ---
-#[cfg(feature = "cache")]
-use crate::modules::cache_v1;
 #[cfg(feature = "auth-passkey")]
 use crate::modules::passkey_v1;
 #[cfg(feature = "auth-oauth")]
@@ -183,11 +181,6 @@ pub fn router(state: AppState) -> Router<AppState> {
             .nest("/auth/facebook/v1", facebook_auth_v1::routes())
             .nest("/auth/github/v1", github_auth_v1::routes())
             .nest("/auth/apple/v1", apple_auth_v1::routes());
-    }
-
-    #[cfg(feature = "cache")]
-    {
-        router = router.nest("/cache/v1", cache_v1::routes());
     }
 
     #[cfg(feature = "openapi")]

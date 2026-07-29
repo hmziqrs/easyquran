@@ -7,7 +7,7 @@ use crate::error::{ErrorCode, ErrorResponse};
 ///
 /// Facebook's server-side OAuth flow does NOT support PKCE (the dialog ignores
 /// `code_challenge`), so we rely on the session-bound CSRF `state` alone for
-/// replay protection — the same single-use, redis-backed state every other
+/// replay protection — the same single-use, in-memory state every other
 /// provider uses. The `client_secret` is sent in the token exchange.
 ///
 /// Required env: `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`,

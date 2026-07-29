@@ -76,7 +76,7 @@ pub async fn subscribe(
     // defeated by rotating the email field; pair it with a per-IP bucket so a
     // single source cannot flood inserts + outbound confirmation mail.
     limiter(
-        &state.redis_pool,
+        &state.gate_store,
         &format!("newsletter:subscribe:ip:{client_ip}"),
         AbuseLimiterConfig {
             temp_block_attempts: 20,

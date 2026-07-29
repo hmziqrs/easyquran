@@ -6,6 +6,8 @@
 -->
 <script lang="ts">
   import { NAV_LINKS, SITE } from "$lib/config/site";
+  import { Icon } from "$lib/components/icon";
+  import { externalLinkAttrs } from "$lib/utils";
 
   const year = new Date().getFullYear();
   const brand = SITE.name.toLowerCase();
@@ -43,6 +45,16 @@
         <p class="max-w-[30ch] text-[14.5px] leading-relaxed text-fg-2">
           {SITE.footerBlurb}
         </p>
+        <div class="flex items-center gap-2">
+          <a
+            href={SITE.x}
+            aria-label="EasyQuran on X"
+            {...externalLinkAttrs(SITE.x, { me: true })}
+            class="inline-flex size-8 items-center justify-center rounded-lg border border-line-2 text-fg-3 transition-colors hover:border-line-3 hover:text-fg"
+          >
+            <Icon name="x-brand" size={15} />
+          </a>
+        </div>
       </div>
 
       <!-- Product -->
@@ -77,7 +89,19 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-5 pb-11">
-      <span class="text-[13.5px] text-fg-3">© {year} {brand}. Made with care.</span>
+      <span class="text-[13.5px] text-fg-3">
+        © {year} {brand}. Built by
+        <a
+          class="text-fg-2 underline underline-offset-2 hover:text-fg"
+          href={SITE.makerUrl}
+          {...externalLinkAttrs(SITE.makerUrl)}>oxlabs.dev</a
+        > · a project by
+        <a
+          class="text-fg-2 underline underline-offset-2 hover:text-fg"
+          href={SITE.ownerUrl}
+          {...externalLinkAttrs(SITE.ownerUrl)}>hmziq.rs</a
+        >.
+      </span>
       <span dir="rtl" class="font-arabic text-[17px] leading-none text-fg-3">
         وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ
       </span>

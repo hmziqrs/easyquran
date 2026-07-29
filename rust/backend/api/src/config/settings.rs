@@ -13,7 +13,7 @@
 //! (e.g. `HOST=0.0.0.0`, `SITE_URL=http://localhost:8888`).
 //!
 //! Scope: this is the MVP (always-on core). Provider-specific configuration
-//! (mail/billing OAuth creds, FCM, webauthn) and the `sea_connect`/`redis`
+//! (mail/billing OAuth creds, FCM, webauthn) and the `sea_connect`
 //! connection helpers are intentionally NOT yet migrated onto `Settings` —
 //! those are shared with the `ruxlog_tui` binary (seed-system) which has its
 //! own boot path, and the telemetry OTLP path is gated separately. They will

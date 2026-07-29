@@ -391,11 +391,11 @@ pub async fn track_view(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user_id: Option<i32> = auth.user.map(|user| user.id);
 
-    // DOS-TRACKVIEW-2: dedup per (post, ip) in Redis BEFORE any DB write. The
+    // DOS-TRACKVIEW-2: dedup per (post, ip) in the in-memory gate store BEFORE any DB write. The
     // /post/v1 nest has a 200/min/IP cap, but an attacker rotating source IPs
     // still got one post_view INSERT + post UPDATE per request (txn-per-request
     // write load). This SET-NX gate collapses the writes to ≤1 per (post, ip)
-    // per 5-min window regardless of IP-pool size. Fail-open on a Redis blip.
+    // per 5-min window regardless of IP-pool size. Fail-open on a store error.
     let ip_str = client_ip.0.to_string();
     let dedup_key = format!("trackview:{post_id}:{ip_str}");
     let user_agent = headers

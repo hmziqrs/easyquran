@@ -5,10 +5,10 @@
 /// therefore has no error type to misuse.)
 #[derive(Debug, thiserror::Error)]
 pub enum GateError {
-    /// Redis/`EVAL` failed. Deny (the store cannot vouch for the count).
+    /// The rate-limit store failed. Deny (the store cannot vouch for the count).
     #[error("rate-limit store unavailable: {0}")]
     StoreUnavailable(String),
-    /// The Lua script returned an unexpected arity. Deny (defensive).
+    /// The store returned an unexpected result. Deny (defensive).
     #[error("rate-limit store returned an unexpected result")]
     UnexpectedResult,
 }

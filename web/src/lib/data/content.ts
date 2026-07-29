@@ -17,7 +17,7 @@ export const FAQS: Faq[] = [
   },
   {
     q: "Do I need an account?",
-    a: "No. Bookmarks, notes and your last read position are saved in your browser. Nothing is sent to a server, so there is nothing to log into.",
+    a: "Not to read — the reader opens straight away. An optional account is coming, so your bookmarks, notes and deeds can follow you across the web and the upcoming native apps.",
   },
   {
     q: "Which Arabic text do you use?",
@@ -28,12 +28,16 @@ export const FAQS: Faq[] = [
     a: "Once the app has loaded, the surahs you've opened stay available offline. Recitation audio needs a connection the first time you play it.",
   },
   {
+    q: "What's coming next?",
+    a: "easyquran is growing into a complete platform. On the way: hadith and their explanations, an audio player, a deeds feature and translations in selected languages — followed by native desktop and mobile apps.",
+  },
+  {
     q: "Will you add translations and tafsir?",
-    a: "Translations and short tafsir summaries are being added surah by surah, each credited to its source. This demo shows sample text in those slots.",
+    a: "Yes. Translations in a selected set of languages and short tafsir summaries are on the way, added surah by surah and each credited to its source.",
   },
   {
     q: "How do I back up my bookmarks?",
-    a: "Because everything lives on your device, clearing browser data clears your bookmarks too. An export-to-file option is on the way.",
+    a: "Today they live in your browser. Cloud sync through an optional account is on the way, with export-to-file as a fallback so you're never locked in.",
   },
 ];
 
@@ -45,30 +49,34 @@ export interface LegalSection {
 export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     h: "1. What we collect",
-    p: "Nothing that identifies you. easyquran has no accounts, no sign-in, no advertising SDKs and no third-party analytics. We do not build a profile of your reading.",
+    p: "To keep easyquran running and to improve it, we collect limited data through Firebase: anonymous usage analytics (which features get used), crash reports, and performance metrics. We also assign your device an identifier so we can deliver push notifications to it. This is never used to build an advertising profile or sold to anyone.",
   },
   {
-    h: "2. What stays on your device",
-    p: "Bookmarks, personal notes, reading position, chosen script size and light or dark preference are written to your browser's local storage. They never leave your device unless you copy them yourself.",
+    h: "2. Accounts and sync",
+    p: "Reading needs no account. If you choose to create one, your bookmarks, notes and deeds are linked to it so they sync across your devices and the native apps. You can delete your account and its data at any time.",
   },
   {
-    h: "3. Hosting logs",
-    p: "Our host records standard, short-lived server logs (approximate region, browser type, requested file) to keep the service running and to detect abuse. These are not linked to any individual and are discarded on a rolling basis.",
+    h: "3. What stays on your device",
+    p: "Until you sign in, bookmarks, notes and your reading position are stored in your browser's local storage. They leave your device only if you turn on sync.",
   },
   {
-    h: "4. Recitation audio",
-    p: "When you play recitation, audio files are requested from our content delivery network. That request includes your IP address, as any web request does. The CDN does not receive your bookmarks, notes or reading history.",
+    h: "4. Hosting and delivery",
+    p: "Our host and content delivery network record short-lived, standard logs (approximate region, browser type, requested file) to keep the service running and to detect abuse. Requesting recitation audio includes your IP address, as any web request does.",
   },
   {
-    h: "5. Children",
-    p: "The app is suitable for all ages and, because it collects no personal information, is safe for children to use without supervision or consent flows.",
+    h: "5. Push notifications",
+    p: "If you enable notifications, we store a device identifier so messages reach the right device. You can turn notifications off at any time in your device or browser settings.",
   },
   {
-    h: "6. Your choices",
-    p: "Clearing your browser data removes everything easyquran has stored. There is no server-side copy for us to delete on your behalf, and no export we can be compelled to hand over.",
+    h: "6. Children",
+    p: "The app is suitable for all ages. We do not knowingly collect personal information from children beyond what is described here.",
   },
   {
-    h: "7. Changes to this policy",
+    h: "7. Your choices",
+    p: "You can use easyquran without an account, decline notifications, and — if you have one — delete your account and its synced data. Clearing your browser data removes anything stored locally.",
+  },
+  {
+    h: "8. Changes to this policy",
     p: "If this policy changes we will update the date at the top and note what changed. Substantive changes will be announced in the app before they take effect.",
   },
 ];
@@ -80,7 +88,7 @@ export const TERMS_SECTIONS: LegalSection[] = [
   },
   {
     h: "2. The service",
-    p: "easyquran provides a Qur'an reading interface, search, bookmarks, personal notes and optional recitation audio, free of charge and without warranty of uninterrupted availability.",
+    p: "easyquran provides a Qur'an reading interface, search, bookmarks, personal notes and optional recitation audio, free of charge and without warranty of uninterrupted availability. Hadith, explanations, translations and further features are added over time as the project grows.",
   },
   {
     h: "3. Accuracy of text",
@@ -88,7 +96,7 @@ export const TERMS_SECTIONS: LegalSection[] = [
   },
   {
     h: "4. Your content",
-    p: "Notes you write remain yours and stay on your device. We claim no licence over them and, because we never receive them, we cannot moderate, restore or recover them.",
+    p: "Notes, bookmarks and deeds you create remain yours. If you use sync, you give us permission to store and transfer them solely to provide that feature. We claim no licence over your content beyond running the service.",
   },
   {
     h: "5. Acceptable use",
@@ -108,23 +116,15 @@ export const TERMS_SECTIONS: LegalSection[] = [
   },
 ];
 
-/** Selectable chips on the contact form. */
-export const CONTACT_TOPICS: string[] = [
-  "Bug report",
-  "Text correction",
-  "Feature idea",
-  "Something else",
-];
-
 /** The three stat tiles on the about page. */
 export interface Stat {
   value: string;
   label: string;
 }
 export const ABOUT_STATS: Stat[] = [
-  { value: "0", label: "Ads, ever" },
-  { value: "0", label: "Trackers or analytics SDKs" },
-  { value: "100%", label: "Stored on your device" },
+  { value: "Free", label: "Now, and as it grows" },
+  { value: "Uthmani", label: "Script, carefully sourced" },
+  { value: "Growing", label: "Hadith, audio, deeds & apps next" },
 ];
 
-export const LEGAL_UPDATED = "12 July 2026";
+export const LEGAL_UPDATED = "30 July 2026";

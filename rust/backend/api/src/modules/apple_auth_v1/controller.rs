@@ -29,13 +29,13 @@ use super::{
 /// `GET /auth/apple/v1/login` — begin the Apple Sign-in flow.
 ///
 /// Builds Apple's authorize URL with PKCE + session-bound CSRF state + OIDC
-/// nonce, persists the state single-use in redis, and redirects the browser to
+/// nonce, persists the state single-use in the in-memory state store, and redirects the browser to
 /// Apple. `response_mode=query` keeps Apple's redirect as a GET `?code&state`,
 /// matching our other providers.
 #[debug_handler]
-#[instrument(skip(state, session), fields(result))]
+#[instrument(skip(_state, session), fields(result))]
 pub async fn apple_login(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     session: Session,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Initiating Apple Sign-in");
@@ -49,13 +49,11 @@ pub async fn apple_login(
 
     let session_id = oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(
-        &state,
         &session_id,
         csrf.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
-    )
-    .await?;
+    )?;
 
     info!("Generated Apple auth URL with PKCE + session-bound CSRF state + OIDC nonce");
     tracing::Span::current().record("result", "success");
@@ -128,7 +126,7 @@ async fn finish_apple_code(
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     // Consume the single-use state: PKCE verifier + OIDC nonce.
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(state, &session_id, state_secret).await?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, state_secret)?;
     // Echo the PKCE verifier in the token exchange (Apple enforces PKCE when a
     // code_challenge was sent).
     let code_verifier = oauth_state

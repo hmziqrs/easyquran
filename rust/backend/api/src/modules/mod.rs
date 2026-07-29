@@ -45,8 +45,6 @@ pub mod search_v1;
 // --- Modules added for the issues batch (2026-07-27) ---
 #[cfg(feature = "auth-oauth")]
 pub mod apple_auth_v1;
-#[cfg(feature = "cache")]
-pub mod cache_v1;
 #[cfg(feature = "notifications")]
 pub mod device_v1;
 #[cfg(feature = "auth-oauth")]

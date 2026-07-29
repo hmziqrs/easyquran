@@ -4,7 +4,6 @@ use crate::state::AppState;
 use axum::extract::State;
 use serde_json::json;
 use std::error::Error;
-use tower_sessions_redis_store::fred::prelude::*;
 use tracing::{debug, info};
 
 pub struct RouteBlockerService;
@@ -17,27 +16,15 @@ impl RouteBlockerService {
         state: &AppState,
         pattern: &str,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let already_cached: bool = state
-            .redis_pool
-            .sismember(Self::KNOWN_ROUTES_KEY, pattern)
-            .await?;
-
-        if already_cached {
-            debug!(pattern, "Route pattern already cached in known_routes set");
-            return Ok(());
-        }
-
+        // Idempotent: ensure_exists returns the existing row without writing if
+        // the pattern is already known, so the prior Redis SET dedup is no
+        // longer needed. The in-memory route cache picks the row up on the next
+        // `sync_all_to_cache` tick; a freshly recorded route is not blocked.
         RouteStatus::ensure_exists(&state.sea_db, pattern)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
-        state
-            .redis_pool
-            .sadd::<(), _, _>(Self::KNOWN_ROUTES_KEY, pattern)
-            .await?;
-
-        info!(pattern, "Recorded route pattern in valkey known_routes set");
-
+        debug!(pattern, "Recorded route pattern (DB-backed route status)");
         Ok(())
     }
 
@@ -45,10 +32,14 @@ impl RouteBlockerService {
         State(state): State<AppState>,
         path: &str,
     ) -> Result<bool, Box<dyn Error + Send + Sync>> {
-        let is_blocked: bool = state
-            .redis_pool
-            .sismember(Self::BLOCKED_ROUTES_KEY, path)
-            .await?;
+        // The blocked/known sets previously lived in Redis (SISMEMBER); with the
+        // cache now an internal detail of `route_status::actions` (no public
+        // single-key reader), this consults the DB — the source of truth. The
+        // middleware owns the call site and may short-circuit via `gate_store`
+        // dedup if the per-request lookup becomes a concern.
+        let is_blocked = RouteStatus::find_by_pattern(&state.sea_db, path)
+            .await
+            .map(|model| model.map(|m| m.is_blocked).unwrap_or(false))?;
 
         Ok(is_blocked)
     }
@@ -65,13 +56,9 @@ impl RouteBlockerService {
                     .with_message(e.to_string())
             })?;
 
-        Self::sync_route_to_redis(&state, &pattern, true)
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
-                    .with_message(e.to_string())
-            })?;
+        Self::sync_all_routes_to_cache(State(state.clone())).await?;
 
+        info!(pattern, "Route blocked");
         Ok(json!(route))
     }
 
@@ -86,13 +73,9 @@ impl RouteBlockerService {
                     .with_message(e.to_string())
             })?;
 
-        Self::sync_route_to_redis(&state, &pattern, false)
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
-                    .with_message(e.to_string())
-            })?;
+        Self::sync_all_routes_to_cache(State(state.clone())).await?;
 
+        info!(pattern, "Route unblocked");
         Ok(json!(route))
     }
 
@@ -107,12 +90,7 @@ impl RouteBlockerService {
                     .with_message(e.to_string())
             })?;
 
-        Self::remove_route_from_redis(&state, &pattern)
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
-                    .with_message(e.to_string())
-            })?;
+        Self::sync_all_routes_to_cache(State(state.clone())).await?;
 
         Ok(json!({ "message": "Route deleted successfully" }))
     }
@@ -128,81 +106,38 @@ impl RouteBlockerService {
             })
     }
 
-    pub async fn sync_all_routes_to_redis(
+    /// Rebuild the process-global in-memory route cache from the DB. Replaces the
+    /// prior `sync_all_to_redis` path — there is no Redis round-trip on the
+    /// default build; the cache lives in `route_status::actions::ROUTE_CACHE`,
+    /// keyed by `{KNOWN_ROUTES_KEY}:{pattern}` / `{BLOCKED_ROUTES_KEY}:{pattern}`.
+    pub async fn sync_all_routes_to_cache(
         State(state): State<AppState>,
     ) -> Result<serde_json::Value, ErrorResponse> {
-        RouteStatus::sync_all_to_redis(
+        RouteStatus::sync_all_to_cache(
             &state.sea_db,
-            state.redis_pool,
             Self::KNOWN_ROUTES_KEY,
             Self::BLOCKED_ROUTES_KEY,
         )
         .await
         .map_err(|e| {
-            let err_str = e.to_string();
-            if let Some(redis_err) = err_str.strip_prefix("Redis error: ") {
-                ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
-                    .with_message(format!("Redis sync failed: {}", redis_err))
-            } else {
-                ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
-                    .with_message(format!("Database sync failed: {}", err_str))
-            }
+            ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
+                .with_message(format!("Route cache sync failed: {}", e))
         })?;
 
-        Ok(json!({ "message": "All routes synced to Redis successfully" }))
+        Ok(json!({ "message": "All routes synced to cache successfully" }))
     }
 
-    async fn sync_route_to_redis(
-        state: &AppState,
-        pattern: &str,
-        is_blocked: bool,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        state
-            .redis_pool
-            .sadd::<(), _, _>(Self::KNOWN_ROUTES_KEY, pattern)
-            .await?;
-
-        if is_blocked {
-            info!(pattern, "Adding route to blocked_routes set in valkey");
-            state
-                .redis_pool
-                .sadd::<(), _, _>(Self::BLOCKED_ROUTES_KEY, pattern)
-                .await?;
-        } else {
-            info!(pattern, "Removing route from blocked_routes set in valkey");
-            state
-                .redis_pool
-                .srem::<(), _, _>(Self::BLOCKED_ROUTES_KEY, pattern)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    async fn remove_route_from_redis(
-        state: &AppState,
-        pattern: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        state
-            .redis_pool
-            .srem::<(), _, _>(Self::BLOCKED_ROUTES_KEY, pattern)
-            .await?;
-        state
-            .redis_pool
-            .srem::<(), _, _>(Self::KNOWN_ROUTES_KEY, pattern)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn initialize_redis_sync(
+    /// Initialize (or refresh) the in-memory route cache at startup and on each
+    /// periodic sync tick. Replaces the prior `initialize_redis_sync`; no Redis.
+    pub async fn initialize_cache(
         state: &AppState,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        match Self::sync_all_routes_to_redis(State(state.clone())).await {
+        match Self::sync_all_routes_to_cache(State(state.clone())).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                tracing::error!("Failed to initialize Redis sync: {}", e);
+                tracing::error!("Failed to initialize route blocker cache: {}", e);
                 Err(Box::new(std::io::Error::other(format!(
-                    "Redis sync failed: {}",
+                    "Route cache sync failed: {}",
                     e
                 ))))
             }

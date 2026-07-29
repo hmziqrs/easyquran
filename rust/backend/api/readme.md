@@ -35,7 +35,7 @@ This project is a comprehensive web application built using the Rust programming
 - CRUD Operations for Posts, Categories, Tags, and Comments
 - Rate Limiting and Abuse Prevention
 - CSRF Protection
-- Redis Integration for Session Management
+- SQLite-Backed Session Management
 - SMTP Integration for Email Notifications
 - Database Migrations
 
@@ -48,7 +48,7 @@ The project is organized into several modules, each responsible for different as
 - **middlewares**: Custom middlewares for CSRF protection, user permissions, and user status checks.
 - **modules**: Application modules for different functionalities such as authentication, email verification, password reset, etc.
 - **router.rs**: Defines the application's routing and middleware layers.
-- **services**: Contains services for abuse limiting, authentication, email sending, and Redis integration.
+- **services**: Contains services for abuse limiting, authentication, email sending, and image optimization.
 - **state.rs**: Defines the application state structure.
 
 ## Installation
@@ -72,18 +72,16 @@ To set up the project locally, follow these steps:
    cargo binstall just
    ```
 
-4. **Set up the PostgreSQL database:**
-   Ensure you have PostgreSQL installed and running. Create a new database for the project.
+4. **Set up the SQLite database:**
+   No database server to install — SQLite is a single file on disk. The database
+   is created automatically on first run (the `?mode=rwc` in the URL below allows
+   create-on-open). Just point `DATABASE_URL` at a path the process can write to.
 
 5. **Set up environment variables:**
    Create a `.env` file in the project root and add the following environment variables:
 
    ```env
-   DATABASE_URL=postgres://username:password@localhost/database_name
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   REDIS_USER=your_redis_user
-   REDIS_PASSWORD=your_redis_password
+   DATABASE_URL=sqlite:./data/easyquran.db?mode=rwc
    SMTP_HOST=smtp.your-email-provider.com
    SMTP_USERNAME=your_smtp_username
    SMTP_PASSWORD=your_smtp_password
@@ -228,14 +226,13 @@ The project includes several custom middlewares:
 
 The project includes various services for handling different functionalities:
 
-- **Abuse Limiter**: Prevents excessive attempts at a specific action.
+- **Abuse Limiter**: Prevents excessive attempts at a specific action (in-memory, via `rux_request_gate::InMemoryStore`).
 - **Authentication**: Handles user authentication and session management.
 - **Mail**: Sends email notifications for verification and password reset.
-- **Redis**: Manages Redis connections for session storage.
 
 ## State Management
 
-The application state is managed using the `AppState` struct, which includes the database pool, Redis pool, and mailer. The state is passed to the handlers using Axum's `State` extractor.
+The application state is managed using the `AppState` struct, which includes the database pool and the mailer. Sessions are SQLite-backed (`SqliteSessionStore`); there is no separate cache server. The state is passed to the handlers using Axum's `State` extractor.
 
 ## Contributing
 

@@ -240,7 +240,7 @@ pub async fn login_finish(
             // `sessions_terminate` can DEL the live tower-sessions record.
             if (auth.session().save().await).is_ok() {
                 if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-                    record_session_mapping(&state.redis_pool, row.id, &tower_sid.to_string()).await;
+                    record_session_mapping(row.id, &tower_sid.to_string());
                 }
             }
 

@@ -6,8 +6,8 @@ This document provides a comprehensive overview of all modules implemented in th
 
 - **Framework**: Axum (async web framework)
 - **ORM**: SeaORM (async ORM for Rust)
-- **Database**: PostgreSQL
-- **Session Storage**: Redis
+- **Database**: SQLite (single file, no DB server)
+- **Session Storage**: SQLite (SqliteSessionStore)
 - **File Storage**: R2/S3-compatible storage
 - **Authentication**: axum-login with session-based auth
 
@@ -244,7 +244,7 @@ Each module has corresponding SeaORM models in `src/db/sea_models/`:
 ## Security Features
 
 1. **Password Security**: Bcrypt hashing with spawn_blocking for async
-2. **Session Management**: Redis-backed sessions
+2. **Session Management**: SQLite-backed sessions (`SqliteSessionStore`)
 3. **CSRF Protection**: Static token validation
 4. **Rate Limiting**: Via abuse_limiter service
 5. **Permission Hierarchy**: Role-based access control
@@ -262,7 +262,6 @@ Each module has corresponding SeaORM models in `src/db/sea_models/`:
 
 The application state includes:
 - SeaORM database connection
-- Redis connection pool
 - S3/R2 client for file storage
 - SMTP mailer for emails
 - Configuration loaded from environment
