@@ -8,10 +8,10 @@
   import { Footer } from "$lib/components/footer";
   import { Tweaks } from "$lib/components/tweaks";
 
-  let { children } = $props();
+  let { data, children } = $props();
 </script>
 
 <Nav />
 <main id="main" tabindex="-1">{@render children()}</main>
-<Footer />
+<Footer owner={data.owner} />
 <Tweaks />

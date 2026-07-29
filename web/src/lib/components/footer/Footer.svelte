@@ -8,6 +8,9 @@
   import { NAV_LINKS, SITE } from "$lib/config/site";
   import { Icon } from "$lib/components/icon";
   import { externalLinkAttrs } from "$lib/utils";
+  import type { OwnerPublic } from "$lib/types/owner";
+
+  let { owner }: { owner: OwnerPublic } = $props();
 
   const year = new Date().getFullYear();
   const brand = SITE.name.toLowerCase();
@@ -47,9 +50,9 @@
         </p>
         <div class="flex items-center gap-2">
           <a
-            href={SITE.x}
+            href={owner.x}
             aria-label="EasyQuran on X"
-            {...externalLinkAttrs(SITE.x, { me: true })}
+            {...externalLinkAttrs(owner.x, { me: true })}
             class="inline-flex size-8 items-center justify-center rounded-lg border border-line-2 text-fg-3 transition-colors hover:border-line-3 hover:text-fg"
           >
             <Icon name="x-brand" size={15} />

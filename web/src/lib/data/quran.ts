@@ -238,13 +238,3 @@ export const tafsirFor = (key: VerseKey): string => {
   return `Sample commentary for ${s.name} ${key} — in the full app this slot carries a short, credited tafsir summary.`;
 };
 
-/** The verse highlighted on the home page. */
-export const VERSE_OF_DAY = {
-  surahName: "Ar-Ra'd",
-  num: 13,
-  ayah: 28,
-  ref: "Ar-Ra'd · 28",
-  arabic: "أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ",
-  caption: "Verse of the day",
-  reciter: "Mishary Rashid",
-} as const;
