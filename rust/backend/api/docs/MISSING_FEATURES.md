@@ -72,7 +72,7 @@ Wiring:
 
 Infrastructure:
 - Background job runner (scheduling, newsletter send, exports)
-- Redis for caching/jobs where applicable
+- External cache/job runner where applicable
 - Blockchain API integrations (verification)
 - Object/file storage for export artifacts
 

@@ -31,7 +31,7 @@ pub async fn generate(session: Session) -> Result<impl IntoResponse, ErrorRespon
         let _ = session.insert("csrf_issued", true).await;
 
         // Materializes session.id() (calls store.create for a new session) and
-        // writes the record. If the store (Redis) is unreachable, we cannot
+        // writes the record. If the SQLite session store is unreachable, we cannot
         // issue a token — fail closed with 500.
         session
             .save()

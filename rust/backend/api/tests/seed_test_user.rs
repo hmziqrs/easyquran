@@ -27,19 +27,18 @@ use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, DatabaseBackend, Stat
 const DEFAULT_EMAIL: &str = "laurie40@yahoo.com";
 const DEFAULT_PASSWORD: &str = "laurie40@yahoo.com";
 
-/// Build a `sslmode=disable` Postgres URL from the standard `POSTGRES_*` env
-/// vars (same names the `migrate` binary and `sea_connect` use). Returns `None`
-/// if any are unset so a misconfigured environment fails loudly with a clear
-/// panic rather than a confusing connection error.
+/// Resolve the SQLite database URL — same source as `sea_connect::get_db_url`:
+/// prefers `DATABASE_URL`, falling back to the default
+/// `sqlite:./data/easyquran.db?mode=rwc` that `try_connect` uses (the `mode=rwc`
+/// creates the file on first connect). Returns `None` only if `DATABASE_URL` is
+/// set but empty, so a misconfigured environment fails loudly with a clear panic
+/// rather than a confusing connection error.
 fn db_url() -> Option<String> {
-    let user = std::env::var("POSTGRES_USER").ok()?;
-    let password = std::env::var("POSTGRES_PASSWORD").ok()?;
-    let db = std::env::var("POSTGRES_DB").ok()?;
-    let host = std::env::var("POSTGRES_HOST").ok()?;
-    let port = std::env::var("POSTGRES_PORT").ok()?;
-    Some(format!(
-        "postgres://{user}:{password}@{host}:{port}/{db}?sslmode=disable"
-    ))
+    match std::env::var("DATABASE_URL") {
+        Ok(url) if url.is_empty() => None,
+        Ok(url) => Some(url),
+        Err(_) => Some("sqlite:./data/easyquran.db?mode=rwc".to_string()),
+    }
 }
 
 #[tokio::test]
@@ -54,7 +53,7 @@ async fn seed_test_user() {
         return;
     }
 
-    let url = db_url().expect("SEED_TEST_USER=1 but POSTGRES_* env vars are not set");
+    let url = db_url().expect("SEED_TEST_USER=1 but DATABASE_URL is set to an empty string");
     let conn = Database::connect(&url)
         .await
         .expect("seed_test_user: failed to connect to database");
@@ -103,12 +102,13 @@ async fn seed_test_user() {
         "#ffffff".into(),
         true.into(),
         now.into(),
+        now.into(),
     ];
     conn.execute(Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
+        DatabaseBackend::Sqlite,
         "INSERT INTO categories \
          (name, slug, color, text_color, is_active, created_at, updated_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $6) \
+         VALUES (?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT (slug) DO NOTHING",
         cat_values,
     ))
@@ -127,12 +127,13 @@ async fn seed_test_user() {
             "#ffffff".into(),
             true.into(),
             now.into(),
+            now.into(),
         ];
         conn.execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
+            DatabaseBackend::Sqlite,
             "INSERT INTO tags \
              (name, slug, color, text_color, is_active, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $6) \
+             VALUES (?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT (slug) DO NOTHING",
             tag_values,
         ))

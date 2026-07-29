@@ -15,15 +15,15 @@ use crate::traits::{AuthBackend, AuthUser};
 /// V-HIGH-2: `user_sessions.revoked_at` alone does NOT invalidate the live
 /// tower-sessions record in the session store, so a revoked cookie keeps
 /// authenticating until its inactivity expiry. Implementors that can reach a
-/// revocation source (Redis set of revoked tower-session ids, or a DB lookup on
-/// `revoked_at`) override [`SessionRevocation::is_session_revoked`]; the
+/// revocation source (a DB lookup on `revoked_at`, or an in-process revocation
+/// set) override [`SessionRevocation::is_session_revoked`]; the
 /// extractor calls it on every authenticated request and, if it returns `true`,
 /// deletes the session and treats the caller as unauthenticated.
 ///
 /// The default implementation returns `false` so backends that opt out of
 /// server-side revocation keep compiling unchanged.
 ///
-/// **Fail-open policy:** on a backend error (e.g. a Redis blip) the extractor
+/// **Fail-open policy:** on a backend error (e.g. a store/DB blip) the extractor
 /// logs a loud `warn!` and treats the session as *not* revoked. This mirrors the
 /// rate limiter's fail-open behavior and avoids a mass lockout during a
 /// transient revocation-store outage — at the cost of a revoked session briefly
@@ -438,7 +438,7 @@ mod tests {
     impl SessionRevocation for MockBackend {}
 
     /// Backend whose revocation set is an in-memory `Mutex<HashSet>`. Mirrors the
-    /// production Redis-backed check without requiring a live Redis.
+    /// production revocation check without requiring a live DB.
     #[derive(Clone, Default)]
     struct RevocableBackend {
         revoked: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
@@ -571,7 +571,7 @@ mod tests {
         let session_record = auth.session().clone();
         drop(auth);
 
-        // Out-of-band revoke (this is what sessions_terminate + Redis sadd do).
+        // Out-of-band revoke (this is what sessions_terminate + the revocation store do).
         {
             let mut g = backend.revoked.lock().unwrap();
             g.insert(tower_sid.clone());

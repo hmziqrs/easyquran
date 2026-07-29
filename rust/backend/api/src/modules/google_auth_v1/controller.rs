@@ -28,9 +28,9 @@ use super::{
 };
 
 #[debug_handler]
-#[instrument(skip(state, session), fields(result))]
+#[instrument(skip(_state, session), fields(result))]
 pub async fn google_login(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     session: Session,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Initiating Google OAuth login");
@@ -65,13 +65,11 @@ pub async fn google_login(
     // (key != value) and lets us recover the verifier at the callback.
     let session_id = oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(
-        &state,
         &session_id,
         csrf_token.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
-    )
-    .await?;
+    )?;
 
     info!("Generated auth URL with PKCE + session-bound CSRF state + OIDC nonce");
     tracing::Span::current().record("result", "success");
@@ -89,7 +87,7 @@ pub async fn google_callback(
     info!("Processing Google OAuth callback");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&state, &session_id, &query.state).await?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
 
     let client = get_google_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(query.code));
@@ -155,7 +153,7 @@ pub async fn google_exchange(
     info!("Processing Google OAuth code exchange from client");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&state, &session_id, &payload.state).await?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
 
     let client = get_google_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(payload.code));
@@ -283,11 +281,9 @@ async fn finish_google_login(
     if (auth.session().save().await).is_ok() {
         if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
             crate::modules::auth_v1::controller::record_session_mapping(
-                &state.redis_pool,
                 row.id,
                 &tower_sid.to_string(),
-            )
-            .await;
+            );
         }
     }
 

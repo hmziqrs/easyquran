@@ -186,20 +186,19 @@ impl AnalyticsInterval {
         }
     }
 
+    /// SQLite `strftime(...)` bucket expression truncating `column` to this
+    /// interval's granularity. Every analytics query runs against
+    /// `DatabaseBackend::Sqlite`, so this must be SQLite dialect (it previously
+    /// emitted Postgres `to_char(date_trunc(...), ...)` and was broken on
+    /// SQLite). `%G`/`%V` are the ISO year / ISO week; SQLite has no native
+    /// Postgres `IW`, so the week bucket uses the `%G-W%V` shape (e.g.
+    /// `2025-W03`), matching the prior `IYYY-"W"IW` output.
     pub fn to_bucket_expr(&self, column: &str) -> String {
         match self {
-            AnalyticsInterval::Hour => {
-                format!("to_char(date_trunc('hour', {column}), 'YYYY-MM-DD HH24:00')")
-            }
-            AnalyticsInterval::Day => {
-                format!("to_char(date_trunc('day', {column}), 'YYYY-MM-DD')")
-            }
-            AnalyticsInterval::Week => {
-                format!("to_char(date_trunc('week', {column}), 'IYYY-\"W\"IW')")
-            }
-            AnalyticsInterval::Month => {
-                format!("to_char(date_trunc('month', {column}), 'YYYY-MM')")
-            }
+            AnalyticsInterval::Hour => format!("strftime('%Y-%m-%d %H:00', {column})"),
+            AnalyticsInterval::Day => format!("strftime('%Y-%m-%d', {column})"),
+            AnalyticsInterval::Week => format!("strftime('%G-W%V', {column})"),
+            AnalyticsInterval::Month => format!("strftime('%Y-%m', {column})"),
         }
     }
 }
@@ -978,31 +977,25 @@ mod tests {
     #[test]
     fn interval_hour_bucket_expr() {
         let expr = AnalyticsInterval::Hour.to_bucket_expr("created_at");
-        assert_eq!(
-            expr,
-            "to_char(date_trunc('hour', created_at), 'YYYY-MM-DD HH24:00')"
-        );
+        assert_eq!(expr, "strftime('%Y-%m-%d %H:00', created_at)");
     }
 
     #[test]
     fn interval_day_bucket_expr() {
         let expr = AnalyticsInterval::Day.to_bucket_expr("created_at");
-        assert_eq!(expr, "to_char(date_trunc('day', created_at), 'YYYY-MM-DD')");
+        assert_eq!(expr, "strftime('%Y-%m-%d', created_at)");
     }
 
     #[test]
     fn interval_week_bucket_expr() {
         let expr = AnalyticsInterval::Week.to_bucket_expr("created_at");
-        assert_eq!(
-            expr,
-            "to_char(date_trunc('week', created_at), 'IYYY-\"W\"IW')"
-        );
+        assert_eq!(expr, "strftime('%G-W%V', created_at)");
     }
 
     #[test]
     fn interval_month_bucket_expr() {
         let expr = AnalyticsInterval::Month.to_bucket_expr("created_at");
-        assert_eq!(expr, "to_char(date_trunc('month', created_at), 'YYYY-MM')");
+        assert_eq!(expr, "strftime('%Y-%m', created_at)");
     }
 
     #[test]

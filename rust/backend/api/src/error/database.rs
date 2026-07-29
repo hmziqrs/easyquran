@@ -49,6 +49,7 @@ fn classify_db_error(msg: &str) -> ErrorCode {
     if msg.contains("40P01")
         || lower.contains("deadlock detected")
         || lower.contains("database is locked")
+        || lower.contains("database table is locked")
     {
         return ErrorCode::TransactionError;
     }

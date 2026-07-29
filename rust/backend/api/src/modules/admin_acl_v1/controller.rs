@@ -40,14 +40,14 @@ pub async fn sync_constants(
     State(state): State<AppState>,
     _auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let result = AclService::sync_all_to_redis(State(state)).await;
+    let result = AclService::sync_all_to_cache(State(state)).await;
     match result {
         Ok(payload) => {
-            info!("Synced ACL constants to Redis");
+            info!("Synced ACL constants to the in-memory cache");
             Ok((StatusCode::OK, Json(payload)))
         }
         Err(err) => {
-            error!(error = %err, "Failed to sync ACL constants to Redis");
+            error!(error = %err, "Failed to sync ACL constants to the in-memory cache");
             Err(err)
         }
     }

@@ -49,8 +49,9 @@ use super::validator::*;
 #[cfg(feature = "billing")]
 mod checkout_intent {
     use super::*;
-    // fred's `set`/`get`/`del` are trait methods on the Pool.
-    use tower_sessions_redis_store::fred::prelude::*;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct CheckoutIntent {
@@ -68,75 +69,71 @@ mod checkout_intent {
         pub plan_id: Option<i32>,
     }
 
-    impl CheckoutIntent {
-        pub(crate) fn redis_key(session_id: &str) -> String {
-            // Namespaced so it can't collide with session/oauth keys.
-            format!("billing:checkout_intent:{session_id}")
-        }
+    /// 1h TTL: long enough to outlast a customer completing payment, short
+    /// enough to reap abandoned sessions.
+    const INTENT_TTL_SECS: u64 = 3600;
+
+    // Process-global checkout-intent store (replaces the prior Redis SET/GETDEL
+    // round-trip). Keyed by the provider's checkout session id; each entry
+    // carries the `Instant` it was stored so abandoned sessions are reaped by
+    // opportunistic expiry on each access. The whole map sits behind one Mutex,
+    // so `take`'s lock-then-remove is an atomic single-take — the same
+    // double-grant guarantee the prior atomic GETDEL provided, with no Redis
+    // round-trip on the default build. A restart loses live intents; the DB
+    // unique indexes on `(user_id, post_id)` and
+    // `(provider, provider_subscription_id)` are the defense-in-depth backstop
+    // against any double-grant (audit F#1).
+    static INTENT_STORE: OnceLock<Mutex<HashMap<String, (CheckoutIntent, Instant)>>> = OnceLock::new();
+
+    fn intent_store() -> &'static Mutex<HashMap<String, (CheckoutIntent, Instant)>> {
+        INTENT_STORE.get_or_init(|| Mutex::new(HashMap::new()))
     }
 
-    /// Persist the intent for a created checkout session. 1h TTL: long enough
-    /// to outlast a customer completing payment, short enough to reap abandoned
-    /// sessions.
-    pub async fn store(
-        state: &AppState,
-        session_id: &str,
-        intent: &CheckoutIntent,
-    ) -> Result<(), ErrorResponse> {
-        let payload = serde_json::to_string(intent).map_err(|e| {
-            tracing::error!(error = ?e, "Failed to serialize checkout intent");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-        })?;
-        state
-            .redis_pool
-            .set::<(), _, _>(
-                CheckoutIntent::redis_key(session_id),
-                payload,
-                Some(fred::types::Expiration::EX(3600)),
-                None,
-                false,
-            )
-            .await
-            .map_err(|e| {
-                tracing::error!(error = ?e, "Failed to store checkout intent in Redis");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+    /// Reap entries older than [`INTENT_TTL_SECS`]. Called under the lock so the
+    /// housekeeping is consistent with the insert/take.
+    fn reap_stale(map: &mut HashMap<String, (CheckoutIntent, Instant)>) {
+        map.retain(|_, (_, at)| at.elapsed().as_secs() < INTENT_TTL_SECS);
+    }
+
+    /// Persist the intent for a created checkout session. Synchronous: the
+    /// in-memory map is process-local, so no I/O is awaited.
+    pub fn store(session_id: &str, intent: &CheckoutIntent) -> Result<(), ErrorResponse> {
+        let mut map = match intent_store().lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                tracing::error!(error = %e, "checkout intent store lock poisoned");
+                return Err(ErrorResponse::new(ErrorCode::InternalServerError));
+            }
+        };
+        reap_stale(&mut map);
+        map.insert(session_id.to_string(), (intent.clone(), Instant::now()));
         Ok(())
     }
 
     /// Atomically take the single-use intent for `session_id`.
     ///
-    /// Uses Redis `GETDEL` (a single round-trip that reads *and* deletes), so
-    /// a concurrent/replayed webhook — two deliveries racing through the grant
-    /// path — can never both observe the intent. The previous GET-then-DEL pair
-    /// had a TOCTOU window where both callers read the same value before either
-    /// deleted it (audit finding F#1). The DB unique indexes on
+    /// Locks the map and removes the entry in one critical section, so a
+    /// concurrent/replayed webhook — two deliveries racing through the grant
+    /// path — can never both observe the intent. This preserves the
+    /// double-grant guarantee the prior Redis `GETDEL` atomic read-and-delete
+    /// provided (audit finding F#1). The DB unique indexes on
     /// `(user_id, post_id)` and `(provider, provider_subscription_id)` are a
     /// defense-in-depth backstop against any double-grant that still slipped
     /// through, but the atomic take is the primary guarantee.
     ///
-    /// Returns `None` when no intent was stored (legacy/no-billing-Redis path).
-    pub async fn take(
-        state: &AppState,
-        session_id: &str,
-    ) -> Result<Option<CheckoutIntent>, ErrorResponse> {
-        let key = CheckoutIntent::redis_key(session_id);
-        // GETDEL: atomic read-and-delete. nil key → None, which the caller
-        // treats as "no intent".
-        let stored: Option<String> = state.redis_pool.getdel(&key).await.map_err(|e| {
-            tracing::error!(error = ?e, "Failed to read checkout intent from Redis");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-        })?;
-        match stored {
-            Some(s) => {
-                let intent: CheckoutIntent = serde_json::from_str(&s).map_err(|e| {
-                    tracing::error!(error = ?e, "Failed to parse stored checkout intent");
-                    ErrorResponse::new(ErrorCode::InternalServerError)
-                })?;
-                Ok(Some(intent))
+    /// Returns `None` when no intent was stored (legacy path / expired / lost
+    /// to a restart).
+    pub fn take(session_id: &str) -> Result<Option<CheckoutIntent>, ErrorResponse> {
+        let mut map = match intent_store().lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                tracing::error!(error = %e, "checkout intent store lock poisoned");
+                return Err(ErrorResponse::new(ErrorCode::InternalServerError));
             }
-            None => Ok(None),
-        }
+        };
+        reap_stale(&mut map);
+        // lock + remove: atomic single-take. A concurrent caller finds nothing.
+        Ok(map.remove(session_id).map(|(intent, _)| intent))
     }
 }
 
@@ -504,7 +501,7 @@ pub async fn create_checkout(
             currency: None,
             plan_id: Some(plan.id),
         };
-        checkout_intent::store(&state, &session.session_id, &intent).await?;
+        checkout_intent::store(&session.session_id, &intent)?;
 
         Ok(Json(json!({
             "data": {
@@ -596,7 +593,7 @@ pub async fn create_post_checkout(
             // distinguish the grant path.
             plan_id: None,
         };
-        checkout_intent::store(&state, &session.session_id, &intent).await?;
+        checkout_intent::store(&session.session_id, &intent)?;
 
         Ok(Json(json!({
             "data": {
@@ -792,12 +789,10 @@ async fn process_webhook_event(
             // intent here means the session predates that binding or Redis lost
             // it; in either case the safe action is to not grant.
             let intent = if !session_id.is_empty() {
-                checkout_intent::take(state, session_id)
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::warn!(error = ?e, "Failed to read checkout intent");
-                        None
-                    })
+                checkout_intent::take(session_id).unwrap_or_else(|e| {
+                    tracing::warn!(error = ?e, "Failed to read checkout intent");
+                    None
+                })
             } else {
                 None
             };
@@ -1206,12 +1201,10 @@ async fn process_webhook_event(
             let session_id = resolve_intent_session_id(event);
 
             let intent = if !session_id.is_empty() {
-                checkout_intent::take(state, session_id)
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::warn!(error = ?e, "Failed to read checkout intent");
-                        None
-                    })
+                checkout_intent::take(session_id).unwrap_or_else(|e| {
+                    tracing::warn!(error = ?e, "Failed to read checkout intent");
+                    None
+                })
             } else {
                 None
             };
@@ -1467,15 +1460,6 @@ mod tests {
         assert_eq!(sub_back.user_id, 5);
         assert!(sub_back.post_id.is_none());
         assert_eq!(sub_back.plan_id, Some(3));
-    }
-
-    #[test]
-    fn checkout_intent_redis_key_is_namespaced() {
-        // Same-key isolation from session/oauth keys: the namespace prefix
-        // prevents a collision that could let a non-checkout key be consumed
-        // as a (possibly attacker-influenced) intent.
-        let key = checkout_intent::CheckoutIntent::redis_key("cs_test_123");
-        assert_eq!(key, "billing:checkout_intent:cs_test_123");
     }
 
     fn payment_confirmed_event_with_memo(memo: &str) -> ParsedWebhook {

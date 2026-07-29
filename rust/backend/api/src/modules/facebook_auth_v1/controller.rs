@@ -26,14 +26,14 @@ use super::{
 /// `GET /auth/facebook/v1/login` — begin the Facebook OAuth flow.
 ///
 /// Builds the Facebook authorize URL with a session-bound CSRF `state` (no
-/// PKCE — Facebook does not support it), persists the state single-use in redis,
-/// and redirects the browser to Facebook. The state secret binds the authorize
+/// PKCE — Facebook does not support it), persists the state single-use in the
+/// in-memory state store, and redirects the browser to Facebook. The state secret binds the authorize
 /// request to THIS browser session so a state issued to one session cannot
 /// complete the flow in another (login-CSRF / state-replay defense).
 #[debug_handler]
-#[instrument(skip(state, session), fields(result))]
+#[instrument(skip(_state, session), fields(result))]
 pub async fn facebook_login(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     session: Session,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Initiating Facebook OAuth login");
@@ -48,7 +48,7 @@ pub async fn facebook_login(
     // Bind the CSRF state to THIS browser session. Empty PKCE verifier: Facebook
     // does not use PKCE; an empty value round-trips as `None` at consume time.
     let session_id = oauth::oauth_session_id(&session)?;
-    oauth::store_oauth_state(&state, &session_id, csrf_token.secret(), "", None).await?;
+    oauth::store_oauth_state(&session_id, csrf_token.secret(), "", None)?;
 
     info!("Generated Facebook auth URL with session-bound CSRF state");
     tracing::Span::current().record("result", "success");
@@ -72,7 +72,7 @@ pub async fn facebook_callback(
     info!("Processing Facebook OAuth callback");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let _oauth_state = oauth::consume_oauth_state(&state, &session_id, &query.state).await?;
+    let _oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
 
     let client = get_facebook_oauth_client()?;
     let token_result = client
@@ -114,7 +114,7 @@ pub async fn facebook_exchange(
     info!("Processing Facebook OAuth code exchange from client");
 
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let _oauth_state = oauth::consume_oauth_state(&state, &session_id, &payload.state).await?;
+    let _oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
 
     let client = get_facebook_oauth_client()?;
     let token_result = client

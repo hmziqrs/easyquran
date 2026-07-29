@@ -19,13 +19,12 @@ This guide sets baseline expectations for security, performance, and maintainabi
   - Configure allowed origins with `ALLOWED_ORIGINS` (comma-separated) to avoid shipping hard-coded hosts. The server includes local defaults; supply production origins via environment (see `src/main.rs:get_allowed_origins`).
 
 - Abuse limiting
-  - A Redis-backed limiter is available (see `src/services/abuse_limiter.rs`). Use it for sensitive endpoints (auth, password reset, media) and expose configuration via environment if variability is needed.
+  - An in-memory limiter is available backed by `rux_request_gate::InMemoryStore` (see `src/services/abuse_limiter.rs`). Use it for sensitive endpoints (auth, password reset, media) and expose configuration via environment if variability is needed.
 
 ## Configuration
 
 - Required environment variables
-  - Database: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (see `src/db/sea_connect.rs`).
-  - Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD` (see `src/services/redis.rs`).
+  - Database: `DATABASE_URL` (a `sqlite:...` path; see `src/db/sea_connect.rs`).
   - R2: `R2_REGION`, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_PUBLIC_URL` (see `src/main.rs:141-148`).
   - App keys: `COOKIE_KEY`, `CSRF_KEY` (`.env.example` lists both).
   - Optional: `ALLOWED_ORIGINS`, IP source selector (`IP_SOURCE`), telemetry endpoints, optimizer toggles.
@@ -49,7 +48,7 @@ This guide sets baseline expectations for security, performance, and maintainabi
 ## Architecture & Modules
 
 - Layout
-  - Versioned routes live under `src/modules/*_v1`. Shared infrastructure lives in `src/services` (auth, Redis, image optimizer), `src/middlewares`, and `src/utils`. Application state is in `src/state.rs`.
+  - Versioned routes live under `src/modules/*_v1`. Shared infrastructure lives in `src/services` (auth, image optimizer), `src/middlewares`, and `src/utils`. Application state is in `src/state.rs`.
 
 - Controllers and data access
   - Keep controllers thin and reuse SeaORM actions in `src/db/sea_models/**/actions.rs` where available (e.g., posts implement join-heavy queries to avoid N+1; see `src/db/sea_models/post/actions.rs`).
@@ -102,7 +101,7 @@ This guide sets baseline expectations for security, performance, and maintainabi
   - Multi-stage build with non-root runtime is in place (see `Dockerfile`). Optionally add a `HEALTHCHECK` against `/healthz` (see `src/router.rs:18-22,57-59`).
 
 - Compose
-  - `docker-compose.dev.yml` provides Postgres/Redis and health checks out of the box and accepts `.env.docker`. Adjust Traefik labels and rate limits via env.
+  - `docker-compose.dev.yml` provides health checks out of the box and accepts `.env.docker`. Adjust Traefik labels and rate limits via env.
 
 ## Priority Matrix
 

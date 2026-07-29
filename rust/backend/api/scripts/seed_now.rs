@@ -4,7 +4,8 @@
 //! `seed-system` feature).
 //!
 //! Run: `cargo run --bin seed_now --features seed-system` (with .env / .env.dev
-//! providing POSTGRES_* / DATABASE_URL).
+//! providing DATABASE_URL — a `sqlite:` URL; defaults to
+//! `sqlite:./data/easyquran.db?mode=rwc` when unset, same as `sea_connect`).
 
 use ruxlog::db::sea_connect::try_connect;
 use ruxlog::services::seed;
@@ -13,7 +14,7 @@ use ruxlog::services::seed;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Mirror ruxlog_tui's env loading: .env then ../../.env.dev fallback.
     dotenvy::dotenv().ok();
-    if std::env::var("POSTGRES_USER").is_err() {
+    if std::env::var("DATABASE_URL").is_err() {
         let _ = dotenvy::from_filename("../../.env.dev");
     }
 

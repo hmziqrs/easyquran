@@ -41,8 +41,8 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 ///
 /// This closes the window the old flow left open, where `verify` merely *checked*
 /// the code and left it live so the (single) `reset` could re-check it — meaning
-/// the code stayed reusable until consumed. Backed by an in-memory map (previously
-/// Redis `SET`/`GETDEL`); a restart drops outstanding tokens, which just forces
+/// the code stayed reusable until consumed. Backed by an in-memory TTL store;
+/// a restart drops outstanding tokens, which just forces
 /// the user to re-request a reset.
 mod reset_token {
     use super::*;
@@ -285,7 +285,7 @@ pub async fn verify(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1VerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Throttle code-guessing. Fail-closed: a Redis outage denies the attempt.
+    // Throttle code-guessing. Fail-closed: a store error denies the attempt.
     let key_prefix = format!("forgot_password_verify:{}", secure_ip);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
@@ -365,12 +365,12 @@ pub async fn reset(
         }
     };
 
-    // Reset password in PostgreSQL. `reset` runs in a transaction that deletes
+    // Reset password in the database. `reset` runs in a transaction that deletes
     // any remaining code row for the user before updating the password, so the
     // row is consumed as part of this flow even if a stale one lingered.
     match forgot_password::Entity::reset(&state.sea_db, user_id, payload.password.clone()).await {
         Ok(_) => {
-            info!(user_id, "Password reset in PostgreSQL");
+            info!(user_id, "Password reset in database");
             Ok((
                 StatusCode::OK,
                 Json(json!({

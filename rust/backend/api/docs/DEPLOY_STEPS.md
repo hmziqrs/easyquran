@@ -1,7 +1,8 @@
 # Production Deployment Steps
 
-This guide brings up the full production stack: the backend API image from GHCR,
-Postgres, Valkey, and Watchtower for zero-SSH auto-updates. The Traefik edge
+This guide brings up the full production stack: the backend API image from GHCR
+and Watchtower for zero-SSH auto-updates. The data layer is SQLite (a file on
+disk), so there is no Postgres or Valkey/Redis service to run. The Traefik edge
 proxy is a separate compose project that owns the shared external network and
 TLS termination.
 
@@ -24,8 +25,8 @@ TLS termination.
 cd /opt/ruxlog/backend/docker
 cp deploy.env.example deploy.env
 # Edit deploy.env: set PROJECT, BACKEND_IMAGE, BACKEND_DOMAIN, ACME_EMAIL, and
-# real DB/Redis/SMTP/S3/FCM credentials. HOST/PORT are forced by compose and
-# must NOT be set here.
+# real DB/SMTP/S3/FCM credentials. DATABASE_URL points at a SQLite file (no DB
+# server). HOST/PORT are forced by compose and must NOT be set here.
 ```
 
 `deploy.env` is used two ways at once: (a) compose interpolation for `${VAR}`
@@ -57,25 +58,26 @@ sea-orm-migration CLI lives in the `migration` crate (binary `migrate`,
 `backend/api/migration/src/main.rs`).
 
 **Recommended (interim, no image change):** build the migrator on the host from
-the repo checkout and run it against the prod database. From the host (outside
-the compose network) use the host-side address of Postgres — e.g. publish the
-port or point at the VPS private IP:
+the repo checkout and run it against the prod SQLite file. Point `DATABASE_URL`
+at the same file the backend container mounts (the bind mount in
+`docker-compose.prod.yml` exposes the host path to both):
 
 ```bash
 cd /opt/ruxlog/backend/api
-DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@<postgres-host>:5432/${POSTGRES_DB}" \
+DATABASE_URL="sqlite:/opt/ruxlog/backend/docker/data/easyquran.db?mode=rwc" \
   cargo run -p migration --bin migrate -- up
 ```
 
-Sanity-check connectivity first:
+Sanity-check connectivity first with the sqlite3 CLI against the file:
 
 ```bash
-docker exec -i ${PROJECT}_postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "SELECT 1"
+sqlite3 /opt/ruxlog/backend/docker/data/easyquran.db "SELECT 1"
 ```
 
 **Follow-up (cleaner):** extend `Dockerfile.api` to also copy the `migrate`
 binary (`COPY --from=builder /workspace/api/target/release/migrate /app/migrate`),
-then run it as a one-shot against the live stack:
+then run it as a one-shot against the live stack (the container sees the same
+file on its mounted volume):
 
 ```bash
 docker compose --env-file deploy.env -f backend/docker/docker-compose.prod.yml \

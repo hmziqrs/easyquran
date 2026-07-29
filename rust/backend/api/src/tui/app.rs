@@ -17,7 +17,6 @@ use ratatui::{
 };
 use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder};
 use tokio::{sync::mpsc, time::sleep};
-use tower_sessions_redis_store::fred::prelude::Pool as RedisPool;
 use tuirealm::terminal::TerminalBridge;
 
 use crate::{
@@ -25,10 +24,7 @@ use crate::{
         sea_connect::try_connect,
         sea_models::{tag, user},
     },
-    services::{
-        redis::init_redis_pool_only,
-        seed::{self, SeedOutcome, SeedOutcomeRow, UndoOutcome},
-    },
+    services::seed::{self, SeedOutcome, SeedOutcomeRow, UndoOutcome},
 };
 
 use super::{
@@ -44,7 +40,6 @@ use super::{
 #[derive(Clone)]
 pub struct CoreState {
     pub db: DatabaseConnection,
-    pub redis: RedisPool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -906,8 +901,7 @@ pub async fn run_tui(theme: ThemeKind) -> Result<(), Box<dyn Error>> {
     let db = try_connect(true)
         .await
         .map_err(|e| format!("Database connection failed: {}", e))?;
-    let redis = init_redis_pool_only().await?;
-    let core = Arc::new(CoreState { db, redis });
+    let core = Arc::new(CoreState { db });
 
     let mut bridge =
         TerminalBridge::init_crossterm().map_err(|e| format!("terminal init error: {e}"))?;

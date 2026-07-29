@@ -6,7 +6,7 @@ FROM rust:1.96.0-slim-trixie AS base
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config libssl-dev libpq-dev build-essential \
+        pkg-config libssl-dev build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Build backend/api STANDALONE. It is normally a member of the repo-root
@@ -36,7 +36,7 @@ RUN cargo build --release --locked
 FROM debian:trixie-slim AS runner
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpq5 ca-certificates curl \
+        ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 10001 appuser
 COPY --from=builder /workspace/backend/api/target/release/ruxlog /app/ruxlog

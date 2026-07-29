@@ -49,7 +49,7 @@ pub async fn verify(
     let user = auth.user.unwrap();
     let user_id = user.id;
 
-    // Throttle code-guessing per account. Fail-closed: a Redis outage denies
+    // Throttle code-guessing per account. Fail-closed: a rate-limit store error denies
     // the attempt rather than allowing unbounded tries.
     let key_prefix = format!("email_verify:{}", user_id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;

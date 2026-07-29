@@ -18,7 +18,7 @@ use crate::{
 
 /// DOS-COMMENT-CREATE-2: per-account comment throttle. The comment nest's
 /// per-IP 100/min layer alone lets one verified account behind rotating IPs
-/// flood comments; this bounds a single account (fail-closed on Redis).
+/// flood comments; this bounds a single account (fail-closed on limiter store error).
 const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
     temp_block_attempts: 20,
     temp_block_range: 60,

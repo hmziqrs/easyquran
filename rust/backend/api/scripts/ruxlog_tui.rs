@@ -20,8 +20,8 @@ struct Args {
 async fn main() -> Result<(), Box<dyn Error>> {
     // Try standard `.env` first (for direct cargo runs)
     dotenvy::dotenv().ok();
-    // If POSTGRES_USER is still missing, fall back to ../../.env.dev
-    if std::env::var("POSTGRES_USER").is_err() {
+    // If DATABASE_URL is still missing, fall back to ../../.env.dev
+    if std::env::var("DATABASE_URL").is_err() {
         let _ = dotenvy::from_filename("../../.env.dev");
     }
 

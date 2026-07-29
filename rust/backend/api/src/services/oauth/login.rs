@@ -152,12 +152,11 @@ pub async fn finish_oauth_login(
     // `auth.login` cycles the session id, so save first to materialize it.
     if (auth.session().save().await).is_ok() {
         if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-            crate::services::auth::record_session_mapping(
-                &state.redis_pool,
-                row.id,
-                &tower_sid.to_string(),
-            )
-            .await;
+            // V-HIGH-2: record the PG-row → tower-session-id mapping so
+            // `sessions_terminate` can later find the live tower-session record.
+            // Sync + no pool: the mapping lives in a process-global in-memory map
+            // (see services::auth::record_session_mapping).
+            crate::services::auth::record_session_mapping(row.id, &tower_sid.to_string());
         }
     }
 

@@ -6,8 +6,6 @@ use axum::extract::State;
 use ruxlog_types::PaginatedList;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::error::Error;
-use tower_sessions_redis_store::fred::prelude::*;
 use tracing::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +44,7 @@ impl AclService {
                 continue;
             }
             // ACL-ENV-SECRETS-IMPORT: never persist live secret material into
-            // the `app_constants` table / shared Redis hash. The prior
+            // the `app_constants` table / in-memory cache. The prior
             // `guess_sensitive` heuristic both missed common secret names
             // (DATABASE_URL, REDIS_URL, SMTP_URL, CONNECTION_STRING, PGCONN) and
             // — critically — only controlled read-side masking, leaving every
@@ -77,7 +75,7 @@ impl AclService {
             })?;
         }
 
-        Self::sync_all_to_redis(State(state)).await?;
+        Self::sync_all_to_cache(State(state)).await?;
 
         Ok(json!({"message": "Env constants bootstrapped"}))
     }
@@ -93,7 +91,7 @@ impl AclService {
 
     /// ACL-ENV-SECRETS-IMPORT: comprehensive secret-key detector. A key that
     /// looks like a secret is SKIPPED by `bootstrap_from_env` (never persisted
-    /// to Postgres or the shared Redis hash). This is a deny-list that covers
+    /// to the SQLite DB or the in-memory cache). This is a deny-list that covers
     /// the bypasses the prior `guess_sensitive` heuristic missed
     /// (DATABASE_URL / REDIS_URL / SMTP_URL / CONNECTION_STRING / *_DSN) plus
     /// the explicit ruxlog live-crypto/session names (COOKIE_KEY,
@@ -162,60 +160,18 @@ impl AclService {
         State(state): State<AppState>,
         key: &str,
     ) -> Result<AppConstantModel, ErrorResponse> {
-        let redis_value: Option<String> = state
-            .redis_pool
-            .hget(Self::VALUE_HASH, key)
-            .await
-            .unwrap_or(None);
-
-        if let Some(value) = redis_value {
-            if let Some(meta_json) = state
-                .redis_pool
-                .hget::<Option<String>, _, _>(Self::META_HASH, key)
-                .await
-                .unwrap_or(None)
-            {
-                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&meta_json) {
-                    let is_sensitive = meta
-                        .get("is_sensitive")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let model = AppConstantModel {
-                        id: 0,
-                        key: key.to_string(),
-                        value,
-                        value_type: meta
-                            .get("value_type")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        description: None,
-                        is_sensitive,
-                        source: "cache".to_string(),
-                        updated_by: None,
-                        created_at: chrono::Utc::now().fixed_offset(),
-                        updated_at: chrono::Utc::now().fixed_offset(),
-                    };
-                    return Ok(model);
-                }
-            }
-        }
-
-        let from_db = AppConstant::find_by_key(&state.sea_db, key)
+        // The constant cache (prior Redis HASHes VALUE_HASH / META_HASH) is now
+        // an internal detail of `app_constant::actions` with no public per-key
+        // reader, so this consults the DB — the source of truth. The process
+        // cache stays warm via `sync_all_to_cache` (bootstrap + mutations).
+        AppConstant::find_by_key(&state.sea_db, key)
             .await
             .map_err(|e| {
                 ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
             })?
             .ok_or_else(|| {
                 ErrorResponse::new(ErrorCode::RecordNotFound).with_message("Key not found")
-            })?;
-
-        Self::write_single_to_redis(&state, &from_db)
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
-            })?;
-
-        Ok(from_db)
+            })
     }
 
     pub async fn list_constants(
@@ -269,7 +225,10 @@ impl AclService {
             ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
         })?;
 
-        Self::write_single_to_redis(&state, &model)
+        // Rebuild the in-memory cache so it reflects the write (replaces the
+        // prior per-key HSET on the Redis hashes; the cache has no public
+        // single-key writer, so a full resync is the faithful equivalent).
+        AppConstant::sync_all_to_cache(&state.sea_db, Self::VALUE_HASH, Self::META_HASH)
             .await
             .map_err(|e| {
                 ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
@@ -289,59 +248,30 @@ impl AclService {
                 ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
             })?;
 
-        state
-            .redis_pool
-            .hdel::<(), _, _>(Self::VALUE_HASH, &key)
-            .await
-            .ok();
-        state
-            .redis_pool
-            .hdel::<(), _, _>(Self::META_HASH, &key)
-            .await
-            .ok();
+        // Drop the deleted key from the in-memory cache (replaces the prior
+        // best-effort HDELs on the two Redis hashes). Non-fatal: the DB is the
+        // source of truth and the next full sync reaps it regardless.
+        let _ =
+            AppConstant::sync_all_to_cache(&state.sea_db, Self::VALUE_HASH, Self::META_HASH).await;
 
         Ok(())
     }
 
-    pub async fn sync_all_to_redis(
+    /// Rebuild the process-global in-memory constant cache from the DB. Replaces
+    /// the prior `sync_all_to_redis` path — there is no Redis round-trip on the
+    /// default build; the cache lives in `app_constant::actions::CONSTANT_CACHE`,
+    /// keyed by `{VALUE_HASH}:{key}` (raw value) / `{META_HASH}:{key}` (JSON
+    /// metadata blob).
+    pub async fn sync_all_to_cache(
         State(state): State<AppState>,
     ) -> Result<serde_json::Value, ErrorResponse> {
-        AppConstant::sync_all_to_redis(
-            &state.sea_db,
-            state.redis_pool,
-            Self::VALUE_HASH,
-            Self::META_HASH,
-        )
-        .await
-        .map_err(|e| {
-            ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
-        })?;
+        AppConstant::sync_all_to_cache(&state.sea_db, Self::VALUE_HASH, Self::META_HASH)
+            .await
+            .map_err(|e| {
+                ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
+            })?;
 
-        Ok(json!({"message": "ACL cache synced to redis"}))
-    }
-
-    async fn write_single_to_redis(
-        state: &AppState,
-        model: &AppConstantModel,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        state
-            .redis_pool
-            .hset::<(), _, _>(Self::VALUE_HASH, vec![(&model.key, &model.value)])
-            .await?;
-
-        let meta = serde_json::json!({
-            "value_type": model.value_type,
-            "is_sensitive": model.is_sensitive,
-            "updated_at": model.updated_at,
-        })
-        .to_string();
-
-        state
-            .redis_pool
-            .hset::<(), _, _>(Self::META_HASH, vec![(&model.key, meta)])
-            .await?;
-
-        Ok(())
+        Ok(json!({"message": "ACL cache synced"}))
     }
 }
 
