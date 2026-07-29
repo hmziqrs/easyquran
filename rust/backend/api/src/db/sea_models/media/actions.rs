@@ -1,0 +1,274 @@
+use crate::error::{DbResult, ErrorResponse};
+use ruxlog_types::PaginatedList;
+use sea_orm::{entity::prelude::*, Condition, Order, QueryOrder, QuerySelect, Set};
+use tracing::{error, info, instrument, warn};
+
+use super::super::media_usage;
+use super::{
+    model::{ActiveModel, Column, Entity},
+    slice::MediaWithUsage,
+    MediaQuery, MediaReference, Model, NewMedia,
+};
+
+impl Entity {
+    pub const PER_PAGE: u64 = 20;
+
+    #[instrument(skip(conn, payload), fields(media_id, uploader_id = payload.uploader_id))]
+    pub async fn create(conn: &DbConn, payload: NewMedia) -> DbResult<Model> {
+        let now = chrono::Utc::now().fixed_offset();
+        let media = ActiveModel {
+            bucket: Set(Some(payload.bucket)),
+            object_key: Set(payload.object_key),
+            mime_type: Set(payload.mime_type),
+            width: Set(payload.width),
+            height: Set(payload.height),
+            size: Set(payload.size),
+            extension: Set(payload.extension),
+            uploader_id: Set(payload.uploader_id),
+            reference_type: Set(payload.reference_type),
+            content_hash: Set(payload.content_hash),
+            is_optimized: Set(payload.is_optimized),
+            optimized_at: Set(payload.optimized_at),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        };
+
+        match media.insert(conn).await {
+            Ok(model) => {
+                tracing::Span::current().record("media_id", model.id);
+                info!(
+                    media_id = model.id,
+                    uploader_id = model.uploader_id,
+                    size = model.size,
+                    "Media created"
+                );
+                Ok(model)
+            }
+            Err(err) => {
+                error!(
+                    uploader_id = payload.uploader_id,
+                    "Failed to create media: {}", err
+                );
+                Err(err.into())
+            }
+        }
+    }
+
+    #[instrument(skip(conn), fields(media_id = id))]
+    pub async fn find_by_id(conn: &DbConn, id: i32) -> DbResult<Option<Model>> {
+        <Self as EntityTrait>::find_by_id(id)
+            .one(conn)
+            .await
+            .map_err(ErrorResponse::from)
+    }
+
+    #[instrument(skip(conn), fields(hash, media_id))]
+    pub async fn find_by_hash(conn: &DbConn, hash: &str) -> DbResult<Option<Model>> {
+        <Self as EntityTrait>::find()
+            .filter(Column::ContentHash.eq(hash))
+            .one(conn)
+            .await
+            .map(|result| {
+                if let Some(ref media) = result {
+                    tracing::Span::current().record("media_id", media.id);
+                }
+                result
+            })
+            .map_err(ErrorResponse::from)
+    }
+
+    #[instrument(skip(conn), fields(media_id = id))]
+    pub async fn delete_by_id(conn: &DbConn, id: i32) -> DbResult<Option<Model>> {
+        match <Self as EntityTrait>::find_by_id(id)
+            .one(conn)
+            .await
+            .map_err(ErrorResponse::from)?
+        {
+            Some(model) => {
+                let active_model: ActiveModel = model.clone().into();
+                active_model
+                    .delete(conn)
+                    .await
+                    .map_err(ErrorResponse::from)?;
+                info!(media_id = id, "Media deleted");
+                Ok(Some(model))
+            }
+            None => {
+                warn!(media_id = id, "Media not found for delete");
+                Ok(None)
+            }
+        }
+    }
+
+    #[instrument(skip(conn), fields(uploader_id))]
+    pub async fn list_by_uploader(conn: &DbConn, uploader_id: i32) -> DbResult<Vec<Model>> {
+        Self::find()
+            .filter(Column::UploaderId.eq(uploader_id))
+            .order_by_desc(Column::CreatedAt)
+            .all(conn)
+            .await
+            .inspect(|results| {
+                info!(
+                    uploader_id,
+                    count = results.len(),
+                    "Media listed by uploader"
+                );
+            })
+            .map_err(ErrorResponse::from)
+    }
+
+    #[instrument(skip(conn), fields(reference_type = ?reference))]
+    pub async fn list_by_reference(
+        conn: &DbConn,
+        reference: MediaReference,
+    ) -> DbResult<Vec<Model>> {
+        Self::find()
+            .filter(Column::ReferenceType.eq(reference))
+            .order_by_desc(Column::CreatedAt)
+            .all(conn)
+            .await
+            .inspect(|results| {
+                info!(reference_type = ?reference, count = results.len(), "Media listed by reference");
+            })
+            .map_err(ErrorResponse::from)
+    }
+
+    #[instrument(skip(conn, query), fields(page = query.page))]
+    pub async fn find_with_query(
+        conn: &DbConn,
+        query: MediaQuery,
+    ) -> DbResult<PaginatedList<MediaWithUsage>> {
+        let mut media_query = Self::find();
+
+        if let Some(search_term) = query.search {
+            let search_pattern = format!("%{}%", search_term.to_lowercase());
+            media_query = media_query.filter(
+                Condition::any()
+                    .add(Column::ObjectKey.contains(&search_pattern))
+                    .add(Column::MimeType.contains(&search_pattern))
+                    .add(Column::Extension.contains(&search_pattern)),
+            );
+        }
+
+        if let Some(reference) = query.reference_type {
+            media_query = media_query.filter(Column::ReferenceType.eq(reference));
+        }
+
+        if let Some(uploader_id) = query.uploader_id {
+            media_query = media_query.filter(Column::UploaderId.eq(uploader_id));
+        }
+
+        if let Some(mime) = query.mime_type {
+            let pattern = format!("%{}%", mime.to_lowercase());
+            media_query = media_query.filter(Column::MimeType.contains(&pattern));
+        }
+
+        if let Some(ext) = query.extension {
+            let pattern = format!("%{}%", ext.to_lowercase());
+            media_query = media_query.filter(Column::Extension.contains(&pattern));
+        }
+
+        if let Some(ts) = query.created_at_gt {
+            media_query = media_query.filter(Column::CreatedAt.gt(ts));
+        }
+        if let Some(ts) = query.created_at_lt {
+            media_query = media_query.filter(Column::CreatedAt.lt(ts));
+        }
+        if let Some(ts) = query.updated_at_gt {
+            media_query = media_query.filter(Column::UpdatedAt.gt(ts));
+        }
+        if let Some(ts) = query.updated_at_lt {
+            media_query = media_query.filter(Column::UpdatedAt.lt(ts));
+        }
+
+        // Sorting: support multiple field sorts; default to created_at desc
+        if let Some(sorts) = &query.sorts {
+            if !sorts.is_empty() {
+                for s in sorts {
+                    let column = match s.field.as_str() {
+                        "id" => Some(Column::Id),
+                        "bucket" => Some(Column::Bucket),
+                        "object_key" => Some(Column::ObjectKey),
+                        "mime_type" => Some(Column::MimeType),
+                        "width" => Some(Column::Width),
+                        "height" => Some(Column::Height),
+                        "size" => Some(Column::Size),
+                        "extension" => Some(Column::Extension),
+                        "uploader_id" => Some(Column::UploaderId),
+                        "reference_type" => Some(Column::ReferenceType),
+                        "created_at" => Some(Column::CreatedAt),
+                        "updated_at" => Some(Column::UpdatedAt),
+                        _ => None,
+                    };
+
+                    if let Some(col) = column {
+                        let ord: Order = s.order.clone();
+                        media_query = media_query.order_by(col, ord);
+                    }
+                }
+            } else {
+                media_query = media_query.order_by_desc(Column::CreatedAt);
+            }
+        } else {
+            media_query = media_query.order_by_desc(Column::CreatedAt);
+        }
+
+        let page = match query.page {
+            Some(p) if p > 0 => p,
+            _ => 1,
+        };
+        let paginator = media_query.paginate(conn, Self::PER_PAGE);
+
+        match paginator.num_items().await {
+            Ok(total) => match paginator.fetch_page(page - 1).await {
+                Ok(results) => {
+                    // fetch usage counts for all media items with one query
+                    let ids = results.iter().map(|m| m.id).collect::<Vec<i32>>();
+                    let usage_counts = media_usage::Entity::find()
+                        .filter(media_usage::Column::MediaId.is_in(ids))
+                        .select_only()
+                        .column(media_usage::Column::MediaId)
+                        .column_as(media_usage::Column::MediaId.count(), "usage_count")
+                        .group_by(media_usage::Column::MediaId)
+                        .into_tuple::<(i32, i64)>()
+                        .all(conn)
+                        .await
+                        .map_err(ErrorResponse::from)?;
+
+                    let results_with_usage = results
+                        .into_iter()
+                        .map(|media| {
+                            let usage_count = usage_counts
+                                .iter()
+                                .find(|(media_id, _)| *media_id == media.id)
+                                .map(|(_, count)| *count)
+                                .unwrap_or(0);
+                            media.with_usage(usage_count)
+                        })
+                        .collect();
+
+                    Ok(PaginatedList::new(results_with_usage, total, page, Self::PER_PAGE))
+                }
+                Err(err) => Err(err.into()),
+            },
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    #[instrument(skip(conn), fields(media_id = id))]
+    pub async fn find_by_id_with_usage(conn: &DbConn, id: i32) -> DbResult<Option<MediaWithUsage>> {
+        match Self::find_by_id(conn, id).await? {
+            Some(media) => {
+                let usage_count = media_usage::Entity::find()
+                    .filter(media_usage::Column::MediaId.eq(media.id))
+                    .count(conn)
+                    .await
+                    .map_err(ErrorResponse::from)? as i64;
+
+                Ok(Some(media.with_usage(usage_count)))
+            }
+            None => Ok(None),
+        }
+    }
+}

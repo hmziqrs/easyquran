@@ -1,0 +1,13 @@
+type: folder
+model: folder
+id: fl_B63m7VD82m
+createdAt: 2025-04-30T05:43:50.294130
+updatedAt: 2025-11-04T11:52:34.705249
+workspaceId: wk_udoUbrFfLp
+folderId: null
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: seed
+sortPriority: 8000.0

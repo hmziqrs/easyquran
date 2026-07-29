@@ -1,0 +1,745 @@
+use std::collections::HashSet;
+
+use crate::{db::sea_models::tag, error::DbResult};
+use ruxlog_types::PaginatedList;
+use sea_orm::{
+    entity::prelude::*, prelude::Expr, sea_query::Alias, Condition, JoinType, Order, QueryOrder,
+    QuerySelect, Set, TransactionTrait,
+};
+use tracing::{error, info, instrument, warn};
+
+use super::*;
+
+impl Entity {
+    pub const PER_PAGE: u64 = 10;
+
+    fn build_post_query_with_relations(public_url: &str) -> Select<Entity> {
+        use super::super::category::Column as CategoryColumn;
+        use super::super::media::url::public_file_url_expr;
+        use super::super::user::Column as UserColumn;
+
+        Self::find()
+            .column_as(Column::FeaturedImageId, "featured_image_id")
+            .column_as(UserColumn::Id, "author_id")
+            .column_as(UserColumn::Name, "author_name")
+            .column_as(UserColumn::Email, "author_email")
+            .column_as(UserColumn::AvatarId, "author_avatar_id")
+            .column_as(CategoryColumn::Id, "category_id")
+            .column_as(CategoryColumn::Name, "category_name")
+            .column_as(CategoryColumn::Slug, "category_slug")
+            .column_as(CategoryColumn::Color, "category_color")
+            .column_as(CategoryColumn::CoverId, "category_cover_id")
+            .column_as(CategoryColumn::LogoId, "category_logo_id")
+            .expr_as(
+                Expr::cust("COALESCE((SELECT COUNT(*) FROM post_comments WHERE post_comments.post_id = posts.id), 0)"),
+                "comment_count",
+            )
+            .join(JoinType::InnerJoin, Relation::User.def())
+            .join_as(
+                JoinType::LeftJoin,
+                super::super::user::Relation::Media.def(),
+                Alias::new("author_avatar_media"),
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("author_avatar_media"),
+                    super::super::media::Column::ObjectKey,
+                )),
+                "author_avatar_object_key",
+            )
+            .expr_as(
+                public_file_url_expr(public_url, "author_avatar_media"),
+                "author_avatar_file_url",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("author_avatar_media"),
+                    super::super::media::Column::MimeType,
+                )),
+                "author_avatar_mime_type",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("author_avatar_media"),
+                    super::super::media::Column::Width,
+                )),
+                "author_avatar_width",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("author_avatar_media"),
+                    super::super::media::Column::Height,
+                )),
+                "author_avatar_height",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("author_avatar_media"),
+                    super::super::media::Column::Size,
+                )),
+                "author_avatar_size",
+            )
+            .join(JoinType::LeftJoin, Relation::Category.def())
+            .join_as(
+                JoinType::LeftJoin,
+                super::super::category::Relation::Cover.def(),
+                Alias::new("category_cover_media"),
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_cover_media"),
+                    super::super::media::Column::ObjectKey,
+                )),
+                "category_cover_object_key",
+            )
+            .expr_as(
+                public_file_url_expr(public_url, "category_cover_media"),
+                "category_cover_file_url",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_cover_media"),
+                    super::super::media::Column::MimeType,
+                )),
+                "category_cover_mime_type",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_cover_media"),
+                    super::super::media::Column::Width,
+                )),
+                "category_cover_width",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_cover_media"),
+                    super::super::media::Column::Height,
+                )),
+                "category_cover_height",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_cover_media"),
+                    super::super::media::Column::Size,
+                )),
+                "category_cover_size",
+            )
+            .join_as(
+                JoinType::LeftJoin,
+                super::super::category::Relation::Logo.def(),
+                Alias::new("category_logo_media"),
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_logo_media"),
+                    super::super::media::Column::ObjectKey,
+                )),
+                "category_logo_object_key",
+            )
+            .expr_as(
+                public_file_url_expr(public_url, "category_logo_media"),
+                "category_logo_file_url",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_logo_media"),
+                    super::super::media::Column::MimeType,
+                )),
+                "category_logo_mime_type",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_logo_media"),
+                    super::super::media::Column::Width,
+                )),
+                "category_logo_width",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_logo_media"),
+                    super::super::media::Column::Height,
+                )),
+                "category_logo_height",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("category_logo_media"),
+                    super::super::media::Column::Size,
+                )),
+                "category_logo_size",
+            )
+            .join_as(
+                JoinType::LeftJoin,
+                Relation::FeaturedImage.def(),
+                Alias::new("featured_image_media"),
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("featured_image_media"),
+                    super::super::media::Column::ObjectKey,
+                )),
+                "featured_image_object_key",
+            )
+            .expr_as(
+                public_file_url_expr(public_url, "featured_image_media"),
+                "featured_image_file_url",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("featured_image_media"),
+                    super::super::media::Column::MimeType,
+                )),
+                "featured_image_mime_type",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("featured_image_media"),
+                    super::super::media::Column::Width,
+                )),
+                "featured_image_width",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("featured_image_media"),
+                    super::super::media::Column::Height,
+                )),
+                "featured_image_height",
+            )
+            .expr_as(
+                Expr::col((
+                    Alias::new("featured_image_media"),
+                    super::super::media::Column::Size,
+                )),
+                "featured_image_size",
+            )
+    }
+
+    async fn sanitized_tag_ids(conn: &DbConn, tag_ids: Vec<i32>) -> DbResult<Vec<i32>> {
+        let mut sanitized_ids = Vec::new();
+        tag::Entity::find()
+            .filter(tag::Column::Id.is_in(tag_ids))
+            .all(conn)
+            .await?
+            .iter()
+            .for_each(|tag| {
+                sanitized_ids.push(tag.id);
+            });
+        Ok(sanitized_ids)
+    }
+
+    #[instrument(skip(conn, new_post), fields(post_id, author_id = new_post.author_id, slug = %new_post.slug))]
+    pub async fn create(
+        conn: &DbConn,
+        public_url: &str,
+        new_post: NewPost,
+    ) -> DbResult<PostWithRelations> {
+        let now = chrono::Utc::now().fixed_offset();
+
+        let sanitized_tag_ids = Self::sanitized_tag_ids(conn, new_post.tag_ids).await?;
+
+        let post = ActiveModel {
+            title: Set(new_post.title),
+            slug: Set(new_post.slug.clone()),
+            content: Set(new_post.content),
+            excerpt: Set(new_post.excerpt),
+            featured_image_id: Set(new_post.featured_image_id),
+            status: Set(new_post.status),
+            published_at: Set(new_post.published_at),
+            author_id: Set(new_post.author_id),
+            category_id: Set(new_post.category_id),
+            view_count: Set(new_post.view_count),
+            likes_count: Set(new_post.likes_count),
+            tag_ids: Set(TagIds(sanitized_tag_ids)),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        };
+
+        match post.insert(conn).await {
+            Ok(model) => {
+                tracing::Span::current().record("post_id", model.id);
+                info!(
+                    post_id = model.id,
+                    author_id = model.author_id,
+                    "Post created"
+                );
+                Self::find_by_id_or_slug(conn, public_url, Some(model.id), None)
+                    .await?
+                    .ok_or_else(|| {
+                        DbErr::RecordNotFound("Created post not found".to_string()).into()
+                    })
+            }
+            Err(err) => {
+                error!(
+                    author_id = new_post.author_id,
+                    "Failed to create post: {}", err
+                );
+                Err(err.into())
+            }
+        }
+    }
+
+    #[instrument(skip(conn, update_post), fields(post_id))]
+    pub async fn update(
+        conn: &DbConn,
+        public_url: &str,
+        post_id: i32,
+        update_post: UpdatePost,
+    ) -> DbResult<Option<PostWithRelations>> {
+        let post: Option<Model> = Self::find_by_id(post_id).one(conn).await?;
+
+        if let Some(post_model) = post {
+            // #10 capture the current slug BEFORE consuming `post_model` so the
+            // cache invalidation below can drop the old slug-keyed entry too.
+            #[cfg(feature = "cache")]
+            let old_slug: String = post_model.slug.clone();
+
+            let mut post_active: ActiveModel = post_model.into();
+
+            if let Some(title) = update_post.title {
+                post_active.title = Set(title);
+            }
+
+            if let Some(slug) = update_post.slug {
+                post_active.slug = Set(slug);
+            }
+
+            if let Some(content) = update_post.content {
+                post_active.content = Set(content);
+            }
+
+            if let Some(excerpt) = update_post.excerpt {
+                post_active.excerpt = Set(Some(excerpt));
+            }
+
+            if let Some(featured_image_id) = update_post.featured_image_id {
+                post_active.featured_image_id = Set(featured_image_id);
+            }
+
+            if let Some(status) = update_post.status {
+                post_active.status = Set(status);
+            }
+
+            if let Some(published_at) = update_post.published_at {
+                post_active.published_at = Set(Some(published_at));
+            }
+
+            if let Some(category_id) = update_post.category_id {
+                post_active.category_id = Set(category_id);
+            }
+
+            if let Some(view_count) = update_post.view_count {
+                post_active.view_count = Set(view_count);
+            }
+
+            if let Some(likes_count) = update_post.likes_count {
+                post_active.likes_count = Set(likes_count);
+            }
+
+            if let Some(tag_ids) = update_post.tag_ids {
+                let sanitized_tag_ids = Self::sanitized_tag_ids(conn, tag_ids).await?;
+                post_active.tag_ids = Set(TagIds(sanitized_tag_ids));
+            }
+
+            post_active.updated_at = Set(update_post.updated_at);
+
+            match post_active.update(conn).await {
+                Ok(updated_post) => {
+                    info!(post_id, "Post updated");
+
+                    // #10 invalidate the stale cache entries for this post. We
+                    // drop the id-keyed entry plus the old AND new slug entries
+                    // (a slug rename otherwise leaves the old-slug entry stale
+                    // until its 60s TTL). `find_by_id_or_slug` below re-populates
+                    // the id entry with the fresh row. Targeted DELs (no prefix
+                    // wipe) so a single edit does not stampede every other post's
+                    // cache. Best-effort: a redis blip only logs.
+                    #[cfg(feature = "cache")]
+                    {
+                        let new_slug = updated_post.slug.clone();
+                        if let Some(pool) = crate::services::cache::global_pool() {
+                            for token in [post_id.to_string(), old_slug, new_slug] {
+                                let key = crate::services::cache::CacheKey::post_view(&token);
+                                if let Err(e) = crate::services::cache::invalidate(pool, &key).await
+                                {
+                                    tracing::warn!(
+                                        error = %e, %key,
+                                        "post view cache invalidate failed (non-fatal)"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    Self::find_by_id_or_slug(conn, public_url, Some(updated_post.id), None).await
+                }
+                Err(err) => {
+                    error!(post_id, "Failed to update post: {}", err);
+                    Err(err.into())
+                }
+            }
+        } else {
+            warn!(post_id, "Post not found for update");
+            Ok(None)
+        }
+    }
+
+    #[instrument(skip(conn), fields(post_id))]
+    pub async fn delete(conn: &DbConn, post_id: i32) -> DbResult<u64> {
+        match Self::delete_by_id(post_id).exec(conn).await {
+            Ok(result) => {
+                info!(
+                    post_id,
+                    rows_affected = result.rows_affected,
+                    "Post deleted"
+                );
+
+                // #10 drop the cached view entries for this post. The slug is
+                // not known here (delete is by id), so wipe the whole
+                // `post:view:*` prefix — deletes are rare, so the prefix wipe is
+                // cheap and guarantees no stale entry is served for a deleted
+                // post. Best-effort (logs on redis error).
+                #[cfg(feature = "cache")]
+                {
+                    crate::services::cache::invalidate_post_view_all().await;
+                }
+
+                Ok(result.rows_affected)
+            }
+            Err(err) => {
+                error!(post_id, "Failed to delete post: {}", err);
+                Err(err.into())
+            }
+        }
+    }
+
+    #[instrument(skip(conn), fields(post_id, slug = post_slug.as_deref()))]
+    pub async fn find_by_id_or_slug(
+        conn: &DbConn,
+        public_url: &str,
+        post_id: Option<i32>,
+        post_slug: Option<String>,
+    ) -> DbResult<Option<PostWithRelations>> {
+        // #10 read-through cache (feature-gated). The cache key is the input
+        // token (id or slug) so both lookup shapes share the `post:view:*`
+        // namespace. Cache stores the raw DB result; the controller-level status
+        // gate + paywall still apply per-request on the way out, so a cached
+        // Draft/gated post is never leaked to an unauthorized viewer. Fail-open:
+        // a redis miss/error falls through to the DB and only logs.
+        #[cfg(feature = "cache")]
+        let cache_token: Option<String> = match (post_id, post_slug.as_deref()) {
+            (Some(id), _) => Some(id.to_string()),
+            (_, Some(slug)) => Some(slug.to_string()),
+            _ => None,
+        };
+
+        #[cfg(feature = "cache")]
+        if let Some(token) = &cache_token {
+            if let Some(pool) = crate::services::cache::global_pool() {
+                let key = crate::services::cache::CacheKey::post_view(token);
+                match crate::services::cache::get::<PostWithRelations>(pool, &key).await {
+                    Ok(Some(cached)) => {
+                        tracing::debug!(key = %key, "post view cache hit");
+                        return Ok(Some(cached));
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        tracing::warn!(error = %e, key = %key, "post view cache get failed (non-fatal)")
+                    }
+                }
+            }
+        }
+
+        let mut query = Self::build_post_query_with_relations(public_url);
+
+        query = match (post_id, post_slug.clone()) {
+            (Some(id), _) => query.filter(Column::Id.eq(id)),
+            (_, Some(slug)) => query.filter(Column::Slug.eq(slug)),
+            _ => return Ok(None),
+        };
+
+        let post_result = query.into_model::<PostWithJoinedData>().one(conn).await?;
+
+        if let Some(post_data) = post_result {
+            let mut tags = Vec::new();
+            if !post_data.tag_ids.0.is_empty() {
+                let tag_models = super::super::tag::Entity::find()
+                    .filter(super::super::tag::Column::Id.is_in(post_data.tag_ids.0.clone()))
+                    .all(conn)
+                    .await?;
+
+                for tag in tag_models {
+                    tags.push(PostTag {
+                        id: tag.id,
+                        name: tag.name,
+                        slug: tag.slug,
+                        color: tag.color,
+                    });
+                }
+            }
+
+            let post = post_data.into_relation(tags);
+
+            // #10 populate cache on miss (best-effort). The raw DB result is
+            // cached; per-request paywall/status stripping happens downstream.
+            #[cfg(feature = "cache")]
+            if let Some(token) = &cache_token {
+                if let Some(pool) = crate::services::cache::global_pool() {
+                    let key = crate::services::cache::CacheKey::post_view(token);
+                    if let Err(e) = crate::services::cache::set(
+                        pool,
+                        &key,
+                        &post,
+                        crate::services::cache::POST_VIEW_TTL_SECS,
+                    )
+                    .await
+                    {
+                        tracing::warn!(error = %e, key = %key, "post view cache set failed (non-fatal)");
+                    }
+                }
+            }
+
+            return Ok(Some(post));
+        }
+
+        Ok(None)
+    }
+
+    // Search posts with query parameters and optionally load relations
+    pub async fn search(
+        conn: &DbConn,
+        public_url: &str,
+        query: PostQuery,
+    ) -> DbResult<PaginatedList<PostWithRelations>> {
+        let mut post_query = Self::build_post_query_with_relations(public_url);
+
+        if let Some(title_filter) = &query.title {
+            let pattern = format!("%{}%", title_filter);
+            post_query = post_query.filter(Column::Title.contains(&pattern));
+        }
+
+        if let Some(status_filter) = query.status {
+            post_query = post_query.filter(Column::Status.eq(status_filter));
+        }
+
+        if let Some(author_id_filter) = query.author_id {
+            post_query = post_query.filter(Column::AuthorId.eq(author_id_filter));
+        }
+
+        // Date range filters
+        if let Some(ts) = query.created_at_gt {
+            post_query = post_query.filter(Column::CreatedAt.gt(ts));
+        }
+        if let Some(ts) = query.created_at_lt {
+            post_query = post_query.filter(Column::CreatedAt.lt(ts));
+        }
+        if let Some(ts) = query.updated_at_gt {
+            post_query = post_query.filter(Column::UpdatedAt.gt(ts));
+        }
+        if let Some(ts) = query.updated_at_lt {
+            post_query = post_query.filter(Column::UpdatedAt.lt(ts));
+        }
+        if let Some(ts) = query.published_at_gt {
+            post_query = post_query.filter(Column::PublishedAt.gt(ts));
+        }
+        if let Some(ts) = query.published_at_lt {
+            post_query = post_query.filter(Column::PublishedAt.lt(ts));
+        }
+
+        if let Some(category_id_filter) = query.category_id {
+            post_query = post_query.filter(Column::CategoryId.eq(category_id_filter));
+        }
+
+        if let Some(search_term) = &query.search {
+            let pattern = format!("%{}%", search_term);
+            post_query = post_query.filter(Condition::any().add(Column::Title.contains(&pattern)));
+        }
+
+        if let Some(tag_ids_filter) = query.tag_ids {
+            if !tag_ids_filter.is_empty() {
+                // Convert the Vec<i32> to a formatted string for PostgreSQL array containment
+                let tag_ids_str = tag_ids_filter
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",");
+
+                post_query = post_query.filter(Expr::cust(format!(
+                    "posts.tag_ids && ARRAY[{}]::int[]",
+                    tag_ids_str
+                )));
+            }
+        }
+
+        // Multi-field sorting with per-field order
+        if let Some(sorts) = query.sorts {
+            for sort in sorts {
+                let column = match sort.field.as_str() {
+                    "title" => Some(Column::Title),
+                    "status" => Some(Column::Status),
+                    "created_at" => Some(Column::CreatedAt),
+                    "updated_at" => Some(Column::UpdatedAt),
+                    "published_at" => Some(Column::PublishedAt),
+                    "view_count" => Some(Column::ViewCount),
+                    "likes_count" => Some(Column::LikesCount),
+                    _ => None,
+                };
+                if let Some(col) = column {
+                    post_query = post_query.order_by(col, sort.order);
+                }
+            }
+        } else {
+            post_query = post_query.order_by(Column::CreatedAt, Order::Desc);
+        }
+
+        let page = match query.page_no {
+            Some(p) if p > 0 => p,
+            _ => 1,
+        };
+
+        let paginated = post_query
+            .into_model::<PostWithJoinedData>()
+            .paginate(conn, Self::PER_PAGE);
+
+        let total = paginated.num_items().await?;
+
+        let posts_joined = paginated.fetch_page(page - 1).await?;
+
+        // Collect all tag IDs from each post into a set
+        let all_tag_ids: HashSet<i32> = posts_joined
+            .iter()
+            .flat_map(|p| p.tag_ids.0.iter().copied())
+            .collect();
+
+        // Load all tags in a single query
+        let tags = if !all_tag_ids.is_empty() {
+            super::super::tag::Entity::find()
+                .filter(
+                    super::super::tag::Column::Id
+                        .is_in(all_tag_ids.into_iter().collect::<Vec<i32>>()),
+                )
+                .all(conn)
+                .await?
+                .into_iter()
+                .map(|t| {
+                    (
+                        t.id,
+                        PostTag {
+                            id: t.id,
+                            name: t.name,
+                            slug: t.slug,
+                            color: t.color,
+                        },
+                    )
+                })
+                .collect::<std::collections::HashMap<i32, PostTag>>()
+        } else {
+            std::collections::HashMap::new()
+        };
+
+        // Map joined data to PostWithRelations
+        let posts_with_relations: Vec<PostWithRelations> = posts_joined
+            .into_iter()
+            .map(|joined_data| {
+                let post_tags = joined_data
+                    .tag_ids
+                    .0
+                    .iter()
+                    .filter_map(|id| tags.get(id).cloned())
+                    .collect::<Vec<PostTag>>();
+
+                // Convert joined data to PostWithRelations
+                joined_data.into_relation(post_tags)
+            })
+            .collect();
+
+        Ok(PaginatedList::new(posts_with_relations, total, page, Self::PER_PAGE))
+    }
+
+    pub async fn find_published_paginated(
+        conn: &DbConn,
+        public_url: &str,
+        query: PostQuery,
+    ) -> DbResult<PaginatedList<PostWithRelations>> {
+        let query = PostQuery {
+            page_no: query.page_no,
+            status: Some(PostStatus::Published),
+            title: None,
+            author_id: query.author_id,
+            sorts: Some(vec![crate::utils::SortParam {
+                field: "updated_at".to_string(),
+                order: sea_orm::Order::Desc,
+            }]),
+            category_id: query.category_id,
+            search: None,
+            tag_ids: query.tag_ids,
+            created_at_gt: None,
+            created_at_lt: None,
+            updated_at_gt: None,
+            updated_at_lt: None,
+            published_at_gt: None,
+            published_at_lt: None,
+        };
+
+        Self::search(conn, public_url, query).await
+    }
+
+    // Sitemap data for published posts
+    pub async fn sitemap(conn: &DbConn) -> DbResult<Vec<PostSitemap>> {
+        let sitemaps = Self::find()
+            .select_only()
+            .columns(vec![Column::Slug, Column::UpdatedAt, Column::PublishedAt])
+            .filter(Column::Status.eq(PostStatus::Published))
+            .into_model::<PostSitemap>()
+            .all(conn)
+            .await?;
+
+        Ok(sitemaps)
+    }
+
+    pub async fn increment_view_count(
+        conn: &DbConn,
+        post_id: i32,
+        user_id: Option<i32>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+    ) -> DbResult<()> {
+        let now = chrono::Utc::now().fixed_offset();
+        let view = super::super::post_view::ActiveModel {
+            post_id: Set(post_id),
+            user_id: Set(user_id),
+            ip_address: Set(ip_address),
+            user_agent: Set(user_agent),
+            created_at: Set(now),
+            ..Default::default()
+        };
+
+        let transaction = conn.begin().await?;
+
+        // Insert the view
+        match view.insert(&transaction).await {
+            Ok(_) => {}
+            Err(err) => {
+                transaction.rollback().await?;
+                return Err(err.into());
+            }
+        }
+
+        // RACE-VIEWCOUNT-1: atomic `UPDATE post SET view_count = view_count + 1`
+        // — no read-modify-write, so concurrent distinct-IP views (the dedup
+        // gate allows one per (post, ip) per window) cannot lose increments.
+        if let Err(err) = Self::update_many()
+            .col_expr(Column::ViewCount, Expr::col(Column::ViewCount).add(1))
+            .filter(Column::Id.eq(post_id))
+            .exec(&transaction)
+            .await
+        {
+            transaction.rollback().await?;
+            return Err(err.into());
+        }
+
+        // Commit the transaction
+        transaction.commit().await?;
+        Ok(())
+    }
+}

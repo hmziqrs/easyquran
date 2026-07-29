@@ -1,0 +1,31 @@
+type: http_request
+model: http_request
+id: rq_9VkkNvw6DQ
+createdAt: 2025-11-01T11:42:08.672659
+updatedAt: 2025-11-01T11:42:12.306201
+workspaceId: wk_udoUbrFfLp
+folderId: fl_Zm7AwmzoXA
+authentication: {}
+authenticationType: null
+body:
+  text: '{}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: csrf-token
+  value: ${[ csrf ]}
+  id: aA64M6mvXe
+- enabled: true
+  name: ''
+  value: ''
+  id: D57mjz6dN3
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: jw8mdQhSE7
+method: POST
+name: ''
+sortPriority: 0.0021999999999999997
+url: ${[ host ]}/observability/v1/logs/recent
+urlParameters: []

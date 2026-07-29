@@ -1,0 +1,141 @@
+use sea_orm::prelude::DateTimeWithTimeZone;
+use serde::{Deserialize, Serialize};
+use validator::{Validate, ValidationError};
+
+use crate::db::sea_models::user::{
+    AdminCreateUser, AdminUpdateUser, AdminUserQuery, UpdateUser, UserRole,
+};
+use crate::utils::SortParam;
+
+/// Password length bounds (CWE-400): reject oversized passwords at validation
+/// (400) before they reach Argon2id, which would otherwise be forced to hash an
+/// unbounded input. Mirrors the bound in `auth_v1` / `forgot_password_v1` so the
+/// limit is uniform across every password-bearing field.
+const PASSWORD_MIN: u64 = 12;
+const PASSWORD_MAX: u64 = 256;
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1UpdateProfilePayload {
+    #[validate(length(min = 1))]
+    pub name: Option<String>,
+    #[validate(email)]
+    pub email: Option<String>,
+    #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
+    pub password: Option<String>,
+}
+
+impl V1UpdateProfilePayload {
+    pub fn into_update_user(self) -> UpdateUser {
+        UpdateUser {
+            name: self.name,
+            email: self.email,
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1AdminCreateUserPayload {
+    #[validate(length(min = 1))]
+    pub name: String,
+    #[validate(email)]
+    pub email: String,
+    #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
+    pub password: String,
+    #[serde(default = "default_role")]
+    #[validate(custom(function = "validate_role"))]
+    pub role: String,
+    pub avatar_id: Option<i32>,
+    #[serde(default = "bool::default")]
+    pub is_verified: bool,
+}
+
+fn default_role() -> String {
+    "user".to_string()
+}
+
+fn validate_role(role: &str) -> Result<(), ValidationError> {
+    match UserRole::from_str(role) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(ValidationError::new("invalid_role")),
+    }
+}
+
+impl V1AdminCreateUserPayload {
+    pub fn into_new_user(self) -> AdminCreateUser {
+        AdminCreateUser {
+            name: self.name,
+            email: self.email,
+            password: self.password,
+            role: UserRole::from_str(&self.role).unwrap_or(UserRole::User),
+            avatar_id: self.avatar_id,
+            is_verified: Some(self.is_verified),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct V1AdminUpdateUserPayload {
+    #[validate(length(min = 1))]
+    pub name: Option<String>,
+    #[validate(email)]
+    pub email: Option<String>,
+    pub avatar_id: Option<i32>,
+    #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
+    pub password: Option<String>,
+    pub is_verified: Option<bool>,
+    #[validate(custom(function = "validate_role"))]
+    pub role: Option<String>,
+}
+
+impl V1AdminUpdateUserPayload {
+    pub fn into_update_user(self) -> AdminUpdateUser {
+        AdminUpdateUser {
+            name: self.name,
+            email: self.email,
+            avatar_id: self.avatar_id,
+            password: self.password,
+            is_verified: self.is_verified,
+            role: self.role.and_then(|r| UserRole::from_str(&r).ok()),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct AdminChangePassword {
+    #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate, Clone)]
+pub struct V1AdminUserQueryParams {
+    pub page: Option<u64>,
+    pub email: Option<String>,
+    pub name: Option<String>,
+    #[validate(custom(function = "validate_role"))]
+    pub role: Option<String>,
+    pub status: Option<bool>,
+    pub sorts: Option<Vec<SortParam>>,
+    pub created_at_gt: Option<DateTimeWithTimeZone>,
+    pub created_at_lt: Option<DateTimeWithTimeZone>,
+    pub updated_at_gt: Option<DateTimeWithTimeZone>,
+    pub updated_at_lt: Option<DateTimeWithTimeZone>,
+}
+
+impl V1AdminUserQueryParams {
+    pub fn into_user_query(self) -> AdminUserQuery {
+        AdminUserQuery {
+            page: self.page,
+            email: self.email,
+            name: self.name,
+            role: self.role.and_then(|r| UserRole::from_str(&r).ok()),
+            status: self.status,
+            sorts: self.sorts,
+            created_at_gt: self.created_at_gt,
+            created_at_lt: self.created_at_lt,
+            updated_at_gt: self.updated_at_gt,
+            updated_at_lt: self.updated_at_lt,
+        }
+    }
+}

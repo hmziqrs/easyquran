@@ -1,0 +1,1106 @@
+use std::collections::{BTreeSet, HashMap};
+
+use aws_sdk_s3::primitives::ByteStream;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use axum_macros::debug_handler;
+use bytes::Bytes;
+use chrono::{Datelike, Utc};
+use sea_orm::{prelude::DateTimeWithTimeZone, ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use serde::Serialize;
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use uuid::Uuid;
+
+use crate::{
+    config,
+    db::sea_models::{
+        category::{self, Model as CategoryModel},
+        media::{self, Entity as Media, NewMedia},
+        media_usage,
+        post::{self, Model as PostModel},
+        user::{self, Model as UserModel},
+    },
+    error::{ErrorCode, ErrorResponse},
+    extractors::{ValidatedJson, ValidatedMultipart},
+    services::auth::AuthSession,
+    AppState,
+};
+
+#[cfg(feature = "image-optimization")]
+use crate::db::sea_models::media_variant::{Entity as MediaVariant, NewMediaVariant};
+#[cfg(feature = "image-optimization")]
+use crate::services::image_optimizer;
+use tracing::{debug, error, info, instrument, warn};
+
+#[cfg(feature = "image-optimization")]
+use super::validator::is_allowed_mime;
+use super::validator::{
+    allowlisted_extension, validate_upload, MediaUploadMetadata, V1MediaListQuery,
+    V1MediaUsageQuery,
+};
+
+#[derive(Debug, Serialize)]
+struct PostUsage {
+    usage_id: i32,
+    field_name: String,
+    created_at: DateTimeWithTimeZone,
+    post: Option<PostSummary>,
+}
+
+#[derive(Debug, Serialize)]
+struct CategoryUsage {
+    usage_id: i32,
+    field_name: String,
+    created_at: DateTimeWithTimeZone,
+    category: Option<CategorySummary>,
+}
+
+#[derive(Debug, Serialize)]
+struct UserUsage {
+    usage_id: i32,
+    field_name: String,
+    created_at: DateTimeWithTimeZone,
+    user: Option<UserSummary>,
+}
+
+#[derive(Debug, Serialize)]
+struct PostSummary {
+    id: i32,
+    title: String,
+    slug: String,
+    status: post::PostStatus,
+    featured_image_id: Option<i32>,
+}
+
+impl From<&PostModel> for PostSummary {
+    fn from(model: &PostModel) -> Self {
+        Self {
+            id: model.id,
+            title: model.title.clone(),
+            slug: model.slug.clone(),
+            status: model.status,
+            featured_image_id: model.featured_image_id,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct CategorySummary {
+    id: i32,
+    name: String,
+    slug: String,
+    cover_id: Option<i32>,
+    logo_id: Option<i32>,
+}
+
+impl From<&CategoryModel> for CategorySummary {
+    fn from(model: &CategoryModel) -> Self {
+        Self {
+            id: model.id,
+            name: model.name.clone(),
+            slug: model.slug.clone(),
+            cover_id: model.cover_id,
+            logo_id: model.logo_id,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct UserSummary {
+    id: i32,
+    name: String,
+    email: String,
+    role: user::UserRole,
+    avatar_id: Option<i32>,
+}
+
+impl From<&UserModel> for UserSummary {
+    fn from(model: &UserModel) -> Self {
+        Self {
+            id: model.id,
+            name: model.name.clone(),
+            email: model.email.clone(),
+            role: model.role,
+            avatar_id: model.avatar_id,
+        }
+    }
+}
+
+#[derive(Default)]
+struct UsageAccumulator {
+    posts: Vec<PostUsage>,
+    categories: Vec<CategoryUsage>,
+    users: Vec<UserUsage>,
+}
+
+#[derive(Debug, Serialize)]
+struct MediaUsageGroup {
+    media_id: i32,
+    media: Option<media::Model>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_url: Option<String>,
+    posts: Vec<PostUsage>,
+    categories: Vec<CategoryUsage>,
+    users: Vec<UserUsage>,
+}
+
+#[debug_handler]
+#[instrument(
+    skip(state, auth, multipart),
+    fields(
+        user_id,
+        file_size,
+        content_hash,
+        is_duplicate,
+        is_optimized,
+        variant_count,
+        result
+    )
+)]
+pub async fn create(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    mut multipart: ValidatedMultipart,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let uploader = auth.user.ok_or_else(|| {
+        error!("Unauthorized upload attempt");
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Authentication required to upload media")
+    })?;
+
+    tracing::Span::current().record("user_id", uploader.id);
+    info!(user_id = uploader.id, "Processing media upload");
+
+    let mut metadata = MediaUploadMetadata::default();
+    let mut file_bytes: Option<Bytes> = None;
+    let mut original_name: Option<String> = None;
+    let mut mime_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.map_err(|err| {
+        error!(error = %err, "Failed to read multipart field");
+        ErrorResponse::new(ErrorCode::ValidationError).with_details(err.to_string())
+    })? {
+        let field_name = field.name().unwrap_or_default().to_string();
+        if field_name == "file" {
+            original_name = field.file_name().map(|name| name.to_string());
+            mime_type = field.content_type().map(|ty| ty.to_string());
+            let bytes = field.bytes().await.map_err(|err| {
+                error!(error = %err, "Failed to read uploaded file bytes");
+                ErrorResponse::new(ErrorCode::FileUploadError)
+                    .with_message("Failed to read uploaded file")
+                    .with_details(err.to_string())
+            })?;
+
+            debug!(file_size = bytes.len(), "File bytes received");
+
+            if bytes.len() > config::body_limits::MEDIA {
+                warn!(
+                    file_size = bytes.len(),
+                    max_size = config::body_limits::MEDIA,
+                    "Upload exceeds size limit"
+                );
+                return Err(
+                    ErrorResponse::new(ErrorCode::FileTooLarge).with_message(format!(
+                        "File size exceeds the {}MiB upload limit",
+                        config::body_limits::MEDIA / 1024 / 1024
+                    )),
+                );
+            }
+
+            file_bytes = Some(bytes);
+        } else {
+            let value = field.text().await.map_err(|err| {
+                error!(error = %err, field = %field_name, "Failed to read form field");
+                ErrorResponse::new(ErrorCode::InvalidFormat)
+                    .with_message("Failed to read accompanying form field")
+                    .with_details(err.to_string())
+            })?;
+
+            metadata.apply_field(&field_name, &value).map_err(|msg| {
+                warn!(field = %field_name, error = %msg, "Invalid metadata field");
+                ErrorResponse::new(ErrorCode::InvalidValue).with_message(&msg)
+            })?;
+        }
+    }
+
+    let file_bytes = file_bytes.ok_or_else(|| {
+        error!("No file field in multipart upload");
+        ErrorResponse::new(ErrorCode::MissingRequiredField).with_message("Missing file field")
+    })?;
+
+    tracing::Span::current().record("file_size", file_bytes.len() as i64);
+
+    // M-7: enforce a MIME + extension ALLOWLIST before any bytes are hashed or
+    // persisted. Without this, an `image/svg+xml` (or any extension) is stored
+    // and served verbatim — the `image` crate only decodes jpeg/png/webp/tiff,
+    // so an SVG's raw `<script>` bytes pass straight through to S3 (stored XSS).
+    // `validate_upload` rejects SVG and any non-allowlisted content-type
+    // outright, and resolves the final (mime, extension) pair from the
+    // allowlist rather than trusting client-supplied headers.
+    let (declared_mime, declared_extension) =
+        validate_upload(mime_type.as_deref(), original_name.as_deref()).map_err(|msg| {
+            warn!(error = %msg, "Rejected upload: file type not on allowlist");
+            ErrorResponse::new(ErrorCode::InvalidFileType).with_message(&msg)
+        })?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&file_bytes);
+    let content_hash = format!("{:x}", hasher.finalize());
+
+    debug!(content_hash = %content_hash, "File hash calculated");
+    tracing::Span::current().record("content_hash", &content_hash);
+
+    if let Some(existing) = Media::find_by_hash(&state.sea_db, &content_hash).await? {
+        // M-5: only return the existing record to its owner or staff. A non-owner
+        // otherwise learns another user's object key / bucket / public URL by
+        // uploading a byte-identical file. For everyone else, fall through and
+        // create a fresh record rather than leaking the existing one.
+        if can_view_media(&uploader, existing.uploader_id) {
+            info!(
+                media_id = existing.id,
+                content_hash = %content_hash,
+                "Duplicate file detected, returning existing media"
+            );
+            tracing::Span::current().record("is_duplicate", true);
+            tracing::Span::current().record("result", "duplicate");
+            return Ok((StatusCode::OK, Json(json!(existing))));
+        } else {
+            warn!(
+                media_id = existing.id,
+                "Duplicate hash belongs to another user; creating a new record"
+            );
+        }
+    }
+
+    tracing::Span::current().record("is_duplicate", false);
+
+    // ── image-moderation (issue #9): classify the uploaded image BEFORE it is
+    // persisted to S3. The gate is a no-op unless the `image-moderation` feature
+    // is compiled in AND a provider is configured on AppState
+    // (`IMAGE_MODERATION_ENABLED=true` + `IMAGE_MODERATION_URL`). When a
+    // provider is configured and returns `safe: false`, the upload is rejected
+    // with `OperationNotAllowed` (403) before any bytes reach object storage.
+    //
+    // Fail-open policy: if the configured provider is unreachable or returns a
+    // malformed response, the upload is ALLOWED and the error is logged. This
+    // keeps the upload pipeline available during a moderation-provider outage;
+    // an operator who prefers fail-closed can move this `Err` branch to a
+    // rejection. Mirrors the graceful-degradation used for FCM (missing config
+    // skips push rather than blocking notifications). When the feature is on but
+    // no provider is configured (`state.storage.image_moderator` is None), the block is
+    // skipped entirely and uploads behave as the NoOp default.
+    #[cfg(feature = "image-moderation")]
+    if let Some(moderator) = state.storage.image_moderator.as_ref() {
+        match moderator.classify(&file_bytes, &declared_mime).await {
+            Ok(verdict) => {
+                if !verdict.safe {
+                    warn!(
+                        user_id = uploader.id,
+                        content_hash = %content_hash,
+                        scores = ?verdict.scores,
+                        "Upload rejected by image moderation"
+                    );
+                    return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                        .with_message("Image rejected by moderation")
+                        .with_details(
+                            "The uploaded image was flagged as unsafe by the moderation provider",
+                        ));
+                }
+                debug!(
+                    user_id = uploader.id,
+                    scores = ?verdict.scores,
+                    "Upload passed image moderation"
+                );
+            }
+            Err(err) => {
+                error!(
+                    user_id = uploader.id,
+                    error = %err,
+                    "Image moderation provider error; failing open (upload allowed)"
+                );
+            }
+        }
+    }
+
+    // Derive useful metadata if it was not supplied
+    if metadata.width.is_none() || metadata.height.is_none() {
+        if let Ok(dimensions) = imagesize::blob_size(&file_bytes) {
+            debug!(
+                width = dimensions.width,
+                height = dimensions.height,
+                "Image dimensions detected"
+            );
+            metadata.width = metadata
+                .width
+                .or_else(|| i32::try_from(dimensions.width).ok());
+            metadata.height = metadata
+                .height
+                .or_else(|| i32::try_from(dimensions.height).ok());
+        }
+    }
+
+    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
+    let mut extension = Some(declared_extension.clone());
+    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
+    let mut content_type = declared_mime.clone();
+    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
+    let mut final_bytes = file_bytes.clone();
+    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
+    let mut is_optimized = false;
+    #[cfg_attr(not(feature = "image-optimization"), allow(unused_mut))]
+    let mut optimized_at = None;
+
+    #[cfg(feature = "image-optimization")]
+    struct PreparedVariant {
+        object_key: String,
+        mime_type: String,
+        width: Option<i32>,
+        height: Option<i32>,
+        size: i64,
+        extension: Option<String>,
+        quality: Option<i32>,
+        variant_type: String,
+    }
+
+    #[cfg(feature = "image-optimization")]
+    let mut prepared_variants: Vec<PreparedVariant> = Vec::new();
+
+    #[cfg(feature = "image-optimization")]
+    let mut variants_to_upload: Vec<image_optimizer::OptimizedImage> = Vec::new();
+
+    #[cfg(feature = "image-optimization")]
+    if content_type.starts_with("image/") {
+        // DOS-MEDIA-OPTIMIZER: the `image` crate work (full RGBA decode +
+        // Lanczos3 resize/re-encode for up to 6 variants + a second validation
+        // decode per variant) is CPU/memory-heavy. Run it on a blocking thread
+        // so a burst of uploads cannot pin the async worker and head-of-line
+        // block every other request sharing that thread. (The /media/v1 nest is
+        // also rate-limited and OPTIMIZER_MAX_PIXELS is capped.)
+        let req_bytes = file_bytes.clone();
+        let req_metadata = metadata.clone();
+        let req_reference = metadata.reference_type;
+        let req_mime = mime_type.clone();
+        let req_ext = extension.clone();
+        let optimizer_cfg = state.storage.optimizer.clone();
+        let optimization_outcome = match tokio::task::spawn_blocking(move || {
+            let optimization_request = image_optimizer::OptimizationRequest {
+                bytes: &req_bytes,
+                metadata: &req_metadata,
+                reference: req_reference,
+                original_mime: req_mime.as_deref(),
+                original_extension: req_ext.as_deref(),
+            };
+            image_optimizer::optimize(&optimizer_cfg, optimization_request)
+        })
+        .await
+        {
+            Ok(Ok(outcome)) => outcome,
+            Ok(Err(err)) => {
+                warn!("image optimizer error: {}", err);
+                image_optimizer::OptimizationOutcome::Skipped(
+                    image_optimizer::SkipReason::DecodeFailed,
+                )
+            }
+            Err(err) => {
+                warn!(error = %err, "image optimizer blocking task failed");
+                image_optimizer::OptimizationOutcome::Skipped(
+                    image_optimizer::SkipReason::DecodeFailed,
+                )
+            }
+        };
+
+        if let image_optimizer::OptimizationOutcome::Optimized(result) = optimization_outcome {
+            // M-7 defense-in-depth: never trust a Content-Type/extension that
+            // is not on the allowlist, even if it comes from the optimizer.
+            if !is_allowed_mime(&result.original.mime_type) {
+                warn!(
+                    optimizer_mime = %result.original.mime_type,
+                    "Optimizer produced a non-allowlisted MIME; keeping validated value"
+                );
+            } else {
+                content_type = result.original.mime_type.clone();
+                extension = super::validator::allowlisted_extension(&result.original.extension);
+            }
+            final_bytes = result.original.bytes.clone();
+
+            if let Ok(width) = i32::try_from(result.original.width) {
+                metadata.width = Some(width);
+            }
+            if let Ok(height) = i32::try_from(result.original.height) {
+                metadata.height = Some(height);
+            }
+
+            variants_to_upload = result.variants;
+            is_optimized = true;
+            optimized_at = Some(Utc::now().fixed_offset());
+        }
+    }
+
+    let size_bytes = i64::try_from(final_bytes.len()).map_err(|_| {
+        ErrorResponse::new(ErrorCode::InvalidValue)
+            .with_message("File size exceeds supported range")
+    })?;
+
+    let object_key = build_object_key(extension.as_deref());
+    #[cfg(feature = "image-optimization")]
+    let base_object_key = object_key
+        .rsplit_once('.')
+        .map(|(prefix, _)| prefix.to_string())
+        .unwrap_or_else(|| object_key.clone());
+
+    let byte_stream = ByteStream::from(final_bytes.clone().to_vec());
+
+    state
+        .storage
+        .client
+        .put_object()
+        .bucket(&state.storage.config.bucket)
+        .key(&object_key)
+        .body(byte_stream)
+        .content_type(&content_type)
+        .send()
+        .await
+        .map_err(|err| {
+            ErrorResponse::new(ErrorCode::StorageError)
+                .with_message("Failed to persist media to storage")
+                .with_details(err.to_string())
+        })?;
+
+    #[cfg(feature = "image-optimization")]
+    for variant in variants_to_upload {
+        let suffix = match variant.label {
+            image_optimizer::VariantLabel::Width(width) => format!("@{}w", width),
+            image_optimizer::VariantLabel::Lqip => "@lqip".to_string(),
+            image_optimizer::VariantLabel::Original => continue,
+        };
+
+        let variant_key = format!(
+            "{}{}{}",
+            base_object_key,
+            suffix,
+            if variant.extension.is_empty() {
+                String::new()
+            } else {
+                format!(".{}", variant.extension)
+            }
+        );
+
+        let size_bytes = i64::try_from(variant.bytes.len()).map_err(|_| {
+            ErrorResponse::new(ErrorCode::InvalidValue)
+                .with_message("Variant size exceeds supported range")
+        })?;
+
+        prepared_variants.push(PreparedVariant {
+            object_key: variant_key.clone(),
+            mime_type: variant.mime_type.clone(),
+            width: i32::try_from(variant.width).ok(),
+            height: i32::try_from(variant.height).ok(),
+            size: size_bytes,
+            extension: if variant.extension.is_empty() {
+                None
+            } else {
+                Some(variant.extension.clone())
+            },
+            quality: variant.quality.map(i32::from),
+            variant_type: label_to_variant_type(&variant.label),
+        });
+
+        if let Err(err) = state
+            .storage
+            .client
+            .put_object()
+            .bucket(&state.storage.config.bucket)
+            .key(&variant_key)
+            .body(ByteStream::from(variant.bytes.to_vec()))
+            .content_type(&variant.mime_type)
+            .send()
+            .await
+        {
+            warn!(
+                "failed to upload optimized variant {}: {}",
+                variant_key, err
+            );
+        }
+    }
+
+    let new_media = NewMedia {
+        bucket: state.storage.config.bucket.clone(),
+        object_key,
+        mime_type: content_type,
+        width: metadata.width,
+        height: metadata.height,
+        size: size_bytes,
+        extension,
+        uploader_id: Some(uploader.id),
+        reference_type: metadata.reference_type,
+        content_hash: Some(content_hash),
+        is_optimized,
+        optimized_at,
+    };
+
+    let stored = Media::create(&state.sea_db, new_media).await?;
+    let file_url = crate::db::sea_models::media::url::build_public_file_url(
+        &state.storage.config.public_url,
+        stored.bucket.as_deref(),
+        &stored.object_key,
+    );
+
+    #[cfg(feature = "image-optimization")]
+    if !prepared_variants.is_empty() {
+        let records = prepared_variants
+            .into_iter()
+            .map(|variant| NewMediaVariant {
+                media_id: stored.id,
+                object_key: variant.object_key,
+                mime_type: variant.mime_type,
+                width: variant.width,
+                height: variant.height,
+                size: variant.size,
+                extension: variant.extension,
+                quality: variant.quality,
+                variant_type: variant.variant_type,
+            })
+            .collect();
+
+        MediaVariant::create_many(&state.sea_db, records).await?;
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(json!(crate::db::sea_models::media::slice::MediaPublic {
+            media: stored,
+            file_url,
+        })),
+    ))
+}
+
+// ── M-5 / M-6 ownership decision helpers ───────────────────────────────────
+//
+// The media model has no public/shared visibility flag, so access defaults to
+// owner-or-staff. Keeping these decisions as pure functions lets the security
+// policy be unit-tested without spinning up a DB / AuthSession (mirrors the
+// post_v1 `can_mutate_post` pattern).
+
+/// Whether `viewer` may read a specific media record owned by `uploader_id`
+/// (None = null-owner / system media). Owner or moderator/staff+ only.
+pub fn can_view_media(viewer: &user::Model, uploader_id: Option<i32>) -> bool {
+    uploader_id == Some(viewer.id) || viewer.is_moderator()
+}
+
+/// Whether `actor` may delete a media record owned by `uploader_id`
+/// (None = null-owner / system media).
+///
+/// M-6: null-owner (system) media may only be deleted by staff; owned media may
+/// be deleted by its owner or staff.
+pub fn can_delete_media(actor: &user::Model, uploader_id: Option<i32>) -> bool {
+    match uploader_id {
+        Some(owner_id) => owner_id == actor.id || actor.is_moderator(),
+        None => actor.is_moderator(),
+    }
+}
+
+#[debug_handler]
+pub async fn view(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    Path(media_id): Path<i32>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let viewer = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Authentication required to view media")
+    })?;
+
+    match Media::find_by_id_with_usage(&state.sea_db, media_id).await? {
+        Some(media) => {
+            // M-5: the media model has no public/shared visibility flag, so
+            // access defaults to owner-or-admin. A non-owner non-staff viewer
+            // must not read another user's object key / bucket / public URL.
+            if !can_view_media(&viewer, media.media.uploader_id) {
+                return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                    .with_message("You can only view media you uploaded"));
+            }
+
+            let file_url = crate::db::sea_models::media::url::build_public_file_url(
+                &state.storage.config.public_url,
+                media.media.bucket.as_deref(),
+                &media.media.object_key,
+            );
+
+            Ok((
+                StatusCode::OK,
+                Json(json!(
+                    crate::db::sea_models::media::slice::MediaWithUsagePublic {
+                        media: media.media,
+                        usage_count: media.usage_count,
+                        file_url,
+                    }
+                )),
+            ))
+        }
+        None => Err(ErrorResponse::new(ErrorCode::FileNotFound).with_message("Media not found")),
+    }
+}
+
+#[debug_handler]
+pub async fn find_with_query(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1MediaListQuery>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let caller = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Authentication required to list media")
+    })?;
+
+    // M-5: scope to the caller by default. Only moderator/staff+ may target a
+    // different uploader id; for everyone else `into_query` overrides any
+    // supplied `uploader_id` with their own id so they cannot enumerate other
+    // users' object keys, buckets, public URLs, or usage.
+    let query = payload.0.into_query(caller.id, caller.is_moderator());
+    let page = query.page.unwrap_or(1);
+
+    let result = Media::find_with_query(&state.sea_db, query).await?;
+    let total = result.total;
+    let data = result
+        .data
+        .into_iter()
+        .map(|item| {
+            let file_url = crate::db::sea_models::media::url::build_public_file_url(
+                &state.storage.config.public_url,
+                item.media.bucket.as_deref(),
+                &item.media.object_key,
+            );
+            crate::db::sea_models::media::slice::MediaWithUsagePublic {
+                media: item.media,
+                usage_count: item.usage_count,
+                file_url,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "data": data,
+            "total": total,
+            "per_page": Media::PER_PAGE,
+            "page": page,
+        })),
+    ))
+}
+
+#[debug_handler]
+pub async fn list_usage_details(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1MediaUsageQuery>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let caller = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Authentication required to view media usage")
+    })?;
+
+    let payload = payload.0;
+    let media_ids = payload.media_ids;
+
+    let usage_records = media_usage::Entity::find()
+        .filter(media_usage::Column::MediaId.is_in(media_ids.clone()))
+        .order_by_asc(media_usage::Column::MediaId)
+        .order_by_asc(media_usage::Column::CreatedAt)
+        .all(&state.sea_db)
+        .await
+        .map_err(ErrorResponse::from)?;
+
+    let media_records = Media::find()
+        .filter(media::Column::Id.is_in(media_ids.clone()))
+        .all(&state.sea_db)
+        .await
+        .map_err(ErrorResponse::from)?
+        .into_iter()
+        // M-5: scope to media the caller owns. A non-privileged caller must not
+        // learn the object key / bucket / public URL or usage of another user's
+        // (or null-owner system) media. Privileged (moderator/staff+) callers
+        // see everything. Out-of-scope ids are dropped from the result set
+        // rather than 403'd so the endpoint remains useful for bulk lookups.
+        .filter(|media| caller.is_moderator() || media.uploader_id == Some(caller.id))
+        .map(|media| (media.id, media))
+        .collect::<HashMap<_, _>>();
+
+    let mut post_ids = BTreeSet::new();
+    let mut category_ids = BTreeSet::new();
+    let mut user_ids = BTreeSet::new();
+
+    for usage in &usage_records {
+        match usage.entity_type {
+            media_usage::EntityType::Post => {
+                post_ids.insert(usage.entity_id);
+            }
+            media_usage::EntityType::Category => {
+                category_ids.insert(usage.entity_id);
+            }
+            media_usage::EntityType::User => {
+                user_ids.insert(usage.entity_id);
+            }
+        }
+    }
+
+    let post_map = if post_ids.is_empty() {
+        HashMap::new()
+    } else {
+        post::Entity::find()
+            .filter(post::Column::Id.is_in(post_ids.iter().copied().collect::<Vec<_>>()))
+            .all(&state.sea_db)
+            .await
+            .map_err(ErrorResponse::from)?
+            .into_iter()
+            .map(|post| (post.id, post))
+            .collect::<HashMap<_, _>>()
+    };
+
+    let category_map = if category_ids.is_empty() {
+        HashMap::new()
+    } else {
+        category::Entity::find()
+            .filter(category::Column::Id.is_in(category_ids.iter().copied().collect::<Vec<_>>()))
+            .all(&state.sea_db)
+            .await
+            .map_err(ErrorResponse::from)?
+            .into_iter()
+            .map(|category| (category.id, category))
+            .collect::<HashMap<_, _>>()
+    };
+
+    let user_map = if user_ids.is_empty() {
+        HashMap::new()
+    } else {
+        user::Entity::find()
+            .filter(user::Column::Id.is_in(user_ids.iter().copied().collect::<Vec<_>>()))
+            .all(&state.sea_db)
+            .await
+            .map_err(ErrorResponse::from)?
+            .into_iter()
+            .map(|user| (user.id, user))
+            .collect::<HashMap<_, _>>()
+    };
+
+    let mut usage_map: HashMap<i32, UsageAccumulator> = HashMap::new();
+
+    for usage in usage_records {
+        let media_usage::Model {
+            id: usage_id,
+            media_id,
+            entity_type,
+            entity_id,
+            field_name,
+            created_at,
+        } = usage;
+
+        let entry = usage_map.entry(media_id).or_default();
+
+        // M-5: skip usage for media the caller cannot see (filtered out of
+        // `media_records` above) so usage details of another user's media are
+        // never emitted.
+        if !media_records.contains_key(&media_id) {
+            continue;
+        }
+
+        match entity_type {
+            media_usage::EntityType::Post => {
+                let summary = post_map.get(&entity_id).map(PostSummary::from);
+                entry.posts.push(PostUsage {
+                    usage_id,
+                    field_name,
+                    created_at,
+                    post: summary,
+                });
+            }
+            media_usage::EntityType::Category => {
+                let summary = category_map.get(&entity_id).map(CategorySummary::from);
+                entry.categories.push(CategoryUsage {
+                    usage_id,
+                    field_name,
+                    created_at,
+                    category: summary,
+                });
+            }
+            media_usage::EntityType::User => {
+                let summary = user_map.get(&entity_id).map(UserSummary::from);
+                entry.users.push(UserUsage {
+                    usage_id,
+                    field_name,
+                    created_at,
+                    user: summary,
+                });
+            }
+        }
+    }
+
+    let mut response = Vec::new();
+    for media_id in media_ids {
+        let mut accumulator = usage_map.remove(&media_id).unwrap_or_default();
+        accumulator.posts.sort_by_key(|item| item.usage_id);
+        accumulator.categories.sort_by_key(|item| item.usage_id);
+        accumulator.users.sort_by_key(|item| item.usage_id);
+
+        let media = media_records.get(&media_id).cloned();
+        let file_url = media.as_ref().map(|media| {
+            crate::db::sea_models::media::url::build_public_file_url(
+                &state.storage.config.public_url,
+                media.bucket.as_deref(),
+                &media.object_key,
+            )
+        });
+
+        response.push(MediaUsageGroup {
+            media_id,
+            media,
+            file_url,
+            posts: accumulator.posts,
+            categories: accumulator.categories,
+            users: accumulator.users,
+        });
+    }
+
+    Ok((StatusCode::OK, Json(json!({ "data": response }))))
+}
+
+#[debug_handler]
+pub async fn delete(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    Path(media_id): Path<i32>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let uploader = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Authentication required to delete media")
+    })?;
+
+    let media = Media::find_by_id(&state.sea_db, media_id)
+        .await?
+        .ok_or_else(|| {
+            ErrorResponse::new(ErrorCode::FileNotFound).with_message("Media record not found")
+        })?;
+
+    // M-6: ownership gate. Seed/system media has `uploader_id = None`; the old
+    // `if let Some(owner_id)` check skipped the block for null-owner media,
+    // letting any authenticated author delete it. Now:
+    //   - null-owner (system) media: only moderator/staff+ may delete;
+    //   - owned media: only the owner (or a moderator/staff+) may delete.
+    if !can_delete_media(&uploader, media.uploader_id) {
+        return Err(
+            ErrorResponse::new(ErrorCode::OperationNotAllowed).with_message(
+                if media.uploader_id.is_none() {
+                    "Only staff may delete system media"
+                } else {
+                    "You can only delete media you uploaded"
+                },
+            ),
+        );
+    }
+
+    state
+        .storage
+        .client
+        .delete_object()
+        .bucket(
+            media
+                .bucket
+                .as_deref()
+                .unwrap_or(state.storage.config.bucket.as_str()),
+        )
+        .key(&media.object_key)
+        .send()
+        .await
+        .map_err(|err| {
+            ErrorResponse::new(ErrorCode::FileDeletionError)
+                .with_message("Failed to delete media from storage")
+                .with_details(err.to_string())
+        })?;
+
+    Media::delete_by_id(&state.sea_db, media_id).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "message": "Media deleted",
+            "media_id": media.id,
+        })),
+    ))
+}
+
+/// Derive the stored object-key extension from a filename/MIME hint, applying
+/// the M-7 allowlist. Any client-supplied extension that is not on the list is
+/// stripped; if the filename yields nothing usable we fall back to the MIME
+/// subtype, again only if it is allowlisted. This keeps arbitrary extensions
+/// (svg, html, exe, …) out of the S3 key.
+#[allow(dead_code)]
+fn infer_extension(filename: Option<&str>, mime_type: Option<&str>) -> Option<String> {
+    if let Some(name) = filename {
+        if let Some((_, ext)) = name.rsplit_once('.') {
+            let ext = ext.trim().trim_matches('.');
+            if let Some(allowed) = allowlisted_extension(ext) {
+                return Some(allowed);
+            }
+        }
+    }
+
+    mime_type
+        .and_then(|mt| mt.split(';').next())
+        .and_then(|mt| mt.rsplit_once('/'))
+        .map(|(_, ext)| ext.trim().to_ascii_lowercase())
+        .filter(|ext| !ext.is_empty())
+        .and_then(|ext| allowlisted_extension(&ext))
+}
+
+fn build_object_key(extension: Option<&str>) -> String {
+    let now = Utc::now();
+    let prefix = format!("media/{}/{:02}", now.year(), now.month());
+    let base = format!("{}/{}", prefix, Uuid::new_v4());
+
+    match extension {
+        Some(ext) => format!("{}.{}", base, ext),
+        None => base,
+    }
+}
+
+#[cfg(feature = "image-optimization")]
+fn label_to_variant_type(label: &image_optimizer::VariantLabel) -> String {
+    match label {
+        image_optimizer::VariantLabel::Width(width) => format!("{}w", width),
+        image_optimizer::VariantLabel::Lqip => "lqip".to_string(),
+        image_optimizer::VariantLabel::Original => "original".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    use crate::db::sea_models::user::UserRole;
+
+    /// Build a `user::Model` with the given id and role. Only `id` and `role`
+    /// drive the ownership decisions; everything else is benign defaults.
+    fn make_user(id: i32, role: UserRole) -> user::Model {
+        let now = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .unwrap()
+            .fixed_offset();
+        user::Model {
+            id,
+            name: format!("user-{id}"),
+            email: format!("user-{id}@example.com"),
+            password: None,
+            avatar_id: None,
+            is_verified: true,
+            role,
+            two_fa_enabled: false,
+            two_fa_secret: None,
+            two_fa_backup_codes: None,
+            two_fa_last_totp_counter: None,
+            google_id: None,
+            oauth_provider: None,
+            session_auth_secret: format!("test-secret-{id}"),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    // ── M-5: view / list scoping ──────────────────────────────────────────
+
+    // (a) User A cannot view user B's media.
+    #[test]
+    fn non_owner_cannot_view_others_media() {
+        let author_a = make_user(7, UserRole::Author);
+        let author_b = make_user(8, UserRole::Author);
+        // A owns media uploaded by 7; B must not view it.
+        assert!(can_view_media(&author_a, Some(7)));
+        assert!(!can_view_media(&author_b, Some(7)));
+        // Symmetric the other way.
+        assert!(!can_view_media(&author_a, Some(8)));
+    }
+
+    // Staff (moderator and above) may view anyone's media, including
+    // null-owner system media.
+    #[test]
+    fn staff_can_view_any_media() {
+        let moderator = make_user(100, UserRole::Moderator);
+        let admin = make_user(101, UserRole::Admin);
+        assert!(can_view_media(&moderator, Some(7)));
+        assert!(can_view_media(&admin, Some(7)));
+        assert!(can_view_media(&moderator, None));
+    }
+
+    // A non-owner author is also denied view of null-owner (system) media.
+    #[test]
+    fn non_owner_cannot_view_null_owner_media() {
+        let author = make_user(7, UserRole::Author);
+        assert!(!can_view_media(&author, None));
+    }
+
+    // ── M-6: delete ownership ─────────────────────────────────────────────
+
+    // (b) A non-admin cannot delete null-owner (system) media.
+    #[test]
+    fn non_admin_cannot_delete_null_owner_media() {
+        let author = make_user(7, UserRole::Author);
+        assert!(!can_delete_media(&author, None));
+    }
+
+    // (c) An admin / staff can delete null-owner media.
+    #[test]
+    fn admin_can_delete_null_owner_media() {
+        let moderator = make_user(100, UserRole::Moderator);
+        let admin = make_user(101, UserRole::Admin);
+        assert!(can_delete_media(&moderator, None));
+        assert!(can_delete_media(&admin, None));
+    }
+
+    // Owner may delete their own media; another author may not.
+    #[test]
+    fn only_owner_or_staff_deletes_owned_media() {
+        let author_a = make_user(7, UserRole::Author);
+        let author_b = make_user(8, UserRole::Author);
+        assert!(can_delete_media(&author_a, Some(7)));
+        assert!(!can_delete_media(&author_b, Some(7)));
+
+        let admin = make_user(101, UserRole::Admin);
+        assert!(can_delete_media(&admin, Some(7)));
+    }
+
+    // ── M-7: extension inference is allowlist-backed ──────────────────────
+
+    #[test]
+    fn infer_extension_keeps_png() {
+        assert_eq!(
+            infer_extension(Some("photo.png"), Some("image/png")),
+            Some("png".to_string())
+        );
+    }
+
+    // (d) SVG extension is stripped by infer_extension — never reaches the key.
+    #[test]
+    fn infer_extension_strips_svg() {
+        assert_eq!(
+            infer_extension(Some("payload.svg"), Some("image/svg+xml")),
+            None
+        );
+    }
+
+    // A junk extension falls back to the MIME subtype only when allowlisted.
+    #[test]
+    fn infer_extension_falls_back_to_allowlisted_mime() {
+        // svg+xml subtype is not allowlisted either, so still None.
+        assert_eq!(infer_extension(Some("a.dat"), Some("image/svg+xml")), None);
+        // png subtype is allowlisted.
+        assert_eq!(
+            infer_extension(Some("a.dat"), Some("image/png")),
+            Some("png".to_string())
+        );
+    }
+}

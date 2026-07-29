@@ -1,0 +1,63 @@
+use crate::utils::SortParam;
+use sea_orm::prelude::DateTimeWithTimeZone;
+use serde::{Deserialize, Serialize};
+
+use super::MediaReference;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NewMedia {
+    pub bucket: String,
+    pub object_key: String,
+    pub mime_type: String,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub size: i64,
+    pub extension: Option<String>,
+    pub uploader_id: Option<i32>,
+    pub reference_type: Option<MediaReference>,
+    pub content_hash: Option<String>,
+    pub is_optimized: bool,
+    pub optimized_at: Option<DateTimeWithTimeZone>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MediaDeletion {
+    pub id: i32,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub struct MediaQuery {
+    pub page: Option<u64>,
+    pub search: Option<String>,
+    pub sorts: Option<Vec<SortParam>>, // [{ field, order }]
+    pub reference_type: Option<MediaReference>,
+    pub uploader_id: Option<i32>,
+    pub mime_type: Option<String>,
+    pub extension: Option<String>,
+    pub created_at_gt: Option<DateTimeWithTimeZone>,
+    pub created_at_lt: Option<DateTimeWithTimeZone>,
+    pub updated_at_gt: Option<DateTimeWithTimeZone>,
+    pub updated_at_lt: Option<DateTimeWithTimeZone>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MediaWithUsage {
+    #[serde(flatten)]
+    pub media: super::model::Model,
+    pub usage_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MediaPublic {
+    #[serde(flatten)]
+    pub media: super::model::Model,
+    pub file_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MediaWithUsagePublic {
+    #[serde(flatten)]
+    pub media: super::model::Model,
+    pub usage_count: i64,
+    pub file_url: String,
+}

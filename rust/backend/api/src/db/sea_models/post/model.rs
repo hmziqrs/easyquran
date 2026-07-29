@@ -1,0 +1,94 @@
+use sea_orm::entity::prelude::*;
+use sea_orm::FromJsonQueryResult;
+use serde::{Deserialize, Serialize};
+
+pub use ruxlog_types::enums::PostStatus;
+
+/// JSON-backed list of tag IDs. Stored as JSON (TEXT under SQLite) rather than a
+/// Postgres `int[]` array so the entity is database-backend-agnostic.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]
+pub struct TagIds(pub Vec<i32>);
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "posts")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    pub title: String,
+    pub slug: String,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub content: Json,
+    pub excerpt: Option<String>,
+    pub featured_image_id: Option<i32>,
+    pub status: PostStatus,
+    pub published_at: Option<DateTimeWithTimeZone>,
+
+    pub author_id: i32,
+    pub category_id: i32,
+    pub view_count: i32,
+    pub likes_count: i32,
+    pub tag_ids: TagIds,
+
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::user::Entity",
+        from = "Column::AuthorId",
+        to = "super::super::user::Column::Id"
+    )]
+    User,
+    #[sea_orm(has_many = "super::super::post_comment::Entity")]
+    Comment,
+    #[sea_orm(has_many = "super::super::post_view::Entity")]
+    View,
+    #[sea_orm(
+        belongs_to = "super::super::category::Entity",
+        from = "Column::CategoryId",
+        to = "super::super::category::Column::Id"
+    )]
+    Category,
+    #[sea_orm(
+        belongs_to = "super::super::media::Entity",
+        from = "Column::FeaturedImageId",
+        to = "super::super::media::Column::Id"
+    )]
+    FeaturedImage,
+    // We're using a tag_ids array directly in the Post model for now
+    // but for now, just removing this relation
+}
+
+impl Related<super::super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
+    }
+}
+
+impl Related<super::super::post_comment::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Comment.def()
+    }
+}
+
+impl Related<super::super::post_view::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::View.def()
+    }
+}
+
+impl Related<super::super::category::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Category.def()
+    }
+}
+
+impl Related<super::super::media::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::FeaturedImage.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}

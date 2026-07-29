@@ -1,0 +1,44 @@
+pub mod category;
+pub mod comment_flag;
+pub mod discount_code;
+pub mod email_suppression;
+pub mod email_verification;
+pub mod forgot_password;
+pub mod invoice;
+pub mod newsletter_subscriber;
+
+pub mod app_constant;
+pub mod audit_log;
+pub mod media;
+pub mod media_usage;
+pub mod media_variant;
+pub mod pagination;
+pub mod payment;
+pub mod payout_account;
+pub mod payout_ledger;
+pub mod plan;
+pub mod post;
+pub mod post_access;
+pub mod post_comment;
+pub mod post_like;
+pub mod post_purchase;
+pub mod post_revision;
+pub mod post_series;
+pub mod post_series_post;
+pub mod post_view;
+pub mod route_status;
+pub mod scheduled_post;
+pub mod seed_run;
+pub mod subscription;
+pub mod tag;
+pub mod user;
+pub mod user_ban;
+pub mod user_session;
+
+// --- Entities added for the issues batch (2026-07-27) ---
+pub mod device;
+pub mod notification;
+pub mod passkey_credential;
+pub mod user_oauth_identity;
+
+pub use crate::utils::color as color_utils;

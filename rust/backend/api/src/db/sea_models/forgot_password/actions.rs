@@ -1,0 +1,183 @@
+use crate::{
+    db::sea_models::user,
+    error::{DbResult, ErrorCode, ErrorResponse},
+};
+use chrono::Utc;
+use ruxlog_types::PaginatedList;
+use sea_orm::{
+    entity::prelude::*, IntoActiveModel, JoinType, Order, QueryOrder, QuerySelect, Set,
+    TransactionTrait,
+};
+
+use super::*;
+
+const ADMIN_PER_PAGE: u64 = 20;
+
+impl Entity {
+    pub async fn create(conn: &DbConn, new_forgot_password: NewForgotPassword) -> DbResult<Model> {
+        let now = Utc::now().fixed_offset();
+        let forgot_password = ActiveModel {
+            user_id: Set(new_forgot_password.user_id),
+            code_hash: Set(new_forgot_password.code_hash),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        };
+
+        match forgot_password.insert(conn).await {
+            Ok(model) => Ok(model),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub async fn find_query(
+        conn: &DbConn,
+        user_id: Option<i32>,
+        email: Option<&str>,
+        code_hash: Option<&str>,
+    ) -> DbResult<Model> {
+        if user_id.is_none() && email.is_none() && code_hash.is_none() {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("Either user_id, email or code must be provided"));
+        }
+        let mut query = Self::find();
+
+        if let Some(user_id) = user_id {
+            query = query.filter(Column::UserId.eq(user_id));
+        }
+        if let Some(code_hash) = code_hash {
+            query = query.filter(Column::CodeHash.eq(code_hash));
+        }
+        if let Some(email) = email {
+            query = query
+                .join(JoinType::InnerJoin, Relation::User.def())
+                .filter(user::Column::Email.eq(email));
+        }
+        match query.one(conn).await {
+            Ok(Some(result)) => Ok(result),
+            Ok(None) => Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("The provided verification code is invalid")),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub async fn reset(conn: &DbConn, user_id: i32, password: String) -> DbResult<u64> {
+        let trx = conn.begin().await?;
+
+        let delete_query = Self::delete_many()
+            .filter(Column::UserId.eq(user_id))
+            .exec(&trx)
+            .await;
+
+        match delete_query {
+            Ok(_) => match user::Entity::change_password(&trx, user_id, password).await {
+                Ok(_) => {
+                    trx.commit().await?;
+                }
+                Err(err) => {
+                    trx.rollback().await?;
+                    return Err(err);
+                }
+            },
+            Err(err) => {
+                trx.rollback().await?;
+                return Err(err.into());
+            }
+        };
+        Ok(1)
+    }
+
+    /// Delete any stored forgot-password code for `user_id` WITHOUT touching the
+    /// password — used by the `verify` step to make the emailed code single-use
+    /// (audit F#9). After this returns, the emailed code can no longer be used
+    /// to reset; the caller issues a fresh single-use `reset_token` instead.
+    pub async fn consume_code(conn: &DbConn, user_id: i32) -> DbResult<u64> {
+        Self::delete_many()
+            .filter(Column::UserId.eq(user_id))
+            .exec(conn)
+            .await
+            .map(|r| r.rows_affected)
+            .map_err(Into::into)
+    }
+
+    /// Upsert the (already-hashed) code for a user. The caller generates the
+    /// plaintext code, emails it, and passes `hash_code(secret, plaintext)` here.
+    pub async fn regenerate(conn: &DbConn, user_id: i32, code_hash: String) -> DbResult<Model> {
+        let now = Utc::now().fixed_offset();
+
+        let existing = Self::find_query(conn, Some(user_id), None, None).await;
+
+        if let Ok(existing_model) = existing {
+            let mut active_model: ActiveModel = existing_model.into_active_model();
+            active_model.code_hash = Set(code_hash);
+            active_model.updated_at = Set(now);
+
+            match active_model.update(conn).await {
+                Ok(model) => Ok(model),
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            let new_forgot_password = NewForgotPassword { user_id, code_hash };
+            Self::create(conn, new_forgot_password).await
+        }
+    }
+
+    pub async fn admin_query(
+        conn: &DbConn,
+        query: &AdminForgotPasswordQuery,
+    ) -> DbResult<PaginatedList<Model>> {
+        let mut db_query = Self::find();
+
+        if let Some(user_id) = query.user_id {
+            db_query = db_query.filter(Column::UserId.eq(user_id));
+        }
+
+        if let Some(code_hash) = &query.code_hash {
+            db_query = db_query.filter(Column::CodeHash.eq(code_hash));
+        }
+
+        if let Some(created_at) = query.created_at {
+            db_query = db_query.filter(Column::CreatedAt.gte(created_at));
+        }
+
+        if let Some(updated_at) = query.updated_at {
+            db_query = db_query.filter(Column::UpdatedAt.gte(updated_at));
+        }
+
+        if let (Some(sort_by), Some(sort_order)) = (&query.sort_by, &query.sort_order) {
+            for field in sort_by {
+                let order = if sort_order == "asc" {
+                    Order::Asc
+                } else {
+                    Order::Desc
+                };
+
+                match field.as_str() {
+                    "id" => db_query = db_query.order_by(Column::Id, order),
+                    "user_id" => db_query = db_query.order_by(Column::UserId, order),
+                    "code_hash" => db_query = db_query.order_by(Column::CodeHash, order),
+                    "created_at" => db_query = db_query.order_by(Column::CreatedAt, order),
+                    "updated_at" => db_query = db_query.order_by(Column::UpdatedAt, order),
+                    _ => {}
+                }
+            }
+        } else {
+            db_query = db_query.order_by(Column::Id, Order::Desc);
+        }
+
+        let page = match query.page_no {
+            Some(p) if p > 0 => p as u64,
+            _ => 1,
+        };
+
+        let paginator = db_query.paginate(conn, ADMIN_PER_PAGE);
+
+        match paginator.num_items().await {
+            Ok(total) => match paginator.fetch_page(page - 1).await {
+                Ok(results) => Ok(PaginatedList::new(results, total, page, ADMIN_PER_PAGE)),
+                Err(err) => Err(err.into()),
+            },
+            Err(err) => Err(err.into()),
+        }
+    }
+}
