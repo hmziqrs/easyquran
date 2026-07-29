@@ -18,10 +18,18 @@ export const SITE = {
   github: "https://github.com/hmziqrs",
   tagline: "the Quran, made easy to read",
   /** one-line value prop used in the footer (distinct from the hero tagline). */
-  footerBlurb: "A quiet Qur'an reader. Free, ad-free, and stored on your device.",
+  footerBlurb: "A free Qur'an reader — growing into hadith, audio, deeds and native apps.",
   /** inbox shown on the contact page. */
   email: "salam@easyquran.app",
   correctionsEmail: "corrections@easyquran.app",
+  /** X (Twitter) support handle, shown on the contact page + footer. */
+  x: "https://x.com/hmziqrs",
+  xHandle: "@hmziqrs",
+  /** project maker + owner, credited in the footer and on the about page. */
+  maker: "oxlabs",
+  makerUrl: "https://oxlabs.dev",
+  owner: "hmziq.rs",
+  ownerUrl: "https://hmziq.rs",
 } as const;
 
 export type ThemeMode = "dark" | "light";

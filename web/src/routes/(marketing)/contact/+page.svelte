@@ -1,151 +1,93 @@
+<!--
+  Contact — no form, by design. Two ways to reach us: email and X. Echoes the
+  home page's feature-card pattern (icon chip + title + body) and fills the
+  same 1180px container frame.
+-->
 <script lang="ts">
-  import { Button, Card, Eyebrow, Icon, Seo } from "$lib/components";
-  import { Input } from "$lib/components/ui/input";
-  import { Textarea } from "$lib/components/ui/textarea";
-  import { Label } from "$lib/components/ui/label";
-  import { cn } from "$lib/utils";
-  import { CONTACT_TOPICS } from "$lib/data/content";
+  import { Container, Eyebrow, Icon, Seo } from "$lib/components";
   import { SITE } from "$lib/config/site";
-
-  // Local-only form state (no backend, per spec 8F).
-  let name = $state("");
-  let email = $state("");
-  let topic = $state<string | null>(null);
-  let message = $state("");
-  let sent = $state(false);
-
-  function send() {
-    sent = true;
-  }
-
-  function reset() {
-    name = "";
-    email = "";
-    topic = null;
-    message = "";
-    sent = false;
-  }
+  import { externalLinkAttrs } from "$lib/utils";
 </script>
 
 <Seo path="/contact" schemaSubtype="ContactPage" />
 
-<div
-  class="mx-auto grid w-full max-w-[1000px] gap-14 px-7 pt-[72px] pb-24 md:grid-cols-2 items-start"
->
-  <!-- Left: intro + contact details -->
-  <div class="flex flex-col gap-6">
-    <div class="flex flex-col gap-3">
-      <Eyebrow class="text-accent">Contact</Eyebrow>
-      <h1 class="text-2xl">Say salam.</h1>
-      <p class="text-[18px] leading-[1.65] text-fg-2">
-        Bug reports, script corrections, or a feature you keep wishing for — all welcome.
-      </p>
-    </div>
-
-    <div class="flex flex-col gap-3.5">
-      <div class="flex flex-col gap-[3px]">
-        <span class="text-xs text-fg-3">Email</span>
-        <a
-          class="text-base text-fg transition-colors hover:text-accent"
-          href="mailto:{SITE.email}"
-        >
-          {SITE.email}
-        </a>
-      </div>
-      <div class="flex flex-col gap-[3px]">
-        <span class="text-xs text-fg-3">Text corrections</span>
-        <a
-          class="text-base text-fg transition-colors hover:text-accent"
-          href="mailto:{SITE.correctionsEmail}"
-        >
-          {SITE.correctionsEmail}
-        </a>
-      </div>
-      <div class="flex flex-col gap-[3px]">
-        <span class="text-xs text-fg-3">Typical reply time</span>
-        <span class="text-base text-fg">Two or three days</span>
-      </div>
-    </div>
+<Container class="flex max-w-[1180px] flex-col gap-12 pt-[72px] pb-24">
+  <!-- intro -->
+  <div class="flex w-full flex-col gap-3 text-center">
+    <Eyebrow class="text-accent">Contact</Eyebrow>
+    <h1 class="text-[40px] leading-[1.1] tracking-[-0.03em] sm:text-[46px]">Say salam.</h1>
+    <p class="mx-auto max-w-[60ch] text-[18px] leading-[1.65] text-fg-2">
+      Bug reports, script corrections, or a feature you keep wishing for &mdash; pick whichever
+      channel suits you. We read everything that comes in.
+    </p>
   </div>
 
-  <!-- Right: form card -->
-  <Card class="rounded-xl p-[30px]">
-    {#if sent}
-      <div class="flex flex-col gap-2.5 px-1 py-6 animate-fade-up">
-        <div
-          class="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-soft text-accent"
-        >
-          <Icon name="check" size={17} />
-        </div>
-        <div class="text-lg font-semibold">Message sent</div>
-        <p class="text-base leading-[1.65] text-fg-2">
-          Jazakallahu khayran — we'll reply to you shortly.
-        </p>
-        <button
-          type="button"
-          onclick={reset}
-          class="mt-1.5 w-fit text-[14.5px] text-accent underline underline-offset-2 transition-opacity hover:opacity-80"
-        >
-          Send another
-        </button>
+  <!-- channels -->
+  <div class="grid w-full gap-4 md:grid-cols-2">
+    <!-- Email -->
+    <a
+      href="mailto:{SITE.email}"
+      class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
+    >
+      <div class="flex size-9 items-center justify-center rounded-[10px] bg-accent-soft text-accent">
+        <Icon name="mail" size={17} />
       </div>
-    {:else}
-      <form class="flex flex-col gap-4" onsubmit={(e) => { e.preventDefault(); send(); }}>
-        <div class="flex flex-col gap-[7px]">
-          <Label for="contact-name" class="text-fg-2">Your name</Label>
-          <Input
-            id="contact-name"
-            bind:value={name}
-            placeholder="Aisha"
-            class="h-auto rounded-lg border-line bg-bg-3 px-3.5 py-3 text-[15px] text-fg placeholder:text-fg-4 md:text-[15px]"
-          />
-        </div>
+      <div class="flex flex-col gap-1.5">
+        <div class="text-[18px] font-semibold">Email</div>
+        <p class="text-[15px] leading-[1.6] text-fg-2">
+          Best for anything detailed &mdash; bug reports, corrections, or a feature idea with context.
+        </p>
+      </div>
+      <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
+        {SITE.email}
+        <Icon
+          name="arrow-right"
+          size={15}
+          class="transition-transform group-hover:translate-x-0.5"
+        />
+      </div>
+    </a>
 
-        <div class="flex flex-col gap-[7px]">
-          <Label for="contact-email" class="text-fg-2">Email</Label>
-          <Input
-            id="contact-email"
-            type="email"
-            bind:value={email}
-            placeholder="you@example.com"
-            class="h-auto rounded-lg border-line bg-bg-3 px-3.5 py-3 text-[15px] text-fg placeholder:text-fg-4 md:text-[15px]"
-          />
-        </div>
+    <!-- X (Twitter) -->
+    <a
+      href={SITE.x}
+      {...externalLinkAttrs(SITE.x, { me: true })}
+      class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
+    >
+      <div class="flex size-9 items-center justify-center rounded-[10px] bg-fg text-bg">
+        <Icon name="x-brand" size={15} />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <div class="text-[18px] font-semibold">X (Twitter)</div>
+        <p class="text-[15px] leading-[1.6] text-fg-2">
+          Quick questions, updates and support &mdash; send a message or drop a reply.
+        </p>
+      </div>
+      <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
+        {SITE.xHandle}
+        <Icon
+          name="arrow-right"
+          size={15}
+          class="transition-transform group-hover:translate-x-0.5"
+        />
+      </div>
+    </a>
+  </div>
 
-        <div class="flex flex-col gap-[7px]">
-          <span class="text-sm text-fg-2">What's this about?</span>
-          <div role="group" aria-label="Topic" class="flex flex-wrap gap-1.5">
-            {#each CONTACT_TOPICS as t (t)}
-              <button
-                type="button"
-                onclick={() => (topic = topic === t ? null : t)}
-                aria-pressed={topic === t}
-                class={cn(
-                  "rounded-full border px-3.5 py-2 text-sm transition-colors",
-                  topic === t
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-line text-fg-2 hover:bg-bg-3",
-                )}
-              >
-                {t}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-[7px]">
-          <Label for="contact-message" class="text-fg-2">Message</Label>
-          <Textarea
-            id="contact-message"
-            bind:value={message}
-            rows={5}
-            placeholder="Tell us as much as you like…"
-            class="resize-y field-sizing-fixed rounded-lg border-line bg-bg-3 px-3.5 py-3 text-[15px] leading-[1.6] text-fg placeholder:text-fg-4 md:text-[15px]"
-          ></Textarea>
-        </div>
-
-        <Button type="submit" variant="accent" size="lg" class="w-full">Send message</Button>
-      </form>
-    {/if}
-  </Card>
-</div>
+  <!-- meta -->
+  <div
+    class="flex w-full flex-col gap-4 rounded-xl border border-line bg-bg-2 px-[30px] py-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left"
+  >
+    <div class="flex flex-col gap-[3px]">
+      <span class="text-xs text-fg-3">Text corrections</span>
+      <a
+        class="text-[15px] text-fg transition-colors hover:text-accent"
+        href="mailto:{SITE.correctionsEmail}">{SITE.correctionsEmail}</a
+      >
+    </div>
+    <div class="flex flex-col gap-[3px] sm:items-end">
+      <span class="text-xs text-fg-3">Typical reply time</span>
+      <span class="text-[15px] text-fg">Two or three days</span>
+    </div>
+  </div>
+</Container>

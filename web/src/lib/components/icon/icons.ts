@@ -29,7 +29,9 @@ export type IconName =
   | "minus"
   | "check"
   | "note"
-  | "arrow-right";
+  | "arrow-right"
+  | "mail"
+  | "x-brand";
 
 export const ICONS: Record<IconName, IconDef> = {
   sun: {
@@ -95,5 +97,14 @@ export const ICONS: Record<IconName, IconDef> = {
   "arrow-right": {
     viewBox: "0 0 256 256",
     d: "M221.66 133.66l-72 72a8 8 0 0 1-11.32-11.32L196.69 136H40a8 8 0 0 1 0-16h156.69l-58.35-58.34a8 8 0 0 1 11.32-11.32l72 72a8 8 0 0 1 0 11.32",
+  },
+  mail: {
+    viewBox: "0 0 256 256",
+    d: "M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM98.71,128,40,181.81V74.19Zm11.84,10.85,12,11.05a8,8,0,0,0,10.82,0l12-11.05,58,53.15H52.57ZM157.29,128,216,74.18V181.82Z",
+  },
+  "x-brand": {
+    // X (formerly Twitter) mark — Simple Icons, CC0, 24×24 grid.
+    viewBox: "0 0 24 24",
+    d: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z",
   },
 };
