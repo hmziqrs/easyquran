@@ -1,12 +1,14 @@
 <!--
   Contact — no form, by design. Two ways to reach us: email and X. Echoes the
   home page's feature-card pattern (icon chip + title + body) and fills the
-  same 1180px container frame.
+  same 1180px container frame. The email + X come from the owner profile
+  fetched server-side in +layout.server.ts (see $lib/server/owner.ts).
 -->
 <script lang="ts">
   import { Container, Eyebrow, Icon, Seo } from "$lib/components";
-  import { SITE } from "$lib/config/site";
   import { externalLinkAttrs } from "$lib/utils";
+
+  let { data } = $props();
 </script>
 
 <Seo path="/contact" schemaSubtype="ContactPage" />
@@ -26,7 +28,7 @@
   <div class="grid w-full gap-4 md:grid-cols-2">
     <!-- Email -->
     <a
-      href="mailto:{SITE.email}"
+      href="mailto:{data.owner.email}"
       class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
     >
       <div class="flex size-9 items-center justify-center rounded-[10px] bg-accent-soft text-accent">
@@ -39,7 +41,7 @@
         </p>
       </div>
       <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
-        {SITE.email}
+        {data.owner.email}
         <Icon
           name="arrow-right"
           size={15}
@@ -50,8 +52,8 @@
 
     <!-- X (Twitter) -->
     <a
-      href={SITE.x}
-      {...externalLinkAttrs(SITE.x, { me: true })}
+      href={data.owner.x}
+      {...externalLinkAttrs(data.owner.x, { me: true })}
       class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
     >
       <div class="flex size-9 items-center justify-center rounded-[10px] bg-fg text-bg">
@@ -64,7 +66,7 @@
         </p>
       </div>
       <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
-        {SITE.xHandle}
+        {data.owner.xHandle}
         <Icon
           name="arrow-right"
           size={15}
@@ -75,19 +77,8 @@
   </div>
 
   <!-- meta -->
-  <div
-    class="flex w-full flex-col gap-4 rounded-xl border border-line bg-bg-2 px-[30px] py-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left"
-  >
-    <div class="flex flex-col gap-[3px]">
-      <span class="text-xs text-fg-3">Text corrections</span>
-      <a
-        class="text-[15px] text-fg transition-colors hover:text-accent"
-        href="mailto:{SITE.correctionsEmail}">{SITE.correctionsEmail}</a
-      >
-    </div>
-    <div class="flex flex-col gap-[3px] sm:items-end">
-      <span class="text-xs text-fg-3">Typical reply time</span>
-      <span class="text-[15px] text-fg">Two or three days</span>
-    </div>
+  <div class="flex w-full flex-col gap-[3px] rounded-xl border border-line bg-bg-2 px-[30px] py-5 text-center">
+    <span class="text-xs text-fg-3">Typical reply time</span>
+    <span class="text-[15px] text-fg">Two or three days</span>
   </div>
 </Container>

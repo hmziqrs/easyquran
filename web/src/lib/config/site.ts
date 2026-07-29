@@ -19,12 +19,8 @@ export const SITE = {
   tagline: "the Quran, made easy to read",
   /** one-line value prop used in the footer (distinct from the hero tagline). */
   footerBlurb: "A free Qur'an reader — growing into hadith, audio, deeds and native apps.",
-  /** inbox shown on the contact page. */
-  email: "salam@easyquran.app",
-  correctionsEmail: "corrections@easyquran.app",
-  /** X (Twitter) support handle, shown on the contact page + footer. */
-  x: "https://x.com/hmziqrs",
-  xHandle: "@hmziqrs",
+  // Owner/maker contact (email + X) is sourced server-side from
+  // hmziq.rs/me.json — see $lib/server/owner.ts — so it isn't hardcoded here.
   /** project maker + owner, credited in the footer and on the about page. */
   maker: "oxlabs",
   makerUrl: "https://oxlabs.dev",
