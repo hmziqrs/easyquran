@@ -14,16 +14,16 @@
      6. base              — reset, typography, selection, scrollbar
 
    Palette follows the EasyQuran design comp: a calm near-black / paper-white
-   base with a teal brand accent and a warm gold pop. Outfit carries the UI;
+   base with a teal brand accent and a warm gold pop. Figtree carries the UI;
    Amiri carries the Arabic / Quranic text.
    ════════════════════════════════════════════════════════════════════════ */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 /* Self-hosted type — bundled same-origin by Vite, no render-blocking external
-   request. Outfit (variable) covers the full UI weight range; Geist Mono is
-   the mono accent face; Amiri is the Arabic / Quranic face. */
-@import "@fontsource-variable/outfit";
+   request. Figtree (variable) is the UI face (per the shadcn preset), Geist
+   Mono is the mono accent face; Amiri is the Arabic / Quranic face. */
+@import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/amiri";
 
@@ -33,8 +33,8 @@
 /* ─── 2. Static tokens ─────────────────────────────────────────────────── */
 @theme {
   --font-sans:
-    "Outfit Variable", "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    "Figtree Variable", "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   /* Arabic/Quranic text — used via `font-arabic` on mushaf content */
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
 
@@ -48,11 +48,11 @@
   --text-3xl: 3.75rem; /* 60 — display */
   --text-4xl: 5rem; /* 80 — hero display */
 
-  /* radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 16px;
+  /* radii — shadcn preset base 0.45rem, derived via the shadcn formula */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
   /* extra breakpoint for the wide container */
   --breakpoint-3xl: 1440px;
@@ -123,26 +123,26 @@
 }
 
 /* ─── 4. Token values — DARK (default) ──────────────────────────────────
-   Neutral near-black base (accent-agnostic — only --accent / --accent-soft
-   carry the brand colour), teal brand accent, warm gold pop. */
+   Neutral (Tailwind "neutral") grayscale base from the shadcn preset —
+   accent-agnostic; only --accent / --accent-soft carry the brand colour. */
 :root,
 [data-theme="dark"] {
-  --bg: #0b0c0e;
-  --bg-1: #131417; /* panel — slightly raised surface */
-  --bg-2: #18191c; /* soft — inset wells */
-  --bg-3: #1d1e22; /* raise — hover / selected */
-  --bg-elev: #08090a; /* nav, footer — a touch deeper than bg */
+  --bg: oklch(0.145 0 0); /* neutral-950 */
+  --bg-1: oklch(0.205 0 0); /* neutral-900 — panel / card */
+  --bg-2: oklch(0.269 0 0); /* neutral-800 — inset well */
+  --bg-3: oklch(0.298 0 0); /* raise — hover / selected */
+  --bg-elev: oklch(0.115 0 0); /* nav, footer — deeper than bg */
 
-  --line: rgba(255, 255, 255, 0.06);
-  --line-2: rgba(255, 255, 255, 0.1);
-  --line-3: rgba(255, 255, 255, 0.16);
+  --line: oklch(1 0 0 / 0.09);
+  --line-2: oklch(1 0 0 / 0.14);
+  --line-3: oklch(1 0 0 / 0.22);
 
-  --fg: #ecf1ef;
-  --fg-2: #a5b2ae; /* secondary */
-  --fg-3: #7e8b87; /* tertiary, meta */
-  --fg-4: #515b58; /* quaternary, labels */
+  --fg: oklch(0.985 0 0); /* neutral-50 */
+  --fg-2: oklch(0.835 0 0); /* secondary */
+  --fg-3: oklch(0.708 0 0); /* neutral-400 — meta */
+  --fg-4: oklch(0.556 0 0); /* neutral-500 — labels */
 
-  --accent: #3fbfa6; /* teal */
+  --accent: #3fbfa6; /* teal — user accent (default emerald) */
   --accent-soft: rgba(63, 191, 166, 0.13);
   --accent-line: rgba(63, 191, 166, 0.32);
   --accent-fg: #06120f;
@@ -152,27 +152,30 @@
 
   --ok: #7fd1b8;
 
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.58 0.22 27);
+
   color-scheme: dark;
 }
 
 /* ─── 4b. Token values — LIGHT ────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg: #ffffff;
-  --bg-1: #fbfbfc; /* panel */
-  --bg-2: #f6f7f8; /* soft */
-  --bg-3: #ecedf0; /* raise */
-  --bg-elev: #ffffff;
+  --bg: oklch(1 0 0); /* white */
+  --bg-1: oklch(1 0 0); /* card */
+  --bg-2: oklch(0.97 0 0); /* neutral-200 — inset well */
+  --bg-3: oklch(0.94 0 0); /* raise — hover / selected */
+  --bg-elev: oklch(0.985 0 0); /* nav, footer */
 
-  --line: rgba(16, 20, 24, 0.07);
-  --line-2: rgba(16, 20, 24, 0.11);
-  --line-3: rgba(16, 20, 24, 0.18);
+  --line: oklch(0.922 0 0); /* neutral-200 */
+  --line-2: oklch(0.89 0 0);
+  --line-3: oklch(0.82 0 0);
 
-  --fg: #101418;
-  --fg-2: #4c565c;
-  --fg-3: #6e777c;
-  --fg-4: #8a9298;
+  --fg: oklch(0.145 0 0); /* neutral-950 */
+  --fg-2: oklch(0.34 0 0); /* secondary */
+  --fg-3: oklch(0.46 0 0); /* meta — held darker than the preset for WCAG AA */
+  --fg-4: oklch(0.62 0 0); /* labels */
 
-  --accent: #0e7c6b; /* teal */
+  --accent: #0e7c6b; /* teal — user accent (default emerald) */
   --accent-soft: rgba(14, 124, 107, 0.1);
   --accent-line: rgba(14, 124, 107, 0.28);
   --accent-fg: #ffffff;
@@ -181,6 +184,9 @@
   --pop-soft: rgba(185, 138, 75, 0.1);
 
   --ok: #2f8f6e;
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.97 0.01 17);
 
   color-scheme: light;
 }
@@ -255,15 +261,10 @@
   /* registry `accent` maps onto our brand accent (--accent is already the
      token value); it only needs its foreground pair. */
   --accent-foreground: var(--accent-fg);
-  --destructive: #ef4444;
-  --destructive-foreground: var(--fg);
   --border: var(--line);
   --input: var(--line-2);
   --ring: var(--accent);
-  --radius: 0.625rem;
-}
-[data-theme="light"] {
-  --destructive: #dc2626;
+  --radius: 0.45rem;
 }
 
 /* ─── 6. Base ─────────────────────────────────────────────────────────── */
