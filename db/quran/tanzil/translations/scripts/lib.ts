@@ -18,6 +18,8 @@ export const ROOT = path.resolve(__dirname, "..");
 /** repo root (translations/ ↑ tanzil ↑ quran ↑ db ↑ root) */
 export const REPO_ROOT = path.resolve(ROOT, "..", "..", "..", "..");
 export const SQLDIR = path.join(ROOT, "sql");
+/** derived SQLite artifacts — one `<id>.sqlite` per translation (see sql-to-sqlite.ts) */
+export const SQLITEDIR = path.join(ROOT, "sqlite");
 export const INDEX = path.join(ROOT, "index.json");
 export const INDEX_MIN = path.join(ROOT, "index.min.json");
 export const PAGE_CACHE = path.join(ROOT, ".trans_page.html");
@@ -304,5 +306,12 @@ export async function downloadSql(id: string, force: boolean): Promise<"ok" | "c
 export function listSqlFiles(): string[] {
   return readdirSync(SQLDIR)
     .filter((f) => f.endsWith(".sql"))
+    .sort();
+}
+
+/** Every built sqlite file (basename, e.g. "en.sahih.sqlite"). */
+export function listSqliteFiles(): string[] {
+  return readdirSync(SQLITEDIR)
+    .filter((f) => f.endsWith(".sqlite"))
     .sort();
 }

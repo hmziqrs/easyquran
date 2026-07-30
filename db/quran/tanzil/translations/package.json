@@ -9,6 +9,8 @@
     "verify": "tsx scripts/verify.ts",
     "catalog": "tsx scripts/catalog.ts",
     "upload": "tsx scripts/upload.ts",
+    "upload:sqlite": "tsx scripts/upload-sqlite.ts",
+    "build:sqlite": "tsx scripts/sql-to-sqlite.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

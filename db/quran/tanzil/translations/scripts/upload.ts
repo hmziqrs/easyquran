@@ -108,6 +108,11 @@ async function main(): Promise<number> {
     region: "auto",
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    // @aws-sdk/client-s3 v3.729+ adds a CRC32 checksum to every PutObject by
+    // default, which Cloudflare R2 rejects (BadDigest / signature mismatch).
+    // Send checksums only when the operation requires it — safe for R2 and S3.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 
   log("→ listing existing objects (to skip already-uploaded) ...");
