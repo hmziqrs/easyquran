@@ -28,9 +28,7 @@
   let { text, n, vKey }: { text: string; n: number; vKey: string } = $props();
 
   const tafsir = $derived(tafsirFor(vKey));
-  const highlighted = $derived(reader.rowHighlight(vKey));
   const bookmarked = $derived(reader.isBookmarked(vKey));
-  const playing = $derived(reader.isPlayingVerse(vKey));
   const noteOpen = $derived(reader.openNote === vKey);
   const hasNote = $derived(reader.getNote(vKey).length > 0);
 
@@ -72,10 +70,7 @@
 
 <div
   id="ayah-{n}"
-  class={cn(
-    "group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors sm:px-9",
-    highlighted && "bg-accent-soft",
-  )}
+  class="group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors sm:px-9"
 >
   <!-- Top row: verse ref (left) + actions (right). Sits ABOVE the Arabic so it
        can never overlap RTL text. Always visible on touch; hover/focus on desktop. -->
@@ -85,26 +80,6 @@
     <span class="font-mono text-[11px] tracking-wide text-fg-3">{vKey}</span>
     <div class="flex items-center gap-0.5">
       <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger>
-            {#snippet child({ props })}
-              <button
-                {...props}
-                type="button"
-                onclick={() => reader.playVerse(vKey)}
-                aria-label="Play this verse"
-                class={cn(
-                  "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                  playing ? "text-accent" : "text-fg-3 hover:text-fg",
-                )}
-              >
-                <Icon name="play" size={13} />
-              </button>
-            {/snippet}
-          </TooltipTrigger>
-          <TooltipContent>Play verse</TooltipContent>
-        </Tooltip>
-
         <Tooltip>
           <TooltipTrigger>
             {#snippet child({ props })}

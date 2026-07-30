@@ -31,7 +31,6 @@
     surahPath,
     type Surah,
   } from "$lib/data/quran";
-  import { Button } from "$lib/components/ui/button";
   import { Icon } from "$lib/components/icon";
   import VerseRow from "./VerseRow.svelte";
   import { cn } from "$lib/utils";
@@ -177,11 +176,6 @@
             <span>Reading</span>
           </button>
         </div>
-
-        <Button variant="accent" size="md" onclick={() => reader.playSurah(surah.num)}>
-          <Icon name="play" size={12} />
-          Listen
-        </Button>
       </div>
     </div>
 

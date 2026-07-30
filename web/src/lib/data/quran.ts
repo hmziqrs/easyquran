@@ -11,7 +11,7 @@
 
    The component-facing loaded-surah value (LoadedSurah, aliased as Surah) keeps
    a `verses: string[]` so existing synchronous helpers (verseText, copyVerse,
-   bookmarkList.text, durationFor) work without a Worker round-trip.
+   bookmarkList.text) work without a Worker round-trip.
    ════════════════════════════════════════════════════════════════════════ */
 
 import { CATALOG } from "$lib/data/quran-meta";

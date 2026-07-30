@@ -4,21 +4,15 @@
    A single Svelte 5 runes class, SSR-safe (guards every DOM/localStorage
    access behind `browser`). Persists the durable slice (current surah, font
    size, bookmarks, notes, last-read) to localStorage under its own key,
-   separate from appearance prefs. The player is simulated — recitation audio
-   in the full app would drive the same progress/playing surface.
+   separate from appearance prefs. Recitation audio is not implemented yet —
+   the listening UI was removed; when real audio arrives it will be built
+   against the live API, not a simulated surface.
    ════════════════════════════════════════════════════════════════════════ */
 
 import { browser } from "$app/environment";
-import {
-  SURAHS,
-  surahByNum,
-  verseKey,
-  parseKey,
-  type VerseKey,
-} from "$lib/data/quran";
+import { SURAHS, surahByNum, parseKey, type VerseKey } from "$lib/data/quran";
 
 const STORAGE_KEY = "easyquran.reader";
-const RECITER = "Mishary Rashid Alafasy";
 
 export type BrowseMode = "surah" | "verse" | "juz" | "page";
 export type ReaderMode = "verse" | "reading";
@@ -36,11 +30,6 @@ interface ReaderState extends Persisted {
   query: string;
   browse: BrowseMode;
   openNote: VerseKey | null;
-  playing: VerseKey | null;
-  progress: number; // 0..100
-  paused: boolean;
-  /** duration (s) of whatever is playing — derived from verse length. */
-  total: number;
 }
 
 const DEFAULTS: ReaderState = {
@@ -53,10 +42,6 @@ const DEFAULTS: ReaderState = {
   query: "",
   browse: "surah",
   openNote: null,
-  playing: null,
-  progress: 0,
-  paused: false,
-  total: 10,
 };
 
 function load(): Partial<Persisted> {
@@ -68,18 +53,14 @@ function load(): Partial<Persisted> {
   }
 }
 
-const fmtTime = (n: number): string =>
-  `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, "0")}`;
-
 class ReaderStore {
   // SSR renders from DEFAULTS; saved state is pulled in after mount via
   // hydrate() so the prerendered HTML and the first client render agree.
   #s = $state<ReaderState>({ ...DEFAULTS });
   #hydrated = false;
-  #timer: ReturnType<typeof setInterval> | null = null;
-  /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text /
-   *  player duration working without a Worker round-trip (doc §6.3). Seeded from
-   *  prerendered page.data; Phase 2 also refreshes it from the sqlite-wasm Worker. */
+  /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text
+   *  working without a Worker round-trip (doc §6.3). Seeded from prerendered
+   *  page.data and refreshed from the sqlite-wasm Worker. */
   #versesBySurah = new Map<number, string[]>();
   /** Monotonic guard: bumped on every navigation so a stale Worker response for
    *  a previously-open surah can never clobber the currently-selected one. */
@@ -266,15 +247,6 @@ class ReaderStore {
     return `${surahByNum(lr.num).name} ${lr.num}:${lr.n}`;
   }
 
-  /** Is this verse the one currently playing? */
-  isPlayingVerse(key: VerseKey): boolean {
-    return this.#s.playing === key;
-  }
-  /** Soft highlight on the playing verse row. */
-  rowHighlight(key: VerseKey): boolean {
-    return this.#s.playing === key;
-  }
-
   // ── synchronous verse cache (doc §6.3) ───────────────────────────────
   /** Synchronous verse text for a surah from the open-surah cache (or "" if the
    *  surah hasn't been seeded yet this session). */
@@ -307,65 +279,10 @@ class ReaderStore {
     }
   }
 
-  // ── simulated player ─────────────────────────────────────────────────
+  // ── verse text (for copy/share) ──────────────────────────────────────
   private verseText(key: VerseKey): string {
     const { num, n } = parseKey(key);
     return this.versesFor(num)[n - 1] ?? "";
-  }
-  private durationFor(key: VerseKey): number {
-    return Math.max(6, Math.round(this.verseText(key).length / 6));
-  }
-
-  private tick(key: VerseKey, total: number, resume = false): void {
-    this.stopTimer();
-    this.#s.total = total;
-    if (resume) {
-      this.#s.paused = false;
-    } else {
-      this.#s.playing = key;
-      this.#s.progress = 0;
-      this.#s.paused = false;
-    }
-    this.#timer = setInterval(() => {
-      const next = this.#s.progress + 100 / (total * 10);
-      if (next >= 100) {
-        this.#s.progress = 100;
-        this.#s.paused = true;
-        this.stopTimer();
-      } else {
-        this.#s.progress = next;
-      }
-    }, 100);
-  }
-  private stopTimer(): void {
-    if (this.#timer !== null) {
-      clearInterval(this.#timer);
-      this.#timer = null;
-    }
-  }
-
-  playVerse(key: VerseKey): void {
-    this.tick(key, this.durationFor(key));
-    const { num, n } = parseKey(key);
-    this.#s.lastRead = { num, n };
-    this.persist();
-  }
-  playSurah(num: number): void {
-    this.tick(verseKey(num, 1), 40);
-  }
-  togglePlay(): void {
-    const key = this.#s.playing;
-    if (!key) return;
-    this.stopTimer();
-    if (this.#s.progress >= 100) this.tick(key, this.#s.total);
-    else if (this.#s.paused) this.tick(key, this.#s.total, true);
-    else this.#s.paused = true;
-  }
-  stop(): void {
-    this.stopTimer();
-    this.#s.playing = null;
-    this.#s.progress = 0;
-    this.#s.paused = false;
   }
 
   // ── verse actions: copy & share ──────────────────────────────────────
@@ -401,31 +318,6 @@ class ReaderStore {
     }
   }
 
-  get isPlaying(): boolean {
-    return this.#s.playing !== null;
-  }
-  get isPaused(): boolean {
-    return this.#s.paused;
-  }
-  get atEnd(): boolean {
-    return this.#s.progress >= 100;
-  }
-  get nowPlayingRef(): string {
-    const key = this.#s.playing;
-    if (!key) return "";
-    const { num, n } = parseKey(key);
-    return `${surahByNum(num).name} ${num}:${n}`;
-  }
-  get reciter(): string {
-    return RECITER;
-  }
-  get progressPct(): string {
-    return `${this.#s.progress}%`;
-  }
-  get timeLabel(): string {
-    const secs = Math.round((this.#s.total * this.#s.progress) / 100);
-    return `${fmtTime(secs)} / ${fmtTime(this.#s.total)}`;
-  }
   /** Total surah count (for the sidebar list source). */
   get surahCount(): number {
     return SURAHS.length;

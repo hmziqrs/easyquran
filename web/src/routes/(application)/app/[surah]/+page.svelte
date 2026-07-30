@@ -18,7 +18,6 @@
   import AppSidebar from "../_reader/Sidebar.svelte";
   import SurahReader from "../_reader/SurahReader.svelte";
   import Results from "../_reader/Results.svelte";
-  import Player from "../_reader/Player.svelte";
 
   // Verses arrive from the SSG server load (prerendered Uthmani text for SEO +
   // first paint, no backend needed). The URL param stays the source of truth for
@@ -105,5 +104,3 @@
     </div>
   </SidebarInset>
 </SidebarProvider>
-
-<Player />
