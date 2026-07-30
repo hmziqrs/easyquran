@@ -13,6 +13,7 @@ pub mod error;
 pub mod extractors;
 pub mod middlewares;
 pub mod modules;
+pub mod quran;
 pub mod router;
 pub mod services;
 pub mod state;

@@ -29,5 +29,5 @@ pub use abuse::{check, dedup_nx, release_dedup, AbuseLimiterConfig, BlockScope, 
 pub use error::GateError;
 pub use hooks::{LimiterHooks, NoHooks};
 pub use ip::{ClientIpSource, FnIpSource, IpSource};
-pub use layer::{BlockInfo, RateLimitLayer, RateLimitLayerBuilder};
+pub use layer::{BlockInfo, PathKey, RateLimitLayer, RateLimitLayerBuilder};
 pub use store::{BucketSnapshot, InMemoryStore, RateLimitStore};
