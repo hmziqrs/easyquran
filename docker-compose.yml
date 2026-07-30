@@ -1,29 +1,24 @@
-# EasyQuran app stack — web + api only.
+# EasyQuran app stack — web + api only. ROOT-LEVEL compose for Dokploy.
 #
-# Traefik is EXTERNAL to this repo (a shared/global proxy on the VPS). This file
-# only defines the two app containers + the Traefik LABELS your external proxy
-# auto-discovers via its docker provider. There is no Traefik service here, no
-# proxy config file, no ACME — that's all the external proxy's job.
+# Why root: Dokploy writes the .env (from your Environment tab) at the code root
+# and sources it relative to the compose file. With the compose in a subdirectory
+# those paths differ and the deploy fails with ".../code/deploy/.env: No such
+# file or directory". At the root they agree. Run locally with `docker compose
+# up` from the repo root.
+#
+# Build context is now the repo root (context: .), so the Dockerfiles under
+# deploy/ and the build-time data files under db/ resolve correctly.
 #
 # Routing (from the labels), all on DOMAIN:
 #   Host(DOMAIN) && PathPrefix(`/api`) → api:8888   (strip /api, priority 100)
 #   Host(DOMAIN)                        → web:8080
-#
-# Usage (from repo root):
-#   cp deploy/.env.example deploy/.env && $EDITOR deploy/.env
-#   docker compose -f deploy/docker-compose.yml up -d --build
-# (compose auto-loads deploy/.env for ${...} interpolation + the api env_file.)
-#
-# Project/group name. Every container gets `com.docker.compose.project=<this>`,
-# so Docker Desktop / Portainer / `docker compose ps` show web + api grouped as
-# one stack. Defaults to "easyquran" even if .env is missing.
 
 name: ${PROJECT:-easyquran}
 
 services:
   web:
     build:
-      context: ..
+      context: .
       dockerfile: deploy/Dockerfile.web
       args:
         PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
@@ -46,7 +41,7 @@ services:
 
   api:
     build:
-      context: ..
+      context: .
       dockerfile: deploy/Dockerfile.api
       args:
         VERSION: ${VERSION:-dev}
@@ -86,8 +81,8 @@ services:
     restart: unless-stopped
 
 networks:
-  # EXTERNAL — owned by your global Traefik. Both containers attach here so the
-  # proxy can reach them; the labels above tell it how to route.
+  # EXTERNAL — Dokploy's network (dokploy-network). Both containers attach here
+  # so Dokploy's Traefik can reach them; the labels above tell it how to route.
   proxy:
     name: ${PROXY_NETWORK}
     external: true

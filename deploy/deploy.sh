@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-"$(dirname "$SCRIPT_DIR")"}"
 DEPLOY_TAG_GLOB="${DEPLOY_TAG_GLOB:-v[0-9]*}"
 STATE_FILE="$REPO_DIR/.deploy-state/last-tag"
-COMPOSE="docker compose -f $REPO_DIR/deploy/docker-compose.yml"
+COMPOSE="docker compose -f $REPO_DIR/docker-compose.yml"
 
 : "${GH_REPO:?GH_REPO must be set (owner/repo)}"
 : "${GH_TOKEN:?GH_TOKEN must be set (fine-grained PAT, Contents:Read)}"

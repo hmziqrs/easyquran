@@ -12,7 +12,10 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 ## Files
 
 - `Dockerfile.web` / `Dockerfile.api` — the two images.
-- `docker-compose.yml` — web + api + Traefik labels, on the external proxy network.
+- `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
+  external proxy network. The canonical compose; used by both the Dokploy flow
+  and the VPS cron flow below. It lives at the root because Dokploy writes/sources
+  the `.env` relative to the compose file.
 - `deploy.sh` — optional cron auto-deploy on a new `vX.Y.Z` tag.
 - `.env.example` — config (copy to `.env`).
 
@@ -20,10 +23,10 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 
 ```bash
 git clone <repo> /opt/easyquran && cd /opt/easyquran
-cp deploy/.env.example deploy/.env
-$EDITOR deploy/.env          # DOMAIN, COOKIE_KEY (openssl rand -hex 32), PROXY_NETWORK…
+cp deploy/.env.example .env
+$EDITOR .env                 # DOMAIN, COOKIE_KEY (openssl rand -hex 32), PROXY_NETWORK…
 # your external Traefik must already own the PROXY_NETWORK (e.g. `web`).
-docker compose -f deploy/docker-compose.yml up -d --build
+docker compose up -d --build
 ```
 
 First build is slow (Rust compiles once; cached after). Verify:
@@ -37,11 +40,15 @@ with the defaults already in `.env.example` (`PROXY_NETWORK=dokploy-network`,
 against your Dokploy instance if you customized Traefik).
 
 1. In Dokploy, create a **Docker Compose** application pointing at this repo.
-2. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels in
+2. Set the compose path to the **root `docker-compose.yml`** (not `deploy/…`).
+   Dokploy writes the `.env` (from your Environment tab) and sources it relative
+   to the compose file, so it must be at the repo root or the deploy fails with
+   `…/code/deploy/.env: No such file or directory`.
+3. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels in
    `docker-compose.yml` already define the routing (Host + `/api` PathPrefix +
    stripPrefix). Dokploy runs `docker compose up`, attaches both services to
    `dokploy-network`, and its Traefik picks the labels up.
-3. Prefer Dokploy's UI to manage routing instead? Delete the `traefik.*` labels
+4. Prefer Dokploy's UI to manage routing instead? Delete the `traefik.*` labels
    and configure domains there: web → `easyquran.fyi`, api → `easyquran.fyi`
    with path `/api`.
 
@@ -56,8 +63,7 @@ git tag v1.0.0 && git push origin v1.0.0
 
 To auto-deploy, set up the cron (see `deploy.sh` header). It polls for a newer
 `vX.Y.Z` tag, rebuilds web + api, and recreates only those two containers. A
-failed build leaves the live site running. Without cron: `git pull && docker
-compose -f deploy/docker-compose.yml up -d --build`.
+failed build leaves the live site running. Without cron: `git pull && docker compose up -d --build`.
 
 ## The dual API URL
 
