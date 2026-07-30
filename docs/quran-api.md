@@ -24,8 +24,7 @@
    the bytes in the runtime image and the bytes at a published S3 key are
    provably the same file (§8.1).
 9. Every artifact this project publishes — API responses, the S3 downloads, and
-   the web reader's offline database — carries byte-identical ayah text. **No
-   component strips, adds, or relocates the basmala at any stage** (§3.3).
+   the web reader's offline database — carries byte-identical ayah text (§3.3).
 10. This plan does not define the web reader or browser storage.
 
 ---
@@ -154,18 +153,14 @@ not distinguish this, which is harmless because the enum is descriptive only.
 27:30 contains the basmala mid-ayah, byte-identical to 1:1, and in simple-clean
 is the only non-first ayah that does.
 
-`surah.bismillah` is **descriptive metadata only**. It does not cause a response
-transformation, and it is not an instruction to transform anything downstream: it
-exists so a client can explain or style what the source already contains, not so
-a client can rewrite it.
-
-**Nothing strips the basmala — not the build, not the API, not the renderer.**
-The source encodes the correct state per surah, and that state is meaningful:
+The source encodes the correct state per surah and that state is meaningful:
 surah 9's omission is intentional, surah 1's basmala genuinely is ayah 1, and the
-95:1/97:1 shadda spelling is a real orthographic distinction. Every strip-or-add
-step is an opportunity to get one of those wrong, and none of them is needed. A
-reader displays ayah 1 as stored; the basmala appears because it is part of the
-verse, which is what the source says.
+95:1/97:1 spelling is a real orthographic distinction. `surah.bismillah` reports
+which case a surah is, for styling or display purposes. It is descriptive
+metadata and never an instruction to alter text.
+
+Ayah text is stored and served exactly as the source has it, everywhere, at every
+stage.
 
 #### Why normalization is a correctness issue, not a style rule
 

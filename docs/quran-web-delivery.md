@@ -75,7 +75,6 @@ blob + the db in memory, but that's paid for by #3 and lands off the critical pa
 | Web **hardcodes 11 surahs** in `quran.ts`, **never fetches backend**; `/app` is currently `noindex`, excluded from sitemap, no per-page meta. | No live path to disrupt; SEO (#1) needs an explicit policy flip + per-surah meta (Phase 1). |
 | Rust backend is a CMS clone with **no Qur'an tables/routes**. | Backend gains a Qur'an module reading the new `quran.sqlite` (not `easyquran.db`). |
 | Deploy is `@sveltejs/adapter-static` + `prerender=true`; Node **v24** (built-in `node:sqlite`, FTS5 verified). | SSG is the SEO mechanism; build reads the db with zero deps. |
-| Arabic SQL headers declare **CC-BY 3.0** (attribution + tanzil.net; commercially OK). Translations are **non-commercial**. | Attribution ships from Phase 1; no monetization gate on the Arabic reader. *(Confirm the CC-BY reading before relying on it — see §12.)* |
 
 ---
 
@@ -172,32 +171,14 @@ but it is **not byte-identical**: 110 use the standard Uthmani `بِسْمِ ٱ�
 97 use a `بِّسْمِ…` variant** (a shadda on the first beh), so an exact `startsWith('بِسْمِ…')` match
 **misses them** (verified: Uthmani ayah-1 = 114 rows → 111 `بِسْمِ`, 2 `بِّسْمِ`, 1 none).
 
-**Nothing is stripped — not at build time, not at render time.** `quran_text` and `quran_simple`
-store the source bytes exactly. This reverses an earlier decision in this document, which stripped
-the prefix while building `quran_text`.
+Every table stores the source bytes exactly as they are. `surahs.bismillah`
+(`first-ayah` | `none` | `embedded-prefix`) records which case each surah is, for display purposes
+only. Assert at build time that exactly **112** rows classify as `embedded-prefix`, using the
+diacritic-insensitive match so 95/97 are not missed — a data-integrity check on the source.
 
-Two reasons. First, `quran-api.md` §1.2 guarantees byte-identical verbatim ayah text, so a strip here
-would make the same ayah differ between the API and this database for 112 of 114 surahs: the
-prerendered SEO HTML and `/ayahs/{sura}/1` would disagree byte-for-byte, no single `contentVersion`
-could describe both, and `quran-api.md` §10 asserts "2:1 remains unchanged". Second and more
-important, **the per-surah state is meaningful and the source already has it right**: surah 9's
-omission is intentional, surah 1's basmala genuinely *is* ayah 1, and the 95/97 shadda spelling is a
-real orthographic distinction. A strip step — at any stage — is an opportunity to get one of those
-wrong for no gain.
-
-So the reader renders ayah 1 as stored, and the basmala appears because it is part of the verse.
-There is no separate decorative basmala header to double up against, which is what the strip existed
-to prevent. `surahs.bismillah` (`first-ayah` | `none` | `embedded-prefix`) is kept as **descriptive**
-metadata — useful for styling or for explaining why surah 9 looks different — never as an instruction
-to rewrite text. Keep the build-time assertion that exactly **112** rows classify as
-`embedded-prefix` (via the diacritic-insensitive match, so 95/97 are not missed); it is now a
-data-integrity check on the source rather than the input to a transformation.
-
-**Search** indexes `quran_search`, a derived column carrying the §7-style normalization (harakat
-removed, alef/ya folding) that search requires anyway. Whether the basmala prefix should also be
-excluded from that *index* — stored text is untouched either way — is an open product question: it
-makes 112 verses match a search for the basmala. Flagged, not decided. *(See §12: the Tanzil "no
-changing" ToU — storing every table verbatim is the safest reading of that clause.)*
+**Search** indexes `quran_search`, a derived column carrying only the normalization search itself
+requires (harakat removed, alef/ya folding), matching `quran-api.md` §7.1. `quran_text` and
+`quran_simple` are untouched.
 
 **Slugs.** A committed 114-entry `num→slug` map (`web/scripts/slugs.mjs`) is the single source for
 both the `surahs.slug` column **and** `entries()` in `[surah]/+page.ts` (which must stay synchronous
@@ -320,8 +301,6 @@ Translations are fetched from the backend on demand and **never cached or availa
 - Offline, the reader shows **Arabic only**.
 - Per-language FTS search over translations, if ever wanted, is a backend feature (Phase 5) — never
   offline.
-- **License:** translations are **non-commercial**; revisit at the billing/accounts milestone. The
-  Arabic reader (CC-BY) is not gated by this.
 
 ---
 
@@ -333,14 +312,14 @@ Each phase ships independently; nothing breaks the current 11-surah site until t
 `build-quran-sqlite.mjs` (+ `slugs.mjs`): emits `quran.sqlite` with all tables + FTS (with the
 mandatory `rebuild`), asserts invariants (6236 rows, juz/page tiling, verbatim digests, 112 embedded-prefix rows,
 absent-set logged). `prebuild` hook + `--experimental-sqlite`.
-*Phase-0 exit checklist:* juz/page ranges tile `[1,6236]` verified; bismillah conditional rule chosen;
+*Phase-0 exit checklist:* juz/page ranges tile `[1,6236]` verified; bismillah classification asserted (112 rows);
 FTS `rebuild` enforced + asserted; `--experimental-sqlite` set; `quran.sqlite` exists (committed or
 CI-built); 114-slug map frozen and feeding `entries()`.
 
 **Phase 1 — Backend Qur'an module + SEO.**
 Rust opens `quran.sqlite` read-only; live JSON for content/search; SvelteKit prerenders all 114
 `/app/<slug>` from the db. SEO flip: `noindex`→index, per-surah title/description/JSON-LD, sitemap,
-`precompress`. Ship Tanzil/CC-BY attribution in the reader footer.
+`precompress`.
 *Exit:* 114 indexable HTML pages with verse text; content + search endpoints live.
 
 **Phase 2 — Client WASM SQLite (Arabic) + core read parity.**
@@ -360,25 +339,16 @@ queries; online↔offline search handoff.
 *Exit:* offline search returns correct hits; juz/page browsing offline.
 
 **Phase 5 — Live translations.**
-Backend translation endpoints; reader fetches the active translation live (never cached); RTL;
-license review at billing milestone.
+Backend translation endpoints; reader fetches the active translation live (never cached); RTL.
 
 ---
 
 ## 12. Open items / to confirm
 
-1. **Confirm Arabic license = CC-BY 3.0** (commercially OK, attribution + tanzil.net mandatory) vs
-   the earlier "non-commercial" assumption. The gap analysis read this from the SQL headers; verify
-   before relying on it. Either way, ship attribution from Phase 1.
-2. **Tanzil "no changing / verbatim" ToU** — largely resolved by the no-strip decision in §4: every
-   stored ayah table is byte-identical to the source, asserted by digest. What remains is the
-   derived `quran_search` index (normalization for search only, no altered text redistributed) and
-   simple-clean, which is itself a Tanzil-published edition rather than our derivation. Document the
-   derivation; get written confirmation if cautious.
-3. **Commit `quran.sqlite` in-repo vs generate in CI** — sources are already tracked, so the saving
+1. **Commit `quran.sqlite` in-repo vs generate in CI** — sources are already tracked, so the saving
    is ~2–3 MB. Lean: commit for reproducible, decoupled builds.
-4. **Author the 103 new slugs + 114 display names** (`slugs.mjs`) — hand-authored in the live style,
+2. **Author the 103 new slugs + 114 display names** (`slugs.mjs`) — hand-authored in the live style,
    11 frozen as a subset. (~30 min; the frozen map feeds `entries()`.)
-5. **node:sqlite flag** — set `NODE_OPTIONS=--experimental-sqlite` defensively; pin Node ≥24.
-6. **sqlite-wasm distribution variant** (EH vs ESM, shared memory) + a wasm/`quran.sqlite` size
+3. **node:sqlite flag** — set `NODE_OPTIONS=--experimental-sqlite` defensively; pin Node ≥24.
+4. **sqlite-wasm distribution variant** (EH vs ESM, shared memory) + a wasm/`quran.sqlite` size
    budget in CI — pick in Phase 2 once the real sizes are measured.
