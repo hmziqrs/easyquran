@@ -11,11 +11,21 @@
 
 import { browser } from "$app/environment";
 import { SURAHS, surahByNum, parseKey, type VerseKey } from "$lib/data/quran";
+import type { Ayah } from "$lib/data/quran-types";
 
 const STORAGE_KEY = "easyquran.reader";
 
-export type BrowseMode = "surah" | "verse" | "juz" | "page";
+export type BrowseMode = "surah" | "ayah" | "juz" | "page";
 export type ReaderMode = "verse" | "reading";
+
+/** A juz or page selected for range rendering. */
+export interface RangeView {
+  kind: "juz" | "page";
+  index: number;
+  label: string;
+  startGlobal: number;
+  endGlobal: number;
+}
 
 interface Persisted {
   current: number;
@@ -58,6 +68,11 @@ class ReaderStore {
   // hydrate() so the prerendered HTML and the first client render agree.
   #s = $state<ReaderState>({ ...DEFAULTS });
   #hydrated = false;
+  /** An open juz/page range view (rendered instead of a surah when set). The
+   *  ayahs come from the sqlite-wasm Worker; loading is async. */
+  #range = $state<{ view: RangeView; ayahs: Ayah[]; loading: boolean; error: boolean } | null>(null);
+  /** Monotonic guard for openRange: a newer selection invalidates an in-flight load. */
+  #rangeToken = 0;
   /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text
    *  working without a Worker round-trip (doc §6.3). Seeded from prerendered
    *  page.data and refreshed from the sqlite-wasm Worker. */
@@ -105,6 +120,7 @@ class ReaderStore {
     this.#navToken++; // invalidate any in-flight Worker refresh for the prior surah
     this.#s.query = "";
     this.#s.openNote = null;
+    this.#range = null; // navigating to a surah closes any open juz/page range
     this.persist();
   }
 
@@ -116,8 +132,47 @@ class ReaderStore {
     this.#s.browse = "surah";
     this.#s.openNote = null;
     this.#s.lastRead = { num, n };
+    this.#range = null;
     this.persist();
     if (browser) window.scrollTo(0, 0);
+  }
+
+  // ── juz / page range view ─────────────────────────────────────────────
+  /** Open a juz or page range view. Ayahs load async from the offline Worker. */
+  async openRange(view: RangeView): Promise<void> {
+    this.#s.query = "";
+    // Token guard (not object identity: Svelte $state deep-proxies the stored
+    // object, so this.#range.view === view would always be false).
+    const token = ++this.#rangeToken;
+    this.#range = { view, ayahs: [], loading: true, error: false };
+    try {
+      const { quranWorker } = await import("$lib/quran/worker-client");
+      await quranWorker.whenReady; // resolves when both DBs are deserialized
+      const ayahs = await quranWorker.readRange(view.startGlobal, view.endGlobal);
+      if (token !== this.#rangeToken) return; // a newer range was opened since
+      this.#range = { view, ayahs, loading: false, error: false };
+    } catch {
+      if (token !== this.#rangeToken) return;
+      this.#range = { view, ayahs: [], loading: false, error: true };
+    }
+  }
+  closeRange(): void {
+    this.#range = null;
+  }
+  get rangeView(): RangeView | null {
+    return this.#range?.view ?? null;
+  }
+  get hasRange(): boolean {
+    return this.#range !== null;
+  }
+  get rangeAyahs(): Ayah[] {
+    return this.#range?.ayahs ?? [];
+  }
+  get rangeLoading(): boolean {
+    return this.#range?.loading ?? false;
+  }
+  get rangeError(): boolean {
+    return this.#range?.error ?? false;
   }
 
   // ── search ───────────────────────────────────────────────────────────
@@ -141,8 +196,8 @@ class ReaderStore {
   get browseSurah(): boolean {
     return this.#s.browse === "surah";
   }
-  get browseVerse(): boolean {
-    return this.#s.browse === "verse";
+  get browseAyah(): boolean {
+    return this.#s.browse === "ayah";
   }
   get browseJuz(): boolean {
     return this.#s.browse === "juz";

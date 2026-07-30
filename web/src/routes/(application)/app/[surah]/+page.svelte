@@ -12,12 +12,13 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { page } from "$app/state";
-  import { Seo } from "$lib/components";
+  import { Seo, Container } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
   import { SidebarProvider, SidebarInset, SidebarTrigger } from "$lib/components/ui/sidebar";
   import AppSidebar from "../_reader/Sidebar.svelte";
   import SurahReader from "../_reader/SurahReader.svelte";
   import Results from "../_reader/Results.svelte";
+  import RangeReader from "../_reader/RangeReader.svelte";
 
   // Verses arrive from the SSG server load (prerendered Uthmani text for SEO +
   // first paint, no backend needed). The URL param stays the source of truth for
@@ -58,7 +59,7 @@
   // Chapter structured-data node. No .md/.txt variants for app routes.
   const seoTitle = $derived(`Surah ${surah.num}, ${surah.name} — Arabic Text & Reading · EasyQuran`);
   const seoDescription = $derived(
-    `Read Surah ${surah.name} (${surah.arabic}) — ${surah.ayahCount} verses, ${surah.place === "meccan" ? "Meccan" : "Medinan"}, in the Uthmani script. Free, fast, and works offline.`,
+    `Read Surah ${surah.name} (${surah.arabic}) — ${surah.ayahCount} ayahs, ${surah.place === "meccan" ? "Meccan" : "Medinan"}, in the Uthmani script. Free, fast, and works offline.`,
   );
   const chapterLd = $derived([
     {
@@ -85,22 +86,26 @@
   <AppSidebar />
 
   <SidebarInset>
-    <!-- top bar: sidebar toggle + current surah. Sticky beneath the global nav. -->
-    <header
-      class="sticky top-[60px] z-10 flex items-center gap-3 border-b border-line bg-bg/80 px-5 py-2.5 backdrop-blur-xl sm:px-7"
-    >
-      <SidebarTrigger />
-      <span class="text-sm font-medium text-fg-2">{surah.num}. {surah.name}</span>
-      <span dir="rtl" class="ml-auto font-arabic text-base text-fg-3">{surah.arabic}</span>
+    <!-- top bar: sidebar toggle + current surah. Sticky beneath the global nav.
+         The bar stretches full-width; its CONTENT is centered to the page width. -->
+    <header class="sticky top-[60px] z-10 border-b border-line bg-bg/80 py-2.5 backdrop-blur-xl">
+      <Container class="max-w-[1180px] flex items-center gap-3">
+        <SidebarTrigger />
+        <span class="text-sm font-medium text-fg-2">{surah.num}. {surah.name}</span>
+        <span dir="rtl" class="ml-auto font-arabic text-base text-fg-3">{surah.arabic}</span>
+      </Container>
     </header>
 
-    <!-- centered reading column — owns the full width -->
-    <div class="mx-auto w-full max-w-[860px] px-5 py-6 sm:px-7">
-      {#if reader.hasQuery}
+    <!-- reading column — same width + padding as the marketing pages (Container).
+         Range view (juz/page) takes priority over search over the surah view. -->
+    <Container class="max-w-[1180px] py-6">
+      {#if reader.hasRange}
+        <RangeReader />
+      {:else if reader.hasQuery}
         <Results />
       {:else}
         <SurahReader {surah} />
       {/if}
-    </div>
+    </Container>
   </SidebarInset>
 </SidebarProvider>

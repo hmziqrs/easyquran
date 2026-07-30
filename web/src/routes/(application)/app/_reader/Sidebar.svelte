@@ -32,11 +32,24 @@
     useSidebar,
   } from "$lib/components/ui/sidebar";
 
-  const BROWSE = ["surah", "verse", "juz", "page"] as const;
+  const BROWSE = ["surah", "ayah", "juz", "page"] as const;
   const current = $derived(surahBySlug(page.params.surah as string));
   const sidebar = useSidebar();
   /** The juz or page range list for the active browse mode. */
   const ranges = $derived(reader.browseJuz ? NAVIGATION.juz : NAVIGATION.page);
+
+  /** Open a juz/page range view in the reader (rendered by RangeReader). */
+  function openRange(rg: (typeof NAVIGATION)[keyof typeof NAVIGATION][number]): void {
+    const kind = reader.browseJuz ? "juz" : "page";
+    reader.openRange({
+      kind,
+      index: rg.index,
+      label: `${kind === "juz" ? "Juz" : "Page"} ${rg.index}`,
+      startGlobal: rg.startGlobal,
+      endGlobal: rg.endGlobal,
+    });
+    onItemClick();
+  }
 
   let inputEl: HTMLInputElement | null = $state(null);
 
@@ -73,7 +86,7 @@
         value={reader.query}
         {oninput}
         placeholder="Search surah, number or Arabic…"
-        aria-label="Search surahs and verses"
+        aria-label="Search surahs and ayahs"
         class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none focus-visible:border-0 focus-visible:ring-0 placeholder:text-fg-3"
       />
       {#if reader.hasQuery}
@@ -141,7 +154,7 @@
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-    {:else if reader.browseVerse}
+    {:else if reader.browseAyah}
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu class="gap-1">
@@ -183,12 +196,7 @@
               <SidebarMenuItem>
                 <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
                   {#snippet child({ props })}
-                    <a
-                      {...props}
-                      href={surahPath(num, n)}
-                      data-sveltekit-preload-data="hover"
-                      onclick={onItemClick}
-                    >
+                    <button {...props} type="button" onclick={() => openRange(rg)}>
                       <span
                         class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
                       >
@@ -197,7 +205,7 @@
                       <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
                         {surahByNum(num).name} {num}:{n}
                       </span>
-                    </a>
+                    </button>
                   {/snippet}
                 </SidebarMenuButton>
               </SidebarMenuItem>

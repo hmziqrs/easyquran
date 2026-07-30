@@ -95,3 +95,12 @@ export interface ArtifactSpec {
   sha256: string;
   downloadUrl: string;
 }
+
+/** One ayah with its verbatim Uthmani text (the unit a range view renders). */
+export interface Ayah {
+  key: VerseKey;
+  surah: number;
+  ayah: number;
+  globalIndex: number;
+  text: string;
+}

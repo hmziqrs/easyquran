@@ -142,7 +142,8 @@ function compile(): Compiled {
     const els = scanEls(xml, tag);
     const starts = els.map((e) => ({
       index: Number(e.index),
-      startGlobal: startGlobalOf(suras[Number(e.sura) - 1]!) + Number(e.aya),
+      // global index of (sura, aya) = start(sura, 0-based) + aya = startGlobalOf(sura) + aya - 1
+      startGlobal: startGlobalOf(suras[Number(e.sura) - 1]!) + Number(e.aya) - 1,
       first: `${Number(e.sura)}:${Number(e.aya)}`,
     }));
     return starts.map((s, i) => {

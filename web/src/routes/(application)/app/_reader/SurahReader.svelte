@@ -157,8 +157,8 @@
             )}
           >
             <Icon name="rows" size={13} />
-            <span class="hidden sm:inline">Verse-by-Verse</span>
-            <span class="sm:hidden">Verses</span>
+            <span class="hidden sm:inline">Ayah-by-Ayah</span>
+            <span class="sm:hidden">Ayahs</span>
           </button>
           <button
             type="button"

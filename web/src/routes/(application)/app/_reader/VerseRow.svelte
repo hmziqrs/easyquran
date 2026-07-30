@@ -107,7 +107,7 @@
                 {...props}
                 type="button"
                 onclick={onCopy}
-                aria-label="Copy verse"
+                aria-label="Copy ayah"
                 class={cn(
                   "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
                   copied ? "text-accent" : "text-fg-3 hover:text-fg",

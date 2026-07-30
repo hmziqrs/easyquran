@@ -11,6 +11,7 @@
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import type { SearchOpts, SearchResponse } from "./search/normalize";
+import type { Ayah } from "$lib/data/quran-types";
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -95,6 +96,11 @@ export const quranWorker = {
   /** Read one surah's verbatim Uthmani verses from the local DB. */
   readSurah(num: number): Promise<string[]> {
     return request<string[]>((id) => ({ id, type: "readSurah", num }));
+  },
+
+  /** Read an inclusive global-index range of ayahs (juz / page). */
+  readRange(from: number, to: number): Promise<Ayah[]> {
+    return request<Ayah[]>((id) => ({ id, type: "readRange", from, to }));
   },
 
   /** Substring search over the local normalized corpus. */
