@@ -149,10 +149,25 @@ pub fn router(state: AppState) -> Router<AppState> {
         );
     }
 
+    with_observability(router)
+}
+
+/// The shared observability stack applied once to every router branch (§8.2):
+/// security headers, request id, HTTP metrics (labeled by `MatchedPath`, not
+/// the raw path — fixes a metrics-cardinality incident at ~7,750 Quran paths),
+/// and the tracing layer.
+///
+/// `track_metrics` is a `route_layer` so it runs AFTER routing, where
+/// `MatchedPath` is populated; the others wrap outside it. Applied once per
+/// branch (the private branch via [`router`], the public `/quran/v1` branch
+/// from `main`) so `request_id` and `track_metrics` are not registered twice
+/// on the same request — earlier code applied them in BOTH `router.rs` and
+/// `main.rs`; do not re-introduce that.
+pub fn with_observability(router: Router<AppState>) -> Router<AppState> {
     router
+        .route_layer(middleware::from_fn(http_metrics::track_metrics))
         .layer(middleware::from_fn(security_headers::security_headers))
         .layer(middleware::from_fn(request_id_middleware))
-        .layer(middleware::from_fn(http_metrics::track_metrics))
         .layer(
             // Do NOT capture headers in spans/responses: Cookie, Authorization,
             // csrf-token, and webhook-signature would otherwise ship to OTLP at

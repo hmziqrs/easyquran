@@ -506,6 +506,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Phase 0 (§4.1): build the immutable in-memory Quran store BEFORE the
+    // process serves traffic. Fail fast — a partially loaded or
+    // invariant-violating store would serve wrong scripture silently, so any
+    // load / digest / tiling failure logs the specific invariant and exits
+    // non-zero. There is no "Arabic not ready" served state.
+    let quran_store = match ruxlog::quran::load_quran_store(&settings.quran).await {
+        Ok(store) => {
+            let cv = store.content_version().to_string();
+            tracing::info!(
+                content_version = %cv,
+                verse_count = ruxlog::quran::VERSE_COUNT,
+                "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
+            );
+            std::sync::Arc::new(store)
+        }
+        Err(err) => {
+            tracing::error!(
+                error = %err,
+                "Quran store failed to load — refusing to boot (§4.1 fail-fast)"
+            );
+            std::process::exit(1);
+        }
+    };
+
     let state = AppState {
         sea_db,
         gate_store,
@@ -525,6 +549,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // --- Fields added for the issues batch (2026-07-27) ---
         fcm,
         webauthn: webauthn_service,
+        quran: quran_store,
+        quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     // Bootstrap application constants from environment (only fills missing keys) and warm the in-memory constant cache.
@@ -681,43 +707,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // it off the shared `Arc<Settings>` (cheap) for `into_extension`.
     let ip_source = settings.http.ip_source.clone();
 
-    let mut app = router::router(state.clone())
-        // Resolve the real client IP (per IP_SOURCE) into the `ClientIp`
-        // extension BEFORE per-route rate-limit layers read it. Sits INNER to
-        // `ip_source` so the `ClientIpSource` config is present when it runs.
-        .layer(middleware::from_fn(
-            middlewares::client_ip::resolve_client_ip,
-        ))
-        .layer(ip_source.into_extension())
-        // `from_fn` middlewares (e.g. auth_guard) cannot extract `State`; they
-        // read AppState through this Extension instead.
+    // ── Phase 1a (§8.2): split into a private (authenticated) branch and a
+    //    public, unauthenticated, wildcard-CORS `/quran/v1` sibling branch.
+    //
+    // `private` keeps the existing authenticated surface with its exact outer
+    // layering. Its observability stack (security headers, request id, metrics,
+    // TraceLayer) now lives ONCE in `router::with_observability`, so the
+    // duplicate `track_metrics` + `request_id_middleware` that used to be
+    // re-applied in THIS file are dropped — not carried to a third registration.
+    let private = router::router(state.clone())
+        // Resolve ClientIp before per-route rate-limit layers read it.
+        .layer(middleware::from_fn(middlewares::client_ip::resolve_client_ip))
+        .layer(ip_source.clone().into_extension())
         .layer(axum::Extension(state.clone()))
-        // NOTE: `session_layer` is applied *after* `csrf_guard` below so that it
-        // is the OUTER layer. Order matters: later `.layer()` calls wrap the
-        // earlier ones, so a request flows session_layer → csrf_guard → router.
-        // The Session is therefore present in the request extensions when
-        // `csrf_guard` runs, letting it recompute the per-session HMAC token.
-        //     config: governor_conf,
-        // })
-        .layer(compression)
-        .layer(middleware::from_fn(
-            middlewares::http_metrics::track_metrics,
-        ))
-        .layer(middleware::from_fn(
-            middlewares::request_id::request_id_middleware,
-        ))
+        .layer(compression.clone())
+        // session_layer is OUTER to csrf_guard so the Session is present when
+        // csrf_guard recomputes the per-session HMAC token.
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
-        .layer(cors);
+        .layer(cors)
+        .layer(middlewares::route_blocker::RouteBlockerLayer::new(state.clone()));
 
-    {
-        app = app.layer(middlewares::route_blocker::RouteBlockerLayer::new(
-            state.clone(),
+    // `public` is the unauthenticated `/quran/v1` branch: wildcard CORS (no
+    // credentials), GET/HEAD/OPTIONS only, client-IP-aware coarse rate limit,
+    // and the shared observability stack. It deliberately does NOT carry
+    // `origin_guard`, `csrf_guard`, `session_layer`, `RouteBlockerLayer`, or
+    // `auth_guard` (§8.2) — and never touches `sea_db` (§2, §10).
+    //
+    // The coarse limit is keyed IP-ONLY (path-independent) via
+    // `rate_limit_layer_branch` — otherwise parameterized routes
+    // (`/ayahs/{s}/{a}` × 6,236, `/pages/N`, …) fan into ~7,750 independent
+    // per-IP buckets and the 600/min ceiling is bypassable (§8.2). A tighter
+    // 30/min limit is layered on `/search` specifically (the most expensive
+    // public route; §8.2).
+    let quran = ruxlog::modules::quran_v1::routes()
+        .merge(
+            ruxlog::modules::quran_v1::search_route()
+                .layer(middlewares::rate_limit::rate_limit_layer(&state, 30, 60)),
+        )
+        // Shape routing-level 404/405 into the §6.4 envelope (preserving the 405
+        // Allow header) so every error on the public branch shares one body.
+        .layer(middleware::from_fn(
+            ruxlog::modules::quran_v1::error::shape_routing_errors,
         ));
-    }
+    let public = router::with_observability(quran)
+        .layer(compression)
+        .layer(middlewares::rate_limit::rate_limit_layer_branch(
+            &state,
+            600,
+            60,
+            "quran-v1",
+        ))
+        .layer(middleware::from_fn(middlewares::client_ip::resolve_client_ip))
+        .layer(ip_source.into_extension())
+        .layer(axum::Extension(state.clone()))
+        .layer(ruxlog::modules::quran_v1::cors::public_cors_layer());
 
-    let app = app.with_state(state);
+    let app = axum::Router::new()
+        .merge(private)
+        .nest("/quran/v1", public)
+        .with_state(state);
 
     let host = settings.http.host.clone();
     let port = settings.http.port.clone();

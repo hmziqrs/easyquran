@@ -177,6 +177,47 @@ impl SiteSettings {
     }
 }
 
+/// Quran content API boot inputs (Phase 0). Paths to the two immutable Arabic
+/// SQLite artifacts and the Tanzil metadata XML, read once at startup to build
+/// the in-memory [`crate::quran::QuranStore`]. All three may be mounted
+/// read-only in the runtime image.
+///
+/// Every field is a `String` to match the workspace `Settings` convention
+/// (there is no `PathBuf`/`Url` precedent in this layer — §8.3); the loader
+/// converts to `&Path` / connection-URL at the call site. The relative defaults
+/// resolve against the process CWD (the repo root in dev/test).
+#[derive(Clone, Debug)]
+pub struct QuranSettings {
+    /// `QURAN_UTHMANI_PATH` — verbatim Uthmani SQLite artifact.
+    pub uthmani_path: String,
+    /// `QURAN_SIMPLE_CLEAN_PATH` — simple-clean SQLite artifact (also the
+    /// Arabic search corpus).
+    pub simple_clean_path: String,
+    /// `QURAN_METADATA_XML_PATH` — Tanzil `quran-data.xml` (surah + navigation
+    /// metadata).
+    pub metadata_xml_path: String,
+    /// `QURAN_CONTENT_VERSION` — optional pinned assertion. When set, boot
+    /// fails if the BLAKE3-derived content version (§8.1) differs. Survives
+    /// only as an assertion, never as the source of the value.
+    pub expected_content_version: Option<String>,
+}
+
+impl QuranSettings {
+    pub fn from_env() -> Self {
+        Self {
+            uthmani_path: std::env::var("QURAN_UTHMANI_PATH").unwrap_or_else(|_| {
+                "db/quran/tanzil/arabic/quran-uthmani.sqlite".to_string()
+            }),
+            simple_clean_path: std::env::var("QURAN_SIMPLE_CLEAN_PATH").unwrap_or_else(|_| {
+                "db/quran/tanzil/arabic/quran-simple-clean.sqlite".to_string()
+            }),
+            metadata_xml_path: std::env::var("QURAN_METADATA_XML_PATH")
+                .unwrap_or_else(|_| "db/quran/tanzil/quran-data.xml".to_string()),
+            expected_content_version: std::env::var("QURAN_CONTENT_VERSION").ok(),
+        }
+    }
+}
+
 /// The typed, fail-closed boot configuration. Constructed once via
 /// [`Settings::from_env`] and shared (behind `Arc`) across `AppState`.
 ///
@@ -191,6 +232,9 @@ pub struct Settings {
     pub site: SiteSettings,
     pub object_storage: ObjectStorageConfig,
     pub optimizer: OptimizerConfig,
+    /// Quran content API boot inputs (Phase 0): the two Arabic SQLite artifacts
+    /// + the metadata XML, loaded once into the in-memory `QuranStore`.
+    pub quran: QuranSettings,
 }
 
 impl Settings {
@@ -220,6 +264,7 @@ impl Settings {
 
         let http = HttpSettings::from_env();
         let site = SiteSettings::from_env();
+        let quran = QuranSettings::from_env();
 
         Self {
             cookie_key,
@@ -227,6 +272,7 @@ impl Settings {
             site,
             object_storage,
             optimizer,
+            quran,
         }
     }
 }

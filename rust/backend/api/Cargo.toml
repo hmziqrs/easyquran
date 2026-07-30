@@ -186,6 +186,26 @@ crossterm = "0.29"
 tuirealm = "3.2.0"
 utoipa = { version = "5", features = ["axum_extras"], optional = true }
 utoipa-swagger-ui = { version = "9", features = ["axum"], optional = true }
+# ── Quran content API (Phase 0): read-only startup loaders + content hashing ──
+# sqlx is added as a DIRECT dependency (already in the graph transitively via
+# sea-orm's `sqlx-sqlite`) so the Quran loader (`src/quran/loader.rs`) opens its
+# OWN read-only SQLite connection to the Arabic artifacts — independent of
+# `sea_db` (§2) and of `rusqlite` (which would collide on `links = "sqlite3"`
+# with libsqlite3-sys; §8.3). `modules/quran_v1/` never references sqlx (§10).
+sqlx = { version = "0.8", default-features = false, features = [
+    "sqlite",
+    "runtime-tokio-rustls",
+] }
+# roxmltree: pure-Rust DOM XML parser for the 77 KB quran-data.xml read once at
+# boot (§8.3). Not quick-xml (absent from the graph).
+roxmltree = "0.20"
+# blake3: content-version digest (§8.1) — `blake3(uthmani ‖ simple-clean ‖ xml)`
+# leading 16 hex chars. One-shot at boot; performance-irrelevant.
+blake3 = "1.5"
+# Declared explicitly (both resolve transitively today) so the Quran store and
+# the shared search normalization own a stable version floor (§8.3).
+memchr = "2"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

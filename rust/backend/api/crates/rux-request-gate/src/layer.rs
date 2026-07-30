@@ -37,6 +37,20 @@ pub struct BlockInfo {
 type BlockFn = Arc<dyn Fn(BlockInfo) -> Response + Send + Sync>;
 type UnavailableFn = Arc<dyn Fn() -> Response + Send + Sync>;
 
+/// How the bucket key's path component is derived. The default (`Raw`) is the
+/// legacy per-distinct-path behavior. `Fixed` collapses every route under the
+/// layer into ONE bucket per IP — the correct keying for a coarse branch-wide
+/// limit where parameterized paths (`/ayahs/{s}/{a}`, `/pages/N`, …) would
+/// otherwise fan out into unbounded independent buckets (§8.2). `Matched` keys
+/// on the route template (axum `MatchedPath`), collapsing fanout while still
+/// separating distinct routes.
+#[derive(Clone)]
+pub enum PathKey {
+    Raw,
+    Fixed(&'static str),
+    Matched,
+}
+
 /// Tower layer that wraps an inner service with per-IP/per-path rate limiting.
 #[derive(Clone)]
 pub struct RateLimitLayer {
@@ -44,6 +58,7 @@ pub struct RateLimitLayer {
     max_requests: u64,
     window_secs: u64,
     ip_source: Arc<dyn IpSource>,
+    path_key: PathKey,
     on_block: BlockFn,
     on_unavailable: UnavailableFn,
 }
@@ -57,6 +72,7 @@ impl RateLimitLayer {
             max_requests,
             window_secs,
             ip_source: Arc::new(ClientIpSource),
+            path_key: PathKey::Raw,
             on_block: Arc::new(default_on_block),
             on_unavailable: Arc::new(default_on_unavailable),
         }
@@ -74,6 +90,7 @@ impl RateLimitLayer {
             max_requests,
             window_secs,
             ip_source,
+            path_key: PathKey::Raw,
             on_block: Arc::new(default_on_block),
             on_unavailable: Arc::new(default_on_unavailable),
         }
@@ -99,6 +116,13 @@ pub struct RateLimitLayerBuilder {
 impl RateLimitLayerBuilder {
     pub fn ip_source(mut self, ip: Arc<dyn IpSource>) -> Self {
         self.layer.ip_source = ip;
+        self
+    }
+    /// Override how the bucket key's path component is derived (§8.2: a coarse
+    /// branch-wide limit must be path-independent so parameterized routes do not
+    /// fan into unbounded buckets).
+    pub fn path_key(mut self, mode: PathKey) -> Self {
+        self.layer.path_key = mode;
         self
     }
     pub fn on_block<F>(mut self, f: F) -> Self
@@ -157,7 +181,15 @@ where
 
         Box::pin(async move {
             let ip = layer.ip_source.resolve(&req);
-            let path = req.uri().path().to_string();
+            let path = match layer.path_key {
+                PathKey::Raw => req.uri().path().to_string(),
+                PathKey::Fixed(c) => c.to_string(),
+                PathKey::Matched => req
+                    .extensions()
+                    .get::<axum::extract::MatchedPath>()
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_else(|| req.uri().path().to_string()),
+            };
             let key = format!("ratelimit:{}:{}", ip, path);
 
             let (count, ttl) = match layer

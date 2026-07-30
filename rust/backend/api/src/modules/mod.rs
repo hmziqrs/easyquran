@@ -32,3 +32,6 @@ pub mod facebook_auth_v1;
 pub mod github_auth_v1;
 pub mod notification_v1;
 pub mod passkey_v1;
+
+// --- Quran content API (Phase 0+, §6) ---
+pub mod quran_v1;

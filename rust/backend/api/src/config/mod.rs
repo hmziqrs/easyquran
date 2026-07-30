@@ -6,7 +6,9 @@
 pub mod env;
 pub mod settings;
 
-pub use settings::{HttpSettings, ObjectStorageConfig, OptimizerConfig, Settings, SiteSettings};
+pub use settings::{
+    HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, Settings, SiteSettings,
+};
 
 /// Request body size limits (bytes) applied per route group.
 pub mod body_limits {

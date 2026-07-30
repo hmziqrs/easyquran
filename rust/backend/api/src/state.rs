@@ -95,6 +95,17 @@ pub struct AppState {
     // --- Fields added for the issues batch (2026-07-27) ---
     pub fcm: Option<std::sync::Arc<FcmClient>>,
     pub webauthn: Option<std::sync::Arc<crate::services::webauthn::WebauthnService>>,
+    /// Immutable in-memory Quran store (Phase 0, §4). Built once at boot before
+    /// the process serves traffic; a load/invariant failure exits non-zero
+    /// (§4.1). Read-only on every request — Arabic handling performs no SQLite
+    /// query.
+    pub quran: std::sync::Arc<crate::quran::QuranStore>,
+    /// Lazy-once HEAD-verified `/scripts` artifact list (§5.1). `None` until the
+    /// first `/scripts` request resolves + HEAD-verifies both download URLs;
+    /// then cached for the process. Kept off `QuranStore` (content-only) and off
+    /// the boot path (no boot-time CDN dependency).
+    pub quran_scripts:
+        std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::Artifact>>>>,
 }
 
 impl FromRef<AppState> for AuthBackend {
