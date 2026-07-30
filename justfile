@@ -84,3 +84,12 @@ api-lint:
 
 api-fmt:
     cd rust && cargo fmt --all
+
+# ── Quran data pipeline (TS in ./db/quran/tanzil/translations) ───────────────
+# Loads R2_* creds from the root .env, then runs the SQLite upload to R2.
+#   just upload-sqlite --dry-run   # preview, no creds needed
+#   just upload-sqlite             # upload, skip already-present
+#   just upload-sqlite --force     # re-upload everything
+upload-sqlite *args='':
+    @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
+    cd db/quran/tanzil/translations && npm run upload:sqlite -- {{args}}
