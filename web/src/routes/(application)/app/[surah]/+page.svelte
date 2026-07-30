@@ -38,6 +38,9 @@
     untrack(() => {
       reader.setCurrent(num);
       reader.seedSurah(num, surah.verses);
+      // Backfill the sync cache from the Worker once it's ready (no-op until
+      // then). Guarded by navToken so it can't clobber a later navigation.
+      void reader.refreshFromWorker(num);
     });
   });
 

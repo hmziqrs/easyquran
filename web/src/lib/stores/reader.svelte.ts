@@ -81,6 +81,9 @@ class ReaderStore {
    *  player duration working without a Worker round-trip (doc §6.3). Seeded from
    *  prerendered page.data; Phase 2 also refreshes it from the sqlite-wasm Worker. */
   #versesBySurah = new Map<number, string[]>();
+  /** Monotonic guard: bumped on every navigation so a stale Worker response for
+   *  a previously-open surah can never clobber the currently-selected one. */
+  #navToken = 0;
 
   /** Hydrate saved state from localStorage after mount (see note above). */
   hydrate(): void {
@@ -118,6 +121,7 @@ class ReaderStore {
   }
   setCurrent(num: number): void {
     this.#s.current = num;
+    this.#navToken++; // invalidate any in-flight Worker refresh for the prior surah
     this.#s.query = "";
     this.#s.openNote = null;
     this.persist();
@@ -126,6 +130,7 @@ class ReaderStore {
   /** Jump to a specific verse (from search / bookmarks / continue-reading). */
   openVerse(num: number, n: number): void {
     this.#s.current = num;
+    this.#navToken++;
     this.#s.query = "";
     this.#s.browse = "surah";
     this.#s.openNote = null;
@@ -279,6 +284,27 @@ class ReaderStore {
   /** Seed a surah's verses into the sync cache (from prerendered page.data). */
   seedSurah(num: number, verses: string[]): void {
     if (verses.length) this.#versesBySurah.set(num, verses);
+  }
+
+  /**
+   * Best-effort refresh of a surah's verses from the sqlite-wasm Worker, guarded
+   * by #navToken so a response for a previously-open surah is discarded. No-op
+   * until the Worker is ready; never throws (the prerendered sync cache already
+   * serves the open surah, so failure is silently absorbed).
+   */
+  async refreshFromWorker(num: number): Promise<void> {
+    if (!browser) return;
+    const token = this.#navToken;
+    try {
+      const { quranWorker } = await import("$lib/quran/worker-client");
+      if (!quranWorker.ready) return;
+      const verses = await quranWorker.readSurah(num);
+      if (token !== this.#navToken) return; // a navigation happened since
+      if (num !== this.#s.current) return; // user moved on
+      if (verses && verses.length) this.seedSurah(num, verses);
+    } catch {
+      /* prerender/cache still serves the surah */
+    }
   }
 
   // ── simulated player ─────────────────────────────────────────────────
