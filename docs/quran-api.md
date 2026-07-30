@@ -1068,10 +1068,11 @@ This is an accepted, documented limitation, not an oversight. Note that the
 often-cited justification — that an in-memory scan "keeps Arabic search out of a
 mutable FTS database" — is not a real benefit: an FTS5 table inside an
 immutable, content-versioned artifact is not mutable, and §5.2 already builds
-FTS5 for every translation pack. If parity is required later, the cheap path is
-to build the same FTS5 index over simple-clean into the Arabic artifact and
-query it, rather than reimplementing either side. §10 asserts the current
-divergence against a fixed query set so it cannot drift unnoticed.
+FTS5 for every translation pack. If parity is required later, treat it as an
+explicit architecture change: either add a backend-owned FTS artifact and relax
+the no-SQLite-after-startup rule, or implement equivalent token semantics in
+memory. Do not silently point Axum at the web/offline database. §10 asserts the
+current divergence against a fixed query set so it cannot drift unnoticed.
 
 ---
 
