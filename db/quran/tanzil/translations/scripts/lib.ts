@@ -2,7 +2,8 @@
  * lib.ts — shared logic for the tanzil-translation data pipeline.
  *
  * Used by fetch.ts (mirror + index), catalog.ts (trimmed index), verify.ts
- * (integrity), and upload.ts (push to Cloudflare R2).
+ * (integrity), sql-to-sqlite.ts (build artifacts), and upload-sqlite.ts (push
+ * the artifacts + catalog to Cloudflare R2).
  */
 
 import { createHash } from "node:crypto";
@@ -72,6 +73,13 @@ export interface MinTranslation {
   direction: "rtl" | "ltr";
   name: string;
   translator: string;
+  /**
+   * Artifact path, relative to the catalog's own location. Points at the
+   * per-translation SQLite build (never the raw MySQL dump — those stay in the
+   * repo and are not published). Placeholder until the derived delivery
+   * databases in docs/quran-web-delivery.md land.
+   */
+  file: string;
 }
 
 // ── small utilities ───────────────────────────────────────────────────────
@@ -256,6 +264,7 @@ export function minFromIndex(index: IndexFile): MinTranslation[] {
     direction: t.direction,
     name: t.name,
     translator: t.translator,
+    file: `sqlite/${t.id}.sqlite`,
   }));
 }
 

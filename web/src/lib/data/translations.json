@@ -5,7 +5,8 @@
     "languageCode": "sq",
     "direction": "ltr",
     "name": "Efendi Nahi",
-    "translator": "Hasan Efendi Nahi"
+    "translator": "Hasan Efendi Nahi",
+    "file": "sqlite/sq.nahi.sqlite"
   },
   {
     "id": "sq.mehdiu",
@@ -13,7 +14,8 @@
     "languageCode": "sq",
     "direction": "ltr",
     "name": "Feti Mehdiu",
-    "translator": "Feti Mehdiu"
+    "translator": "Feti Mehdiu",
+    "file": "sqlite/sq.mehdiu.sqlite"
   },
   {
     "id": "sq.ahmeti",
@@ -21,7 +23,8 @@
     "languageCode": "sq",
     "direction": "ltr",
     "name": "Sherif Ahmeti",
-    "translator": "Sherif Ahmeti"
+    "translator": "Sherif Ahmeti",
+    "file": "sqlite/sq.ahmeti.sqlite"
   },
   {
     "id": "ber.mensur",
@@ -29,7 +32,8 @@
     "languageCode": "ber",
     "direction": "ltr",
     "name": "At Mensur",
-    "translator": "Ramdane At Mansour"
+    "translator": "Ramdane At Mansour",
+    "file": "sqlite/ber.mensur.sqlite"
   },
   {
     "id": "ar.jalalayn",
@@ -37,7 +41,8 @@
     "languageCode": "ar",
     "direction": "rtl",
     "name": "تفسير الجلالين",
-    "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti"
+    "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti",
+    "file": "sqlite/ar.jalalayn.sqlite"
   },
   {
     "id": "ar.muyassar",
@@ -45,7 +50,8 @@
     "languageCode": "ar",
     "direction": "rtl",
     "name": "تفسير المیسر",
-    "translator": "King Fahad Quran Complex"
+    "translator": "King Fahad Quran Complex",
+    "file": "sqlite/ar.muyassar.sqlite"
   },
   {
     "id": "am.sadiq",
@@ -53,7 +59,8 @@
     "languageCode": "am",
     "direction": "ltr",
     "name": "ሳዲቅ & ሳኒ ሐቢብ",
-    "translator": "Muhammed Sadiq and Muhammed Sani Habib"
+    "translator": "Muhammed Sadiq and Muhammed Sani Habib",
+    "file": "sqlite/am.sadiq.sqlite"
   },
   {
     "id": "az.mammadaliyev",
@@ -61,7 +68,8 @@
     "languageCode": "az",
     "direction": "ltr",
     "name": "Məmmədəliyev & Bünyadov",
-    "translator": "Vasim Mammadaliyev and Ziya Bunyadov"
+    "translator": "Vasim Mammadaliyev and Ziya Bunyadov",
+    "file": "sqlite/az.mammadaliyev.sqlite"
   },
   {
     "id": "az.musayev",
@@ -69,7 +77,8 @@
     "languageCode": "az",
     "direction": "ltr",
     "name": "Musayev",
-    "translator": "Alikhan Musayev"
+    "translator": "Alikhan Musayev",
+    "file": "sqlite/az.musayev.sqlite"
   },
   {
     "id": "bn.hoque",
@@ -77,7 +86,8 @@
     "languageCode": "bn",
     "direction": "ltr",
     "name": "জহুরুল হক",
-    "translator": "Zohurul Hoque"
+    "translator": "Zohurul Hoque",
+    "file": "sqlite/bn.hoque.sqlite"
   },
   {
     "id": "bn.bengali",
@@ -85,7 +95,8 @@
     "languageCode": "bn",
     "direction": "ltr",
     "name": "মুহিউদ্দীন খান",
-    "translator": "Muhiuddin Khan"
+    "translator": "Muhiuddin Khan",
+    "file": "sqlite/bn.bengali.sqlite"
   },
   {
     "id": "bs.korkut",
@@ -93,7 +104,8 @@
     "languageCode": "bs",
     "direction": "ltr",
     "name": "Korkut",
-    "translator": "Besim Korkut"
+    "translator": "Besim Korkut",
+    "file": "sqlite/bs.korkut.sqlite"
   },
   {
     "id": "bs.mlivo",
@@ -101,7 +113,8 @@
     "languageCode": "bs",
     "direction": "ltr",
     "name": "Mlivo",
-    "translator": "Mustafa Mlivo"
+    "translator": "Mustafa Mlivo",
+    "file": "sqlite/bs.mlivo.sqlite"
   },
   {
     "id": "bg.theophanov",
@@ -109,7 +122,8 @@
     "languageCode": "bg",
     "direction": "ltr",
     "name": "Теофанов",
-    "translator": "Tzvetan Theophanov"
+    "translator": "Tzvetan Theophanov",
+    "file": "sqlite/bg.theophanov.sqlite"
   },
   {
     "id": "zh.jian",
@@ -117,7 +131,8 @@
     "languageCode": "zh",
     "direction": "ltr",
     "name": "Ma Jian",
-    "translator": "Ma Jian"
+    "translator": "Ma Jian",
+    "file": "sqlite/zh.jian.sqlite"
   },
   {
     "id": "zh.majian",
@@ -125,7 +140,8 @@
     "languageCode": "zh",
     "direction": "ltr",
     "name": "Ma Jian (Traditional)",
-    "translator": "Ma Jian"
+    "translator": "Ma Jian",
+    "file": "sqlite/zh.majian.sqlite"
   },
   {
     "id": "cs.hrbek",
@@ -133,7 +149,8 @@
     "languageCode": "cs",
     "direction": "ltr",
     "name": "Hrbek",
-    "translator": "Preklad I. Hrbek"
+    "translator": "Preklad I. Hrbek",
+    "file": "sqlite/cs.hrbek.sqlite"
   },
   {
     "id": "cs.nykl",
@@ -141,7 +158,8 @@
     "languageCode": "cs",
     "direction": "ltr",
     "name": "Nykl",
-    "translator": "A. R. Nykl"
+    "translator": "A. R. Nykl",
+    "file": "sqlite/cs.nykl.sqlite"
   },
   {
     "id": "dv.divehi",
@@ -149,7 +167,8 @@
     "languageCode": "dv",
     "direction": "rtl",
     "name": "ދިވެހި",
-    "translator": "Office of the President of Maldives"
+    "translator": "Office of the President of Maldives",
+    "file": "sqlite/dv.divehi.sqlite"
   },
   {
     "id": "nl.keyzer",
@@ -157,7 +176,8 @@
     "languageCode": "nl",
     "direction": "ltr",
     "name": "Keyzer",
-    "translator": "Salomo Keyzer"
+    "translator": "Salomo Keyzer",
+    "file": "sqlite/nl.keyzer.sqlite"
   },
   {
     "id": "nl.leemhuis",
@@ -165,7 +185,8 @@
     "languageCode": "nl",
     "direction": "ltr",
     "name": "Leemhuis",
-    "translator": "Fred Leemhuis"
+    "translator": "Fred Leemhuis",
+    "file": "sqlite/nl.leemhuis.sqlite"
   },
   {
     "id": "nl.siregar",
@@ -173,7 +194,8 @@
     "languageCode": "nl",
     "direction": "ltr",
     "name": "Siregar",
-    "translator": "Sofian S. Siregar"
+    "translator": "Sofian S. Siregar",
+    "file": "sqlite/nl.siregar.sqlite"
   },
   {
     "id": "en.ahmedali",
@@ -181,7 +203,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Ahmed Ali",
-    "translator": "Ahmed Ali"
+    "translator": "Ahmed Ali",
+    "file": "sqlite/en.ahmedali.sqlite"
   },
   {
     "id": "en.ahmedraza",
@@ -189,7 +212,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Ahmed Raza Khan",
-    "translator": "Ahmed Raza Khan"
+    "translator": "Ahmed Raza Khan",
+    "file": "sqlite/en.ahmedraza.sqlite"
   },
   {
     "id": "en.arberry",
@@ -197,7 +221,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Arberry",
-    "translator": "A. J. Arberry"
+    "translator": "A. J. Arberry",
+    "file": "sqlite/en.arberry.sqlite"
   },
   {
     "id": "en.daryabadi",
@@ -205,7 +230,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Daryabadi",
-    "translator": "Abdul Majid Daryabadi"
+    "translator": "Abdul Majid Daryabadi",
+    "file": "sqlite/en.daryabadi.sqlite"
   },
   {
     "id": "en.hilali",
@@ -213,7 +239,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Hilali & Khan",
-    "translator": "Muhammad Taqi-ud-Din al-Hilali and Muhammad Muhsin Khan"
+    "translator": "Muhammad Taqi-ud-Din al-Hilali and Muhammad Muhsin Khan",
+    "file": "sqlite/en.hilali.sqlite"
   },
   {
     "id": "en.itani",
@@ -221,7 +248,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Itani",
-    "translator": "Talal Itani"
+    "translator": "Talal Itani",
+    "file": "sqlite/en.itani.sqlite"
   },
   {
     "id": "en.maududi",
@@ -229,7 +257,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Maududi",
-    "translator": "Abul Ala Maududi"
+    "translator": "Abul Ala Maududi",
+    "file": "sqlite/en.maududi.sqlite"
   },
   {
     "id": "en.mubarakpuri",
@@ -237,7 +266,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Mubarakpuri",
-    "translator": "Safi-ur-Rahman al-Mubarakpuri"
+    "translator": "Safi-ur-Rahman al-Mubarakpuri",
+    "file": "sqlite/en.mubarakpuri.sqlite"
   },
   {
     "id": "en.pickthall",
@@ -245,7 +275,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Pickthall",
-    "translator": "Mohammed Marmaduke William Pickthall"
+    "translator": "Mohammed Marmaduke William Pickthall",
+    "file": "sqlite/en.pickthall.sqlite"
   },
   {
     "id": "en.qarai",
@@ -253,7 +284,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Qarai",
-    "translator": "Ali Quli Qarai"
+    "translator": "Ali Quli Qarai",
+    "file": "sqlite/en.qarai.sqlite"
   },
   {
     "id": "en.qaribullah",
@@ -261,7 +293,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Qaribullah & Darwish",
-    "translator": "Hasan al-Fatih Qaribullah and Ahmad Darwish"
+    "translator": "Hasan al-Fatih Qaribullah and Ahmad Darwish",
+    "file": "sqlite/en.qaribullah.sqlite"
   },
   {
     "id": "en.sahih",
@@ -269,7 +302,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Saheeh International",
-    "translator": "Saheeh International"
+    "translator": "Saheeh International",
+    "file": "sqlite/en.sahih.sqlite"
   },
   {
     "id": "en.sarwar",
@@ -277,7 +311,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Sarwar",
-    "translator": "Muhammad Sarwar"
+    "translator": "Muhammad Sarwar",
+    "file": "sqlite/en.sarwar.sqlite"
   },
   {
     "id": "en.shakir",
@@ -285,7 +320,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Shakir",
-    "translator": "Mohammad Habib Shakir"
+    "translator": "Mohammad Habib Shakir",
+    "file": "sqlite/en.shakir.sqlite"
   },
   {
     "id": "en.transliteration",
@@ -293,7 +329,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Transliteration",
-    "translator": "English Transliteration"
+    "translator": "English Transliteration",
+    "file": "sqlite/en.transliteration.sqlite"
   },
   {
     "id": "en.wahiduddin",
@@ -301,7 +338,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Wahiduddin Khan",
-    "translator": "Wahiduddin Khan"
+    "translator": "Wahiduddin Khan",
+    "file": "sqlite/en.wahiduddin.sqlite"
   },
   {
     "id": "en.yusufali",
@@ -309,7 +347,8 @@
     "languageCode": "en",
     "direction": "ltr",
     "name": "Yusuf Ali",
-    "translator": "Abdullah Yusuf Ali"
+    "translator": "Abdullah Yusuf Ali",
+    "file": "sqlite/en.yusufali.sqlite"
   },
   {
     "id": "fr.hamidullah",
@@ -317,7 +356,8 @@
     "languageCode": "fr",
     "direction": "ltr",
     "name": "Hamidullah",
-    "translator": "Muhammad Hamidullah"
+    "translator": "Muhammad Hamidullah",
+    "file": "sqlite/fr.hamidullah.sqlite"
   },
   {
     "id": "de.aburida",
@@ -325,7 +365,8 @@
     "languageCode": "de",
     "direction": "ltr",
     "name": "Abu Rida",
-    "translator": "Abu Rida Muhammad ibn Ahmad ibn Rassoul"
+    "translator": "Abu Rida Muhammad ibn Ahmad ibn Rassoul",
+    "file": "sqlite/de.aburida.sqlite"
   },
   {
     "id": "de.bubenheim",
@@ -333,7 +374,8 @@
     "languageCode": "de",
     "direction": "ltr",
     "name": "Bubenheim & Elyas",
-    "translator": "A. S. F. Bubenheim and N. Elyas"
+    "translator": "A. S. F. Bubenheim and N. Elyas",
+    "file": "sqlite/de.bubenheim.sqlite"
   },
   {
     "id": "de.khoury",
@@ -341,7 +383,8 @@
     "languageCode": "de",
     "direction": "ltr",
     "name": "Khoury",
-    "translator": "Adel Theodor Khoury"
+    "translator": "Adel Theodor Khoury",
+    "file": "sqlite/de.khoury.sqlite"
   },
   {
     "id": "de.zaidan",
@@ -349,7 +392,8 @@
     "languageCode": "de",
     "direction": "ltr",
     "name": "Zaidan",
-    "translator": "Amir Zaidan"
+    "translator": "Amir Zaidan",
+    "file": "sqlite/de.zaidan.sqlite"
   },
   {
     "id": "ha.gumi",
@@ -357,7 +401,8 @@
     "languageCode": "ha",
     "direction": "ltr",
     "name": "Gumi",
-    "translator": "Abubakar Mahmoud Gumi"
+    "translator": "Abubakar Mahmoud Gumi",
+    "file": "sqlite/ha.gumi.sqlite"
   },
   {
     "id": "hi.farooq",
@@ -365,7 +410,8 @@
     "languageCode": "hi",
     "direction": "ltr",
     "name": "फ़ारूक़ ख़ान & अहमद",
-    "translator": "Muhammad Farooq Khan and Muhammad Ahmed"
+    "translator": "Muhammad Farooq Khan and Muhammad Ahmed",
+    "file": "sqlite/hi.farooq.sqlite"
   },
   {
     "id": "hi.hindi",
@@ -373,7 +419,8 @@
     "languageCode": "hi",
     "direction": "ltr",
     "name": "फ़ारूक़ ख़ान & नदवी",
-    "translator": "Suhel Farooq Khan and Saifur Rahman Nadwi"
+    "translator": "Suhel Farooq Khan and Saifur Rahman Nadwi",
+    "file": "sqlite/hi.hindi.sqlite"
   },
   {
     "id": "id.indonesian",
@@ -381,7 +428,8 @@
     "languageCode": "id",
     "direction": "ltr",
     "name": "Bahasa Indonesia",
-    "translator": "Indonesian Ministry of Religious Affairs"
+    "translator": "Indonesian Ministry of Religious Affairs",
+    "file": "sqlite/id.indonesian.sqlite"
   },
   {
     "id": "id.muntakhab",
@@ -389,7 +437,8 @@
     "languageCode": "id",
     "direction": "ltr",
     "name": "Quraish Shihab",
-    "translator": "Muhammad Quraish Shihab et al."
+    "translator": "Muhammad Quraish Shihab et al.",
+    "file": "sqlite/id.muntakhab.sqlite"
   },
   {
     "id": "id.jalalayn",
@@ -397,7 +446,8 @@
     "languageCode": "id",
     "direction": "ltr",
     "name": "Tafsir Jalalayn",
-    "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti"
+    "translator": "Jalal ad-Din al-Mahalli and Jalal ad-Din as-Suyuti",
+    "file": "sqlite/id.jalalayn.sqlite"
   },
   {
     "id": "it.piccardo",
@@ -405,7 +455,8 @@
     "languageCode": "it",
     "direction": "ltr",
     "name": "Piccardo",
-    "translator": "Hamza Roberto Piccardo"
+    "translator": "Hamza Roberto Piccardo",
+    "file": "sqlite/it.piccardo.sqlite"
   },
   {
     "id": "ja.japanese",
@@ -413,7 +464,8 @@
     "languageCode": "ja",
     "direction": "ltr",
     "name": "Japanese",
-    "translator": "Unknown"
+    "translator": "Unknown",
+    "file": "sqlite/ja.japanese.sqlite"
   },
   {
     "id": "ko.korean",
@@ -421,7 +473,8 @@
     "languageCode": "ko",
     "direction": "ltr",
     "name": "Korean",
-    "translator": "Unknown"
+    "translator": "Unknown",
+    "file": "sqlite/ko.korean.sqlite"
   },
   {
     "id": "ku.asan",
@@ -429,7 +482,8 @@
     "languageCode": "ku",
     "direction": "rtl",
     "name": "ته‌فسیری ئاسان",
-    "translator": "Burhan Muhammad-Amin"
+    "translator": "Burhan Muhammad-Amin",
+    "file": "sqlite/ku.asan.sqlite"
   },
   {
     "id": "ms.basmeih",
@@ -437,7 +491,8 @@
     "languageCode": "ms",
     "direction": "ltr",
     "name": "Basmeih",
-    "translator": "Abdullah Muhammad Basmeih"
+    "translator": "Abdullah Muhammad Basmeih",
+    "file": "sqlite/ms.basmeih.sqlite"
   },
   {
     "id": "ml.abdulhameed",
@@ -445,7 +500,8 @@
     "languageCode": "ml",
     "direction": "ltr",
     "name": "അബ്ദുല്‍ ഹമീദ് & പറപ്പൂര്‍",
-    "translator": "Cheriyamundam Abdul Hameed and Kunhi Mohammed Parappoor"
+    "translator": "Cheriyamundam Abdul Hameed and Kunhi Mohammed Parappoor",
+    "file": "sqlite/ml.abdulhameed.sqlite"
   },
   {
     "id": "ml.karakunnu",
@@ -453,7 +509,8 @@
     "languageCode": "ml",
     "direction": "ltr",
     "name": "കാരകുന്ന് & എളയാവൂര്",
-    "translator": "Muhammad Karakunnu and Vanidas Elayavoor"
+    "translator": "Muhammad Karakunnu and Vanidas Elayavoor",
+    "file": "sqlite/ml.karakunnu.sqlite"
   },
   {
     "id": "no.berg",
@@ -461,7 +518,8 @@
     "languageCode": "no",
     "direction": "ltr",
     "name": "Einar Berg",
-    "translator": "Einar Berg"
+    "translator": "Einar Berg",
+    "file": "sqlite/no.berg.sqlite"
   },
   {
     "id": "ps.abdulwali",
@@ -469,7 +527,8 @@
     "languageCode": "ps",
     "direction": "rtl",
     "name": "عبدالولي",
-    "translator": "Abdulwali Khan"
+    "translator": "Abdulwali Khan",
+    "file": "sqlite/ps.abdulwali.sqlite"
   },
   {
     "id": "fa.ansarian",
@@ -477,7 +536,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "انصاریان",
-    "translator": "Hussain Ansarian"
+    "translator": "Hussain Ansarian",
+    "file": "sqlite/fa.ansarian.sqlite"
   },
   {
     "id": "fa.ayati",
@@ -485,7 +545,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "آیتی",
-    "translator": "AbdolMohammad Ayati"
+    "translator": "AbdolMohammad Ayati",
+    "file": "sqlite/fa.ayati.sqlite"
   },
   {
     "id": "fa.bahrampour",
@@ -493,7 +554,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "بهرام‌پور",
-    "translator": "Abolfazl Bahrampour"
+    "translator": "Abolfazl Bahrampour",
+    "file": "sqlite/fa.bahrampour.sqlite"
   },
   {
     "id": "fa.gharaati",
@@ -501,7 +563,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "قرائتی",
-    "translator": "Mohsen Gharaati"
+    "translator": "Mohsen Gharaati",
+    "file": "sqlite/fa.gharaati.sqlite"
   },
   {
     "id": "fa.ghomshei",
@@ -509,7 +572,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "الهی قمشه‌ای",
-    "translator": "Mahdi Elahi Ghomshei"
+    "translator": "Mahdi Elahi Ghomshei",
+    "file": "sqlite/fa.ghomshei.sqlite"
   },
   {
     "id": "fa.khorramdel",
@@ -517,7 +581,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "خرمدل",
-    "translator": "Mostafa Khorramdel"
+    "translator": "Mostafa Khorramdel",
+    "file": "sqlite/fa.khorramdel.sqlite"
   },
   {
     "id": "fa.khorramshahi",
@@ -525,7 +590,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "خرمشاهی",
-    "translator": "Baha'oddin Khorramshahi"
+    "translator": "Baha'oddin Khorramshahi",
+    "file": "sqlite/fa.khorramshahi.sqlite"
   },
   {
     "id": "fa.sadeqi",
@@ -533,7 +599,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "صادقی تهرانی",
-    "translator": "Mohammad Sadeqi Tehrani"
+    "translator": "Mohammad Sadeqi Tehrani",
+    "file": "sqlite/fa.sadeqi.sqlite"
   },
   {
     "id": "fa.safavi",
@@ -541,7 +608,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "صفوی",
-    "translator": "Sayyed Mohammad Reza Safavi"
+    "translator": "Sayyed Mohammad Reza Safavi",
+    "file": "sqlite/fa.safavi.sqlite"
   },
   {
     "id": "fa.fooladvand",
@@ -549,7 +617,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "فولادوند",
-    "translator": "Mohammad Mahdi Fooladvand"
+    "translator": "Mohammad Mahdi Fooladvand",
+    "file": "sqlite/fa.fooladvand.sqlite"
   },
   {
     "id": "fa.mojtabavi",
@@ -557,7 +626,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "مجتبوی",
-    "translator": "Sayyed Jalaloddin Mojtabavi"
+    "translator": "Sayyed Jalaloddin Mojtabavi",
+    "file": "sqlite/fa.mojtabavi.sqlite"
   },
   {
     "id": "fa.moezzi",
@@ -565,7 +635,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "معزی",
-    "translator": "Mohammad Kazem Moezzi"
+    "translator": "Mohammad Kazem Moezzi",
+    "file": "sqlite/fa.moezzi.sqlite"
   },
   {
     "id": "fa.makarem",
@@ -573,7 +644,8 @@
     "languageCode": "fa",
     "direction": "rtl",
     "name": "مکارم شیرازی",
-    "translator": "Naser Makarem Shirazi"
+    "translator": "Naser Makarem Shirazi",
+    "file": "sqlite/fa.makarem.sqlite"
   },
   {
     "id": "pl.bielawskiego",
@@ -581,7 +653,8 @@
     "languageCode": "pl",
     "direction": "ltr",
     "name": "Bielawskiego",
-    "translator": "Józefa Bielawskiego"
+    "translator": "Józefa Bielawskiego",
+    "file": "sqlite/pl.bielawskiego.sqlite"
   },
   {
     "id": "pt.elhayek",
@@ -589,7 +662,8 @@
     "languageCode": "pt",
     "direction": "ltr",
     "name": "El-Hayek",
-    "translator": "Samir El-Hayek"
+    "translator": "Samir El-Hayek",
+    "file": "sqlite/pt.elhayek.sqlite"
   },
   {
     "id": "ro.grigore",
@@ -597,7 +671,8 @@
     "languageCode": "ro",
     "direction": "ltr",
     "name": "Grigore",
-    "translator": "George Grigore"
+    "translator": "George Grigore",
+    "file": "sqlite/ro.grigore.sqlite"
   },
   {
     "id": "ru.abuadel",
@@ -605,7 +680,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Абу Адель",
-    "translator": "Abu Adel"
+    "translator": "Abu Adel",
+    "file": "sqlite/ru.abuadel.sqlite"
   },
   {
     "id": "ru.muntahab",
@@ -613,7 +689,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Аль-Мунтахаб",
-    "translator": "Ministry of Awqaf, Egypt"
+    "translator": "Ministry of Awqaf, Egypt",
+    "file": "sqlite/ru.muntahab.sqlite"
   },
   {
     "id": "ru.kalam",
@@ -621,7 +698,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Калям Шариф",
-    "translator": "Muslim Religious Board of the Republiс of Tatarstan"
+    "translator": "Muslim Religious Board of the Republiс of Tatarstan",
+    "file": "sqlite/ru.kalam.sqlite"
   },
   {
     "id": "ru.krachkovsky",
@@ -629,7 +707,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Крачковский",
-    "translator": "Ignaty Yulianovich Krachkovsky"
+    "translator": "Ignaty Yulianovich Krachkovsky",
+    "file": "sqlite/ru.krachkovsky.sqlite"
   },
   {
     "id": "ru.kuliev",
@@ -637,7 +716,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Кулиев",
-    "translator": "Elmir Kuliev"
+    "translator": "Elmir Kuliev",
+    "file": "sqlite/ru.kuliev.sqlite"
   },
   {
     "id": "ru.kuliev-alsaadi",
@@ -645,7 +725,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Кулиев + ас-Саади",
-    "translator": "Elmir Kuliev (with Abd ar-Rahman as-Saadi's commentaries)"
+    "translator": "Elmir Kuliev (with Abd ar-Rahman as-Saadi's commentaries)",
+    "file": "sqlite/ru.kuliev-alsaadi.sqlite"
   },
   {
     "id": "ru.osmanov",
@@ -653,7 +734,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Османов",
-    "translator": "Magomed-Nuri Osmanovich Osmanov"
+    "translator": "Magomed-Nuri Osmanovich Osmanov",
+    "file": "sqlite/ru.osmanov.sqlite"
   },
   {
     "id": "ru.porokhova",
@@ -661,7 +743,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Порохова",
-    "translator": "V. Porokhova"
+    "translator": "V. Porokhova",
+    "file": "sqlite/ru.porokhova.sqlite"
   },
   {
     "id": "ru.sablukov",
@@ -669,7 +752,8 @@
     "languageCode": "ru",
     "direction": "ltr",
     "name": "Саблуков",
-    "translator": "Gordy Semyonovich Sablukov"
+    "translator": "Gordy Semyonovich Sablukov",
+    "file": "sqlite/ru.sablukov.sqlite"
   },
   {
     "id": "sd.amroti",
@@ -677,7 +761,8 @@
     "languageCode": "sd",
     "direction": "rtl",
     "name": "امروٽي",
-    "translator": "Taj Mehmood Amroti"
+    "translator": "Taj Mehmood Amroti",
+    "file": "sqlite/sd.amroti.sqlite"
   },
   {
     "id": "so.abduh",
@@ -685,7 +770,8 @@
     "languageCode": "so",
     "direction": "ltr",
     "name": "Abduh",
-    "translator": "Mahmud Muhammad Abduh"
+    "translator": "Mahmud Muhammad Abduh",
+    "file": "sqlite/so.abduh.sqlite"
   },
   {
     "id": "es.bornez",
@@ -693,7 +779,8 @@
     "languageCode": "es",
     "direction": "ltr",
     "name": "Bornez",
-    "translator": "Raúl González Bórnez"
+    "translator": "Raúl González Bórnez",
+    "file": "sqlite/es.bornez.sqlite"
   },
   {
     "id": "es.cortes",
@@ -701,7 +788,8 @@
     "languageCode": "es",
     "direction": "ltr",
     "name": "Cortes",
-    "translator": "Julio Cortes"
+    "translator": "Julio Cortes",
+    "file": "sqlite/es.cortes.sqlite"
   },
   {
     "id": "es.garcia",
@@ -709,7 +797,8 @@
     "languageCode": "es",
     "direction": "ltr",
     "name": "Garcia",
-    "translator": "Muhammad Isa García"
+    "translator": "Muhammad Isa García",
+    "file": "sqlite/es.garcia.sqlite"
   },
   {
     "id": "sw.barwani",
@@ -717,7 +806,8 @@
     "languageCode": "sw",
     "direction": "ltr",
     "name": "Al-Barwani",
-    "translator": "Ali Muhsin Al-Barwani"
+    "translator": "Ali Muhsin Al-Barwani",
+    "file": "sqlite/sw.barwani.sqlite"
   },
   {
     "id": "sv.bernstrom",
@@ -725,7 +815,8 @@
     "languageCode": "sv",
     "direction": "ltr",
     "name": "Bernström",
-    "translator": "Knut Bernström"
+    "translator": "Knut Bernström",
+    "file": "sqlite/sv.bernstrom.sqlite"
   },
   {
     "id": "tg.ayati",
@@ -733,7 +824,8 @@
     "languageCode": "tg",
     "direction": "ltr",
     "name": "Оятӣ",
-    "translator": "AbdolMohammad Ayati"
+    "translator": "AbdolMohammad Ayati",
+    "file": "sqlite/tg.ayati.sqlite"
   },
   {
     "id": "ta.tamil",
@@ -741,7 +833,8 @@
     "languageCode": "ta",
     "direction": "ltr",
     "name": "ஜான் டிரஸ்ட்",
-    "translator": "Jan Turst Foundation"
+    "translator": "Jan Turst Foundation",
+    "file": "sqlite/ta.tamil.sqlite"
   },
   {
     "id": "tt.nugman",
@@ -749,7 +842,8 @@
     "languageCode": "tt",
     "direction": "ltr",
     "name": "Yakub Ibn Nugman",
-    "translator": "Yakub Ibn Nugman"
+    "translator": "Yakub Ibn Nugman",
+    "file": "sqlite/tt.nugman.sqlite"
   },
   {
     "id": "th.thai",
@@ -757,7 +851,8 @@
     "languageCode": "th",
     "direction": "ltr",
     "name": "ภาษาไทย",
-    "translator": "King Fahad Quran Complex"
+    "translator": "King Fahad Quran Complex",
+    "file": "sqlite/th.thai.sqlite"
   },
   {
     "id": "tr.golpinarli",
@@ -765,7 +860,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Abdulbakî Gölpınarlı",
-    "translator": "Abdulbaki Golpinarli"
+    "translator": "Abdulbaki Golpinarli",
+    "file": "sqlite/tr.golpinarli.sqlite"
   },
   {
     "id": "tr.bulac",
@@ -773,7 +869,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Alİ Bulaç",
-    "translator": "Alİ Bulaç"
+    "translator": "Alİ Bulaç",
+    "file": "sqlite/tr.bulac.sqlite"
   },
   {
     "id": "tr.transliteration",
@@ -781,7 +878,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Çeviriyazı",
-    "translator": "Muhammet Abay"
+    "translator": "Muhammet Abay",
+    "file": "sqlite/tr.transliteration.sqlite"
   },
   {
     "id": "tr.diyanet",
@@ -789,7 +887,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Diyanet İşleri",
-    "translator": "Diyanet Isleri"
+    "translator": "Diyanet Isleri",
+    "file": "sqlite/tr.diyanet.sqlite"
   },
   {
     "id": "tr.vakfi",
@@ -797,7 +896,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Diyanet Vakfı",
-    "translator": "Diyanet Vakfi"
+    "translator": "Diyanet Vakfi",
+    "file": "sqlite/tr.vakfi.sqlite"
   },
   {
     "id": "tr.yuksel",
@@ -805,7 +905,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Edip Yüksel",
-    "translator": "Edip Yüksel"
+    "translator": "Edip Yüksel",
+    "file": "sqlite/tr.yuksel.sqlite"
   },
   {
     "id": "tr.yazir",
@@ -813,7 +914,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Elmalılı Hamdi Yazır",
-    "translator": "Elmalili Hamdi Yazir"
+    "translator": "Elmalili Hamdi Yazir",
+    "file": "sqlite/tr.yazir.sqlite"
   },
   {
     "id": "tr.ozturk",
@@ -821,7 +923,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Öztürk",
-    "translator": "Yasar Nuri Ozturk"
+    "translator": "Yasar Nuri Ozturk",
+    "file": "sqlite/tr.ozturk.sqlite"
   },
   {
     "id": "tr.yildirim",
@@ -829,7 +932,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Suat Yıldırım",
-    "translator": "Suat Yildirim"
+    "translator": "Suat Yildirim",
+    "file": "sqlite/tr.yildirim.sqlite"
   },
   {
     "id": "tr.ates",
@@ -837,7 +941,8 @@
     "languageCode": "tr",
     "direction": "ltr",
     "name": "Süleyman Ateş",
-    "translator": "Suleyman Ates"
+    "translator": "Suleyman Ates",
+    "file": "sqlite/tr.ates.sqlite"
   },
   {
     "id": "ur.maududi",
@@ -845,7 +950,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "ابوالاعلی مودودی",
-    "translator": "Abul A'ala Maududi"
+    "translator": "Abul A'ala Maududi",
+    "file": "sqlite/ur.maududi.sqlite"
   },
   {
     "id": "ur.kanzuliman",
@@ -853,7 +959,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "احمد رضا خان",
-    "translator": "Ahmed Raza Khan"
+    "translator": "Ahmed Raza Khan",
+    "file": "sqlite/ur.kanzuliman.sqlite"
   },
   {
     "id": "ur.ahmedali",
@@ -861,7 +968,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "احمد علی",
-    "translator": "Ahmed Ali"
+    "translator": "Ahmed Ali",
+    "file": "sqlite/ur.ahmedali.sqlite"
   },
   {
     "id": "ur.jalandhry",
@@ -869,7 +977,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "جالندہری",
-    "translator": "Fateh Muhammad Jalandhry"
+    "translator": "Fateh Muhammad Jalandhry",
+    "file": "sqlite/ur.jalandhry.sqlite"
   },
   {
     "id": "ur.qadri",
@@ -877,7 +986,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "طاہر القادری",
-    "translator": "Tahir ul Qadri"
+    "translator": "Tahir ul Qadri",
+    "file": "sqlite/ur.qadri.sqlite"
   },
   {
     "id": "ur.jawadi",
@@ -885,7 +995,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "علامہ جوادی",
-    "translator": "Syed Zeeshan Haider Jawadi"
+    "translator": "Syed Zeeshan Haider Jawadi",
+    "file": "sqlite/ur.jawadi.sqlite"
   },
   {
     "id": "ur.junagarhi",
@@ -893,7 +1004,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "محمد جوناگڑھی",
-    "translator": "Muhammad Junagarhi"
+    "translator": "Muhammad Junagarhi",
+    "file": "sqlite/ur.junagarhi.sqlite"
   },
   {
     "id": "ur.najafi",
@@ -901,7 +1013,8 @@
     "languageCode": "ur",
     "direction": "rtl",
     "name": "محمد حسین نجفی",
-    "translator": "Muhammad Hussain Najafi"
+    "translator": "Muhammad Hussain Najafi",
+    "file": "sqlite/ur.najafi.sqlite"
   },
   {
     "id": "ug.saleh",
@@ -909,7 +1022,8 @@
     "languageCode": "ug",
     "direction": "rtl",
     "name": "محمد صالح",
-    "translator": "Muhammad Saleh"
+    "translator": "Muhammad Saleh",
+    "file": "sqlite/ug.saleh.sqlite"
   },
   {
     "id": "uz.sodik",
@@ -917,6 +1031,7 @@
     "languageCode": "uz",
     "direction": "ltr",
     "name": "Мухаммад Содик",
-    "translator": "Muhammad Sodik Muhammad Yusuf"
+    "translator": "Muhammad Sodik Muhammad Yusuf",
+    "file": "sqlite/uz.sodik.sqlite"
   }
 ]
