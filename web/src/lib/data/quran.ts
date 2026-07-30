@@ -42,8 +42,9 @@ export type Surah = LoadedSurah;
 
 export const verseKey = (surah: number, ayah: number): VerseKey => `${surah}:${ayah}`;
 export const parseKey = (key: VerseKey): { num: number; n: number } => {
-  const [num, n] = key.split(":").map(Number);
-  return { num, n };
+  const m = /^(\d+):(\d+)$/.exec(key);
+  if (!m) return { num: 1, n: 1 }; // malformed key → safe sentinel instead of NaN
+  return { num: +m[1]!, n: +m[2]! };
 };
 
 /** The full 114-surah catalog (metadata only — no verse text). */

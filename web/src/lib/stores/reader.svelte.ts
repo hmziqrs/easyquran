@@ -18,6 +18,7 @@ export type BrowseMode = "surah" | "ayah" | "juz" | "page";
 export type ReaderMode = "verse" | "reading";
 
 interface Persisted {
+  v: number;
   current: number;
   fontSize: number;
   mode: ReaderMode;
@@ -33,6 +34,7 @@ interface ReaderState extends Persisted {
 }
 
 const DEFAULTS: ReaderState = {
+  v: 1,
   current: 1,
   fontSize: 33,
   mode: "verse",
@@ -47,7 +49,52 @@ const DEFAULTS: ReaderState = {
 function load(): Partial<Persisted> {
   if (!browser) return {};
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") as Partial<Persisted>;
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    // Schema-version gate: this build is v1. A blob with NO `v` is legacy data
+    // from before the version field existed — migrate it forward (the validation
+    // below filters any garbage; persist() re-stamps v:1 on the next write).
+    // Only discard an EXPLICIT unknown version (a future, incompatible shape) so
+    // a schema change can never half-load.
+    if (stored?.v !== undefined && stored.v !== 1) return {};
+    const out: Partial<Persisted> = {};
+    if (
+      typeof stored.current === "number" &&
+      stored.current >= 1 &&
+      stored.current <= SURAHS.length
+    ) {
+      out.current = stored.current;
+    }
+    if (typeof stored.fontSize === "number" && stored.fontSize >= 22 && stored.fontSize <= 56) {
+      out.fontSize = stored.fontSize;
+    }
+    if (stored.mode === "verse" || stored.mode === "reading") out.mode = stored.mode;
+    if (
+      stored.bookmarks &&
+      typeof stored.bookmarks === "object" &&
+      !Array.isArray(stored.bookmarks)
+    ) {
+      const bookmarks: Record<VerseKey, boolean> = {};
+      for (const [k, val] of Object.entries(stored.bookmarks)) {
+        if (val === true) bookmarks[k] = true;
+      }
+      out.bookmarks = bookmarks;
+    }
+    if (stored.notes && typeof stored.notes === "object" && !Array.isArray(stored.notes)) {
+      const notes: Record<VerseKey, string> = {};
+      for (const [k, val] of Object.entries(stored.notes)) {
+        if (typeof val === "string") notes[k] = val;
+      }
+      out.notes = notes;
+    }
+    if (stored.lastRead === null) {
+      out.lastRead = null;
+    } else if (stored.lastRead && typeof stored.lastRead === "object") {
+      const lr = stored.lastRead;
+      if (typeof lr.num === "number" && typeof lr.n === "number") {
+        out.lastRead = { num: lr.num, n: lr.n };
+      }
+    }
+    return out;
   } catch {
     return {};
   }
@@ -61,7 +108,7 @@ class ReaderStore {
   /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text
    *  working without a Worker round-trip (doc §6.3). Seeded from prerendered
    *  page.data and refreshed from the sqlite-wasm Worker. */
-  #versesBySurah = new Map<number, string[]>();
+  #versesBySurah = $state(new Map<number, string[]>());
   /** Monotonic guard: bumped on every navigation so a stale Worker response for
    *  a previously-open surah can never clobber the currently-selected one. */
   #navToken = 0;
@@ -70,13 +117,25 @@ class ReaderStore {
   hydrate(): void {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
-    const s = load();
-    if (s.current != null) this.#s.current = s.current;
-    if (s.fontSize != null) this.#s.fontSize = s.fontSize;
-    if (s.mode) this.#s.mode = s.mode;
-    if (s.bookmarks) this.#s.bookmarks = s.bookmarks;
-    if (s.notes) this.#s.notes = s.notes;
-    if (s.lastRead !== undefined) this.#s.lastRead = s.lastRead ?? null;
+    this.#apply(load());
+    // Cross-tab sync: when another tab writes the durable slice, re-read and
+    // re-apply the validated fields so this tab reflects the other's last write.
+    // Registered once — #hydrated guards repeat hydrate() calls. The 'storage'
+    // event only fires in *other* tabs, so this never echoes our own writes.
+    window.addEventListener("storage", (e) => {
+      if (e.key === STORAGE_KEY) this.#apply(load());
+    });
+  }
+
+  /** Apply the validated durable fields from load() into runtime state. Missing
+   *  fields are left untouched (a skipped/invalid field keeps its default). */
+  #apply(s: Partial<Persisted>): void {
+    if (s.current !== undefined) this.#s.current = s.current;
+    if (s.fontSize !== undefined) this.#s.fontSize = s.fontSize;
+    if (s.mode !== undefined) this.#s.mode = s.mode;
+    if (s.bookmarks !== undefined) this.#s.bookmarks = s.bookmarks;
+    if (s.notes !== undefined) this.#s.notes = s.notes;
+    if (s.lastRead !== undefined) this.#s.lastRead = s.lastRead;
   }
 
   // ── persistence ──────────────────────────────────────────────────────
@@ -86,7 +145,7 @@ class ReaderStore {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ current, fontSize, mode, bookmarks, notes, lastRead }),
+        JSON.stringify({ v: 1, current, fontSize, mode, bookmarks, notes, lastRead }),
       );
     } catch {
       /* storage may be unavailable (private mode, quota) — non-fatal */
@@ -216,7 +275,7 @@ class ReaderStore {
       .sort((a, b) => a.num - b.num || a.n - b.n);
   }
   get bookmarkCount(): number {
-    return this.bookmarkList.length;
+    return Object.values(this.#s.bookmarks).filter(Boolean).length;
   }
 
   // ── notes ────────────────────────────────────────────────────────────

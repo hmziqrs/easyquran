@@ -22,7 +22,7 @@
 
 <ReaderShell>
   {#snippet header()}
-    <span class="text-sm font-medium text-fg-2">{data.label}</span>
+    <h1 class="text-sm font-medium text-fg-2">{data.label}</h1>
     <span class="ml-auto font-mono text-[12px] text-fg-3">{extent}</span>
   {/snippet}
   <RangeReader {data} />

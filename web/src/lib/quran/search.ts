@@ -65,9 +65,34 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
       const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.ok) {
         const body = (await res.json()) as Record<string, unknown>;
-        const data = (body.data ?? body) as Partial<SearchResponse>;
-        if (data && Array.isArray(data.results)) {
-          return { ...(data as SearchResponse), query, source: "api" };
+        const data = (body.data ?? body) as Partial<SearchResponse> | undefined;
+        const rawResults = data?.results;
+        if (Array.isArray(rawResults)) {
+          // Validate at the boundary, rebuild field-by-field — never spread the
+          // wire shape. Skip any item lacking numeric surah + ayah.
+          const results: SearchHit[] = [];
+          for (const item of rawResults) {
+            if (!item || typeof item !== "object") continue;
+            const rec = item as unknown as Record<string, unknown>;
+            const surah = Number(rec.surah);
+            const ayah = Number(rec.ayah);
+            if (rec.surah == null || rec.ayah == null || !Number.isFinite(surah) || !Number.isFinite(ayah)) continue;
+            results.push({
+              key: String(rec.key ?? ""),
+              surah,
+              ayah,
+              globalIndex: Number(rec.globalIndex) || 0,
+              text: typeof rec.text === "string" ? rec.text : "",
+            });
+          }
+          return {
+            query,
+            total: typeof data?.total === "number" ? data.total : results.length,
+            limit: Number(data?.limit) || DEFAULT_LIMIT,
+            offset: Number(data?.offset) || DEFAULT_OFFSET,
+            results,
+            source: "api",
+          };
         }
       }
     } catch {

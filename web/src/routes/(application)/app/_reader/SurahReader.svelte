@@ -33,6 +33,7 @@
   } from "$lib/data/quran";
   import { Icon } from "$lib/components/icon";
   import VerseRow from "./VerseRow.svelte";
+  import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
 
   let { surah }: { surah: Surah } = $props();
@@ -150,6 +151,7 @@
             type="button"
             id="mode-verse"
             role="tab"
+            aria-controls="surah-text"
             aria-selected={reader.isVerseMode}
             tabindex={reader.isVerseMode ? 0 : -1}
             onclick={() => reader.setMode("verse")}
@@ -166,6 +168,7 @@
             type="button"
             id="mode-reading"
             role="tab"
+            aria-controls="surah-text"
             aria-selected={reader.isReadingMode}
             tabindex={reader.isReadingMode ? 0 : -1}
             onclick={() => reader.setMode("reading")}
@@ -201,11 +204,13 @@
           style="font-size:{reader.arabicSizePx}"
         >{#each surah.verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
       {:else}
-        <div class="flex flex-col">
-          {#each surah.verses as text, i (verseKey(surah.num, i + 1))}
-            <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
-          {/each}
-        </div>
+        <TooltipProvider delayDuration={300}>
+          <div class="flex flex-col">
+            {#each surah.verses as text, i (verseKey(surah.num, i + 1))}
+              <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
+            {/each}
+          </div>
+        </TooltipProvider>
       {/if}
     </div>
 

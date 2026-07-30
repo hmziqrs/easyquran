@@ -12,7 +12,7 @@
   import { quranSearch } from "$lib/quran/search";
   import type { SearchResponse } from "$lib/quran/search/normalize";
 
-  let result = $state<SearchResponse | null>(null);
+  let result = $state.raw<SearchResponse | null>(null);
   let loading = $state(false);
 
   // Re-run search whenever the query changes (debounced so fast typing doesn't

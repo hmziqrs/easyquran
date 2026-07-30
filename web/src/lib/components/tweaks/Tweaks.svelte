@@ -12,6 +12,8 @@
   import { cn } from "$lib/utils";
 
   let open = $state(false);
+  let triggerButton = $state<HTMLButtonElement>();
+  let firstControl = $state<HTMLButtonElement>();
   const themes: ThemeMode[] = ["dark", "light"];
 
   const pill = "rounded-md border px-3 py-1 text-xs capitalize transition-colors duration-150";
@@ -22,11 +24,31 @@
   function consentPill(value: boolean): string {
     return cn(pill, value ? on : off);
   }
+
+  // Escape closes the panel and restores focus to the trigger.
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" && open) {
+      open = false;
+      triggerButton?.focus();
+    }
+  }
+
+  // When the panel opens, move focus to its first control.
+  $effect(() => {
+    if (open && firstControl) {
+      firstControl.focus();
+    }
+  });
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="fixed bottom-5 right-5 z-[1000] flex flex-col items-end gap-3">
   {#if open}
     <div
+      id="tweaks-panel"
+      role="group"
+      aria-label="Settings"
       class="w-[260px] rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >
       <div class="mb-3 flex items-center justify-between">
@@ -35,6 +57,7 @@
           type="button"
           class="text-fg-3 transition-colors hover:text-fg"
           onclick={() => (open = false)}
+          bind:this={firstControl}
           aria-label="Close appearance panel">✕</button
         >
       </div>
@@ -107,9 +130,11 @@
 
   <button
     type="button"
+    bind:this={triggerButton}
     onclick={() => (open = !open)}
     aria-label="Customize appearance"
-    aria-pressed={open}
+    aria-expanded={open}
+    aria-controls="tweaks-panel"
     class="flex size-10 items-center justify-center rounded-full border border-line-2 bg-bg-1/95 text-fg-2 shadow-lg backdrop-blur transition-colors hover:text-fg"
   >
     {#if open}<span class="text-sm">✕</span>{:else}<span class="text-lg leading-none">◐</span>{/if}

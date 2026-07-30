@@ -37,7 +37,13 @@ function load(): ConsentFlags {
   if (!browser) return { ...DEFAULT_FLAGS };
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return { ...DEFAULT_FLAGS, ...stored } as ConsentFlags;
+    return {
+      // Default ON unless explicitly false; non-boolean values keep the default.
+      analytics: stored.analytics === false ? false : DEFAULT_FLAGS.analytics,
+      performance: stored.performance === false ? false : DEFAULT_FLAGS.performance,
+      // Default OFF unless explicitly true; non-boolean values keep the default.
+      advertising: stored.advertising === true ? true : DEFAULT_FLAGS.advertising,
+    };
   } catch {
     return { ...DEFAULT_FLAGS };
   }
@@ -86,7 +92,11 @@ class ConsentStore {
   set(patch: ConsentPatch): void {
     this.#flags = { ...this.#flags, ...patch };
     if (browser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#flags));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#flags));
+      } catch {
+        /* storage may be unavailable (private mode, quota) — non-fatal */
+      }
       window.dispatchEvent(new CustomEvent("easyquran:consent", { detail: patch }));
     }
   }

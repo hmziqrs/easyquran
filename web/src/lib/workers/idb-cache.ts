@@ -10,8 +10,14 @@ const DB_NAME = "easyquran-quran";
 const STORE = "artifacts";
 const key = (cv: string, id: string): string => `${cv}:${id}`;
 
+// One shared connection for the worker's lifetime — opening a fresh
+// IDBDatabase per call leaks connections. Never closed; cached promise is
+// reused by open()/idbGet/idbSet.
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
@@ -19,6 +25,7 @@ function open(): Promise<IDBDatabase> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+  return dbPromise;
 }
 
 export async function idbGet(cv: string, id: string): Promise<Uint8Array<ArrayBuffer> | null> {

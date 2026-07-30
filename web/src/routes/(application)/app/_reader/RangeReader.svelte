@@ -8,6 +8,7 @@
   import { goto } from "$app/navigation";
   import { surahByNum, surahPath } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
+  import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { Ayah, RangePageData } from "$lib/data/quran-types";
 
   let { data }: { data: RangePageData } = $props();
@@ -62,11 +63,13 @@
         </button>
       </div>
       <!-- ayahs -->
-      <div class="flex flex-col">
-        {#each g.ayahs as a (a.key)}
-          <VerseRow text={a.text} n={a.ayah} vKey={a.key} />
-        {/each}
-      </div>
+      <TooltipProvider delayDuration={300}>
+        <div class="flex flex-col">
+          {#each g.ayahs as a (a.key)}
+            <VerseRow text={a.text} n={a.ayah} vKey={a.key} />
+          {/each}
+        </div>
+      </TooltipProvider>
     </div>
   {/each}
 

@@ -13,5 +13,5 @@
 
 <Nav />
 <main id="main" tabindex="-1">{@render children()}</main>
-<Footer owner={data.owner} />
+<Footer owner={data.owner} year={data.year} />
 <Tweaks />

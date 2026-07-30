@@ -8,7 +8,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import { browser } from "$app/environment";
-import { DEFAULTS, type AccentId, type ThemeMode } from "$lib/config/site";
+import { ACCENTS, DEFAULTS, type AccentId, type ThemeMode } from "$lib/config/site";
 
 const STORAGE_KEY = "easyquran.prefs";
 
@@ -20,12 +20,17 @@ export interface Prefs {
 type PrefPatch = Partial<Prefs>;
 
 function load(): Prefs {
-  if (!browser) return { ...DEFAULTS } as Prefs;
+  if (!browser) return { theme: DEFAULTS.theme, accent: DEFAULTS.accent };
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return { ...DEFAULTS, ...stored } as Prefs;
+    const theme: ThemeMode =
+      stored?.theme === "dark" || stored?.theme === "light" ? stored.theme : DEFAULTS.theme;
+    const accent: AccentId = ACCENTS.some((a) => a.id === stored?.accent)
+      ? stored.accent
+      : DEFAULTS.accent;
+    return { theme, accent };
   } catch {
-    return { ...DEFAULTS } as Prefs;
+    return { theme: DEFAULTS.theme, accent: DEFAULTS.accent };
   }
 }
 
@@ -64,7 +69,11 @@ class PrefsStore {
   set(patch: PrefPatch): void {
     this.#prefs = { ...this.#prefs, ...patch };
     if (browser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#prefs));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#prefs));
+      } catch {
+        /* storage may be unavailable (private mode, quota) — non-fatal */
+      }
       this.apply();
       window.dispatchEvent(new CustomEvent("easyquran:pref", { detail: patch }));
     }

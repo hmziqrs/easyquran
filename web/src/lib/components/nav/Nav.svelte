@@ -15,6 +15,8 @@
   import { Icon } from "$lib/components/icon";
 
   let open = $state(false);
+  let toggleBtn: HTMLButtonElement | undefined = $state();
+  let drawerEl: HTMLDivElement | undefined = $state();
 
   // /app is active on every reader route; the marketing links are exact matches.
   function isActive(href: string) {
@@ -27,6 +29,24 @@
     open = false;
   });
 
+  // The drawer is modal (full-screen backdrop, Escape to close), so it owns
+  // focus while open: move focus to the first link on open, trap Tab within,
+  // and return focus to the hamburger toggle on close. `wasOpen` guards the
+  // restore so we don't grab focus on the initial mount.
+  let wasOpen = false;
+  $effect(() => {
+    const isOpen = open;
+    if (isOpen) {
+      const first = drawerEl?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      first?.focus();
+    } else if (wasOpen) {
+      toggleBtn?.focus();
+    }
+    wasOpen = isOpen;
+  });
+
   function toggle() {
     open = !open;
   }
@@ -35,6 +55,25 @@
   }
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") open = false;
+  }
+  // Trap Tab/Shift+Tab inside the drawer while it is open.
+  function onDrawerKeydown(e: KeyboardEvent) {
+    if (e.key !== "Tab" || !drawerEl) return;
+    const focusables = Array.from(
+      drawerEl.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 </script>
 
@@ -79,6 +118,7 @@
         aria-expanded={open}
         aria-controls="mobile-menu"
         aria-label="Menu"
+        bind:this={toggleBtn}
         class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg md:hidden"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
@@ -98,6 +138,12 @@
   ></button>
   <div
     id="mobile-menu"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Mobile"
+    tabindex="-1"
+    bind:this={drawerEl}
+    onkeydown={onDrawerKeydown}
     class="fixed inset-x-0 top-[60px] z-50 border-b border-line bg-bg/95 backdrop-blur-xl md:hidden"
   >
     <div class="mx-auto max-w-[1180px] px-6 py-3 sm:px-7">

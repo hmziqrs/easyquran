@@ -17,12 +17,7 @@
   import { tafsirFor, toArabicDigits } from "$lib/data/quran";
   import { Icon } from "$lib/components/icon";
   import { Textarea } from "$lib/components/ui/textarea";
-  import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-    TooltipProvider,
-  } from "$lib/components/ui/tooltip";
+  import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
 
   let { text, n, vKey }: { text: string; n: number; vKey: string } = $props();
@@ -38,10 +33,12 @@
   let sharedCopied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let shareTimer: ReturnType<typeof setTimeout> | null = null;
+  let mounted = true;
 
   async function onCopy() {
     const ok = await reader.copyVerse(vKey);
     if (!ok) return;
+    if (!mounted) return;
     copied = true;
     if (copyTimer) clearTimeout(copyTimer);
     copyTimer = setTimeout(() => (copied = false), 1500);
@@ -50,6 +47,7 @@
   async function onShare() {
     const r = await reader.shareVerse(vKey);
     if (r !== "copied") return; // "shared" (native sheet) or "failed" — no banner
+    if (!mounted) return;
     sharedCopied = true;
     if (shareTimer) clearTimeout(shareTimer);
     shareTimer = setTimeout(() => (sharedCopied = false), 1500);
@@ -62,6 +60,7 @@
   // Drop pending feedback timers if the row unmounts mid-countdown.
   $effect(() => {
     return () => {
+      mounted = false;
       if (copyTimer) clearTimeout(copyTimer);
       if (shareTimer) clearTimeout(shareTimer);
     };
@@ -70,7 +69,7 @@
 
 <div
   id="ayah-{n}"
-  class="group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors sm:px-9"
+  class="group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors content-visibility-auto [contain-intrinsic-size:auto_120px] sm:px-9"
 >
   <!-- Top row: verse ref (left) + actions (right). Sits ABOVE the Arabic so it
        can never overlap RTL text. Always visible on touch; hover/focus on desktop. -->
@@ -79,8 +78,7 @@
   >
     <span class="font-mono text-[11px] tracking-wide text-fg-3">{vKey}</span>
     <div class="flex items-center gap-0.5">
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
+      <Tooltip>
           <TooltipTrigger>
             {#snippet child({ props })}
               <button
@@ -159,7 +157,6 @@
           </TooltipTrigger>
           <TooltipContent>Note &amp; tafsir</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
     </div>
   </div>
 

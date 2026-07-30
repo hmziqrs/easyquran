@@ -14,7 +14,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { SURAHS, surahBySlug, surahMeta, surahPath, parseKey, surahByNum } from "$lib/data/quran";
+  import { SURAHS, surahBySlug, surahMeta, surahPath, parseKey, surahByNum, verseKey } from "$lib/data/quran";
   import { NAVIGATION } from "$lib/data/quran-meta";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
@@ -145,7 +145,7 @@
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu class="gap-1">
-            {#each reader.versesFor(current.num) as v, i (i)}
+            {#each reader.versesFor(current.num) as v, i (verseKey(current.num, i + 1))}
               {@const n = i + 1}
               <SidebarMenuItem>
                 <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">

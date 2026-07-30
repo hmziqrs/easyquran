@@ -163,7 +163,7 @@ export const ACCENTS: AccentDef[] = [
   { id: "plum", label: "Plum", hex: "#c08cff" },
 ];
 
-export const DEFAULTS = {
+export const DEFAULTS: { theme: ThemeMode; accent: AccentId } = {
   theme: "dark",
   accent: "emerald",
-} satisfies Record<string, string>;
+};

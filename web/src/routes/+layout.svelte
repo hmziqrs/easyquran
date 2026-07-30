@@ -52,31 +52,46 @@
     // Lazy-import the feature modules so the Firebase SDK never enters the
     // critical modulepreload graph — it starts only after hydration.
     void (async () => {
-      const fbAnalytics = await import("$lib/firebase/analytics");
-      const fbPerf = await import("$lib/firebase/performance");
+      // fbAnalytics stays undefined if the dynamic import or init fails; the
+      // consent bridge below is then a safe no-op, so a later retry or manual
+      // consent change isn't silently lost.
+      let fbAnalytics: typeof import("$lib/firebase/analytics") | undefined;
 
       // Push the user's consent choices into GA4 consent mode + the analytics
       // collection toggle, and re-apply whenever they change (Settings panel).
       // (Performance has no runtime toggle — see lib/firebase/performance.ts —
       // it's consent-gated only at init above; the control reloads to apply it.)
       const applyConsent = () => {
+        if (!fbAnalytics) return;
         fbAnalytics.setConsentState(consent.consentSettings);
         fbAnalytics.setAnalyticsCollectionEnabled(consent.analytics);
       };
 
-      // Start analytics + performance, gated by consent. (Performance flags are
-      // honored at init; analytics can be toggled freely at runtime.)
-      await fbAnalytics.initAnalytics();
-      fbPerf.initPerformance({
-        dataCollectionEnabled: consent.performance,
-        instrumentationEnabled: consent.performance,
-      });
-      applyConsent();
-      window.addEventListener("easyquran:consent", applyConsent);
+      try {
+        fbAnalytics = await import("$lib/firebase/analytics");
+        const fbPerf = await import("$lib/firebase/performance");
 
-      // First-load page view (after consent is applied, so the first event
-      // respects the user's consent-mode state).
-      fbAnalytics.pageView(location.pathname);
+        // Start analytics + performance, gated by consent. (Performance flags
+        // are honored at init; analytics can be toggled freely at runtime.)
+        await fbAnalytics.initAnalytics();
+        fbPerf.initPerformance({
+          dataCollectionEnabled: consent.performance,
+          instrumentationEnabled: consent.performance,
+        });
+        applyConsent();
+
+        // First-load page view (after consent is applied, so the first event
+        // respects the user's consent-mode state).
+        fbAnalytics.pageView(location.pathname);
+      } catch (err) {
+        // Analytics is best-effort — a failed dynamic import or init must not
+        // throw unhandled or disable the consent bridge registered below.
+        console.warn("[firebase] init failed:", err);
+      }
+
+      // Register the consent bridge outside the try/catch so it survives an
+      // init failure (applyConsent is a no-op until fbAnalytics is assigned).
+      window.addEventListener("easyquran:consent", applyConsent);
     })();
   });
 
@@ -86,7 +101,11 @@
   // runs after consent is applied), so this fires only on subsequent navigations.
   afterNavigate((navigation) => {
     if (navigation.type === "enter") return;
-    void import("$lib/firebase/analytics").then(({ pageView }) => pageView(location.pathname));
+    void import("$lib/firebase/analytics")
+      .then(({ pageView }) => pageView(location.pathname))
+      .catch(() => {
+        /* analytics is best-effort */
+      });
   });
 
   // Site-level structured data. A @graph of WebSite + Organization, each with

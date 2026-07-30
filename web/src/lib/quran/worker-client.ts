@@ -10,7 +10,7 @@
 
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
-import type { SearchOpts, SearchResponse } from "./search/normalize";
+import { DEFAULT_LIMIT, DEFAULT_OFFSET, type SearchOpts, type SearchResponse } from "./search/normalize";
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -73,6 +73,21 @@ export const quranWorker = {
         name: "quran-db",
       });
       worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => handle(e.data));
+      // A worker-bundle load/eval failure (or an undeserializable message) must
+      // settle start()/whenReady and every pending request — otherwise they hang
+      // forever. Read the live module-scoped arrays; do not capture a stale copy.
+      const failAll = (err: Error): void => {
+        readyReject.forEach((r) => r(err));
+        readyReject = [];
+        pending.forEach((p) => p.reject(err));
+        pending.clear();
+      };
+      worker.addEventListener("error", (e: ErrorEvent) => {
+        failAll(e.error instanceof Error ? e.error : new Error(`quran worker failed to load: ${e.message}`));
+      });
+      worker.addEventListener("messageerror", () => {
+        failAll(new Error("quran worker message could not be deserialized"));
+      });
       readyPromise = new Promise<void>((res, rej) => {
         readyResolve.push(res);
         readyReject.push(rej);
@@ -94,11 +109,38 @@ export const quranWorker = {
 
   /** Read one surah's verbatim Uthmani verses from the local DB. */
   readSurah(num: number): Promise<string[]> {
-    return request<string[]>((id) => ({ id, type: "readSurah", num }));
+    return request<string[]>((id) => ({ id, type: "readSurah", num })).then((r: unknown) =>
+      Array.isArray(r) ? r.map(String) : [],
+    );
   },
 
   /** Substring search over the local normalized corpus. */
   search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
-    return request<SearchResponse>((id) => ({ id, type: "search", query, opts }));
+    return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then((r: unknown) => {
+      const empty: SearchResponse = {
+        query,
+        total: 0,
+        limit: opts?.limit ?? DEFAULT_LIMIT,
+        offset: opts?.offset ?? DEFAULT_OFFSET,
+        results: [],
+        source: "worker",
+      };
+      if (!r || typeof r !== "object") return empty;
+      const o = r as Record<string, unknown>;
+      if (
+        typeof o.total !== "number" ||
+        !Array.isArray(o.results) ||
+        !o.results.every(
+          (h) =>
+            !!h &&
+            typeof h === "object" &&
+            typeof (h as Record<string, unknown>).surah === "number" &&
+            typeof (h as Record<string, unknown>).ayah === "number",
+        )
+      ) {
+        return empty;
+      }
+      return r as SearchResponse;
+    });
   },
 };

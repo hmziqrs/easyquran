@@ -10,9 +10,8 @@
   import { externalLinkAttrs } from "$lib/utils";
   import type { OwnerPublic } from "$lib/types/owner";
 
-  let { owner }: { owner: OwnerPublic } = $props();
+  let { owner, year }: { owner: OwnerPublic; year: number } = $props();
 
-  const year = new Date().getFullYear();
   const brand = SITE.name.toLowerCase();
 
   // Company column = the nav's marketing links (Read lives in Product).

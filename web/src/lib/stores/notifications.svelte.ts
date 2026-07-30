@@ -183,10 +183,14 @@ class NotificationsStore {
 
   #persist(): void {
     if (!browser) return;
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ token: this.#token, subscribed: this.#subscribed }),
-    );
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ token: this.#token, subscribed: this.#subscribed }),
+      );
+    } catch {
+      /* storage may be unavailable (private mode, quota) — non-fatal */
+    }
   }
 
   #setSubscribed(subscribed: boolean, token: string | null, registered = true): void {
