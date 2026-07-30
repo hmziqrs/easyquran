@@ -28,3 +28,7 @@ vite.config.ts.timestamp-*
 rust/target/
 rust/**/target/
 *.profraw
+
+# SQLite WAL sidecars (the app db runs journal_mode=WAL; the db itself is tracked)
+*.db-wal
+*.db-shm
