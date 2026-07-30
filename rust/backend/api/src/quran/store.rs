@@ -353,7 +353,8 @@ pub fn range_containing<K>(ranges: &[Range<K>], g: u32) -> Option<&Range<K>> {
 /// derived from object-storage settings and joined into `/scripts` by its
 /// handler, so a CDN hostname change is not a Quran content change (§4.2).
 ///
-/// `search` (the normalized `SearchIndex`, §4.2/§7.1) is added in Phase 2.
+/// `search` is the normalized `SearchIndex` (§4.2/§7.1), built at boot from the
+/// in-memory simple-clean corpus — no SQLite (see the field doc below).
 pub struct QuranStore {
     pub uthmani: Corpus,
     pub simple_clean: Corpus,

@@ -10,11 +10,13 @@ edition = "2021"
 publish = false
 
 [features]
-default = []
+# `openapi` is on by default: §6.1 documents `GET /openapi.json` on the public
+# branch, so the shipped build must serve it. (`seed-system` stays off — see below.)
+default = ["openapi"]
 # Security: the seeder + admin TUI use a predictable ChaCha20 RNG seed and must
 # never ship in a release binary. Excluded from default; do not enable for releases.
 seed-system = []
-# Optional OpenAPI docs (utoipa + swagger UI). Off by default to avoid the doc-build cost.
+# OpenAPI docs (utoipa + swagger UI). Serves `GET /quran/v1/openapi.json` (§6.1).
 openapi = ["utoipa", "utoipa-swagger-ui"]
 
 [dependencies]

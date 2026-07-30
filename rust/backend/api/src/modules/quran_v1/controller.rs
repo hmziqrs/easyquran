@@ -372,6 +372,13 @@ pub async fn ayahs_multi(
     let script = parse_script(&q.script)?;
     match (q.keys.as_deref(), q.from_global, q.to_global) {
         (Some(keys), _, _) => {
+            // Cheap raw-size guard before the (allocating) split+collect, so a
+            // huge `keys` value is rejected without a transient oversized Vec —
+            // parity with the search guard; `keys` is the one unbounded public
+            // query surface (§6.1 caps the logical count at 50 entries).
+            if keys.len() > 1024 {
+                return Err(invalid("`keys` is too long (max ~1024 bytes; up to 50 verse keys)"));
+            }
             let parsed: Vec<&str> = keys.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
             if parsed.is_empty() {
                 return Err(invalid("`keys` must contain at least one verse key (e.g. 2:255)"));
