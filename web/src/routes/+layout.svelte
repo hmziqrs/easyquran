@@ -32,6 +32,15 @@
     prefs.apply();
     notifications.hydrate();
 
+    // Register the root Service Worker (app-shell + FCM) in production so the
+    // reader is offline-capable after first visit. Skipped in dev (it would
+    // cache over HMR). firebase/messaging.ts re-uses this same registration.
+    if (import.meta.env.PROD && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
+        console.warn("[sw] registration failed:", err);
+      });
+    }
+
     // Lazy-import the feature modules so the Firebase SDK never enters the
     // critical modulepreload graph — it starts only after hydration.
     void (async () => {

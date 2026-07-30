@@ -94,16 +94,17 @@ export function initMessaging(): Promise<Messaging | null> {
 }
 
 /**
- * Register the FCM service worker (static/firebase-messaging-sw.js, served at
- * /firebase-messaging-sw.js) and resolve once it's active. Returns null if
- * service workers are unavailable or registration throws. Idempotent.
+ * Register the root service worker (static/sw.js at /) — the ONE worker that
+ * both caches the app shell AND handles Firebase Cloud Messaging background
+ * push — and resolve once it's active. Idempotent. Returns null if service
+ * workers are unavailable or registration throws. (The worker is also registered
+ * eagerly by the root layout on first paint; this re-register is a no-op that
+ * just yields the existing registration for getToken.)
  */
 export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!browser || !("serviceWorker" in navigator)) return null;
   try {
-    const reg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
-      scope: "/",
-    });
+    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     await navigator.serviceWorker.ready;
     return reg;
   } catch (err) {
