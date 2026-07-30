@@ -1,4 +1,4 @@
-# EasyQuran app stack — web + api only. ROOT-LEVEL compose for Dokploy.
+# EasyQuran app stack — web (+ api) at the repo root.
 #
 # Why root: Dokploy writes the .env (from your Environment tab) at the code root
 # and sources it relative to the compose file. With the compose in a subdirectory
@@ -6,11 +6,18 @@
 # file or directory". At the root they agree. Run locally with `docker compose
 # up` from the repo root.
 #
-# Build context is now the repo root (context: .), so the Dockerfiles under
-# deploy/ and the build-time data files under db/ resolve correctly.
+# Build context is the repo root (context: .), so the Dockerfiles under deploy/
+# and the build-time data files under db/ resolve correctly.
+#
+# NOTE: the `api` service is COMMENTED OUT for a web-only deploy. The web reader
+# is static and doesn't depend on the API (it reads baked constants + fetches the
+# Arabic sqlite directly from R2). To re-enable the API later: uncomment the block
+# below AND first add `curl` to deploy/Dockerfile.api's builder apt-get (the
+# utoipa-swagger-ui build script needs curl to fetch Swagger UI — without it the
+# Rust build fails with "`curl` command not found").
 #
 # Routing (from the labels), all on DOMAIN:
-#   Host(DOMAIN) && PathPrefix(`/api`) → api:8888   (strip /api, priority 100)
+#   Host(DOMAIN) && PathPrefix(`/api`) → api:8888   (strip /api, priority 100)  [disabled]
 #   Host(DOMAIN)                        → web:8080
 
 name: ${PROJECT:-easyquran}
@@ -39,53 +46,50 @@ services:
       - "traefik.http.services.web.loadbalancer.server.port=8080"
     restart: unless-stopped
 
-  api:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile.api
-      args:
-        VERSION: ${VERSION:-dev}
-    image: ${PROJECT:-easyquran}/api:latest
-    container_name: ${PROJECT:-easyquran}_api
-    env_file: [.env]
-    environment:
-      HOST: "0.0.0.0"
-      PORT: "8888"
-      DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
-      RUST_LOG: ${RUST_LOG:-info}
-    volumes:
-      - api_data:/app/data
-    networks:
-      proxy:
-        aliases: [api]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/healthz || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=${PROXY_NETWORK}"
-      - "traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.api.entrypoints=${HTTPS_ENTRYPOINT}"
-      - "traefik.http.routers.api.tls=true"
-      - "traefik.http.routers.api.tls.certresolver=${ACME_RESOLVER}"
-      - "traefik.http.routers.api.priority=100"
-      # strip /api so the backend (which serves /healthz, /auth/v1, … at root)
-      # gets clean paths: easyquran.fyi/api/healthz → /healthz.
-      - "traefik.http.routers.api.middlewares=strip-api@docker"
-      - "traefik.http.services.api.loadbalancer.server.port=8888"
-      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
-      - "traefik.http.middlewares.strip-api.stripprefix.forceslash=false"
-    restart: unless-stopped
+  # ── API (Rust/Axum) — disabled for web-only deploy. Uncomment to re-enable. ──
+  # api:
+  #   build:
+  #     context: .
+  #     dockerfile: deploy/Dockerfile.api
+  #     args:
+  #       VERSION: ${VERSION:-dev}
+  #   image: ${PROJECT:-easyquran}/api:latest
+  #   container_name: ${PROJECT:-easyquran}_api
+  #   env_file: [.env]
+  #   environment:
+  #     HOST: "0.0.0.0"
+  #     PORT: "8888"
+  #     DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
+  #     RUST_LOG: ${RUST_LOG:-info}
+  #   volumes:
+  #     - api_data:/app/data
+  #   networks:
+  #     proxy:
+  #       aliases: [api]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8888/healthz || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 15s
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=${PROXY_NETWORK}"
+  #     - "traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
+  #     - "traefik.http.routers.api.entrypoints=${HTTPS_ENTRYPOINT}"
+  #     - "traefik.http.routers.api.tls=true"
+  #     - "traefik.http.routers.api.tls.certresolver=${ACME_RESOLVER}"
+  #     - "traefik.http.routers.api.priority=100"
+  #     - "traefik.http.routers.api.middlewares=strip-api@docker"
+  #     - "traefik.http.services.api.loadbalancer.server.port=8888"
+  #     - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+  #     - "traefik.http.middlewares.strip-api.stripprefix.forceslash=false"
+  #   restart: unless-stopped
 
 networks:
-  # EXTERNAL — Dokploy's network (dokploy-network). Both containers attach here
-  # so Dokploy's Traefik can reach them; the labels above tell it how to route.
   proxy:
     name: ${PROXY_NETWORK}
     external: true
 
-volumes:
-  api_data: {}
+# volumes:
+#   api_data: {}
