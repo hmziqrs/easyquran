@@ -19,10 +19,10 @@
     · a prev/next footer (adjacentSurahs → goto(surahPath)).
 -->
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import { reader } from "$lib/stores/reader.svelte";
   import {
-    adjacentSurahs,
+    SURAHS,
+    surahByNum,
     surahMeta,
     verseKey,
     BISMILLAH,
@@ -37,7 +37,9 @@
 
   let { surah }: { surah: Surah } = $props();
 
-  const adj = $derived(adjacentSurahs(surah.num));
+  // Bounded prev/next surah (no wrap): surah 1 has no prev, 114 no next.
+  const prevNum = $derived(surah.num > 1 ? surah.num - 1 : null);
+  const nextNum = $derived(surah.num < SURAHS.length ? surah.num + 1 : null);
   const showBasmala = $derived(showsBismillah(surah));
   const badge = $derived(String(surah.num).padStart(3, "0"));
 
@@ -207,24 +209,30 @@
       {/if}
     </div>
 
-    <!-- prev / next -->
+    <!-- prev / next surah (bounded: no wrap at 1 / 114) -->
     <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
-      <button
-        type="button"
-        onclick={() => goto(surahPath(adj.prev.num))}
-        class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-      >
-        <span aria-hidden="true">←</span>
-        {adj.prev.name}
-      </button>
-      <button
-        type="button"
-        onclick={() => goto(surahPath(adj.next.num))}
-        class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-      >
-        {adj.next.name}
-        <span aria-hidden="true">→</span>
-      </button>
+      {#if prevNum !== null}
+        <a
+          href={surahPath(prevNum)}
+          data-sveltekit-preload-data="hover"
+          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+        >
+          <span aria-hidden="true">←</span>
+          {surahByNum(prevNum).name}
+        </a>
+      {:else}
+        <span></span>
+      {/if}
+      {#if nextNum !== null}
+        <a
+          href={surahPath(nextNum)}
+          data-sveltekit-preload-data="hover"
+          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+        >
+          {surahByNum(nextNum).name}
+          <span aria-hidden="true">→</span>
+        </a>
+      {/if}
     </div>
   </div>
 </div>

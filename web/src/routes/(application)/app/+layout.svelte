@@ -9,18 +9,15 @@
   import { onMount } from "svelte";
   import { Nav } from "$lib/components/nav";
   import { reader } from "$lib/stores/reader.svelte";
-  import { bootOfflineEngine } from "$lib/quran/offline";
 
   let { children } = $props();
 
   // Pull saved reader state in AFTER mount so the prerendered HTML (built from
-  // DEFAULTS) matches the first client render — no hydration mismatch.
+  // DEFAULTS) matches the first client render — no hydration mismatch. (The
+  // offline engine is booted from the root layout, so it starts on the landing
+  // page too — see routes/+layout.svelte.)
   onMount(() => {
     reader.hydrate();
-    // Boot the offline engine in the background: it fetches + verifies the two
-    // Arabic DBs from R2 into OPFS and starts the sqlite-wasm Worker. Fully
-    // best-effort — the reader paints from prerendered data regardless.
-    void bootOfflineEngine();
   });
 </script>
 

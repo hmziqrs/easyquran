@@ -18,6 +18,7 @@
   import { notifications } from "$lib/stores/notifications.svelte";
   import { NotificationToast } from "$lib/components/notifications";
   import { SITE } from "$lib/config/site";
+  import { bootOfflineEngine } from "$lib/quran/offline";
 
   let { children } = $props();
 
@@ -39,6 +40,18 @@
       navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
         console.warn("[sw] registration failed:", err);
       });
+    }
+
+    // Proactively cache the Quran for offline use as soon as the browser is
+    // idle — don't wait for the reader to be opened. The two Arabic DBs (~2.5 MB
+    // total) download in a background Worker into OPFS, so the first visit to
+    // /app is already cached. Best-effort; the reader renders from prerendered
+    // data regardless. (requestIdleCallback avoids competing with first paint.)
+    const bootOffline = () => void bootOfflineEngine();
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(bootOffline, { timeout: 4000 });
+    } else {
+      window.setTimeout(bootOffline, 1500);
     }
 
     // Lazy-import the feature modules so the Firebase SDK never enters the
