@@ -93,6 +93,36 @@
       // init failure (applyConsent is a no-op until fbAnalytics is assigned).
       window.addEventListener("easyquran:consent", applyConsent);
     })();
+
+    // Crash reporting — forward uncaught errors + unhandled promise rejections to
+    // GA4 as exceptions (Crashlytics has no web SDK; this is the Firebase-native
+    // equivalent). Consent-gated: logException → track() drops it while collection
+    // is off. Dynamic-imported so the analytics module stays out of the critical
+    // bundle (errors are rare; the module caches after first load).
+    const reportException = (description: string) =>
+      import("$lib/firebase/analytics")
+        .then(({ logException }) => logException(description, true))
+        .catch(() => {
+          /* crash reporting is best-effort */
+        });
+    const onError = (event: ErrorEvent) =>
+      reportException(
+        `Uncaught: ${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`,
+      );
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason =
+        event.reason instanceof Error
+          ? `${event.reason.name}: ${event.reason.message}`
+          : String(event.reason);
+      reportException(`Unhandled rejection: ${reason}`);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
   });
 
   // The site is a prerendered SPA, so client-side route changes don't reload the

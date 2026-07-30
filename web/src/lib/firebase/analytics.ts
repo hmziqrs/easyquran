@@ -133,3 +133,15 @@ export async function setAnalyticsCollectionEnabled(enabled: boolean): Promise<v
     console.warn("[firebase] setAnalyticsCollectionEnabled failed:", err);
   }
 }
+
+/**
+ * Log an exception to GA4 — the web-native crash signal. Crashlytics has no web
+ * SDK, so this (GA4's reserved `exception` event) is the closest Firebase-native
+ * equivalent. Consent-gated like every analytics call: track() drops the event
+ * while collection is disabled. GA4 truncates `description` to 100 chars.
+ *
+ *   try { … } catch (err) { void logException(`foo failed: ${err}`, true); }
+ */
+export async function logException(description: string, fatal = false): Promise<void> {
+  await track("exception", { description, fatal });
+}

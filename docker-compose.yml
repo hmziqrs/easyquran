@@ -24,8 +24,8 @@ services:
         PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
         INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
         VERSION: ${VERSION:-dev}
-    image: ${PROJECT}/web:latest
-    container_name: ${PROJECT}_web
+    image: ${PROJECT:-easyquran}/web:latest
+    container_name: ${PROJECT:-easyquran}_web
     networks:
       proxy:
         aliases: [web]
@@ -45,8 +45,8 @@ services:
       dockerfile: deploy/Dockerfile.api
       args:
         VERSION: ${VERSION:-dev}
-    image: ${PROJECT}/api:latest
-    container_name: ${PROJECT}_api
+    image: ${PROJECT:-easyquran}/api:latest
+    container_name: ${PROJECT:-easyquran}_api
     env_file: [.env]
     environment:
       HOST: "0.0.0.0"
