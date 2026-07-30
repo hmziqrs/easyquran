@@ -1,33 +1,27 @@
 <!--
-  /app — the reader. A centered max-w-[1320px] two-column grid: the sticky
-  Sidebar (288px) on the left and the reading section on the right. The section
-  swaps between search Results (reader.hasQuery) and the SurahReader. The
-  sticky Player mounts whenever audio is playing. All state flows through the
-  `reader` store; this file only wires the regions together.
+  /app — resume the last-read surah (or Al-Fatihah). The reader itself lives at
+  /app/[surah]; this index just picks a destination client-side, after the store
+  hydrates, so "Open the app" always lands you back where you were. (Hydrate is
+  idempotent — the app layout also calls it — so order across onMount hooks is
+  irrelevant.)
 -->
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
-  import Sidebar from "./_reader/Sidebar.svelte";
-  import SurahReader from "./_reader/SurahReader.svelte";
-  import Results from "./_reader/Results.svelte";
-  import Player from "./_reader/Player.svelte";
+  import { slugFor } from "$lib/data/quran";
+
+  onMount(() => {
+    reader.hydrate();
+    const num = reader.lastRead?.num ?? 1;
+    goto(`/app/${slugFor(num)}`, { replaceState: true });
+  });
 </script>
 
 <Seo path="/app" noindex />
 
-<div
-  class="mx-auto grid max-w-[1320px] grid-cols-1 gap-5 px-5 pt-6 sm:px-7 md:grid-cols-[288px_1fr] md:items-start"
->
-  <Sidebar />
-
-  <section class="flex min-w-0 flex-col gap-4">
-    {#if reader.hasQuery}
-      <Results />
-    {:else}
-      <SurahReader />
-    {/if}
-  </section>
+<!-- bare shell while the redirect resolves -->
+<div class="mx-auto max-w-[1320px] px-5 pt-16 sm:px-7" aria-busy="true">
+  <p class="text-sm text-fg-3">Opening the reader…</p>
 </div>
-
-<Player />

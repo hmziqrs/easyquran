@@ -20,11 +20,13 @@ import {
 const STORAGE_KEY = "easyquran.reader";
 const RECITER = "Mishary Rashid Alafasy";
 
-export type ReaderTab = "surahs" | "bookmarks";
+export type BrowseMode = "surah" | "verse" | "juz" | "page";
+export type ReaderMode = "verse" | "reading";
 
 interface Persisted {
   current: number;
   fontSize: number;
+  mode: ReaderMode;
   bookmarks: Record<VerseKey, boolean>;
   notes: Record<VerseKey, string>;
   lastRead: { num: number; n: number } | null;
@@ -32,7 +34,7 @@ interface Persisted {
 
 interface ReaderState extends Persisted {
   query: string;
-  tab: ReaderTab;
+  browse: BrowseMode;
   openNote: VerseKey | null;
   playing: VerseKey | null;
   progress: number; // 0..100
@@ -44,11 +46,12 @@ interface ReaderState extends Persisted {
 const DEFAULTS: ReaderState = {
   current: 1,
   fontSize: 33,
+  mode: "verse",
   bookmarks: {},
   notes: {},
   lastRead: null,
   query: "",
-  tab: "surahs",
+  browse: "surah",
   openNote: null,
   playing: null,
   progress: 0,
@@ -82,6 +85,7 @@ class ReaderStore {
     const s = load();
     if (s.current != null) this.#s.current = s.current;
     if (s.fontSize != null) this.#s.fontSize = s.fontSize;
+    if (s.mode) this.#s.mode = s.mode;
     if (s.bookmarks) this.#s.bookmarks = s.bookmarks;
     if (s.notes) this.#s.notes = s.notes;
     if (s.lastRead !== undefined) this.#s.lastRead = s.lastRead ?? null;
@@ -90,11 +94,11 @@ class ReaderStore {
   // ── persistence ──────────────────────────────────────────────────────
   private persist(): void {
     if (!browser) return;
-    const { current, fontSize, bookmarks, notes, lastRead } = this.#s;
+    const { current, fontSize, mode, bookmarks, notes, lastRead } = this.#s;
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ current, fontSize, bookmarks, notes, lastRead }),
+        JSON.stringify({ current, fontSize, mode, bookmarks, notes, lastRead }),
       );
     } catch {
       /* storage may be unavailable (private mode, quota) — non-fatal */
@@ -119,7 +123,7 @@ class ReaderStore {
   openVerse(num: number, n: number): void {
     this.#s.current = num;
     this.#s.query = "";
-    this.#s.tab = "surahs";
+    this.#s.browse = "surah";
     this.#s.openNote = null;
     this.#s.lastRead = { num, n };
     this.persist();
@@ -140,18 +144,24 @@ class ReaderStore {
     this.#s.query = "";
   }
 
-  // ── sidebar tab ──────────────────────────────────────────────────────
-  get tab(): ReaderTab {
-    return this.#s.tab;
+  // ── sidebar browse mode (Surah / Verse / Juz / Page) ─────────────────
+  get browseMode(): BrowseMode {
+    return this.#s.browse;
   }
-  get isSurahTab(): boolean {
-    return this.#s.tab === "surahs";
+  get browseSurah(): boolean {
+    return this.#s.browse === "surah";
   }
-  get isBookmarkTab(): boolean {
-    return this.#s.tab === "bookmarks";
+  get browseVerse(): boolean {
+    return this.#s.browse === "verse";
   }
-  setTab(tab: ReaderTab): void {
-    this.#s.tab = tab;
+  get browseJuz(): boolean {
+    return this.#s.browse === "juz";
+  }
+  get browsePage(): boolean {
+    return this.#s.browse === "page";
+  }
+  setBrowse(browse: BrowseMode): void {
+    this.#s.browse = browse;
   }
 
   // ── font size ────────────────────────────────────────────────────────
@@ -167,6 +177,22 @@ class ReaderStore {
   }
   smaller(): void {
     this.#s.fontSize = Math.max(22, this.#s.fontSize - 3);
+    this.persist();
+  }
+
+  // ── reading mode (verse-by-verse vs continuous mushaf text) ──────────
+  get mode(): ReaderMode {
+    return this.#s.mode;
+  }
+  get isVerseMode(): boolean {
+    return this.#s.mode === "verse";
+  }
+  get isReadingMode(): boolean {
+    return this.#s.mode === "reading";
+  }
+  setMode(mode: ReaderMode): void {
+    if (this.#s.mode === mode) return;
+    this.#s.mode = mode;
     this.persist();
   }
 
@@ -299,6 +325,39 @@ class ReaderStore {
     this.#s.playing = null;
     this.#s.progress = 0;
     this.#s.paused = false;
+  }
+
+  // ── verse actions: copy & share ──────────────────────────────────────
+  /** Copy a verse (Arabic + ref) to the clipboard. Returns success. */
+  async copyVerse(key: VerseKey): Promise<boolean> {
+    if (!browser) return false;
+    const { num, n } = parseKey(key);
+    const ref = `${surahByNum(num).name} ${num}:${n}`;
+    try {
+      await navigator.clipboard.writeText(`${this.verseText(key)}\n${ref}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Share a verse via the Web Share API when available, else fall back to
+   *  copying. Returns what happened. */
+  async shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed"> {
+    if (!browser) return "failed";
+    const { num, n } = parseKey(key);
+    const ref = `${surahByNum(num).name} ${num}:${n}`;
+    const text = `${this.verseText(key)}\n${ref}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: ref, text });
+        return "shared";
+      }
+      await navigator.clipboard.writeText(text);
+      return "copied";
+    } catch {
+      return "failed";
+    }
   }
 
   get isPlaying(): boolean {
