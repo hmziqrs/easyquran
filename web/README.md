@@ -39,23 +39,72 @@ which is also where the pnpm `catalog:` pins for `vite` / `vite-plus` live.
 
 ## Firebase
 
+Three services are wired up, all browser-only and loaded lazily so the SDK never
+enters the critical modulepreload graph and never runs during SSR/prerender:
+
+- **Analytics (GA4)** — `src/lib/firebase/analytics.ts`
+- **Performance Monitoring** — `src/lib/firebase/performance.ts`
+- **Cloud Messaging (web push)** — `src/lib/firebase/messaging.ts`
+
 Copy `.env.example` → `.env` and fill in the web config from the Firebase console
 (Project settings → General → Your apps → SDK setup and configuration):
 
 ```
 PUBLIC_FIREBASE_API_KEY=…
 PUBLIC_FIREBASE_APP_ID=…
-…
+PUBLIC_FIREBASE_VAPID_KEY=…        # Cloud Messaging → Web config → Generate key pair
+PUBLIC_API_BASE_URL=…              # optional: Axum API origin for device-token registration
+PUBLIC_FIREBASE_ANALYTICS_DEBUG=false
 ```
 
 These values are public by design — they ship in the client bundle; access is gated
 by Security Rules / App Check, not by hiding them. They're read through
-`$env/dynamic/public`, so **until they're set, `src/lib/firebase.ts` no-ops
-entirely** and analytics simply never starts — nothing breaks.
+`$env/dynamic/public`, so **until they're set, `src/lib/firebase/*` no-ops
+entirely** and nothing ever starts — the build and the site work with no config.
 
-Analytics starts in `+layout.svelte` via `initAnalytics()` inside `onMount` (never
-during SSR, and only when `isSupported()`). Fire custom events from anywhere with
-`track("event_name", { … })`; it silently drops until analytics is ready.
+Everything starts in `+layout.svelte` inside `onMount` (browser-only):
+
+- `initAnalytics()` / `initPerformance()` start the services, gated by the user's
+  consent flags. Fire custom events from anywhere with `track("event_name", { … })`
+  (silently drops until ready); measure code with `instrument("name", fn)`.
+- `pageView(path)` is called on first load and on every `afterNavigate`, so GA4
+  sees client-side route changes (the site is a prerendered SPA).
+
+### Consent
+
+`src/lib/stores/consent.svelte.ts` holds the user's choices (analytics,
+performance, advertising), persisted to `localStorage` and broadcast via the
+`easyquran:consent` event. The layout applies them to Firebase — GA4 consent mode
+(`setConsent`) + `setAnalyticsCollectionEnabled`, and Performance's collection
+flags at init. Defaults reflect the project's stance (analytics/performance on,
+disclosed in `/privacy`); users can toggle them in the floating Settings panel.
+The Privacy Policy copy in `src/lib/data/content.ts` is the source of truth for
+what's disclosed.
+
+### Cloud Messaging
+
+- **Background delivery** (page closed/backgrounded): `static/firebase-messaging-sw.js`
+  — a classic worker that `importScripts` the compat SDK (gstatic, version-pinned —
+  keep in sync with `firebase` in `package.json`) and its config from
+  `/firebase-config.js`. That endpoint (`src/routes/firebase-config.js/+server.ts`,
+  prerendered) writes `self.__easyquranFirebase = {…}` from the PUBLIC_FIREBASE_*
+  env vars — empty object when unconfigured, so the worker no-ops and the build
+  still passes. A classic worker + `importScripts` is used because SvelteKit's
+  service-worker env can't read runtime `$env/*` and the build must succeed with
+  no config; synchronous config at eval time is what reliable background push needs.
+- **Foreground delivery** (page focused): `onMessage` in the client dispatches an
+  `easyquran:fcm` event and updates the `notifications` store; `<NotificationToast>`
+  (mounted in the root layout) shows it.
+- **Lifecycle**: `src/lib/stores/notifications.svelte.ts` orchestrates permission →
+  token → optional backend registration. The token is persisted locally and
+  re-checked on app focus (the modular SDK has no refresh callback). The subscribe
+  control lives in the floating Settings panel; subscribe is driven by a user
+  gesture (required by Safari/iOS web push).
+
+Backend registration is **optional**: only when `PUBLIC_API_BASE_URL` is set is the
+token POSTed to `${PUBLIC_API_BASE_URL}/device/v1/{register,delete}` (Axum routes
+that require an authenticated session). Until accounts ship, the token is kept
+locally and registered on a later login.
 
 ## shadcn-svelte
 

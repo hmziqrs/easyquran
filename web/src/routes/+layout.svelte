@@ -12,21 +12,64 @@
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
   import { onMount } from "svelte";
+  import { afterNavigate } from "$app/navigation";
   import { prefs } from "$lib/stores/prefs.svelte";
+  import { consent } from "$lib/stores/consent.svelte";
+  import { notifications } from "$lib/stores/notifications.svelte";
+  import { NotificationToast } from "$lib/components/notifications";
   import { SITE } from "$lib/config/site";
 
   let { children } = $props();
 
   // The inline <head> script in app.html already applied saved prefs before
   // paint; re-apply on mount so the reactive store and the DOM stay in sync.
-  // `onMount` only runs in the browser, so this is also where analytics is
-  // safe to start (gtag.js + cookies can't run during SSR).
+  // `onMount` only runs in the browser, so this is also where Firebase is safe
+  // to start (gtag.js + the SDK + cookies can't run during SSR/prerender).
   onMount(() => {
+    // Hydrate durable state BEFORE starting Firebase so init reads real choices.
+    consent.hydrate();
     prefs.hydrate();
     prefs.apply();
-    // Firebase is imported dynamically so its SDK + config never enter the
-    // critical modulepreload graph — analytics starts only after hydration.
-    void import("$lib/firebase").then(({ initAnalytics }) => initAnalytics());
+    notifications.hydrate();
+
+    // Lazy-import the feature modules so the Firebase SDK never enters the
+    // critical modulepreload graph — it starts only after hydration.
+    void (async () => {
+      const fbAnalytics = await import("$lib/firebase/analytics");
+      const fbPerf = await import("$lib/firebase/performance");
+
+      // Push the user's consent choices into GA4 consent mode + the analytics
+      // collection toggle, and re-apply whenever they change (Settings panel).
+      // (Performance has no runtime toggle — see lib/firebase/performance.ts —
+      // it's consent-gated only at init above; the control reloads to apply it.)
+      const applyConsent = () => {
+        fbAnalytics.setConsentState(consent.consentSettings);
+        fbAnalytics.setAnalyticsCollectionEnabled(consent.analytics);
+      };
+
+      // Start analytics + performance, gated by consent. (Performance flags are
+      // honored at init; analytics can be toggled freely at runtime.)
+      await fbAnalytics.initAnalytics();
+      fbPerf.initPerformance({
+        dataCollectionEnabled: consent.performance,
+        instrumentationEnabled: consent.performance,
+      });
+      applyConsent();
+      window.addEventListener("easyquran:consent", applyConsent);
+
+      // First-load page view (after consent is applied, so the first event
+      // respects the user's consent-mode state).
+      fbAnalytics.pageView(location.pathname);
+    })();
+  });
+
+  // The site is a prerendered SPA, so client-side route changes don't reload the
+  // page — log a screen/page view on each navigation so GA4 sees them. Skip the
+  // initial 'enter' navigation: the onMount call above already logged it (and
+  // runs after consent is applied), so this fires only on subsequent navigations.
+  afterNavigate((navigation) => {
+    if (navigation.type === "enter") return;
+    void import("$lib/firebase/analytics").then(({ pageView }) => pageView(location.pathname));
   });
 
   // Site-level structured data. A @graph of WebSite + Organization, each with
@@ -83,4 +126,5 @@
   class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[100] focus:rounded focus:bg-bg-1 focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:shadow-lg"
   >Skip to content</a
 >
+<NotificationToast />
 {@render children()}

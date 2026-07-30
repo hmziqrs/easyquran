@@ -11,4 +11,5 @@ export * from "./panel";
 export * from "./nav";
 export * from "./footer";
 export * from "./tweaks";
+export * from "./notifications";
 export * from "./seo";
