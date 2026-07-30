@@ -9,6 +9,7 @@
 pub mod cloudflare;
 pub mod error_map;
 mod html_templates;
+pub mod none;
 pub mod provider;
 pub mod router;
 pub mod smtp;

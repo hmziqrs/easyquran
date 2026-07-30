@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.7
+# EasyQuran API — Rust/Axum (binary: ruxlog). Build context = repo root.
+#   docker build -f deploy/Dockerfile.api -t easyquran/api .
+FROM rust:1.96.0-slim-trixie AS builder
+WORKDIR /workspace
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config libssl-dev build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Whole workspace + the tracked root Cargo.lock. cargo build --locked -p ruxlog
+# verifies the lock (the old standalone backend/api/Cargo.lock was never committed
+# and broke the image). .dockerignore strips target/ first.
+COPY rust/ /workspace/rust/
+WORKDIR /workspace/rust
+ENV RUSTFLAGS="-C strip=symbols"
+
+# Cache mounts → incremental rebuilds on each tag. Copy the binary OUT of the
+# cache mount (cache mounts aren't part of the image layer) for the next stage.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/workspace/rust/target \
+    cargo build --release --locked -p ruxlog \
+ && cp target/release/ruxlog /tmp/ruxlog
+
+FROM debian:trixie-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* && useradd -r -u 10001 appuser \
+    # Pre-create + own /app/data so appuser can write the SQLite file. Without
+    # this, the named volume mounts root-owned and the app can't create its db.
+    && mkdir -p /app/data && chown -R appuser /app/data
+COPY --from=builder /tmp/ruxlog /app/ruxlog
+
+# OCI image metadata (name/version/revision). VERSION/REVISION come from
+# build-args; deploy.sh passes the git tag as VERSION so a deployed image is
+# labeled with the release it was built from.
+ARG VERSION=dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="EasyQuran API" \
+      org.opencontainers.image.description="EasyQuran Rust/Axum backend (Quran content, search, translations)" \
+      org.opencontainers.image.source="https://github.com/hmziqrs/easyquran" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      easyquran.component="api"
+
+USER appuser
+EXPOSE 8888
+CMD ["/app/ruxlog"]

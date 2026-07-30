@@ -60,6 +60,17 @@ async fn build_mail_router(
 
     let mut providers: HashMap<String, std::sync::Arc<dyn MailProvider>> = HashMap::new();
     let default = match selected.as_str() {
+        // No mail backend: boots with zero mail credentials. Drops every
+        // message with a warning. Use until accounts/email are wired, then
+        // switch to "cloudflare" (or "smtp").
+        "none" => {
+            providers.insert(
+                "none".to_string(),
+                std::sync::Arc::new(ruxlog::services::mail::none::NoOpMailProvider)
+                    as std::sync::Arc<dyn MailProvider>,
+            );
+            "none"
+        }
         "cloudflare" => {
             {
                 use ruxlog::services::mail::cloudflare::CloudflareMailProvider;
