@@ -1,130 +1,184 @@
 <!--
-  Sidebar — the sticky left rail of the reader (hidden below md). Owns:
-    · the search input (bound to reader.query via reader.setQuery, with a clear
-      button once reader.hasQuery);
-    · the Surahs / Bookmarks tab switch (reader.setTab), Bookmarks showing the
-      live reader.bookmarkCount;
-    · the scrollable surah list (SURAHS, active = reader.current) or the
-      bookmark list (reader.bookmarkList) with its dashed empty state.
-  All state lives in the reader store; this component only calls its methods.
+  Sidebar — the reader's navigation panel, built on the shadcn-svelte Sidebar
+  (an overlay Sheet: backdrop, Esc, focus trap; collapses fully off-screen so
+  the reading column owns the full width). Mounted inside a <SidebarProvider>
+  in [surah]/+page.svelte; a SidebarTrigger toggles it. Holds:
+    · search (reader.query) + a Ctrl/Cmd+K focus shortcut;
+    · the Surah / Verse / Juz / Page browse controls (toggle buttons);
+    · the list for the active mode — every surah, the current surah's verses
+      (deep-link via ?verse=N), or a "coming with the full dataset" note for
+      Juz / Page (no juz/page mapping in the sample data).
+  Each surah/verse is a real <a> (link semantics + SvelteKit preload); picking
+  one clears the search and closes the overlay.
 -->
 <script lang="ts">
+  import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { SURAHS, surahMeta } from "$lib/data/quran";
+  import { SURAHS, surahBySlug, surahMeta, surahPath } from "$lib/data/quran";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
+  import {
+    Sidebar,
+    SidebarHeader,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarMenu,
+    SidebarMenuItem,
+    SidebarMenuButton,
+    useSidebar,
+  } from "$lib/components/ui/sidebar";
+
+  const BROWSE = ["surah", "verse", "juz", "page"] as const;
+  const current = $derived(surahBySlug(page.params.surah as string));
+  const sidebar = useSidebar();
+
+  let inputEl: HTMLInputElement | null = $state(null);
 
   function oninput(e: Event) {
     reader.setQuery((e.currentTarget as HTMLInputElement).value);
   }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      inputEl?.focus();
+      inputEl?.select();
+    }
+  }
+  // Real links do the navigation (preload + new-tab affordance); we just clear
+  // any search and close the overlay on click.
+  function onItemClick() {
+    reader.clearQuery();
+    sidebar.setOpenMobile(false);
+  }
 </script>
 
-<aside class="hidden flex-col gap-3 md:flex md:sticky md:top-[88px]">
-  <!-- search box -->
-  <div
-    class="flex items-center gap-2.5 rounded-[11px] border border-line bg-bg-2 px-[13px] py-[11px] transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
-  >
-    <Icon name="search" size={15} class="flex-none text-fg-3" />
-    <Input
-      type="text"
-      value={reader.query}
-      {oninput}
-      placeholder="Search surah, number or Arabic…"
-      aria-label="Search surahs and verses"
-      class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none focus-visible:border-0 focus-visible:ring-0 placeholder:text-fg-3 dark:bg-transparent"
-    />
-    {#if reader.hasQuery}
-      <button
-        type="button"
-        onclick={() => reader.clearQuery()}
-        aria-label="Clear search"
-        class="flex-none text-fg-3 transition-colors hover:text-fg"
-      >
-        <Icon name="x" size={15} />
-      </button>
-    {/if}
-  </div>
+<svelte:window onkeydown={onKey} />
 
-  <!-- Surahs / Bookmarks tab switch -->
-  <div class="flex gap-1 rounded-[10px] bg-bg-2 p-1">
-    <button
-      type="button"
-      onclick={() => reader.setTab("surahs")}
-      aria-pressed={reader.isSurahTab}
-      class={cn(
-        "flex-1 rounded-[7px] py-2 text-[13px] font-medium transition-colors",
-        reader.isSurahTab ? "bg-bg-3 text-fg" : "text-fg-3 hover:text-fg-2",
-      )}
+<Sidebar collapsible="offcanvas">
+  <SidebarHeader>
+    <!-- search -->
+    <div
+      class="flex items-center gap-2.5 rounded-[11px] border border-line bg-bg-2 px-[13px] py-[11px] transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
     >
-      Surahs
-    </button>
-    <button
-      type="button"
-      onclick={() => reader.setTab("bookmarks")}
-      aria-pressed={reader.isBookmarkTab}
-      class={cn(
-        "flex-1 rounded-[7px] py-2 text-[13px] font-medium transition-colors",
-        reader.isBookmarkTab ? "bg-bg-3 text-fg" : "text-fg-3 hover:text-fg-2",
-      )}
-    >
-      Bookmarks{reader.bookmarkCount ? ` (${reader.bookmarkCount})` : ""}
-    </button>
-  </div>
-
-  {#if reader.isSurahTab}
-    <div class="flex max-h-[calc(100vh-240px)] flex-col gap-[3px] overflow-y-auto pr-0.5">
-      {#each SURAHS as s (s.num)}
-        {@const active = reader.current === s.num}
+      <Icon name="search" size={15} class="flex-none text-fg-3" />
+      <Input
+        bind:ref={inputEl}
+        type="text"
+        value={reader.query}
+        {oninput}
+        placeholder="Search surah, number or Arabic…"
+        aria-label="Search surahs and verses"
+        class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none focus-visible:border-0 focus-visible:ring-0 placeholder:text-fg-3"
+      />
+      {#if reader.hasQuery}
         <button
           type="button"
-          onclick={() => reader.setCurrent(s.num)}
-          aria-current={active ? "true" : undefined}
+          onclick={() => reader.clearQuery()}
+          aria-label="Clear search"
+          class="flex-none text-fg-3 transition-colors hover:text-fg"
+        >
+          <Icon name="x" size={15} />
+        </button>
+      {/if}
+    </div>
+
+    <!-- Surah / Verse / Juz / Page browse controls (toggle buttons) -->
+    <div class="grid grid-cols-4 gap-1 rounded-[10px] bg-bg-2 p-1" role="group" aria-label="Browse">
+      {#each BROWSE as b (b)}
+        <button
+          type="button"
+          aria-pressed={reader.browseMode === b}
+          onclick={() => reader.setBrowse(b)}
           class={cn(
-            "flex items-center justify-between gap-2 rounded-[9px] px-[13px] py-[11px] text-left transition-colors",
-            active ? "bg-accent-soft" : "hover:bg-bg-2",
+            "rounded-[7px] py-2 text-[12.5px] font-medium capitalize transition-colors",
+            reader.browseMode === b ? "bg-bg-3 text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
           )}
         >
-          <span class="flex min-w-0 flex-col gap-px">
-            <span class={cn("truncate text-sm font-medium", active ? "text-accent" : "text-fg-2")}>
-              {s.num} · {s.name}
-            </span>
-            <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
-          </span>
-          <span
-            dir="rtl"
-            class={cn("flex-none font-arabic text-[17px]", active ? "text-accent" : "text-fg-2")}
-          >
-            {s.arabic}
-          </span>
+          {b}
         </button>
       {/each}
     </div>
-  {:else}
-    <div class="flex flex-col gap-1.5">
-      {#if reader.bookmarkCount === 0}
-        <div
-          class="rounded-[11px] border border-dashed border-line px-4 py-6 text-center text-[13.5px] leading-relaxed text-fg-3"
-        >
-          No bookmarks yet. Tap the ribbon beside any verse to save it here.
-        </div>
-      {:else}
-        {#each reader.bookmarkList as b (b.key)}
-          <button
-            type="button"
-            onclick={() => reader.openVerse(b.num, b.n)}
-            class="flex flex-col gap-1.5 rounded-[10px] bg-bg-2 px-[13px] py-3 text-left transition-colors hover:bg-accent-soft"
-          >
-            <span class="text-xs font-semibold text-accent">{b.ref}</span>
-            <span
-              dir="rtl"
-              class="block max-h-[34px] overflow-hidden font-arabic text-lg leading-[1.9] text-fg-2"
-            >
-              {b.text}
-            </span>
-          </button>
-        {/each}
-      {/if}
-    </div>
-  {/if}
-</aside>
+  </SidebarHeader>
+
+  <SidebarContent>
+    {#if reader.browseSurah}
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu class="gap-1">
+            {#each SURAHS as s (s.num)}
+              {@const active = page.params.surah === s.slug}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={active}
+                  aria-current={active ? "page" : undefined}
+                  class="h-auto items-start gap-3 px-3.5 py-3"
+                >
+                  {#snippet child({ props })}
+                    <a
+                      {...props}
+                      href={surahPath(s.num)}
+                      data-sveltekit-preload-data="hover"
+                      onclick={onItemClick}
+                    >
+                      <span class="flex min-w-0 flex-1 flex-col gap-1">
+                        <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
+                        <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
+                      </span>
+                      <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
+                        {s.arabic}
+                      </span>
+                    </a>
+                  {/snippet}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            {/each}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    {:else if reader.browseVerse}
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu class="gap-1">
+            {#each current.verses as v, i (i)}
+              {@const n = i + 1}
+              <SidebarMenuItem>
+                <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                  {#snippet child({ props })}
+                    <a
+                      {...props}
+                      href={surahPath(current.num, n)}
+                      data-sveltekit-preload-data="hover"
+                      onclick={onItemClick}
+                    >
+                      <span
+                        class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                      >
+                        {n}
+                      </span>
+                      <span dir="rtl" class="min-w-0 flex-1 truncate font-arabic text-[15px]">
+                        {v}
+                      </span>
+                    </a>
+                  {/snippet}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            {/each}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    {:else}
+      <div
+        class="m-4 rounded-[11px] border border-dashed border-line px-4 py-6 text-center text-[13px] leading-relaxed text-fg-3"
+      >
+        {reader.browseJuz ? "Juz" : "Page"} browsing arrives once the full Quran dataset is wired in.
+      </div>
+    {/if}
+  </SidebarContent>
+
+  <SidebarFooter>
+    <span class="px-1 text-[11px] text-fg-3">Tip: press Ctrl+K to search</span>
+  </SidebarFooter>
+</Sidebar>

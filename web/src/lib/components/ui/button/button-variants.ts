@@ -18,6 +18,8 @@ export const buttonVariants = tv(
         sm: "h-[30px] px-2.5 text-xs",
         md: "h-9 px-3.5 text-sm",
         lg: "h-11 px-[18px] text-base",
+        icon: "size-9 p-0",
+        "icon-sm": "size-7 p-0",
       },
     },
     defaultVariants: { variant: "primary", size: "md" },

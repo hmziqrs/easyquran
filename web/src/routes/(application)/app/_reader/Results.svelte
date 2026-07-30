@@ -4,8 +4,9 @@
   Arabic text; clicking opens the verse in the reader (reader.openVerse).
 -->
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { reader } from "$lib/stores/reader.svelte";
-  import { searchVerses } from "$lib/data/quran";
+  import { searchVerses, surahPath } from "$lib/data/quran";
 
   const results = $derived(searchVerses(reader.query));
   const label = $derived(
@@ -20,7 +21,10 @@
   {#each results as r (r.key)}
     <button
       type="button"
-      onclick={() => reader.openVerse(r.num, r.ayah)}
+      onclick={() => {
+        reader.openVerse(r.num, r.ayah);
+        goto(surahPath(r.num, r.ayah));
+      }}
       class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
     >
       <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">{r.ref}</span>

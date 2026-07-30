@@ -11,6 +11,8 @@
 export interface Surah {
   /** surah number, 1..114 */
   num: number;
+  /** URL slug, e.g. "al-baqarah" — drives /app/[surah] deep links */
+  slug: string;
   /** transliterated name, e.g. "Al-Fatihah" */
   name: string;
   /** Arabic name */
@@ -35,6 +37,7 @@ export const parseKey = (key: VerseKey): { num: number; n: number } => {
 export const SURAHS: Surah[] = [
   {
     num: 1,
+    slug: "al-fatihah",
     name: "Al-Fatihah",
     arabic: "الفاتحة",
     place: "Meccan",
@@ -50,6 +53,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 2,
+    slug: "al-baqarah",
     name: "Al-Baqarah",
     arabic: "البقرة",
     place: "Medinan",
@@ -64,6 +68,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 103,
+    slug: "al-asr",
     name: "Al-'Asr",
     arabic: "العصر",
     place: "Meccan",
@@ -75,6 +80,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 105,
+    slug: "al-fil",
     name: "Al-Fil",
     arabic: "الفيل",
     place: "Meccan",
@@ -88,6 +94,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 106,
+    slug: "quraysh",
     name: "Quraysh",
     arabic: "قريش",
     place: "Meccan",
@@ -100,6 +107,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 108,
+    slug: "al-kawthar",
     name: "Al-Kawthar",
     arabic: "الكوثر",
     place: "Meccan",
@@ -111,6 +119,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 109,
+    slug: "al-kafirun",
     name: "Al-Kafirun",
     arabic: "الكافرون",
     place: "Meccan",
@@ -125,6 +134,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 110,
+    slug: "an-nasr",
     name: "An-Nasr",
     arabic: "النصر",
     place: "Medinan",
@@ -136,6 +146,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 112,
+    slug: "al-ikhlas",
     name: "Al-Ikhlas",
     arabic: "الإخلاص",
     place: "Meccan",
@@ -148,6 +159,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 113,
+    slug: "al-falaq",
     name: "Al-Falaq",
     arabic: "الفلق",
     place: "Meccan",
@@ -161,6 +173,7 @@ export const SURAHS: Surah[] = [
   },
   {
     num: 114,
+    slug: "an-nas",
     name: "An-Nas",
     arabic: "الناس",
     place: "Meccan",
@@ -177,6 +190,30 @@ export const SURAHS: Surah[] = [
 
 /** Lookup by surah number; falls back to Al-Fatihah. */
 export const surahByNum = (num: number): Surah => SURAHS.find((s) => s.num === num) ?? SURAHS[0];
+
+/** Lookup by URL slug; falls back to Al-Fatihah. */
+export const surahBySlug = (slug: string): Surah =>
+  SURAHS.find((s) => s.slug === slug) ?? SURAHS[0];
+
+/** URL slug for a surah number. */
+export const slugFor = (num: number): string => surahByNum(num).slug;
+
+/** Reader path for a surah, with an optional verse deep-link (?verse=N). */
+export const surahPath = (num: number, ayah?: number): string =>
+  `/app/${slugFor(num)}${ayah ? `?verse=${ayah}` : ""}`;
+
+/** Convert a western number to Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩). */
+export const toArabicDigits = (n: number | string): string =>
+  String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
+
+/** The Basmala, shown as a centered header above the first verse. */
+export const BISMILLAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
+/**
+ * Whether a surah shows the Basmala as a separate header line. Al-Fatihah's
+ * first verse already IS the Basmala, so it is not duplicated.
+ */
+export const showsBismillah = (s: Surah): boolean =>
+  s.num !== 1 && s.num !== 9;
 
 /** Index-aware neighbours, wrapping at both ends. */
 export const adjacentSurahs = (
@@ -237,4 +274,3 @@ export const tafsirFor = (key: VerseKey): string => {
   const s = surahByNum(num);
   return `Sample commentary for ${s.name} ${key} — in the full app this slot carries a short, credited tafsir summary.`;
 };
-
