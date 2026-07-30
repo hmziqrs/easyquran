@@ -2,8 +2,7 @@
  * lib.ts — shared logic for the tanzil-translation data pipeline.
  *
  * Used by fetch.ts (mirror + index), catalog.ts (trimmed index), verify.ts
- * (integrity), sql-to-sqlite.ts (build artifacts), and upload-sqlite.ts (push
- * the artifacts + catalog to Cloudflare R2).
+ * (integrity), and upload.ts (push to Cloudflare R2).
  */
 
 import { createHash } from "node:crypto";

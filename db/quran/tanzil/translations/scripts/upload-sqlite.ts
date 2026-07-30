@@ -11,6 +11,7 @@
  *     tanzil/translations/index.min.json     catalog — always re-uploaded
  *     tanzil/translations/sqlite/<id>.sqlite
  *     tanzil/arabic/<file>.sqlite
+ *     tanzil/quran-data.xml                  Tanzil surah/ayah metadata
  *
  * The raw MySQL dumps under sql/ are deliberately NOT published: they are the
  * upstream mirror format, already versioned in git, and nothing downstream can
@@ -39,6 +40,8 @@ const BUCKET = process.env.R2_BUCKET ?? "easyquran";
 const PREFIX = "tanzil/";
 const SQLITE_DIR = path.join(ROOT, "sqlite"); // .../tanzil/translations/sqlite
 const ARABIC_DIR = path.resolve(ROOT, "..", "arabic"); // .../tanzil/arabic
+/** .../tanzil/quran-data.xml — Tanzil surah/ayah metadata */
+const QURAN_DATA_XML = path.resolve(ROOT, "..", "quran-data.xml");
 
 /** one immutable object per translation id — safe to cache forever */
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -99,6 +102,17 @@ async function collectItems(): Promise<Item[]> {
         cacheControl: IMMUTABLE,
       });
     }
+  }
+
+  if (existsSync(QURAN_DATA_XML)) {
+    items.push({
+      abs: QURAN_DATA_XML,
+      key: `${PREFIX}quran-data.xml`,
+      contentType: "application/xml; charset=utf-8",
+      cacheControl: IMMUTABLE,
+    });
+  } else {
+    log("  ! quran-data.xml missing (not uploaded)");
   }
 
   return items;
