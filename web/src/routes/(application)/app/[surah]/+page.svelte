@@ -12,13 +12,11 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { page } from "$app/state";
-  import { Seo, Container } from "$lib/components";
+  import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
-  import { SidebarProvider, SidebarInset, SidebarTrigger } from "$lib/components/ui/sidebar";
-  import AppSidebar from "../_reader/Sidebar.svelte";
+  import ReaderShell from "../_reader/ReaderShell.svelte";
   import SurahReader from "../_reader/SurahReader.svelte";
   import Results from "../_reader/Results.svelte";
-  import RangeReader from "../_reader/RangeReader.svelte";
 
   // Verses arrive from the SSG server load (prerendered Uthmani text for SEO +
   // first paint, no backend needed). The URL param stays the source of truth for
@@ -82,30 +80,15 @@
   includeTextVariants={false}
 />
 
-<SidebarProvider open={false}>
-  <AppSidebar />
+<ReaderShell>
+  {#snippet header()}
+    <span class="text-sm font-medium text-fg-2">{surah.num}. {surah.name}</span>
+    <span dir="rtl" class="ml-auto font-arabic text-base text-fg-3">{surah.arabic}</span>
+  {/snippet}
 
-  <SidebarInset>
-    <!-- top bar: sidebar toggle + current surah. Sticky beneath the global nav.
-         The bar stretches full-width; its CONTENT is centered to the page width. -->
-    <header class="sticky top-[60px] z-10 border-b border-line bg-bg/80 py-2.5 backdrop-blur-xl">
-      <Container class="max-w-[1180px] flex items-center gap-3">
-        <SidebarTrigger />
-        <span class="text-sm font-medium text-fg-2">{surah.num}. {surah.name}</span>
-        <span dir="rtl" class="ml-auto font-arabic text-base text-fg-3">{surah.arabic}</span>
-      </Container>
-    </header>
-
-    <!-- reading column — same width + padding as the marketing pages (Container).
-         Range view (juz/page) takes priority over search over the surah view. -->
-    <Container class="max-w-[1180px] py-6">
-      {#if reader.hasRange}
-        <RangeReader />
-      {:else if reader.hasQuery}
-        <Results />
-      {:else}
-        <SurahReader {surah} />
-      {/if}
-    </Container>
-  </SidebarInset>
-</SidebarProvider>
+  {#if reader.hasQuery}
+    <Results />
+  {:else}
+    <SurahReader {surah} />
+  {/if}
+</ReaderShell>

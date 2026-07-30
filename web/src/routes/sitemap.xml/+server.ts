@@ -14,11 +14,16 @@ export function GET() {
   const surahs = CATALOG.map(
     (s) => `  <url>\n    <loc>${escape(SITE.url + "/app/" + s.slug)}</loc>\n  </url>`,
   ).join("\n");
+  const juz = Array.from(
+    { length: 30 },
+    (_, i) => `  <url>\n    <loc>${escape(SITE.url + "/app/juz/" + (i + 1))}</loc>\n  </url>`,
+  ).join("\n");
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${marketing}
 ${surahs}
+${juz}
 </urlset>`;
 
   return new Response(xml, {

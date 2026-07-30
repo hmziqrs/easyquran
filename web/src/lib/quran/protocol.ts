@@ -16,7 +16,6 @@ export type WorkerStatus = "init" | "downloading" | "ready" | "error";
 export type WorkerRequest =
   | { id: number; type: "init"; manifest: ResolvedManifest }
   | { id: number; type: "readSurah"; num: number }
-  | { id: number; type: "readRange"; from: number; to: number }
   | { id: number; type: "search"; query: string; opts?: SearchOpts }
   | { id: number; type: "ping" };
 

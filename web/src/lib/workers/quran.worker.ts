@@ -15,7 +15,7 @@
 
 import init, { type Sqlite3Static, type Database } from "@sqlite.org/sqlite-wasm";
 import { ensureArtifact } from "./opfs-cache";
-import type { ArtifactSpec, Ayah } from "$lib/data/quran-types";
+import type { ArtifactSpec } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
@@ -127,25 +127,6 @@ function readSurah(num: number): string[] {
   return out;
 }
 
-/** Read an inclusive global-index range of ayahs (juz / page / arbitrary). */
-function readRange(from: number, to: number): Ayah[] {
-  if (!uthmaniDb) throw new Error("uthmani db not open");
-  const rows: [number, number, number, string][] = [];
-  uthmaniDb.exec({
-    sql: 'SELECT "index", sura, aya, text FROM quran_text WHERE "index" BETWEEN ? AND ? ORDER BY "index"',
-    bind: [from, to],
-    rowMode: "array",
-    resultRows: rows,
-  });
-  return rows.map(([index, sura, aya, text]) => ({
-    key: `${sura}:${aya}`,
-    surah: sura,
-    ayah: aya,
-    globalIndex: index,
-    text,
-  }));
-}
-
 /** Build the normalized search corpus from simple-clean + a Uthmani text map. */
 function ensureSearchCorpus(): void {
   if (corpus && uthmaniByIndex) return;
@@ -218,9 +199,6 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>): Promise<void> => {
     switch (msg.type) {
       case "readSurah":
         emit({ id, ok: true, result: readSurah(msg.num) });
-        return;
-      case "readRange":
-        emit({ id, ok: true, result: readRange(msg.from, msg.to) });
         return;
       case "search":
         emit({ id, ok: true, result: search(msg.query, msg.opts) });

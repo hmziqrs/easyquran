@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { QURAN } from "$lib/config/site";
+import type { Ayah } from "$lib/data/quran-types";
 
 /**
  * Resolve the checked-in Uthmani DB from `process.cwd()`. SSR bundling relocates
@@ -59,6 +60,29 @@ export function readSurahVerses(num: number): string[] {
   }
   const rows = stmt.all(num) as { text: string }[];
   return rows.map((r) => r.text);
+}
+
+/** Verbatim Uthmani ayahs in an inclusive global-index range (juz / page). */
+let rangeStmt: StatementSync | null = null;
+export function readRangeAyahs(from: number, to: number): Ayah[] {
+  if (!rangeStmt) {
+    rangeStmt = getDb().prepare(
+      `SELECT "index", sura, aya, text FROM quran_text WHERE "index" BETWEEN ? AND ? ORDER BY "index"`,
+    );
+  }
+  const rows = rangeStmt.all(from, to) as {
+    index: number;
+    sura: number;
+    aya: number;
+    text: string;
+  }[];
+  return rows.map((r) => ({
+    key: `${r.sura}:${r.aya}`,
+    surah: r.sura,
+    ayah: r.aya,
+    globalIndex: r.index,
+    text: r.text,
+  }));
 }
 
 /** Validate the source file: identity byte digest + row count. Called in dev /

@@ -104,3 +104,15 @@ export interface Ayah {
   globalIndex: number;
   text: string;
 }
+
+/** A prerendered juz or page: its range bounds + the ayahs it contains. */
+export interface RangePageData {
+  kind: "juz" | "page";
+  index: number;
+  label: string;
+  startGlobal: number;
+  endGlobal: number;
+  first: VerseKey;
+  last: VerseKey;
+  ayahs: Ayah[];
+}

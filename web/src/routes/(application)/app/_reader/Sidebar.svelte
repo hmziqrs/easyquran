@@ -38,19 +38,6 @@
   /** The juz or page range list for the active browse mode. */
   const ranges = $derived(reader.browseJuz ? NAVIGATION.juz : NAVIGATION.page);
 
-  /** Open a juz/page range view in the reader (rendered by RangeReader). */
-  function openRange(rg: (typeof NAVIGATION)[keyof typeof NAVIGATION][number]): void {
-    const kind = reader.browseJuz ? "juz" : "page";
-    reader.openRange({
-      kind,
-      index: rg.index,
-      label: `${kind === "juz" ? "Juz" : "Page"} ${rg.index}`,
-      startGlobal: rg.startGlobal,
-      endGlobal: rg.endGlobal,
-    });
-    onItemClick();
-  }
-
   let inputEl: HTMLInputElement | null = $state(null);
 
   function oninput(e: Event) {
@@ -193,10 +180,11 @@
           <SidebarMenu class="gap-1">
             {#each ranges as rg (rg.index)}
               {@const { num, n } = parseKey(rg.first)}
+              {@const href = `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`}
               <SidebarMenuItem>
                 <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
                   {#snippet child({ props })}
-                    <button {...props} type="button" onclick={() => openRange(rg)}>
+                    <a {...props} {href} data-sveltekit-preload-data="hover" onclick={onItemClick}>
                       <span
                         class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
                       >
@@ -205,7 +193,7 @@
                       <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
                         {surahByNum(num).name} {num}:{n}
                       </span>
-                    </button>
+                    </a>
                   {/snippet}
                 </SidebarMenuButton>
               </SidebarMenuItem>
