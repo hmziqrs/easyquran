@@ -14,25 +14,31 @@
   import { page } from "$app/state";
   import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahBySlug } from "$lib/data/quran";
   import { SidebarProvider, SidebarInset, SidebarTrigger } from "$lib/components/ui/sidebar";
   import AppSidebar from "../_reader/Sidebar.svelte";
   import SurahReader from "../_reader/SurahReader.svelte";
   import Results from "../_reader/Results.svelte";
   import Player from "../_reader/Player.svelte";
 
+  // Verses arrive from the SSG server load (prerendered Uthmani text for SEO +
+  // first paint, no backend needed). The URL param stays the source of truth for
+  // which surah renders, so deep links like /app/al-baqarah prerender correctly
+  // with no hydration mismatch.
+  let { data } = $props();
+  const surah = $derived(data.surah);
   const slug = $derived(page.params.surah as string);
-  const surah = $derived(surahBySlug(slug));
 
-  // Keep the store's notion of "current" in sync with the URL surah for
-  // last-read / bookmark context. `untrack` is essential: setCurrent() calls
-  // persist(), which reads notes/bookmarks/mode/font through the $state proxy.
-  // Without untrack those reads would make THIS effect depend on them, so it
-  // would re-run on every keystroke in a note and reset openNote/query —
-  // making notes un-typeable. untrack keeps the surah as the sole dependency.
+  // Keep the store's "current" + the synchronous verse cache in sync with the
+  // rendered surah. `untrack` is essential: setCurrent()/seedSurah() touch the
+  // $state proxy; without untrack this effect would depend on notes/bookmarks/
+  // mode/font and re-run on every keystroke in a note. untrack keeps the surah
+  // as the sole dependency.
   $effect(() => {
     const num = surah.num;
-    untrack(() => reader.setCurrent(num));
+    untrack(() => {
+      reader.setCurrent(num);
+      reader.seedSurah(num, surah.verses);
+    });
   });
 
   // Deep link to a verse (?verse=N): scroll it into view on load + navigation.
@@ -45,9 +51,33 @@
       .getElementById(`ayah-${v}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
+
+  // Per-surah SEO (doc §5): indexable, with a canonical, description, and a
+  // Chapter structured-data node. No .md/.txt variants for app routes.
+  const seoTitle = $derived(`Surah ${surah.num}, ${surah.name} — Arabic Text & Reading · EasyQuran`);
+  const seoDescription = $derived(
+    `Read Surah ${surah.name} (${surah.arabic}) — ${surah.ayahCount} verses, ${surah.place === "meccan" ? "Meccan" : "Medinan"}, in the Uthmani script. Free, fast, and works offline.`,
+  );
+  const chapterLd = $derived([
+    {
+      "@context": "https://schema.org",
+      "@type": "Chapter",
+      name: `Surah ${surah.name}`,
+      alternateName: surah.arabic,
+      position: surah.num,
+      inLanguage: "ar",
+      isPartOf: { "@type": "Book", name: "The Quran", inLanguage: "ar" },
+    },
+  ]);
 </script>
 
-<Seo path={`/app/${slug}`} noindex />
+<Seo
+  path={`/app/${slug}`}
+  title={seoTitle}
+  description={seoDescription}
+  extraLd={chapterLd}
+  includeTextVariants={false}
+/>
 
 <SidebarProvider open={false}>
   <AppSidebar />

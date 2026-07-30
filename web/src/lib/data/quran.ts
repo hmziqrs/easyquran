@@ -1,32 +1,44 @@
 /* ════════════════════════════════════════════════════════════════════════
-   quran.ts — the Quran content the reader works against.
+   quran.ts — the web-owned Quran seam: URL slugs, the synchronous reader
+   contract, and pure routing helpers.
 
-   This is the same selection the design comp ships: a handful of surahs with
-   their Uthmani verses, plus a "verse of the day". The full Tanzil dataset
-   lives in /db (SQLite + SQL); when the reader is wired to the real source it
-   swaps in here without touching the components — the types below are the
-   contract.
+   Catalog METADATA (114 surahs: slug, name, arabic, place, ayahCount,
+   revelationOrder, rukus, bismillah) comes from the build-time CATALOG virtual
+   module (surah-names.json ∪ quran-data.xml). Verse TEXT is no longer authored
+   here — it is loaded: prerendered into page.data at SSG, held in the reader's
+   per-surah synchronous cache, served by the sqlite-wasm Worker, or fetched from
+   the live /quran/v1 API. See docs/quran-web-delivery.md §10.
+
+   The component-facing loaded-surah value (LoadedSurah, aliased as Surah) keeps
+   a `verses: string[]` so existing synchronous helpers (verseText, copyVerse,
+   bookmarkList.text, durationFor) work without a Worker round-trip.
    ════════════════════════════════════════════════════════════════════════ */
 
-export interface Surah {
-  /** surah number, 1..114 */
-  num: number;
-  /** URL slug, e.g. "al-baqarah" — drives /app/[surah] deep links */
-  slug: string;
-  /** transliterated name, e.g. "Al-Fatihah" */
-  name: string;
-  /** Arabic name */
-  arabic: string;
-  /** "Meccan" | "Medinan" */
-  place: "Meccan" | "Medinan";
-  /** true when this selection omits verses of a longer surah */
-  partial?: boolean;
-  /** Uthmani verse text, in order */
-  verses: string[];
-}
+import { CATALOG } from "$lib/data/quran-meta";
+import type {
+  CatalogEntry,
+  LoadedSurah,
+  VerseKey,
+  Place,
+  Bismillah,
+} from "$lib/data/quran-types";
 
-/** A coordinate into the text — "surah:ayah". */
-export type VerseKey = string;
+export type {
+  CatalogEntry,
+  LoadedSurah,
+  VerseKey,
+  Script,
+  Place,
+  Bismillah,
+  SajdaKind,
+  RangeEntry,
+  NavigationData,
+  SajdaEntry,
+  ArtifactSpec,
+} from "$lib/data/quran-types";
+
+/** Back-compat alias: components type the reader prop as `Surah`. */
+export type Surah = LoadedSurah;
 
 export const verseKey = (surah: number, ayah: number): VerseKey => `${surah}:${ayah}`;
 export const parseKey = (key: VerseKey): { num: number; n: number } => {
@@ -34,167 +46,16 @@ export const parseKey = (key: VerseKey): { num: number; n: number } => {
   return { num, n };
 };
 
-export const SURAHS: Surah[] = [
-  {
-    num: 1,
-    slug: "al-fatihah",
-    name: "Al-Fatihah",
-    arabic: "الفاتحة",
-    place: "Meccan",
-    verses: [
-      "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-      "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
-      "الرَّحْمَٰنِ الرَّحِيمِ",
-      "مَالِكِ يَوْمِ الدِّينِ",
-      "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
-      "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ",
-      "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ",
-    ],
-  },
-  {
-    num: 2,
-    slug: "al-baqarah",
-    name: "Al-Baqarah",
-    arabic: "البقرة",
-    place: "Medinan",
-    partial: true,
-    verses: [
-      "الٓمٓ",
-      "ذَٰلِكَ الْكِتَابُ لَا رَيْبَ فِيهِ هُدًى لِّلْمُتَّقِينَ",
-      "الَّذِينَ يُؤْمِنُونَ بِالْغَيْبِ وَيُقِيمُونَ الصَّلَاةَ وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ",
-      "وَالَّذِينَ يُؤْمِنُونَ بِمَا أُنزِلَ إِلَيْكَ وَمَا أُنزِلَ مِن قَبْلِكَ وَبِالْآخِرَةِ هُمْ يُوقِنُونَ",
-      "أُولَٰئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ وَأُولَٰئِكَ هُمُ الْمُفْلِحُونَ",
-    ],
-  },
-  {
-    num: 103,
-    slug: "al-asr",
-    name: "Al-'Asr",
-    arabic: "العصر",
-    place: "Meccan",
-    verses: [
-      "وَالْعَصْرِ",
-      "إِنَّ الْإِنسَانَ لَفِي خُسْرٍ",
-      "إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ",
-    ],
-  },
-  {
-    num: 105,
-    slug: "al-fil",
-    name: "Al-Fil",
-    arabic: "الفيل",
-    place: "Meccan",
-    verses: [
-      "أَلَمْ تَرَ كَيْفَ فَعَلَ رَبُّكَ بِأَصْحَابِ الْفِيلِ",
-      "أَلَمْ يَجْعَلْ كَيْدَهُمْ فِي تَضْلِيلٍ",
-      "وَأَرْسَلَ عَلَيْهِمْ طَيْرًا أَبَابِيلَ",
-      "تَرْمِيهِم بِحِجَارَةٍ مِّن سِجِّيلٍ",
-      "فَجَعَلَهُمْ كَعَصْفٍ مَّأْكُولٍ",
-    ],
-  },
-  {
-    num: 106,
-    slug: "quraysh",
-    name: "Quraysh",
-    arabic: "قريش",
-    place: "Meccan",
-    verses: [
-      "لِإِيلَافِ قُرَيْشٍ",
-      "إِيلَافِهِمْ رِحْلَةَ الشِّتَاءِ وَالصَّيْفِ",
-      "فَلْيَعْبُدُوا رَبَّ هَٰذَا الْبَيْتِ",
-      "الَّذِي أَطْعَمَهُم مِّن جُوعٍ وَآمَنَهُم مِّنْ خَوْفٍ",
-    ],
-  },
-  {
-    num: 108,
-    slug: "al-kawthar",
-    name: "Al-Kawthar",
-    arabic: "الكوثر",
-    place: "Meccan",
-    verses: [
-      "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
-      "فَصَلِّ لِرَبِّكَ وَانْحَرْ",
-      "إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ",
-    ],
-  },
-  {
-    num: 109,
-    slug: "al-kafirun",
-    name: "Al-Kafirun",
-    arabic: "الكافرون",
-    place: "Meccan",
-    verses: [
-      "قُلْ يَا أَيُّهَا الْكَافِرُونَ",
-      "لَا أَعْبُدُ مَا تَعْبُدُونَ",
-      "وَلَا أَنتُمْ عَابِدُونَ مَا أَعْبُدُ",
-      "وَلَا أَنَا عَابِدٌ مَّا عَبَدتُّمْ",
-      "وَلَا أَنتُمْ عَابِدُونَ مَا أَعْبُدُ",
-      "لَكُمْ دِينُكُمْ وَلِيَ دِينِ",
-    ],
-  },
-  {
-    num: 110,
-    slug: "an-nasr",
-    name: "An-Nasr",
-    arabic: "النصر",
-    place: "Medinan",
-    verses: [
-      "إِذَا جَاءَ نَصْرُ اللَّهِ وَالْفَتْحُ",
-      "وَرَأَيْتَ النَّاسَ يَدْخُلُونَ فِي دِينِ اللَّهِ أَفْوَاجًا",
-      "فَسَبِّحْ بِحَمْدِ رَبِّكَ وَاسْتَغْفِرْهُ إِنَّهُ كَانَ تَوَّابًا",
-    ],
-  },
-  {
-    num: 112,
-    slug: "al-ikhlas",
-    name: "Al-Ikhlas",
-    arabic: "الإخلاص",
-    place: "Meccan",
-    verses: [
-      "قُلْ هُوَ اللَّهُ أَحَدٌ",
-      "اللَّهُ الصَّمَدُ",
-      "لَمْ يَلِدْ وَلَمْ يُولَدْ",
-      "وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ",
-    ],
-  },
-  {
-    num: 113,
-    slug: "al-falaq",
-    name: "Al-Falaq",
-    arabic: "الفلق",
-    place: "Meccan",
-    verses: [
-      "قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
-      "مِن شَرِّ مَا خَلَقَ",
-      "وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ",
-      "وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ",
-      "وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ",
-    ],
-  },
-  {
-    num: 114,
-    slug: "an-nas",
-    name: "An-Nas",
-    arabic: "الناس",
-    place: "Meccan",
-    verses: [
-      "قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
-      "مَلِكِ النَّاسِ",
-      "إِلَٰهِ النَّاسِ",
-      "مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ",
-      "الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ",
-      "مِنَ الْجِنَّةِ وَالنَّاسِ",
-    ],
-  },
-];
+/** The full 114-surah catalog (metadata only — no verse text). */
+export const SURAHS: CatalogEntry[] = CATALOG;
+
+const byNum = new Map<number, CatalogEntry>(CATALOG.map((s) => [s.num, s]));
+const bySlug = new Map<string, CatalogEntry>(CATALOG.map((s) => [s.slug, s]));
 
 /** Lookup by surah number; falls back to Al-Fatihah. */
-export const surahByNum = (num: number): Surah => SURAHS.find((s) => s.num === num) ?? SURAHS[0];
-
+export const surahByNum = (num: number): CatalogEntry => byNum.get(num) ?? CATALOG[0]!;
 /** Lookup by URL slug; falls back to Al-Fatihah. */
-export const surahBySlug = (slug: string): Surah =>
-  SURAHS.find((s) => s.slug === slug) ?? SURAHS[0];
-
+export const surahBySlug = (slug: string): CatalogEntry => bySlug.get(slug) ?? CATALOG[0]!;
 /** URL slug for a surah number. */
 export const slugFor = (num: number): string => surahByNum(num).slug;
 
@@ -209,21 +70,19 @@ export const toArabicDigits = (n: number | string): string =>
 /** The Basmala, shown as a centered header above the first verse. */
 export const BISMILLAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
 /**
- * Whether a surah shows the Basmala as a separate header line. Al-Fatihah's
- * first verse already IS the Basmala, so it is not duplicated.
+ * Whether a surah shows the Basmala as a separate header line. Only the
+ * "embedded-prefix" case (112 surahs) does; Al-Fatihah's first verse IS it
+ * ("first-ayah") and At-Tawbah has none ("none").
  */
-export const showsBismillah = (s: Surah): boolean =>
-  s.num !== 1 && s.num !== 9;
+export const showsBismillah = (s: CatalogEntry): boolean => s.bismillah === "embedded-prefix";
 
 /** Index-aware neighbours, wrapping at both ends. */
-export const adjacentSurahs = (
-  num: number,
-): { prev: Surah; next: Surah } => {
-  const idx = SURAHS.findIndex((s) => s.num === surahByNum(num).num);
-  const len = SURAHS.length;
+export const adjacentSurahs = (num: number): { prev: CatalogEntry; next: CatalogEntry } => {
+  const idx = CATALOG.findIndex((s) => s.num === surahByNum(num).num);
+  const len = CATALOG.length;
   return {
-    prev: SURAHS[(idx - 1 + len) % len],
-    next: SURAHS[(idx + 1) % len],
+    prev: CATALOG[(idx - 1 + len) % len]!,
+    next: CATALOG[(idx + 1) % len]!,
   };
 };
 
@@ -236,36 +95,30 @@ export interface SearchResult {
   ayah: number;
 }
 
-/** Fuzzy verse search across the selection: matches surah name, number, or any
- *  verse text (Arabic substring). Caps at 24 hits, like the comp. */
+/**
+ * Synchronous NAME/NUMBER fallback search over the catalog. The full verse-text
+ * substring search is served by the sqlite-wasm Worker (quranSearch) once it is
+ * ready; this keeps the search box responsive before the corpus loads and when
+ * offline data is unavailable. Returns surahs whose name/number matches.
+ */
 export function searchVerses(rawQuery: string): SearchResult[] {
   const q = rawQuery.trim();
   if (!q) return [];
   const qLower = q.toLowerCase();
-  const nameOrNumHit = (s: Surah) =>
-    s.name.toLowerCase().includes(qLower) || s.arabic.includes(q) || String(s.num) === qLower;
-
   const out: SearchResult[] = [];
-  for (const s of SURAHS) {
-    const hitName = nameOrNumHit(s);
-    s.verses.forEach((t, i) => {
-      if ((hitName || t.includes(q)) && out.length < 24) {
-        out.push({
-          key: verseKey(s.num, i + 1),
-          ref: `${s.name} ${s.num}:${i + 1}`,
-          text: t,
-          num: s.num,
-          ayah: i + 1,
-        });
-      }
-    });
+  for (const s of CATALOG) {
+    if (out.length >= 24) break;
+    const hit = s.name.toLowerCase().includes(qLower) || s.arabic.includes(q) || String(s.num) === qLower;
+    if (hit) {
+      out.push({ key: verseKey(s.num, 1), ref: `${s.name} ${s.num}`, text: "", num: s.num, ayah: 1 });
+    }
   }
   return out;
 }
 
-/** "Meccan · 7 verses" / "Medinan · 5 of 286 verses". */
-export const surahMeta = (s: Surah): string =>
-  `${s.place} · ${s.verses.length}${s.partial ? " of 286 verses" : " verses"}`;
+/** "Meccan · 7 verses". */
+export const surahMeta = (s: CatalogEntry): string =>
+  `${s.place === "meccan" ? "Meccan" : "Medinan"} · ${s.ayahCount} verses`;
 
 /** Sample commentary for a verse. In the full app this slot carries a short,
  *  credited tafsir summary. */

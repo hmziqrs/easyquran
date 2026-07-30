@@ -142,7 +142,7 @@
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu class="gap-1">
-            {#each current.verses as v, i (i)}
+            {#each reader.versesFor(current.num) as v, i (i)}
               {@const n = i + 1}
               <SidebarMenuItem>
                 <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">

@@ -77,6 +77,10 @@ class ReaderStore {
   #s = $state<ReaderState>({ ...DEFAULTS });
   #hydrated = false;
   #timer: ReturnType<typeof setInterval> | null = null;
+  /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text /
+   *  player duration working without a Worker round-trip (doc §6.3). Seeded from
+   *  prerendered page.data; Phase 2 also refreshes it from the sqlite-wasm Worker. */
+  #versesBySurah = new Map<number, string[]>();
 
   /** Hydrate saved state from localStorage after mount (see note above). */
   hydrate(): void {
@@ -218,7 +222,7 @@ class ReaderStore {
         return {
           key: k,
           ref: `${s.name} ${num}:${n}`,
-          text: s.verses[n - 1] ?? "",
+          text: this.versesFor(num)[n - 1] ?? "",
           num,
           n,
         };
@@ -266,10 +270,21 @@ class ReaderStore {
     return this.#s.playing === key;
   }
 
+  // ── synchronous verse cache (doc §6.3) ───────────────────────────────
+  /** Synchronous verse text for a surah from the open-surah cache (or "" if the
+   *  surah hasn't been seeded yet this session). */
+  versesFor(num: number): string[] {
+    return this.#versesBySurah.get(num) ?? [];
+  }
+  /** Seed a surah's verses into the sync cache (from prerendered page.data). */
+  seedSurah(num: number, verses: string[]): void {
+    if (verses.length) this.#versesBySurah.set(num, verses);
+  }
+
   // ── simulated player ─────────────────────────────────────────────────
   private verseText(key: VerseKey): string {
     const { num, n } = parseKey(key);
-    return surahByNum(num).verses[n - 1] ?? "";
+    return this.versesFor(num)[n - 1] ?? "";
   }
   private durationFor(key: VerseKey): number {
     return Math.max(6, Math.round(this.verseText(key).length / 6));

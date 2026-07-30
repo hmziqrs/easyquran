@@ -28,6 +28,47 @@ export const SITE = {
   ownerUrl: "https://hmziq.rs",
 } as const;
 
+/* ════════════════════════════════════════════════════════════════════════
+   QURAN — Quran content delivery config (docs/quran-web-delivery.md).
+
+   The two Arabic SQLite files + the metadata XML are immutable and already
+   published to R2 (r2.easyquran.fyi). `apiBase` points at the /quran/v1 Rust
+   API; it is EMPTY today (the API is being built in parallel), so the manifest
+   resolver (lib/quran/manifest.ts) falls back to the BAKED constants below —
+   every data path works with no backend, then lights up the live API when
+   `apiBase` is set and the host responds. Set it via PUBLIC_QURAN_API_BASE.
+   ════════════════════════════════════════════════════════════════════════ */
+
+import { env } from "$env/dynamic/public";
+
+/** Same-origin by default; override with a full URL when the API is elsewhere. */
+const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
+
+export const QURAN = {
+  apiBase: PUBLIC_API_BASE,
+  r2Base: "https://r2.easyquran.fyi",
+  /** BLAKE3(uthmani || simple-clean || xml)[0..16] (docs/quran-api.md §8.1).
+   *  Baked until /quran/v1/version is live; the resolver overrides it then. */
+  contentVersion: "32cc746d817cad9f",
+  /** Bumped whenever the shared normalization rules change (docs §8). */
+  searchVersion: "arabic-search-v1",
+  /** R2 paths mirror db/quran/tanzil (see translations/scripts/upload-sqlite.ts). */
+  scripts: [
+    {
+      id: "uthmani" as const,
+      sizeBytes: 1_593_344,
+      sha256: "581cc5405831bc072fccd8db55cd1db72c5c5440c39bd975edbf03447efecf53",
+      downloadUrl: "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
+    },
+    {
+      id: "simple-clean" as const,
+      sizeBytes: 929_792,
+      sha256: "a0c52760d6660ac5be1de5c76bb10df7a839a3e8a87ecb0e636fe2ed45b2e4a3",
+      downloadUrl: "https://r2.easyquran.fyi/tanzil/arabic/quran-simple-clean.sqlite",
+    },
+  ],
+} as const;
+
 export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
 

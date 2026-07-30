@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import { quranData } from "./vite-plugin-quran";
 
 export default defineConfig({
   fmt: {},
@@ -11,6 +12,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   plugins: lazyPlugins(() => [
+    quranData(),
     tailwindcss(),
     sveltekit({
       // Force runes mode everywhere except vendored libraries (can be removed in Svelte 6).
