@@ -10,6 +10,7 @@
 
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
+import type { SearchOpts, SearchResponse } from "./search/normalize";
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -94,5 +95,10 @@ export const quranWorker = {
   /** Read one surah's verbatim Uthmani verses from the local DB. */
   readSurah(num: number): Promise<string[]> {
     return request<string[]>((id) => ({ id, type: "readSurah", num }));
+  },
+
+  /** Substring search over the local normalized corpus. */
+  search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
+    return request<SearchResponse>((id) => ({ id, type: "search", query, opts }));
   },
 };

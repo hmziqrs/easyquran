@@ -14,7 +14,8 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { SURAHS, surahBySlug, surahMeta, surahPath } from "$lib/data/quran";
+  import { SURAHS, surahBySlug, surahMeta, surahPath, parseKey, surahByNum } from "$lib/data/quran";
+  import { NAVIGATION } from "$lib/data/quran-meta";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -34,6 +35,8 @@
   const BROWSE = ["surah", "verse", "juz", "page"] as const;
   const current = $derived(surahBySlug(page.params.surah as string));
   const sidebar = useSidebar();
+  /** The juz or page range list for the active browse mode. */
+  const ranges = $derived(reader.browseJuz ? NAVIGATION.juz : NAVIGATION.page);
 
   let inputEl: HTMLInputElement | null = $state(null);
 
@@ -170,11 +173,38 @@
         </SidebarGroupContent>
       </SidebarGroup>
     {:else}
-      <div
-        class="m-4 rounded-[11px] border border-dashed border-line px-4 py-6 text-center text-[13px] leading-relaxed text-fg-3"
-      >
-        {reader.browseJuz ? "Juz" : "Page"} browsing arrives once the full Quran dataset is wired in.
-      </div>
+      <!-- Juz / Page browse: the navigation ranges from quran-data.xml. Each
+           entry deep-links to its first ayah (?verse=N scrolls it into view). -->
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu class="gap-1">
+            {#each ranges as rg (rg.index)}
+              {@const { num, n } = parseKey(rg.first)}
+              <SidebarMenuItem>
+                <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                  {#snippet child({ props })}
+                    <a
+                      {...props}
+                      href={surahPath(num, n)}
+                      data-sveltekit-preload-data="hover"
+                      onclick={onItemClick}
+                    >
+                      <span
+                        class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
+                      >
+                        {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
+                      </span>
+                      <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+                        {surahByNum(num).name} {num}:{n}
+                      </span>
+                    </a>
+                  {/snippet}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            {/each}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
     {/if}
   </SidebarContent>
 

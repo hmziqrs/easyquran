@@ -40,6 +40,7 @@ export const SITE = {
    ════════════════════════════════════════════════════════════════════════ */
 
 import { env } from "$env/dynamic/public";
+import { SEARCH_VERSION } from "$lib/quran/search/normalize";
 
 /** Same-origin by default; override with a full URL when the API is elsewhere. */
 const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
@@ -50,8 +51,8 @@ export const QURAN = {
   /** BLAKE3(uthmani || simple-clean || xml)[0..16] (docs/quran-api.md §8.1).
    *  Baked until /quran/v1/version is live; the resolver overrides it then. */
   contentVersion: "32cc746d817cad9f",
-  /** Bumped whenever the shared normalization rules change (docs §8). */
-  searchVersion: "arabic-search-v1",
+  /** Bumped whenever the shared normalization rules change (docs §7). */
+  searchVersion: SEARCH_VERSION,
   /** R2 paths mirror db/quran/tanzil (see translations/scripts/upload-sqlite.ts). */
   scripts: [
     {

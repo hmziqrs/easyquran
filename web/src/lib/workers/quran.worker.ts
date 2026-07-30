@@ -18,6 +18,17 @@ import { ensureArtifact } from "./opfs-cache";
 import type { ArtifactSpec } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_OFFSET,
+  MAX_LIMIT,
+  MAX_OFFSET,
+  isEligibleQuery,
+  normalizeArabic,
+  type SearchHit,
+  type SearchOpts,
+  type SearchResponse,
+} from "../quran/search/normalize";
 
 /** Minimal worker scope (avoids DOM/webworker `self` lib clashes). */
 interface WorkerCtx {
@@ -36,6 +47,17 @@ let simpleCleanBytes: Uint8Array | null = null;
  *  deserialized DB references its heap copy. */
 let uthmaniBytes: Uint8Array | null = null;
 let ready = false;
+
+/** Normalized search corpus over simple-clean + Uthmani display text by index.
+ *  Built lazily on the first search request. */
+interface CorpusRow {
+  index: number;
+  sura: number;
+  aya: number;
+  norm: string;
+}
+let corpus: CorpusRow[] | null = null;
+let uthmaniByIndex: Map<number, string> | null = null;
 
 function emit(msg: WorkerOutbound): void {
   ctx.postMessage(msg);
@@ -105,6 +127,60 @@ function readSurah(num: number): string[] {
   return out;
 }
 
+/** Build the normalized search corpus from simple-clean + a Uthmani text map. */
+function ensureSearchCorpus(): void {
+  if (corpus && uthmaniByIndex) return;
+  if (!simpleCleanBytes || !uthmaniDb) throw new Error("search corpus sources unavailable");
+  const sc = openReadOnly(simpleCleanBytes);
+  const scRows: [number, number, number, string][] = [];
+  sc.exec({
+    sql: 'SELECT "index", sura, aya, text FROM quran_text ORDER BY "index"',
+    rowMode: "array",
+    resultRows: scRows,
+  });
+  corpus = scRows.map((r) => ({
+    index: r[0],
+    sura: r[1],
+    aya: r[2],
+    norm: normalizeArabic(r[3]),
+  }));
+  const uRows: [number, string][] = [];
+  uthmaniDb.exec({
+    sql: 'SELECT "index", text FROM quran_text ORDER BY "index"',
+    rowMode: "array",
+    resultRows: uRows,
+  });
+  uthmaniByIndex = new Map(uRows);
+}
+
+/** Substring search over the normalized simple-clean corpus (docs §7). */
+function search(query: string, opts: SearchOpts = {}): SearchResponse {
+  ensureSearchCorpus();
+  const norm = normalizeArabic(query);
+  const limit = Math.min(opts.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+  const offset = Math.min(opts.offset ?? DEFAULT_OFFSET, MAX_OFFSET);
+  if (!isEligibleQuery(norm)) {
+    return { query, total: 0, limit, offset, results: [], source: "worker" };
+  }
+  const results: SearchHit[] = [];
+  let total = 0;
+  for (const row of corpus!) {
+    if (row.norm.includes(norm)) {
+      total++;
+      if (total > offset && results.length < limit) {
+        results.push({
+          key: `${row.sura}:${row.aya}`,
+          surah: row.sura,
+          ayah: row.aya,
+          globalIndex: row.index,
+          text: uthmaniByIndex!.get(row.index) ?? "",
+        });
+      }
+    }
+  }
+  return { query, total, limit, offset, results, source: "worker" };
+}
+
 ctx.onmessage = async (e: MessageEvent<WorkerRequest>): Promise<void> => {
   const msg = e.data;
   const id = msg.id;
@@ -123,6 +199,9 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>): Promise<void> => {
     switch (msg.type) {
       case "readSurah":
         emit({ id, ok: true, result: readSurah(msg.num) });
+        return;
+      case "search":
+        emit({ id, ok: true, result: search(msg.query, msg.opts) });
         return;
       case "ping":
         emit({ id, ok: true, result: "pong" });

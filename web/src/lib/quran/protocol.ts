@@ -7,6 +7,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import type { ResolvedManifest } from "./manifest";
+import type { SearchOpts } from "./search/normalize";
 
 /** Worker lifecycle status, surfaced to the UI via the quran status store. */
 export type WorkerStatus = "init" | "downloading" | "ready" | "error";
@@ -15,6 +16,7 @@ export type WorkerStatus = "init" | "downloading" | "ready" | "error";
 export type WorkerRequest =
   | { id: number; type: "init"; manifest: ResolvedManifest }
   | { id: number; type: "readSurah"; num: number }
+  | { id: number; type: "search"; query: string; opts?: SearchOpts }
   | { id: number; type: "ping" };
 
 /** worker → client: the response to a correlated request. */
