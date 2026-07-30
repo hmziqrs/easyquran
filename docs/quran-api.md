@@ -21,13 +21,12 @@
    downloads.
 7. Published database objects are versioned and never overwritten in place.
 8. The content version is **derived from a content hash**, never hand-typed, so
-   the backend and every derived artifact can prove they used the same source
-   inputs (§8.1).
-9. Every artifact this project publishes — API responses, the S3 downloads, and
-   the web reader's offline database — carries byte-identical ayah text (§3.3).
-10. The EasyQuran web reader's combined `quran.sqlite` is a **derived offline
-    artifact**. Axum advertises its manifest but never opens or proxies it; it is
-    not a backend startup input.
+   backend and browser can identify the same immutable source set (§8.1).
+9. API responses and the two published Arabic databases carry byte-identical
+   source ayah text (§3.3).
+10. The existing `quran-uthmani.sqlite` and `quran-simple-clean.sqlite` files
+    are also the browser download artifacts. No third Arabic SQLite database is
+    built or published.
 11. This plan does not define the web reader or browser storage.
 
 ---
@@ -42,8 +41,8 @@
 - Search Arabic from the in-memory corpus.
 - Keep Quran data independent from the mutable application database
   (`sea_db`).
-- Expose direct database download URLs, including the derived web/offline
-  artifact, without proxying their bytes.
+- Expose direct download URLs for the two existing Arabic databases without
+  proxying their bytes.
 - Define the future translation pack and API contract without implementing it
   in the Arabic MVP.
 
@@ -65,16 +64,12 @@
 | Uthmani Arabic | `db/quran/tanzil/arabic/quran-uthmani.sqlite` | `quran_text("index" PK, sura, aya, text)`, 6,236 rows |
 | Simple-clean Arabic | `db/quran/tanzil/arabic/quran-simple-clean.sqlite` | same schema, 6,236 rows |
 | Metadata | `db/quran/tanzil/quran-data.xml` | surah and navigation metadata |
-| Slug table | `db/quran/slugs.json` | **to be created** — see §4.3 |
-| Shared content manifest | `db/quran/content-manifest.json` | **to be generated** — source SHA-256 values plus the canonical `contentVersion` |
-| Offline artifact manifest | deployment/build output | generated beside the combined browser database; see §5.1 |
 | Translation sources | `db/quran/tanzil/translations/sql/*.sql` | 115 SQL dumps; MySQL/phpMyAdmin format, not runtime-ready |
 | Translation catalog | `db/quran/tanzil/translations/index.json` | translation names, languages, directions, `lastUpdate`, `sha256`, and source metadata |
 
 Also committed and **not** authoritative for the runtime: `arabic/sql/*.sql`
 (the SQL form of the two Arabic databases) and `translations/index.min.json`.
-The runtime reads the two Arabic `.sqlite` files, XML, slug table, shared
-content manifest, and generated offline-artifact manifest.
+The runtime reads only the two Arabic `.sqlite` files and the XML.
 
 Current sizes, decimal throughout:
 
@@ -198,21 +193,15 @@ The digest is asserted at startup (§4.1) and in CI (§10).
 ## 4. Architecture
 
 ```text
-Arabic SQLite + XML + canonical slugs
+Existing Arabic SQLite files + XML
         │
         ├── backend startup ──► immutable in-memory QuranStore
         │                             │
         │                             └── Arabic API reads and substring search
         │
-        ├── publish raw script databases to S3/CDN
-        │
-        └── web build ──► combined offline quran.sqlite + manifest
-                               │
-                               ├── SSG reads it directly
-                               └── browser downloads it directly from S3/CDN
-
-Axum reads the offline artifact manifest only. It never opens or serves the
-combined database.
+        └── publish the same two SQLite files to S3/CDN
+                                      │
+                                      └── browser downloads them directly
 
 Translation SQL sources (future)
         │
@@ -225,36 +214,32 @@ Translation SQL sources (future)
 ```
 
 `QuranStore` is immutable. The translation layer is mutable and therefore a
-sibling of it on `AppState`, not a field inside it (§4.4). The combined browser
-database is deliberately outside both runtime stores.
+sibling of it on `AppState`, not a field inside it (§4.4).
 
 ### 4.1 Arabic startup
 
 The store is built **before the runtime serves traffic** — either in a plain
 `fn main` that constructs it and then enters the Tokio runtime, or via
-`tokio::task::spawn_blocking`. The SQLite, XML, and manifest file work below
+`tokio::task::spawn_blocking`. The SQLite and XML file work below
 must never run inside a request handler or behind a lazy `OnceCell`.
 
 1. Open both Arabic SQLite files read-only, as `file:<path>?mode=ro&immutable=1`.
 2. Read all rows in global-index order.
-3. Parse `quran-data.xml` and the committed slug table.
+3. Parse `quran-data.xml`.
 4. Build and validate metadata ranges.
-5. Compute the source digests and `contentVersion`, then assert the shared
-   content manifest (§3.3, §8.1).
-6. Parse the generated offline-artifact manifest and assert that it names the
-   same `contentVersion`; do not open the database it describes.
-7. Construct `QuranStore` and close the SQLite connections.
+5. Compute the source digests and `contentVersion` (§3.3, §8.1).
+6. Construct `QuranStore` and close the SQLite connections.
 
-`immutable=1` is safe because artifacts and local filenames are versioned and
-never replaced in place; it also suppresses all lock and `-shm` activity, which
-matters on a read-only mount (§5.2).
+`immutable=1` is safe for this startup read because deployed source files are
+not changed in place while the short-lived connections are open; it also
+suppresses lock and `-shm` activity on a read-only mount.
 
 Cost: 12,472 row reads plus a 77,234 B XML parse — roughly 50–150 ms in
 release, up to ~1 s in debug or on a cold page cache. Size container
 `startupProbe` / `initialDelaySeconds` accordingly.
 
 **Failure policy: fail fast.** Any missing or corrupt source, XML failure,
-tiling-invariant failure, slug-table failure, or digest mismatch logs the
+tiling-invariant failure or digest mismatch logs the
 specific invariant and exits non-zero. A partially loaded or invariant-violating
 Arabic store is worse than an unavailable one, because it would serve wrong
 scripture silently; a failing image is also a louder signal than a degraded
@@ -263,8 +248,7 @@ checks in this codebase. There is no "Arabic not ready" served state.
 
 Arabic request handling performs no SQLite query. Uthmani is the default
 response script; simple-clean is an alternate response script and the Arabic
-search corpus. The combined web/offline database is never opened by the
-backend.
+search corpus.
 
 ### 4.2 Runtime model
 
@@ -291,7 +275,6 @@ struct SuraMeta {
     name_arabic: Box<str>,
     name_translit: Box<str>,
     name_english: Box<str>,
-    slug: Box<str>,
     bismillah: Bismillah, // FirstAyah | None | EmbeddedPrefix
 }
 
@@ -348,10 +331,9 @@ struct QuranStore {
 }
 ```
 
-`QuranStore` holds content only. Raw artifact URLs are derived from object
-storage settings, while the combined artifact metadata lives in a separate
-validated manifest on `AppState`; `/scripts` joins those at the handler. A CDN
-hostname change is therefore not a Quran content change.
+`QuranStore` holds content only. Artifact URLs are derived from object-storage
+settings and joined into `/scripts` by its handler, so a CDN hostname change is
+not a Quran content change.
 
 External Quran numbers are one-based. Array access must always convert
 explicitly:
@@ -361,25 +343,13 @@ verse offset = globalIndex - 1
 sura offset  = suraNumber - 1
 ```
 
-### 4.3 Slugs
+### 4.3 Surah identifiers and web slugs
 
-Use `db/quran/slugs.json` as the one committed 114-entry `num → slug` table, to
-be authored — it does not exist yet. The only slug data in the repo today is 11 demo entries in
-`web/src/lib/data/quran.ts`, which its own header marks as placeholder:
-`al-fatihah`(1), `al-baqarah`(2), `al-asr`(103), `al-fil`(105), `quraysh`(106),
-`al-kawthar`(108), `al-kafirun`(109), `an-nasr`(110), `al-ikhlas`(112),
-`al-falaq`(113), `an-nas`(114). Those 11 are the fixed subset; the remaining 103
-are open (§11.1).
-
-At startup assert:
-
-- exactly 114 entries;
-- every surah number appears once;
-- all slugs are unique;
-- the 11 published slugs above are unchanged.
-
-The web builder and SSG import this JSON directly or consume generated code from
-it. `web/scripts/slugs.mjs` must not become a second authored slug list.
+The public API accepts numeric surah identifiers `1..=114`. URL slugs are a web
+routing concern and remain in the existing `web/src/lib/data/quran.ts` contract;
+the web adapter resolves a slug to a number before calling Axum. The backend
+therefore needs no slug file, and a web-only URL spelling change does not change
+Quran API content or `contentVersion`.
 
 ### 4.4 Translation service — future
 
@@ -410,10 +380,8 @@ single-flight natively and is preferred over hand-rolling it.
 
 ### 5.1 Arabic artifacts
 
-Expose whole-database download metadata from `/scripts`. The two `scripts`
-entries are verbatim source-script databases for general API consumers. The
-`offlineDatabase` entry is the combined, derived artifact used by EasyQuran's
-SSG and browser:
+Expose the two existing databases from `/scripts`. These exact files are used
+by the backend at startup and downloaded by the web reader:
 
 The version strings in the examples are placeholders, not golden values; the
 real `contentVersion` is the BLAKE3-derived value from §8.1 and must not be
@@ -435,67 +403,27 @@ copied from the Uthmani SHA-256 prefix.
         "sha256": "a0c52760d6660ac5be1de5c76bb10df7a839a3e8a87ecb0e636fe2ed45b2e4a3",
         "downloadUrl": "https://cdn.example/quran/arabic/simple-clean/32cc746d817cad9f/quran-simple-clean.sqlite"
       }
-    ],
-    "offlineDatabase": {
-      "id": "easyquran-arabic-offline",
-      "artifactVersion": "8f2d7c1b19ce3014",
-      "schemaKind": "easyquran-offline",
-      "schemaVersion": 1,
-      "searchVersion": "arabic-search-v1",
-      "builderVersion": 1,
-      "sizeBytes": 3145728,
-      "sha256": "…",
-      "downloadUrl": "https://cdn.example/quran/offline/8f2d7c1b19ce3014/quran.sqlite"
-    }
+    ]
   },
   "contentVersion": "32cc746d817cad9f"
 }
 ```
 
-Object keys are immutable and versioned by the appropriate axis:
+Object keys are immutable and versioned by the content set:
 
 ```text
 quran/arabic/<script>/<content-version>/<filename>.sqlite
-quran/offline/<offline-artifact-version>/quran.sqlite
 ```
 
-The web artifact builder produces an offline-artifact manifest alongside the
-database:
-
-```json
-{
-  "contentVersion": "32cc746d817cad9f",
-  "artifactVersion": "8f2d7c1b19ce3014",
-  "schemaKind": "easyquran-offline",
-  "schemaVersion": 1,
-  "searchVersion": "arabic-search-v1",
-  "builderVersion": 1,
-  "sizeBytes": 3145728,
-  "sha256": "…",
-  "downloadUrl": "https://cdn.example/quran/offline/8f2d7c1b19ce3014/quran.sqlite"
-}
-```
-
-`artifactVersion` is the leading 16 hex characters of SHA-256 over the UTF-8
-string
-`easyquran-offline\0<contentVersion>\0<schemaVersion>\0<searchVersion>\0<builderVersion>`.
-Any semantic schema, normalization, or builder change therefore requires an
-explicit version-axis change, while `sha256` verifies the exact final database
-bytes. The builder must be deterministic for a fixed tuple: fixed insertion
-order, `journal_mode=DELETE`, `VACUUM`, no timestamps in the database, no
-WAL/SHM sidecars, and identical output SHA-256 on a clean rebuild.
-
-At boot, parse this manifest, assert its `contentVersion` and `searchVersion`
-against the in-memory store, and `HEAD` every artifact advertised by `/scripts`
-once with `Accept-Encoding: identity`.
+At boot, `HEAD` both URLs once with `Accept-Encoding: identity`.
 Refuse to advertise a link that 404s or whose identity-encoded `Content-Length`
-does not equal `sizeBytes`. Axum reads the manifest only; it never opens or
-streams `quran.sqlite`.
+does not equal `sizeBytes`. Axum advertises the URLs but never proxies their
+bytes.
 
-The raw Tanzil script databases have only `quran_text` and deliberately remain
-byte-for-byte source artifacts; they do **not** contain a `meta` table. The
-derived offline database carries its version tuple in `meta`, and translation
-packs carry theirs in `pack_meta`.
+The existing databases have only `quran_text` and deliberately remain
+byte-for-byte source artifacts; they do not need a `meta` table. The web client
+stores them under an OPFS directory named by the enclosing `contentVersion` and
+verifies each file against `/scripts.sizeBytes` and `/scripts.sha256`.
 
 ### 5.2 Translation packs — future
 
@@ -537,10 +465,10 @@ CREATE VIRTUAL TABLE verses_fts USING fts5(
 );
 ```
 
-`PRAGMA user_version` is file-local, not a project-wide schema number. It is
-valid for this translation schema and the unrelated offline schema both to be
-version `1`; `pack_meta.schema_kind` and the offline database's
-`meta.schema_kind` prevent consumers from opening the wrong artifact type.
+`PRAGMA user_version` is file-local, not a project-wide schema number.
+`pack_meta.schema_kind` prevents consumers from opening the wrong translation
+artifact type. These future translation packs are unrelated to the Arabic
+browser/search design and are not required for the Arabic MVP.
 
 `content_version` is derived from the catalog's `lastUpdate`, which is free-text
 English (`"April 24, 2011"`) and parses for all 115 entries; it is not a field
@@ -588,13 +516,13 @@ Translation object keys:
 quran/translations/<id>/<content-version>/<id>.sqlite
 ```
 
-Rules for every raw Arabic, combined offline, or translation database:
+Rules for every Arabic or translation database:
 
 - upload the complete SQLite file;
 - never overwrite a published object — enforced with a conditional write
   (`If-None-Match: *`) plus a bucket policy denying unconditional `PutObject`,
   with bucket versioning as a backstop;
-- use a new applicable content, artifact, or pack version for a replacement;
+- use a new applicable content or pack version for a replacement;
 - `Content-Type: application/vnd.sqlite3`;
 - no `Content-Encoding`: publish the exact SQLite bytes with identity encoding
   so `Content-Length`, byte ranges, `sizeBytes`, and `sha256` all describe the
@@ -628,7 +556,7 @@ republish, and offline clients pin a version indefinitely by design, so an
 age-based lifecycle rule would delete exactly the objects that must be kept.
 Retain the N most recent versions per artifact **plus any version referenced by
 a still-supported `catalogVersion`**, implemented as a tag-based policy. The
-support window is an open decision (§11.3).
+support window is an open decision (§11.2).
 
 The translation catalog contains:
 
@@ -792,8 +720,8 @@ Parameter matrix:
 - `fromGlobal` and `toGlobal` are inclusive, bounded to `1..=6236`, and required
   together;
 - `cursor` and `limit` paginate (see below);
-- `{surah}` accepts `1..=114` or a slug from the 114-entry table; the ETag key
-  and any `Location` header always normalize to the number;
+- `{surah}` accepts only `1..=114`; the web layer resolves URL slugs before
+  calling the API;
 - unknown parameters are rejected with 400, via
   `#[serde(deny_unknown_fields)]` on each query struct — plain serde ignores
   them silently.
@@ -837,7 +765,7 @@ other clients.
 
 ### 6.3 Response types
 
-Every Quran content, metadata, search, version, and artifact-manifest response
+Every Quran content, metadata, search, version, and artifact-metadata response
 uses one envelope, so a client caching a single ayah can still tell which
 content version it holds. Readiness and the OpenAPI document are operational
 exceptions:
@@ -912,17 +840,6 @@ struct Artifact {
     download_url: String,
 }
 
-struct OfflineArtifact {
-    id: String,
-    artifact_version: String,
-    schema_kind: String,
-    schema_version: u32,
-    search_version: String,
-    builder_version: u32,
-    size_bytes: u64,
-    sha256: String,
-    download_url: String,
-}
 ```
 
 `script` lives on `RangeMeta`, not on each `Ayah`, since it is constant across a
@@ -966,7 +883,7 @@ All errors share one body:
 
 | Condition | Status |
 |---|---:|
-| unknown Quran identifier, slug, or translation ID | 404 |
+| unknown Quran identifier or translation ID | 404 |
 | unknown route | 404 |
 | unknown script or invalid value | 400 |
 | malformed range, or range out of bounds | 400 |
@@ -1028,15 +945,15 @@ Normalization applies only to search values, never response text:
 - remove combining marks;
 - fold hamza-bearing alefs to bare alef;
 - fold alef-maqsura to ya;
-- optionally fold ta-marbuta to ha (§11.2 — resolve before Phase 2 ships, not
+- optionally fold ta-marbuta to ha (§11.1 — resolve before Phase 2 ships, not
   after).
 
 Corpus and query normalization implement one shared specification and must pass
 the same versioned fixtures in Rust and Node. A divergence is a correctness
 bug, not a tuning knob. The frozen rule set is identified by
 `searchVersion`. Changing it bumps `searchVersion`, invalidates search ETags,
-and produces a new combined offline artifact; it does not pretend that the
-verbatim Quran source bytes changed.
+and ships with updated backend/web code. It does not alter or require rebuilding
+the existing SQLite files.
 
 Limits:
 
@@ -1057,22 +974,16 @@ queries its `verses_fts` table.
 
 The API never opens or scans all translation packs for one request.
 
-### 7.3 Known divergence from the offline client
+### 7.3 Offline client parity
 
-The backend matches by substring on a normalized corpus; the web reader's
-offline database uses FTS5 token matching. **The same query therefore returns
-different results online and offline**, which is visible to a user whose client
-switches sources mid-session.
+The web reader downloads the existing simple-clean database, reads its 6,236
+rows into a small in-memory normalized array, and uses the same substring
+semantics, limits, ordering, and versioned normalization fixtures as the
+backend. No FTS table or derived SQLite database is required.
 
-This is an accepted, documented limitation, not an oversight. Note that the
-often-cited justification — that an in-memory scan "keeps Arabic search out of a
-mutable FTS database" — is not a real benefit: an FTS5 table inside an
-immutable, content-versioned artifact is not mutable, and §5.2 already builds
-FTS5 for every translation pack. If parity is required later, treat it as an
-explicit architecture change: either add a backend-owned FTS artifact and relax
-the no-SQLite-after-startup rule, or implement equivalent token semantics in
-memory. Do not silently point Axum at the web/offline database. §10 asserts the
-current divergence against a fixed query set so it cannot drift unnoticed.
+A fixed query suite must return identical ordered verse keys online and
+offline. Highlight rendering may be implemented independently, but it must not
+change which verses match.
 
 ---
 
@@ -1085,29 +996,23 @@ The version axes are deliberately separate:
 | Axis | Covers | Moves when |
 |---|---|---|
 | `/quran/v1` | wire shape | a breaking field or route change; **never** for content |
-| `contentVersion` | Arabic text, metadata XML, slug table | any of those bytes change |
+| `contentVersion` | the two Arabic SQLite files and metadata XML | any of those bytes change |
 | `searchVersion` | shared Arabic normalization rules and fixtures | normalization semantics change |
-| offline `schemaVersion` | combined browser database schema | its SQL shape changes |
-| offline `builderVersion` | semantic build recipe not covered above | the derivation logic changes |
-| offline `artifactVersion` | the complete semantic tuple above | content, search, schema, or builder version changes |
 | per-pack `contentVersion` | one translation | that pack's bytes change |
 | `catalogVersion` / catalog `schemaVersion` | the catalog document / its shape | catalog contents / catalog format |
 | `PRAGMA user_version` | one SQLite file's schema | that file's schema changes; checked at open |
 
 `contentVersion` is **derived, not declared**: at boot compute
-`blake3(uthmani_bytes ‖ simple_clean_bytes ‖ xml_bytes ‖ slug_table_bytes)` and
+`blake3(uthmani_bytes ‖ simple_clean_bytes ‖ xml_bytes)` and
 take the leading 16 hex characters. `QURAN_CONTENT_VERSION` survives only as an
 *assertion* — boot fails if the computed digest differs from the pinned value.
 
-The exact concatenation order above is part of the contract. A generated,
-committed `db/quran/content-manifest.json` carries that value plus the SHA-256
-of each of the four inputs. Rust recomputes BLAKE3 at boot. The zero-dependency
-Node builder verifies all four SHA-256 values with `node:crypto` and copies the
-manifest's `contentVersion`; it does not independently invent or hand-type the
-value. CI contains one fixed cross-language test vector.
+The exact concatenation order above is part of the contract. The web client
+does not recompute it; `/version` and `/scripts` return the backend-derived
+value, and the client uses that value as its OPFS directory name.
 
-An operator-typed version string would join the backend's four source inputs,
-the raw published objects, and every derived artifact with nothing but
+An operator-typed version string would join the backend's three source inputs
+and the published objects with nothing but
 discipline, and both failure modes are silent: forget to bump it and every
 cached response plus every `If-None-Match` returns 304 for changed content;
 bump it spuriously and
@@ -1115,9 +1020,8 @@ bump it spuriously and
 digest also makes same-day republishes structurally distinct, which a date
 string cannot express under the never-overwrite rule.
 
-Note that a wire-representation change moves `/v1`, not `contentVersion`; an
-offline SQL representation change moves the offline schema/builder/artifact
-axes; and a normalization change moves `searchVersion`.
+Note that a wire-representation change moves `/v1`, not `contentVersion`, and a
+normalization change moves `searchVersion`.
 
 `GET /version` returns every axis so a client can compare without parsing
 headers:
@@ -1131,11 +1035,6 @@ headers:
       "uthmani": "32cc746d…",
       "simpleClean": "37593472…"
     },
-    "offlineDatabase": {
-      "artifactVersion": "8f2d7c1b19ce3014",
-      "schemaVersion": 1,
-      "builderVersion": 1
-    },
     "translations": [
       { "id": "en.sahih", "contentVersion": "2011-04-24" }
     ]
@@ -1144,12 +1043,10 @@ headers:
 }
 ```
 
-The derived offline database records the full offline version tuple in `meta`,
-and translation packs use `pack_meta`. The raw Tanzil script databases remain
-verbatim and have no internal version marker; their version is carried by the
-immutable object key and `/scripts` manifest. The web client compares
-`offlineDatabase.artifactVersion`, not only `contentVersion`, and redownloads
-rather than merging whenever it changes.
+The two existing Arabic databases remain verbatim and have no internal version
+marker. Their shared version is carried by the immutable object keys and the
+`/scripts` envelope. The web client compares that `contentVersion` with its
+OPFS directory name and redownloads both files whenever it changes.
 
 Cache headers:
 
@@ -1169,7 +1066,7 @@ unversioned alias the policy above.)
 `<canonical-resource-key>` is the resource kind plus its normalized identifiers
 plus **every** accepted query parameter in fixed alphabetical order, with
 defaults made explicit — e.g. `surahs/2/ayahs?from=1&script=uthmani&to=286`.
-Slugs normalize to numbers and verse keys to `surah/ayah`. Omitting `script` here
+Verse keys normalize to `surah/ayah`. Omitting `script` here
 would let `?script=simple-clean` and `?script=uthmani` collide on one ETag, and
 a shared CDN would then serve the wrong script. Translation ETags are
 `W/"<arabic-content-version>+<pack-content-version>:<key>"`.
@@ -1295,9 +1192,6 @@ struct QuranSettings {
     uthmani_path: PathBuf,          // QURAN_UTHMANI_PATH
     simple_clean_path: PathBuf,     // QURAN_SIMPLE_CLEAN_PATH
     metadata_xml_path: PathBuf,     // QURAN_METADATA_XML_PATH
-    slug_table_path: PathBuf,       // QURAN_SLUG_TABLE_PATH
-    content_manifest_path: PathBuf, // QURAN_CONTENT_MANIFEST_PATH
-    offline_artifact_manifest_path: PathBuf, // QURAN_OFFLINE_ARTIFACT_MANIFEST_PATH
     expected_content_version: Option<String>, // QURAN_CONTENT_VERSION, asserted
 }
 
@@ -1317,10 +1211,9 @@ struct TranslationSettings { // future
 }
 ```
 
-Download URLs are **not** hand-entered settings. Raw Arabic and translation URLs
+Download URLs are **not** hand-entered settings. Arabic and translation URLs
 are derived from `settings.object_storage.public_url`, the bucket, and their
-versions. The offline publisher writes its URL into the generated manifest from
-that same base; boot validates its host and immutable path shape.
+versions.
 
 `max_download_bytes` bounds a broken or hostile upstream; without it a
 misbehaving endpoint can fill the cache volume.
@@ -1347,12 +1240,10 @@ is locked by a totality snapshot test and which feeds TS/Dart codegen. Reuse the
 generic codes (`RecordNotFound`, `InvalidInput`, `ServiceUnavailable`) where they
 fit; a `QRN_*` namespace means touching a shared crate and downstream codegen.
 
-The runtime image or deployment mount must contain both Arabic SQLite files, the
-XML, the slug table, the shared content manifest, and the offline-artifact
-manifest. The first four are source inputs and the last is metadata only; all
-may be mounted read-only. The combined offline database itself is not mounted
-into Axum. The future translation cache directory is writable and should be
-persistent (§5.4).
+The runtime image or deployment mount must contain both existing Arabic SQLite
+files and the XML. All three are startup inputs and may be mounted read-only.
+The future translation cache directory is writable and should be persistent
+(§5.4).
 
 ### 8.4 Health
 
@@ -1363,7 +1254,6 @@ Keep liveness separate from readiness. `GET /quran/v1/health/ready`:
   "ready": true,
   "contentVersion": "32cc746d817cad9f",
   "searchVersion": "arabic-search-v1",
-  "offlineArtifactVersion": "8f2d7c1b19ce3014",
   "sourceDigests": { "uthmani": "32cc746d…", "simpleClean": "37593472…" },
   "verseCount": 6236,
   "surahCount": 114,
@@ -1436,22 +1326,17 @@ yesterday's ayah for most of the following day.
 
 ### Phase 0 — Arabic store
 
-- Add settings and author the 114-entry slug table.
-- Generate the shared content manifest from the four canonical inputs and add
-  the cross-language content-version test vector.
+- Add settings for the two existing SQLite files and the XML.
 - Load both Arabic sources into memory as arenas.
 - Parse XML and build every metadata range.
 - Validate the source invariants and assert the golden digests.
 - Add `Arc<QuranStore>` to `AppState`.
 - Include or mount startup data in the backend deployment.
-- Accept and validate the generated offline-artifact manifest without opening
-  the database it describes.
 - Upload the two Arabic artifacts to versioned immutable keys — 2.5 MB of bytes
   with no build pipeline needed, so there is no reason to defer it to Phase 3.
 
 Exit: all 6,236 source rows in both scripts are available verbatim from memory,
-the golden digests match the constants in §3.3, and the content/offline
-manifests agree with the in-memory store.
+and the golden digests match the constants in §3.3.
 
 ### Phase 1a — Router split
 
@@ -1478,12 +1363,12 @@ revoked-session enforcement.
 ### Phase 1b — Arabic API
 
 - Add `modules/quran_v1/` with routes, validators, and DTOs.
-- Freeze `/surahs` + `/ayahs`, the `surah`/`ayah` wire fields, and slug
-  acceptance as specified in §6.
+- Freeze `/surahs` + `/ayahs`, numeric surah identifiers, and the
+  `surah`/`ayah` wire fields as specified in §6.
 - Add the response-size cap and cursor pagination.
 - Add cache headers, weak ETags, HEAD, and conditional requests.
-- Expose the raw-script and offline-database manifests from `/scripts` and
-  `/version`; never proxy their bytes.
+- Expose the two existing database URLs and checksums from `/scripts`; never
+  proxy their bytes.
 
 Exit: every range family returns the correct ordered slice; no response exceeds
 the cap; a cross-origin conditional GET completes preflight and the client can
@@ -1501,9 +1386,9 @@ greenfield and is separated for that reason.
 
 - Add the normalized `SearchIndex` with offset maps.
 - Add `/search`, limits, rate limiting, metrics, and smoke tests.
-- Resolve the ta-marbuta question (§11.2) before shipping.
-- Freeze the normalization fixtures and `searchVersion`; keep substring matching
-  online and the documented FTS5 divergence offline.
+- Resolve the ta-marbuta question (§11.1) before shipping.
+- Freeze the normalization fixtures and `searchVersion`; use the same substring
+  semantics online and offline.
 
 Exit: search performs no SQLite query, per the assertion in §10.
 
@@ -1542,13 +1427,6 @@ Each exit criterion below is stated as something a test can actually observe.
 - Every range family tiles `[1, 6236]`, and marker `index` order matches global
   order.
 - `hizb` and `quarterInHizb` derivation covers 1..60 and 1..4 exactly.
-- The slug table contains 114 unique entries and the 11 published slugs are
-  unchanged.
-- The shared content manifest's four input SHA-256 values match the exact files,
-  and Rust and Node agree on the fixed `contentVersion` test vector.
-- The offline manifest matches `contentVersion` and `searchVersion`, its
-  `artifactVersion` matches the specified tuple, and a clean rebuild is
-  byte-deterministic.
 
 ### Verbatim responses
 
@@ -1583,8 +1461,8 @@ Each exit criterion below is stated as something a test can actually observe.
   no two consecutive dates differ by 1.
 - `/scripts` omits any artifact whose URL failed the boot `HEAD` check or whose
   identity-encoded `Content-Length` differs from `sizeBytes`.
-- `/scripts` exposes the combined offline database separately from the two raw
-  script databases, and Axum never serves any of those bytes.
+- `/scripts` exposes exactly the existing Uthmani and simple-clean databases,
+  and Axum never serves their bytes.
 
 ### No-SQLite-after-startup
 
@@ -1598,13 +1476,11 @@ Each exit criterion below is stated as something a test can actually observe.
 
 ### Search
 
-- A fixed query set asserts the documented API-substring versus client-FTS5
-  divergence explicitly so it cannot widen unnoticed.
-- Rust and Node normalization pass the same versioned fixture corpus.
+- A fixed query set returns identical ordered verse keys online and offline.
+- Rust and web normalization pass the same versioned fixture corpus.
 - Highlight offsets fall on valid UTF-16 boundaries in the response script.
 - A 2-scalar query returns 400; early termination caps allocations at `limit`.
-- Changing a normalization fixture requires a `searchVersion` change and a new
-  offline `artifactVersion`.
+- Changing a normalization fixture requires a `searchVersion` change.
 
 ### Translation future
 
@@ -1631,7 +1507,6 @@ Each exit criterion below is stated as something a test can actually observe.
 
 ## 11. Remaining API decisions
 
-1. Final 114-entry slug spelling — 11 are fixed (§4.3), 103 are open.
-2. Whether ta-marbuta folding improves Arabic search (resolve before Phase 2).
-3. Retention window for superseded immutable objects (§5.3).
-4. Future translation disk-cache sizing and `warm_packs` selection.
+1. Whether ta-marbuta folding improves Arabic search (resolve before Phase 2).
+2. Retention window for superseded immutable objects (§5.3).
+3. Future translation disk-cache sizing and `warm_packs` selection.

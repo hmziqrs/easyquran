@@ -1,485 +1,462 @@
 # EasyQuran — Quran content delivery to the web (design plan)
 
-> Status: **plan** (not yet implemented). Scope: a server-rendered, SEO-indexable Qur'an reader
-> with a **live Rust backend** serving content/search/translations, plus a front-end that **caches
-> a derived Arabic database permanently** and runs the reader-facing Arabic surface offline against
-> a local SQL engine. **Translations are live-only for this web reader** (never persisted, never
-> available offline).
-> This document owns web delivery decisions; `quran-api.md` remains authoritative for Rust runtime
-> behavior and the shared wire/artifact contract.
+> Status: **plan** (not yet implemented). Scope: a server-rendered,
+> SEO-indexable Qur'an reader with a live Rust backend and an offline-capable
+> Arabic reader.
 >
-> Decisions settled in review: **SSG + live Rust backend** for the MVP; **Arabic-only permanent
-> cache** (translations loaded live); **one combined Service Worker at `/`**.
+> The browser caches the two existing Arabic databases unchanged:
+> `quran-uthmani.sqlite` and `quran-simple-clean.sqlite`. Translations are
+> live-only for this web reader. **No additional Arabic SQLite database is
+> built, generated, or maintained.**
+>
+> This document owns web delivery decisions. `quran-api.md` owns Rust runtime
+> behavior and the shared HTTP contract.
 
 ---
 
-## 1. Goals & requirements
+## 1. Goals and requirements
 
-1. **SEO / server-rendered.** Every `/app/<slug>` page ships as real HTML with the Uthmani verse
-   text in the DOM — indexable without relying on crawler JS execution, best-possible LCP.
-2. **Permanent client cache of the Arabic database.** The Qur'an text is immutable, so the Arabic db
-   is downloaded **once** and kept **forever** (no expiry, no periodic re-sync).
+1. **SEO / server-rendered.** Every `/app/<slug>` page ships as real HTML with
+   the Uthmani verse text in the DOM.
+2. **Reuse the existing Arabic databases.**
+   `quran-uthmani.sqlite` and `quran-simple-clean.sqlite` are downloaded from
+   the immutable CDN URLs advertised by `/quran/v1/scripts` and stored in an
+   OPFS directory named by the backend's `contentVersion`. The files are not
+   altered and require no `meta` table.
+3. **Offline Arabic-reader parity.** Surah and ayah reads, arbitrary ayah
+   batches and global ranges, juz/page/ruku/hizb-quarter/manzil navigation,
+   sajda markers, deterministic ayah-of-the-day, both Arabic scripts, and
+   Arabic search work offline after the two databases are cached.
+4. **The same search behavior online and offline.** Both sides normalize and
+   substring-scan the 6,236 simple-clean verses. No FTS table or search database
+   is required.
+5. **Translations are live-only.** Translation requests use
+   `cache: "no-store"` and are never written to OPFS or Cache Storage. The
+   public API may publish translation packs for other clients; this web reader
+   does not download them.
+6. **SPA-fast after hydration.** Client navigation is prefetched and local once
+   the Arabic files are ready.
+7. **Preserve the reader boundary.** The `VerseKey` contract, pure routing
+   helpers, and component-facing loaded-surah shape in
+   `web/src/lib/data/quran.ts` remain stable.
 
-   This is safe only because every published artifact is immutable — but a new content, schema,
-   normalizer, or builder version produces a new artifact. So "no invalidation" means *no polling*,
-   not *no version check*. The db carries its full offline version tuple in `meta`; the client
-   compares `meta.artifact_version` with
-   `GET /quran/v1/version → data.offlineDatabase.artifactVersion` on load (cheap,
-   `max-age=300`). A mismatch re-downloads the new URL advertised by `/scripts`. Comparing only
-   `contentVersion` is insufficient because an offline schema or search-index change need not alter
-   Quran source bytes.
-3. **Offline parity for the reader-facing Arabic surface.** Offline, the front-end supports surah
-   and ayah reads, arbitrary ayah batches/global ranges, juz/page/ruku/hizb-quarter/manzil ranges,
-   sajda markers, deterministic ayah-of-the-day, both Arabic scripts, and search. Operational API
-   resources such as health, OpenAPI, version, and artifact manifests are naturally online-only.
-
-   One documented exception: **search results are not identical online and offline.** This db uses
-   FTS5 token matching; the backend MVP uses a substring scan over a normalized corpus
-   (`quran-api.md` §7.3). Feature parity holds; result parity does not, and a user whose client
-   switches sources mid-session can see results change. Accepted for now — see `quran-api.md` §7.3.
-4. **Translations are live-only.** Translations are fetched from the backend on demand and are
-   sent with `cache: "no-store"`, bypass the Service Worker, and are never written to Cache Storage
-   or OPFS. The public API may still publish translation packs for other clients; this web reader
-   does not consume them.
-5. **SPA-fast after hydration.** Client-side navigation, prefetched on hover.
-6. **Contract preserved.** The `Surah` / `VerseKey` interface and pure helpers in
-   `web/src/lib/data/quran.ts` stay; the `_reader` components are not edited for the core cutover.
+Operational resources such as health, OpenAPI, and version metadata remain
+online-only.
 
 ---
 
-## 2. The decision, and why
+## 2. Why the existing databases are enough
 
-### Why a SQL engine in the browser (WASM SQLite)
+Both existing files already have the schema needed for verse reads:
 
-Requirement #3 — **offline parity**, which needs **full-text search *and* relational queries**
-(juz/page ranges, ayah lookups) together — rules out the lighter options:
+```sql
+CREATE TABLE quran_text (
+    "index" INTEGER PRIMARY KEY,
+    sura    INTEGER NOT NULL DEFAULT 0,
+    aya     INTEGER NOT NULL DEFAULT 0,
+    text    TEXT NOT NULL
+);
 
-- **IndexedDB** — native, WASM-free, but **no FTS, no relational queries**. Cannot serve "jump to
-  juz 5" or `MATCH`-style search without rebuilding a query engine on top of it.
-- **A JS search library** (MiniSearch/FlexSearch) — great for offline *text* search, but **no
-  relational side** (juz/page/range, joins).
-- **Web SQL** — deprecated (2010), removed everywhere (~2023); **no native SQL db in browsers**.
+CREATE INDEX idx_quran_text_sura_aya ON quran_text (sura, aya);
+```
 
-WASM SQLite is the only option giving FTS **and** relational queries offline. It costs a ~1 MB WASM
-blob + the db in memory, but that's paid for by #3 and lands off the critical path (§6).
+Both contain 6,236 rows with the same contiguous global indices and the same
+`(sura, aya)` keys.
 
-### Why a live backend *and* a client cache
+- `quran-uthmani.sqlite` is the display source. Its text is used by Axum, SSG,
+  browser reading, copying, and SEO HTML.
+- `quran-simple-clean.sqlite` is the search source and the optional
+  simple-clean display script. Its smaller, undiacritated text is loaded into a
+  small in-memory array and substring-scanned.
+- `quran-data.xml` supplies surah metadata and the navigation markers. The
+  backend parses it at startup; the web build parses it into the JavaScript
+  bundle. It is not another runtime database.
+- `web/src/lib/data/quran.ts` owns URL slugs. The web maps a slug to the API's
+  numeric surah identifier.
 
-- **Backend (live):** the source of truth for content/search/**translations**, and the before-cache
-  fallback on first visit. Required by #4 (translations live) and by online search.
-- **Client OPFS cache (Arabic only):** delivers #2 (permanent) and #3 (offline parity). Once cached,
-  Arabic reads/searches are local and instant; offline works.
-- **SSG prerender:** delivers #1 (SEO) and first paint.
-
-### Verified facts that shape the design
-
-| Fact (verified on disk) | Consequence |
-|---|---|
-| `quran-data.xml` is **metadata only** (114 sura rows + all navigation markers; **no verse text**). | Build reads the XML for catalog/ranges and a `.sqlite` for verse text. |
-| Verse text in `db/quran/tanzil/arabic/quran-uthmani.sqlite` (1.6 MB, 6236 rows, `quran_text("index",sura,aya,text)`). | Primary content source for the derived offline db. |
-| `quran-simple-clean.sqlite` (908 KB) = same verses **undiacriticated, regular alef**. | The FTS/search corpus (§9). Both scripts contain embedded prefixes for 112 surahs; Uthmani has 110 standard spellings plus the shadda variants at 95:1 and 97:1. Only surah 9 is prefix-free. |
-| Web **hardcodes 11 surahs** in `quran.ts`, **never fetches backend**; `/app` is currently `noindex`, excluded from sitemap, no per-page meta. | No live path to disrupt; SEO (#1) needs an explicit policy flip + per-surah meta (Phase 1). |
-| Rust backend is a CMS clone with **no Qur'an tables/routes**. | The API plan adds a module that loads the two raw Arabic databases + XML + canonical slugs into memory. It never opens the combined browser database. |
-| Deploy is `@sveltejs/adapter-static` + `prerender=true`; Node **v24** (built-in `node:sqlite`, FTS5 verified). | SSG is the SEO mechanism; build reads the db with zero deps. |
+There is no need to merge the files. There is also no need to add FTS to either
+file: the complete simple-clean text corpus is about 744 KB, so a normalized
+substring scan is small enough for both Rust and a browser Worker.
 
 ---
 
 ## 3. Architecture
 
-```
-SHARED INPUTS
-  Tanzil Arabic sqlite files + quran-data.xml + db/quran/slugs.json
-  db/quran/content-manifest.json fixes input SHA-256 values + contentVersion
+```text
+EXISTING, AUTHORITATIVE INPUTS
+  db/quran/tanzil/arabic/quran-uthmani.sqlite
+  db/quran/tanzil/arabic/quran-simple-clean.sqlite
+  db/quran/tanzil/quran-data.xml
 
-WEB/OFFLINE BUILD (once)
-  shared inputs ──► build-quran-sqlite.mjs (node:sqlite, --experimental-sqlite)
-    output:  ONE derived quran.sqlite  (ARABIC ONLY — no translations)
-               quran_text (Uthmani)   quran_simple (simple-clean)   surahs (114 meta)
-               all 5 range families + sajdas             quran_fts (FTS5 over simple-clean)
-             + offline-artifact manifest (version tuple, size, sha256, CDN URL)
-  SSG reads quran.sqlite directly; publisher uploads it to an immutable CDN key
+BACKEND
+  opens both SQLite files + XML at startup
+    └── builds an immutable in-memory store
+          ├── verbatim Arabic reads
+          ├── normalized simple-clean substring search
+          └── metadata/range reads
+  closes SQLite before serving
+  /scripts advertises the same two existing files on the CDN
 
-SERVER (Rust backend — LIVE in MVP)
-  opens the 2 raw Arabic sqlite files + XML + slugs at startup, builds an in-memory store,
-  closes SQLite, and then ──►
-    (a) LIVE JSON: content + normalized substring search + live translations
-    (b) /scripts and /version advertise the offline manifest
-    (c) never opens or proxies the combined quran.sqlite
+SSG
+  opens quran-uthmani.sqlite directly with node:sqlite
+  parses XML and uses quran.ts slug metadata
+    └── prerenders 114 SEO pages
 
-CLIENT
-  first paint : prerendered HTML shows verses (SEO + UX)
-  first visit : before the Arabic db caches, SPA nav/search fall back to the live backend JSON
-                background: fetch sqlite-wasm + quran.sqlite directly from CDN → persist to OPFS
-  subsequent  : reader-facing Arabic reads/search/navigation run locally → instant, OFFLINE
-  translations: always fetched LIVE with cache bypass, never persisted, never offline
-
-CACHING
-  OPFS              the Arabic quran.sqlite (persistent; best-effort — versioned re-download on miss)
-  Service Worker    ONE combined SW at / : content cache + importScripts(Firebase Messaging)
-                    excludes FCM config, offline DB downloads, and translation-bearing requests
+BROWSER
+  first paint ──► prerendered Uthmani HTML
+  before cache ──► live backend fallback
+  background   ──► download the same two SQLite files from CDN to OPFS
+  after cache  ──► local reads + local substring search
+  translations ──► live backend only
 ```
 
 | Layer | Technology | Job |
 |---|---|---|
-| SEO / first paint | SvelteKit **prerender** (SSG), reading `quran.sqlite` at build | verses in DOM for crawlers |
-| Live content/search/translations | **Rust backend** (in-memory JSON) | runtime source of truth + before-cache fallback + substring search + translations |
-| Local query engine | **sqlite-wasm** (FTS5 + OPFS VFS) in a Web Worker | offline Arabic read/search/ranges |
-| Persistent storage | **OPFS** + `navigator.storage.persist()` (+ versioned re-download) | permanent Arabic db cache |
-| Artifact delivery | **S3/CDN**, advertised by Axum | immutable combined database; Axum never proxies it |
-| Asset caching | **one combined Service Worker at `/`** | wasm + HTML + shell; relays FCM; does not duplicate the OPFS database |
+| SEO / first paint | SvelteKit SSG + `node:sqlite` | Read the existing Uthmani database and emit verse HTML |
+| Live content and search | Rust backend, in memory | Runtime source and before-cache fallback |
+| Local Arabic reads | `sqlite-wasm` in a Web Worker | Open the two existing databases unchanged |
+| Local Arabic search | Worker in-memory array | Normalize and substring-scan simple-clean rows |
+| Navigation metadata | XML parsed at backend startup and web build | Surah/range/sajda metadata without another database |
+| Persistent storage | OPFS | Keep both existing databases under `contentVersion` |
+| Artifact delivery | S3/CDN, advertised by Axum | Serve the two existing immutable files; Axum does not proxy them |
+| Asset caching | One Service Worker at `/` | Cache the app shell and WASM; leave SQLite to OPFS |
 
 ---
 
-## 4. The derived offline `quran.sqlite` (Arabic only)
+## 4. Source use and validation
 
-Built by `web/scripts/build-quran-sqlite.mjs` (Node, `node:sqlite`, no native deps), run before
-`vite build` via a `prebuild` hook. Run with `NODE_OPTIONS=--experimental-sqlite` (defensively;
-`node:sqlite` is still flagged on some v24 builds). SSG reads this file directly and the publisher
-uploads it to the immutable CDN key from its generated manifest. Axum reads that manifest but never
-opens or proxies the database. **Translations are not in this file** — they're served live from the
-backend.
+The web build and backend consume the checked-in source files directly. There
+is no database builder and no generated SQLite artifact.
 
-The source of truth remains the two raw Arabic databases, the XML, and
-`db/quran/slugs.json`. Before building, Node verifies their SHA-256 values against
-`db/quran/content-manifest.json` and copies its canonical `contentVersion`.
+Build and CI assert:
 
-**Schema:**
+- each database contains exactly 6,236 rows;
+- global indices are contiguous from 1 through 6,236;
+- both databases have identical ordered `(index, sura, aya)` keys;
+- the verbatim text digests equal the golden constants in
+  `quran-api.md` §3.3;
+- XML counts are 114 surahs, 30 juzs, 604 pages, 556 rukus, 240 quarters,
+  7 manzils, and 15 sajdas;
+- each range family tiles `[1, 6236]` without a gap or overlap;
+- Uthmani bismillah classification is exactly one first-ayah, 112 embedded
+  prefixes, and one absent; the shadda variants at 95:1 and 97:1 are preserved;
+- the CDN identity-encoded byte length and SHA-256 for each file match what
+  `/quran/v1/scripts` advertises.
 
-```sql
-PRAGMA user_version = 1;   -- offline schema version; checked at open
+The existing databases deliberately have no internal EasyQuran version field.
+Their enclosing `contentVersion` is computed by the backend from:
 
--- so a cached db can identify both its content and derived representation
-CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- rows: schema_kind='easyquran-offline', content_version, artifact_version,
---       schema_version, search_version, builder_version,
---       uthmani_digest, simple_clean_digest
-
-CREATE TABLE quran_text  ("index" INTEGER PRIMARY KEY, sura INTEGER, aya INTEGER, text TEXT);
-CREATE INDEX idx_quran_text_sura ON quran_text(sura, aya);
-CREATE TABLE quran_simple ("index" INTEGER PRIMARY KEY, text TEXT);
--- derived search index (normalization only); quran_text/quran_simple stay verbatim
-CREATE TABLE quran_search ("index" INTEGER PRIMARY KEY, text TEXT);
-CREATE TABLE surahs (num INTEGER PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT, tname TEXT,
-                     ename TEXT, place TEXT, ayah_count INTEGER, revelation_order INTEGER, rukus INTEGER,
-                     bismillah TEXT NOT NULL CHECK (bismillah IN ('first-ayah','none','embedded-prefix')));
-CREATE TABLE juzs (
-    num INTEGER PRIMARY KEY, start_index INTEGER, end_index INTEGER,
-    start_sura INTEGER, start_aya INTEGER, end_sura INTEGER, end_aya INTEGER
-);
-CREATE TABLE pages (
-    num INTEGER PRIMARY KEY, start_index INTEGER, end_index INTEGER,
-    start_sura INTEGER, start_aya INTEGER, end_sura INTEGER, end_aya INTEGER
-);
-CREATE TABLE rukus (
-    num INTEGER PRIMARY KEY, start_index INTEGER, end_index INTEGER,
-    start_sura INTEGER, start_aya INTEGER, end_sura INTEGER, end_aya INTEGER
-);
-CREATE TABLE hizb_quarters (
-    num INTEGER PRIMARY KEY, hizb INTEGER, quarter_in_hizb INTEGER,
-    start_index INTEGER, end_index INTEGER,
-    start_sura INTEGER, start_aya INTEGER, end_sura INTEGER, end_aya INTEGER
-);
-CREATE TABLE manzils (
-    num INTEGER PRIMARY KEY, start_index INTEGER, end_index INTEGER,
-    start_sura INTEGER, start_aya INTEGER, end_sura INTEGER, end_aya INTEGER
-);
-CREATE TABLE sajdas (
-    num INTEGER PRIMARY KEY, global_index INTEGER UNIQUE,
-    sura INTEGER, aya INTEGER, kind TEXT
-);
-CREATE VIRTUAL TABLE quran_fts USING fts5(text, content='quran_search', content_rowid='index');
+```text
+BLAKE3(uthmani bytes || simple-clean bytes || XML bytes)[0..16 hex]
 ```
 
-`PRAGMA user_version = 1` does not collide with translation pack schema version
-1 because SQLite versions are file-local and
-`meta.schema_kind` rejects the wrong artifact type.
-
-**Build invariants (assert at build time, fail loud):**
-
-- The four input SHA-256 values match `db/quran/content-manifest.json`; copy its
-  `contentVersion` rather than independently reimplementing or hand-typing the
-  backend's BLAKE3 result.
-- `COUNT(*) = 6236` for `quran_text`, `quran_simple`, `quran_search`, and `quran_fts`; `"index"`
-  contiguous 1..6236.
-- **Verbatim digests match the API's golden constants** (`quran-api.md` §3.3): `sha256` over all
-  6,236 `quran_text` / `quran_simple` values joined by `\n` equals `32cc746d…` / `375934722…`. This
-  is what makes "one source of truth, no drift between the SEO HTML and the offline experience"
-  checkable rather than aspirational — and it catches a silent NFC normalization by `node:sqlite`,
-  which would otherwise alter 5,782 of 6,236 Uthmani rows invisibly.
-- `meta` contains the exact content/artifact/schema/search/builder tuple from the
-  generated offline manifest. `artifactVersion` follows the formula in
-  `quran-api.md` §5.1; the client compares this value, not only `contentVersion`.
-- **FTS must be populated explicitly** — external-content FTS does **not** auto-fill; `MATCH` returns
-  `[]` until rebuilt. Mandatory: `INSERT INTO quran_fts(quran_fts) VALUES('rebuild')`, then assert
-  `count(*) = 6236`. (Forgetting this ships a silently-empty search.)
-- All five range families have the API counts 30 / 604 / 556 / 240 / 7 and each
-  **tiles `[1, 6236]`** exactly; there are 15 correctly mapped sajda markers. The XML gives `(sura,aya)`
-  anchors and 0-based `sura/@start`; derive `start_index = suras[sura].start_global + (aya-1)` and
-  `end_index = next.start_index - 1` (last → 6236); assert no gaps/overlaps.
-- Build in global-index order, set `journal_mode=DELETE`, run `VACUUM` and
-  `integrity_check`, emit no WAL/SHM sidecars, and store no build timestamp. Two
-  clean builds for the same version tuple must have the same final SHA-256.
-- Generate the artifact manifest only after the database closes; record its
-  identity-encoded `sizeBytes`, final-byte `sha256`, immutable CDN URL, and full
-  version tuple.
-
-**Bismillah handling (verified against the files).** Only **surah 9** is genuinely basmala-free —
-this is **intentional** (At-Tawbah is the one surah without a basmala; never add one); surah 1's
-basmala *is* ayah 1 (keep it). The other **112 surahs carry a basmala prefix on ayah 1** —
-but it is **not byte-identical**: 110 use the standard Uthmani `بِسْمِ ٱللَّهِ…`, while **surahs 95 &
-97 use a `بِّسْمِ…` variant** (a shadda on the first beh), so an exact `startsWith('بِسْمِ…')` match
-**misses them** (verified: Uthmani ayah-1 = 114 rows → 111 `بِسْمِ`, 2 `بِّسْمِ`, 1 none).
-
-Every table stores the source bytes exactly as they are. `surahs.bismillah`
-(`first-ayah` | `none` | `embedded-prefix`) records which case each surah is, for display purposes
-only. Assert at build time that exactly **112** rows classify as `embedded-prefix`, using the
-diacritic-insensitive match so 95/97 are not missed — a data-integrity check on the source.
-
-**Search** indexes `quran_search`, a derived column carrying only the normalization search itself
-requires (harakat removed, alef/ya folding), matching the versioned fixtures and `searchVersion`
-from `quran-api.md` §7.1. `quran_text` and `quran_simple` are untouched.
-
-**Slugs.** The committed 114-entry `db/quran/slugs.json` is the single authored source for the
-`surahs.slug` column, the backend, and `entries()` in `[surah]/+page.ts`. If synchronous web code
-needs `web/scripts/slugs.mjs`, generate it from the JSON and fail CI when it differs. The 11 live
-slugs are a verbatim subset; the other 103 are hand-authored once and frozen (the XML `tname`
-cannot be normalized to the live slugs).
+The browser uses that value as the OPFS directory name and validates each
+download with its advertised `sizeBytes` and `sha256`. When `contentVersion`
+changes, it downloads both current source files into a new directory before
+promoting it.
 
 ---
 
-## 5. Server — live backend + SSG for SEO
+## 5. Server and SSG
 
-Backend implementation is owned by `quran-api.md`: Rust loads the two raw
-Arabic databases, XML, and canonical slug JSON at startup, constructs an
-immutable in-memory store, and closes SQLite before serving traffic. It never
-opens the derived offline database. The two delivery jobs are:
+Backend implementation is owned by `quran-api.md`. Rust reads both existing
+Arabic databases and the XML at startup, builds an immutable in-memory store,
+and closes its SQLite handles. HTTP requests do not query SQLite.
 
-- **SSG (build-time, for SEO).** `+page.server.ts` `load` reads `quran.sqlite` directly via
-  `node:sqlite` (backend need not be running during `vite build`) → verses baked into the 114
-  prerendered `/app/<slug>` HTML files. **SEO policy flip (Phase 1 exit):** `/app` moves from
-  `noindex` → indexable; add per-surah `<title>`/description/canonical + a Qur'an JSON-LD node
-  (derived from the `surahs` row, not hardcoded), extend `entries()` + sitemap to all 114, enable
-  adapter `precompress`.
-- **LIVE JSON (runtime).** `/quran/v1` serves surah/ayah content from memory,
-  normalized **substring search**, and translations. It also advertises the
-  derived database manifest through `/scripts` and `/version`; the browser
-  downloads the database bytes directly from the manifest's CDN URL.
+The two web-facing jobs are:
 
-> Crawlers don't run client WASM, so **prerendered HTML is the SEO surface**. The live backend + the
-> client OPFS cache are the SPA/offline experience layered on top. Reading the
-> derived database at SSG time is intentional: the build verifies the same
-> source digests and content manifest as the backend, without requiring a live
-> API during `vite build`.
+- **SSG for SEO.** `+page.server.ts` reads
+  `db/quran/tanzil/arabic/quran-uthmani.sqlite` directly through
+  `node:sqlite`. It prerenders all 114 `/app/<slug>` pages without requiring a
+  running backend during `vite build`. The web build parses `quran-data.xml`
+  for metadata and uses the 114 slug mappings in the existing
+  `web/src/lib/data/quran.ts`.
+- **Live JSON.** `/quran/v1` serves Arabic reads, range metadata, normalized
+  substring search, and live translations. `/quran/v1/scripts` advertises the
+  immutable CDN URLs, sizes, and checksums for the two existing Arabic files.
 
----
+The SEO cutover removes `/app` from `noindex`, adds per-surah title,
+description, canonical URL, and JSON-LD, includes all 114 pages in `entries()`
+and the sitemap, and enables adapter precompression.
 
-## 6. Client — WASM SQLite on OPFS (Arabic) + live translations
-
-**Engine:** official **`sqlite-wasm`** (ships FTS5 + OPFS VFS). OPFS sync access handles are only
-available **inside a Web Worker**, so the engine runs in a dedicated Worker driven via the sqlite-wasm
-**Promiser** (async-to-main-thread) API.
-
-**Persistence (Arabic db):**
-
-- Store `quran.sqlite` in **OPFS**; call `navigator.storage.persist()` on first gesture.
-- OPFS "permanent" is **best-effort** (eviction under pressure is still possible; `persist()` is
-  near-no-op on Safari). On load, validate `PRAGMA user_version`, `meta.schema_kind`, and
-  `meta.artifact_version` against `/quran/v1/version`. If OPFS is missing, corrupt, wrong-kind, or
-  stale, fetch `/quran/v1/scripts`, then download the advertised immutable URL **directly from the
-  CDN** with HTTP-cache bypass and write it to OPFS. Validate identity `Content-Length`/`sizeBytes`
-  and final-byte SHA-256 before promotion. Axum never serves the database body.
-
-**Lifecycle / UX:**
-
-- **First paint:** prerendered HTML (no WASM needed).
-- **Before cache (first visit):** SPA navigation/search fall back to the **live backend JSON**.
-  Background: fetch `sqlite-wasm` plus the CDN database, verify it, write it to OPFS, and initialize
-  the Worker.
-- **After cache:** reader-facing Arabic reads/search/navigation run **locally → instant, offline**.
-- **Translations:** always `fetch` from the backend on demand with `{ cache: "no-store" }`; never
-  written to OPFS or Cache Storage; unavailable offline. (Loading state + graceful "online only"
-  treatment.)
-
-**The sync/async seam (no hydration flash):**
-
-- **Serialize the prerendered verses into client state** (`page.data`) so the first client render
-  matches the DOM byte-for-byte — **never re-query the already-painted surah** from WASM.
-- Keep a **per-open-surah sync verse cache in `reader.svelte.ts`**, populated when the page load
-  resolves, so the store's synchronous getters (`verseText`, `copyVerse`, `bookmarkList.text`,
-  `durationFor`) keep working with no WASM round-trip and no component edits.
-- The WASM db (and backend) serve **navigation to other surahs, search, and reader-facing Arabic
-  ranges/markers** only.
-  Async loads are guarded by a **version token** (captured at call time) so a stale response from a
-  rapid back/forward can't overwrite the current surah. (`$derived` can't be async — fill `$state`
-  via a guarded `$effect`.)
-
-**Live API adapter.** The fallback client consumes the API envelope's `data`
-field and the settled camelCase `/surahs` + `/ayahs` wire (`surah`, `ayah`,
-`ayahCount`). SQL's upstream `sura` / `aya` column names stay inside the Worker.
-The adapter handles `404`, validation `400`, `429`, and retryable `5xx` bodies
-using the API's closed error shape; it never treats a failed response as an
-empty surah.
-
-**Feature surface (offline, Arabic, against the local db):**
-
-- Open surah and choose script: query `quran_text` or `quran_simple` in ayah order.
-- Jump to ayah, arbitrary verse-key batch, and inclusive global ranges.
-- Jump to juz, page, ruku, hizb-quarter, or manzil using the corresponding
-  range table; expose the same first/last/global-index metadata as the API.
-- Resolve sajda markers locally.
-- Compute `/random` locally with the API's frozen UTC-date constants.
-- Search: `WHERE quran_fts MATCH ?` (§9).
-
-The 300-ayah HTTP cap does not complicate the first-visit reader fallback:
-every complete surah fits, with a maximum of 286 ayahs.
+Crawlers do not depend on client WASM. Prerendered Uthmani HTML is the SEO and
+first-paint surface; live/backend and OPFS data take over after hydration.
 
 ---
 
-## 7. Offline, caching, and the cost
+## 6. Browser data flow
 
-- **OPFS** holds the Arabic `quran.sqlite` permanently (best-effort; versioned re-download on miss).
-- **One combined Service Worker at `/`** — the single controller. It does content caching **and**
-  `importScripts` the Firebase Messaging compat SDK (what `firebase-messaging-sw.js` already does).
-  It must **network-first / exclude** `/firebase-messaging-sw.js` and `/firebase-config.js` so it
-  can't stale-cache the FCM worker. After reload, assert `navigator.serviceWorker.controller` is
-  this SW (not merely that a registration exists). Fix the stale comment at
-  `web/src/lib/firebase/messaging.ts:11` (references a nonexistent `src/service-worker.ts`).
-- Cache only the same-origin shell, HTML, JS/CSS, and WASM. Pass all
-  `/quran/v1/**` requests through without Cache Storage, and never cache the CDN
-  `quran.sqlite`; OPFS is its sole persistent copy.
-- **Translations are explicitly not cached** — bypass
-  `/quran/v1/translations/**`, any Arabic request carrying `translations=`, and
-  translation-pack CDN URLs. Translation fetches also set `cache: "no-store"`.
-  Offline therefore means Arabic only.
-- **WASM cost is off the critical path:** first paint is prerendered HTML; the ~1 MB engine + ~2–3 MB
-  db download in the background, once, then never again.
+### 6.1 SQLite engine
 
----
+Use `sqlite-wasm` inside a dedicated Web Worker because OPFS synchronous access
+handles are Worker-only. The Worker opens the two source databases read-only:
 
-## 8. The seam — `web/src/lib/data/quran.ts`
+- Uthmani for the normal reader;
+- simple-clean when that script is requested and to initialize search.
 
-`quran.ts` stays the contract + pure helpers. Changes are internal:
+The databases retain their existing `quran_text` schema. Queries stay simple:
 
-- The hardcoded 11-surah `SURAHS` array is replaced by the **in-memory 114-row metadata** (bundled
-  from canonical `db/quran/slugs.json`—optionally through a generated `slugs.mjs`—plus the
-  `surahs` table) so `Sidebar`, `adjacentSurahs`, `surahMeta`, and the reader-store name lookups stay
-  **synchronous**, and `entries()` stays sync/build-time.
-- Add `ayahCount: number` to `Surah` (additive); `surahMeta` reads `s.ayahCount`.
-- Verse text reaches components via **prerender data + the per-surah sync cache** (§6), not via the
-  old inline array. Search/navigation/translations are async (WASM/backend).
-- **Untouched:** `verseKey`, `parseKey`, `toArabicDigits`, `BISMILLAH`, `showsBismillah`,
-  `surahPath`, `slugFor`, and the `_reader` components for the core cutover (`Results` becomes async
-  only when search ships).
+```sql
+-- one surah
+SELECT "index", sura, aya, text
+FROM quran_text
+WHERE sura = ?
+ORDER BY aya;
 
----
+-- search corpus initialization, from simple-clean
+SELECT "index", sura, aya, text
+FROM quran_text
+ORDER BY "index";
+```
 
-## 9. Search
+### 6.2 Persistence and version changes
 
-**Offline (after cache):** FTS5 `MATCH` over the **simple-clean** corpus in the local db. Indexing
-simple-clean (not Uthmani) is essential — Uthmani's harakat + alef-wasla (`ٱ`) give near-zero recall.
-Normalize the query with the same versioned fixtures as the API before `MATCH`. The Worker escapes
-FTS operators and deliberately exposes exact-token/prefix semantics only (no arbitrary FTS syntax or
-stemming) for v1.
+1. Compare the current `/quran/v1/version.contentVersion` with the active OPFS
+   directory.
+2. If both files are present and valid in that directory, open them.
+3. Otherwise fetch `/quran/v1/scripts`, download both files directly from their
+   CDN URLs with identity encoding, and stream them into a temporary OPFS
+   directory.
+4. Verify each final byte count and SHA-256.
+5. Open both databases read-only and run a minimal schema/row-count check.
+6. Promote the directory atomically for subsequent opens.
 
-**Online (before cache):** the backend performs the API plan's normalized **substring scan** over
-its in-memory simple-clean corpus. It does not query FTS5 or open the offline database.
+Call `navigator.storage.persist()` after a user gesture. Persistence remains
+best-effort; eviction is handled as a cache miss and redownload.
 
-The UI applies the API's normalized-query length and result limits to both
-sources, orders results by `globalIndex`, and adapts each source into one view
-model. API results include UTF-16 highlight offsets; offline results may return
-an empty highlight list because FTS offsets into normalized simple-clean cannot
-be applied directly to verbatim Uthmani text. Switching sources may change the
-result set because substring and token/prefix semantics are intentionally
-different. `searchVersion` guarantees shared normalization, not identical match
-semantics.
+### 6.3 Lifecycle and UX
 
----
+- **First paint:** use prerendered Uthmani HTML; no WASM is needed.
+- **Before cache:** SPA reads and search fall back to the live API.
+- **Background:** load WASM and download/validate the two databases.
+- **After cache:** Arabic reads, metadata navigation, and search run locally.
+- **Offline:** Arabic remains available; translations show an online-only
+  state.
 
-## 10. Translations — live only
+Serialize the prerendered verses into `page.data` so hydration matches the DOM
+byte-for-byte. Do not immediately re-query the already-painted surah.
 
-Translations are fetched from the backend on demand and **never persisted or available offline in
-the EasyQuran web reader**:
+Keep a per-open-surah synchronous verse cache in `reader.svelte.ts`. This lets
+existing synchronous helpers such as `verseText`, `copyVerse`,
+`bookmarkList.text`, and `durationFor` continue to work without a Worker
+round-trip. Guard async navigation with a request/version token so an older
+response cannot overwrite the currently selected surah.
 
-- The reader requests the active translation's text for the open surah from the backend; it is
-  rendered alongside the Arabic and discarded. Requests use `cache: "no-store"` and the Service
-  Worker bypass rules in §7.
-- Offline, the reader shows **Arabic only**.
-- The API's downloadable translation packs serve other clients. This reader neither requests nor
-  stores them.
-- Per-language FTS search over translations, if ever wanted, is a backend feature (Phase 5) — never
-  offline.
+### 6.4 API adapter
+
+The web owns slugs; Axum accepts numeric surah identifiers `1..=114`.
+`quran.ts` resolves `/app/<slug>` to a number before the adapter calls the API.
+
+The adapter consumes the API envelope's `data` field and the settled camelCase
+`/surahs` + `/ayahs` wire (`surah`, `ayah`, `ayahCount`). The upstream SQLite
+column names `sura` and `aya` stay inside the backend/Worker boundary.
+
+It handles `404`, validation `400`, `429`, and retryable `5xx` responses using
+the API's closed error shape; a failed request must never become an empty surah.
 
 ---
 
-## 11. Phased plan
+## 7. Navigation metadata
 
-Each phase ships independently; nothing breaks the current 11-surah site until the cutover.
+`quran-data.xml` is metadata, not verse text. Both consumers derive the same
+inclusive ranges from its start markers:
 
-**Phase 0 — Derived offline `quran.sqlite` (Arabic, no behavior change).**
-`build-quran-sqlite.mjs` consumes the shared content manifest and canonical slug JSON; emits all
-offline tables + populated FTS; proves the five range families, 15 sajdas, verbatim digests,
-bismillah classification, schema kind/version, deterministic rebuild, and integrity; then generates
-and publishes the offline artifact manifest and immutable CDN object.
-*Phase-0 exit checklist:* all build gates in §4 pass; `--experimental-sqlite` is set; the CDN HEAD
-matches identity `sizeBytes`; `db/quran/slugs.json` feeds generated web metadata and `entries()`; the
-API can validate and advertise the manifest without opening the database.
+```text
+startGlobal = current marker global index
+endGlobal   = next marker global index - 1
+last end    = 6236
+```
 
-**Phase 1 — API contract integration + SEO.**
-Backend implementation is tracked exclusively by `quran-api.md`; this web phase consumes its frozen
-`/surahs` + `/ayahs` OpenAPI contract and `/scripts` manifest. SvelteKit prerenders all 114
-`/app/<slug>` pages from the derived database. SEO flip: `noindex`→index, per-surah
-title/description/JSON-LD, sitemap, `precompress`.
-*Exit:* 114 indexable HTML pages contain verbatim verse text; the generated/mock client and live API
-agree on envelopes, wire names, errors, and artifact metadata.
+- Rust parses the XML into its in-memory store at startup.
+- The SvelteKit build parses the same XML and includes the small range and
+  sajda arrays in the web bundle.
 
-**Phase 2 — Client WASM SQLite (Arabic) + core read parity.**
-Wire `sqlite-wasm` Worker + OPFS + manifest/SHA-verified CDN download + `persist()`; validate the
-full artifact/schema/search tuple; serialize prerender verses
-into client state (no flash); per-surah sync cache in the store; before-cache fallback to backend
-JSON; one-line `+page.svelte` change to consume `data`; swap `quran.ts` internals (§8).
-*Exit:* reader renders all 114 surahs; second visit is instant + offline (Arabic).
+This provides local juz, page, ruku, hizb-quarter, manzil, and sajda navigation
+without modifying either database and without adding a third file for the user
+to maintain.
 
-**Phase 3 — One combined Service Worker + SPA polish.**
-Combined SW at `/` (shell cache + `importScripts` FCM); exclude FCM routes, all API requests, the
-offline database, and translation-bearing traffic; assert controller; `data-sveltekit-preload-data`.
-*Exit:* offline Arabic navigation works; FCM still delivers.
+The browser computes the deterministic `/random` result locally using the same
+frozen UTC-date constants as the API.
 
-**Phase 4 — Offline search + complete Arabic navigation.**
-FTS5 search UI (async `Results.svelte`, versioned normalization and source adapter); add all
-juz/page/ruku/hizb-quarter/manzil/sajda/batch/global-range surfaces and the deterministic random
-ayah; implement the documented online-substring ↔ offline-FTS handoff.
-*Exit:* the complete reader-facing Arabic surface works offline and the fixed divergence query set
-matches `quran-api.md` §7.3.
-
-**Phase 5 — Live translations.**
-After API Phase 4 freezes the translation DTOs, the reader fetches the active translation live with
-cache bypass, never requests pack downloads, and handles offline Arabic-only mode; RTL.
+The API's 300-ayah response cap is sufficient for before-cache complete-surah
+fallback because the largest surah has 286 ayahs.
 
 ---
 
-## 12. Release/version handshake
+## 8. Search
 
-1. Build and test the deterministic database, upload its never-overwritten CDN object, and generate
-   the final manifest.
-2. Deploy the API with that manifest. Boot verifies source/content/search versions and the CDN HEAD
-   before `/scripts` advertises it.
-3. Build and deploy SSG from the same database and manifest; embed `contentVersion` and
-   `artifactVersion` in page data.
-4. At hydration, compare the embedded, API, and OPFS versions. Never open an unsupported
-   `schemaVersion`. During a rolling-deploy mismatch, keep the already-painted surah internally
-   consistent, use one selected source/version for subsequent navigation, and request a reload once
-   the matching web build is available rather than mixing verse sets.
-5. Retain supported old immutable artifacts so clients on an older web bundle can continue or fall
-   back to live JSON safely.
+There is one search algorithm with two implementations:
+
+```text
+simple-clean quran_text rows
+  ──► normalize every verse with searchVersion rules
+  ──► substring match the normalized query
+  ──► return ascending globalIndex order
+```
+
+- **Online:** Rust builds the normalized array at backend startup and scans it
+  in memory.
+- **Offline:** the Worker reads all 6,236 rows from the cached
+  `quran-simple-clean.sqlite` once, builds the same normalized array, and scans
+  it in memory.
+
+Both sides use the same fixtures and rules: remove combining marks, fold
+hamza-bearing alefs, fold alef-maqsura to ya, apply the settled ta-marbuta
+decision, and collapse whitespace. Both enforce the same query length,
+`limit`, `offset`, phrase/subsequence semantics, and ascending-global-index
+ordering.
+
+A fixed query suite must return identical ordered verse keys online and
+offline. Highlight calculation may differ internally, but cannot change the
+match set. A normalization change bumps `searchVersion` and ships updated Rust
+and web code; it does not modify or rebuild either SQLite file.
+
+No FTS extension, FTS table, token query language, or search database is part of
+this plan.
 
 ---
 
-## 13. Open items / to confirm
+## 9. Offline and caching
 
-1. **Author the 103 new slugs + 114 display names** in `db/quran/slugs.json` — hand-authored in the
-   live style, with the existing 11 frozen. Generate any MJS/TS form from it.
-2. **sqlite-wasm distribution variant** (EH vs ESM, shared memory) + a wasm/`quran.sqlite` size
-   budget in CI — pick in Phase 2 once the real sizes are measured.
+- OPFS holds both existing Arabic SQLite files under the active
+  `contentVersion`.
+- One Service Worker at `/` caches the same-origin shell, HTML, JS/CSS, and
+  WASM and imports the Firebase Messaging compatibility worker.
+- The Service Worker passes `/quran/v1/**` through and does not Cache-Storage
+  cache either CDN SQLite file; OPFS is their sole browser-persistent copy.
+- It network-first/excludes `/firebase-messaging-sw.js` and
+  `/firebase-config.js` so FCM configuration cannot become stale.
+- Translation routes, translation-bearing Arabic requests, and translation-pack
+  URLs always bypass caches. Translation fetches also use
+  `cache: "no-store"`.
 
-Settled: generate and publish `quran.sqlite` in CI rather than committing it; pin Node ≥24 and set
-`NODE_OPTIONS=--experimental-sqlite` defensively.
+The background cost is approximately 2.5 MB for the two existing databases plus
+the selected SQLite WASM distribution. None of it blocks the prerendered first
+paint.
+
+---
+
+## 10. The `quran.ts` seam
+
+`web/src/lib/data/quran.ts` remains the single web-owned place for URL slugs and
+the reader's synchronous contract.
+
+- Split the current catalog metadata from the component-facing loaded-surah
+  value, and expand the 11 authored catalog entries to all 114 while preserving
+  existing slugs.
+- Add `ayahCount: number` to catalog metadata.
+- Stop authoring inline verse arrays in the catalog at the data cutover.
+  The component-facing loaded-surah value keeps its `verses` array, populated
+  from prerendered `page.data`, the per-surah cache, the Worker, or the live
+  API.
+- Use XML-derived build data for Arabic/transliterated names, place,
+  revelation order, counts, bismillah classification, ranges, and sajdas.
+- Keep `verseKey`, `parseKey`, `toArabicDigits`, `BISMILLAH`,
+  `showsBismillah`, `surahPath`, `slugFor`, and adjacency helpers.
+
+No separate slug JSON or generated slug module is introduced. The backend does
+not need web slugs because its surah identifiers are numeric.
+
+---
+
+## 11. Translations
+
+Translations are fetched from the backend on demand and never persisted by the
+EasyQuran web reader:
+
+- request only the active translation for the open content;
+- render it alongside Arabic, then discard it;
+- use `cache: "no-store"` and the Service Worker bypass rules;
+- show Arabic-only mode while offline.
+
+The API's downloadable translation packs are for other clients. This web reader
+does not request or store them. Translation search, if added, is backend-only.
+
+---
+
+## 12. Phased implementation
+
+### Phase 0 — validate and publish the existing sources
+
+- Add CI assertions from §4.
+- Expand the existing `quran.ts` metadata to all 114 surahs.
+- Parse XML during the web build for navigation metadata.
+- Upload the two existing SQLite files unchanged to immutable,
+  `contentVersion`-keyed CDN paths.
+- Configure the API to advertise their exact sizes and checksums.
+
+Exit: the checked-in files, backend inputs, SSG inputs, and CDN bytes have
+matching digests. No database build step exists.
+
+### Phase 1 — API integration and SEO
+
+- Implement/consume the frozen `/surahs` + `/ayahs` numeric API contract.
+- Read the existing Uthmani database directly during SSG.
+- Prerender and index all 114 pages with per-surah metadata and sitemap entries.
+
+Exit: all 114 HTML pages contain verbatim Uthmani verse text and the web adapter
+matches the API envelopes, wire names, and errors.
+
+### Phase 2 — browser SQLite and core offline reads
+
+- Add the `sqlite-wasm` Worker and OPFS directory lifecycle.
+- Download and validate the two existing database files from `/scripts` URLs.
+- Wire prerender state, the per-surah synchronous cache, and live fallback.
+
+Exit: all 114 surahs render from local Uthmani/simple-clean data on a subsequent
+offline visit.
+
+### Phase 3 — Service Worker and SPA polish
+
+- Combine shell caching and FCM support in one root Service Worker.
+- Exclude API, SQLite, FCM configuration, and translation traffic as specified
+  in §9.
+- Enable navigation preloading/prefetch behavior.
+
+Exit: offline Arabic navigation works and FCM still delivers.
+
+### Phase 4 — matching search and full navigation
+
+- Initialize the in-memory search corpus from simple-clean in the Worker.
+- Implement the shared normalization fixtures and substring search.
+- Add all range/sajda/batch/global-range surfaces and deterministic random ayah.
+
+Exit: the fixed query suite returns identical ordered keys online and offline,
+and the complete reader-facing Arabic surface works offline.
+
+### Phase 5 — live translations
+
+- Consume the frozen translation DTOs.
+- Fetch only the selected translation with cache bypass.
+- Handle offline Arabic-only mode and RTL/LTR presentation.
+
+---
+
+## 13. Release/version handshake
+
+1. Validate the three authoritative inputs and compute `contentVersion`.
+2. Upload the two existing SQLite files unchanged to their never-overwritten
+   CDN keys.
+3. Deploy the API, which verifies both CDN objects before `/scripts` advertises
+   them.
+4. Build SSG from the same checked-in Uthmani database and XML. SSG does not
+   independently calculate or declare a version.
+5. At hydration, read `contentVersion` from `/quran/v1/version` and compare it
+   with the active OPFS directory. On mismatch, keep the prerendered page
+   internally consistent while both current files download and validate, then
+   switch as one unit.
+6. Retain still-supported immutable objects so older web bundles can continue
+   or safely use live JSON.
+
+---
+
+## 14. Remaining web decisions
+
+1. Author the remaining 103 URL slugs in the existing
+   `web/src/lib/data/quran.ts`, preserving the 11 current slugs.
+2. Choose the `sqlite-wasm` distribution variant and measure its final transfer
+   size during Phase 2.
+
+Settled: use the existing `quran-uthmani.sqlite` and
+`quran-simple-clean.sqlite` unchanged in the backend and browser. Do not create
+or publish another Arabic SQLite file.
