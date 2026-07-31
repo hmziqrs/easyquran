@@ -72,6 +72,9 @@ export const QURAN = {
 
 export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
+/** Background/neutral family. Orthogonal to theme and accent — every surface
+ *  defines both a dark and a light set of values in layout.css. */
+export type SurfaceId = "ink" | "paper" | "slate" | "mocha" | "contrast";
 
 export type MarketingPageId = "home" | "about" | "faq" | "contact" | "privacy" | "terms";
 export type AppPageId = "app";
@@ -163,7 +166,58 @@ export const ACCENTS: AccentDef[] = [
   { id: "plum", label: "Plum", hex: "#c08cff" },
 ];
 
-export const DEFAULTS: { theme: ThemeMode; accent: AccentId } = {
+export interface SurfaceDef {
+  id: SurfaceId;
+  label: string;
+  /** one-line description shown under the swatch in the tweaker */
+  note: string;
+  /** preview swatches — [dark page, light page] base backgrounds */
+  darkHex: string;
+  lightHex: string;
+}
+
+/** The background families. Values live in layout.css under
+ *  [data-theme][data-surface]; these entries only drive the picker UI. */
+export const SURFACES: SurfaceDef[] = [
+  {
+    id: "ink",
+    label: "Ink",
+    note: "Neutral near-black / paper white. The default.",
+    darkHex: "#0a0a0a",
+    lightHex: "#ffffff",
+  },
+  {
+    id: "paper",
+    label: "Paper",
+    note: "Warm sepia — closest to a printed mushaf.",
+    darkHex: "#151210",
+    lightHex: "#faf6ef",
+  },
+  {
+    id: "slate",
+    label: "Slate",
+    note: "Cool blue-grey, slightly softer contrast.",
+    darkHex: "#0d1117",
+    lightHex: "#f6f8fa",
+  },
+  {
+    id: "mocha",
+    label: "Mocha",
+    note: "Deep espresso browns, low glare at night.",
+    darkHex: "#17110e",
+    lightHex: "#f7f1ea",
+  },
+  {
+    id: "contrast",
+    label: "Contrast",
+    note: "Pure black / pure white — maximum legibility.",
+    darkHex: "#000000",
+    lightHex: "#ffffff",
+  },
+];
+
+export const DEFAULTS: { theme: ThemeMode; accent: AccentId; surface: SurfaceId } = {
   theme: "dark",
   accent: "emerald",
+  surface: "ink",
 };

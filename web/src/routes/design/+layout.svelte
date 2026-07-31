@@ -1,0 +1,67 @@
+<!--
+  Design gallery chrome — a thin review bar pinned to the top, then the variant
+  itself full-bleed underneath. Deliberately NOT the marketing Nav/Footer: a
+  variant has to be judged as a whole page, so the only persistent chrome is
+  the switcher and the theme tweaker.
+
+  Every page under /design is noindex (belt and braces — the routes are also
+  absent from MARKETING_PAGES, so nothing generates links to them).
+-->
+<script lang="ts">
+  import { page } from "$app/state";
+  import { Tweaks } from "$lib/components/tweaks";
+  import { VARIANTS, type VariantKind } from "./_variants/registry";
+  import { cn } from "$lib/utils";
+
+  let { children } = $props();
+
+  // Which gallery page we're on, parsed from the URL rather than passed down,
+  // so a variant page needs no boilerplate to light up the switcher.
+  const parts = $derived(page.url.pathname.replace(/^\/design\/?/, "").split("/").filter(Boolean));
+  const kind = $derived(parts[0] as VariantKind | undefined);
+  const current = $derived(parts[1]);
+  const list = $derived(kind && kind in VARIANTS ? VARIANTS[kind] : []);
+
+  const tab =
+    "rounded-md px-2.5 py-1 text-xs transition-colors duration-150 border";
+  const tabOn = "border-accent bg-accent-soft text-fg";
+  const tabOff = "border-transparent text-fg-3 hover:text-fg";
+</script>
+
+<svelte:head>
+  <meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
+<div class="flex min-h-screen flex-col">
+  <header
+    class="sticky top-0 z-50 border-b border-line bg-bg-elev/85 backdrop-blur-xl"
+  >
+    <div class="mx-auto flex w-full max-w-[1440px] flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
+      <a href="/design" class="font-mono text-xs uppercase tracking-wide text-fg-2 hover:text-fg">
+        Design&nbsp;/&nbsp;variants
+      </a>
+
+      {#if kind}
+        <span class="text-xs text-fg-4">{kind}</span>
+        <div class="flex items-center gap-1">
+          {#each list as v (v.id)}
+            <a
+              href={`/design/${kind}/${v.id}`}
+              class={cn(tab, current === v.id ? tabOn : tabOff)}
+            >
+              {v.id.toUpperCase()} · {v.name}
+            </a>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="ml-auto flex items-center gap-3 text-xs text-fg-4">
+        <a href="/" class="transition-colors hover:text-fg">live site →</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="flex-1">{@render children()}</main>
+</div>
+
+<Tweaks />

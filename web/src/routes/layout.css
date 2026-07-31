@@ -260,6 +260,138 @@
   --accent-fg: #ffffff;
 }
 
+/* ─── 4d. Surface families (background/neutral palettes) ────────────────
+   Orthogonal to theme and accent: [data-surface] swaps ONLY the background,
+   hairline and foreground ramps, never the brand colours. Every family
+   declares both a dark and a light set, and both are written with the same
+   two-attribute specificity (0,2,0) so neither can accidentally out-rank the
+   other. "ink" is the base palette in 4/4b above and needs no block here.
+
+   The theme tweaker's custom colour pickers layer ON TOP of whatever family is
+   selected, as an inline style on <html> (see lib/theme/derive.ts) — inline
+   styles beat all of these rules, so a partial custom palette (say, a custom
+   accent only) leaves the rest of the chosen family intact. */
+
+/* Paper — warm sepia, closest to a printed mushaf. */
+[data-theme="dark"][data-surface="paper"] {
+  --bg: #151210;
+  --bg-1: #1d1916;
+  --bg-2: #262019;
+  --bg-3: #2e271f;
+  --bg-elev: #0f0d0b;
+  --line: rgba(255, 244, 224, 0.09);
+  --line-2: rgba(255, 244, 224, 0.14);
+  --line-3: rgba(255, 244, 224, 0.22);
+  --fg: #f5efe6;
+  --fg-2: #d6cdc0;
+  --fg-3: #b0a698;
+  --fg-4: #8a8073;
+}
+[data-theme="light"][data-surface="paper"] {
+  --bg: #faf6ef;
+  --bg-1: #fffdf8;
+  --bg-2: #f2ece1;
+  --bg-3: #eae2d4;
+  --bg-elev: #fdfaf4;
+  --line: rgba(60, 45, 25, 0.14);
+  --line-2: rgba(60, 45, 25, 0.2);
+  --line-3: rgba(60, 45, 25, 0.3);
+  --fg: #241d14;
+  --fg-2: #4a3f31;
+  --fg-3: #6b5f4e;
+  --fg-4: #918471;
+}
+
+/* Slate — cool blue-grey, slightly softer contrast. */
+[data-theme="dark"][data-surface="slate"] {
+  --bg: #0d1117;
+  --bg-1: #161b22;
+  --bg-2: #1e2430;
+  --bg-3: #262d3a;
+  --bg-elev: #090d12;
+  --line: rgba(220, 235, 255, 0.1);
+  --line-2: rgba(220, 235, 255, 0.15);
+  --line-3: rgba(220, 235, 255, 0.24);
+  --fg: #e6edf3;
+  --fg-2: #c2ccd6;
+  --fg-3: #9aa6b2;
+  --fg-4: #75818e;
+}
+[data-theme="light"][data-surface="slate"] {
+  --bg: #f6f8fa;
+  --bg-1: #ffffff;
+  --bg-2: #eef1f5;
+  --bg-3: #e3e8ee;
+  --bg-elev: #fbfcfd;
+  --line: rgba(20, 35, 55, 0.12);
+  --line-2: rgba(20, 35, 55, 0.18);
+  --line-3: rgba(20, 35, 55, 0.28);
+  --fg: #10151b;
+  --fg-2: #333c47;
+  --fg-3: #55606d;
+  --fg-4: #7d8794;
+}
+
+/* Mocha — deep espresso, low glare at night. */
+[data-theme="dark"][data-surface="mocha"] {
+  --bg: #17110e;
+  --bg-1: #201814;
+  --bg-2: #2b211a;
+  --bg-3: #342820;
+  --bg-elev: #100b09;
+  --line: rgba(255, 238, 220, 0.09);
+  --line-2: rgba(255, 238, 220, 0.14);
+  --line-3: rgba(255, 238, 220, 0.22);
+  --fg: #f4ebe3;
+  --fg-2: #d7c9bc;
+  --fg-3: #b3a294;
+  --fg-4: #8b7a6c;
+}
+[data-theme="light"][data-surface="mocha"] {
+  --bg: #f7f1ea;
+  --bg-1: #fffcf8;
+  --bg-2: #efe6db;
+  --bg-3: #e6dacc;
+  --bg-elev: #fbf7f1;
+  --line: rgba(70, 45, 25, 0.14);
+  --line-2: rgba(70, 45, 25, 0.2);
+  --line-3: rgba(70, 45, 25, 0.3);
+  --fg: #241a12;
+  --fg-2: #4b3b2d;
+  --fg-3: #6d5b4a;
+  --fg-4: #93806d;
+}
+
+/* Contrast — pure black / pure white, maximum legibility. */
+[data-theme="dark"][data-surface="contrast"] {
+  --bg: #000000;
+  --bg-1: #0d0d0d;
+  --bg-2: #1a1a1a;
+  --bg-3: #262626;
+  --bg-elev: #000000;
+  --line: rgba(255, 255, 255, 0.16);
+  --line-2: rgba(255, 255, 255, 0.24);
+  --line-3: rgba(255, 255, 255, 0.36);
+  --fg: #ffffff;
+  --fg-2: #e0e0e0;
+  --fg-3: #bdbdbd;
+  --fg-4: #9e9e9e;
+}
+[data-theme="light"][data-surface="contrast"] {
+  --bg: #ffffff;
+  --bg-1: #ffffff;
+  --bg-2: #f0f0f0;
+  --bg-3: #e3e3e3;
+  --bg-elev: #ffffff;
+  --line: rgba(0, 0, 0, 0.22);
+  --line-2: rgba(0, 0, 0, 0.3);
+  --line-3: rgba(0, 0, 0, 0.42);
+  --fg: #000000;
+  --fg-2: #1f1f1f;
+  --fg-3: #3d3d3d;
+  --fg-4: #5c5c5c;
+}
+
 /* ─── 5. shadcn-svelte semantic layer (mapped onto our tokens) ──────────
    So any registry component (bg-background, text-foreground, bg-primary,
    border-border, ring-ring …) inherits the look and stays theme-aware. */
