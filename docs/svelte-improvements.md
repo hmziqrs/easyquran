@@ -10,21 +10,27 @@ The goal is maintainability, correctness, and testability. A dependency should b
 
 ## Progress (updated 2026-08-01)
 
-Steps 1–3 of the execution order (§8) are **complete and verified**: `svelte-check` 0/0, `vp lint --deny-warnings` 0 warnings, `vp fmt --check` clean, 22 Vitest tests pass, `vp build` succeeds. Steps 4–11 remain.
+**All 11 steps complete and verified on master** (2026-08-01): `svelte-check` 0/0 (1573 files), `vp lint --deny-warnings` 0 warnings, `vp fmt --check` clean, 153 Vitest tests pass, `vp build` succeeds. Steps 4–11 landed via 6 parallel worktree agents (reader-cluster 4-5-8, Tabs 6, VerseRow 7, boot 9, wire-schemas 10, sidebar-profile 11), then integrated to master.
 
 | # | Step | Status |
 |---|---|---|
 | 1 | SvelteMap fix + regression test | ✅ |
 | 2 | Quality gates | ✅ (local scripts — **no CI**) |
 | 3 | Harden async boundaries | ✅ |
-| 4 | Persistence foundation + debounce notes | ☐ next |
-| 5 | Split reader, remove dead state | ☐ |
-| 6 | shadcn-svelte Tabs | ☐ |
-| 7 | VerseRow actions | ☐ |
-| 8 | Factories / contexts | ☐ |
-| 9 | Boot services | ☐ |
-| 10 | Centralize wire schemas | ☐ |
-| 11 | Profile sidebar / virtualization | ☐ |
+| 4 | Persistence foundation + debounce notes | ✅ |
+| 5 | Split reader, remove dead state | ✅ |
+| 6 | shadcn-svelte Tabs | ✅ |
+| 7 | VerseRow actions | ✅ |
+| 8 | Factories / contexts | ✅ (factories + selective context; context not yet adopted in consumers — singleton fallback works) |
+| 9 | Boot services | ✅ (offline corpus now gated to `/app`; consent-listener leak fixed) |
+| 10 | Centralize wire schemas | ✅ (shared `$lib/quran/wire.ts`, zero new deps) |
+| 11 | Profile sidebar / virtualization | ✅ (measured → **keep, no virtualization**; see notes) |
+
+Step-11 measurement (Playwright, production build): the default surah list is 114 entries; the 604-page list is opt-in and mounts in ~80 ms with zero long tasks; the verse body (5,261 nodes for Al-Baqarah, already covered by `content-visibility`) is >2× the largest sidebar list. No bottleneck → virtualization not justified; verse body remains non-virtualized per the standing decision.
+
+Integration notes (2026-08-01):
+- The active theme/surface/accent/custom work in `prefs.svelte.ts` was kept as-is (it's the richer, in-flight feature); `$lib/storage` is exercised by `consent`/`notifications`/`reader`. `prefs` can be migrated to the foundation later.
+- `createPreferences`/`createConsent`/`createNotifications` factories exist but are not yet consumed; the `reader` context has a singleton fallback so all consumers keep working via `import { reader } from "$lib/stores/reader.svelte"`.
 
 **No CI.** This project does **not** use GitHub Actions or any CI. The quality floor is enforced by running the local `web/package.json` scripts (`format:check`, `lint`, `check`, `test`, `build`) before commit — not by a workflow. The "add CI / make CI run" guidance elsewhere in this document is superseded by this decision.
 
