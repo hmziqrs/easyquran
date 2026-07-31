@@ -18,7 +18,7 @@
    refreshed token) on app focus; the notifications store does this on
    visibilitychange and compares against the stored token.
 
-   The VAPID key (PUBLIC_FIREBASE_VAPID_KEY) is required; without it getToken
+   The VAPID key (FCM_VAPID_KEY in ./index) is required; without it getToken
    cannot run. Backend registration is optional: only when PUBLIC_API_BASE_URL
    is set does the token get POSTed to the Axum `/device/v1/*` routes (which
    require an authenticated session — until accounts ship, the token is kept
@@ -131,7 +131,7 @@ export async function requestPermission(): Promise<PermissionState> {
  */
 export async function getFcmToken(): Promise<string | null> {
   if (!isConfigured || !FCM_VAPID_KEY) {
-    console.warn("[firebase] messaging: VAPID key missing (PUBLIC_FIREBASE_VAPID_KEY).");
+    console.warn("[firebase] messaging: VAPID key missing (set FCM_VAPID_KEY in ./index).");
     return null;
   }
   if (getPermissionState() !== "granted") return null;

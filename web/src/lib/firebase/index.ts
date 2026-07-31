@@ -8,43 +8,59 @@
 
    The web config is *not* a secret — by Firebase's design it ships in the
    client bundle; access is gated by Security Rules / App Check, not by hiding
-   it. It's read from PUBLIC_FIREBASE_* env vars (see .env.example) so the same
-   source builds against different Firebase projects. With no config present,
-   every function below quietly no-ops.
+   it. It's HARDCODED below (single Firebase project) rather than read from env,
+   so analytics/performance/messaging are always configured for this build. The
+   prerendered /firebase-config.js service-worker endpoint imports this same
+   object — one source of truth. (API_BASE_URL — the Axum device-registration
+   origin — is the one exception: it stays an env var because it genuinely varies
+   per environment.)
    ════════════════════════════════════════════════════════════════════════ */
 
 import { browser } from "$app/environment";
 import { env } from "$env/dynamic/public";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
 
+// ── Firebase web config ────────────────────────────────────────────────
+// Hardcoded for this single project. These values are PUBLIC by Firebase's
+// design (they ship in the client bundle no matter where they're stored);
+// access is gated by Security Rules / App Check, not by secrecy. Every feature
+// module and the prerendered /firebase-config.js endpoint read from here.
 export const firebaseConfig: FirebaseOptions = {
-  apiKey: env.PUBLIC_FIREBASE_API_KEY,
-  authDomain: env.PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: env.PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: env.PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.PUBLIC_FIREBASE_APP_ID,
-  measurementId: env.PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyBTlP0JPVdOxesSY1QtqFujW4OqmaUsoMg",
+  authDomain: "easyquran-fyi.firebaseapp.com",
+  projectId: "easyquran-fyi",
+  storageBucket: "easyquran-fyi.firebasestorage.app",
+  messagingSenderId: "679657424226",
+  appId: "1:679657424226:web:3bdc96c4f984fb8294983b",
+  measurementId: "G-ZYL6HY24W6",
 };
 
-/** True once the env vars are filled in. Until then everything no-ops. */
+/** Always true now that the config is hardcoded; kept so feature modules still
+ *  short-circuit uniformly if the project is ever blanked out. */
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.appId);
 
-/** Web Push VAPID key (Firebase console → Project settings → Cloud Messaging → Web config). */
-export const FCM_VAPID_KEY = env.PUBLIC_FIREBASE_VAPID_KEY;
+/**
+ * Web Push VAPID key (Firebase console → Project settings → Cloud Messaging →
+ * Web configuration → "Generate key pair"). Required for FCM web push; until a
+ * key is pasted here, getToken() cannot run and push silently no-ops.
+ *   TODO(accounts/push): paste the generated public key to enable notifications.
+ */
+export const FCM_VAPID_KEY = "";
 
 /**
  * Backend API origin for device-token registration (the Axum `/device/v1/*`
  * routes). Trailing slash trimmed. Empty until accounts arrive — without it the
  * client still obtains an FCM token and keeps it locally, so a later login can
  * register it. Optional: if set, the messaging module POSTs the token to
- * `${API_BASE_URL}/device/v1/register` on subscribe.
+ * `${API_BASE_URL}/device/v1/register` on subscribe. Unlike the Firebase config
+ * above, this genuinely varies per environment (local empty, prod origin), so
+ * it stays an env var.
  */
 export const API_BASE_URL = (env.PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 
 /** When true, analytics calls are echoed to the console (local dev aid). For
  *  GA4 DebugView itself, append `?firebase_debug_mode=1` to the URL instead. */
-export const ANALYTICS_DEBUG = env.PUBLIC_FIREBASE_ANALYTICS_DEBUG === "true";
+export const ANALYTICS_DEBUG = false;
 
 let app: FirebaseApp | null = null;
 let appPromise: Promise<FirebaseApp | null> | null = null;

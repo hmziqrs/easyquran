@@ -46,21 +46,23 @@ enters the critical modulepreload graph and never runs during SSR/prerender:
 - **Performance Monitoring** — `src/lib/firebase/performance.ts`
 - **Cloud Messaging (web push)** — `src/lib/firebase/messaging.ts`
 
-Copy `.env.example` → `.env` and fill in the web config from the Firebase console
-(Project settings → General → Your apps → SDK setup and configuration):
+The Firebase web config is **hardcoded** in `src/lib/firebase/index.ts` (single
+project) — it's not read from `.env`. Set or replace the values there directly:
 
 ```
-PUBLIC_FIREBASE_API_KEY=…
-PUBLIC_FIREBASE_APP_ID=…
-PUBLIC_FIREBASE_VAPID_KEY=…        # Cloud Messaging → Web config → Generate key pair
-PUBLIC_API_BASE_URL=…              # optional: Axum API origin for device-token registration
-PUBLIC_FIREBASE_ANALYTICS_DEBUG=false
+// src/lib/firebase/index.ts
+export const firebaseConfig: FirebaseOptions = {
+  apiKey: "…", authDomain: "…", projectId: "…", storageBucket: "…",
+  messagingSenderId: "…", appId: "…", measurementId: "…",
+};
+export const FCM_VAPID_KEY = "";   // Cloud Messaging → Web config → Generate key pair
 ```
 
 These values are public by design — they ship in the client bundle; access is gated
-by Security Rules / App Check, not by hiding them. They're read through
-`$env/dynamic/public`, so **until they're set, `src/lib/firebase/*` no-ops
-entirely** and nothing ever starts — the build and the site work with no config.
+by Security Rules / App Check, not by hiding them. With them hardcoded,
+analytics/performance/messaging are always configured for this build. (`PUBLIC_API_BASE_URL`
+in `.env` is the one Firebase-adjacent value that stays an env var — the Axum
+device-registration origin, which varies per environment.)
 
 Everything starts in `+layout.svelte` inside `onMount` (browser-only):
 
@@ -87,9 +89,8 @@ what's disclosed.
   — a classic worker that `importScripts` the compat SDK (gstatic, version-pinned —
   keep in sync with `firebase` in `package.json`) and its config from
   `/firebase-config.js`. That endpoint (`src/routes/firebase-config.js/+server.ts`,
-  prerendered) writes `self.__easyquranFirebase = {…}` from the PUBLIC_FIREBASE_*
-  env vars — empty object when unconfigured, so the worker no-ops and the build
-  still passes. A classic worker + `importScripts` is used because SvelteKit's
+  prerendered) writes `self.__easyquranFirebase = {…}` from the hardcoded
+  config in `src/lib/firebase/index.ts` (single source of truth). A classic worker + `importScripts` is used because SvelteKit's
   service-worker env can't read runtime `$env/*` and the build must succeed with
   no config; synchronous config at eval time is what reliable background push needs.
 - **Foreground delivery** (page focused): `onMessage` in the client dispatches an
@@ -251,5 +252,5 @@ want any of these.
 
 - `SITE.domain` / `SITE.url` in `lib/config/site.ts` (currently `easyquran.fyi`) —
   also update the `Sitemap:` line in `static/robots.txt` and `static/_redirects`.
-- `.env` Firebase credentials (see above).
+- Firebase config values in `src/lib/firebase/index.ts` (hardcoded; see above).
 - `lib/assets/favicon.svg` + the generated `static/` images, and the page copy.
