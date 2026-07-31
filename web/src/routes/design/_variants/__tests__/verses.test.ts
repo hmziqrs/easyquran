@@ -10,8 +10,7 @@ import { withoutBasmalaPrefix } from "../verses";
 /** Al-Mulk 67:1 exactly as it comes out of quran-uthmani.sqlite — note the
  *  tatweel in ٱلرَّحْمَـٰنِ and the shadda-before-fatha ordering, both of which
  *  differ from the BISMILLAH constant. */
-const MULK_1 =
-  "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ تَبَـٰرَكَ ٱلَّذِى بِيَدِهِ ٱلْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَىْءٍ قَدِيرٌ";
+const MULK_1 = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ تَبَـٰرَكَ ٱلَّذِى بِيَدِهِ ٱلْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَىْءٍ قَدِيرٌ";
 
 describe("withoutBasmalaPrefix", () => {
   it("removes the basmala despite differing tatweel and harakat order", () => {

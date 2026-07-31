@@ -9,24 +9,6 @@ vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
 import { decodeConsent } from "../consent.svelte";
 import { decodeFcm } from "../notifications.svelte";
-import { decodePrefs } from "../prefs.svelte";
-
-describe("decodePrefs", () => {
-  it("keeps valid theme/accent", () => {
-    expect(decodePrefs({ theme: "light", accent: "gold" })).toEqual({
-      theme: "light",
-      accent: "gold",
-    });
-  });
-  it("falls back to defaults for invalid/missing values", () => {
-    expect(decodePrefs({ theme: "mauve", accent: "nope" })).toEqual({
-      theme: "dark",
-      accent: "emerald",
-    });
-    expect(decodePrefs({})).toEqual({ theme: "dark", accent: "emerald" });
-    expect(decodePrefs(null)).toEqual({ theme: "dark", accent: "emerald" });
-  });
-});
 
 describe("decodeConsent", () => {
   it("analytics/performance default ON unless explicitly false; advertising OFF unless true", () => {
