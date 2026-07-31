@@ -4,58 +4,58 @@ import { SIDEBAR_KEYBOARD_SHORTCUT } from "./constants.js";
 type Getter<T> = () => T;
 
 export type SidebarStateProps = {
-	/**
-	 * A getter function that returns the current open state of the sidebar.
-	 * We use a getter function here to support `bind:open` on the `Sidebar.Provider`
-	 * component.
-	 */
-	open: Getter<boolean>;
+  /**
+   * A getter function that returns the current open state of the sidebar.
+   * We use a getter function here to support `bind:open` on the `Sidebar.Provider`
+   * component.
+   */
+  open: Getter<boolean>;
 
-	/**
-	 * A function that sets the open state of the sidebar. To support `bind:open`, we need
-	 * a source of truth for changing the open state to ensure it will be synced throughout
-	 * the sub-components and any `bind:` references.
-	 */
-	setOpen: (open: boolean) => void;
+  /**
+   * A function that sets the open state of the sidebar. To support `bind:open`, we need
+   * a source of truth for changing the open state to ensure it will be synced throughout
+   * the sub-components and any `bind:` references.
+   */
+  setOpen: (open: boolean) => void;
 };
 
 class SidebarState {
-	readonly props: SidebarStateProps;
-	open = $derived.by(() => this.props.open());
-	openMobile = $state(false);
-	setOpen: SidebarStateProps["setOpen"];
-	state = $derived.by(() => (this.open ? "expanded" : "collapsed"));
+  readonly props: SidebarStateProps;
+  open = $derived.by(() => this.props.open());
+  openMobile = $state(false);
+  setOpen: SidebarStateProps["setOpen"];
+  state = $derived.by(() => (this.open ? "expanded" : "collapsed"));
 
-	constructor(props: SidebarStateProps) {
-		this.setOpen = props.setOpen;
-		this.props = props;
-	}
+  constructor(props: SidebarStateProps) {
+    this.setOpen = props.setOpen;
+    this.props = props;
+  }
 
-	// EasyQuran: the reader sidebar is ALWAYS an overlay drawer — it takes the
-	// Sheet branch in sidebar.svelte on every viewport (and during SSR), so it
-	// floats over the reading column and never pushes it. Hardcoding `true`
-	// (instead of a media query) also keeps server and client in agreement,
-	// avoiding a hydration mismatch. `openMobile` is therefore the operative
-	// open/closed state everywhere.
-	get isMobile() {
-		return true;
-	}
+  // EasyQuran: the reader sidebar is ALWAYS an overlay drawer — it takes the
+  // Sheet branch in sidebar.svelte on every viewport (and during SSR), so it
+  // floats over the reading column and never pushes it. Hardcoding `true`
+  // (instead of a media query) also keeps server and client in agreement,
+  // avoiding a hydration mismatch. `openMobile` is therefore the operative
+  // open/closed state everywhere.
+  get isMobile() {
+    return true;
+  }
 
-	// Event handler to apply to the `<svelte:window>`
-	handleShortcutKeydown = (e: KeyboardEvent) => {
-		if (e.key === SIDEBAR_KEYBOARD_SHORTCUT && (e.metaKey || e.ctrlKey)) {
-			e.preventDefault();
-			this.toggle();
-		}
-	};
+  // Event handler to apply to the `<svelte:window>`
+  handleShortcutKeydown = (e: KeyboardEvent) => {
+    if (e.key === SIDEBAR_KEYBOARD_SHORTCUT && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      this.toggle();
+    }
+  };
 
-	setOpenMobile = (value: boolean) => {
-		this.openMobile = value;
-	};
+  setOpenMobile = (value: boolean) => {
+    this.openMobile = value;
+  };
 
-	toggle = () => {
-		this.openMobile = !this.openMobile;
-	};
+  toggle = () => {
+    this.openMobile = !this.openMobile;
+  };
 }
 
 const SYMBOL_KEY = "scn-sidebar";
@@ -67,7 +67,7 @@ const SYMBOL_KEY = "scn-sidebar";
  * @returns  The `SidebarState` instance.
  */
 export function setSidebar(props: SidebarStateProps): SidebarState {
-	return setContext(Symbol.for(SYMBOL_KEY), new SidebarState(props));
+  return setContext(Symbol.for(SYMBOL_KEY), new SidebarState(props));
 }
 
 /**
@@ -76,5 +76,5 @@ export function setSidebar(props: SidebarStateProps): SidebarState {
  * @returns The `SidebarState` instance.
  */
 export function useSidebar(): SidebarState {
-	return getContext(Symbol.for(SYMBOL_KEY));
+  return getContext(Symbol.for(SYMBOL_KEY));
 }

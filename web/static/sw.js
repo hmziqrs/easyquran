@@ -37,7 +37,7 @@ async function cacheFirst(req, cacheName) {
   const hit = await cache.match(req);
   if (hit) return hit;
   const res = await fetch(req);
-  if (res && res.ok) cache.put(req, res.clone());
+  if (res && res.ok) void cache.put(req, res.clone()).catch(() => {});
   return res;
 }
 
@@ -46,7 +46,7 @@ async function staleWhileRevalidate(req, cacheName) {
   const hit = await cache.match(req);
   const network = fetch(req)
     .then((res) => {
-      if (res && res.ok) cache.put(req, res.clone());
+      if (res && res.ok) void cache.put(req, res.clone()).catch(() => {});
       return res;
     })
     .catch(() => null);
@@ -58,7 +58,7 @@ async function networkFirstNav(req) {
   const cache = await caches.open(NAV);
   try {
     const res = await fetch(req);
-    if (res && res.ok && res.type !== "opaque") cache.put(req, res.clone());
+    if (res && res.ok && res.type !== "opaque") await cache.put(req, res.clone());
     return res;
   } catch {
     return (await cache.match(req)) || (await cache.match("/404.html")) || Response.error();
@@ -66,8 +66,8 @@ async function networkFirstNav(req) {
 }
 
 // ── lifecycle ──────────────────────────────────────────────────────────
-self.addEventListener("install", () => {
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
@@ -138,13 +138,14 @@ self.addEventListener("push", (event) => {
 // Open/focus the right tab on click.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification && event.notification.data && event.notification.data.url) || "/";
+  const target =
+    (event.notification && event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     (async () => {
       const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of all) {
         if ("focus" in client) {
-          client.focus();
+          await client.focus();
           if ("navigate" in client) {
             try {
               await client.navigate(target);

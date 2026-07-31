@@ -13,11 +13,7 @@ import { DatabaseSync } from "node:sqlite";
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  DEFAULT_LIMIT,
-  normalizeArabic,
-  scalarLength,
-} from "../src/lib/quran/search/normalize.ts";
+import { DEFAULT_LIMIT, normalizeArabic, scalarLength } from "../src/lib/quran/search/normalize.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(__dirname, "..");
@@ -37,13 +33,7 @@ const corpus = rows.map((r) => ({
   norm: normalizeArabic(r.text),
 }));
 
-const QUERIES = [
-  "بسم الله",
-  "الحمد لله",
-  "إن الله",
-  "جنة",
-  "الناس",
-];
+const QUERIES = ["بسم الله", "الحمد لله", "إن الله", "جنة", "الناس"];
 
 interface Fixture {
   query: string;
@@ -61,7 +51,12 @@ const fixtures: Fixture[] = QUERIES.map((query) => {
     if (row.norm.includes(norm)) {
       total++;
       if (first.length < DEFAULT_LIMIT) {
-        first.push({ key: `${row.sura}:${row.aya}`, surah: row.sura, ayah: row.aya, globalIndex: row.index });
+        first.push({
+          key: `${row.sura}:${row.aya}`,
+          surah: row.sura,
+          ayah: row.aya,
+          globalIndex: row.index,
+        });
       }
     }
   }
@@ -71,6 +66,5 @@ const fixtures: Fixture[] = QUERIES.map((query) => {
 mkdirSync(path.dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify({ searchVersion: "arabic-search-v1", fixtures }, null, 2) + "\n");
 console.log(
-  `wrote ${OUT}\n  ` +
-    fixtures.map((f) => `"${f.query}" → ${f.total} match(es)`).join("\n  "),
+  `wrote ${OUT}\n  ` + fixtures.map((f) => `"${f.query}" → ${f.total} match(es)`).join("\n  "),
 );

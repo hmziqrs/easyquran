@@ -34,7 +34,14 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
       s.arabic.includes(q) ||
       String(s.num) === qLower ||
       (norm.length > 0 && normalizeArabic(s.arabic).includes(norm));
-    if (hit) all.push({ key: verseKey(s.num, 1), surah: s.num, ayah: 1, globalIndex: s.startGlobal, text: "" });
+    if (hit)
+      all.push({
+        key: verseKey(s.num, 1),
+        surah: s.num,
+        ayah: 1,
+        globalIndex: s.startGlobal,
+        text: "",
+      });
   }
   return {
     query,
@@ -74,11 +81,20 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
           for (const item of rawResults) {
             if (!item || typeof item !== "object") continue;
             const rec = item as unknown as Record<string, unknown>;
-            const surah = Number(rec.surah);
-            const ayah = Number(rec.ayah);
-            if (rec.surah == null || rec.ayah == null || !Number.isFinite(surah) || !Number.isFinite(ayah)) continue;
+            // Require real numbers in range — Number() would otherwise coerce
+            // "", [], or true into finite 0/1 and emit bogus surah=0 hits.
+            const { surah, ayah } = rec;
+            if (
+              typeof surah !== "number" ||
+              typeof ayah !== "number" ||
+              !Number.isFinite(surah) ||
+              !Number.isFinite(ayah) ||
+              surah < 1 ||
+              ayah < 1
+            )
+              continue;
             results.push({
-              key: String(rec.key ?? ""),
+              key: typeof rec.key === "string" ? rec.key : "",
               surah,
               ayah,
               globalIndex: Number(rec.globalIndex) || 0,

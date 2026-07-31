@@ -15,13 +15,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import { CATALOG } from "$lib/data/quran-meta";
-import type {
-  CatalogEntry,
-  LoadedSurah,
-  VerseKey,
-  Place,
-  Bismillah,
-} from "$lib/data/quran-types";
+import type { CatalogEntry, LoadedSurah, VerseKey } from "$lib/data/quran-types";
 
 export type {
   CatalogEntry,
@@ -109,9 +103,16 @@ export function searchVerses(rawQuery: string): SearchResult[] {
   const out: SearchResult[] = [];
   for (const s of CATALOG) {
     if (out.length >= 24) break;
-    const hit = s.name.toLowerCase().includes(qLower) || s.arabic.includes(q) || String(s.num) === qLower;
+    const hit =
+      s.name.toLowerCase().includes(qLower) || s.arabic.includes(q) || String(s.num) === qLower;
     if (hit) {
-      out.push({ key: verseKey(s.num, 1), ref: `${s.name} ${s.num}`, text: "", num: s.num, ayah: 1 });
+      out.push({
+        key: verseKey(s.num, 1),
+        ref: `${s.name} ${s.num}`,
+        text: "",
+        num: s.num,
+        ayah: 1,
+      });
     }
   }
   return out;
@@ -124,7 +125,7 @@ export const surahMeta = (s: CatalogEntry): string =>
 /** Sample commentary for a verse. In the full app this slot carries a short,
  *  credited tafsir summary. */
 export const tafsirFor = (key: VerseKey): string => {
-  const { num, n } = parseKey(key);
+  const { num } = parseKey(key);
   const s = surahByNum(num);
   return `Sample commentary for ${s.name} ${key} — in the full app this slot carries a short, credited tafsir summary.`;
 };

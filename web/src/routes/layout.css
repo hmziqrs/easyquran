@@ -34,7 +34,8 @@
 @theme {
   --font-sans:
     "Figtree Variable", "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-mono:
+    "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   /* Arabic/Quranic text — used via `font-arabic` on mushaf content */
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
 

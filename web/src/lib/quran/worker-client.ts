@@ -6,31 +6,62 @@
    bundle stays out of the server/prerender graph. `start()` is called from a
    browser-only onMount with a resolved manifest (manifest.ts runs here, on the
    main thread — never inside the worker).
+
+   Every request settles deterministically: on a response, on a per-request
+   timeout, on a worker load/eval/runtime fatal, or on disposal. No in-flight
+   request can hang forever.
    ════════════════════════════════════════════════════════════════════════ */
 
 import type { DownloadProgress } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
-import { DEFAULT_LIMIT, DEFAULT_OFFSET, type SearchOpts, type SearchResponse } from "./search/normalize";
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_OFFSET,
+  type SearchOpts,
+  type SearchResponse,
+} from "./search/normalize";
+
+/** Per-request settlement handle. The timer is cleared on every settle path
+ *  (response, timeout, fatal, disposal) so no dangling rejection fires later. */
+interface Pending {
+  resolve: (v: unknown) => void;
+  reject: (e: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/** Requests that never get a worker response must still settle. Generous: the
+ *  corpus is local (OPFS), so this only trips on a genuinely stuck worker. */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 let worker: Worker | null = null;
 let seq = 0;
 let isReady = false;
 let startPromise: Promise<void> | null = null;
-let readyPromise: Promise<void> | null = null;
-let readyResolve: (() => void)[] = [];
-let readyReject: ((e: Error) => void)[] = [];
 
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+const pending = new Map<number, Pending>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
 const progressListeners = new Set<(p: DownloadProgress) => void>();
+
+/** Reject every in-flight request (worker load/eval failure, a post-init fatal
+ *  message, or disposal). Module-scoped so disposal and the fatal handler share
+ *  exactly one cleanup path. */
+function failAll(err: Error): void {
+  for (const p of pending.values()) {
+    clearTimeout(p.timer);
+    p.reject(err);
+  }
+  pending.clear();
+}
 
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
     const p = pending.get(msg.id);
-    if (!p) return;
+    if (!p) return; // already settled by timeout/disposal
+    clearTimeout(p.timer);
     pending.delete(msg.id);
-    msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+    if (msg.ok) p.resolve(msg.result);
+    else p.reject(new Error(msg.error));
     return;
   }
   if (msg.type === "status") {
@@ -39,17 +70,24 @@ function handle(msg: WorkerOutbound): void {
     const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
     for (const cb of progressListeners) cb(p);
   } else if (msg.type === "fatal") {
-    const err = new Error(msg.error);
-    readyReject.forEach((r) => r(err));
-    readyReject = [];
+    // A runtime fatal (e.g. a sqlite-wasm crash) can arrive AFTER init has
+    // succeeded; reject every in-flight request too, not just readiness —
+    // otherwise readSurah/search callers hang forever.
+    failAll(new Error(msg.error));
   }
 }
 
-function request<T>(build: (id: number) => WorkerRequest): Promise<T> {
+function request<T>(
+  build: (id: number) => WorkerRequest,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   if (!worker) return Promise.reject(new Error("quran worker not started"));
   const id = ++seq;
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+    const timer = setTimeout(() => {
+      if (pending.delete(id)) reject(new Error("quran worker request timed out"));
+    }, timeoutMs);
+    pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
     worker!.postMessage(build(id));
   });
 }
@@ -57,11 +95,6 @@ function request<T>(build: (id: number) => WorkerRequest): Promise<T> {
 export const quranWorker = {
   get ready(): boolean {
     return isReady;
-  },
-  /** Resolves once the engine has both DBs deserialized; rejects on fatal error. */
-  get whenReady(): Promise<void> {
-    if (isReady) return Promise.resolve();
-    return readyPromise ?? Promise.reject(new Error("quran worker not started"));
   },
   /** Subscribe to lifecycle status (init/downloading/ready/error). Returns an unsub. */
   onStatus(cb: (s: WorkerStatus, detail?: string) => void): () => void {
@@ -83,38 +116,40 @@ export const quranWorker = {
         name: "quran-db",
       });
       worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => handle(e.data));
-      // A worker-bundle load/eval failure (or an undeserializable message) must
-      // settle start()/whenReady and every pending request — otherwise they hang
-      // forever. Read the live module-scoped arrays; do not capture a stale copy.
-      const failAll = (err: Error): void => {
-        readyReject.forEach((r) => r(err));
-        readyReject = [];
-        pending.forEach((p) => p.reject(err));
-        pending.clear();
-      };
+      // A worker-bundle load/eval failure or an undeserializable message must
+      // settle every pending request (including the init await below) — start()
+      // then rejects via that init request instead of hanging forever.
       worker.addEventListener("error", (e: ErrorEvent) => {
-        failAll(e.error instanceof Error ? e.error : new Error(`quran worker failed to load: ${e.message}`));
+        failAll(
+          e.error instanceof Error
+            ? e.error
+            : new Error(`quran worker failed to load: ${e.message}`),
+        );
       });
       worker.addEventListener("messageerror", () => {
         failAll(new Error("quran worker message could not be deserialized"));
       });
-      readyPromise = new Promise<void>((res, rej) => {
-        readyResolve.push(res);
-        readyReject.push(rej);
-      });
       try {
         await request<null>((id) => ({ id, type: "init", manifest }));
         isReady = true;
-        readyResolve.forEach((r) => r());
-        readyResolve = [];
       } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        readyReject.forEach((r) => r(e));
-        readyReject = [];
-        throw e;
+        throw err instanceof Error ? err : new Error(String(err));
       }
     })();
     return startPromise;
+  },
+
+  /** Tear the worker down and reject every in-flight request with a disposal
+   *  error. Resets module state so a later start() can spin up a fresh worker.
+   *  No-op when not started. Has no production caller (the worker is page
+   *  lifetime) but is required for test isolation and any future reader unmount. */
+  dispose(): void {
+    if (!worker) return;
+    failAll(new Error("quran worker disposed"));
+    worker.terminate();
+    worker = null;
+    isReady = false;
+    startPromise = null;
   },
 
   /** Read one surah's verbatim Uthmani verses from the local DB. */
@@ -126,31 +161,33 @@ export const quranWorker = {
 
   /** Substring search over the local normalized corpus. */
   search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
-    return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then((r: unknown) => {
-      const empty: SearchResponse = {
-        query,
-        total: 0,
-        limit: opts?.limit ?? DEFAULT_LIMIT,
-        offset: opts?.offset ?? DEFAULT_OFFSET,
-        results: [],
-        source: "worker",
-      };
-      if (!r || typeof r !== "object") return empty;
-      const o = r as Record<string, unknown>;
-      if (
-        typeof o.total !== "number" ||
-        !Array.isArray(o.results) ||
-        !o.results.every(
-          (h) =>
-            !!h &&
-            typeof h === "object" &&
-            typeof (h as Record<string, unknown>).surah === "number" &&
-            typeof (h as Record<string, unknown>).ayah === "number",
-        )
-      ) {
-        return empty;
-      }
-      return r as SearchResponse;
-    });
+    return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
+      (r: unknown) => {
+        const empty: SearchResponse = {
+          query,
+          total: 0,
+          limit: opts?.limit ?? DEFAULT_LIMIT,
+          offset: opts?.offset ?? DEFAULT_OFFSET,
+          results: [],
+          source: "worker",
+        };
+        if (!r || typeof r !== "object") return empty;
+        const o = r as Record<string, unknown>;
+        if (
+          typeof o.total !== "number" ||
+          !Array.isArray(o.results) ||
+          !o.results.every(
+            (h) =>
+              !!h &&
+              typeof h === "object" &&
+              typeof (h as Record<string, unknown>).surah === "number" &&
+              typeof (h as Record<string, unknown>).ayah === "number",
+          )
+        ) {
+          return empty;
+        }
+        return r as SearchResponse;
+      },
+    );
   },
 };

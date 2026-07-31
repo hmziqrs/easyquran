@@ -219,7 +219,7 @@ export function quranData(): Plugin {
         if (f === NAMES_PATH || f === XML_PATH) {
           cached = null;
           const mod = server.moduleGraph.getModuleById(RESOLVED);
-          if (mod) server.reloadModule(mod);
+          if (mod) void server.reloadModule(mod);
         }
       });
     },

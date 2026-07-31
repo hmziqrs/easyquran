@@ -43,21 +43,32 @@ function normalizeScript(raw: Record<string, unknown>): ArtifactSpec | null {
 /** Resolve the manifest, preferring the live API and degrading to baked. */
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
   if (!QURAN.apiBase) return baked;
+  // Compose a 3s timeout with the caller's abort signal. Both are torn down in
+  // the `finally` below so a fetch rejection or caller abort can never leak the
+  // timer or leave an anonymous listener attached to the caller's signal.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener("abort", onAbort);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 3000);
-    signal?.addEventListener("abort", () => ctrl.abort(), { once: true });
     const [vRes, sRes] = await Promise.all([
-      fetch(`${QURAN.apiBase}/version`, { signal: ctrl.signal, headers: { accept: "application/json" } }),
-      fetch(`${QURAN.apiBase}/scripts`, { signal: ctrl.signal, headers: { accept: "application/json" } }),
+      fetch(`${QURAN.apiBase}/version`, {
+        signal: ctrl.signal,
+        headers: { accept: "application/json" },
+      }),
+      fetch(`${QURAN.apiBase}/scripts`, {
+        signal: ctrl.signal,
+        headers: { accept: "application/json" },
+      }),
     ]);
-    clearTimeout(timer);
     if (!vRes.ok || !sRes.ok) return baked;
 
     const vBody = (await vRes.json()) as Record<string, unknown>;
     const sBody = (await sRes.json()) as Record<string, unknown>;
     const sData = (sBody.data ?? sBody) as Record<string, unknown>;
-    const rawScripts = Array.isArray(sData.scripts) ? (sData.scripts as Record<string, unknown>[]) : [];
+    const rawScripts = Array.isArray(sData.scripts)
+      ? (sData.scripts as Record<string, unknown>[])
+      : [];
     const scripts = rawScripts.map(normalizeScript).filter((s): s is ArtifactSpec => s !== null);
     if (scripts.length < 2) return baked;
 
@@ -70,5 +81,8 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     };
   } catch {
     return baked;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }

@@ -53,9 +53,7 @@ function getDb(): DatabaseSync {
 export function readSurahVerses(num: number): string[] {
   let stmt = suraStmtCache.get(num);
   if (!stmt) {
-    stmt = getDb().prepare(
-      `SELECT text FROM quran_text WHERE sura = ? ORDER BY aya`,
-    );
+    stmt = getDb().prepare(`SELECT text FROM quran_text WHERE sura = ? ORDER BY aya`);
     suraStmtCache.set(num, stmt);
   }
   const rows = stmt.all(num) as { text: string }[];

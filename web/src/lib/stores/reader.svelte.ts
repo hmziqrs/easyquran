@@ -11,6 +11,7 @@
 
 import { browser } from "$app/environment";
 import { SURAHS, surahByNum, parseKey, type VerseKey } from "$lib/data/quran";
+import { SvelteMap } from "svelte/reactivity";
 
 const STORAGE_KEY = "easyquran.reader";
 
@@ -107,8 +108,9 @@ class ReaderStore {
   #hydrated = false;
   /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text
    *  working without a Worker round-trip (doc §6.3). Seeded from prerendered
-   *  page.data and refreshed from the sqlite-wasm Worker. */
-  #versesBySurah = $state(new Map<number, string[]>());
+   *  page.data and refreshed from the sqlite-wasm Worker. SvelteMap (not a
+   *  plain Map in $state) so consumers of versesFor() are notified on .set(). */
+  #versesBySurah = new SvelteMap<number, string[]>();
   /** Monotonic guard: bumped on every navigation so a stale Worker response for
    *  a previously-open surah can never clobber the currently-selected one. */
   #navToken = 0;
@@ -257,9 +259,7 @@ class ReaderStore {
   }
   /** Bookmarks as an ordered list (surah order, then ayah). */
   get bookmarkList(): { key: VerseKey; ref: string; text: string; num: number; n: number }[] {
-    return Object.keys(this.#s.bookmarks
-      ? this.#s.bookmarks
-      : ({} as Record<VerseKey, boolean>))
+    return Object.keys(this.#s.bookmarks ? this.#s.bookmarks : ({} as Record<VerseKey, boolean>))
       .filter((k) => this.#s.bookmarks[k])
       .map((k) => {
         const { num, n } = parseKey(k);

@@ -45,7 +45,7 @@ let uthmaniDb: Database | null = null;
 let simpleCleanBytes: Uint8Array | null = null;
 /** Retain the Uthmani bytes so their backing buffer is never GC'd while the
  *  deserialized DB references its heap copy. */
-let uthmaniBytes: Uint8Array | null = null;
+let _uthmaniBytes: Uint8Array | null = null;
 let ready = false;
 
 /** Normalized search corpus over simple-clean + Uthmani display text by index.
@@ -112,12 +112,18 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
   sqlite3 = await init();
 
   const uthmaniSpec = manifest.scripts.find((s) => s.id === "uthmani") as ArtifactSpec | undefined;
-  const simpleSpec = manifest.scripts.find((s) => s.id === "simple-clean") as ArtifactSpec | undefined;
+  const simpleSpec = manifest.scripts.find((s) => s.id === "simple-clean") as
+    | ArtifactSpec
+    | undefined;
   if (!uthmaniSpec || !simpleSpec) throw new Error("manifest missing a script spec");
 
   status("downloading", "uthmani");
-  const u = await ensureArtifact(uthmaniSpec, manifest.contentVersion, progressEmitter(uthmaniSpec));
-  uthmaniBytes = u.bytes;
+  const u = await ensureArtifact(
+    uthmaniSpec,
+    manifest.contentVersion,
+    progressEmitter(uthmaniSpec),
+  );
+  _uthmaniBytes = u.bytes;
   uthmaniDb = openReadOnly(u.bytes);
 
   status("downloading", "simple-clean");
