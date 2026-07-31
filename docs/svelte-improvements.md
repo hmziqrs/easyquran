@@ -8,23 +8,51 @@ The goal is maintainability, correctness, and testability. A dependency should b
 
 ---
 
+## Progress (updated 2026-08-01)
+
+Steps 1–3 of the execution order (§8) are **complete and verified**: `svelte-check` 0/0, `vp lint --deny-warnings` 0 warnings, `vp fmt --check` clean, 22 Vitest tests pass, `vp build` succeeds. Steps 4–11 remain.
+
+| # | Step | Status |
+|---|---|---|
+| 1 | SvelteMap fix + regression test | ✅ |
+| 2 | Quality gates | ✅ (local scripts — **no CI**) |
+| 3 | Harden async boundaries | ✅ |
+| 4 | Persistence foundation + debounce notes | ☐ next |
+| 5 | Split reader, remove dead state | ☐ |
+| 6 | shadcn-svelte Tabs | ☐ |
+| 7 | VerseRow actions | ☐ |
+| 8 | Factories / contexts | ☐ |
+| 9 | Boot services | ☐ |
+| 10 | Centralize wire schemas | ☐ |
+| 11 | Profile sidebar / virtualization | ☐ |
+
+**No CI.** This project does **not** use GitHub Actions or any CI. The quality floor is enforced by running the local `web/package.json` scripts (`format:check`, `lint`, `check`, `test`, `build`) before commit — not by a workflow. The "add CI / make CI run" guidance elsewhere in this document is superseded by this decision.
+
+Corrections found while implementing (re-audit):
+- **§A:** confirmed empirically — `$state(new Map())` does **not** make a `Map` reactive; `SvelteMap` is required. (A prior attempt with `$state(new Map())` shipped a no-op fix; the regression test catches this.)
+- **§B:** `worker-client.ts` already had a `failAll` path for worker load/eval failure; the real gaps were the missing per-request timeout, no disposal, and the post-init `fatal` branch not clearing `pending`. All fixed. The "eight module-level mutable variables" was actually 7 `let` + 3 const-mutable collections; the dead resolver arrays were removed.
+- **§E / §5:** range-path literals `/app/${kind}/${index}` appear in **7 files**, not just `Sidebar.svelte` — step 5 needs a real `rangePath()` helper. The project uses **shadcn-svelte** (which wraps Bits UI), so step 6 should add the shadcn `tabs` component rather than importing `bits-ui` directly.
+- **§1:** all `localStorage.setItem` calls are already guarded; the only unvalidated `JSON.parse` left is the anti-FOUC inline script in `app.html`.
+
+---
+
 ## 1. Current quality baseline
 
-The project compiles cleanly, but its automated quality floor is incomplete:
+The project compiles cleanly, and its automated quality floor is now in place (raised by step 2):
 
 - `pnpm check`: **0 Svelte errors and 0 warnings**
-- `vp lint`: **10 warnings**, including unsafe API-boundary coercion and unhandled promises
-- `vp fmt --check`: **20 files** need formatting
-- web tests: **0**
-- CI workflows enforcing check, lint, format, and tests: **none**
+- `vp lint` (`--deny-warnings`): **0 warnings**
+- `vp fmt --check`: **clean**
+- web tests: **22 passing** (Vitest; config in `web/vitest.config.ts`)
+- CI: **none, by decision** — the floor runs as local `pnpm` scripts, not a workflow
 
-Before large refactors, make the existing commands reproducible in `web/package.json` and enforce them in CI. The first objective is not an arbitrary coverage percentage; it is regression protection for the state and persistence code that will be changed below.
+The commands are reproducible in `web/package.json` (`check`, `lint`, `format`, `format:check`, `test`, `test:watch`, `build`). The first objective is not an arbitrary coverage percentage; it is regression protection for the state and persistence code that will be changed below.
 
 ---
 
 ## 2. Immediate correctness fixes
 
-### A. Replace the non-reactive verse `Map`
+### A. Replace the non-reactive verse `Map` ✅
 
 **File:** `web/src/lib/stores/reader.svelte.ts:111`
 
@@ -46,7 +74,7 @@ The visible regression is the Sidebar ayah list remaining empty after a cold sur
 
 **Verification:** cold-load a surah, switch the Sidebar to Ayah mode, and confirm that the list populates without another navigation or unrelated state update. Add a regression test around cache seeding and reactive consumption.
 
-### B. Harden asynchronous boundaries
+### B. Harden asynchronous boundaries ✅
 
 These are correctness improvements, not cosmetic refactors:
 
@@ -80,13 +108,15 @@ Then add browser/component coverage for:
 - note autosave and persistence timing
 - Sidebar mode switching and links
 
-Add scripts for at least `test` and `test:watch`, then make CI run:
+Scripts for `test`, `test:watch`, `lint`, `format`, and `format:check` are in `web/package.json`. ✅ Done. Run them locally before commit — there is **no CI** by project decision. Vitest is configured in `web/vitest.config.ts` (happy-dom + `resolve.conditions: ["browser"]` so `SvelteMap` and effects behave as in the browser).
 
-1. formatting check
-2. lint with no warnings
-3. `svelte-check`
-4. unit/component tests
-5. production build
+To run the floor locally:
+
+1. `pnpm format:check`
+2. `pnpm lint` (fails on any warning)
+3. `pnpm check`
+4. `pnpm test`
+5. `pnpm build`
 
 Tests should land immediately after the `SvelteMap` fix and before persistence or ReaderStore is split.
 
@@ -266,9 +296,9 @@ This decision should be revisited when product requirements change:
 
 ## 8. Recommended execution order
 
-1. **Fix the `SvelteMap` bug** and add its regression test.
-2. **Establish quality gates**: formatting, lint with no warnings, `svelte-check`, Vitest, build, and CI.
-3. **Harden boundaries**: API decoding, manifest cleanup, Worker timeout/failure/disposal.
+1. **Fix the `SvelteMap` bug** and add its regression test. ✅
+2. **Establish quality gates**: formatting, lint with no warnings, `svelte-check`, Vitest, build (local scripts — no CI). ✅
+3. **Harden boundaries**: API decoding, manifest cleanup, Worker timeout/failure/disposal. ✅
 4. **Extract persistence mechanics** with domain-specific scheduling; debounce note writes.
 5. **Split Reader state** and remove unused persisted/public state before introducing new abstractions.
 6. **Replace custom mode tabs with Bits UI Tabs**, then extract focused controls where useful.
