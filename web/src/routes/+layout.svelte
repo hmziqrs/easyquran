@@ -19,9 +19,26 @@
   import { NotificationToast } from "$lib/components/notifications";
   import { DownloadBar } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
-  import { bootOfflineEngine } from "$lib/quran/offline";
+  import { startServiceWorker } from "$lib/boot/service-worker";
+  import { startAnalytics } from "$lib/boot/analytics";
+  import { startCrashReporting } from "$lib/boot/crash-reporting";
+  import { startOfflineEngine } from "$lib/boot/offline-engine";
 
   let { children } = $props();
+
+  // The offline Quran engine (~2.5 MB corpus + sqlite-wasm worker boot) is
+  // GATED to /app so marketing routes (/, /about, …) don't pay the bandwidth,
+  // battery, and main-thread-contension cost. The reader always paints from
+  // prerendered page.data regardless of when (or whether) it boots. The root
+  // onMount fires once at initial entry; afterNavigate covers subsequent
+  // marketing → /app navigations. startOfflineEngine is idempotent, so calling
+  // it on every /app entry is safe and cheap.
+  let offlineTeardown: (() => void) | null = null;
+  const ensureOfflineEngine = (pathname: string): void => {
+    if (!pathname.startsWith("/app")) return;
+    if (offlineTeardown) return;
+    offlineTeardown = startOfflineEngine();
+  };
 
   // The inline <head> script in app.html already applied saved prefs before
   // paint; re-apply on mount so the reactive store and the DOM stay in sync.
@@ -34,109 +51,39 @@
     prefs.apply();
     notifications.hydrate();
 
-    // Register the root Service Worker (app-shell + FCM) in production so the
-    // reader is offline-capable after first visit. Skipped in dev (it would
-    // cache over HMR). firebase/messaging.ts re-uses this same registration.
-    if (import.meta.env.PROD && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
-        console.warn("[sw] registration failed:", err);
-      });
-    }
+    // Lifecycle-owned boot services — each returns its teardown so the listeners
+    // they register (service worker, consent bridge, crash handlers) are removed
+    // if the root layout ever unmounts. The consent bridge is the key fix: it
+    // used to be registered inside a fire-and-forget IIFE with no way to remove
+    // it (see lib/boot/analytics.ts).
+    const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
-    // Proactively cache the Quran for offline use as soon as the page mounts —
-    // don't wait for the reader to be opened. The two Arabic DBs (~2.5 MB total)
-    // download in a background Worker into OPFS, so the first visit to /app is
-    // already cached. Best-effort (it never blocks the main thread or first
-    // paint); the reader renders from prerendered data regardless.
-    void bootOfflineEngine();
-
-    // Lazy-import the feature modules so the Firebase SDK never enters the
-    // critical modulepreload graph — it starts only after hydration.
-    void (async () => {
-      // fbAnalytics stays undefined if the dynamic import or init fails; the
-      // consent bridge below is then a safe no-op, so a later retry or manual
-      // consent change isn't silently lost.
-      let fbAnalytics: typeof import("$lib/firebase/analytics") | undefined;
-
-      // Push the user's consent choices into GA4 consent mode + the analytics
-      // collection toggle, and re-apply whenever they change (Settings panel).
-      // (Performance has no runtime toggle — see lib/firebase/performance.ts —
-      // it's consent-gated only at init above; the control reloads to apply it.)
-      const applyConsent = () => {
-        if (!fbAnalytics) return;
-        fbAnalytics.setConsentState(consent.consentSettings);
-        fbAnalytics.setAnalyticsCollectionEnabled(consent.analytics);
-      };
-
-      try {
-        fbAnalytics = await import("$lib/firebase/analytics");
-        const fbPerf = await import("$lib/firebase/performance");
-
-        // Start analytics + performance, gated by consent. (Performance flags
-        // are honored at init; analytics can be toggled freely at runtime.)
-        await fbAnalytics.initAnalytics();
-        fbPerf.initPerformance({
-          dataCollectionEnabled: consent.performance,
-          instrumentationEnabled: consent.performance,
-        });
-        applyConsent();
-
-        // First-load page view (after consent is applied, so the first event
-        // respects the user's consent-mode state).
-        fbAnalytics.pageView(location.pathname);
-      } catch (err) {
-        // Analytics is best-effort — a failed dynamic import or init must not
-        // throw unhandled or disable the consent bridge registered below.
-        console.warn("[firebase] init failed:", err);
-      }
-
-      // Register the consent bridge outside the try/catch so it survives an
-      // init failure (applyConsent is a no-op until fbAnalytics is assigned).
-      window.addEventListener("easyquran:consent", applyConsent);
-    })();
-
-    // Crash reporting — forward uncaught errors + unhandled promise rejections to
-    // GA4 as exceptions (Crashlytics has no web SDK; this is the Firebase-native
-    // equivalent). Consent-gated: logException → track() drops it while collection
-    // is off. Dynamic-imported so the analytics module stays out of the critical
-    // bundle (errors are rare; the module caches after first load).
-    const reportException = (description: string) =>
-      import("$lib/firebase/analytics")
-        .then(({ logException }) => logException(description, true))
-        .catch(() => {
-          /* crash reporting is best-effort */
-        });
-    const onError = (event: ErrorEvent) =>
-      reportException(
-        `Uncaught: ${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`,
-      );
-    const onRejection = (event: PromiseRejectionEvent) => {
-      const reason =
-        event.reason instanceof Error
-          ? `${event.reason.name}: ${event.reason.message}`
-          : String(event.reason);
-      reportException(`Unhandled rejection: ${reason}`);
-    };
-    window.addEventListener("error", onError);
-    window.addEventListener("unhandledrejection", onRejection);
+    // Boot the offline engine immediately when the user lands directly on /app.
+    // (Marketing entries skip it; afterNavigate below starts it on /app entry.)
+    ensureOfflineEngine(location.pathname);
 
     return () => {
-      window.removeEventListener("error", onError);
-      window.removeEventListener("unhandledrejection", onRejection);
+      for (const teardown of cleanups) teardown();
+      offlineTeardown?.();
+      offlineTeardown = null;
     };
   });
 
   // The site is a prerendered SPA, so client-side route changes don't reload the
-  // page — log a screen/page view on each navigation so GA4 sees them. Skip the
-  // initial 'enter' navigation: the onMount call above already logged it (and
-  // runs after consent is applied), so this fires only on subsequent navigations.
+  // page. Two concerns run on each navigation:
+  //   • log a screen/page view so GA4 sees them (skip the initial 'enter'
+  //     navigation: onMount's analytics init already logged it, after consent),
+  //   • start the offline engine when the user enters /app from a marketing
+  //     route (idempotent — no-op if already booted on direct entry).
   afterNavigate((navigation) => {
-    if (navigation.type === "enter") return;
-    void import("$lib/firebase/analytics")
-      .then(({ pageView }) => pageView(location.pathname))
-      .catch(() => {
-        /* analytics is best-effort */
-      });
+    if (navigation.type !== "enter") {
+      void import("$lib/firebase/analytics")
+        .then(({ pageView }) => pageView(location.pathname))
+        .catch(() => {
+          /* analytics is best-effort */
+        });
+    }
+    ensureOfflineEngine(location.pathname);
   });
 
   // Site-level structured data. A @graph of WebSite + Organization, each with
