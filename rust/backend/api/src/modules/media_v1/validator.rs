@@ -201,8 +201,6 @@ pub struct V1MediaUsageQuery {
 mod tests {
     use super::*;
 
-    // ── MediaUploadMetadata::apply_field ──────────────────────────────────
-
     #[test]
     fn apply_field_reference_type_valid() {
         let mut meta = MediaUploadMetadata::default();

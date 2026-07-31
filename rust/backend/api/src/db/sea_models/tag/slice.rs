@@ -27,7 +27,6 @@ pub struct UpdateTag {
 pub struct TagQuery {
     pub page: Option<u64>,
     pub search: Option<String>,
-    // New: dynamic multi-field sorts
     pub sorts: Option<Vec<SortParam>>,
     // Optional filter for active state
     pub is_active: Option<bool>,

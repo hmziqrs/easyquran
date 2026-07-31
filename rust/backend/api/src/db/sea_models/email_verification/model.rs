@@ -60,8 +60,4 @@ impl Model {
         Utc::now().fixed_offset() < delay_time
     }
 
-    //     // Implement your email sending logic here
-    //     // For example, using an email sending crate like lettre
-    //     Ok(())
-    // }
 }

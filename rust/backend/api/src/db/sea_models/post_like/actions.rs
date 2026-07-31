@@ -23,7 +23,6 @@ impl Entity {
     pub async fn like_post(conn: &DbConn, post_id: i32, user_id: i32) -> DbResult<(bool, i32)> {
         let transaction = conn.begin().await?;
 
-        // Check if already liked
         let existing = Self::find()
             .filter(Column::PostId.eq(post_id))
             .filter(Column::UserId.eq(user_id))
@@ -58,7 +57,6 @@ impl Entity {
             }
         }
 
-        // Increment likes_count on the post
         let post = super::super::post::Entity::find_by_id(post_id)
             .one(&transaction)
             .await?;
@@ -95,7 +93,6 @@ impl Entity {
     pub async fn unlike_post(conn: &DbConn, post_id: i32, user_id: i32) -> DbResult<(bool, i32)> {
         let transaction = conn.begin().await?;
 
-        // Check if the like exists
         let existing = Self::find()
             .filter(Column::PostId.eq(post_id))
             .filter(Column::UserId.eq(user_id))
@@ -116,7 +113,6 @@ impl Entity {
             }
         };
 
-        // Delete the like record
         match like_record.delete(&transaction).await {
             Ok(_) => {}
             Err(err) => {
@@ -184,7 +180,6 @@ impl Entity {
         post_ids: &[i32],
         user_id: i32,
     ) -> DbResult<Vec<LikeStatus>> {
-        // Get all likes for this user on these posts
         let likes = Self::find()
             .filter(Column::PostId.is_in(post_ids.to_vec()))
             .filter(Column::UserId.eq(user_id))

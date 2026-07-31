@@ -178,7 +178,6 @@ impl<B: AuthBackend> AuthSession<B> {
         self.user = Some(user.clone());
         self.state = Some(state);
 
-        // Call backend hook
         self.backend.on_login(user).await?;
 
         Ok(())
@@ -318,7 +317,6 @@ where
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // Extract the tower-sessions Session
         let session = Session::from_request_parts(parts, state)
             .await
             .map_err(|_| {

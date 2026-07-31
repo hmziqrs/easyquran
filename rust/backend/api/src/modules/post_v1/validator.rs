@@ -322,7 +322,6 @@ impl V1UpdatePostPayload {
         UpdatePost {
             title: self.title,
             content: self.content.map(|d| d.into_json()),
-            // author_id: Some(author_id),
             published_at: self.published_at,
             updated_at: chrono::Utc::now().fixed_offset(),
             status: self.status,

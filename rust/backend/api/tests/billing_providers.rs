@@ -24,7 +24,6 @@ mod billing_mock_tests {
         StripeProvider::new("sk_test".into(), secret.into())
     }
 
-    // Import providers
     use ruxlog::services::billing::lemon_squeezy::LemonSqueezyProvider;
     use ruxlog::services::billing::paddle::PaddleProvider;
     use ruxlog::services::billing::polar::PolarProvider;
@@ -244,8 +243,6 @@ mod billing_mock_tests {
         assert!(matches!(err, BillingError::ProviderApi(_)));
     }
 
-    // ── Stripe: cancel_subscription ──────────────────────────────────────
-
     #[tokio::test]
     async fn stripe_cancel_subscription_immediate() {
         let server = MockServer::start().await;
@@ -319,8 +316,6 @@ mod billing_mock_tests {
         assert!(info.current_period_end.is_some());
     }
 
-    // ── Stripe: verify_webhook ───────────────────────────────────────────
-
     #[tokio::test]
     async fn stripe_verify_webhook_valid_signature() {
         let webhook_secret = "whsec_secret_key_123";
@@ -362,8 +357,6 @@ mod billing_mock_tests {
             BillingError::WebhookVerification(_)
         ));
     }
-
-    // ── Stripe: create_portal_session ────────────────────────────────────
 
     #[tokio::test]
     async fn stripe_create_portal_session() {
@@ -471,10 +464,6 @@ mod billing_mock_tests {
         assert_eq!(parsed.event_type, "invoice.payment_succeeded");
         assert_eq!(parsed.payment_id, Some("pi_inv".to_string()));
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Polar.sh mock tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod polar_tests {
         use super::*;
@@ -1153,10 +1142,6 @@ mod billing_mock_tests {
             );
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Airwallex mock tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod airwallex_tests {
         use super::*;

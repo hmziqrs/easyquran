@@ -78,4 +78,3 @@ impl From<UserRole> for i32 {
     }
 }
 
-// `Default` is derived on `UserRole` above (`#[default] User`).

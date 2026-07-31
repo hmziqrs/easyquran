@@ -113,7 +113,6 @@ impl Entity {
             return Ok(0);
         }
 
-        // Delete them
         let res = Entity::delete_many()
             .filter(Column::Id.is_in(old_ids))
             .exec(conn)

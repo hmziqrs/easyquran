@@ -940,7 +940,6 @@ mod tests {
         assert_eq!(resolved.sort_order, SortOrder::Asc);
     }
 
-    // ── SortOrder::from_option ───────────────────────────────────────────
 
     #[test]
     fn sort_order_from_option_asc() {
@@ -1017,7 +1016,6 @@ mod tests {
         assert_eq!(AnalyticsInterval::default(), AnalyticsInterval::Day);
     }
 
-    // ── DashboardPeriod ──────────────────────────────────────────────────
 
     #[test]
     fn dashboard_period_as_str() {

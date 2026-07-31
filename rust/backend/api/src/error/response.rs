@@ -77,7 +77,6 @@ impl ErrorResponse {
 
     /// Add detailed information (only included in development mode)
     pub fn with_details(mut self, details: impl Into<String>) -> Self {
-        // and only include details in development mode
         #[cfg(debug_assertions)]
         {
             self.details = Some(details.into());

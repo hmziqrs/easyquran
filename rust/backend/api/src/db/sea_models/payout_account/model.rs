@@ -55,9 +55,7 @@ impl Related<super::super::user::Entity> for Entity {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // V-MED-11: model-layer encryption (no caller can forget)
-// ──────────────────────────────────────────────────────────────────────────
 //
 // The encrypt happens in `ActiveModelBehavior::before_save` — every insert and
 // update that touches `metadata` is wrapped, so no service/handler layer can

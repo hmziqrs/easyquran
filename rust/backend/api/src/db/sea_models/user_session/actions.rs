@@ -146,7 +146,6 @@ impl Entity {
                 };
             }
         } else {
-            // Default sort by last_seen desc
             q = q.order_by(Column::LastSeen, Order::Desc);
         }
 

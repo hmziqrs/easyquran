@@ -180,7 +180,6 @@ mod tests {
         assert!(!list.has_next_page());
     }
 
-    // ── has_previous_page ──
 
     #[test]
     fn has_previous_page_false_on_first_page() {

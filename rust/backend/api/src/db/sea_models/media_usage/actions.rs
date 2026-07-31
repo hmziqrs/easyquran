@@ -71,10 +71,8 @@ impl Entity {
     where
         C: ConnectionTrait,
     {
-        // Remove old usage
         Self::untrack_usage(conn, entity_type, entity_id, field_name).await?;
 
-        // Track new usage if provided
         if let Some(mid) = new_media_id {
             Self::track_usage(conn, mid, entity_type, entity_id, field_name).await?;
         }

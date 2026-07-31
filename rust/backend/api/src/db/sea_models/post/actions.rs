@@ -520,7 +520,6 @@ impl Entity {
 
         let posts_joined = paginated.fetch_page(page - 1).await?;
 
-        // Collect all tag IDs from each post into a set
         let all_tag_ids: HashSet<i32> = posts_joined
             .iter()
             .flat_map(|p| p.tag_ids.0.iter().copied())
@@ -552,7 +551,6 @@ impl Entity {
             std::collections::HashMap::new()
         };
 
-        // Map joined data to PostWithRelations
         let posts_with_relations: Vec<PostWithRelations> = posts_joined
             .into_iter()
             .map(|joined_data| {
@@ -563,7 +561,6 @@ impl Entity {
                     .filter_map(|id| tags.get(id).cloned())
                     .collect::<Vec<PostTag>>();
 
-                // Convert joined data to PostWithRelations
                 joined_data.into_relation(post_tags)
             })
             .collect();
@@ -631,7 +628,6 @@ impl Entity {
 
         let transaction = conn.begin().await?;
 
-        // Insert the view
         match view.insert(&transaction).await {
             Ok(_) => {}
             Err(err) => {
@@ -653,7 +649,6 @@ impl Entity {
             return Err(err.into());
         }
 
-        // Commit the transaction
         transaction.commit().await?;
         Ok(())
     }

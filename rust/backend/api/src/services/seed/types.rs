@@ -110,8 +110,6 @@ pub fn size_label(count: u32) -> &'static str {
 mod tests {
     use super::*;
 
-    // ── compute_range ─────────────────────────────────────────────────────
-
     #[test]
     fn compute_range_normal_growth() {
         let range = compute_range(0, 10);

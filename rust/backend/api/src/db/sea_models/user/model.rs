@@ -79,9 +79,7 @@ impl Model {
         self.get_role().to_i32() >= UserRole::SuperAdmin.to_i32()
     }
 
-    // ───────────────────────────────────────────────────────────────────────
     // CRYP-2FA-002 / CRYP-ENC-013 / CRYP-ENC-004: decrypt accessors
-    // ───────────────────────────────────────────────────────────────────────
     //
     // The encrypted columns (`two_fa_secret`, `google_id`) are stored as opaque
     // field-crypto envelopes at rest. A freshly-loaded `Model` therefore carries
@@ -195,9 +193,7 @@ impl Related<super::super::media::Entity> for Entity {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
 // CRYP-2FA-002 / CRYP-ENC-013 / CRYP-ENC-004: transparent at-rest encryption
-// ──────────────────────────────────────────────────────────────────────────
 //
 // `ActiveModelBehavior::before_save` wraps every insert/update that SETS
 // `two_fa_secret` or `google_id`: the plaintext value passed by the service

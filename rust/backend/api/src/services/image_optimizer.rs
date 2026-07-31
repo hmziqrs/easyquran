@@ -739,8 +739,6 @@ fn significant_reduction(original: usize, candidate: usize, threshold: f32) -> b
 mod tests {
     use super::*;
 
-    // ── normalize_extension ──
-
     #[test]
     fn test_normalize_extension_basic() {
         assert_eq!(normalize_extension("jpg"), Some("jpg".to_string()));
@@ -786,8 +784,6 @@ mod tests {
         assert_eq!(format_extensions(&ImageFormat::Hdr), "hdr");
         assert_eq!(format_extensions(&ImageFormat::OpenExr), "exr");
     }
-
-    // ── format_mime ──
 
     #[test]
     fn test_format_mime_known_formats() {
@@ -960,8 +956,6 @@ mod tests {
     fn test_significant_reduction_50_percent() {
         assert!(significant_reduction(1000, 500, 0.1));
     }
-
-    // ── analyze_image ──
 
     #[test]
     fn test_analyze_image_aspect_ratio_landscape() {

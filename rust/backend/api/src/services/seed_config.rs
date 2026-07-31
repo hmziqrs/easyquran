@@ -323,8 +323,6 @@ mod tests {
         assert_eq!(mode.to_seed(), 0);
     }
 
-    // ── CustomSeedTarget::label ────────────────────────────────────────
-
     #[test]
     fn custom_seed_target_labels() {
         assert_eq!(CustomSeedTarget::Users.label(), "Users");
@@ -355,8 +353,6 @@ mod tests {
         );
         assert_eq!(CustomSeedTarget::RouteStatus.label(), "Route status");
     }
-
-    // ── SeedSizePreset::label ──────────────────────────────────────────
 
     #[test]
     fn seed_size_preset_labels() {
@@ -434,8 +430,6 @@ mod tests {
         );
     }
 
-    // ── list_presets ───────────────────────────────────────────────────
-
     #[test]
     fn list_presets_returns_four() {
         let presets = list_presets();
@@ -463,8 +457,6 @@ mod tests {
         assert_eq!(dev.seed, 4000);
     }
 
-    // ── preset_to_seed ─────────────────────────────────────────────────
-
     #[test]
     fn preset_to_seed_known_names() {
         assert_eq!(preset_to_seed("demo"), Some(1000));
@@ -484,8 +476,6 @@ mod tests {
         assert_eq!(preset_to_seed("nonexistent"), None);
         assert_eq!(preset_to_seed(""), None);
     }
-
-    // ── get_preset ─────────────────────────────────────────────────────
 
     #[test]
     fn get_preset_known_returns_correct_struct() {

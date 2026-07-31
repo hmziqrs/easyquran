@@ -119,7 +119,6 @@ pub fn draw_seed_summary(f: &mut Frame, area: Rect, app: &App, palette: &ThemePa
             );
         f.render_widget(list, body_chunks[0]);
 
-        // Show errors and warnings if present
         if has_issues {
             let mut issue_items: Vec<ListItem> = Vec::new();
             let max_width = body_chunks[1].width.saturating_sub(4) as usize;

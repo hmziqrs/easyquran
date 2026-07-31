@@ -40,10 +40,8 @@ pub mod traits;
 pub use error::{AuthError, AuthErrorCode};
 pub use traits::{AuthBackend, AuthUser, BanStatus};
 
-// Session exports
 pub use session::{AuthSession, AuthSessionState, SessionRevocation};
 
-// Requirements exports
 pub use requirements::{auth_requirements, AuthRequirements};
 
 // Middleware exports

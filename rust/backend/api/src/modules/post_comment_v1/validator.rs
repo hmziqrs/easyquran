@@ -50,7 +50,6 @@ pub struct V1AdminPostCommentListQuery {
     pub flag_filter: Option<FlagFilter>,
     pub min_flags: Option<i32>,
     pub sorts: Option<Vec<SortParam>>,
-    // Date range filters
     pub created_at_gt: Option<DateTimeWithTimeZone>,
     pub created_at_lt: Option<DateTimeWithTimeZone>,
     pub updated_at_gt: Option<DateTimeWithTimeZone>,

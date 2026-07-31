@@ -279,8 +279,6 @@ impl AclService {
 mod tests {
     use super::*;
 
-    // ── AclService::guess_sensitive ───────────────────────────────────────
-
     #[test]
     fn guess_sensitive_password() {
         assert!(AclService::guess_sensitive("DB_PASSWORD"));

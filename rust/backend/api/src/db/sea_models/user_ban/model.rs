@@ -29,7 +29,6 @@ impl Model {
             return false;
         }
 
-        // Check expiry
         if let Some(expires_at) = self.expires_at {
             chrono::Utc::now().fixed_offset() < expires_at
         } else {

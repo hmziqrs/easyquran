@@ -72,8 +72,6 @@ pub trait ImageModerator: Send + Sync {
     ) -> Result<ModerationVerdict, ModerationError>;
 }
 
-// ── NoOpModerator ─────────────────────────────────────────────────────────
-
 /// Pass-through moderator that approves every image. The implicit default when
 /// no provider is configured, so uploads are never blocked by the *absence* of
 /// a moderation backend (only by an explicit `safe: false` verdict).

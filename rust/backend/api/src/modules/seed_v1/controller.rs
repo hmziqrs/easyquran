@@ -353,7 +353,6 @@ pub async fn seed_post_comments(
             let new_comment = post_comment::NewComment {
                 post_id,
                 user_id: user.id,
-                // parent_id: None,
                 content,
                 likes_count: Some(0),
             };

@@ -49,8 +49,6 @@ impl V1SeedPayload {
 mod tests {
     use super::*;
 
-    // ── V1SeedPayload::to_seed_mode ───────────────────────────────────────
-
     #[test]
     fn to_seed_mode_none_is_random() {
         let payload = V1SeedPayload {

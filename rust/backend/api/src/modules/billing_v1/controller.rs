@@ -135,8 +135,6 @@ mod checkout_intent {
     }
 }
 
-// ── Admin: Plan CRUD ──────────────────────────────────────────────────
-
 pub async fn admin_list_plans(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
@@ -447,7 +445,6 @@ pub async fn create_checkout(
     })?;
     let user_id = user.id;
     let user_email = user.email.clone();
-    // Look up the plan
     let plan = plan::Entity::find()
         .filter(plan::Column::Slug.eq(&payload.plan_slug))
         .filter(plan::Column::IsActive.eq(true))
@@ -1314,8 +1311,6 @@ pub async fn check_post_access(
         }))),
     }
 }
-
-// ── Admin: Set post access ────────────────────────────────────────────
 
 pub async fn admin_set_post_access(
     State(state): State<AppState>,

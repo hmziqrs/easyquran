@@ -464,8 +464,6 @@ fn valid_ordinal(s: &str) -> bool {
 }
 
 // ── the five range families (juz / page / ruku / hizb-quarter / manzil) ─────
-
-// ── the five range families (juz / page / ruku / hizb-quarter / manzil) ─────
 //
 // Each family has the same three-route shape (list / one / ayahs) — no family
 // is a special case (§6.1). Handlers are written explicitly (not a macro) to
