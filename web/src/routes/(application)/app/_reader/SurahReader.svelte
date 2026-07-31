@@ -19,7 +19,7 @@
     · a prev/next footer (adjacentSurahs → goto(surahPath)).
 -->
 <script lang="ts">
-  import { reader } from "$lib/stores/reader.svelte";
+  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import {
     SURAHS,
     surahByNum,
@@ -34,7 +34,7 @@
   import { Icon } from "$lib/components/icon";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
-  import { cn } from "$lib/utils";
+  import * as Tabs from "$lib/components/ui/tabs";
 
   let { surah }: { surah: Surah } = $props();
 
@@ -44,28 +44,9 @@
   const showBasmala = $derived(showsBismillah(surah));
   const badge = $derived(String(surah.num).padStart(3, "0"));
 
-  const MODES = ["verse", "reading"] as const;
-
   function continueReading() {
     const lr = reader.lastRead;
     if (lr) reader.openVerse(lr.num, lr.n);
-  }
-
-  // WAI-ARIA Tabs pattern: arrows move focus + activate (automatic activation),
-  // Home/End jump to the ends. Roving tabindex is set per-tab in the markup.
-  function onModeKey(e: KeyboardEvent) {
-    const idx = MODES.indexOf(reader.mode);
-    let next = idx;
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (idx + 1) % MODES.length;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
-      next = (idx - 1 + MODES.length) % MODES.length;
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = MODES.length - 1;
-    else return;
-    e.preventDefault();
-    const m = MODES[next];
-    reader.setMode(m);
-    document.getElementById("mode-" + m)?.focus();
   }
 </script>
 
@@ -83,7 +64,8 @@
   {/if}
 
   <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
-    <!-- header -->
+    <Tabs.Root value={reader.mode} onValueChange={(v) => reader.setMode(v as ReaderMode)}>
+      <!-- header -->
     <div
       class="flex flex-wrap items-start justify-between gap-6 border-b border-line px-5 pb-[26px] pt-[30px] sm:px-9"
     >
@@ -137,50 +119,31 @@
           </button>
         </div>
 
-        <!-- reading-mode tablist: Verse-by-Verse | Reading (WAI-ARIA tabs).
-             Focus lives on the tabs (roving tabindex below), so the tablist
-             container itself is intentionally non-focusable. -->
-        <!-- svelte-ignore a11y_interactive_supports_focus -->
-        <div
-          class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
-          role="tablist"
+        <!-- reading-mode tabs: Ayah-by-Ayah | Reading. The shadcn Tabs primitive
+             (bits-ui) owns roving tabindex, Arrow/Home/End + automatic
+             activation, orientation handling, and — importantly — labels each
+             tabpanel by its ACTIVE trigger (the prior hand-rolled panel was
+             hardwired to mode-verse even while Reading was selected). -->
+        <Tabs.List
           aria-label="Reading mode"
-          onkeydown={onModeKey}
+          class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
         >
-          <button
-            type="button"
-            id="mode-verse"
-            role="tab"
-            aria-controls="surah-text"
-            aria-selected={reader.isVerseMode}
-            tabindex={reader.isVerseMode ? 0 : -1}
-            onclick={() => reader.setMode("verse")}
-            class={cn(
-              "flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
-              reader.isVerseMode ? "bg-bg-3 text-fg" : "text-fg-3 hover:text-fg",
-            )}
+          <Tabs.Trigger
+            value="verse"
+            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors data-[state=active]:bg-bg-3 data-[state=active]:text-fg data-[state=inactive]:text-fg-3 data-[state=inactive]:hover:text-fg"
           >
             <Icon name="rows" size={13} />
             <span class="hidden sm:inline">Ayah-by-Ayah</span>
             <span class="sm:hidden">Ayahs</span>
-          </button>
-          <button
-            type="button"
-            id="mode-reading"
-            role="tab"
-            aria-controls="surah-text"
-            aria-selected={reader.isReadingMode}
-            tabindex={reader.isReadingMode ? 0 : -1}
-            onclick={() => reader.setMode("reading")}
-            class={cn(
-              "flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
-              reader.isReadingMode ? "bg-bg-3 text-fg" : "text-fg-3 hover:text-fg",
-            )}
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="reading"
+            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors data-[state=active]:bg-bg-3 data-[state=active]:text-fg data-[state=inactive]:text-fg-3 data-[state=inactive]:hover:text-fg"
           >
             <Icon name="continuous" size={13} />
             <span>Reading</span>
-          </button>
-        </div>
+          </Tabs.Trigger>
+        </Tabs.List>
       </div>
     </div>
 
@@ -189,30 +152,34 @@
       <p dir="rtl" class="py-2 text-center font-arabic text-fg-3">{BISMILLAH}</p>
     {/if}
 
-    <!-- tabpanel: verse list OR reading block (both keyed by stable vKey) -->
-    <div
-      role="tabpanel"
-      id="surah-text"
-      aria-labelledby="mode-verse"
-      tabindex="0"
+    <!-- tabpanels: one per mode. bits-ui renders only the active value's panel
+         and labels it by that panel's OWN trigger — fixing the prior bug where
+         the single hand-rolled panel was hardwired to mode-verse even while
+         Reading was selected. Both bodies are keyed by stable vKey; only the
+         {#if reader.isReadingMode} wrapper moved into per-value Content. -->
+    <Tabs.Content
+      value="verse"
       class="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-line-3"
     >
-      {#if reader.isReadingMode}
-        <div
-          dir="rtl"
-          class="reading-text px-5 py-8 text-fg sm:px-9"
-          style="font-size:{reader.arabicSizePx}"
-        >{#each surah.verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
-      {:else}
-        <TooltipProvider delayDuration={300}>
-          <div class="flex flex-col">
-            {#each surah.verses as text, i (verseKey(surah.num, i + 1))}
-              <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
-            {/each}
-          </div>
-        </TooltipProvider>
-      {/if}
-    </div>
+      <TooltipProvider delayDuration={300}>
+        <div class="flex flex-col">
+          {#each surah.verses as text, i (verseKey(surah.num, i + 1))}
+            <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
+          {/each}
+        </div>
+      </TooltipProvider>
+    </Tabs.Content>
+    <Tabs.Content
+      value="reading"
+      class="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-line-3"
+    >
+      <div
+        dir="rtl"
+        class="reading-text px-5 py-8 text-fg sm:px-9"
+        style="font-size:{reader.arabicSizePx}"
+      >{#each surah.verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
+    </Tabs.Content>
+    </Tabs.Root>
 
     <!-- prev / next surah (bounded: no wrap at 1 / 114) -->
     <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
