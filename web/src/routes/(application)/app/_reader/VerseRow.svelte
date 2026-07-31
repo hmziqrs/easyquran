@@ -15,7 +15,7 @@
 <script lang="ts">
   import { reader } from "$lib/stores/reader.svelte";
   import { tafsirFor, toArabicDigits } from "$lib/data/quran";
-  import { Icon } from "$lib/components/icon";
+  import { Icon, type IconName } from "$lib/components/icon";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
@@ -78,85 +78,56 @@
   >
     <span class="font-mono text-[11px] tracking-wide text-fg-3">{vKey}</span>
     <div class="flex items-center gap-0.5">
-      <Tooltip>
-          <TooltipTrigger>
-            {#snippet child({ props })}
-              <button
-                {...props}
-                type="button"
-                onclick={() => reader.toggleBookmark(vKey)}
-                aria-label={bookmarked ? "Remove bookmark" : "Bookmark this verse"}
-                class={cn(
-                  "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                  bookmarked ? "text-pop" : "text-fg-3 hover:text-fg",
-                )}
-              >
-                <Icon name="bookmark" size={15} />
-              </button>
-            {/snippet}
-          </TooltipTrigger>
-          <TooltipContent>{bookmarked ? "Remove bookmark" : "Bookmark"}</TooltipContent>
-        </Tooltip>
-
+      {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string })}
         <Tooltip>
           <TooltipTrigger>
             {#snippet child({ props })}
               <button
                 {...props}
                 type="button"
-                onclick={onCopy}
-                aria-label="Copy ayah"
+                onclick={onclick}
+                aria-label={ariaLabel}
                 class={cn(
                   "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                  copied ? "text-accent" : "text-fg-3 hover:text-fg",
+                  activeClass ?? "text-fg-3 hover:text-fg",
                 )}
               >
-                <Icon name={copied ? "check" : "copy"} size={15} />
+                <Icon name={icon} size={15} />
               </button>
             {/snippet}
           </TooltipTrigger>
-          <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
+          <TooltipContent>{label}</TooltipContent>
         </Tooltip>
+      {/snippet}
 
-        <Tooltip>
-          <TooltipTrigger>
-            {#snippet child({ props })}
-              <button
-                {...props}
-                type="button"
-                onclick={onShare}
-                aria-label="Share verse"
-                class={cn(
-                  "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                  sharedCopied ? "text-accent" : "text-fg-3 hover:text-fg",
-                )}
-              >
-                <Icon name={sharedCopied ? "check" : "share"} size={15} />
-              </button>
-            {/snippet}
-          </TooltipTrigger>
-          <TooltipContent>{sharedCopied ? "Copied" : "Share"}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger>
-            {#snippet child({ props })}
-              <button
-                {...props}
-                type="button"
-                onclick={() => reader.toggleNote(vKey)}
-                aria-label={noteOpen ? "Close note and tafsir" : "Open note and tafsir"}
-                class={cn(
-                  "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                  noteOpen || hasNote ? "text-accent" : "text-fg-3 hover:text-fg",
-                )}
-              >
-                <Icon name="note" size={15} />
-              </button>
-            {/snippet}
-          </TooltipTrigger>
-          <TooltipContent>Note &amp; tafsir</TooltipContent>
-        </Tooltip>
+      {@render verseAction({
+        onclick: () => reader.toggleBookmark(vKey),
+        label: bookmarked ? "Remove bookmark" : "Bookmark",
+        ariaLabel: bookmarked ? "Remove bookmark" : "Bookmark this verse",
+        icon: "bookmark",
+        activeClass: bookmarked ? "text-pop" : undefined,
+      })}
+      {@render verseAction({
+        onclick: onCopy,
+        label: copied ? "Copied" : "Copy",
+        ariaLabel: "Copy ayah",
+        icon: copied ? "check" : "copy",
+        activeClass: copied ? "text-accent" : undefined,
+      })}
+      {@render verseAction({
+        onclick: onShare,
+        label: sharedCopied ? "Copied" : "Share",
+        ariaLabel: "Share verse",
+        icon: sharedCopied ? "check" : "share",
+        activeClass: sharedCopied ? "text-accent" : undefined,
+      })}
+      {@render verseAction({
+        onclick: () => reader.toggleNote(vKey),
+        label: "Note & tafsir",
+        ariaLabel: noteOpen ? "Close note and tafsir" : "Open note and tafsir",
+        icon: "note",
+        activeClass: noteOpen || hasNote ? "text-accent" : undefined,
+      })}
     </div>
   </div>
 
