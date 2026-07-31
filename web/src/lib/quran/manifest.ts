@@ -13,7 +13,8 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import { QURAN } from "$lib/config/site";
-import type { ArtifactSpec, Script } from "$lib/data/quran-types";
+import type { ArtifactSpec } from "$lib/data/quran-types";
+import { decodeScriptsPayload, decodeVersionPayload } from "./wire";
 
 export interface ResolvedManifest {
   contentVersion: string;
@@ -28,17 +29,6 @@ const baked: ResolvedManifest = {
   scripts: QURAN.scripts,
   source: "baked",
 };
-
-/** Tolerant mapping of one /scripts entry → ArtifactSpec. */
-function normalizeScript(raw: Record<string, unknown>): ArtifactSpec | null {
-  const id = raw.id as Script | undefined;
-  const sizeBytes = Number(raw.sizeBytes);
-  const sha256 = raw.sha256;
-  const downloadUrl = raw.downloadUrl;
-  if (id !== "uthmani" && id !== "simple-clean") return null;
-  if (!sizeBytes || typeof sha256 !== "string" || typeof downloadUrl !== "string") return null;
-  return { id, sizeBytes, sha256, downloadUrl };
-}
 
 /** Resolve the manifest, preferring the live API and degrading to baked. */
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
@@ -63,19 +53,21 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     ]);
     if (!vRes.ok || !sRes.ok) return baked;
 
-    const vBody = (await vRes.json()) as Record<string, unknown>;
-    const sBody = (await sRes.json()) as Record<string, unknown>;
-    const sData = (sBody.data ?? sBody) as Record<string, unknown>;
-    const rawScripts = Array.isArray(sData.scripts)
-      ? (sData.scripts as Record<string, unknown>[])
-      : [];
-    const scripts = rawScripts.map(normalizeScript).filter((s): s is ArtifactSpec => s !== null);
-    if (scripts.length < 2) return baked;
+    // /scripts + /version are untrusted API JSON. Both shapes (enveloped or
+    // bare, per backend build) and every entry are validated by the shared wire
+    // decoders — this module no longer hand-rolls the field-by-field rebuild.
+    const sBody = await sRes.json();
+    const scripts = decodeScriptsPayload(sBody);
+    if (!scripts || scripts.length < 2) return baked;
 
-    const vData = (vBody.data ?? vBody) as Record<string, unknown>;
+    const vBody = await vRes.json();
+    const version = decodeVersionPayload(vBody) ?? {
+      contentVersion: null,
+      searchVersion: null,
+    };
     return {
-      contentVersion: (vData.contentVersion as string) ?? QURAN.contentVersion,
-      searchVersion: (vData.searchVersion as string) ?? QURAN.searchVersion,
+      contentVersion: version.contentVersion ?? QURAN.contentVersion,
+      searchVersion: version.searchVersion ?? QURAN.searchVersion,
       scripts,
       source: "api",
     };

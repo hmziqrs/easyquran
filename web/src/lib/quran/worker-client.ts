@@ -21,6 +21,7 @@ import {
   type SearchOpts,
   type SearchResponse,
 } from "./search/normalize";
+import { decodeSearchResponse } from "./wire";
 
 /** Per-request settlement handle. The timer is cleared on every settle path
  *  (response, timeout, fatal, disposal) so no dangling rejection fires later. */
@@ -163,30 +164,29 @@ export const quranWorker = {
   search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
     return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
       (r: unknown) => {
+        const limit = opts?.limit ?? DEFAULT_LIMIT;
+        const offset = opts?.offset ?? DEFAULT_OFFSET;
         const empty: SearchResponse = {
           query,
           total: 0,
-          limit: opts?.limit ?? DEFAULT_LIMIT,
-          offset: opts?.offset ?? DEFAULT_OFFSET,
+          limit,
+          offset,
           results: [],
           source: "worker",
         };
-        if (!r || typeof r !== "object") return empty;
-        const o = r as Record<string, unknown>;
-        if (
-          typeof o.total !== "number" ||
-          !Array.isArray(o.results) ||
-          !o.results.every(
-            (h) =>
-              !!h &&
-              typeof h === "object" &&
-              typeof (h as Record<string, unknown>).surah === "number" &&
-              typeof (h as Record<string, unknown>).ayah === "number",
-          )
-        ) {
-          return empty;
-        }
-        return r as SearchResponse;
+        // The worker boundary is structuredClone'd `unknown`, not a typed RPC:
+        // rebuild via the shared wire decoder. Malformed hits are dropped rather
+        // than blanking the whole set; a non-object/non-array reply yields empty.
+        const payload = decodeSearchResponse(r);
+        if (!payload) return empty;
+        return {
+          query,
+          total: payload.total ?? payload.results.length,
+          limit: payload.limit ?? limit,
+          offset: payload.offset ?? offset,
+          results: payload.results,
+          source: "worker",
+        };
       },
     );
   },

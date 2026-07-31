@@ -19,6 +19,7 @@ import {
   type SearchOpts,
   type SearchResponse,
 } from "./search/normalize";
+import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
 /** Surah name / Arabic / number fallback when no corpus is available. */
 function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
@@ -71,42 +72,18 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
       url.searchParams.set("offset", String(opts.offset ?? DEFAULT_OFFSET));
       const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.ok) {
-        const body = (await res.json()) as Record<string, unknown>;
-        const data = (body.data ?? body) as Partial<SearchResponse> | undefined;
-        const rawResults = data?.results;
-        if (Array.isArray(rawResults)) {
-          // Validate at the boundary, rebuild field-by-field — never spread the
-          // wire shape. Skip any item lacking numeric surah + ayah.
-          const results: SearchHit[] = [];
-          for (const item of rawResults) {
-            if (!item || typeof item !== "object") continue;
-            const rec = item as unknown as Record<string, unknown>;
-            // Require real numbers in range — Number() would otherwise coerce
-            // "", [], or true into finite 0/1 and emit bogus surah=0 hits.
-            const { surah, ayah } = rec;
-            if (
-              typeof surah !== "number" ||
-              typeof ayah !== "number" ||
-              !Number.isFinite(surah) ||
-              !Number.isFinite(ayah) ||
-              surah < 1 ||
-              ayah < 1
-            )
-              continue;
-            results.push({
-              key: typeof rec.key === "string" ? rec.key : "",
-              surah,
-              ayah,
-              globalIndex: Number(rec.globalIndex) || 0,
-              text: typeof rec.text === "string" ? rec.text : "",
-            });
-          }
+        const body = await res.json();
+        // Strip the `{ data }` envelope (if any) and rebuild field-by-field via
+        // the shared wire decoder — never spread the untrusted API shape. Each
+        // hit is re-validated by decodeSearchHit (strict numeric surah/ayah).
+        const payload = decodeSearchResponse(unwrapEnvelope(body));
+        if (payload) {
           return {
             query,
-            total: typeof data?.total === "number" ? data.total : results.length,
-            limit: Number(data?.limit) || DEFAULT_LIMIT,
-            offset: Number(data?.offset) || DEFAULT_OFFSET,
-            results,
+            total: payload.total ?? payload.results.length,
+            limit: payload.limit || DEFAULT_LIMIT,
+            offset: payload.offset || DEFAULT_OFFSET,
+            results: payload.results,
             source: "api",
           };
         }
