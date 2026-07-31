@@ -9,6 +9,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 import { browser } from "$app/environment";
+import type { DownloadProgress } from "$lib/data/quran-types";
 import type { WorkerStatus } from "$lib/quran/protocol";
 
 export type QuranStatus =
@@ -25,6 +26,8 @@ class QuranStore {
   detail = $state<string>("");
   source = $state<"unknown" | "baked" | "api">("unknown");
   error = $state<string | null>(null);
+  /** Live download progress for the current artifact (null when idle/ready). */
+  download = $state<DownloadProgress | null>(null);
 
   /** Map worker lifecycle events onto this store. */
   setWorkerStatus(s: WorkerStatus, detail?: string): void {
@@ -32,13 +35,26 @@ class QuranStore {
       this.status = "ready";
       this.detail = "";
       this.error = null;
+      this.download = null;
     } else if (s === "error") {
       this.status = "error";
       this.error = detail ?? "offline data error";
+      this.download = null;
     } else {
       this.status = s; // init | downloading
       if (detail) this.detail = detail;
     }
+  }
+
+  /** Record live download progress from the worker (drives a future progress bar). */
+  setDownload(p: DownloadProgress): void {
+    this.download = p;
+  }
+
+  /** 0..1 fraction of the current download, or null when not downloading. */
+  get downloadPct(): number | null {
+    const d = this.download;
+    return d && d.total > 0 ? Math.min(1, d.loaded / d.total) : null;
   }
 
   get offlineReady(): boolean {

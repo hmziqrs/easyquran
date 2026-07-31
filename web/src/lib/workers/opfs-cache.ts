@@ -34,16 +34,63 @@ async function sha256(data: BufferSource): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Fetch with identity encoding and verify size + sha256 before returning. */
-async function fetchVerified(spec: ArtifactSpec): Promise<Bytes> {
+/** Verify a downloaded buffer against the artifact's expected size + sha256. */
+async function verify(buf: Bytes, spec: ArtifactSpec): Promise<Bytes> {
+  if (buf.byteLength !== spec.sizeBytes) {
+    throw new Error(`${spec.id}: size ${buf.byteLength} ≠ expected ${spec.sizeBytes}`);
+  }
+  if ((await sha256(buf)) !== spec.sha256) throw new Error(`${spec.id}: sha256 mismatch`);
+  return buf;
+}
+
+/**
+ * Fetch with identity encoding and verify size + sha256 before returning. The
+ * body is STREAMED so bytes-received can be reported mid-flight for a progress
+ * bar. The expected total is `spec.sizeBytes` (known up front) — `Content-Length`
+ * is never read, so this introduces no cross-origin ExposeHeaders/CORS need.
+ * `onProgress(loaded, total)` is invoked as bytes arrive (and once with 0 up
+ * front); the full buffer is still assembled before hashing/writing, so memory
+ * behavior and verification are unchanged from the previous arrayBuffer() path.
+ */
+async function fetchVerified(
+  spec: ArtifactSpec,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<Bytes> {
   const res = await fetch(spec.downloadUrl, { headers: { "Accept-Encoding": "identity" } });
   if (!res.ok) throw new Error(`fetch ${spec.id}: HTTP ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.byteLength !== spec.sizeBytes) {
-    throw new Error(`${spec.id}: size ${bytes.byteLength} ≠ expected ${spec.sizeBytes}`);
+  const total = spec.sizeBytes;
+
+  if (res.body) {
+    const reader = res.body.getReader();
+    try {
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      onProgress?.(0, total);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          loaded += value.byteLength;
+          onProgress?.(loaded, total);
+        }
+      }
+      // Concatenate chunks into one buffer (same shape as the old arrayBuffer()).
+      const buf = new Uint8Array(loaded);
+      let off = 0;
+      for (const c of chunks) {
+        buf.set(c, off);
+        off += c.byteLength;
+      }
+      return verify(buf, spec);
+    } finally {
+      // Release the body stream whether we finished, threw, or aborted.
+      await reader.cancel().catch(() => {});
+    }
   }
-  if ((await sha256(bytes)) !== spec.sha256) throw new Error(`${spec.id}: sha256 mismatch`);
-  return bytes;
+
+  // No body stream (e.g. opaque/unsupported response): buffer at once, no progress.
+  return verify(new Uint8Array(await res.arrayBuffer()), spec);
 }
 
 /** Return the cached bytes for an artifact if present AND valid, else null. */
@@ -68,8 +115,9 @@ async function opfsReadValid(
 async function opfsFetchAndStore(
   active: FileSystemDirectoryHandle,
   spec: ArtifactSpec,
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<Bytes> {
-  const bytes = await fetchVerified(spec);
+  const bytes = await fetchVerified(spec, onProgress);
   const fh = await active.getFileHandle(`${spec.id}.sqlite`, { create: true });
   const writable = await fh.createWritable();
   await writable.write(bytes);
@@ -80,11 +128,14 @@ async function opfsFetchAndStore(
 /**
  * Ensure an artifact is available as bytes: OPFS (read or fetch+store), falling
  * back to IDB, then to a per-session fetch. Never throws on storage failure —
- * only on a genuinely unverifiable download.
+ * only on a genuinely unverifiable download. `onProgress` is forwarded only on
+ * the OPFS fetch path (the durable, common case); cache hits and the per-session
+ * fallback emit no progress.
  */
 export async function ensureArtifact(
   spec: ArtifactSpec,
   contentVersion: string,
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<CachedArtifact> {
   // 1. OPFS (read valid → else fetch+store)
   if (hasOpfs()) {
@@ -94,7 +145,7 @@ export async function ensureArtifact(
       const active = await eq.getDirectoryHandle(contentVersion, { create: true });
       const hit = await opfsReadValid(active, spec);
       if (hit) return { bytes: hit, store: "opfs" };
-      const fetched = await opfsFetchAndStore(active, spec);
+      const fetched = await opfsFetchAndStore(active, spec, onProgress);
       return { bytes: fetched, store: "opfs" };
     } catch (err) {
       console.warn(`[opfs-cache] OPFS unavailable for ${spec.id}, falling back:`, err);

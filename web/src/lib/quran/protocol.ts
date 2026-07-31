@@ -6,6 +6,7 @@
    runtime code (and no $env/SvelteKit code) into the worker bundle.
    ════════════════════════════════════════════════════════════════════════ */
 
+import type { DownloadProgress } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { SearchOpts } from "./search/normalize";
 
@@ -28,6 +29,7 @@ export type WorkerResponse =
 export type WorkerEvent =
   | { type: "status"; status: WorkerStatus; detail?: string }
   | { type: "ready" }
-  | { type: "fatal"; error: string };
+  | { type: "fatal"; error: string }
+  | ({ type: "progress" } & DownloadProgress);
 
 export type WorkerOutbound = WorkerResponse | WorkerEvent;

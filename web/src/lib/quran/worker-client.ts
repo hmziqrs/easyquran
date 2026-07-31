@@ -8,6 +8,7 @@
    main thread — never inside the worker).
    ════════════════════════════════════════════════════════════════════════ */
 
+import type { DownloadProgress } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, type SearchOpts, type SearchResponse } from "./search/normalize";
@@ -22,6 +23,7 @@ let readyReject: ((e: Error) => void)[] = [];
 
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
+const progressListeners = new Set<(p: DownloadProgress) => void>();
 
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
@@ -33,6 +35,9 @@ function handle(msg: WorkerOutbound): void {
   }
   if (msg.type === "status") {
     for (const cb of statusListeners) cb(msg.status, msg.detail);
+  } else if (msg.type === "progress") {
+    const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
+    for (const cb of progressListeners) cb(p);
   } else if (msg.type === "fatal") {
     const err = new Error(msg.error);
     readyReject.forEach((r) => r(err));
@@ -62,6 +67,11 @@ export const quranWorker = {
   onStatus(cb: (s: WorkerStatus, detail?: string) => void): () => void {
     statusListeners.add(cb);
     return () => statusListeners.delete(cb);
+  },
+  /** Subscribe to live download progress (per artifact). Returns an unsub. */
+  onProgress(cb: (p: DownloadProgress) => void): () => void {
+    progressListeners.add(cb);
+    return () => progressListeners.delete(cb);
   },
 
   /** Start the worker with a resolved manifest. Idempotent; safe to call once. */

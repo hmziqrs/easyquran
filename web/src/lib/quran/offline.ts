@@ -17,6 +17,7 @@ export async function bootOfflineEngine(): Promise<void> {
   quran.source = manifest.source;
 
   quranWorker.onStatus((s, detail) => quran.setWorkerStatus(s, detail));
+  quranWorker.onProgress((p) => quran.setDownload(p));
 
   // Best-effort: persists the OPFS cache across eviction where the origin has
   // enough engagement. Denied silently otherwise; eviction = redownload.

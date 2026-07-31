@@ -96,6 +96,15 @@ export interface ArtifactSpec {
   downloadUrl: string;
 }
 
+/** Live download progress for one Arabic artifact (drives a future progress bar).
+ *  Named `script` (not `id`) so it never collides with the correlation `id` on
+ *  WorkerResponse in the worker-client message router. */
+export interface DownloadProgress {
+  script: Script;
+  loaded: number;
+  total: number;
+}
+
 /** One ayah with its verbatim Uthmani text (the unit a range view renders). */
 export interface Ayah {
   key: VerseKey;

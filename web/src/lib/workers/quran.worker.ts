@@ -66,6 +66,22 @@ function status(s: WorkerStatus, detail?: string): void {
   emit({ type: "status", status: s, detail });
 }
 
+/**
+ * Build a per-artifact progress callback that emits a `progress` event throttled
+ * to integer-percent changes (≤101 messages per file regardless of chunk count).
+ * The expected total comes from `spec.sizeBytes`, not a response header.
+ */
+function progressEmitter(spec: ArtifactSpec): (loaded: number, total: number) => void {
+  let lastPct = -1;
+  return (loaded, total) => {
+    const pct = total > 0 ? Math.floor((loaded / total) * 100) : 0;
+    if (pct !== lastPct) {
+      lastPct = pct;
+      emit({ type: "progress", script: spec.id, loaded, total });
+    }
+  };
+}
+
 /** Open a read-only in-memory DB from raw SQLite bytes via deserialize. */
 function openReadOnly(bytes: Uint8Array): Database {
   const db = new sqlite3!.oo1.DB(); // :memory:
@@ -100,12 +116,12 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
   if (!uthmaniSpec || !simpleSpec) throw new Error("manifest missing a script spec");
 
   status("downloading", "uthmani");
-  const u = await ensureArtifact(uthmaniSpec, manifest.contentVersion);
+  const u = await ensureArtifact(uthmaniSpec, manifest.contentVersion, progressEmitter(uthmaniSpec));
   uthmaniBytes = u.bytes;
   uthmaniDb = openReadOnly(u.bytes);
 
   status("downloading", "simple-clean");
-  const s = await ensureArtifact(simpleSpec, manifest.contentVersion);
+  const s = await ensureArtifact(simpleSpec, manifest.contentVersion, progressEmitter(simpleSpec));
   simpleCleanBytes = s.bytes;
 
   ready = true;

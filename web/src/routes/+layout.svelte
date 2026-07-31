@@ -17,6 +17,7 @@
   import { consent } from "$lib/stores/consent.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
   import { NotificationToast } from "$lib/components/notifications";
+  import { DownloadBar } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
   import { bootOfflineEngine } from "$lib/quran/offline";
 
@@ -193,4 +194,5 @@
   >Skip to content</a
 >
 <NotificationToast />
+<DownloadBar />
 {@render children()}
