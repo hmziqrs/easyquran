@@ -32,3 +32,5 @@ rust/**/target/
 # SQLite WAL sidecars (the app db runs journal_mode=WAL; the db itself is tracked)
 *.db-wal
 *.db-shm
+
+.commandcode
