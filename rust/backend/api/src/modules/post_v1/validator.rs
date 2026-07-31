@@ -6,7 +6,6 @@ use validator::{Validate, ValidationError, ValidationErrors};
 use crate::db::sea_models::post::{NewPost, PostQuery, PostStatus, UpdatePost};
 use crate::utils::SortParam;
 
-// Validated Editor.js document types
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EditorJsDocument {
     pub time: Option<i64>,
@@ -346,7 +345,6 @@ pub struct V1PostQueryParams {
     pub sorts: Option<Vec<SortParam>>,
     pub tag_ids: Option<Vec<i32>>,
     pub title: Option<String>,
-    // Date range filters
     pub created_at_gt: Option<DateTimeWithTimeZone>,
     pub created_at_lt: Option<DateTimeWithTimeZone>,
     pub updated_at_gt: Option<DateTimeWithTimeZone>,
@@ -358,10 +356,7 @@ pub struct V1PostQueryParams {
 impl V1PostQueryParams {
     pub fn into_post_query(self) -> PostQuery {
         PostQuery {
-            // DOS-PUBLIST-OFFSET-1: clamp the page so a caller cannot drive an
-            // arbitrarily large OFFSET through the public published-listing
-            // multi-table join (same class as DOS-SEARCH-1). 500 × PER_PAGE
-            // bounds the offset regardless of the requested page.
+            // Clamp is a DOS guard: unbounded page → huge OFFSET on the public join.
             page_no: self.page.map(|p| p.clamp(1, 500)),
             author_id: self.author_id,
             category_id: self.category_id,
@@ -438,7 +433,6 @@ mod tests {
         }
     }
 
-    // --- EditorJsDocument validation ---
 
     #[test]
     fn empty_blocks_rejected() {
@@ -725,7 +719,6 @@ mod tests {
         assert!(doc.validate().is_ok());
     }
 
-    // --- EditorJsDocument::into_json ---
 
     #[test]
     fn into_json_roundtrip() {
@@ -734,7 +727,6 @@ mod tests {
         assert!(json.get("blocks").unwrap().as_array().unwrap().len() == 1);
     }
 
-    // --- V1SeriesCreatePayload validation ---
 
     #[test]
     fn valid_series_create() {
@@ -766,7 +758,6 @@ mod tests {
         assert!(payload.validate().is_err());
     }
 
-    // --- V1SeriesUpdatePayload validation ---
 
     #[test]
     fn valid_series_update() {

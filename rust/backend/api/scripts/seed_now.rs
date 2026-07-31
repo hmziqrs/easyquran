@@ -1,18 +1,9 @@
-//! Non-interactive database seeder — runs `services::seed::seed_all` against
-//! the configured DB. Equivalent to picking "seed all" in the `ruxlog_tui`
-//! without driving the interactive UI. Intended for dev/CI (requires the
-//! `seed-system` feature).
-//!
-//! Run: `cargo run --bin seed_now --features seed-system` (with .env / .env.dev
-//! providing DATABASE_URL — a `sqlite:` URL; defaults to
-//! `sqlite:./data/easyquran.db?mode=rwc` when unset, same as `sea_connect`).
 
 use ruxlog::db::sea_connect::try_connect;
 use ruxlog::services::seed;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Mirror ruxlog_tui's env loading: .env then ../../.env.dev fallback.
     dotenvy::dotenv().ok();
     if std::env::var("DATABASE_URL").is_err() {
         let _ = dotenvy::from_filename("../../.env.dev");

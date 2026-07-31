@@ -9,7 +9,6 @@ use sea_orm::{PaginatorTrait, QueryOrder};
 impl Entity {
     pub const PER_PAGE: u64 = 20;
 
-    /// Track media usage for an entity field
     pub async fn track_usage<C>(
         conn: &C,
         media_id: i32,
@@ -37,7 +36,6 @@ impl Entity {
         }
     }
 
-    /// Remove media usage for an entity field
     pub async fn untrack_usage<C>(
         conn: &C,
         entity_type: EntityType,
@@ -59,7 +57,6 @@ impl Entity {
         }
     }
 
-    /// Update media usage - removes old and tracks new
     pub async fn update_usage<C>(
         conn: &C,
         _old_media_id: Option<i32>,
@@ -80,7 +77,6 @@ impl Entity {
         Ok(())
     }
 
-    /// Get all usages for a specific media
     pub async fn find_by_media_id<C>(conn: &C, media_id: i32) -> DbResult<Vec<Model>>
     where
         C: ConnectionTrait,
@@ -95,7 +91,6 @@ impl Entity {
         }
     }
 
-    /// Remove all usages for an entity
     pub async fn delete_by_entity<C>(
         conn: &C,
         entity_type: EntityType,
@@ -115,7 +110,6 @@ impl Entity {
         }
     }
 
-    /// Find media usage with filtering and pagination
     pub async fn find_with_filters(
         conn: &DbConn,
         media_id: Option<i32>,

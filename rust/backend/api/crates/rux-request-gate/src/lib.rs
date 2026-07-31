@@ -1,20 +1,6 @@
-//! Request gates for Axum — domain-free and reusable, backend-agnostic.
-//!
-//! Three primitives, each with explicit fail semantics:
-//! - **Abuse limiter** ([`check`]): dual-threshold (short temp-block / long
-//!   block) sliding-window counter. Returns a [`LimiterDecision`];
-//!   **fail-CLOSED** on a store error.
-//! - **Rate-limit layer** ([`RateLimitLayer`]): per-IP/per-path fixed-window
-//!   tower middleware emitting `x-ratelimit-*` + `Retry-After`. **Fail-CLOSED**
-//!   (503) on a store error.
-//! - **Idempotency/dedup** ([`dedup_nx`]/[`release_dedup`]): one-shot claim.
-//!   **Fail-OPEN** — a store outage must not 5xx the caller.
-//!
-//! The crate depends on no application types and no specific backend: it talks
-//! to a [`RateLimitStore`] trait. The default [`InMemoryStore`] is a std-only,
-//! in-process implementation (real enforcement, in-memory state). Its
-//! `snapshot`/`restore` methods let a host app bolt on a durable L2 (e.g.
-//! SQLite) without this crate depending on it.
+//! Fail semantics are deliberate and must not be "simplified": [`check`] and
+//! [`RateLimitLayer`] fail-CLOSED (503) on a store error; [`dedup_nx`] /
+//! [`release_dedup`] fail-OPEN so a store outage never 5xx's the caller.
 
 #![forbid(unsafe_code)]
 

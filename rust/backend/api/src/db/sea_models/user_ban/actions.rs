@@ -5,11 +5,9 @@ use ruxlog_types::PaginatedList;
 
 use super::*;
 
-/// Actions for the `user_bans` entity
 impl Entity {
     pub const PER_PAGE: u64 = 20;
 
-    /// Create a new ban record
     pub async fn create(conn: &DbConn, new_ban: NewUserBan) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
 
@@ -30,7 +28,6 @@ impl Entity {
         }
     }
 
-    /// Revoke a ban by id
     pub async fn revoke(
         conn: &DbConn,
         ban_id: i32,
@@ -56,15 +53,9 @@ impl Entity {
         }
     }
 
-    /// Check if a user has an active ban
-    ///
-    /// Returns the active ban if one exists, None otherwise.
     pub async fn get_active_ban(conn: &DbConn, user_id: i32) -> DbResult<Option<Model>> {
         let now = chrono::Utc::now().fixed_offset();
 
-        // Find bans that are:
-        // 1. Not revoked (revoked_at IS NULL)
-        // 2. Either no expiry (expires_at IS NULL) OR expires_at > now
         let ban = Self::find()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::RevokedAt.is_null())
@@ -79,12 +70,10 @@ impl Entity {
         }
     }
 
-    /// Check if a user is banned (returns bool for quick checks)
     pub async fn is_banned(conn: &DbConn, user_id: i32) -> DbResult<bool> {
         Ok(Self::get_active_ban(conn, user_id).await?.is_some())
     }
 
-    /// List all bans for a user (paginated)
     pub async fn list_by_user(
         conn: &DbConn,
         user_id: i32,
@@ -110,7 +99,6 @@ impl Entity {
         }
     }
 
-    /// Admin list with filters (paginated)
     pub async fn admin_list(conn: &DbConn, query: UserBanQuery) -> DbResult<PaginatedList<Model>> {
         let mut q = Self::find();
 
@@ -127,7 +115,6 @@ impl Entity {
             }
         }
 
-        // Sorting
         let order = if query.sort_order.as_deref() == Some("asc") {
             Order::Asc
         } else {

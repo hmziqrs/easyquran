@@ -8,9 +8,6 @@ use tower_http::{
 };
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
 
-// `env_bool`/`parse_env_u64` are used by the always-on mail-router builder;
-// `env_u64`/`env_with_fallback` are reached by the route-blocker sync and the
-// image-moderation URL/key wiring respectively.
 use ruxlog::config::env::{env_bool, env_u64, env_with_fallback, parse_env_u64};
 use ruxlog::utils::cors::get_allowed_origins;
 use ruxlog::{
@@ -29,12 +26,6 @@ use ruxlog::services::billing::BillingProvider;
 
 use ruxlog::services::billing::router::{BillingRouter, GeoRouter, GeoRulesConfig};
 
-/// Build the [`MailRouter`] from `MAIL_PROVIDER` + provider-specific env. The
-/// selected provider's required env is read with `expect` (fail-loud boot) so a
-/// misconfigured provider is caught at startup, not on the first send. `mailer`
-/// is an `Arc<MailRouter>` (non-Option): mail is unconditional, and a selected
-/// provider without its creds must fail loud rather than silently no-op every
-/// send.
 async fn build_mail_router(
     db: sea_orm::DatabaseConnection,
     gate_store: std::sync::Arc<rux_request_gate::InMemoryStore>,
@@ -60,9 +51,6 @@ async fn build_mail_router(
 
     let mut providers: HashMap<String, std::sync::Arc<dyn MailProvider>> = HashMap::new();
     let default = match selected.as_str() {
-        // No mail backend: boots with zero mail credentials. Drops every
-        // message with a warning. Use until accounts/email are wired, then
-        // switch to "cloudflare" (or "smtp").
         "none" => {
             providers.insert(
                 "none".to_string(),
@@ -110,7 +98,6 @@ async fn build_mail_router(
                 "cloudflare"
             }
         }
-        // default (and explicit "smtp")
         _ => {
             let transport = ruxlog::services::mail::smtp::create_connection().await;
             let smtp = SmtpMailProvider::new(transport, from_address, from_name);
@@ -138,54 +125,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     telemetry::init_pool_metrics();
 
-    // Typed, fail-closed boot configuration: validates COOKIE_KEY (refuses the
-    // known committed placeholder / empty / sub-32-byte keys before any
-    // derivation — CRYPTO_AUDIT.md V-CRIT-1 / V-HIGH-3), reads the mandatory S3
-    // fields, and parses the HTTP/site/optimizer settings. A misconfigured
-    // deployment panics here with the same operator-actionable messages the old
-    // inline `expect` / `validate_cookie_key` calls produced.
     let settings = Arc::new(Settings::from_env());
 
-    // CRYP-KM-003 / V-MED-11: install the field-encryption key into the
-    // process-wide `utils::field_crypto` OnceLock so the SeaORM model layer can
-    // encrypt/decrypt payout metadata without callers passing the key. The key
-    // no longer lives on `AppState` (no consumer ever read it there — the model
-    // layer reaches it via the process-global slot), but this side-effecting
-    // install MUST still run at boot.
+    // Required boot side-effect: installs the field-encryption key into the
+    // process-wide OnceLock the SeaORM model layer reads. Deleting it breaks
+    // field encryption.
     ruxlog::state::load_field_enc_key();
 
     let sea_db = db::sea_connect::get_sea_connection().await;
 
-    // In-memory rate-limit / abuse / dedup store (replaces Redis for the gate).
     let gate_store = std::sync::Arc::new(rux_request_gate::InMemoryStore::default());
 
-    // SQLite L2 durability for the rate-limit store: hydrate from disk at boot,
-    // then flush a periodic snapshot back so active blocks/counters survive a
-    // restart (enforcement itself stays in-memory — no DB write per request).
     ruxlog::services::rate_limit_store::ensure_table(&sea_db).await;
     gate_store.restore(ruxlog::services::rate_limit_store::load(&sea_db).await);
     ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
 
-    // tower-sessions store over the shared SQLite connection (replaces the prior
-    // Redis session store). `new` runs `CREATE TABLE IF NOT EXISTS sessions`.
     let session_store =
         Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
 
-    // Process-wide set of administratively-revoked tower-session ids (replaces
-    // the Redis revocation set). Consulted fail-open by the per-request
-    // `is_session_revoked` check.
     let revoked_sessions: std::sync::Arc<
         std::sync::Mutex<std::collections::HashSet<String>>,
     > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
 
-    // Object storage config is parsed fail-closed inside `Settings::from_env`;
-    // re-derive it here only to build the AWS client from its fields.
     let object_storage = settings.object_storage.clone();
 
-    // V-MED-8: do NOT log the raw ObjectStorageConfig — even with the manual
-    // Debug impl redacting access_key/secret_key, emitting the whole struct at
-    // debug level is unnecessary surface. Log only the non-secret fields that
-    // are useful for diagnosing startup wiring.
     tracing::debug!(
         bucket = %object_storage.bucket,
         region = %object_storage.region,
@@ -210,26 +173,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let s3_client = aws_sdk_s3::Client::new(&s3_config);
 
-    // V-LOW-PRINTLN: the previous boot-time `println!("Buckets:")` loop dumped
-    // every bucket name + creation date to stdout. That is unnecessary startup
-    // noise AND a minor information disclosure in shared/logged consoles (bucket
-    // names are sometimes sensitive). Bucket wiring is already logged in a
-    // redacted form just above (`tracing::debug!` of bucket/region/endpoint),
-    // so echoing the full S3 list adds nothing. Removed entirely.
-    //
-    // The optimizer config (cfg image-optimization) and the cookie-transport /
-    // site / HTTP-bind settings now live on `settings` (parsed fail-closed in
-    // `Settings::from_env`) instead of being read ad-hoc here.
 
-    // V-MED-10: ONE shared, timeout-configured reqwest::Client for all outbound
-    // billing + Google HTTP calls. Built once here so a slow/hanging upstream
-    // can never pin a handler thread indefinitely (CWE-400/CWE-770). Cloned
-    // cheaply (it is internally an `Arc`) into each provider and the Google
-    // userinfo/JWKS fetch. See `state::build_http_client`.
     let http_client = ruxlog::state::build_http_client();
 
-    // Mail router (SMTP or Cloudflare, selected by MAIL_PROVIDER). Built after
-    // http_client since the Cloudflare provider reuses the shared client.
     let mailer = build_mail_router(sea_db.clone(), gate_store.clone(), http_client.clone()).await;
 
     let billing_router: std::sync::Arc<BillingRouter> = {
@@ -239,8 +185,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             paddle::PaddleProvider, paypal::PayPalProvider, polar::PolarProvider,
             razorpay::RazorpayProvider, revolut::RevolutProvider, stripe::StripeProvider,
         };
-        // Each provider receives the shared client so it never falls back to
-        // constructing its own `reqwest::Client::new()`.
         let http_client = http_client.clone();
 
         fn try_init<F>(name: &str, init: F) -> Option<(String, std::sync::Arc<dyn BillingProvider>)>
@@ -265,7 +209,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut providers: std::collections::HashMap<String, std::sync::Arc<dyn BillingProvider>> =
             std::collections::HashMap::new();
 
-        // Stripe
         if let Some((k, v)) = try_init("stripe", || {
             let secret = env::var("STRIPE_SECRET_KEY").ok()?;
             let wh = env::var("STRIPE_WEBHOOK_SECRET").ok()?;
@@ -276,7 +219,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Polar.sh
         if let Some((k, v)) = try_init("polar", || {
             let token = env::var("POLAR_ACCESS_TOKEN").ok()?;
             let wh = env::var("POLAR_WEBHOOK_SECRET").ok()?;
@@ -287,9 +229,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // LemonSqueezy — key MUST match `provider_name()` ("lemon_squeezy") so the
-        // webhook path `/webhook/lemon_squeezy` resolves on the router. The prior
-        // `"lemonsqueezy"` registration 404'd every LemonSqueezy webhook (plan 1e).
+        // Key must stay "lemon_squeezy" — must match provider_name() and the
+        // /webhook/lemon_squeezy route; "lemonsqueezy" 404'd every webhook.
         if let Some((k, v)) = try_init("lemon_squeezy", || {
             let api_key = env::var("LEMONSQUEEZY_API_KEY").ok()?;
             let wh = env::var("LEMONSQUEEZY_WEBHOOK_SECRET").ok()?;
@@ -302,8 +243,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Paddle — verifies webhooks with an Ed25519 public key (PADDLE_PUBLIC_KEY,
-        // hex of 32 bytes). Without it the provider verifies fail-closed.
         if let Some((k, v)) = try_init("paddle", || {
             let client_token = env::var("PADDLE_CLIENT_TOKEN").ok()?;
             let wh = env::var("PADDLE_WEBHOOK_SECRET").ok()?;
@@ -322,7 +261,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Crypto (single chain)
         if let Some((k, v)) = try_init("crypto", || {
             let wallet = env::var("CRYPTO_WALLET_ADDRESS").ok()?;
             let api_url = env::var("CRYPTO_API_URL")
@@ -337,7 +275,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Crypto (multi-chain)
         if let Some((k, v)) = try_init("crypto_multi", || {
             let provider = ruxlog::services::billing::crypto::MultiChainCryptoProvider::from_env()
                 .ok()?
@@ -347,7 +284,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Razorpay
         if let Some((k, v)) = try_init("razorpay", || {
             let key_id = env::var("RAZORPAY_KEY_ID").ok()?;
             let key_secret = env::var("RAZORPAY_KEY_SECRET").ok()?;
@@ -359,7 +295,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Mercado Pago
         if let Some((k, v)) = try_init("mercado_pago", || {
             let access_token = env::var("MERCADO_PAGO_ACCESS_TOKEN").ok()?;
             let wh = env::var("MERCADO_PAGO_WEBHOOK_SECRET").ok()?;
@@ -370,7 +305,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Airwallex
         if let Some((k, v)) = try_init("airwallex", || {
             let client_id = env::var("AIRWALLEX_CLIENT_ID").ok()?;
             let api_key = env::var("AIRWALLEX_API_KEY").ok()?;
@@ -383,7 +317,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Revolut
         if let Some((k, v)) = try_init("revolut", || {
             let api_key = env::var("REVOLUT_API_KEY").ok()?;
             let wh = env::var("REVOLUT_WEBHOOK_SECRET").ok()?;
@@ -394,9 +327,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // PayPal — webhooks are verified via PayPal's verify-webhook-signature
-        // API, which requires the webhook ID PayPal issues on registration
-        // (PAYPAL_WEBHOOK_ID). Without it the provider verifies fail-closed.
         if let Some((k, v)) = try_init("paypal", || {
             let client_id = env::var("PAYPAL_CLIENT_ID").ok()?;
             let client_secret = env::var("PAYPAL_CLIENT_SECRET").ok()?;
@@ -431,9 +361,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::sync::Arc::new(BillingRouter::new(providers, geo_router))
     };
 
-    // ── Service construction added for the issues batch (2026-07-27) ──
-    // #29 Firebase Cloud Messaging (in-app/push). Stays None unless
-    // FCM_ENABLED + a service-account JSON are present; in-app rows still persist.
     let fcm: Option<std::sync::Arc<rux_fcm::FcmClient>> = {
         if env_bool("FCM_ENABLED", false) {
             let project_id = env::var("FCM_PROJECT_ID")
@@ -471,7 +398,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // #4 passkey/WebAuthn service.
     let webauthn_service: Option<std::sync::Arc<ruxlog::services::webauthn::WebauthnService>> =
         match ruxlog::services::webauthn::WebauthnService::from_env() {
             Ok(svc) => {
@@ -487,7 +413,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-    // #9 image moderation gate (HttpModerator hits a configurable provider).
     let image_moderator: Option<
         std::sync::Arc<dyn ruxlog::services::image_moderation::ImageModerator + Send + Sync>,
     > = {
@@ -517,11 +442,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Phase 0 (§4.1): build the immutable in-memory Quran store BEFORE the
-    // process serves traffic. Fail fast — a partially loaded or
-    // invariant-violating store would serve wrong scripture silently, so any
-    // load / digest / tiling failure logs the specific invariant and exits
-    // non-zero. There is no "Arabic not ready" served state.
     let quran_store = match ruxlog::quran::load_quran_store(&settings.quran).await {
         Ok(store) => {
             let cv = store.content_version().to_string();
@@ -557,14 +477,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         secret_key: settings.cookie_key.as_bytes().to_vec(),
         http_client,
         billing_router,
-        // --- Fields added for the issues batch (2026-07-27) ---
         fcm,
         webauthn: webauthn_service,
         quran: quran_store,
         quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
     };
 
-    // Bootstrap application constants from environment (only fills missing keys) and warm the in-memory constant cache.
     {
         if let Err(err) = AclService::bootstrap_from_env(State(state.clone())).await {
             tracing::error!(error = %err, "Failed to bootstrap ACL constants from env");
@@ -590,7 +508,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let notify = route_blocker_config::notifier();
 
-            // Set initial next sync time
             route_blocker_config::set_next_sync_at(route_blocker_config::calculate_next_sync());
 
             loop {
@@ -615,7 +532,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tokio::select! {
                         _ = &mut sleep => {},
                         _ = notify.notified() => {
-                            // config change: restart loop to re-read state.
                             continue;
                         }
                     }
@@ -649,10 +565,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ruxlog::services::scheduler::start_scheduler(state.clone());
 
     tracing::info!("SQLite session store established.");
-    // Periodic sweep of expired session rows. With the Redis TTL gone, the
-    // sessions table would otherwise grow without bound; this reaps lapsed rows
-    // hourly. Errors are non-fatal (logged) — a missed sweep just leaves stale
-    // rows that `load` already filters out by `expiry_date`.
     {
         let sweep_store = session_store.clone();
         tokio::spawn(async move {
@@ -665,16 +577,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-    // Derive the cookie signing+encryption key via HKDF-SHA256 rather than the
-    // previous raw SHA-512 of COOKIE_KEY (a fast hash is the wrong tool for key
-    // derivation: a weak COOKIE_KEY collapses to a brute-forceable key). cookie's
-    // Key::derive_from applies HKDF-SHA256 to the material. Note: changing the
-    // KDF rotates the derived key, so existing private cookies/sessions
-    // invalidate and users re-authenticate once. See plan Phase 2d.
+    // HKDF-SHA256 is load-bearing — do NOT swap for a raw hash. A fast hash
+    // turns a weak COOKIE_KEY into a brute-forceable signing key.
     let cookie_key = Key::derive_from(settings.cookie_key.as_bytes());
 
-    // Secure cookies by default; dev/local sets COOKIE_SECURE=false. A permanent
-    // .with_secure(false) blocked the Secure flag in production. See plan 2e.
     let cookie_secure = settings.http.cookie_secure;
 
     let session_layer = SessionManagerLayer::new((*session_store).clone())
@@ -682,10 +588,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_same_site(SameSite::Lax)
         .with_secure(cookie_secure)
         .with_http_only(true)
-        // CRYP-SESS-006: pin the session cookie name to a constant. Letting the
-        // cookie name float (or derive from a configurable value) widens the
-        // surface for cookie-fixing / confused-deputy issues across deployments;
-        // a fixed, known name is what the CSRF guard and frontend expect.
+        // Cookie name must stay hardcoded — the CSRF guard and frontend depend
+        // on it; a configurable name widens the cookie-fixing surface.
         .with_name("ruxlog.sid")
         .with_private(cookie_key);
 
@@ -714,51 +618,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_credentials(true)
         .max_age(Duration::from_secs(360));
 
-    // ClientIpSource is parsed fail-closed inside `Settings::from_env`; clone
-    // it off the shared `Arc<Settings>` (cheap) for `into_extension`.
     let ip_source = settings.http.ip_source.clone();
 
-    // ── Phase 1a (§8.2): split into a private (authenticated) branch and a
-    //    public, unauthenticated, wildcard-CORS `/quran/v1` sibling branch.
-    //
-    // `private` keeps the existing authenticated surface with its exact outer
-    // layering. Its observability stack (security headers, request id, metrics,
-    // TraceLayer) now lives ONCE in `router::with_observability`, so the
-    // duplicate `track_metrics` + `request_id_middleware` that used to be
-    // re-applied in THIS file are dropped — not carried to a third registration.
     let private = router::router(state.clone())
-        // Resolve ClientIp before per-route rate-limit layers read it.
         .layer(middleware::from_fn(middlewares::client_ip::resolve_client_ip))
         .layer(ip_source.clone().into_extension())
         .layer(axum::Extension(state.clone()))
         .layer(compression.clone())
-        // session_layer is OUTER to csrf_guard so the Session is present when
-        // csrf_guard recomputes the per-session HMAC token.
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
+        // session_layer must stay outer to csrf_guard — the Session must exist
+        // when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
         .layer(cors)
         .layer(middlewares::route_blocker::RouteBlockerLayer::new(state.clone()));
 
-    // `public` is the unauthenticated `/quran/v1` branch: wildcard CORS (no
-    // credentials), GET/HEAD/OPTIONS only, client-IP-aware coarse rate limit,
-    // and the shared observability stack. It deliberately does NOT carry
-    // `origin_guard`, `csrf_guard`, `session_layer`, `RouteBlockerLayer`, or
-    // `auth_guard` (§8.2) — and never touches `sea_db` (§2, §10).
-    //
-    // The coarse limit is keyed IP-ONLY (path-independent) via
-    // `rate_limit_layer_branch` — otherwise parameterized routes
-    // (`/ayahs/{s}/{a}` × 6,236, `/pages/N`, …) fan into ~7,750 independent
-    // per-IP buckets and the 600/min ceiling is bypassable (§8.2). A tighter
-    // 30/min limit is layered on `/search` specifically (the most expensive
-    // public route; §8.2).
     let quran = ruxlog::modules::quran_v1::routes()
         .merge(
             ruxlog::modules::quran_v1::search_route()
                 .layer(middlewares::rate_limit::rate_limit_layer(&state, 30, 60)),
         )
-        // Shape routing-level 404/405 into the §6.4 envelope (preserving the 405
-        // Allow header) so every error on the public branch shares one body.
         .layer(middleware::from_fn(
             ruxlog::modules::quran_v1::error::shape_routing_errors,
         ));

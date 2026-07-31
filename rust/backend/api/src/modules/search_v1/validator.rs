@@ -1,5 +1,3 @@
-//! Search request/response types.
-
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -15,9 +13,8 @@ pub struct SearchQuery {
 
 impl SearchQuery {
     pub fn page(&self) -> u64 {
-        // DOS-SEARCH-1: cap the page so a caller cannot drive an arbitrarily
-        // large (and therefore expensive) OFFSET on top of the unindexed
-        // triple-ILIKE scan. 500 pages × 100 per_page bounds the offset to ~50k.
+        // DoS guard: cap page so callers can't force a huge OFFSET onto the
+        // unindexed triple-ILIKE scan. Bound is unpinned by tests — don't raise.
         self.page.unwrap_or(1).clamp(1, 500)
     }
 

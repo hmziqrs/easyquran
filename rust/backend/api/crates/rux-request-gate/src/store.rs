@@ -1,17 +1,3 @@
-//! Backend-agnostic rate-limit store.
-//!
-//! The gate primitives talk to a [`RateLimitStore`] trait instead of any
-//! specific backend. The default [`InMemoryStore`] is a std-only, in-process
-//! implementation: enforcement is real (every request mutates the same map
-//! under one lock) but, being in-memory, state resets on restart. Its
-//! [`InMemoryStore::snapshot`] / [`InMemoryStore::restore`] methods let a host
-//! app add a durable backing store (e.g. SQLite) as an L2 without the gate
-//! crate depending on it.
-//!
-//! Time is tracked as absolute epoch instants (`SystemTime`) so that a
-//! snapshotted-and-restored block/counter expires correctly across a restart
-//! (a relative "remaining seconds" would otherwise reset the clock on boot).
-
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,7 +7,6 @@ use async_trait::async_trait;
 use crate::abuse::{AbuseLimiterConfig, BlockScope, LimiterDecision};
 use crate::error::GateError;
 
-/// Seconds since the Unix epoch; 0 means "none/expired".
 type Epoch = i64;
 
 fn now_epoch() -> Epoch {
@@ -39,61 +24,40 @@ fn epoch_to_systime(secs: Epoch) -> Option<SystemTime> {
     }
 }
 
-/// A backend-agnostic rate-limit / abuse / dedup store.
-///
-/// Implementations own atomicity. For [`RateLimitStore::abuse_check`] the
-/// counting and any block placement MUST happen atomically (the in-memory
-/// impl achieves this by taking one lock for the whole op).
+// Count + block must stay under one lock; splitting them lets concurrent
+// attackers race past the threshold (no test pins this).
 #[async_trait]
 pub trait RateLimitStore: Send + Sync {
-    /// Fixed-window counter increment (used by the rate-limit layer). Increments
-    /// `key`, (re)seeds an expiry of `window` on the first increment in a
-    /// window, and returns `(count_after_incr, ttl_remaining_secs)`.
     async fn incr_expire(&self, key: &str, window: Duration) -> Result<(u64, u64), GateError>;
 
-    /// Atomic dual-threshold abuse check. Records one attempt against `key` and
-    /// returns the decision (allowed, or blocked with a retry-after). The
-    /// implementation performs the sliding-window count + block placement.
     async fn abuse_check(
         &self,
         key: &str,
         cfg: AbuseLimiterConfig,
     ) -> Result<LimiterDecision, GateError>;
 
-    /// One-shot idempotency claim. Returns `true` if the key was newly created,
-    /// `false` if it already existed within its TTL.
     async fn set_nx_ex(&self, key: &str, ttl: Duration) -> Result<bool, GateError>;
 
-    /// Delete a key (best-effort release of a dedup claim). Always succeeds.
     async fn del(&self, key: &str) -> Result<(), GateError>;
 }
 
-/// Point-in-time snapshot of an in-memory limiter bucket, used to persist the
-/// L1 cache to / restore it from a durable backing store. Expiries are absolute
-/// epoch seconds so durability survives restart correctly.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BucketSnapshot {
     pub key: String,
     pub fixed_count: u64,
-    /// Absolute epoch-second expiry of the fixed-window counter (0 = none).
     pub fixed_expires_at: Epoch,
-    /// Absolute epoch-second expiry of an active abuse block (0 = none).
     pub block_until_at: Epoch,
 }
 
 #[derive(Default)]
 struct Bucket {
-    /// Fixed-window counter + expiry (rate-limit layer).
     fixed_count: u64,
     fixed_expires: Option<SystemTime>,
-    /// Sliding-window attempt timestamps (abuse limiter), as epoch seconds.
     attempts: VecDeque<Epoch>,
-    /// Active abuse block.
     block_until: Option<SystemTime>,
     block_scope: Option<BlockScope>,
 }
 
-/// Std-only, in-process rate-limit store.
 #[derive(Default)]
 pub struct InMemoryStore {
     limits: Mutex<HashMap<String, Bucket>>,
@@ -101,7 +65,6 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
-    /// Capture all non-expired buckets for L2 persistence.
     pub fn snapshot(&self) -> Vec<BucketSnapshot> {
         let now = now_epoch();
         let map = self.limits.lock().expect("rate-limit map poisoned");
@@ -129,8 +92,6 @@ impl InMemoryStore {
             .collect()
     }
 
-    /// Re-seed buckets from an L2 snapshot (called once at boot before serving
-    /// traffic). Expired entries (expiries already in the past) are dropped.
     pub fn restore(&self, snaps: Vec<BucketSnapshot>) {
         let now = now_epoch();
         let mut map = self.limits.lock().expect("rate-limit map poisoned");
@@ -182,13 +143,11 @@ impl RateLimitStore for InMemoryStore {
         let mut map = self.limits.lock().expect("rate-limit map poisoned");
         let b = map.entry(key.to_string()).or_default();
 
-        // Drop attempts older than the long window.
         let long_cutoff = now_e.saturating_sub(cfg.block_range as i64);
         while b.attempts.front().map_or(false, |&t| t < long_cutoff) {
             b.attempts.pop_front();
         }
 
-        // If a block is still active, count this attempt but keep the block.
         if let Some(until) = b.block_until {
             if until > now {
                 b.attempts.push_back(now_e);
@@ -257,8 +216,6 @@ impl RateLimitStore for InMemoryStore {
     }
 }
 
-/// `remaining_secs` expressed for a *future* `SystemTime` (the common case for
-/// live buckets): returns secs until `t`, or `fallback` on None/elapsed.
 fn remaining_secs_with_future(t: Option<SystemTime>, fallback: Duration) -> u64 {
     match t {
         Some(t) => t
@@ -269,9 +226,6 @@ fn remaining_secs_with_future(t: Option<SystemTime>, fallback: Duration) -> u64 
     }
 }
 
-/// Blanket impl so an `Arc<RateLimitStore>` (e.g. `Arc<InMemoryStore>` held in
-/// the app's `AppState`) can be passed anywhere a `&dyn RateLimitStore` is
-/// expected without manual deref at every call site.
 #[async_trait]
 impl<T: RateLimitStore> RateLimitStore for std::sync::Arc<T> {
     async fn incr_expire(&self, key: &str, window: Duration) -> Result<(u64, u64), GateError> {

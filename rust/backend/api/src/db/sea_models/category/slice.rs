@@ -76,7 +76,6 @@ pub struct CategoryWithRelations {
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult)]
 pub struct CategoryWithJoinedData {
-    // Category fields
     pub id: i32,
     pub name: String,
     pub slug: String,
@@ -90,7 +89,6 @@ pub struct CategoryWithJoinedData {
     pub created_at: DateTime<FixedOffset>,
     pub updated_at: DateTime<FixedOffset>,
 
-    // Cover media fields from join
     pub cover_object_key: Option<String>,
     pub cover_file_url: Option<String>,
     pub cover_mime_type: Option<String>,
@@ -98,7 +96,6 @@ pub struct CategoryWithJoinedData {
     pub cover_height: Option<i32>,
     pub cover_size: Option<i64>,
 
-    // Logo media fields from join
     pub logo_object_key: Option<String>,
     pub logo_file_url: Option<String>,
     pub logo_mime_type: Option<String>,

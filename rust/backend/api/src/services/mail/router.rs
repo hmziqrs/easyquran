@@ -1,18 +1,3 @@
-//! Multi-provider mail router with the cross-cutting send-time guards.
-//!
-//! `MailRouter` holds the initialized [`MailProvider`]s and, unlike the billing
-//! router, also owns the rate-limit store + DB connection so the four guards run in
-//! exactly one place for every provider:
-//! 1. recipient canonicalization + RFC-5321 validation (header-injection safe),
-//! 2. suppression-list pre-check (fail-open on DB error),
-//! 3. per-recipient + provider-quota rate limiting (fail-closed on a rate-limit store error;
-//!    skipped for transactional templates already bounded at the controller),
-//! 4. content dedup (newsletter only).
-//!
-//! It then delegates to the selected provider, records telemetry once, and feeds
-//! synchronous permanent bounces back into the suppression list. Mirrors
-//! `services::billing::router::BillingRouter`.
-
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -32,12 +17,6 @@ use super::provider::{
     WebhookEvent, TEMPLATE_NEWSLETTER,
 };
 
-// ── Rate-limit budgets ───────────────────────────────────────────────────
-// Tunable constants (deliberately not env knobs to keep the surface small).
-// `temp_*` is the short burst window; `block_*` is the sustained window, mirroring
-// every other AbuseLimiterConfig in the codebase.
-
-/// Per-recipient outbound budget: 5 sends / 10 min, else a 1h block.
 pub const MAIL_RCPT_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     temp_block_attempts: 5,
     temp_block_range: 10 * 60,
@@ -47,8 +26,6 @@ pub const MAIL_RCPT_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     block_duration: 24 * 60 * 60,
 };
 
-/// Provider-quota outbound budget: bounds total blast volume (e.g. a newsletter
-/// send) against the upstream per-minute limit. 50 / min, else a 5 min block.
 pub const MAIL_PROVIDER_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     temp_block_attempts: 50,
     temp_block_range: 60,
@@ -58,15 +35,11 @@ pub const MAIL_PROVIDER_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     block_duration: 60 * 60,
 };
 
-/// Bundled router limits so `MailRouter::new` stays under clippy's
-/// `too_many_arguments` threshold.
 #[derive(Clone)]
 pub struct MailRouterLimits {
     pub rcpt: AbuseLimiterConfig,
     pub provider: AbuseLimiterConfig,
-    /// TTL for the content-dedup key, in seconds.
     pub dedup_ttl_secs: usize,
-    /// How long a soft (non-permanent) bounce suppresses a recipient, in seconds.
     pub soft_cooldown_secs: i64,
 }
 
@@ -107,22 +80,14 @@ impl MailRouter {
         }
     }
 
-    /// Names of the registered providers (diagnostics).
     pub fn provider_names(&self) -> Vec<&str> {
         self.registry.provider_names()
     }
 
     fn get_provider(&self, name: &str) -> Result<&Arc<dyn MailProvider>, MailError> {
-        // Forwarded to the shared registry; FrameworkError is narrowed back to
-        // MailError::Config("mail provider '{name}' not initialized") by the
-        // From-impl in provider.rs — preserving the exact pre-refactor error
-        // variant + message (drift point #1 vs billing).
         self.registry.get(name).map_err(MailError::from)
     }
 
-    /// `Ok(true)` if `recipient` must be suppressed. `Err(())` on a DB error →
-    /// the caller fails OPEN (a suppression outage must not blackhole all OTP
-    /// sends) and bumps the `suppression_check_failed` counter.
     async fn lookup_suppressed(&self, recipient: &str) -> Result<bool, ()> {
         let row = match SuppressionEntity::find_by_recipient(&self.db, recipient).await {
             Ok(m) => m,
@@ -141,8 +106,6 @@ impl MailRouter {
         Ok(row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown))
     }
 
-    /// Enforce per-recipient + provider-quota buckets. Fail-closed (503) on a
-    /// rate-limit store error — the limiter itself returns 503 for the same case.
     async fn check_rate(&self, recipient: &str) -> Result<(), MailError> {
         self.enforce(&format!("mail:send:rcpt:{recipient}"), self.limits.rcpt)
             .await?;
@@ -170,10 +133,6 @@ impl MailRouter {
         }
     }
 
-    /// Best-effort release of a dedup claim so a failed send (throttle / provider
-    /// error) can be retried within the window instead of being suppressed as a
-    /// duplicate. Fail-open: a store error just leaves the key to TTL (worst case
-    /// a near-term retry is deduped; the next send after the TTL proceeds).
     async fn release_dedup(&self, key: Option<&str>) {
         if let Some(key) = key {
             rux_request_gate::release_dedup(&self.gate_store, key).await;
@@ -194,9 +153,6 @@ impl MailRouter {
         format!("mail:dedup:{}:{digest}", msg.template.unwrap_or("default"))
     }
 
-    /// Record synchronous permanent bounces from the provider receipt into the
-    /// suppression list. This is the core deliverability guarantee: a recipient
-    /// the provider already rejected permanently is never tried again.
     async fn record_sync_bounces(&self, provider_name: &str, bounces: &[String]) {
         let router_metrics = telemetry::mail_router_metrics();
         for rcpt in bounces {
@@ -227,7 +183,6 @@ impl MailProvider for MailRouter {
         let router_metrics = telemetry::mail_router_metrics();
         let start = std::time::Instant::now();
 
-        // (1) Canonicalize + validate the recipient (header-injection safe).
         let mut msg = msg;
         msg.to = canonicalize_recipient(&msg.to)?;
         let recipient_domain = msg.to.split('@').nth(1).unwrap_or("unknown");
@@ -235,7 +190,6 @@ impl MailProvider for MailRouter {
 
         let transactional = is_transactional(msg.template);
 
-        // (2) Suppression pre-check (fail-open on DB error).
         let suppressed = match self.lookup_suppressed(&msg.to).await {
             Ok(true) => true,
             Ok(false) => false,
@@ -247,29 +201,22 @@ impl MailProvider for MailRouter {
         if suppressed {
             router_metrics.suppressed.add(1, &[]);
             if transactional {
-                // Anti account-enumeration: drop silently, look identical to a
-                // successful send from the client's perspective.
+                // Anti-enumeration: MUST return Ok and look identical to a real
+                // send — erroring would leak that the account is suppressed.
                 debug!(template = ?msg.template, "suppressed transactional send dropped");
                 return Ok(SendReceipt::default());
             }
             return Err(MailError::Suppressed);
         }
 
-        // (3) Content dedup — newsletter only, and BEFORE rate-limiting so a true
-        // duplicate within the window short-circuits without burning a
-        // provider-quota token (otherwise re-submitting a blast self-DoSes all
-        // non-transactional mail). The claim is RELEASED on any later failure
-        // (rate-limit throttle or provider error) so a throttled send can be
-        // retried rather than silently dropped as a "duplicate" — dedup marks
-        // *delivered* content, not merely *attempted* content. Transactional
-        // codes change each request, so dedup is a no-op there.
+        // Dedup must run before rate-limiting, else a duplicate blast burns
+        // provider quota and self-DoSes all non-transactional mail.
         let dedup_claim = if msg.template == Some(TEMPLATE_NEWSLETTER) {
             let key = self.dedup_key(&msg);
             if rux_request_gate::dedup_nx(&self.gate_store, &key, self.limits.dedup_ttl_secs).await
             {
-                Some(key) // newly claimed -> proceed, release on failure
+                Some(key)
             } else {
-                // Already delivered within the window -> short-circuit.
                 router_metrics.deduped.add(1, &[]);
                 debug!("duplicate newsletter send suppressed");
                 return Ok(SendReceipt::default());
@@ -278,9 +225,8 @@ impl MailProvider for MailRouter {
             None
         };
 
-        // (4) Rate limiting — skipped for transactional templates (the controller
-        // already bounds them, keyed on user_id, so this avoids a double-limit
-        // with a different error code).
+        // Transactional sends are rate-limited at the controller (per user_id);
+        // exempt here or they get double-limited under a different key.
         if self.rate_limit_enabled && !transactional {
             if let Err(e) = self.check_rate(&msg.to).await {
                 self.release_dedup(dedup_claim.as_deref()).await;
@@ -288,7 +234,6 @@ impl MailProvider for MailRouter {
             }
         }
 
-        // (5) Delegate to the selected provider.
         let provider = self.get_provider(self.registry.default_provider())?;
         let provider_name = provider.provider_name();
         let receipt = match provider.send(msg).await {
@@ -296,8 +241,6 @@ impl MailProvider for MailRouter {
             Err(e) => {
                 metrics.emails_failed.add(1, &[]);
                 tracing::Span::current().record("result", "failure");
-                // Release the dedup claim so this (failed) send can be retried
-                // within the window instead of being suppressed as a duplicate.
                 self.release_dedup(dedup_claim.as_deref()).await;
                 return Err(e);
             }
@@ -309,7 +252,6 @@ impl MailProvider for MailRouter {
             .record(start.elapsed().as_millis() as f64, &[]);
         tracing::Span::current().record("result", "success");
 
-        // (6) Feed synchronous permanent bounces back into the suppression list.
         if !receipt.permanent_bounces.is_empty() {
             self.record_sync_bounces(provider_name, &receipt.permanent_bounces)
                 .await;
@@ -319,21 +261,11 @@ impl MailProvider for MailRouter {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedMailEvent, MailError> {
-        // Uniform webhook dispatch through the shared registry. A missing
-        // provider narrows to MailError::Config("mail provider '{name}' not
-        // initialized") via the From-impl — PRESERVES drift point #1 (mail
-        // surfaces registry misses as Config, billing surfaces them as
-        // WebhookVerification in its own verify_webhook).
         let provider = self.registry.get_for_webhook(&event).map_err(MailError::from)?;
         provider.verify_webhook(event).await
     }
 }
 
-/// Canonicalize + validate a single recipient mailbox. Trims and lowercases,
-/// rejects CR/LF (header injection), comma/semicolon/angle-brackets (multiple or
-/// display-name addresses), and anything without exactly one `@` with non-empty
-/// local + domain. Both providers get the same validation (lettre's mailbox
-/// parser would otherwise cover only the SMTP path).
 pub fn canonicalize_recipient(input: &str) -> Result<String, MailError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -396,9 +328,9 @@ mod tests {
     #[test]
     fn canonicalize_rejects_malformed() {
         assert!(canonicalize_recipient("noatsign").is_err());
-        assert!(canonicalize_recipient("@b.com").is_err()); // empty local
-        assert!(canonicalize_recipient("a@").is_err()); // empty domain
-        assert!(canonicalize_recipient("a@@b.com").is_err()); // two @
+        assert!(canonicalize_recipient("@b.com").is_err());
+        assert!(canonicalize_recipient("a@").is_err());
+        assert!(canonicalize_recipient("a@@b.com").is_err());
         assert!(canonicalize_recipient("   ").is_err());
     }
 }

@@ -1,13 +1,3 @@
-//! Shared post-exchange finish logic for all third-party OAuth providers.
-//!
-//! Resolves a verified IdP identity to a local `users` row (looking up an
-//! existing link, linking onto a matching email-verified account, or creating a
-//! new pre-verified account), then starts a server session exactly the way the
-//! password-login path does (`AuthBackend` + `user_sessions` row + tower-session
-//! mapping). Mirrors `google_auth_v1::controller::finish_google_login`, minus
-//! the Google-specific id_token JWKS step (each provider service does its own
-//! identity verification before calling into here).
-
 use sea_orm::{ActiveModelTrait, Set};
 use tracing::{error, info, instrument, warn};
 
@@ -20,21 +10,8 @@ use crate::{
 
 use user_oauth_identity::NewOauthIdentity;
 
-/// Resolve a verified provider identity to a local user, applying the same
-/// OAUTH-CREATE-UNVERIFIED / link-safety gates as the Google path:
-///
-/// 1. **Already linked** → return that user (login existing).
-/// 2. **Existing user with the same email** → link the identity onto it, but
-///    ONLY if the IdP asserted the email is verified. Otherwise refuse: an
-///    attacker controlling an unverified-at-IdP account with the victim's email
-///    must not take over the account, and we do NOT create a duplicate.
-/// 3. **No matching user** → create a new pre-verified account, but ONLY if the
-///    IdP verified the email. Otherwise refuse (the user signs up via normal
-///    email verification).
-///
-/// `email_verified = true` is a hard precondition for both the link and create
-/// branches; providers that cannot assert email verification must be configured
-/// to refuse at the service layer before reaching here.
+/// `email_verified` must be true before linking onto or creating an account:
+/// an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(state), fields(provider = %provider, provider_user_id = %provider_user_id, email = %email))]
 pub async fn find_or_create_user_for_oauth(
@@ -45,7 +22,6 @@ pub async fn find_or_create_user_for_oauth(
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
-    // 1. Already linked → log that user in directly.
     if let Some(identity) =
         user_oauth_identity::Entity::find_by_provider(&state.sea_db, provider, provider_user_id)
             .await?
@@ -58,7 +34,6 @@ pub async fn find_or_create_user_for_oauth(
         return Ok(user);
     }
 
-    // 2. Existing local user with the same email → link (IdP-verified gate).
     if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
         if !email_verified {
             warn!(user_id = existing.id, email = %email, "Refusing to link OAuth account: IdP email is not verified");
@@ -73,7 +48,6 @@ pub async fn find_or_create_user_for_oauth(
         return Ok(existing);
     }
 
-    // 3. No existing user → create (IdP-verified gate, same rationale as Google).
     if !email_verified {
         warn!(email = %email, "Refusing to create account from OAuth: IdP email is not verified");
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
@@ -88,7 +62,7 @@ pub async fn find_or_create_user_for_oauth(
         password: Set(None),
         oauth_provider: Set(Some(provider.to_string())),
         role: Set(user::UserRole::User),
-        is_verified: Set(true), // IdP-verified email ⇒ pre-verified locally
+        is_verified: Set(true),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
@@ -104,7 +78,6 @@ pub async fn find_or_create_user_for_oauth(
     Ok(user)
 }
 
-/// Insert a `user_oauth_identities` link row for an already-resolved user.
 async fn link_identity(
     db: &sea_orm::DatabaseConnection,
     user_id: i32,
@@ -125,10 +98,6 @@ async fn link_identity(
     .map(|_| ())
 }
 
-/// Start a server session for an OAuth-authenticated user: `auth.login`,
-/// record a `user_sessions` row (device label = "<Provider> OAuth"), then
-/// record the PG-row → tower-session-id mapping so the session can later be
-/// revoked via `sessions_terminate` (mirrors the password + Google paths).
 pub async fn finish_oauth_login(
     state: &AppState,
     auth: &mut AuthSession,
@@ -147,15 +116,10 @@ pub async fn finish_oauth_login(
     .await
     .ok();
 
-    // V-HIGH-2: record the PG-row → tower-session-id mapping so
-    // `sessions_terminate` can later DEL the live tower-session record.
-    // `auth.login` cycles the session id, so save first to materialize it.
+    // record_session_mapping lets sessions_terminate revoke this session later;
+    // save() first because auth.login cycles the session id.
     if (auth.session().save().await).is_ok() {
         if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-            // V-HIGH-2: record the PG-row → tower-session-id mapping so
-            // `sessions_terminate` can later find the live tower-session record.
-            // Sync + no pool: the mapping lives in a process-global in-memory map
-            // (see services::auth::record_session_mapping).
             crate::services::auth::record_session_mapping(row.id, &tower_sid.to_string());
         }
     }
@@ -163,8 +127,6 @@ pub async fn finish_oauth_login(
     Ok(())
 }
 
-/// Cryptographically-random OIDC nonce for providers that issue a signed
-/// `id_token` (Apple). 128 bits of entropy (base64url ≈ 22 chars).
 pub fn generate_oauth_nonce() -> String {
     use base64::Engine;
     use rand::Rng;

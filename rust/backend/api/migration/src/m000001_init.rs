@@ -1,29 +1,3 @@
-//! Single-source SQLite schema for the default feature build
-//! (`basic` = post-management + auth-login + auth-signup, plus `mail-cloudflare`).
-//!
-//! The historical suite was Postgres-only (tsvector/GIN, jsonb, `CREATE TYPE`
-//! enums, `ALTER COLUMN TYPE`, PL/pgSQL `DO` blocks, `gen_random_uuid`).
-//! None of that runs on SQLite, so the whole suite is collapsed into this one
-//! migration that creates every table the default-compiled sea-orm entities
-//! need at runtime.
-//!
-//! Type mapping (entity Model → SQLite column):
-//!  - `i32` / `i64` PK        → `INTEGER PRIMARY KEY AUTOINCREMENT`
-//!  - `String` / enum / uuid  → `TEXT`
-//!  - `Option<T>`             → nullable
-//!  - `bool`                  → `INTEGER` (0/1)
-//!  - `Json` / `TagIds`       → `TEXT` (JSON serialized by sea-orm)
-//!  - `DateTimeWithTimeZone`  → `TEXT` (RFC 3339)
-//!  - enums (`UserRole`, `PostStatus`, ...) → `TEXT` (sea-orm `ActiveEnum`)
-//!
-//! Defaults mirror the original Postgres DDL (`false`/`'user'`/`'draft'`/`0`/
-//! `current_timestamp`) so inserts that leave an `ActiveValue::NotSet` still
-//! succeed. Foreign keys are declared because the app runs with
-//! `PRAGMA foreign_keys = ON`. Parents are created before children; the
-//! `users.avatar_id → media` link is intentionally NOT a DB-level FK (it would
-//! form a cycle with `media.uploader_id → users`); sea-orm resolves that
-//! relation via the entity `Relation` enum, so runtime queries are unaffected.
-
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -33,7 +7,8 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let stmts: &[&str] = &[
-            // ── users ───────────────────────────────────────────────────────
+            // `users.avatar_id` intentionally has no DB-level FK: it would form a
+            // cycle with `media.uploader_id → users` (no valid insert/delete order).
             r#"CREATE TABLE IF NOT EXISTS "users" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "name" TEXT NOT NULL,
@@ -52,7 +27,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── media (before categories/posts which reference it) ─────────
             r#"CREATE TABLE IF NOT EXISTS "media" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "bucket" TEXT,
@@ -72,7 +46,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("uploader_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE SET NULL
             )"#,
-            // ── user_sessions ───────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "user_sessions" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER NOT NULL,
@@ -83,7 +56,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── user_bans ───────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "user_bans" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER NOT NULL,
@@ -100,7 +72,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("revoked_by") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE SET NULL
             )"#,
-            // ── categories ──────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "categories" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "name" TEXT NOT NULL,
@@ -119,7 +90,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("logo_id") REFERENCES "media" ("id")
                     ON UPDATE CASCADE ON DELETE SET NULL
             )"#,
-            // ── tags ────────────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "tags" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "name" TEXT NOT NULL,
@@ -131,7 +101,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── posts ───────────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "posts" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "title" TEXT NOT NULL,
@@ -155,7 +124,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("featured_image_id") REFERENCES "media" ("id")
                     ON UPDATE CASCADE ON DELETE SET NULL
             )"#,
-            // ── post_revisions ──────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_revisions" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -165,7 +133,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("post_id") REFERENCES "posts" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── scheduled_posts ─────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "scheduled_posts" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -176,7 +143,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("post_id") REFERENCES "posts" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── post_series ─────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_series" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "name" TEXT NOT NULL,
@@ -185,7 +151,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── post_series_posts (join) ────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_series_posts" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "series_id" INTEGER NOT NULL,
@@ -198,7 +163,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("post_id") REFERENCES "posts" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── post_views ──────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_views" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -209,7 +173,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("post_id") REFERENCES "posts" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── post_access ─────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_access" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -220,7 +183,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("post_id") REFERENCES "posts" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── post_likes ──────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_likes" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -231,7 +193,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── media_variants ──────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "media_variants" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "media_id" INTEGER NOT NULL,
@@ -248,7 +209,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("media_id") REFERENCES "media" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── media_usage ─────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "media_usage" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "media_id" INTEGER NOT NULL,
@@ -259,7 +219,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("media_id") REFERENCES "media" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── email_suppression ───────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "email_suppression" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "recipient" TEXT NOT NULL UNIQUE,
@@ -271,7 +230,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── app_constants ───────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "app_constants" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "key" TEXT NOT NULL UNIQUE,
@@ -284,7 +242,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── route_status ────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "route_status" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "route_pattern" TEXT NOT NULL UNIQUE,
@@ -293,7 +250,6 @@ impl MigrationTrait for Migration {
                 "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"#,
-            // ── audit_logs ──────────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "audit_logs" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER,
@@ -307,7 +263,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE SET NULL
             )"#,
-            // ── forgot_passwords ────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "forgot_passwords" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER NOT NULL,
@@ -317,7 +272,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── email_verifications ────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "email_verifications" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER NOT NULL,
@@ -327,7 +281,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── post_comments ───────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "post_comments" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "post_id" INTEGER NOT NULL,
@@ -343,7 +296,6 @@ impl MigrationTrait for Migration {
                 FOREIGN KEY ("user_id") REFERENCES "users" ("id")
                     ON UPDATE CASCADE ON DELETE CASCADE
             )"#,
-            // ── comment_flags ───────────────────────────────────────────────
             r#"CREATE TABLE IF NOT EXISTS "comment_flags" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "comment_id" INTEGER NOT NULL,
@@ -368,7 +320,6 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Drop children before parents. Order is the reverse of `up`.
         let drops: &[&str] = &[
             r#"DROP TABLE IF EXISTS "comment_flags""#,
             r#"DROP TABLE IF EXISTS "post_comments""#,

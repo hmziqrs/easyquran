@@ -23,12 +23,7 @@ use super::validator::{
     V1ListSubscribersQuery, V1SendNewsletterPayload, V1SubscribePayload, V1UnsubscribePayload,
 };
 
-/// Pace between newsletter sends to stay under the provider per-minute quota
-/// (MAIL_PROVIDER_CFG defaults to 50/min → ~1.3s keeps us under it without a
-/// burst that trips the temp block).
 const NEWSLETTER_PACE: std::time::Duration = std::time::Duration::from_millis(1300);
-/// How many times to back off + retry a single recipient when the provider
-/// quota bucket throttles it before counting the send as failed.
 const NEWSLETTER_MAX_THROTTLE_RETRIES: u8 = 2;
 
 async fn send_mail(
@@ -60,7 +55,6 @@ pub async fn subscribe(
     let email = payload.email.trim().to_lowercase();
     let token = Uuid::new_v4().to_string();
 
-    // Abuse limiter: per-email subscription attempts
     let key = format!("newsletter:subscribe:{}", email);
     let config = AbuseLimiterConfig {
         temp_block_attempts: 5,
@@ -72,9 +66,8 @@ pub async fn subscribe(
     };
     limiter(&state.gate_store, &key, config).await?;
 
-    // DOS-NEWSLETTER-IP-1: per-IP bucket. The per-email limiter above is
-    // defeated by rotating the email field; pair it with a per-IP bucket so a
-    // single source cannot flood inserts + outbound confirmation mail.
+    // Per-IP bucket: the per-email limiter above is beaten by rotating the
+    // email field; without this a single source floods inserts.
     limiter(
         &state.gate_store,
         &format!("newsletter:subscribe:ip:{client_ip}"),
@@ -100,13 +93,8 @@ pub async fn subscribe(
             info!(email = %email, "Newsletter subscription created");
             let site_url = state.settings.site.url.clone();
 
-            // CRYP-GAP-012 / CRYP-RNG-005: do NOT carry the secret token in the
-            // URL query string (`?token=`), where it leaks into access logs,
-            // proxy logs, and the Referer header. Put it in the URL *fragment*
-            // (`#token=`) instead — fragments are never transmitted to servers.
-            // The client reads the fragment and POSTs `{email, token}` in the
-            // JSON body (the /confirm endpoint already accepts a JSON body).
-            // Token strength is unchanged: 122 bits of UUIDv4 entropy.
+            // Fragment, not `?token=`: fragments aren't sent to servers, so the
+            // secret stays out of access/proxy logs and the Referer header.
             let confirm_url = format!(
                 "{}/newsletter/confirm#email={}&token={}",
                 site_url.trim_end_matches('/'),
@@ -119,12 +107,9 @@ pub async fn subscribe(
                 "<p>Thanks for subscribing!</p><p>Please confirm your subscription by clicking the link below:</p><p><a href=\"{0}\">{0}</a></p>",
                 confirm_url
             );
-            // Best-effort email; do not fail subscription on send error
             let _ = send_mail(&state.mailer, &email, subject, Some(&html), None).await;
 
-            // The token / confirm_url are intentionally NOT echoed in the
-            // response body, even in debug builds, to avoid leaking the secret
-            // token into client logs.
+            // Never echo token/confirm_url here, even in debug — leaks to client logs.
             let body = json!({ "message": "Please check your email to confirm your subscription" });
             Ok((StatusCode::CREATED, Json(body)))
         }
@@ -168,7 +153,6 @@ pub async fn send(
     _auth: AuthSession,
     payload: ValidatedJson<V1SendNewsletterPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Offload to background task
     let subject = payload.subject.clone();
     let text = payload.text.clone();
     let html = payload.html.clone();
@@ -177,7 +161,6 @@ pub async fn send(
     tokio::spawn(
         tracing::info_span!("newsletter_send_background", subject = %subject).in_scope(
             || async move {
-                // Load confirmed subscribers and send best-effort
                 let Ok(subscribers) = SubscriberEntity::find()
                     .filter(SubscriberColumn::Status.eq(SubscriberStatus::Confirmed))
                     .all(&state_cloned.sea_db)
@@ -214,10 +197,6 @@ pub async fn send(
                             Err(crate::services::mail::MailError::Throttled {
                                 retry_after_secs,
                             }) => {
-                                // The shared provider-quota bucket throttled us.
-                                // Back off by the limiter's retry window, then
-                                // retry this recipient (bounded) rather than
-                                // silently dropping it as a generic failure.
                                 attempts += 1;
                                 if attempts > NEWSLETTER_MAX_THROTTLE_RETRIES {
                                     throttled += 1;
@@ -233,8 +212,7 @@ pub async fn send(
                             }
                         }
                     }
-                    // Pace to stay under the provider per-minute quota so the
-                    // next send does not trip the temp block.
+                    // Pace under the provider per-minute quota or the next send trips the temp block.
                     tokio::time::sleep(NEWSLETTER_PACE).await;
                 }
 

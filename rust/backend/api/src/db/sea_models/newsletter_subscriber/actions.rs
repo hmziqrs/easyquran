@@ -15,7 +15,6 @@ impl Entity {
     pub async fn create(conn: &DbConn, new_subscriber: NewSubscriber) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
 
-        // If a subscriber with the same email exists, update token/status instead of inserting
         match Self::find()
             .filter(Column::Email.eq(new_subscriber.email.clone()))
             .one(conn)
@@ -75,11 +74,8 @@ impl Entity {
             .await?;
 
         if let Some(model) = sub {
-            // Only confirm if token matches and not already unsubscribed
-            // CRYPT-NEWSLETTER-1: constant-time compare (the rest of the crypto
-            // surface uses subtle::ConstantTimeEq; the newsletter token was the
-            // lone `==` outlier). subtle is a direct dep and compiles without
-            // the billing feature, unlike services::billing::webhook_util.
+            // Constant-time compare: a plain `==` leaks token validity via
+            // timing, enabling mass confirmation probing.
             use subtle::ConstantTimeEq;
             let token_ok = model.token.as_bytes().ct_eq(token.as_bytes()).unwrap_u8() == 1;
             if token_ok && model.status != SubscriberStatus::Unsubscribed {
@@ -109,9 +105,8 @@ impl Entity {
             .await?;
 
         if let Some(model) = sub {
-            // If a token is provided, require match
             if let Some(t) = token {
-                // CRYPT-NEWSLETTER-1: constant-time token compare.
+                // Constant-time compare — see `confirm` (timing side-channel on token).
                 use subtle::ConstantTimeEq;
                 let token_ok = model.token.as_bytes().ct_eq(t.as_bytes()).unwrap_u8() == 1;
                 if !token_ok {

@@ -17,12 +17,8 @@ pub struct AppleExchangeRequest {
     pub state: String,
 }
 
-/// Verified claims of an Apple `id_token`. Apple is OIDC: the user identity
-/// (`sub`, `email`) lives in the signed id_token, not in a userinfo endpoint.
-///
-/// NB: Apple serializes `email_verified` and `is_private_email` as the STRINGS
-/// `"true"` / `"false"` (not booleans), so they are decoded as `Option<String>`
-/// and compared against the literal `"true"`.
+// Apple sends `email_verified` / `is_private_email` as the STRINGS "true"/"false",
+// not booleans — keep them as Option<String> or deserialization/verification breaks.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppleIdTokenClaims {
     pub iss: String,
@@ -38,7 +34,6 @@ pub struct AppleIdTokenClaims {
 }
 
 impl AppleIdTokenClaims {
-    /// True iff Apple asserts this email is verified (`email_verified == "true"`).
     pub fn is_email_verified(&self) -> bool {
         self.email_verified.as_deref() == Some("true")
     }

@@ -8,16 +8,10 @@ use ruxlog_types::PaginatedList;
 
 use super::*;
 
-/// Actions for post revisions:
-/// - Create a revision
-/// - List revisions (newest first) with pagination
-/// - Enforce a maximum number of revisions per post by trimming oldest
 impl Entity {
     pub const PER_PAGE: u64 = 10;
     pub const MAX_REVISIONS_PER_POST: u64 = 10;
 
-    /// Create a new revision entry for a post.
-    /// This will also enforce the maximum revisions cap (keep newest N).
     pub async fn create(
         conn: &DbConn,
         post_id: i32,
@@ -38,14 +32,12 @@ impl Entity {
 
         let created = active.insert(&txn).await?;
 
-        // Trim older revisions beyond the cap
         Self::enforce_max_inner(&txn, post_id, Self::MAX_REVISIONS_PER_POST).await?;
 
         txn.commit().await?;
         Ok(created)
     }
 
-    /// List revisions for a post (newest first) with pagination.
     pub async fn list_by_post(
         conn: &DbConn,
         post_id: i32,
@@ -70,9 +62,6 @@ impl Entity {
         Ok(PaginatedList::new(items, total, page, per_page))
     }
 
-    /// Enforce max revisions for a post (public wrapper).
-    /// Keeps the newest `max` revisions and deletes older ones.
-    /// Returns number of deleted rows.
     pub async fn enforce_max(conn: &DbConn, post_id: i32, max: u64) -> DbResult<u64> {
         let txn = conn.begin().await?;
         let deleted = Self::enforce_max_inner(&txn, post_id, max).await?;
@@ -80,12 +69,10 @@ impl Entity {
         Ok(deleted)
     }
 
-    /// Internal helper to enforce max within an existing transaction.
     async fn enforce_max_inner<C>(conn: &C, post_id: i32, max: u64) -> DbResult<u64>
     where
         C: ConnectionTrait,
     {
-        // Count total revisions
         let total: u64 = Entity::find()
             .filter(Column::PostId.eq(post_id))
             .count(conn)
@@ -97,7 +84,6 @@ impl Entity {
 
         let to_delete = (total - max) as i64;
 
-        // Find the oldest `to_delete` revisions
         let old_ids: Vec<i32> = Entity::find()
             .filter(Column::PostId.eq(post_id))
             .order_by_asc(Column::CreatedAt)

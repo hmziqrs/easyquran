@@ -5,7 +5,6 @@ use axum::{middleware, routing::post, Router};
 
 use crate::{middlewares::auth_guard, AppState};
 
-/// Routes for the analytics v1 module.
 pub fn routes() -> Router<AppState> {
     Router::<AppState>::new()
         .route(

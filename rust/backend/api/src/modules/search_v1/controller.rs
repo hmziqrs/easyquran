@@ -1,5 +1,3 @@
-//! Search controller — full-text search across published posts.
-
 use axum::{extract::State, Json};
 use sea_orm::{ColumnTrait, EntityTrait, FromQueryResult, QueryFilter, QueryOrder, QuerySelect};
 use serde::Deserialize;

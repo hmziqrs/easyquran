@@ -2,10 +2,6 @@ use std::env;
 
 use axum::http::HeaderValue;
 
-/// Build the list of allowed CORS origins.
-///
-/// This mirrors the configuration used in `main.rs` so both the CORS layer
-/// and our middleware share the same source of truth.
 pub fn get_allowed_origins() -> Vec<HeaderValue> {
     let mut default_origins: Vec<String> = vec![
         "http://localhost:8081",

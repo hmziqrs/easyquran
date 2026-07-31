@@ -1,48 +1,11 @@
-//! Server-side HTML allowlist sanitization of stored post (EditorJS) content.
-//!
-//! Post `content` is stored as raw EditorJS JSON. Several block `data` fields
-//! are rendered by the frontends via `dangerous_inner_html` — i.e. parsed as
-//! HTML, not escaped text:
-//!   - `paragraph.data.text` — consumer + admin `render_paragraph_block`
-//!   - `list.data.items[]`   — consumer + admin `render_list_block`
-//!   - `raw.data.html`       — consumer + admin `render_raw_block`
-//!
-//! Because posts are admin-writable but unauthenticated-readable, an attacker
-//! who can author (or compromise an account that authors) a post could
-//! otherwise persist `<script>`, `onerror=`, or `javascript:` payloads that
-//! execute for every reader. We neutralise those three fields at the
-//! serialization chokepoint (`PostWithRelations::content`, via
-//! `serialize_with`) using the `ammonia` allowlist sanitizer, which drops
-//! `<script>`/event-handler attributes/`javascript:` URLs while preserving
-//! benign inline markup (`<b>`, `<i>`, `<a>`, …).
-//!
-//! Fields rendered as *escaped text* (header, quote, code, table, captions) are
-//! intentionally NOT touched here: `ammonia` would HTML-encode their literal
-//! `<`/`&`, which the escaped frontend renderers would then escape a second
-//! time, corrupting legitimate content. Those fields are safe precisely because
-//! they are never `dangerous_inner_html` sinks. The one historical exception —
-//! the TOC component rendering header text via `dangerous_inner_html` — is
-//! fixed at the frontend (it renders a plain-text label). The layered CSP
-//! (`script-src 'self'`, plan Phase 6c) blocks any residual inline `<script>`
-//! as defence-in-depth. See plan Phase 6e.
-
 use serde::Serialize;
 use serde_json::Value;
 
-/// Clean an HTML string through ammonia's known-safe allowlist.
-///
-/// `ammonia::clean` is the documented shorthand for
-/// `Builder::default().clean(input).to_string()`: it strips unknown elements,
-/// all `on*` event-handler attributes, and `javascript:`/`vbscript:` URLs from
-/// `href`/`src`, while keeping safe inline formatting.
 fn clean(html: &str) -> String {
     ammonia::clean(html)
 }
 
-/// Sanitize a top-level string field on a block's `data` object, in place.
 fn clean_field(data: &mut Value, key: &str) {
-    // Read the current string into an owned value so the immutable borrow ends
-    // before we mutate `data`.
     let cleaned = match data.get(key).and_then(|v| v.as_str()) {
         Some(s) => clean(s),
         None => return,
@@ -52,7 +15,6 @@ fn clean_field(data: &mut Value, key: &str) {
     }
 }
 
-/// Sanitize `list` block items, which are an array of HTML strings.
 fn clean_items(data: &mut Value) {
     let Some(arr) = data.get_mut("items").and_then(|v| v.as_array_mut()) else {
         return;
@@ -64,13 +26,6 @@ fn clean_items(data: &mut Value) {
     }
 }
 
-/// Sanitize EditorJS post content in place: strip XSS payloads from the three
-/// block fields the frontends render as `dangerous_inner_html`.
-///
-/// Unknown block types and non-string fields are left untouched. The `code`
-/// block (`data.code`) is deliberately never handled here — it is source text
-/// rendered as an escaped text node, and sanitizing it would corrupt code
-/// samples containing `<`.
 pub fn sanitize_editorjs_content(content: &mut Value) {
     let Some(blocks) = content.get_mut("blocks").and_then(|v| v.as_array_mut()) else {
         return;
@@ -93,11 +48,6 @@ pub fn sanitize_editorjs_content(content: &mut Value) {
     }
 }
 
-/// `serde` `serialize_with` adapter: clone, sanitize, then serialize.
-///
-/// The stored value is never mutated — sanitization happens on read, so every
-/// client-facing serialization of `PostWithRelations::content` is XSS-clean
-/// regardless of which handler or list endpoint produced it.
 pub fn serialize_sanitized_content<S>(value: &Value, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -107,17 +57,6 @@ where
     cloned.serialize(serializer)
 }
 
-/// `serde` `serialize_with` adapter for a content field stored as a JSON
-/// *string* (e.g. `post_revision::Model::content`), mirroring
-/// [`serialize_sanitized_content`] for the `Value` form.
-///
-/// The stored string is parsed to JSON, sanitized through the ammonia
-/// allowlist, then re-serialized to a JSON string — so XSS payloads in the
-/// `dangerous_inner_html` block fields are stripped on read while the stored
-/// value is left untouched (sanitization-on-read). A malformed (non-JSON)
-/// string is passed through verbatim rather than corrupted: we cannot parse it,
-/// and rewriting it would risk data loss. The post-revision endpoints (autosave
-/// result, revisions list) flow revision content to the client through this.
 pub fn serialize_sanitized_content_string<S>(
     value: &String,
     serializer: S,
@@ -128,24 +67,15 @@ where
     match serde_json::from_str::<Value>(value) {
         Ok(mut parsed) => {
             sanitize_editorjs_content(&mut parsed);
-            // `parsed` came from a JSON string and is serializable, so this
-            // cannot fail; fall back to the raw string defensively anyway.
             let cleaned = serde_json::to_string(&parsed).unwrap_or_else(|_| value.clone());
             cleaned.serialize(serializer)
         }
-        // Not valid JSON — leave it untouched (do not corrupt non-JSON data).
         Err(_) => value.serialize(serializer),
     }
 }
 
-/// Escape a string for safe interpolation into XML text/attribute content.
-///
-/// Escapes the five XML 1.0 metacharacters (`&`, `<`, `>`, `'`, `"`). Used for
-/// server-generated XML documents (the sitemap) where author/operator-controlled
-/// strings (post slugs, the site base URL) are interpolated into the document —
-/// preventing stored XML injection / structure breakage (SITEMAP-XML-1). Slugs
-/// are author-controlled and only length-validated, so without this a post slug
-/// like `</loc></url><!--` would corrupt or inject into `/sitemap.xml`.
+/// Sitemap (router.rs) interpolates author-controlled slugs raw into XML; without
+/// this, a slug like `</loc></url>` injects into /sitemap.xml. No test pins it.
 pub fn xml_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
@@ -226,8 +156,6 @@ mod tests {
 
     #[test]
     fn code_block_is_untouched() {
-        // `code` is rendered as an escaped text node — it must round-trip
-        // verbatim, including `<` and even literal `<script>` inside a sample.
         let mut c = serde_json::json!({
             "blocks": [
                 { "type": "code", "data": { "code": "let x = a < b;\n<script>alert(1)</script>" } }
@@ -241,9 +169,6 @@ mod tests {
 
     #[test]
     fn header_text_is_untouched() {
-        // Header text is consumed by the escaped header renderer; sanitizing it
-        // server-side would double-encode literal `<`. The TOC inner_html sink
-        // is neutralized at the frontend instead.
         let mut c = serde_json::json!({
             "blocks": [
                 { "type": "header", "data": { "text": "if a < b then", "level": 2 } }
@@ -278,7 +203,6 @@ mod tests {
             serde_json::json!({ "blocks": [{ "type": "paragraph" /* no data */ }] }),
         ];
         for mut c in cases {
-            // Must not panic.
             sanitize_editorjs_content(&mut c);
         }
     }
@@ -300,7 +224,6 @@ mod tests {
             "serialized output is clean"
         );
         assert!(serialized.contains("ok"));
-        // The original value is unmutated (sanitization-on-read, not in place).
         assert!(
             value["blocks"][0]["data"]["text"]
                 .as_str()
@@ -312,8 +235,6 @@ mod tests {
 
     #[test]
     fn string_adapter_cleans_json_string_content() {
-        // Revision content is stored as a JSON *string*; the string adapter
-        // must parse, sanitize, and re-emit clean JSON.
         let raw = serde_json::to_string(&serde_json::json!({
             "blocks": [
                 { "type": "paragraph", "data": { "text": "<script>alert(1)</script>hi" } },
@@ -333,13 +254,11 @@ mod tests {
         );
         assert!(serialized.contains("hi"));
         assert!(serialized.contains("<i>ok</i>"), "benign markup survives");
-        // Source string left unmutated.
         assert!(raw.contains("<script>"));
     }
 
     #[test]
     fn string_adapter_passes_malformed_through() {
-        // Non-JSON string must round-trip verbatim (not corrupted, not dropped).
         let raw = String::from("plain text, not json <script>x</script>");
         #[derive(serde::Serialize)]
         struct Wrap<'a>(#[serde(serialize_with = "serialize_sanitized_content_string")] &'a String);

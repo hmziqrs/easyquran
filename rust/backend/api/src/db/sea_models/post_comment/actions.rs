@@ -104,7 +104,6 @@ impl Entity {
         }
     }
 
-    /// Find all comments by post ID (public use)
     #[instrument(skip(conn), fields(post_id))]
     pub async fn find_all_by_post(
         conn: &DbConn,
@@ -178,10 +177,8 @@ impl Entity {
             .filter(Column::PostId.eq(post_id))
             .filter(Column::Hidden.eq(false))
             .order_by(Column::CreatedAt, Order::Asc)
-            // DOS-COMMENTLIST-1: cap the result set so a heavily-commented post
-            // cannot force an unbounded SELECT + 3-table join + serialization on
-            // every public request. 500 is a generous ceiling; true pagination
-            // (PER_PAGE) is used by the dashboard `find_with_query` path.
+            // Keep the limit: public path has no pagination, so removing it
+            // allows an unbounded SELECT + 3-table join per request.
             .limit(500)
             .into_model::<CommentWithUserJoined>()
             .all(conn)
@@ -195,7 +192,6 @@ impl Entity {
         Ok(comments)
     }
 
-    /// Find comments with query (dashboard use)
     pub async fn find_with_query(
         conn: &DbConn,
         public_url: &str,
@@ -302,7 +298,6 @@ impl Entity {
             }
         }
 
-        // Date range filters
         if let Some(ts) = query.created_at_gt {
             comment_query = comment_query.filter(Column::CreatedAt.gt(ts));
         }
@@ -316,7 +311,6 @@ impl Entity {
             comment_query = comment_query.filter(Column::UpdatedAt.lt(ts));
         }
 
-        // Multi-field sorting with per-field order
         if let Some(sorts) = query.sorts {
             for sort in sorts {
                 let column = match sort.field.as_str() {

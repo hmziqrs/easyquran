@@ -13,8 +13,6 @@ use crate::{
 
 use super::validator::{V1DeleteDevicePayload, V1RegisterDevicePayload};
 
-/// Register (or refresh) a push token for the current user. Idempotent: the
-/// `(user_id, token)` unique constraint makes a re-register an upsert.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn register(
@@ -22,7 +20,7 @@ pub async fn register(
     auth: AuthSession,
     payload: ValidatedJson<V1RegisterDevicePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap(); // safe behind auth_guard::verified
+    let user = auth.user.unwrap();
     let model = device::Entity::upsert(
         &state.sea_db,
         device::NewDevice {
@@ -36,7 +34,6 @@ pub async fn register(
     Ok((StatusCode::OK, Json(json!({ "id": model.id }))))
 }
 
-/// List the current user's registered devices (newest first).
 #[debug_handler]
 #[instrument(skip(state, auth), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn list(
@@ -48,7 +45,6 @@ pub async fn list(
     Ok((StatusCode::OK, Json(json!({ "devices": devices }))))
 }
 
-/// Unregister a push token for the current user.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn delete(

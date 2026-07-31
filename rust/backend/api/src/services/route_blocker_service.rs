@@ -16,10 +16,6 @@ impl RouteBlockerService {
         state: &AppState,
         pattern: &str,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        // Idempotent: ensure_exists returns the existing row without writing if
-        // the pattern is already known, so the prior Redis SET dedup is no
-        // longer needed. The in-memory route cache picks the row up on the next
-        // `sync_all_to_cache` tick; a freshly recorded route is not blocked.
         RouteStatus::ensure_exists(&state.sea_db, pattern)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
@@ -32,11 +28,6 @@ impl RouteBlockerService {
         State(state): State<AppState>,
         path: &str,
     ) -> Result<bool, Box<dyn Error + Send + Sync>> {
-        // The blocked/known sets previously lived in Redis (SISMEMBER); with the
-        // cache now an internal detail of `route_status::actions` (no public
-        // single-key reader), this consults the DB — the source of truth. The
-        // middleware owns the call site and may short-circuit via `gate_store`
-        // dedup if the per-request lookup becomes a concern.
         let is_blocked = RouteStatus::find_by_pattern(&state.sea_db, path)
             .await
             .map(|model| model.map(|m| m.is_blocked).unwrap_or(false))?;
@@ -106,10 +97,6 @@ impl RouteBlockerService {
             })
     }
 
-    /// Rebuild the process-global in-memory route cache from the DB. Replaces the
-    /// prior `sync_all_to_redis` path — there is no Redis round-trip on the
-    /// default build; the cache lives in `route_status::actions::ROUTE_CACHE`,
-    /// keyed by `{KNOWN_ROUTES_KEY}:{pattern}` / `{BLOCKED_ROUTES_KEY}:{pattern}`.
     pub async fn sync_all_routes_to_cache(
         State(state): State<AppState>,
     ) -> Result<serde_json::Value, ErrorResponse> {
@@ -127,8 +114,6 @@ impl RouteBlockerService {
         Ok(json!({ "message": "All routes synced to cache successfully" }))
     }
 
-    /// Initialize (or refresh) the in-memory route cache at startup and on each
-    /// periodic sync tick. Replaces the prior `initialize_redis_sync`; no Redis.
     pub async fn initialize_cache(
         state: &AppState,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {

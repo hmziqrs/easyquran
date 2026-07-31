@@ -55,7 +55,6 @@ pub mod model {
 pub mod slice {
     use serde::{Deserialize, Serialize};
 
-    /// Payload to add a post into a series
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct NewPostSeriesPost {
         pub series_id: i32,
@@ -64,14 +63,12 @@ pub mod slice {
         pub sort_order: Option<i32>,
     }
 
-    /// Payload to remove a post from a series
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RemovePostSeriesPost {
         pub series_id: i32,
         pub post_id: i32,
     }
 
-    /// Payload to reorder a post within a series
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct ReorderSeriesPost {
         pub series_id: i32,
@@ -79,7 +76,6 @@ pub mod slice {
         pub new_sort_order: i32,
     }
 
-    /// Query parameters for listing mappings within a series
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SeriesPostsListQuery {
         pub series_id: i32,
@@ -104,12 +100,9 @@ pub mod actions {
     impl Entity {
         pub const PER_PAGE: u64 = 10;
 
-        /// Add a post to a series. If mapping already exists, returns existing model.
-        /// If `sort_order` is not provided, appends to the end.
         pub async fn add(conn: &DbConn, payload: NewPostSeriesPost) -> DbResult<Model> {
             let now = chrono::Utc::now().fixed_offset();
 
-            // Idempotency: return existing mapping if present
             if let Some(existing) = Entity::find()
                 .filter(Column::SeriesId.eq(payload.series_id))
                 .filter(Column::PostId.eq(payload.post_id))
@@ -140,14 +133,12 @@ pub mod actions {
 
             let created = active.insert(&txn).await?;
 
-            // Normalize ordering to ensure uniqueness and contiguous sequence
             Self::normalize_sort_orders(&txn, payload.series_id).await?;
 
             txn.commit().await?;
             Ok(created)
         }
 
-        /// Remove a post from a series. Returns rows affected.
         pub async fn remove(conn: &DbConn, payload: RemovePostSeriesPost) -> DbResult<u64> {
             let txn = conn.begin().await?;
 
@@ -157,14 +148,12 @@ pub mod actions {
                 .exec(&txn)
                 .await?;
 
-            // Normalize remaining after removal
             Self::normalize_sort_orders(&txn, payload.series_id).await?;
 
             txn.commit().await?;
             Ok(res.rows_affected)
         }
 
-        /// Reorder a post within a series (1-based position). Returns rows updated.
         pub async fn reorder(conn: &DbConn, payload: ReorderSeriesPost) -> DbResult<u64> {
             let txn = conn.begin().await?;
 
@@ -175,7 +164,6 @@ pub mod actions {
                 .all(&txn)
                 .await?;
 
-            // Find index of the target post
             if let Some((idx, _)) = items
                 .iter()
                 .enumerate()
@@ -183,7 +171,6 @@ pub mod actions {
             {
                 let item = items.remove(idx);
 
-                // Clamp new position
                 let len = items.len() as i32;
                 let mut target_pos = payload.new_sort_order;
                 if target_pos < 1 {
@@ -193,10 +180,8 @@ pub mod actions {
                     target_pos = len + 1;
                 }
 
-                // Insert at new position (convert to 0-based)
                 items.insert((target_pos - 1) as usize, item);
 
-                // Persist new order
                 let now = chrono::Utc::now().fixed_offset();
                 let mut updated_count = 0u64;
                 for (i, m) in items.into_iter().enumerate() {
@@ -211,12 +196,10 @@ pub mod actions {
                 txn.commit().await?;
                 Ok(updated_count)
             } else {
-                // Nothing to do if mapping not found
                 Ok(0)
             }
         }
 
-        /// List mappings for a series ordered by sort_order asc, id asc.
         pub async fn list_by_series(
             conn: &DbConn,
             query: SeriesPostsListQuery,
@@ -238,7 +221,6 @@ pub mod actions {
             Ok(PaginatedList::new(items, total, page, per_page))
         }
 
-        /// Count mappings for a given series.
         pub async fn count_by_series(conn: &DbConn, series_id: i32) -> DbResult<u64> {
             let c = Entity::find()
                 .filter(Column::SeriesId.eq(series_id))
@@ -247,7 +229,6 @@ pub mod actions {
             Ok(c)
         }
 
-        /// Remove all mappings for a series. Returns rows affected.
         pub async fn clear_series(conn: &DbConn, series_id: i32) -> DbResult<u64> {
             let res = Entity::delete_many()
                 .filter(Column::SeriesId.eq(series_id))
@@ -256,7 +237,6 @@ pub mod actions {
             Ok(res.rows_affected)
         }
 
-        /// Get the maximum sort_order for a given series.
         async fn max_sort_order_for_series<C>(conn: &C, series_id: i32) -> DbResult<Option<i32>>
         where
             C: ConnectionTrait,
@@ -270,7 +250,6 @@ pub mod actions {
             Ok(item.map(|m| m.sort_order))
         }
 
-        /// Normalize sort orders to be contiguous starting from 1.
         async fn normalize_sort_orders<C>(conn: &C, series_id: i32) -> DbResult<()>
         where
             C: ConnectionTrait,
@@ -297,6 +276,5 @@ pub mod actions {
     }
 }
 
-// Re-exports for convenience and consistency with other modules
 pub use model::{ActiveModel, Column, Entity, Model, Relation};
 pub use slice::*;

@@ -155,12 +155,10 @@ impl Entity {
             );
         }
 
-        // Optional is_active filter
         if let Some(active) = query.is_active {
             tag_query = tag_query.filter(Column::IsActive.eq(active));
         }
 
-        // Optional created_at/updated_at range filters
         if let Some(ts) = query.created_at_gt {
             tag_query = tag_query.filter(Column::CreatedAt.gt(ts));
         }

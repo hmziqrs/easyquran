@@ -11,7 +11,6 @@ pub enum TemplateError {
     },
 }
 
-/// Lazy-initialized Tera instance with all email templates.
 fn tera_instance() -> Result<Tera, TemplateError> {
     let mut tera = Tera::default();
 
@@ -63,18 +62,6 @@ fn tera_instance() -> Result<Tera, TemplateError> {
     Ok(tera)
 }
 
-/// Render a named email template with the given context.
-///
-/// # Template names
-///
-/// - `"email_verification"` — variables: `app_name`, `verification_url`, `user_name`
-/// - `"forgot_password"` — variables: `app_name`, `reset_url`, `user_name`
-/// - `"welcome"` — variables: `app_name`, `user_name`, `login_url`
-/// - `"newsletter_confirmation"` — variables: `app_name`, `confirm_url`
-/// - `"payment_receipt"` — variables: `app_name`, `user_name`, `amount`, `currency`, `plan_name`, `invoice_url`
-/// - `"subscription_confirmation"` — variables: `app_name`, `user_name`, `plan_name`, `amount`, `next_billing_date`
-///
-/// All templates also support an optional `primary_color` variable (defaults to `"#3b82f6"`).
 pub fn render(template_name: &str, context: &tera::Context) -> Result<String, TemplateError> {
     let tera = tera_instance()?;
 

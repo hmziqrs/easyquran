@@ -1,10 +1,3 @@
-//! Quran content API — in-memory store + boot loader (Phase 0, §4).
-//!
-//! [`store`] holds the immutable content types; [`loader`] is the only place
-//! that reads SQLite for Quran content (it owns its own read-only connections,
-//! independent of `sea_db`). Public handlers under `modules/quran_v1/` consume
-//! the store purely in-memory and contain no sqlx/SQLite reference (§10).
-
 pub mod loader;
 pub mod normalize;
 pub mod search;

@@ -5,13 +5,8 @@ use crate::middlewares::auth_guard;
 use crate::AppState;
 use axum::{middleware, routing::post, Router};
 
-/// Seed/system-provisioning routes.
-///
-/// These mutate core tables and must never be reachable in production. They are
-/// (1) feature-gated behind `seed-system`, which is excluded from the `full`
-/// feature set so production images never compile them, and (2) additionally
-/// gated behind a super-admin auth requirement so even dev/staging builds can
-/// only be exercised by `ROLE_SUPER_ADMIN`. See plan Phase 6d.
+// Seed routes mutate core tables — must stay feature-gated (`seed-system`,
+// excluded from `full`) AND behind ROLE_SUPER_ADMIN. Do not relax either gate.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/seed_tags", post(controller::seed_tags))

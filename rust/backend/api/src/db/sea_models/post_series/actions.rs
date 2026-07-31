@@ -8,16 +8,9 @@ use ruxlog_types::PaginatedList;
 
 use super::*;
 
-/// Actions for post series:
-/// - create
-/// - update
-/// - delete
-/// - list (with optional search + pagination)
-/// - find_by_slug
 impl Entity {
     pub const PER_PAGE: u64 = 10;
 
-    /// Create a new post series.
     pub async fn create(
         conn: &DbConn,
         name: String,
@@ -39,10 +32,7 @@ impl Entity {
         Ok(model)
     }
 
-    /// Update a post series by id. Returns Ok(None) if the series doesn't exist.
-    ///
-    /// Note: `description` cannot be cleared to NULL via this method (consistent with other update patterns);
-    /// it can only be set when provided (Some), otherwise left unchanged (None).
+    /// `description: None` leaves the column unchanged (not cleared to NULL).
     pub async fn update(
         conn: &DbConn,
         series_id: i32,
@@ -72,18 +62,11 @@ impl Entity {
         }
     }
 
-    /// Delete a post series by id. Returns number of rows affected.
     pub async fn delete(conn: &DbConn, series_id: i32) -> DbResult<u64> {
         let res = Entity::delete_by_id(series_id).exec(conn).await?;
         Ok(res.rows_affected)
     }
 
-    /// List post series with optional search (matches name or slug) and pagination.
-    /// Returns (items, total_count).
-    ///
-    /// - page starts at 1
-    /// - default per_page = PER_PAGE
-    /// - ordered by updated_at desc, id desc
     pub async fn list(
         conn: &DbConn,
         page: Option<u64>,
@@ -116,7 +99,6 @@ impl Entity {
         Ok(PaginatedList::new(items, total, page, per_page))
     }
 
-    /// Find a post series by slug.
     pub async fn find_by_slug(conn: &DbConn, slug: String) -> DbResult<Option<Model>> {
         let model = Entity::find()
             .filter(Column::Slug.eq(slug))

@@ -14,23 +14,14 @@ const APPLE_TOKEN_URL: &str = "https://appleid.apple.com/auth/token";
 const APPLE_JWKS_URL: &str = "https://appleid.apple.com/auth/keys";
 const APPLE_ISSUER: &str = "https://appleid.apple.com";
 
-/// Resolved Apple Sign-in configuration loaded from env. Apple's `client_secret`
-/// is NOT a static value — it is a per-request ES256-signed JWT minted from the
-/// team/key id + the EC private key (see [`mint_apple_client_secret`]).
 pub struct AppleConfig {
-    /// Services ID / app_id (`client_id` in Apple's OAuth terms).
     pub client_id: String,
     pub team_id: String,
     pub key_id: String,
     pub redirect_uri: String,
-    /// P-256 EC private key (Apple .p8 contents), PEM-decoded bytes.
     pub private_key_pem: String,
 }
 
-/// Load Apple config from env. The private key is read from `APPLE_PRIVATE_KEY`
-/// (the .p8 contents, newlines literal or `\n`-escaped) with a
-/// `APPLE_PRIVATE_KEY_PATH` file fallback (keeps the secret out of the process
-/// env / git, mirroring the FCM service-account pattern).
 #[allow(clippy::result_large_err)]
 pub fn load_apple_config() -> Result<AppleConfig, ErrorResponse> {
     let client_id = std::env::var("APPLE_CLIENT_ID").map_err(|_| {
@@ -53,7 +44,6 @@ pub fn load_apple_config() -> Result<AppleConfig, ErrorResponse> {
     let private_key_pem = match std::env::var("APPLE_PRIVATE_KEY") {
         Ok(raw) if !raw.trim().is_empty() => unescape_pem_newlines(&raw),
         _ => {
-            // File fallback: read the .p8 from disk so the key never sits in env.
             let path = std::env::var("APPLE_PRIVATE_KEY_PATH").map_err(|_| {
                 ErrorResponse::new(ErrorCode::InternalServerError)
                     .with_message("APPLE_PRIVATE_KEY or APPLE_PRIVATE_KEY_PATH not configured")
@@ -75,8 +65,6 @@ pub fn load_apple_config() -> Result<AppleConfig, ErrorResponse> {
     })
 }
 
-/// `.env`-stored PEMs often arrive with literal `\n` sequences; normalize them
-/// to real newlines so `from_ec_pem` parses the key.
 fn unescape_pem_newlines(raw: &str) -> String {
     if raw.contains("\\n") {
         raw.replace("\\n", "\n")
@@ -85,10 +73,6 @@ fn unescape_pem_newlines(raw: &str) -> String {
     }
 }
 
-/// Mint Apple's `client_secret` JWT (ES256) for one token exchange. The JWT is
-/// short-lived (~6 months is Apple's max); we mint fresh each request so there
-/// is no stale-secret window. Mirrors the FCM service-account JWT pattern using
-/// `jsonwebtoken`'s EC encoding key.
 #[allow(clippy::result_large_err)]
 pub fn mint_apple_client_secret(cfg: &AppleConfig) -> Result<String, ErrorResponse> {
     let mut header = Header::new(Algorithm::ES256);
@@ -98,7 +82,7 @@ pub fn mint_apple_client_secret(cfg: &AppleConfig) -> Result<String, ErrorRespon
     let claims = serde_json::json!({
         "iss": cfg.team_id,
         "iat": now,
-        "exp": now + 157_77000, // ~6 months — Apple's documented maximum
+        "exp": now + 157_77000,
         "aud": APPLE_ISSUER,
         "sub": cfg.client_id,
     });
@@ -118,11 +102,6 @@ pub fn mint_apple_client_secret(cfg: &AppleConfig) -> Result<String, ErrorRespon
     })
 }
 
-/// Build the Apple authorize URL with PKCE + session-bound state + OIDC nonce.
-/// We request `response_type=code` only and set `response_mode=query`, so Apple
-/// redirects back with a GET `?code=...&state=...` (matching our other
-/// providers' GET callbacks); the id_token is then obtained from the token
-/// endpoint, not the callback.
 pub fn build_apple_authorize_url(
     cfg: &AppleConfig,
     state_secret: &str,
@@ -149,8 +128,6 @@ pub fn build_apple_authorize_url(
     Ok(url.to_string())
 }
 
-/// Apple's token endpoint response. We only consume `id_token` (the OIDC
-/// identity); the access/refresh tokens are unused for our login flow.
 #[derive(Debug, Deserialize)]
 pub struct AppleTokenResponse {
     #[allow(dead_code)]
@@ -161,12 +138,6 @@ pub struct AppleTokenResponse {
     pub id_token: String,
 }
 
-/// Exchange an Apple authorization code for tokens via a hand-rolled form POST.
-/// We cannot use the `oauth2` crate's exchange here because Apple's
-/// `client_secret` is a per-request signed JWT, not a static value. The PKCE
-/// `code_verifier` MUST be echoed (Apple enforces PKCE when a `code_challenge`
-/// was sent in the authorize request); pass `None` only if the authorize
-/// request did not use PKCE.
 pub async fn exchange_apple_code(
     http_client: &reqwest::Client,
     cfg: &AppleConfig,
@@ -212,7 +183,6 @@ pub async fn exchange_apple_code(
     })
 }
 
-/// A single RSA signing key from Apple's JWKS.
 #[derive(Clone, Debug, Deserialize)]
 struct AppleJwkKey {
     kid: Option<String>,
@@ -225,11 +195,6 @@ struct AppleJwkSet {
     keys: Vec<AppleJwkKey>,
 }
 
-/// Verify an Apple `id_token`'s signature and claims against the published
-/// JWKS. Mirrors `google_auth_v1::service::verify_google_id_token` (single
-/// fetch, RS256, aud/iss/exp validation, optional nonce binding) but without
-/// the cache — Apple logins are infrequent enough that a fresh JWKS fetch per
-/// login is acceptable.
 #[allow(clippy::result_large_err)]
 pub async fn verify_apple_id_token(
     id_token: &str,
@@ -274,7 +239,6 @@ pub async fn verify_apple_id_token(
             ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid Apple id_token")
         })?;
 
-    // OIDC nonce binding (V-LOW-NONCE): if we sent a nonce, require it echoed.
     if let Some(expected) = expected_nonce {
         match &token_data.claims.nonce {
             Some(actual) if actual == expected => { /* bound */ }
@@ -292,8 +256,6 @@ pub async fn verify_apple_id_token(
     Ok(token_data.claims)
 }
 
-/// Build a short-timeout reqwest client for the JWKS fetch (V-MED-10: bound so a
-/// wedged Apple endpoint cannot pin the login handler).
 fn http_client_for_jwks() -> Result<reqwest::Client, ErrorResponse> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())

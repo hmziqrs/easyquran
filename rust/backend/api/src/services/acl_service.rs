@@ -43,14 +43,7 @@ impl AclService {
             if normalized_key.is_empty() {
                 continue;
             }
-            // ACL-ENV-SECRETS-IMPORT: never persist live secret material into
-            // the `app_constants` table / in-memory cache. The prior
-            // `guess_sensitive` heuristic both missed common secret names
-            // (DATABASE_URL, REDIS_URL, SMTP_URL, CONNECTION_STRING, PGCONN) and
-            // — critically — only controlled read-side masking, leaving every
-            // caught secret (COOKIE_KEY, FIELD_ENC_KEY, AWS_SECRET_ACCESS_KEY)
-            // stored VERBATIM at rest. Skipping secret keys entirely closes the
-            // at-rest duplication of the process's highest-value secrets.
+            // Security: never persist secret env vars into app_constants at rest.
             if Self::looks_like_secret_key(&normalized_key) {
                 tracing::debug!(
                     key = %normalized_key,
@@ -89,16 +82,8 @@ impl AclService {
             || lower.contains("access")
     }
 
-    /// ACL-ENV-SECRETS-IMPORT: comprehensive secret-key detector. A key that
-    /// looks like a secret is SKIPPED by `bootstrap_from_env` (never persisted
-    /// to the SQLite DB or the in-memory cache). This is a deny-list that covers
-    /// the bypasses the prior `guess_sensitive` heuristic missed
-    /// (DATABASE_URL / REDIS_URL / SMTP_URL / CONNECTION_STRING / *_DSN) plus
-    /// the explicit ruxlog live-crypto/session names (COOKIE_KEY,
-    /// FIELD_ENC_KEY) and cloud/provider credentials.
     fn looks_like_secret_key(key: &str) -> bool {
         let k = key.to_ascii_uppercase();
-        // Explicit secret-bearing substrings (case-insensitive).
         const SECRET_NEEDLES: &[&str] = &[
             "SECRET",
             "PASSWORD",
@@ -108,7 +93,6 @@ impl AclService {
             "PRIVATE",
             "SIGNING",
             "APIKEY",
-            // connection strings / infra URLs that carry or target credentials:
             "DATABASE_URL",
             "DB_URL",
             "DSN",
@@ -123,13 +107,11 @@ impl AclService {
             "AMQP",
             "RABBITMQ",
             "KAFKA",
-            // ruxlog live crypto / session material — must never be duplicated:
             "COOKIE_KEY",
             "FIELD_ENC_KEY",
             "SESSION_KEY",
             "CSRF_KEY",
             "JWT_SECRET",
-            // cloud / provider credentials:
             "AWS_SECRET_ACCESS_KEY",
             "AWS_ACCESS_KEY_ID",
             "AWS_SESSION_TOKEN",
@@ -141,7 +123,6 @@ impl AclService {
             "GOOGLE_CLIENT_SECRET",
             "OAUTH_CLIENT_SECRET",
         ];
-        // Suffixes that mark a var as secret regardless of prefix.
         const SECRET_SUFFIXES: &[&str] = &[
             "_KEY",
             "_SECRET",
@@ -160,10 +141,6 @@ impl AclService {
         State(state): State<AppState>,
         key: &str,
     ) -> Result<AppConstantModel, ErrorResponse> {
-        // The constant cache (prior Redis HASHes VALUE_HASH / META_HASH) is now
-        // an internal detail of `app_constant::actions` with no public per-key
-        // reader, so this consults the DB — the source of truth. The process
-        // cache stays warm via `sync_all_to_cache` (bootstrap + mutations).
         AppConstant::find_by_key(&state.sea_db, key)
             .await
             .map_err(|e| {
@@ -225,9 +202,6 @@ impl AclService {
             ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
         })?;
 
-        // Rebuild the in-memory cache so it reflects the write (replaces the
-        // prior per-key HSET on the Redis hashes; the cache has no public
-        // single-key writer, so a full resync is the faithful equivalent).
         AppConstant::sync_all_to_cache(&state.sea_db, Self::VALUE_HASH, Self::META_HASH)
             .await
             .map_err(|e| {
@@ -248,20 +222,12 @@ impl AclService {
                 ErrorResponse::new(ErrorCode::InternalServerError).with_message(e.to_string())
             })?;
 
-        // Drop the deleted key from the in-memory cache (replaces the prior
-        // best-effort HDELs on the two Redis hashes). Non-fatal: the DB is the
-        // source of truth and the next full sync reaps it regardless.
         let _ =
             AppConstant::sync_all_to_cache(&state.sea_db, Self::VALUE_HASH, Self::META_HASH).await;
 
         Ok(())
     }
 
-    /// Rebuild the process-global in-memory constant cache from the DB. Replaces
-    /// the prior `sync_all_to_redis` path — there is no Redis round-trip on the
-    /// default build; the cache lives in `app_constant::actions::CONSTANT_CACHE`,
-    /// keyed by `{VALUE_HASH}:{key}` (raw value) / `{META_HASH}:{key}` (JSON
-    /// metadata blob).
     pub async fn sync_all_to_cache(
         State(state): State<AppState>,
     ) -> Result<serde_json::Value, ErrorResponse> {
@@ -326,7 +292,6 @@ mod tests {
 
     #[test]
     fn guess_sensitive_case_insensitive() {
-        // All these should be detected regardless of case
         assert!(AclService::guess_sensitive("Password"));
         assert!(AclService::guess_sensitive("SECRET"));
         assert!(AclService::guess_sensitive("Token"));
@@ -336,9 +301,7 @@ mod tests {
 
     #[test]
     fn guess_sensitive_substring_match() {
-        // "key" appears inside "monkey" -- should still match
         assert!(AclService::guess_sensitive("monkey"));
-        // "access" appears inside "inaccessibility" -- should still match
         assert!(AclService::guess_sensitive("inaccessibility"));
     }
 
@@ -349,7 +312,6 @@ mod tests {
 
     #[test]
     fn guess_sensitive_value_containing_keyword() {
-        // Values containing sensitive words should also be detected
         assert!(AclService::guess_sensitive("my_password_123"));
         assert!(AclService::guess_sensitive("bearer_token_value"));
     }

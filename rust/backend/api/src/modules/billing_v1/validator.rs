@@ -1,13 +1,9 @@
-//! Billing API request/response types and validation.
-
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::db::sea_models::post_access::model::PostAccessType;
 
 use crate::db::sea_models::plan::model::PlanInterval;
-
-// --- Plan CRUD payloads ---
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreatePlanPayload {
@@ -49,38 +45,28 @@ pub struct PlanListQuery {
     pub include_inactive: Option<bool>,
 }
 
-// --- Checkout ---
-
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreateCheckoutPayload {
     #[validate(length(min = 1, max = 255))]
     pub plan_slug: String,
-    /// Override success URL (optional, server provides default)
     pub success_url: Option<String>,
-    /// Override cancel URL (optional, server provides default)
     pub cancel_url: Option<String>,
 }
 
-/// One-time purchase of a single gated post. The amount charged is the
-/// server-side price from the post's access policy — never the client's.
+/// Amount is taken from the post's server-side access policy — do NOT add a
+/// client-supplied amount field to this payload.
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreatePostCheckoutPayload {
     #[validate(range(min = 1))]
     pub post_id: i32,
-    /// Override success URL (optional, server provides default)
     pub success_url: Option<String>,
-    /// Override cancel URL (optional, server provides default)
     pub cancel_url: Option<String>,
 }
-
-// --- Subscription management ---
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CancelSubscriptionPayload {
     pub immediately: Option<bool>,
 }
-
-// --- Discount codes ---
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreateDiscountCodePayload {
@@ -105,16 +91,12 @@ pub enum DiscountTypeValue {
     FixedAmount,
 }
 
-// --- Webhook ---
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WebhookPayload {
     pub provider: String,
     pub payload: serde_json::Value,
     pub signature: String,
 }
-
-// --- Responses ---
 
 #[derive(Debug, Serialize)]
 pub struct PlanResponse {
@@ -184,8 +166,6 @@ pub struct InvoiceResponse {
     pub pdf_url: Option<String>,
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
 }
-
-// --- Post access / paywall ---
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SetPostAccessPayload {

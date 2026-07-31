@@ -66,7 +66,6 @@ impl From<sea_orm::DbErr> for SeedError {
 
 pub type SeedResult<T> = Result<T, SeedError>;
 
-/// Progress callback function type for seed operations
 pub type ProgressCallback = Box<dyn Fn(String) + Send + Sync>;
 
 pub fn compute_range(before: i32, after: i32) -> TableRange {
@@ -80,17 +79,12 @@ pub fn compute_range(before: i32, after: i32) -> TableRange {
     }
 }
 
-/// Build the PRNG used by the seeders.
-///
-/// CRYP-RNG-006: by default we seed from OS entropy (`ChaCha20Rng::from_os_rng`)
-/// so no predictable/constant seed exists in any built binary. Deterministic
-/// output is only produced when a caller *explicitly* opts into reproducible
-/// data via `SeedMode::Static { value }` (the dev-only preset/static path) —
-/// every other path, including the default `Random` mode, is non-deterministic.
+/// Default seeding is OS entropy — never make this deterministic by default;
+/// predictable seeds predict any downstream "random" tokens. The Static arm is
+/// the only reproducibility opt-in (dev-only).
 pub fn seeded_rng(seed_mode: Option<SeedMode>) -> ChaCha20Rng {
     match seed_mode.unwrap_or_default() {
         SeedMode::Random => ChaCha20Rng::from_os_rng(),
-        // Explicit dev/reproducibility opt-in only.
         SeedMode::Static { value } => ChaCha20Rng::seed_from_u64(value),
     }
 }
@@ -159,8 +153,6 @@ mod tests {
         assert_eq!(range.to, 3);
     }
 
-    // ── size_label ────────────────────────────────────────────────────────
-
     #[test]
     fn size_label_boundaries() {
         assert_eq!(size_label(0), "low");
@@ -185,8 +177,6 @@ mod tests {
         assert_eq!(size_label(500), "very large");
         assert_eq!(size_label(10_000), "massive");
     }
-
-    // ── SeedOutcome::counts ───────────────────────────────────────────────
 
     #[test]
     fn counts_normal_ranges() {
@@ -232,7 +222,6 @@ mod tests {
             errors: vec![],
             warnings: vec![],
         };
-        // from > to: should yield 0
         outcome
             .ranges
             .insert("bad".to_string(), TableRange { from: 10, to: 5 });
@@ -252,8 +241,6 @@ mod tests {
         let counts = outcome.counts();
         assert!(counts.is_empty());
     }
-
-    // ── SeedOutcome::ranges_json ──────────────────────────────────────────
 
     #[test]
     fn ranges_json_valid_output() {
@@ -303,7 +290,6 @@ mod tests {
 
         let json = outcome.ranges_json();
         let serialized = serde_json::to_string(&json).unwrap();
-        // Verify it is valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&serialized).unwrap();
         assert_eq!(parsed["posts"]["from"], 5);
         assert_eq!(parsed["posts"]["to"], 15);

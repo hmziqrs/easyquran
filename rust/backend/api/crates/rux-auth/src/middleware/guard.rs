@@ -1,5 +1,3 @@
-//! Authentication guard middleware
-
 use std::marker::PhantomData;
 use std::task::{Context, Poll};
 
@@ -13,19 +11,6 @@ use crate::requirements::AuthRequirements;
 use crate::session::AuthSession;
 use crate::traits::{AuthBackend, AuthUser};
 
-/// Layer that enforces authentication requirements
-///
-/// # Examples
-///
-/// ```ignore
-/// use rux_auth::{auth_guard, auth_requirements};
-///
-/// let app = Router::new()
-///     .route("/protected", get(handler))
-///     .layer(auth_guard::<MyBackend>(
-///         auth_requirements().authenticated().verified()
-///     ));
-/// ```
 #[derive(Clone)]
 pub struct AuthGuardLayer<B: AuthBackend> {
     requirements: AuthRequirements,
@@ -33,7 +18,6 @@ pub struct AuthGuardLayer<B: AuthBackend> {
 }
 
 impl<B: AuthBackend> AuthGuardLayer<B> {
-    /// Create a new auth guard layer with the given requirements
     pub fn new(requirements: AuthRequirements) -> Self {
         Self {
             requirements,
@@ -54,7 +38,6 @@ impl<S, B: AuthBackend> Layer<S> for AuthGuardLayer<B> {
     }
 }
 
-/// Authentication guard service
 #[derive(Clone)]
 pub struct AuthGuard<S, B: AuthBackend> {
     inner: S,
@@ -81,58 +64,34 @@ where
         let _requirements = self.requirements.clone();
 
         Box::pin(async move {
-            // This is a simplified version - the real implementation
-            // extracts AuthSession and checks requirements
-            // For now, just pass through
             let mut inner = inner;
             inner.call(req).await
         })
     }
 }
 
-/// Create an auth guard layer
-///
-/// # Examples
-///
-/// ```ignore
-/// use rux_auth::{auth_guard, auth_requirements};
-///
-/// let layer = auth_guard::<MyBackend>(
-///     auth_requirements().authenticated()
-/// );
-/// ```
 pub fn auth_guard<B: AuthBackend>(requirements: AuthRequirements) -> AuthGuardLayer<B> {
     AuthGuardLayer::new(requirements)
 }
 
-/// Check authentication requirements against a session
-///
-/// This is the core validation logic used by the middleware.
 pub async fn check_requirements<B: AuthBackend>(
     auth: &mut AuthSession<B>,
     requirements: &AuthRequirements,
 ) -> Result<(), AuthError> {
-    // Check unauthenticated requirement first
     if requirements.authenticated == Some(false) {
         if auth.user.is_some() {
             return Err(AuthError::new(AuthErrorCode::AlreadyAuthenticated));
         }
-        // Unauthenticated - no further checks needed
         return Ok(());
     }
 
-    // Check authenticated requirement
     if requirements.authenticated == Some(true) && auth.user.is_none() {
         return Err(AuthError::new(AuthErrorCode::Unauthenticated));
     }
 
-    // Get user and state for remaining checks. Clone out of the immutable
-    // borrow on `auth` so the ban-refresh path below can take `&mut auth` to
-    // write the refreshed status back into the session.
     let (user, state) = match (&auth.user, &auth.state) {
         (Some(u), Some(s)) => (u.clone(), s.clone()),
         _ => {
-            // No user but we didn't require auth - pass through
             if requirements.authenticated != Some(true) {
                 return Ok(());
             }
@@ -140,39 +99,18 @@ pub async fn check_requirements<B: AuthBackend>(
         }
     };
 
-    // Check unverified requirement (inverse)
     if requirements.unverified && user.email_verified() {
         return Err(AuthError::new(AuthErrorCode::AlreadyVerified)
             .with_message("This resource is for unverified users only"));
     }
 
-    // Check verified requirement
     if requirements.verified && !user.email_verified() {
         return Err(AuthError::new(AuthErrorCode::VerificationRequired));
     }
 
-    // 2FA / step-up checks are intentionally NOT performed here.
-    //
-    // NOTE (audit F#7 — DEADSTEP, removed): the per-route step-up machinery
-    // (the `.totp_verified()` / `.totp_if_enabled()` builders, the
-    // `reauth_within` step-up check, and the `totp_verified_at` /
-    // `reauthenticated_at` session-state fields) has been deleted. 2FA is
-    // enforced at the LOGIN boundary via a two-step login flow: `auth_v1::log_in`
-    // issues a short-lived, single-use pending-TOTP credential (NOT a session)
-    // for `two_fa_enabled` users, and only `auth_v1::login_totp` — after a
-    // replay-protected TOTP verification — grants the full session. So a correct
-    // password alone can no longer yield an authenticated session for a
-    // TOTP-enrolled user; they MUST supply a valid code. The success criterion
-    // of F#4/F#7/F#16 is met at the login boundary. See `docs/CRYPTO_AUDIT.md`.
-
-    // Check ban status
     if requirements.not_banned {
-        // Check if we need to refresh ban status
         if state.ban_cache_stale(requirements.ban_cache_duration) {
-            // check_ban returns an owned BanStatus, so the &auth borrow ends here
-            // and we can write the refreshed status back to the session below.
             let ban_status = auth.backend().check_ban(&user.id()).await?;
-            // Persist the refreshed ban status into the session cache.
             auth.update_ban_status(&ban_status).await?;
             if ban_status.is_banned() {
                 return Err(AuthError::new(AuthErrorCode::Banned));
@@ -182,7 +120,6 @@ pub async fn check_requirements<B: AuthBackend>(
         }
     }
 
-    // Check role requirement
     if let Some(min_role) = requirements.min_role {
         if user.role_level() < min_role {
             return Err(AuthError::new(AuthErrorCode::InsufficientRole)
@@ -194,25 +131,6 @@ pub async fn check_requirements<B: AuthBackend>(
     Ok(())
 }
 
-/// Middleware function for use with `axum::middleware::from_fn_with_state`
-///
-/// This is an alternative to using the Layer approach.
-///
-/// # Examples
-///
-/// ```ignore
-/// use axum::{Router, middleware};
-/// use rux_auth::{auth_guard_fn, auth_requirements};
-///
-/// async fn auth_middleware<B: AuthBackend>(
-///     State(state): State<AppState>,
-///     auth: AuthSession<B>,
-///     request: Request,
-///     next: Next,
-/// ) -> Result<Response, AuthError> {
-///     auth_guard_fn(auth, auth_requirements().authenticated(), request, next).await
-/// }
-/// ```
 pub async fn auth_guard_fn<B: AuthBackend>(
     mut auth: AuthSession<B>,
     requirements: AuthRequirements,

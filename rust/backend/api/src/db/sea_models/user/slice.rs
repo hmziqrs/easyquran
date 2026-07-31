@@ -31,7 +31,6 @@ pub struct UserWithRelations {
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult)]
 pub struct UserWithJoinedData {
-    // User fields
     pub id: i32,
     pub name: String,
     pub email: String,
@@ -42,7 +41,6 @@ pub struct UserWithJoinedData {
     pub created_at: DateTime<FixedOffset>,
     pub updated_at: DateTime<FixedOffset>,
 
-    // Avatar media fields from join
     pub avatar_object_key: Option<String>,
     pub avatar_file_url: Option<String>,
     pub avatar_mime_type: Option<String>,

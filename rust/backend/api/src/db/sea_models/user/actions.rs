@@ -134,9 +134,6 @@ impl Entity {
         };
 
         if let Some(user_model) = user {
-            // EMAIL-CHANGE-1: capture the current email/verified state before
-            // the model is consumed by `into()`, so an email change can be
-            // detected and the stale trust state reset.
             let prev_email = user_model.email.clone();
             let prev_verified = user_model.is_verified;
             let mut user_active: ActiveModel = user_model.into();
@@ -147,15 +144,8 @@ impl Entity {
 
             if let Some(email) = update_user.email {
                 if email != prev_email {
-                    // A verified account that changes its email must lose its
-                    // verified status until the NEW address is proven — otherwise
-                    // a verified badge persists on an unproven address the
-                    // account holder may not control (trust spoofing, CWE-290).
-                    // Rotate the per-user `session_auth_secret` so every prior
-                    // session is invalidated on its next request (the caller
-                    // must re-authenticate), mirroring the password-change path
-                    // (F#16). The new address is re-verified via the existing
-                    // email-verification resend endpoint.
+                    // Trust reset on email change: clear is_verified and rotate
+                    // session_auth_secret so the badge and prior sessions die with the old address.
                     user_active.email = Set(email);
                     user_active.is_verified = Set(false);
                     user_active.session_auth_secret = Set(super::model::new_session_auth_secret()
@@ -234,12 +224,7 @@ impl Entity {
         user_active.password = Set(Some(hash));
         user_active.updated_at = Set(chrono::Utc::now().fixed_offset());
 
-        // F#16: rotate the server-random `session_auth_secret` on credential
-        // change. `session_auth_hash` (services/auth.rs) is keyed on this secret,
-        // so rotating it invalidates ALL of the user's prior sessions on their
-        // next request (the extractor's ct_eq mismatch deletes the stale record).
-        // This closes the CSRF/session-fixation trust transition for the
-        // password-change path: a compromised session cannot survive a reset.
+        // Rotate session_auth_secret so prior sessions die with the old credential.
         user_active.session_auth_secret =
             Set(super::model::new_session_auth_secret().map_err(|err| {
                 ErrorResponse::new(ErrorCode::InternalServerError)
@@ -279,40 +264,12 @@ impl Entity {
         }
     }
 
-    /// V-MED-6 (TOTP replay TOCTOU): atomically advance the
-    /// `two_fa_last_totp_counter` watermark only if the proposed `new_counter`
-    /// is strictly greater than the row's current value (or the row has no
-    /// watermark yet).
-    ///
-    /// This is a single conditional UPDATE executed by the DB:
-    /// ```sql
-    /// UPDATE users
-    ///   SET two_fa_last_totp_counter = :new_counter
-    ///   WHERE id = :user_id
-    ///     AND (two_fa_last_totp_counter IS NULL OR two_fa_last_totp_counter < :new_counter)
-    /// ```
-    /// The UPDATE is the authoritative replay gate: under two concurrent
-    /// `twofa_verify`/`twofa_disable` requests for the same user and the same
-    /// matched counter, only one UPDATE can claim the row (the DB applies each
-    /// UPDATE's WHERE against the row it reads under its own lock), so only one
-    /// request sees `rows_affected > 0` and is authorized. The other observes
-    /// the now-advanced watermark, matches zero rows, and is rejected as a
-    /// replay — closing the read-modify-write TOCTOU that the prior
-    /// `find_by_id`-then-`update` path had.
-    ///
-    /// Returns `true` when the watermark was advanced (caller may authorize),
-    /// `false` when another request already advanced past `new_counter`
-    /// (caller must treat as a replay). Any DB error propagates as a 500.
     #[instrument(skip(conn), fields(user_id, new_counter))]
     pub async fn advance_totp_counter_if_higher<T: ConnectionTrait>(
         conn: &T,
         user_id: i32,
         new_counter: i64,
     ) -> DbResult<bool> {
-        // Build the conditional SET. `col_expr` writes
-        // `two_fa_last_totp_counter = $new_counter`; the IS NULL OR < filter is
-        // the replay guard. `Expr::col` + `.lt` builds the comparison against
-        // the bound value so both branches reference the same `new_counter`.
         let new_watermark = Expr::col(Column::TwoFaLastTotpCounter).lt(new_counter);
         let result = Self::update_many()
             .col_expr(Column::TwoFaLastTotpCounter, Expr::value(new_counter))
@@ -335,11 +292,7 @@ impl Entity {
         }
     }
 
-    /// CRYP-ENC-004(a): `google_id` is stored AT REST as a DETERMINISTIC
-    /// field-crypto envelope, so the lookup encrypts the supplied id with the
-    /// same key and matches the stored ciphertext column. Transparent to
-    /// callers — they pass the plaintext Google subject id and get the user.
-    /// A key-unset deployment surfaces a 500 (never a silent miss).
+    /// google_id is encrypted at rest; encrypt here or the lookup can't match.
     pub async fn find_by_google_id(conn: &DbConn, google_id: String) -> DbResult<Option<Model>> {
         let lookup =
             crate::utils::field_crypto::encrypt_deterministic(&google_id).map_err(|err| {
@@ -372,7 +325,7 @@ impl Entity {
             google_id: Set(Some(google_id)),
             oauth_provider: Set(Some("google".to_string())),
             role: Set(UserRole::User),
-            is_verified: Set(true), // Google accounts are pre-verified
+            is_verified: Set(true),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -747,13 +700,6 @@ mod tests {
     use sea_orm::sea_query::SqliteQueryBuilder;
     use sea_orm::QueryTrait;
 
-    /// V-MED-6 TOCTOU fix: `advance_totp_counter_if_higher` must emit a SINGLE
-    /// conditional UPDATE — `SET two_fa_last_totp_counter = :new WHERE id = :uid
-    /// AND (two_fa_last_totp_counter IS NULL OR two_fa_last_totp_counter < :new)`
-    /// — so the DB, not the application, decides who wins the watermark race.
-    /// The guarantee is the SQL shape (the conditional WHERE), not a value this
-    /// test asserts; rendering the statement to SQL keeps the test DB-free.
-    /// If a future refactor drops the `IS NULL OR <` guard, this test fails.
     #[test]
     fn advance_totp_counter_emits_atomic_conditional_update() {
         let sql =
@@ -769,19 +715,14 @@ mod tests {
                 .into_query()
                 .to_string(SqliteQueryBuilder);
 
-        // The SET targets exactly the watermark column with the new counter.
         assert!(
             sql.contains("SET \"two_fa_last_totp_counter\" = 1000042"),
             "expected SET on the watermark column, got: {sql}"
         );
-        // The row is scoped to one user — no bulk update.
         assert!(
             sql.contains("\"id\" = 7"),
             "expected WHERE id = 7, got: {sql}"
         );
-        // The replay guard: IS NULL OR < new_counter. Both arms must be present
-        // so first-use (NULL) and strict-advance (<) both pass while a replay
-        // (==) matches zero rows.
         assert!(
             sql.contains("\"two_fa_last_totp_counter\" IS NULL"),
             "missing IS NULL branch (first-use), got: {sql}"
@@ -790,13 +731,9 @@ mod tests {
             sql.contains("\"two_fa_last_totp_counter\" < 1000042"),
             "missing strict-less-than branch (replay guard), got: {sql}"
         );
-        // Sanity: this is an UPDATE against the users table, not a SELECT.
         assert!(sql.starts_with("UPDATE \"users\""), "not an UPDATE: {sql}");
     }
 
-    /// The watermark column's SeaORM identity must be stable so the SET column
-    /// and the WHERE filter refer to the same physical column — a mismatched
-    /// alias here would silently break the replay guard.
     #[test]
     fn two_fa_last_totp_counter_iden_is_stable() {
         use sea_orm::sea_query::Iden;

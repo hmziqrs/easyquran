@@ -17,11 +17,6 @@ pub struct FacebookExchangeRequest {
     pub state: String,
 }
 
-/// Facebook Graph API `/me?fields=id,name,email` response.
-///
-/// `email` is optional: a user may deny the email permission. `name` is
-/// optional for accounts that never set a display name. `id` is always present
-/// and is the stable provider subject identifier we link on.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FacebookUserInfo {
     pub id: String,

@@ -1,33 +1,20 @@
-//! Error handling for database operations
-
 use crate::error::{ErrorCode, ErrorResponse, IntoErrorResponse};
 use sea_orm::DbErr;
 
-/// Map SQLSTATE codes and common database error messages to ErrorCode
 fn classify_db_error(msg: &str) -> ErrorCode {
     let lower = msg.to_lowercase();
-    // Duplicate / unique constraint violations
-    //   Postgres: SQLSTATE 23505 / "duplicate key value" / "unique constraint"
-    //   SQLite : "unique constraint failed: <table>.<col>" (matched by the
-    //            "unique constraint" substring below)
     if msg.contains("23505")
         || lower.contains("duplicate key value")
         || lower.contains("unique constraint")
     {
         return ErrorCode::DuplicateEntry;
     }
-    // Foreign key violations
-    //   Postgres: SQLSTATE 23503 / "violates foreign key constraint"
-    //   SQLite : "foreign key constraint failed"
     if msg.contains("23503")
         || lower.contains("violates foreign key constraint")
         || lower.contains("foreign key constraint failed")
     {
         return ErrorCode::IntegrityError;
     }
-    // Not-null violations
-    //   Postgres: SQLSTATE 23502 / "not-null constraint" / "null value in column"
-    //   SQLite : "not null constraint failed: <table>.<col>"
     if msg.contains("23502")
         || lower.contains("not-null constraint")
         || lower.contains("null value in column")
@@ -35,7 +22,6 @@ fn classify_db_error(msg: &str) -> ErrorCode {
     {
         return ErrorCode::IntegrityError;
     }
-    // Check constraint (Postgres 23514) and other integrity issues (class 23*)
     if msg.contains("23514")
         || lower.contains("check constraint")
         || msg.contains("23P01")
@@ -43,9 +29,6 @@ fn classify_db_error(msg: &str) -> ErrorCode {
     {
         return ErrorCode::IntegrityError;
     }
-    // Deadlock / lock contention
-    //   Postgres: SQLSTATE 40P01 / "deadlock detected"
-    //   SQLite : "database is locked" / "database table is locked" (SQLITE_BUSY/LOCKED)
     if msg.contains("40P01")
         || lower.contains("deadlock detected")
         || lower.contains("database is locked")
@@ -53,18 +36,15 @@ fn classify_db_error(msg: &str) -> ErrorCode {
     {
         return ErrorCode::TransactionError;
     }
-    // Serialization failure (Postgres 40001)
     if msg.contains("40001")
         || lower.contains("could not serialize access due to")
         || lower.contains("serialization failure")
     {
         return ErrorCode::TransactionError;
     }
-    // Default
     ErrorCode::QueryError
 }
 
-/// Standardized handling for SeaORM database errors
 impl IntoErrorResponse for DbErr {
     fn into_error_response(self) -> ErrorResponse {
         match self {
@@ -139,23 +119,18 @@ impl IntoErrorResponse for DbErr {
     }
 }
 
-/// Implement From<DbErr> for ErrorResponse for convenience
 impl From<DbErr> for ErrorResponse {
     fn from(err: DbErr) -> Self {
         err.into_error_response()
     }
 }
 
-/// Represents the result of a database operation
 pub type DbResult<T> = Result<T, ErrorResponse>;
 
-/// Database-specific error handling utilities
 #[allow(clippy::result_large_err)]
 pub trait DbResultExt<T> {
-    /// Convert a Result<T, DbErr> to a Result<T, ErrorResponse>
     fn map_err_to_response(self) -> DbResult<T>;
 
-    /// Handle the not found case with a custom message
     fn not_found_with_message(self, message: &str) -> DbResult<T>;
 }
 

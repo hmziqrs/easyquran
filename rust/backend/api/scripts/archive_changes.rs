@@ -8,13 +8,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(name = "archive_changes")]
 #[command(about = "Archive git-modified files to a zip archive")]
 struct Args {
-    /// Output directory for archives (default: ../backups)
     #[arg(short, long)]
     output: Option<PathBuf>,
 }

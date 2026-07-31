@@ -14,11 +14,9 @@ fn escape_sql_literal(value: &str) -> String {
     value.replace('\'', "''")
 }
 
-/// Builds a SQL expression that computes a public URL from `bucket` + `object_key`, falling back
-/// to `object_key` as a full path when `bucket` is NULL/empty (legacy rows).
 pub fn public_file_url_expr(public_url: &str, table_alias: &str) -> SimpleExpr {
-    // Use a literal here (vs bind params) to avoid driver placeholder differences (e.g. `?` vs `$1`)
-    // in custom SQL fragments across backends.
+    // Literal (not bind params): custom SQL fragments can't share placeholders across
+    // drivers (? vs $1). Value is escaped via escape_sql_literal above.
     let base = escape_sql_literal(public_url.trim_end_matches('/'));
     let alias = escape_sql_literal(table_alias);
 

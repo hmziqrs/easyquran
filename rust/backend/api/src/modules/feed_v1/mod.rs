@@ -25,13 +25,8 @@ pub mod controller {
         pub limit: Option<u64>,
     }
 
-    /// Summary text shown for a gated post in the public feed. The feed is
-    /// unauthenticated, so the body of a `Paid`/`SubscriberOnly` post must NEVER
-    /// be derived from `content` — the previous fallback (`content_to_summary`)
-    /// leaked up to 500 chars of the real body to anonymous feed readers
-    /// (audit F#11 round-2, paywall bypass via the feed). Show only a policy
-    /// hint; readers must visit the site to read, where the server-side paywall
-    /// gates them properly.
+    /// Never derive a gated post's summary from its body — that leaks paid
+    /// content to anonymous readers.
     fn gated_summary(policy: &PostAccessPolicy) -> String {
         match policy.access_type {
             PostAccessType::SubscriberOnly => {
@@ -47,8 +42,6 @@ pub mod controller {
                     "This post is available for purchase — visit the site to read it.".to_string()
                 }
             },
-            // Unreachable for open posts (the caller only invokes this when the
-            // policy is gated), but kept exhaustive.
             PostAccessType::Free => String::new(),
         }
     }
@@ -61,7 +54,6 @@ pub mod controller {
             .replace('\'', "&apos;")
     }
 
-    // Extract a short plain-text summary from Editor.js-style JSON
     fn content_to_summary(value: &serde_json::Value, max_len: usize) -> String {
         let mut out = String::new();
         if let Some(blocks) = value.get("blocks").and_then(|b| b.as_array()) {
@@ -116,7 +108,6 @@ pub mod controller {
             }
         }
         if out.is_empty() {
-            // fallback to the entire JSON as string, trimmed
             out = value.to_string();
         }
         out.chars().take(max_len).collect()
@@ -171,9 +162,6 @@ pub mod controller {
         let limit = params.limit.unwrap_or(20).min(100);
         let posts = fetch_latest_posts(&state, limit).await?;
 
-        // Batch-load the access policy for every post so gated (Paid/
-        // SubscriberOnly) entries never leak their body in the public feed
-        // (audit F#11 round-2). Defaults to Free for posts with no policy row.
         let post_ids: Vec<i32> = posts.iter().map(|p| p.id).collect();
         let policies = load_post_access_map(&state.sea_db, &post_ids).await?;
 
@@ -204,9 +192,6 @@ pub mod controller {
                 .get(&p.id)
                 .cloned()
                 .unwrap_or_else(PostAccessPolicy::free);
-            // The feed is public/unauthenticated: a gated post leaks nothing of
-            // its body — only a policy hint. Open (Free) posts keep the excerpt
-            // or a body-derived summary (audit F#11 round-2).
             let desc_raw = if policy.is_open() {
                 if let Some(ex) = &p.excerpt {
                     ex.clone()
@@ -246,9 +231,6 @@ pub mod controller {
         let limit = params.limit.unwrap_or(20).min(100);
         let posts = fetch_latest_posts(&state, limit).await?;
 
-        // Batch-load the access policy for every post so gated (Paid/
-        // SubscriberOnly) entries never leak their body in the public feed
-        // (audit F#11 round-2). Defaults to Free for posts with no policy row.
         let post_ids: Vec<i32> = posts.iter().map(|p| p.id).collect();
         let policies = load_post_access_map(&state.sea_db, &post_ids).await?;
 
@@ -277,9 +259,6 @@ pub mod controller {
                 .get(&p.id)
                 .cloned()
                 .unwrap_or_else(PostAccessPolicy::free);
-            // The feed is public/unauthenticated: a gated post leaks nothing of
-            // its body — only a policy hint. Open (Free) posts keep the excerpt
-            // or a body-derived summary (audit F#11 round-2).
             let summary_raw = if policy.is_open() {
                 if let Some(ex) = &p.excerpt {
                     ex.clone()
@@ -312,8 +291,6 @@ pub mod controller {
     #[cfg(test)]
     mod tests {
         use super::*;
-
-        // ── xml_escape ─────────────────────────────────────────────────
 
         #[test]
         fn xml_escape_ampersand() {
@@ -352,8 +329,6 @@ pub mod controller {
         fn xml_escape_empty() {
             assert_eq!(xml_escape(""), "");
         }
-
-        // ── content_to_summary ─────────────────────────────────────────
 
         #[test]
         fn content_to_summary_paragraph() {
@@ -454,9 +429,6 @@ pub mod controller {
                 ]
             });
             let result = content_to_summary(&json, 10);
-            // The function breaks once out.len() >= max_len (byte-based), then
-            // truncates by chars().take(max_len). "A very lon" is 10 bytes and
-            // 10 chars, so the 'g' never gets appended.
             assert_eq!(result, "A very lon");
         }
 
@@ -464,7 +436,6 @@ pub mod controller {
         fn content_to_summary_empty_blocks_falls_back_to_json_string() {
             let json = serde_json::json!({ "not": "blocks" });
             let result = content_to_summary(&json, 200);
-            // Falls back to the entire JSON as a string
             assert!(result.contains("not"));
             assert!(result.contains("blocks"));
         }
@@ -473,7 +444,6 @@ pub mod controller {
         fn content_to_summary_empty_value() {
             let json = serde_json::json!({});
             let result = content_to_summary(&json, 100);
-            // Fallback: the JSON representation of {}
             assert!(!result.is_empty());
         }
 
@@ -493,11 +463,8 @@ pub mod controller {
                 "some_key": "some relatively long value here"
             });
             let result = content_to_summary(&json, 5);
-            // The fallback JSON string is also truncated
             assert_eq!(result.len(), 5);
         }
-
-        // ── gated_summary (audit F#11 round-2, feed paywall) ──────────
 
         fn access(access_type: PostAccessType, price: Option<i32>) -> PostAccessPolicy {
             PostAccessPolicy {
@@ -511,7 +478,6 @@ pub mod controller {
         fn gated_summary_subscriber_only_is_a_hint_not_the_body() {
             let s = gated_summary(&access(PostAccessType::SubscriberOnly, None));
             assert!(s.to_lowercase().contains("subscriber"));
-            // Never echoes body content — it is a fixed policy hint.
             assert!(s.contains("visit the site"));
         }
 
@@ -519,7 +485,6 @@ pub mod controller {
         fn gated_summary_paid_includes_price() {
             let s = gated_summary(&access(PostAccessType::Paid, Some(499)));
             assert!(s.to_lowercase().contains("purchase"));
-            // 499 cents → 4.99
             assert!(s.contains("4.99"));
         }
 
@@ -532,7 +497,6 @@ pub mod controller {
 
         #[test]
         fn gated_summary_free_is_empty() {
-            // Open posts never reach gated_summary; the value is unused.
             assert_eq!(gated_summary(&access(PostAccessType::Free, None)), "");
         }
     }

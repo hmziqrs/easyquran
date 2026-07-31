@@ -1,8 +1,3 @@
-//! Mock HTTP tests for billing providers.
-//!
-//! Uses wiremock to simulate provider APIs without real credentials.
-//! Run: cargo test --test billing_providers
-
 mod billing_mock_tests {
     use base64::Engine;
     use hmac::{Hmac, Mac};
@@ -34,13 +29,8 @@ mod billing_mock_tests {
         hex::encode(mac.finalize().into_bytes())
     }
 
-    /// Derive the raw HMAC key from a Polar / Standard Webhooks secret
-    /// (`whsec_<base64>` → strip prefix → base64-decode → raw key). This mirrors
-    /// the Standard Webhooks spec the SAME way `webhook_util::standard_webhooks_key`
-    /// does, implemented locally so the helper is a genuine independent signer
-    /// (not a call into the verifier under test). Misconfigured / non-base64
-    /// secrets fall back to the raw bytes, matching the verifier's fail-closed
-    /// behaviour at the signature check.
+    // Local, not webhook_util: the test signer must stay independent of the
+    // verifier under test, or a derivation bug passes here while prod breaks.
     fn polar_webhooks_key(secret: &str) -> Vec<u8> {
         let trimmed = secret.strip_prefix("whsec_").unwrap_or(secret);
         base64::engine::general_purpose::STANDARD
@@ -55,26 +45,16 @@ mod billing_mock_tests {
             .unwrap_or(0)
     }
 
-    /// Build a `WebhookEvent` carrying the correctly-signed header for each
-    /// provider's CURRENT verification scheme. Each branch mirrors exactly what
-    /// the provider's `verify_webhook` recomputes, so a genuine event parses and
-    /// a tampered one is rejected. Paddle (Ed25519) and PayPal (outbound verify
-    /// API) are handled in their own tests.
     fn signed_event(provider: &str, payload: &[u8], secret: &str) -> WebhookEvent {
         signed_event_at(provider, payload, secret, now_secs())
     }
 
-    /// Same as `signed_event` but with a caller-supplied `now_secs`, so a tamper
-    /// test can sign a body and then present a DIFFERENT body under the original
-    /// signature — the verifier must reject it.
     fn signed_event_at(provider: &str, payload: &[u8], secret: &str, now: i64) -> WebhookEvent {
         let mut headers = axum::http::HeaderMap::new();
         let body_hex = sign_payload(secret, payload);
-        // Mercado Pago's data.id arrives via the URL query string (V-CRIT-2).
         let mut query: Option<String> = None;
         match provider {
             "stripe" => {
-                // Stripe-Signature: t=<ts>,v1=<HMAC(secret, "{ts}.{body}")>
                 let ts = now.to_string();
                 let mut msg = Vec::with_capacity(ts.len() + 1 + payload.len());
                 msg.extend_from_slice(ts.as_bytes());
@@ -93,18 +73,6 @@ mod billing_mock_tests {
                 headers.insert("X-Signature", body_hex.parse().unwrap());
             }
             "polar" => {
-                // Polar.sh follows the Standard Webhooks spec (what
-                // `verify_standard_webhooks` recomputes): the signed message is
-                // `"{webhook_id}.{webhook_timestamp}.{body}"`, keyed by the raw
-                // bytes derived from the `whsec_<base64>` secret, and the digest
-                // is transmitted base64-encoded in `webhook-signature` as
-                // `v1,<base64>` alongside the required `webhook-id` and
-                // `webhook-timestamp` (unix seconds) headers. This mirrors the
-                // spec, NOT the verifier, so the test exercises a genuine
-                // end-to-end check (CRYP-HMAC-004). The previous branch signed
-                // the non-existent `X-Polar-Signature` with `hex(HMAC(secret,
-                // body))`, which the rewritten verifier never reads — circular
-                // and stale.
                 let webhook_id = "evt_polar_test";
                 let ts_str = now.to_string();
                 let key = polar_webhooks_key(secret);
@@ -121,10 +89,6 @@ mod billing_mock_tests {
                 headers.insert("webhook-signature", format!("v1,{sig}").parse().unwrap());
             }
             "mercado_pago" => {
-                // Official scheme (V-CRIT-2): x-signature: ts=<ms>,v1=<HMAC(
-                // secret, "id:{data.id};request-id:{x-request-id};ts:{ts};")>.
-                // data.id arrives via the URL query string, x-request-id via a
-                // request header, ts from x-signature's ts= field.
                 const DATA_ID: &str = "1234567890";
                 const REQUEST_ID: &str = "test-request-id";
                 let ts_ms = (now * 1000).to_string();
@@ -138,8 +102,6 @@ mod billing_mock_tests {
                 query = Some(format!("data.id={DATA_ID}"));
             }
             "airwallex" => {
-                // #133: two headers x-timestamp + x-signature;
-                // HMAC over (x-timestamp string + raw body), no separator.
                 let ts = now.to_string();
                 let mut msg = Vec::with_capacity(ts.len() + payload.len());
                 msg.extend_from_slice(ts.as_bytes());
@@ -149,8 +111,6 @@ mod billing_mock_tests {
                 headers.insert("x-signature", mac.parse().unwrap());
             }
             "revolut" => {
-                // #132: Revolut-Signature: v1=<hex> + Revolut-Request-Timestamp;
-                // signed message "<ts>.<body>".
                 let ts = now.to_string();
                 let mut msg = Vec::with_capacity(ts.len() + 1 + payload.len());
                 msg.extend_from_slice(ts.as_bytes());
@@ -170,7 +130,6 @@ mod billing_mock_tests {
         }
     }
 
-    /// An event with no signature headers at all — every provider must reject it.
     fn unsigned_event(provider: &str, payload: &[u8]) -> WebhookEvent {
         WebhookEvent {
             provider: provider.into(),
@@ -179,8 +138,6 @@ mod billing_mock_tests {
             query: None,
         }
     }
-
-    // ── Stripe: create_checkout ──────────────────────────────────────────
 
     #[tokio::test]
     async fn stripe_create_checkout_returns_session() {
@@ -285,8 +242,6 @@ mod billing_mock_tests {
         assert!(result.is_ok());
     }
 
-    // ── Stripe: get_subscription ─────────────────────────────────────────
-
     #[tokio::test]
     async fn stripe_get_subscription_returns_info() {
         let server = MockServer::start().await;
@@ -383,22 +338,17 @@ mod billing_mock_tests {
         assert!(url.contains("/portal/session"));
     }
 
-    // ── Provider trait consistency ────────────────────────────────────────
-
     #[test]
     fn stripe_provider_name() {
         let provider = StripeProvider::new("sk_test".into(), "whsec_test".into());
         assert_eq!(provider.provider_name(), "stripe");
     }
 
-    // ── Full webhook event flow: checkout -> parsed -> event_type matches ─
-
     #[tokio::test]
     async fn stripe_full_webhook_flow_subscription_events() {
         let webhook_secret = "whsec_flow_test";
         let provider = stripe_webhook_provider(webhook_secret);
 
-        // Test subscription.updated event
         let updated_payload = json!({
             "type": "customer.subscription.updated",
             "data": {
@@ -418,7 +368,6 @@ mod billing_mock_tests {
         assert_eq!(parsed.event_type, "customer.subscription.updated");
         assert_eq!(parsed.customer_id, "cus_flow");
 
-        // Test subscription.deleted event
         let deleted_payload = json!({
             "type": "customer.subscription.deleted",
             "data": {
@@ -537,11 +486,6 @@ mod billing_mock_tests {
 
         #[tokio::test]
         async fn verify_webhook() {
-            // A genuine 32-byte key, base64-encoded and prefixed with `whsec_`
-            // — exactly how Polar ships the signing secret. The shared
-            // `signed_event("polar", …)` helper now derives this key and signs
-            // the Standard Webhooks message `{id}.{ts}.{body}`, so a real-shape
-            // request verifies end-to-end.
             let raw_key = [42u8; 32];
             let secret = format!(
                 "whsec_{}",
@@ -565,9 +509,6 @@ mod billing_mock_tests {
 
         #[tokio::test]
         async fn verify_webhook_rejects_tampered_body() {
-            // Sign one body, then present a different body under the same
-            // signature — the bound body in the Standard Webhooks message must
-            // cause the recomputed digest to mismatch.
             let raw_key = [7u8; 32];
             let secret = format!(
                 "whsec_{}",
@@ -592,10 +533,6 @@ mod billing_mock_tests {
             );
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // LemonSqueezy mock tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod lemon_tests {
         use super::*;
@@ -686,8 +623,6 @@ mod billing_mock_tests {
                 .verify_webhook(signed_event("lemon_squeezy", &payload_bytes, "secret123"))
                 .await
                 .expect("should verify");
-            // `subscription_created` normalizes to the canonical checkout-completion
-            // event (audit F#11); the provider-agnostic dispatch matches on it.
             assert_eq!(parsed.event_type, "checkout.session.completed");
         }
 
@@ -699,10 +634,6 @@ mod billing_mock_tests {
             );
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Paddle mock tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod paddle_tests {
         use super::*;
@@ -785,9 +716,6 @@ mod billing_mock_tests {
         async fn verify_webhook() {
             use ed25519_dalek::{Signer, SigningKey};
 
-            // Paddle verifies an Ed25519 signature over "<ts><body>" against a
-            // configured public key (PADDLE_PUBLIC_KEY). Generate a deterministic
-            // test keypair and configure it.
             let sk = SigningKey::from_bytes(&[7u8; 32]);
             let vk = sk.verifying_key();
             let provider = PaddleProvider::new("tok".into(), "padsecret".into())
@@ -836,10 +764,6 @@ mod billing_mock_tests {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // Razorpay mock tests
-    // ══════════════════════════════════════════════════════════════════════
-
     mod razorpay_tests {
         use super::*;
         use ruxlog::services::billing::razorpay::RazorpayProvider;
@@ -851,10 +775,6 @@ mod billing_mock_tests {
 
         #[tokio::test]
         async fn create_checkout() {
-            // create_checkout creates a REAL subscription (POST /subscriptions),
-            // so the stored session_id is a subscription id (`sub_…`) that
-            // `subscription.activated` echoes back — closing the round-trip
-            // (audit F#11 residual).
             let server = MockServer::start().await;
             Mock::given(method("POST"))
                 .and(path("/subscriptions"))
@@ -965,8 +885,6 @@ mod billing_mock_tests {
                 .verify_webhook(signed_event("razorpay", &bytes, secret))
                 .await
                 .expect("should verify");
-            // `payment.captured` normalizes to the canonical payment-succeeded
-            // event (audit F#11).
             assert_eq!(parsed.event_type, "invoice.payment_succeeded");
             assert_eq!(parsed.customer_id, "cus_rzp");
             assert_eq!(parsed.subscription_id, Some("sub_rzp_w".to_string()));
@@ -1008,10 +926,6 @@ mod billing_mock_tests {
             );
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Mercado Pago mock tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod mercado_pago_tests {
         use super::*;
@@ -1101,10 +1015,6 @@ mod billing_mock_tests {
                 .verify_webhook(signed_event("mercado_pago", &payload_bytes, secret))
                 .await
                 .expect("should verify");
-            // A `payment` event normalizes to the canonical checkout-completion
-            // event (audit F#11). NOTE: the thin MP webhook does not round-trip
-            // the stored preference id, so the checkout arm still fails closed on
-            // intent recovery — but it reaches the correct arm now.
             assert_eq!(parsed.event_type, "checkout.session.completed");
             assert_eq!(parsed.customer_id, "cus_mp1");
             assert_eq!(parsed.subscription_id, Some("sub_mp_w".to_string()));
@@ -1156,7 +1066,6 @@ mod billing_mock_tests {
         async fn create_checkout() {
             let server = MockServer::start().await;
 
-            // Mock auth endpoint
             Mock::given(method("POST"))
                 .and(path("/authentication/login"))
                 .respond_with(
@@ -1165,7 +1074,6 @@ mod billing_mock_tests {
                 .mount(&server)
                 .await;
 
-            // Mock payment intent creation
             Mock::given(method("POST"))
                 .and(path("/pa/payment_intents/create"))
                 .and(header("Authorization", "Bearer awx_bearer_tok"))
@@ -1289,10 +1197,6 @@ mod billing_mock_tests {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // Revolut mock tests
-    // ══════════════════════════════════════════════════════════════════════
-
     mod revolut_tests {
         use super::*;
         use ruxlog::services::billing::revolut::RevolutProvider;
@@ -1369,9 +1273,6 @@ mod billing_mock_tests {
         async fn verify_webhook_valid_signature() {
             let secret = "rev_secret_123";
             let provider = RevolutProvider::new("k".into(), secret.into());
-            // Revolut webhooks are FLAT ({event, order_id}) per the #132
-            // rewrite; the grant recovers user_id/amount from the server-bound
-            // checkout intent, never from webhook JSON.
             let payload = json!({
                 "event": "ORDER_COMPLETED",
                 "order_id": "ord_rev_w",
@@ -1385,7 +1286,6 @@ mod billing_mock_tests {
             assert_eq!(parsed.event_type, "checkout.session.completed");
             assert_eq!(parsed.payment_id, Some("ord_rev_w".to_string()));
             assert_eq!(parsed.checkout_session_id.as_deref(), Some("ord_rev_w"));
-            // The flat webhook carries no customer/subscription fields.
             assert_eq!(parsed.customer_id, "");
             assert_eq!(parsed.subscription_id, None);
         }
@@ -1423,10 +1323,6 @@ mod billing_mock_tests {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // PayPal mock tests
-    // ══════════════════════════════════════════════════════════════════════
-
     mod paypal_tests {
         use super::*;
         use ruxlog::services::billing::paypal::PayPalProvider;
@@ -1440,7 +1336,6 @@ mod billing_mock_tests {
         async fn create_checkout() {
             let server = MockServer::start().await;
 
-            // Mock OAuth token
             Mock::given(method("POST"))
                 .and(path("/v1/oauth2/token"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -1450,11 +1345,6 @@ mod billing_mock_tests {
                 .mount(&server)
                 .await;
 
-            // Mock subscription creation. create_checkout creates a REAL billing
-            // subscription (POST /v1/billing/subscriptions), so the stored
-            // session_id is the subscription id (`I-…`) that
-            // BILLING.SUBSCRIPTION.ACTIVATED echoes back — closing the round-trip
-            // (audit F#11 residual).
             Mock::given(method("POST"))
                 .and(path("/v1/billing/subscriptions"))
                 .and(header("Authorization", "Bearer pp_bearer_tok"))
@@ -1540,8 +1430,6 @@ mod billing_mock_tests {
 
         #[tokio::test]
         async fn verify_webhook_valid_signature() {
-            // PayPal verifies via its outbound verify-webhook-signature API, so we
-            // mock the OAuth token + the verify endpoint returning SUCCESS.
             let server = MockServer::start().await;
             Mock::given(method("POST"))
                 .and(path("/v1/oauth2/token"))
@@ -1596,15 +1484,12 @@ mod billing_mock_tests {
                 })
                 .await
                 .expect("should verify");
-            // `PAYMENT.SALE.COMPLETED` normalizes to the canonical payment-succeeded
-            // event (audit F#11).
             assert_eq!(parsed.event_type, "invoice.payment_succeeded");
             assert_eq!(parsed.customer_id, "cus_pp1");
         }
 
         #[tokio::test]
         async fn verify_webhook_invalid_signature() {
-            // Without PAYPAL_WEBHOOK_ID configured, verification fails closed.
             let provider = PayPalProvider::new("c".into(), "s".into(), "w".into());
             let result = provider
                 .verify_webhook(unsigned_event("paypal", b"{}"))
@@ -1634,10 +1519,6 @@ mod billing_mock_tests {
             );
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // BillingRouter integration tests
-    // ══════════════════════════════════════════════════════════════════════
 
     mod router_tests {
         use super::*;
@@ -1736,7 +1617,6 @@ mod billing_mock_tests {
 
             let router = make_router(providers, "stripe");
 
-            // Calling the BillingProvider trait method (no IP) uses default
             let session = router
                 .create_checkout("plan_1", "u@t.com", 1, "https://s", "https://c")
                 .await
@@ -1757,10 +1637,6 @@ mod billing_mock_tests {
             assert!(matches!(result.unwrap_err(), BillingError::Config(_)));
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Crypto end-to-end tests
-    // ══════════════════════════════════════════════════════════════════════
 
     #[tokio::test]
     async fn crypto_checkout_generates_bip21_uri() {
@@ -1790,10 +1666,6 @@ mod billing_mock_tests {
 
     #[tokio::test]
     async fn crypto_webhook_rejected_fail_closed_btc() {
-        // Crypto webhooks cannot be cryptographically verified (any chain payload
-        // is forgeable), so verify_webhook fails closed until on-chain
-        // confirmation polling lands (plan §1j). A well-formed-looking payload
-        // must STILL be rejected.
         let provider = CryptoProvider::new(
             "bc1qtestwallet".into(),
             "https://api.blockcypher.com/v1".into(),

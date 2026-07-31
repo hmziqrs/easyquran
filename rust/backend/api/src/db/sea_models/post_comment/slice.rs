@@ -10,7 +10,6 @@ pub enum HiddenFilter {
 }
 
 impl HiddenFilter {
-    /// Resolve an optional filter to a concrete value, defaulting to Visible.
     pub fn resolve(input: Option<Self>) -> Self {
         input.unwrap_or(HiddenFilter::Visible)
     }
@@ -25,7 +24,6 @@ pub enum FlagFilter {
 }
 
 impl FlagFilter {
-    /// Resolve an optional flag filter to a concrete value, defaulting to All.
     pub fn resolve(input: Option<Self>) -> Self {
         input.unwrap_or(FlagFilter::All)
     }
@@ -66,7 +64,6 @@ pub struct CommentQuery {
     pub flag_filter: Option<FlagFilter>,
     pub min_flags: Option<i32>,
     pub sorts: Option<Vec<crate::utils::SortParam>>,
-    // Date range filters
     pub created_at_gt: Option<DateTimeWithTimeZone>,
     pub created_at_lt: Option<DateTimeWithTimeZone>,
     pub updated_at_gt: Option<DateTimeWithTimeZone>,
@@ -87,7 +84,6 @@ pub struct CommentWithUserJoined {
     pub user_name: String,
     pub user_avatar_id: Option<i32>,
 
-    // User avatar media fields from join
     pub user_avatar_object_key: Option<String>,
     pub user_avatar_file_url: Option<String>,
     pub user_avatar_mime_type: Option<String>,

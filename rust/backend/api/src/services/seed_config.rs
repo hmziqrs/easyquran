@@ -1,18 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-/// Seed mode for controlling data generation randomness
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SeedMode {
-    /// Random seed based on current timestamp - unique data each run
     #[default]
     Random,
-    /// Static seed with specific value - reproducible data
     Static { value: u64 },
 }
 
 impl SeedMode {
-    /// Get the seed value as u64
     pub fn to_seed(&self) -> u64 {
         match self {
             Self::Random => chrono::Utc::now().timestamp_millis() as u64,
@@ -21,7 +17,6 @@ impl SeedMode {
     }
 }
 
-/// Named seed preset for reproducible data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeedPreset {
     pub name: String,
@@ -29,7 +24,6 @@ pub struct SeedPreset {
     pub description: String,
 }
 
-/// Target categories for individual seeders
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CustomSeedTarget {
@@ -78,7 +72,6 @@ impl CustomSeedTarget {
     }
 }
 
-/// Size presets for individual seeders
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SeedSizePreset {
@@ -102,7 +95,6 @@ impl SeedSizePreset {
         }
     }
 
-    /// Get a count for a given target based on the preset.
     pub fn count_for_target(&self, target: CustomSeedTarget) -> u32 {
         match target {
             CustomSeedTarget::Users => match self {
@@ -253,7 +245,6 @@ impl SeedSizePreset {
     }
 }
 
-/// Get all available seed presets
 pub fn list_presets() -> Vec<SeedPreset> {
     vec![
         SeedPreset {
@@ -279,7 +270,6 @@ pub fn list_presets() -> Vec<SeedPreset> {
     ]
 }
 
-/// Convert preset name to seed value
 pub fn preset_to_seed(name: &str) -> Option<u64> {
     match name.to_lowercase().as_str() {
         "demo" => Some(1000),
@@ -290,7 +280,6 @@ pub fn preset_to_seed(name: &str) -> Option<u64> {
     }
 }
 
-/// Get preset by name
 pub fn get_preset(name: &str) -> Option<SeedPreset> {
     list_presets()
         .into_iter()
@@ -301,13 +290,10 @@ pub fn get_preset(name: &str) -> Option<SeedPreset> {
 mod tests {
     use super::*;
 
-    // ── SeedMode::to_seed ──────────────────────────────────────────────
-
     #[test]
     fn seed_mode_random_returns_non_zero() {
         let mode = SeedMode::Random;
         let seed = mode.to_seed();
-        // A timestamp-based seed must be non-zero in any realistic scenario.
         assert_ne!(seed, 0);
     }
 
@@ -363,8 +349,6 @@ mod tests {
         assert_eq!(SeedSizePreset::VeryLarge.label(), "Very large");
         assert_eq!(SeedSizePreset::Massive.label(), "Massive");
     }
-
-    // ── SeedSizePreset::count_for_target ───────────────────────────────
 
     #[test]
     fn count_for_target_users() {
@@ -450,7 +434,6 @@ mod tests {
             assert_ne!(p.seed, 0);
         }
 
-        // Spot-check specific seeds
         let demo = presets.iter().find(|p| p.name == "demo").unwrap();
         assert_eq!(demo.seed, 1000);
         let dev = presets.iter().find(|p| p.name == "development").unwrap();

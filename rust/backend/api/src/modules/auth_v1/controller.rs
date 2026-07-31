@@ -26,9 +26,6 @@ use crate::{
     AppState,
 };
 
-/// Two-tier, fail-closed limiter config reused for brute-force-sensitive
-/// auth endpoints (here: the 2FA code verify). Mirrors the config used by the
-/// forgot-password and email-verification flows.
 const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
     temp_block_attempts: 3,
     temp_block_range: 360,
@@ -72,15 +69,9 @@ pub async fn log_in(
 
     let payload = payload.0;
 
-    // AUTH-BF-1: per-account brute-force throttle on the password step. The
-    // generic per-IP 100/min cap on the /auth/v1 nest does not stop an attacker
-    // rotating source IPs from grinding one account's password with no
-    // account-level lockout. Key the abuse limiter on the normalized target
-    // email (same bucket shape the TOTP/2FA endpoints use for `totp:{user_id}`),
-    // so repeated guesses against one account trigger the temp/long block
-    // regardless of source IP. Fail-closed on Redis outage, matching the TOTP
-    // endpoints. (Accepted trade-off: an attacker who knows the email can lock
-    // the victim out — strictly better than unbounded password grinding.)
+    // AUTH-BF-1: per-account throttle on the password step. The per-IP cap
+    // does not stop an attacker rotating IPs to grind one account's password.
+    // Keyed on the normalized email; fail-closed.
     let login_key = payload.email.trim().to_lowercase();
     abuse_limiter::limiter(
         &state.gate_store,
@@ -99,9 +90,7 @@ pub async fn log_in(
             tracing::Span::current().record("user_id", user.id);
             tracing::Span::current().record("user_role", user.role.to_string());
 
-            // Reject banned users at the door — never issue a session for a
-            // banned account. Fail closed if the ban lookup itself errors so a
-            // transient DB/Redis failure cannot grant access to a banned user.
+            // Fail closed: a ban-lookup error must not grant access to a banned user.
             match auth.backend().check_ban(&user.id).await {
                 Ok(ban_status) if ban_status.is_banned() => {
                     warn!(user_id = user.id, "Banned user attempted login");
@@ -117,21 +106,6 @@ pub async fn log_in(
                 }
             }
 
-            // F#4 / F#7 / F#16 (2FA-at-login) — NOW ENFORCED. A correct
-            // password is NO LONGER sufficient to obtain a fully authenticated
-            // session for a user with 2FA enrolled. Instead, when
-            // `user.two_fa_enabled` is true, we issue a SHORT-LIVED, single-use
-            // pending-TOTP credential (an opaque random token stored in Redis,
-            // TTL ~5 min) and return `{ status: "totp_required", totp_token }`
-            // WITHOUT calling `login_with_metadata` — so NO session cookie is
-            // set and NO authenticated session exists. The caller must then POST
-            // that token plus a valid TOTP code to `/login/totp`, which — only
-            // on a verified, replay-blocked code — issues the FULL session
-            // (with session-id rotation + sid_map recording, identical to the
-            // non-2FA path). The pending token authenticates ONLY the TOTP step
-            // and grants nothing else; it is consumed (GETDEL) on first use.
-            // Non-2FA users get the full session exactly as before (backward
-            // compatible). See `login_totp` below and `docs/CRYPTO_AUDIT.md`.
             if user.two_fa_enabled {
                 tracing::Span::current().record("result", "totp_required");
                 let totp_token = login_totp_token::mint(user.id).await?;
@@ -170,20 +144,9 @@ pub async fn log_in(
                     .await
                     .ok();
 
-                    // V-HIGH-2: persist the PG-row → tower-session-id mapping in
-                    // Redis so `sessions_terminate` can later find and DEL the
-                    // live tower-sessions record. Without this, terminating a
-                    // session only stamps `revoked_at` and the cookie keeps
-                    // authenticating for up to 14 days. The mapping TTLs out
-                    // with the session max-age so it self-cleans.
-                    //
-                    // `login_with_metadata` calls `cycle_id`, which sets the
-                    // in-memory session id to `None` until the record is saved.
-                    // Save now to materialize the cycled id (the one the cookie
-                    // will carry) before reading it. The `SessionManagerLayer`
-                    // saves again at response time — that just updates the same
-                    // record (`store.save` path), so this is safe and
-                    // idempotent.
+                    // V-HIGH-2: record the sid_map so sessions_terminate can DEL the live
+                    // tower-session record. revoked_at is audit-only; without this the cookie
+                    // authenticates until its 14-day expiry.
                     if (auth.session().save().await).is_ok() {
                         if let (Some(row), Some(tower_sid)) =
                             (session_row.as_ref(), auth.session().id())
@@ -218,31 +181,6 @@ pub async fn log_in(
     }
 }
 
-/// Second step of the two-step 2FA-at-login flow (F#4 / F#7 / F#16).
-///
-/// `log_in` issues a short-lived, single-use pending credential
-/// (`totp_token`) instead of a full session for TOTP-enrolled users. This
-/// endpoint exchanges that token plus a valid TOTP code for the FULL session
-/// (the same grant `log_in` makes for non-2FA users). Pipeline:
-///
-///   1. Atomically consume the pending token (`GETDEL` → single-use: a replayed
-///      token observes `None` and is rejected). The token authenticates ONLY
-///      this step — it is never itself a session.
-///   2. Load the user. Fail-closed ban re-check (a user banned between `log_in`
-///      and `/login/totp` must NOT get a session).
-///   3. Rate-limit on the shared `totp:{user_id}` abuse-limiter bucket (same
-///      budget as `/2fa/verify` + `/2fa/disable`), so brute-forcing the 6-digit
-///      code here counts against the one limit.
-///   4. Verify the TOTP code via the counter-returning variant + the atomic
-///      `advance_totp_counter_if_higher` replay gate — so a code consumed at
-///      login cannot be replayed at `/2fa/verify`, `/2fa/disable`, or a second
-///      login, and vice versa.
-///   5. ONLY on a verified, replay-blocked code, call `login_with_metadata` to
-///      issue the full session (session-id rotation + sid_map recording,
-///      identical to the non-2FA path).
-///
-/// Every failure returns a generic 401 so the response does not reveal whether
-/// the token, the code, or the replay gate was the cause.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id, result))]
 pub async fn login_totp(
@@ -252,7 +190,6 @@ pub async fn login_totp(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let payload = payload.0;
 
-    // Single-use: atomically consume the pending token so a replay observes None.
     let user_id = match login_totp_token::take(&payload.totp_token).await? {
         Some(id) => id,
         None => {
@@ -272,8 +209,7 @@ pub async fn login_totp(
         }
     };
 
-    // Fail-closed ban re-check: a ban issued between log_in and /login/totp
-    // must not yield a session. Mirrors the log_in door check.
+    // Fail-closed ban re-check between the two steps.
     match auth.backend().check_ban(&user.id).await {
         Ok(ban_status) if ban_status.is_banned() => {
             warn!(user_id = user.id, "login/totp: banned user");
@@ -287,18 +223,12 @@ pub async fn login_totp(
         }
     }
 
-    // Share the totp:{user_id} abuse-limiter bucket with /2fa/verify and
-    // /2fa/disable. Fail-closed on Redis outage (denies the attempt rather
-    // than allowing unbounded TOTP guessing).
+    // Fail-closed per-account TOTP brute-force throttle.
     let key_prefix = format!("totp:{}", user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
-    // Verify the TOTP code. The user's stored secret must be present (2FA is
-    // enabled, so a missing secret is an inconsistent state — reject generically).
-    // CRYP-2FA-002: `two_fa_secret` is encrypted at rest — decrypt via the
-    // accessor. A decrypt failure (tampered ciphertext / wrong key) fails
-    // closed: the user cannot complete the second factor rather than risk
-    // verifying the TOTP code against the opaque envelope bytes.
+    // CRYP-2FA-002: secret is encrypted at rest; a decrypt failure must fail
+    // closed (reject), never verify against the opaque envelope bytes.
     let secret = match user.two_fa_secret_plain() {
         Ok(Some(s)) => s,
         Ok(None) => {
@@ -327,11 +257,9 @@ pub async fn login_totp(
         }
     };
 
-    // Replay gate: the cheap fast-path reject against the just-read row, then
-    // the authoritative atomic conditional UPDATE. Only one concurrent request
-    // (across login AND /2fa/verify AND /2fa/disable) can claim the row, so a
-    // code reused on a second endpoint is rejected. A lost race reads as a
-    // generic 401 (no leak that it was a replay).
+    // Replay gate: is_fresh_counter is the fast-path reject; the authoritative
+    // gate is advance_totp_counter_if_higher (atomic conditional UPDATE) which
+    // closes the TOCTOU race across login/verify/disable. Keep both.
     if !twofa::is_fresh_counter(matched, user.two_fa_last_totp_counter) {
         warn!(
             user_id = user.id,
@@ -351,11 +279,6 @@ pub async fn login_totp(
         return Err(ErrorResponse::new(ErrorCode::Unauthorized).with_message("Invalid 2FA code"));
     }
 
-    // TOTP verified + replay blocked: issue the FULL session, identical to the
-    // non-2FA log_in path (session-id rotation + user_sessions row + sid_map).
-    // This endpoint has no ClientIp/User-Agent extraction (the pending token is
-    // the only thing binding step 2 to step 1), so record no device/ip — the
-    // session row is still created for the sessions UI + revoke mapping.
     let ip: Option<String> = None;
     let device: Option<String> = None;
     match auth
@@ -376,9 +299,7 @@ pub async fn login_totp(
             .await
             .ok();
 
-            // V-HIGH-2: record the PG-row -> tower-session-id mapping (same as
-            // the password-login path) so sessions_terminate can later delete the
-            // live record from the session store.
+            // V-HIGH-2: record sid_map (same as password-login path).
             if (auth.session().save().await).is_ok() {
                 if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
                     record_session_mapping(row.id, &tower_sid.to_string());
@@ -409,10 +330,7 @@ pub async fn register(
 
     let email = payload.email.clone();
 
-    // Generate the verification code now: store only its keyed hash alongside
-    // the new user (transactional), but email the plaintext. The plaintext
-    // never touches the database (audit: "brute-forceable plaintext codes" —
-    // fixed in Phase 3d).
+    // Store only the keyed hash; the plaintext code is emailed, never persisted.
     let code = email_verification::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
 
@@ -422,7 +340,6 @@ pub async fn register(
             tracing::Span::current().record("user_id", user.id);
             tracing::Span::current().record("result", "success");
 
-            // Send first-party email verification code (non-blocking)
             let app_state = state.clone();
             let user_id = user.id;
             let email_for_task = email.clone();
@@ -446,11 +363,8 @@ pub async fn register(
         Err(err) => {
             warn!(error = ?err, "Registration failed");
             tracing::Span::current().record("result", "failure");
-            // AUTH-ENUM-REGISTER: do not surface the raw SeaORM error. A unique-
-            // violation ("Duplicate entry") is distinguishable from other
-            // failures via the ErrorCode/type field and leaks that the email is
-            // already registered. Return a generic message; the raw error type
-            // is no longer an enumeration oracle.
+            // Do not echo the raw SeaORM error: a unique-violation would leak that
+            // the email is already registered (enumeration oracle).
             Err(ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Registration could not be completed at this time"))
         }
@@ -468,9 +382,6 @@ pub async fn twofa_setup(
 
     info!(user_id = user.id, "2FA setup initiated");
 
-    // Generate base32 secret and backup codes, persist to user.
-    // CSPRNG failures must surface as 500s — never silently produce a
-    // predictable secret. See plan Phase 2f.
     let secret_b32 = twofa::generate_secret_base32(20).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to generate 2FA secret")
@@ -482,12 +393,10 @@ pub async fn twofa_setup(
         twofa::DEFAULT_TOTP_DIGITS,
     );
 
-    // Generate and hash backup codes (store Argon2id hashes only).
     let backup_codes = twofa::generate_backup_codes(10).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to generate backup codes")
     })?;
-    // Argon2id is memory-hard; hash off the async worker thread.
     let backup_hashes = {
         let codes_for_hash = backup_codes.clone();
         tokio::task::spawn_blocking(move || twofa::hash_backup_codes(&codes_for_hash))
@@ -499,7 +408,6 @@ pub async fn twofa_setup(
     };
     let backup_hashes_json = serde_json::json!(backup_hashes);
 
-    // Persist on user
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
     let mut active: user::ActiveModel = existing.into();
     active.two_fa_enabled = sea_orm::Set(false);
@@ -524,16 +432,13 @@ pub async fn twofa_verify(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFAVerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Borrow (do not move `auth.user`) so `auth.session()` stays callable for
-    // the F#16 trust-transition rotation below.
     let user = auth
         .user
         .as_ref()
         .expect("authenticated guard ensures user");
     let payload = payload.0;
 
-    // Throttle brute-force attempts on the 2FA code. Fail-closed: a Redis
-    // outage denies the attempt rather than letting unbounded tries through.
+    // Fail-closed per-account TOTP brute-force throttle.
     let key_prefix = format!("totp:{}", user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
@@ -552,30 +457,13 @@ pub async fn twofa_verify(
         }
     };
 
-    // If code matches TOTP, enable 2FA. Otherwise, try backup code consumption.
-    //
-    // V-MED-6 (TOTP replay + TOCTOU): the previously stateless verify let an
-    // accepted 6-digit code be replayed for ~90s (window=1 → 3 steps of 30s).
-    // `is_fresh_counter` below is the cheap fast-path reject — it compares the
-    // matched RFC 6238 counter against the just-read row and bounces
-    // obviously-stale codes without touching the DB. But that read-then-write
-    // is racy: two concurrent verifies can each observe the stale watermark,
-    // each pass `is_fresh_counter`, and each persist — accepting the same
-    // counter twice. The authoritative gate is therefore the atomic
-    // conditional UPDATE `advance_totp_counter_if_higher`: only one concurrent
-    // request can claim the row, so the loser sees `false` and is rejected as a
-    // replay. The last-used counter is read from `existing` so the fast path
-    // uses the DB's current value; the conditional UPDATE is the source of
-    // truth.
+    // V-MED-6: keep both checks — is_fresh_counter is the fast-path reject;
+    // advance_totp_counter_if_higher is the authoritative atomic gate closing
+    // the TOCTOU race (concurrent verifies). Removing either reopens replay.
     let totp_counter = twofa::verify_totp_code_now(&secret, &payload.code);
 
     if let Some(matched) = totp_counter {
         if twofa::is_fresh_counter(matched, existing.two_fa_last_totp_counter) {
-            // Authoritative replay gate: atomically advance the watermark only
-            // if `matched` is strictly higher than whatever the row currently
-            // holds. A concurrent verify/disable that already advanced past
-            // `matched` makes this UPDATE match zero rows → reject as a replay
-            // (no leak — same generic InvalidToken as any bad code).
             let advanced =
                 user::Entity::advance_totp_counter_if_higher(&state.sea_db, user.id, matched)
                     .await?;
@@ -589,22 +477,16 @@ pub async fn twofa_verify(
                     ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid 2FA code")
                 );
             }
-            // Watermark advanced; flip 2FA on. `two_fa_last_totp_counter` is
-            // already persisted atomically above, so this UPDATE only sets the
-            // enabled flag (and refreshes updated_at).
+            // Counter already persisted by the atomic gate above; keep Unchanged —
+            // a Set here could clobber a concurrent advance and reopen replay.
             let mut active: user::ActiveModel = existing.into();
             active.two_fa_enabled = sea_orm::Set(true);
             active.two_fa_last_totp_counter = sea_orm::Unchanged(Some(matched));
             active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
             let updated = active.update(&state.sea_db).await?;
-            // F#16: 2FA was just enabled — rotate the session id so the CSRF
-            // token rebinds to the post-enable trust level.
             rotate_session_after_trust_change(&mut auth).await;
             return Ok((StatusCode::OK, Json(json!(updated))));
         } else {
-            // Replay of an already-used counter within the window. Count it
-            // against the abuse limiter budget (already consumed above) and
-            // reject as an invalid token — do NOT reveal that it was a replay.
             warn!(
                 user_id = user.id,
                 matched_counter = matched,
@@ -616,11 +498,8 @@ pub async fn twofa_verify(
         }
     }
 
-    // Try backup code if provided
     if let Some(backup_code) = payload.backup_code {
         if let Some(stored) = &existing.two_fa_backup_codes {
-            // Materialize owned copies and end the borrow on `existing` before
-            // awaiting: Argon2id verification runs on the blocking pool.
             let stored_vec: Vec<String> =
                 serde_json::from_value(stored.clone()).unwrap_or_else(|_| vec![]);
             let consume_result = {
@@ -641,8 +520,6 @@ pub async fn twofa_verify(
                 active.two_fa_backup_codes = sea_orm::Set(Some(serde_json::json!(updated_hashes)));
                 active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
                 let updated = active.update(&state.sea_db).await?;
-                // F#16: 2FA was just enabled via backup code — rotate the session
-                // id so the CSRF token rebinds.
                 rotate_session_after_trust_change(&mut auth).await;
                 return Ok((StatusCode::OK, Json(json!(updated))));
             }
@@ -658,41 +535,27 @@ pub async fn twofa_disable(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFADisablePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Borrow (do not move `auth.user`) so `auth.session()` stays callable for
-    // the F#16 trust-transition rotation below.
     let user = auth
         .user
         .as_ref()
         .expect("authenticated guard ensures user");
     let payload = payload.0;
 
-    // Throttle brute-force attempts on the 2FA code (audit V-MED-4): without
-    // this, an attacker holding the password could mount unbounded online TOTP
-    // guessing against `twofa_disable` to turn off a victim's 2FA. Shares the
-    // `totp:{user.id}` budget with `twofa_verify` so attempts across both
-    // endpoints count against one limit. Fail-closed on Redis outage.
+    // Fail-closed per-account TOTP brute-force throttle.
     let key_prefix = format!("totp:{}", user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
 
-    // V-MED-6 (TOTP replay + TOCTOU): when disable is authorized via a fresh
-    // TOTP counter, the watermark is advanced atomically AT authorization time
-    // via `advance_totp_counter_if_higher` (the authoritative replay gate).
-    // `totp_authorized` records that the atomic UPDATE succeeded; the final
-    // persistence block below then uses `Unchanged` so it does NOT re-issue a
-    // SET for the column the gate already wrote. We do NOT touch the counter
-    // on a backup-code disable (backup codes are single-use via Argon2id +
-    // consume, and the TOTP secret is being wiped).
+    // V-MED-6: advance_totp_counter_if_higher is the authoritative replay gate;
+    // totp_authorized records it succeeded so the final UPDATE leaves the counter
+    // column Unchanged (no redundant/racy re-write). Backup-code path skips it.
     let mut totp_authorized = false;
 
-    // If 2FA is enabled and a code is provided, verify it; allow disable with valid code or backup code
     if existing.two_fa_enabled {
         if let Some(code) = payload.code.clone() {
-            // CRYP-2FA-002: decrypt the at-rest secret via the accessor. A
-            // decrypt error is logged and treated as no-usable-secret so the
-            // backup-code fallback still applies; disable is never granted
-            // without a valid second factor either way.
+            // CRYP-2FA-002: decrypt failure → empty secret (falls through to backup
+            // code); never grant disable without a valid second factor.
             let secret = match existing.two_fa_secret_plain() {
                 Ok(Some(s)) => s,
                 Ok(None) => String::new(),
@@ -701,10 +564,6 @@ pub async fn twofa_disable(
                     String::new()
                 }
             };
-            // V-MED-6 (TOTP replay): use the counter-returning variant and reject
-            // a counter that is not strictly greater than the last used one.
-            // `is_fresh_counter` is the cheap fast-path reject against the
-            // just-read row; the authoritative gate is the conditional UPDATE.
             let totp_matched = if secret.is_empty() {
                 None
             } else {
@@ -718,12 +577,6 @@ pub async fn twofa_disable(
             };
 
             if totp_fresh {
-                // Authoritative replay gate: atomically advance the watermark
-                // only if `matched` is strictly higher than the row's current
-                // value. A concurrent verify/disable that already advanced past
-                // `matched` makes this UPDATE match zero rows → reject as a
-                // replay (generic InvalidToken, no leak). Only if the gate
-                // succeeds is the disable TOTP-authorized.
                 let matched = totp_matched.expect("totp_matched is Some when totp_fresh");
                 let advanced =
                     user::Entity::advance_totp_counter_if_higher(&state.sea_db, user.id, matched)
@@ -745,9 +598,6 @@ pub async fn twofa_disable(
                 if let Some(stored) = &existing.two_fa_backup_codes {
                     let stored_vec: Vec<String> =
                         serde_json::from_value(stored.clone()).unwrap_or_else(|_| vec![]);
-                    // Argon2id verification is memory-hard; run off the async
-                    // worker. The borrow of `existing` via `stored` ends here
-                    // (only `stored_vec`, owned, crosses the await).
                     backup_ok = {
                         let stored_clone = stored_vec;
                         let code_clone = code.clone();
@@ -768,23 +618,11 @@ pub async fn twofa_disable(
                     .with_message("Invalid 2FA or backup code"));
             }
         } else {
-            // Require a code if 2FA is enabled
             return Err(ErrorResponse::new(ErrorCode::MissingRequiredField)
                 .with_message("code is required"));
         }
     }
 
-    // Disable and clear secrets.
-    //
-    // `two_fa_last_totp_counter`: the watermark was already persisted
-    // atomically by `advance_totp_counter_if_higher` when `totp_authorized` is
-    // true, so we use `Unchanged` to avoid a redundant/racy second write. When
-    // authorization came from a backup code (or no code was needed because 2FA
-    // was already off), leave the watermark untouched.
-    // Capture the current watermark before `existing` is moved into the
-    // ActiveModel. `Unchanged` (below) tells SeaORM to leave the column alone
-    // in this UPDATE — the atomic gate already persisted the new value on the
-    // TOTP path, and the backup-code path leaves it untouched.
     let last_counter = existing.two_fa_last_totp_counter;
     let mut active: user::ActiveModel = existing.into();
     active.two_fa_enabled = sea_orm::Set(false);
@@ -794,10 +632,6 @@ pub async fn twofa_disable(
     active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
     let updated = active.update(&state.sea_db).await?;
 
-    // F#16: 2FA was just disabled — rotate the session id so the CSRF token
-    // rebinds to the post-disable trust level (an attacker who stole the old
-    // session + its CSRF token can no longer reuse them against the now-lowered
-    // auth posture).
     rotate_session_after_trust_change(&mut auth).await;
 
     Ok((StatusCode::OK, Json(json!(updated))))
@@ -832,18 +666,8 @@ pub async fn sessions_terminate(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user_id = auth.user.as_ref().map(|u| u.id).unwrap_or(0);
 
-    // V-LOW-IDOR: verify ownership BEFORE any mutation. The previous code
-    // called `Entity::revoke` first (which stamps `revoked_at`) and only then
-    // inspected the returned row's `user_id` to decide 401-vs-200 — so a
-    // cross-user terminate request still mutated (revoked) the victim's
-    // `user_sessions` row before being rejected. Resolve the row, reject on
-    // mismatch or not-found, and only then revoke. This keeps the authz gate
-    // ahead of the write.
-    // Ownership-gate resolve: the model is consumed only to assert
-    // `user_id` matches; `Entity::revoke` re-resolves the row itself, so the
-    // bound model is intentionally unused thereafter (`_` silences the dead
-    // binding). The point is the early-reject paths above — they must fire
-    // before any write.
+    // V-LOW-IDOR: ownership check must precede any write. The earlier revoke-first
+    // flow mutated the victim row before the 401; resolve, reject on mismatch, then revoke.
     let _existing = match user_session::Entity::find_by_id(id)
         .one(&state.sea_db)
         .await
@@ -853,20 +677,11 @@ pub async fn sessions_terminate(
         Ok(None) => return Err(ErrorResponse::new(ErrorCode::RecordNotFound)),
         Err(err) => return Err(err.into()),
     };
-    // Ownership confirmed; safe to mutate.
     user_session::Entity::revoke(&state.sea_db, id).await?;
 
     {
-        // V-HIGH-2: actually invalidate the live tower-sessions record.
-        // `Entity::revoke` only stamps `user_sessions.revoked_at` (audit/
-        // UI-only — nothing on the auth path reads it); the tower-sessions
-        // store record remains, so the cookie keeps authenticating. Look up the
-        // tower-session id captured at login and delete it from the session
-        // store (plus add it to the revoked set as defense-in-depth). A missing
-        // mapping (a session whose login path didn't record one, lost to a
-        // restart, or a pre-fix row) means we CANNOT delete the live record —
-        // the cookie then stays valid until its 14-day inactivity expiry.
-        // `revoked_at` does NOT enforce that window; it is audit-only.
+        // V-HIGH-2: revoke only stamps revoked_at (audit-only); the live tower-session
+        // record must also be deleted or the cookie authenticates until its 14-day expiry.
         if let Some(tower_sid) = lookup_session_mapping(id) {
             auth.backend().terminate(&tower_sid).await;
         } else {
@@ -882,52 +697,21 @@ pub async fn sessions_terminate(
     }
 }
 
-// Session-mapping helpers (session_mapping_key / record_session_mapping /
-// lookup_session_mapping) now live in the service layer (crate::services::auth)
-// so the OAuth login path can call them without an inverted service→module
-// import. Re-exported pub(crate) here so this module's callers and the
-// cross-module oauth callers (passkey/google) keep their existing paths.
 pub(crate) use crate::services::auth::{lookup_session_mapping, record_session_mapping};
 
-/// F#16 (CSRF re-rotation at trust transitions): rotate the session id after a
-/// privilege/trust change so the per-session CSRF token rebinds. The frontend
-/// already re-fetches its CSRF token per session (backend-only contract).
-///
-/// `cycle_id` preserves the in-memory record's data while arming a fresh id
-/// (the same primitive `login_with_metadata` uses on login); the
-/// `SessionManagerLayer` persists the rotated record at response time, so we
-/// save now only to materialize the cycled id deterministically. A failure to
-/// rotate is logged but non-fatal — the security gain is the rotation, and the
-/// request itself already succeeded (2FA toggled / password changed); surfacing
-/// a 500 here would mislead the client about an otherwise-complete operation.
-/// `auth` is taken by `&mut` only so the borrow checker allows a subsequent
-/// `auth.session()` call; the mutation is to interior session state.
+/// F#16: rotate the session id at trust transitions (2FA on/off) so the per-session
+/// CSRF token rebinds. A rotation failure is logged non-fatal — the trust change
+/// itself already succeeded; surfacing a 500 would mislead the client.
 async fn rotate_session_after_trust_change(auth: &mut AuthSession) {
     if let Err(err) = auth.session().cycle_id().await {
         warn!(error = %err, "F#16: failed to re-rotate session id at trust transition; CSRF token NOT rebound");
         return;
     }
-    // Materialize the rotated id (login does the same — see log_in). Errors
-    // here are non-fatal for the same reason; the response-layer save is the
-    // fallback persistence path.
     if let Err(err) = auth.session().save().await {
         warn!(error = %err, "F#16: failed to persist rotated session id at trust transition");
     }
 }
 
-/// Single-use pending-TOTP credential for the two-step 2FA-at-login flow
-/// (F#4 / F#7 / F#16).
-///
-/// `log_in` mints one of these when the authenticating user has 2FA enrolled
-/// instead of issuing a full session. The token is the ONLY thing the caller
-/// can use to reach the TOTP step — it authenticates nothing else, and it is
-/// consumed on first use. Mirrors the `reset_token` single-use pattern in
-/// `forgot_password_v1` (32 random bytes → 256-bit hex, removed-on-take).
-///
-/// Backed by a process-global in-memory TTL map (previously a Redis `SET`/`GETDEL`
-/// pair). Single-use is preserved by removing the entry on `take`; a replayed
-/// token observes `None`. Tokens live in-memory only, so a restart drops all
-/// pending tokens (acceptable — the user just re-logs-in).
 mod login_totp_token {
     use super::*;
     use rand::Rng;
@@ -936,14 +720,8 @@ mod login_totp_token {
     use std::time::Instant;
     use zeroize::Zeroize;
 
-    /// Pending-TOTP credential TTL, in seconds. 5 minutes is long enough to
-    /// switch to the authenticator app and type a code, short enough to bound
-    /// an attacker's window if a token is intercepted.
     const TTL_SECS: u64 = 300;
 
-    /// Compile-time marker that this module is wired (referenced by the unit
-    /// test so a rename/removal fails the build rather than silently dropping
-    /// the two-step login plumbing).
     #[doc(hidden)]
     #[allow(dead_code)] // referenced via type_name::<AssertWired> only (compile-time wiring check)
     pub struct AssertWired;
@@ -956,22 +734,14 @@ mod login_totp_token {
         TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
     }
 
-    /// Drop entries older than `TTL_SECS`. Called under the lock so the
-    /// housekeeping is consistent with the insert/take. Bounded by the
-    /// (small) number of in-flight 2FA logins.
     fn reap_stale(map: &mut TokenMap) {
         map.retain(|_, (_, at)| at.elapsed().as_secs() < TTL_SECS);
     }
 
     fn namespaced_key(token: &str) -> String {
-        // Namespaced so it cannot collide with session/oauth/reset keys. The
-        // in-memory map is keyed directly by this string.
         format!("auth:login_totp:{token}")
     }
 
-    /// Mint a fresh single-use pending credential bound to `user_id`.
-    /// 32 random bytes → 256 bits, hex-encoded. Returned to the client in the
-    /// `totp_required` response. The raw bytes are zeroized once hex-encoded.
     pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
         let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
         rand::rng().fill(bytes.as_mut());
@@ -989,10 +759,6 @@ mod login_totp_token {
         Ok(token)
     }
 
-    /// Atomically consume the pending credential, returning the bound
-    /// `user_id` if the token was valid and present, or `None` if it was
-    /// already used / unknown / expired. Removal on take guarantees a replayed
-    /// token can never be observed twice (the single-use guarantee).
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
         let mut map = tokens()
             .lock()
@@ -1005,17 +771,12 @@ mod login_totp_token {
     }
 }
 
-// record_session_mapping / lookup_session_mapping moved to crate::services::auth
-// (re-exported above) so services::oauth can use them without a module import.
 
 #[cfg(test)]
 mod tests {
     use super::login_totp_token;
     use crate::services::auth::session_mapping_key;
 
-    /// V-HIGH-2: the PG-row → tower-session-id mapping key must be a stable,
-    /// namespaced function of the integer `user_sessions.id` so terminate can
-    /// recover the exact key login wrote.
     #[test]
     fn session_mapping_key_is_stable_and_namespaced() {
         assert_eq!(session_mapping_key(1), "rux:sid_map:1");
@@ -1027,16 +788,8 @@ mod tests {
         );
     }
 
-    /// F#4/F#7/F#16: the pending-TOTP credential Redis key namespace is the
-    /// exact contract `mint`/`take` rely on for the single-use GETDEL. Locking
-    /// the prefix here guards against a rename silently breaking the
-    /// mint⇄take pairing (a mismatched key would make EVERY token look unknown
-    /// / expired). The token authenticates ONLY the TOTP step.
     #[test]
     fn login_totp_redis_key_prefix_is_stable() {
-        // Re-derive the key the same way the helper module does. `redis_key`
-        // itself is private to the module, but the prefix is the load-bearing
-        // contract — assert it here.
         for token in ["deadbeef", "abc123", "z"] {
             let expected = format!("auth:login_totp:{token}");
             assert!(
@@ -1044,8 +797,6 @@ mod tests {
                 "pending-TOTP key must live under the auth:login_totp: namespace"
             );
         }
-        // Touch the module path so a rename or accidental removal fails to
-        // compile this test — the two-step plumbing must stay wired.
         let _ = std::any::type_name::<login_totp_token::AssertWired>;
     }
 }

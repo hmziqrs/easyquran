@@ -7,10 +7,8 @@ use crate::db::sea_models::user::{
 };
 use crate::utils::SortParam;
 
-/// Password length bounds (CWE-400): reject oversized passwords at validation
-/// (400) before they reach Argon2id, which would otherwise be forced to hash an
-/// unbounded input. Mirrors the bound in `auth_v1` / `forgot_password_v1` so the
-/// limit is uniform across every password-bearing field.
+// DoS guard (CWE-400): cap password length so Argon2id never hashes unbounded
+// input. Keep in sync with auth_v1 / forgot_password_v1.
 const PASSWORD_MIN: u64 = 12;
 const PASSWORD_MAX: u64 = 256;
 

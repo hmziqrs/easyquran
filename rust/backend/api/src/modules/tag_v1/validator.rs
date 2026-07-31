@@ -66,9 +66,8 @@ impl V1UpdateTagPayload {
 pub struct V1TagQueryParams {
     pub page: Option<u64>,
     pub search: Option<String>,
-    pub sorts: Option<Vec<SortParam>>, // [{ field, order }]
+    pub sorts: Option<Vec<SortParam>>,
     pub is_active: Option<bool>,
-    // Optional created_at/updated_at range filters (ISO8601)
     pub created_at_gt: Option<DateTimeWithTimeZone>,
     pub created_at_lt: Option<DateTimeWithTimeZone>,
     pub updated_at_gt: Option<DateTimeWithTimeZone>,

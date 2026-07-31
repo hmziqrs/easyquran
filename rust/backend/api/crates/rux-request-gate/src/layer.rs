@@ -1,10 +1,3 @@
-//! Per-IP/per-path fixed-window rate-limit tower layer.
-//!
-//! Emits `x-ratelimit-{limit,remaining,reset}` + `Retry-After`. **Fail-CLOSED**:
-//! a store error yields 503 (the count cannot be trusted). The 429 body and the
-//! 503 body are produced by caller-supplied closures (sensible defaults ship
-//! with the crate), so the crate owns no error vocabulary.
-
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -19,12 +12,10 @@ use tracing::{debug, warn};
 use crate::ip::{ClientIpSource, IpSource};
 use crate::store::RateLimitStore;
 
-// Standard rate limit header names (not in http::header module).
 static X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 static X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 static X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 
-/// Context handed to the `on_block` closure.
 #[derive(Debug, Clone, Copy)]
 pub struct BlockInfo {
     pub retry_after_secs: u64,
@@ -37,13 +28,9 @@ pub struct BlockInfo {
 type BlockFn = Arc<dyn Fn(BlockInfo) -> Response + Send + Sync>;
 type UnavailableFn = Arc<dyn Fn() -> Response + Send + Sync>;
 
-/// How the bucket key's path component is derived. The default (`Raw`) is the
-/// legacy per-distinct-path behavior. `Fixed` collapses every route under the
-/// layer into ONE bucket per IP — the correct keying for a coarse branch-wide
-/// limit where parameterized paths (`/ayahs/{s}/{a}`, `/pages/N`, …) would
-/// otherwise fan out into unbounded independent buckets (§8.2). `Matched` keys
-/// on the route template (axum `MatchedPath`), collapsing fanout while still
-/// separating distinct routes.
+/// Path component of the bucket key. `Fixed`/`Matched` collapse parameterized
+/// routes (`/ayahs/{s}/{a}`, `/pages/N`) into one bucket — `Raw` would fan them
+/// into unbounded independent buckets (memory exhaustion).
 #[derive(Clone)]
 pub enum PathKey {
     Raw,
@@ -51,7 +38,6 @@ pub enum PathKey {
     Matched,
 }
 
-/// Tower layer that wraps an inner service with per-IP/per-path rate limiting.
 #[derive(Clone)]
 pub struct RateLimitLayer {
     store: Arc<dyn RateLimitStore>,
@@ -64,8 +50,6 @@ pub struct RateLimitLayer {
 }
 
 impl RateLimitLayer {
-    /// Construct with the default `ClientIpSource` IP resolver and the crate's
-    /// default 429/503 response bodies.
     pub fn new(store: Arc<dyn RateLimitStore>, max_requests: u64, window_secs: u64) -> Self {
         Self {
             store,
@@ -78,7 +62,6 @@ impl RateLimitLayer {
         }
     }
 
-    /// Construct with a custom IP source.
     pub fn with_ip(
         store: Arc<dyn RateLimitStore>,
         max_requests: u64,
@@ -96,7 +79,6 @@ impl RateLimitLayer {
         }
     }
 
-    /// Start a builder to override IP source / response closures.
     pub fn builder(
         store: Arc<dyn RateLimitStore>,
         max_requests: u64,
@@ -108,7 +90,6 @@ impl RateLimitLayer {
     }
 }
 
-/// Builder for [`RateLimitLayer`].
 pub struct RateLimitLayerBuilder {
     layer: RateLimitLayer,
 }
@@ -118,9 +99,6 @@ impl RateLimitLayerBuilder {
         self.layer.ip_source = ip;
         self
     }
-    /// Override how the bucket key's path component is derived (§8.2: a coarse
-    /// branch-wide limit must be path-independent so parameterized routes do not
-    /// fan into unbounded buckets).
     pub fn path_key(mut self, mode: PathKey) -> Self {
         self.layer.path_key = mode;
         self
@@ -155,7 +133,6 @@ impl<Inner> Layer<Inner> for RateLimitLayer {
     }
 }
 
-/// Tower middleware service that enforces rate limits via the store.
 #[derive(Clone)]
 pub struct RateLimitMiddleware<Inner> {
     inner: Inner,
@@ -240,7 +217,6 @@ where
                 return Ok(response);
             }
 
-            // Allowed — run the inner service and attach rate limit headers.
             let response = inner.call(req).await?;
 
             let remaining = layer.max_requests.saturating_sub(count);
@@ -255,15 +231,12 @@ where
     }
 }
 
-/// Helper to insert a numeric header value, falling back gracefully.
 fn insert_header(headers: &mut axum::http::HeaderMap, name: &HeaderName, value: u64) {
     let val = HeaderValue::from_str(&value.to_string())
         .unwrap_or_else(|_| HeaderValue::from_static("0"));
     headers.insert(name, val);
 }
 
-/// Default 429 body (overridable via the builder). Minimal JSON; the host app
-/// typically overrides with its own error envelope.
 fn default_on_block(info: BlockInfo) -> Response {
     (
         axum::http::StatusCode::TOO_MANY_REQUESTS,
@@ -276,7 +249,6 @@ fn default_on_block(info: BlockInfo) -> Response {
         .into_response()
 }
 
-/// Default 503 body (overridable via the builder).
 fn default_on_unavailable() -> Response {
     (
         axum::http::StatusCode::SERVICE_UNAVAILABLE,

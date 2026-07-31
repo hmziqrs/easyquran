@@ -237,7 +237,7 @@ impl App {
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let max_index = 3; // tags, users, seed, history
+                let max_index = 3;
                 if self.selected_home_index < max_index {
                     self.selected_home_index += 1;
                 }
@@ -369,28 +369,24 @@ impl App {
                 self.cycle_seed_size(true);
             }
             KeyCode::Char('1') => {
-                // Random seed
                 self.selected_seed_mode = Some(crate::services::seed_config::SeedMode::Random);
                 self.push_log("Selected: RANDOM seed mode".to_string());
                 self.start_seed_all(tx);
             }
             KeyCode::Char('2') => {
-                // Static seed - for now use a default value, could add input dialog later
                 self.selected_seed_mode =
                     Some(crate::services::seed_config::SeedMode::Static { value: 12345 });
                 self.push_log("Selected: STATIC seed mode (seed: 12345)".to_string());
                 self.start_seed_all(tx);
             }
             KeyCode::Char('3') => {
-                // Preset - use demo by default
                 self.selected_seed_mode = Some(crate::services::seed_config::SeedMode::Static {
-                    value: 1000, // demo preset
+                    value: 1000,
                 });
                 self.push_log("Selected: PRESET seed mode (demo - seed: 1000)".to_string());
                 self.start_seed_all(tx);
             }
             KeyCode::Char('4') => {
-                // List presets
                 let presets = crate::services::seed_config::list_presets();
                 for preset in presets {
                     self.push_log(format!(
@@ -444,28 +440,24 @@ impl App {
                 let selected = self.seed_menu_state.selected().unwrap_or(0);
                 match selected {
                     0 => {
-                        // Random
                         self.selected_seed_mode =
                             Some(crate::services::seed_config::SeedMode::Random);
                         self.push_log("Selected: RANDOM seed mode".to_string());
                         self.start_seed_all(tx);
                     }
                     1 => {
-                        // Static
                         self.selected_seed_mode =
                             Some(crate::services::seed_config::SeedMode::Static { value: 12345 });
                         self.push_log("Selected: STATIC seed mode (seed: 12345)".to_string());
                         self.start_seed_all(tx);
                     }
                     2 => {
-                        // Preset
                         self.selected_seed_mode =
                             Some(crate::services::seed_config::SeedMode::Static { value: 1000 });
                         self.push_log("Selected: PRESET seed mode (demo - seed: 1000)".to_string());
                         self.start_seed_all(tx);
                     }
                     3 => {
-                        // List presets
                         let presets = crate::services::seed_config::list_presets();
                         for preset in presets {
                             self.push_log(format!(
@@ -896,8 +888,6 @@ impl App {
 }
 
 pub async fn run_tui(theme: ThemeKind) -> Result<(), Box<dyn Error>> {
-    // Run migrations to ensure tables exist before loading tags; but return
-    // a clean error instead of panicking if DB is unreachable.
     let db = try_connect(true)
         .await
         .map_err(|e| format!("Database connection failed: {}", e))?;

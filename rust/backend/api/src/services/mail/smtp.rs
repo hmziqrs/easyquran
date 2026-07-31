@@ -10,21 +10,8 @@ use tracing::instrument;
 
 use super::provider::{MailError, MailProvider, OutboundEmail, SendReceipt};
 
-/// Default to STARTTLS (port 587) unless an implicit-TLS mode is requested.
 const TLS_MODE_IMPLICIT: &str = "tls";
 
-/// Resolve the desired TLS mode for the SMTP transport.
-///
-/// Implicit TLS (SMTPS, port 465) is selected when either:
-///   - `SMTP_TLS_MODE=tls` is set, or
-///   - `SMTP_PORT=465` is set.
-///
-/// Otherwise the transport falls back to the existing STARTTLS (port 587)
-/// behaviour via `starttls_relay`.
-///
-/// Reading `SMTP_PORT` here does not change the underlying relay port that
-/// lettre selects (`relay`/`starttls_relay` pin 465/587 respectively); it is
-/// only consulted to detect the implicit-TLS intent.
 fn use_implicit_tls() -> bool {
     if let Ok(mode) = env::var("SMTP_TLS_MODE") {
         if mode.eq_ignore_ascii_case(TLS_MODE_IMPLICIT) {
@@ -34,9 +21,6 @@ fn use_implicit_tls() -> bool {
     matches!(env::var("SMTP_PORT").ok().as_deref(), Some("465"))
 }
 
-/// Build the shared SMTP transport from `SMTP_*` env vars. Panics (boot-fail)
-/// when `MAIL_PROVIDER=smtp` and any required var is missing — fail-loud is the
-/// current contract, preserved by the provider selector in `main.rs`.
 #[instrument(name = "smtp_connection_init")]
 pub async fn create_connection() -> AsyncSmtpTransport<Tokio1Executor> {
     let host = env::var("SMTP_HOST").expect("SMTP_HOST must be set");
@@ -53,12 +37,6 @@ pub async fn create_connection() -> AsyncSmtpTransport<Tokio1Executor> {
 
     let creds = Credentials::new(username, password);
 
-    // Select the transport based on the configured TLS mode:
-    //   - implicit TLS (SMTPS, port 465): a full TLS connection is established
-    //     up-front via `relay` (Tls::Wrapper). Use this when SMTP_TLS_MODE=tls
-    //     or SMTP_PORT=465.
-    //   - otherwise: STARTTLS upgrade over a plain connection via
-    //     `starttls_relay` (the original behaviour).
     let transport = if implicit_tls {
         AsyncSmtpTransport::<Tokio1Executor>::relay(&host)
             .expect("failed to build implicit-TLS SMTP transport")
@@ -73,9 +51,6 @@ pub async fn create_connection() -> AsyncSmtpTransport<Tokio1Executor> {
     transport
 }
 
-/// SMTP [`MailProvider`]. Wraps a pre-built lettre transport and the verified
-/// sender address; the router records telemetry after delegation, so `send`
-/// does not touch `mail_metrics` itself.
 pub struct SmtpMailProvider {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     from_address: String,
@@ -95,7 +70,6 @@ impl SmtpMailProvider {
         }
     }
 
-    /// Compose the RFC 5322 `From` header value for the configured sender.
     fn sender_header(&self) -> String {
         match &self.from_name {
             Some(name) if !name.trim().is_empty() => {
@@ -143,8 +117,6 @@ impl MailProvider for SmtpMailProvider {
             .await
             .map_err(|e| MailError::ProviderApi(e.to_string()))?;
 
-        // lettre confirms delivery synchronously: treat a successful send as
-        // delivered. SMTP has no notion of synchronous permanent bounces.
         Ok(SendReceipt {
             delivered: 1,
             queued: 0,

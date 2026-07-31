@@ -1,5 +1,3 @@
-//! Session management for authentication
-
 mod extractor;
 mod state;
 

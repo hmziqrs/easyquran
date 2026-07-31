@@ -417,7 +417,6 @@ impl Entity {
         Ok(None)
     }
 
-    // Search posts with query parameters and optionally load relations
     pub async fn search(
         conn: &DbConn,
         public_url: &str,
@@ -438,7 +437,6 @@ impl Entity {
             post_query = post_query.filter(Column::AuthorId.eq(author_id_filter));
         }
 
-        // Date range filters
         if let Some(ts) = query.created_at_gt {
             post_query = post_query.filter(Column::CreatedAt.gt(ts));
         }
@@ -469,12 +467,6 @@ impl Entity {
 
         if let Some(tag_ids_filter) = query.tag_ids {
             if !tag_ids_filter.is_empty() {
-                // `tag_ids` is stored as a JSON TEXT array; test for overlap with
-                // the requested ids via SQLite's `json_each` table-valued function.
-                // The ids are bound as parameters (never string-interpolated) so the
-                // filter stays injection-safe. `json_each.value` yields each element
-                // of the `[1, 5, 9]` array as an integer, compared against the bound
-                // i32 ids with `IN (...)`.
                 let placeholders = vec!["?"; tag_ids_filter.len()].join(", ");
                 post_query = post_query.filter(Expr::cust_with_values(
                     format!(
@@ -486,7 +478,6 @@ impl Entity {
             }
         }
 
-        // Multi-field sorting with per-field order
         if let Some(sorts) = query.sorts {
             for sort in sorts {
                 let column = match sort.field.as_str() {
@@ -525,7 +516,6 @@ impl Entity {
             .flat_map(|p| p.tag_ids.0.iter().copied())
             .collect();
 
-        // Load all tags in a single query
         let tags = if !all_tag_ids.is_empty() {
             super::super::tag::Entity::find()
                 .filter(
@@ -596,7 +586,6 @@ impl Entity {
         Self::search(conn, public_url, query).await
     }
 
-    // Sitemap data for published posts
     pub async fn sitemap(conn: &DbConn) -> DbResult<Vec<PostSitemap>> {
         let sitemaps = Self::find()
             .select_only()
@@ -636,9 +625,6 @@ impl Entity {
             }
         }
 
-        // RACE-VIEWCOUNT-1: atomic `UPDATE post SET view_count = view_count + 1`
-        // — no read-modify-write, so concurrent distinct-IP views (the dedup
-        // gate allows one per (post, ip) per window) cannot lose increments.
         if let Err(err) = Self::update_many()
             .col_expr(Column::ViewCount, Expr::col(Column::ViewCount).add(1))
             .filter(Column::Id.eq(post_id))

@@ -1,14 +1,3 @@
-//! Cloudflare Email Sending [`MailProvider`].
-//!
-//! Posts to `POST {base}/accounts/{account_id}/email/sending/send` (bearer
-//! auth with the API token) and parses the recipient-grouped delivery status
-//! (`delivered` / `queued` / `permanent_bounces`). Synchronous
-//! `permanent_bounces` are returned in the [`SendReceipt`] so the router can
-//! upsert suppression rows. The inbound `verify_webhook` authenticates an
-//! **operator-owned** envelope (a Cloudflare Worker that consumes the Email
-//! Service event Queue and re-POSTs under a shared HMAC secret — Cloudflare
-//! does not natively POST signed email events).
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -20,9 +9,6 @@ use super::provider::{
 };
 use super::router::canonicalize_recipient;
 
-/// Cloudflare Email Sending provider. `api_token` + `webhook_secret` are
-/// `SecretString` (redacting `Debug`); `expose_secret()` is used only at the
-/// HTTP / signing call sites.
 #[derive(Debug)]
 pub struct CloudflareMailProvider {
     account_id: String,
@@ -32,15 +18,10 @@ pub struct CloudflareMailProvider {
     from_address: String,
     from_name: Option<String>,
     http_client: reqwest::Client,
-    /// Optional sandbox allowlist (`CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES`); when
-    /// set, sends to any recipient not on the list are refused.
     allowed_addresses: Option<Vec<String>>,
 }
 
 impl CloudflareMailProvider {
-    /// Build from resolved config. Fails (returns `MailError::Config`) on a
-    /// missing/empty required field; the boot selector in `main.rs` panics on
-    /// that so a misconfigured `MAIL_PROVIDER=cloudflare` fails loud.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         account_id: String,
@@ -91,8 +72,6 @@ impl CloudflareMailProvider {
         })
     }
 
-    /// Compose the RFC 5322 `From` value (display name + address when a name is
-    /// configured, else the bare address).
     fn sender_field(&self) -> String {
         match &self.from_name {
             Some(name) => format!("{name} <{}>", self.from_address),
@@ -112,7 +91,6 @@ impl MailProvider for CloudflareMailProvider {
     }
 
     async fn send(&self, msg: OutboundEmail) -> Result<SendReceipt, MailError> {
-        // Sandbox allowlist (pre-prod safety).
         if let Some(allowed) = &self.allowed_addresses {
             if !allowed.iter().any(|a| a.eq_ignore_ascii_case(&msg.to)) {
                 return Err(MailError::InvalidRecipient(
@@ -171,7 +149,6 @@ impl MailProvider for CloudflareMailProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedMailEvent, MailError> {
-        // Fail-closed: an unset secret rejects every event (no silent insecure mode).
         let secret = self.webhook_secret.expose_secret();
         if secret.is_empty() {
             return Err(MailError::WebhookVerification(
@@ -179,10 +156,6 @@ impl MailProvider for CloudflareMailProvider {
             ));
         }
 
-        // The timestamp is REQUIRED and bound into the signed message, so a
-        // captured signed body cannot be replayed indefinitely (CWE-294). The
-        // operator Worker signs HMAC-SHA256(secret, "{ts}.{body}") and sends the
-        // same `ts` in `X-Mail-Webhook-Timestamp`.
         let ts_str = webhook_util::header_str(&event.headers, "x-mail-webhook-timestamp")
             .ok_or_else(|| {
                 MailError::WebhookVerification("missing x-mail-webhook-timestamp".to_string())
@@ -202,7 +175,6 @@ impl MailProvider for CloudflareMailProvider {
             .get("x-mail-webhook-signature")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        // Recompute the MAC over the exact signed message bytes: "{ts}.{body}".
         let mut signed: Vec<u8> = Vec::with_capacity(ts_str.len() + 1 + event.payload.len());
         signed.extend_from_slice(ts_str.as_bytes());
         signed.push(b'.');
@@ -230,14 +202,12 @@ impl MailProvider for CloudflareMailProvider {
         }
         .to_string();
 
-        // Strict: reject (do not store) a malformed recipient so an
-        // un-enforceable row can't be written into email_suppression.
+        // Reject non-canonicalizable recipients; storing them breaks future suppression matches.
         let recipient = canonicalize_recipient(&env.recipient).map_err(|_| {
             MailError::WebhookVerification("invalid recipient in envelope".to_string())
         })?;
 
         Ok(ParsedMailEvent {
-            // Complaints are always a permanent suppression.
             permanent: env.permanent || event_type == canonical::COMPLAINED,
             event_type,
             recipient,
@@ -248,8 +218,6 @@ impl MailProvider for CloudflareMailProvider {
         })
     }
 }
-
-// ── Cloudflare Email Sending wire types ───────────────────────────────────
 
 #[derive(Serialize)]
 struct CfSendRequest<'a> {
@@ -286,7 +254,6 @@ struct CfResult {
     permanent_bounces: Vec<String>,
 }
 
-/// Our defined inbound envelope (the reference Worker POSTs this shape).
 #[derive(Deserialize)]
 struct CfMailEnvelope {
     event_type: String,
@@ -334,7 +301,6 @@ mod tests {
         assert!(matches!(r, Err(MailError::Config(_))));
     }
 
-    /// Sign `"{ts}.{body}"` with HMAC-SHA256 (the operator Worker's contract).
     fn sign(secret: &str, ts: &str, body: &[u8]) -> String {
         let mut msg = Vec::with_capacity(ts.len() + 1 + body.len());
         msg.extend_from_slice(ts.as_bytes());
@@ -343,7 +309,6 @@ mod tests {
         webhook_util::hmac_sha256_hex(secret.as_bytes(), &msg)
     }
 
-    /// Build a validly-signed event with a fresh timestamp.
     fn signed_event(body: &[u8]) -> WebhookEvent {
         let ts = chrono::Utc::now().timestamp().to_string();
         let sig = sign("sec", &ts, body);
@@ -366,7 +331,6 @@ mod tests {
         let parsed = p.verify_webhook(signed_event(body)).await.unwrap();
         assert_eq!(parsed.event_type, canonical::COMPLAINED);
         assert_eq!(parsed.recipient, "victim@example.com");
-        // complaint forced permanent
         assert!(parsed.permanent);
     }
 
@@ -374,7 +338,6 @@ mod tests {
     async fn verify_webhook_rejects_bad_signature() {
         let p = provider();
         let body = br#"{"event_type":"delivered","recipient":"a@b.com"}"#;
-        // Fresh timestamp, but a signature computed with the wrong secret.
         let ts = chrono::Utc::now().timestamp().to_string();
         let sig = sign("wrong-secret", &ts, body);
         let mut headers = HeaderMap::new();
@@ -415,7 +378,6 @@ mod tests {
     async fn verify_webhook_rejects_stale_timestamp() {
         let p = provider();
         let body = br#"{"event_type":"bounced","recipient":"a@b.com","permanent":true}"#;
-        // 1 hour ago — outside the ±5 min window.
         let stale = (chrono::Utc::now().timestamp() - 3600).to_string();
         let sig = sign("sec", &stale, body);
         let mut headers = HeaderMap::new();
@@ -434,7 +396,6 @@ mod tests {
     async fn verify_webhook_rejects_missing_timestamp() {
         let p = provider();
         let body = br#"{"event_type":"bounced","recipient":"a@b.com","permanent":true}"#;
-        // Signature header present but NO timestamp header -> reject (required).
         let sig = sign("sec", "0", body);
         let mut headers = HeaderMap::new();
         headers.insert("x-mail-webhook-signature", sig.parse().unwrap());
@@ -449,9 +410,6 @@ mod tests {
 
     #[tokio::test]
     async fn verify_webhook_rejects_body_only_signature_replay() {
-        // A body-only signature (the old, replayable contract) must NOT verify
-        // now that the timestamp is bound into the signed message — proves a
-        // captured body-only signed payload can no longer be replayed.
         let p = provider();
         let body = br#"{"event_type":"bounced","recipient":"a@b.com","permanent":true}"#;
         let body_only_sig = webhook_util::hmac_sha256_hex(b"sec", body);
@@ -467,8 +425,6 @@ mod tests {
         };
         assert!(p.verify_webhook(ev).await.is_err());
     }
-
-    // ── send path (wiremock: real HTTP contract) ──────────────────────────
 
     #[tokio::test]
     async fn send_posts_bearer_json_and_parses_permanent_bounces() {
@@ -570,7 +526,6 @@ mod tests {
 
     #[tokio::test]
     async fn send_rejects_recipient_not_in_sandbox_allowlist() {
-        // No mock server: the allowlist short-circuits before any HTTP call.
         let p = CloudflareMailProvider::new(
             "accid".to_string(),
             SecretString::from("tok".to_string()),

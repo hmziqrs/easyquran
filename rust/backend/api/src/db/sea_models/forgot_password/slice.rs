@@ -1,9 +1,6 @@
 use sea_orm::prelude::DateTimeWithTimeZone;
 use serde::{Deserialize, Serialize};
 
-/// Input for creating a forgot-password row. `code_hash` is the keyed hash of
-/// the plaintext code (computed by the caller via `utils::code_hash::hash_code`),
-/// never the plaintext itself.
 #[derive(Deserialize, Debug)]
 pub struct NewForgotPassword {
     pub user_id: i32,

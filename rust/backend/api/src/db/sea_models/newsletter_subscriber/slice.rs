@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use super::SubscriberStatus;
 use crate::utils::SortParam;
 
-/// New subscriber DTO for insertion
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewSubscriber {
     pub email: String,
@@ -13,7 +12,6 @@ pub struct NewSubscriber {
     pub token: String,
 }
 
-/// Update subscriber DTO for partial updates (e.g., confirm/unsubscribe)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UpdateSubscriber {
     pub status: Option<SubscriberStatus>,
@@ -21,7 +19,6 @@ pub struct UpdateSubscriber {
     pub updated_at: DateTimeWithTimeZone,
 }
 
-/// Query parameters for searching/paginating subscribers
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SubscriberQuery {
     pub page: Option<u64>,
@@ -34,7 +31,6 @@ pub struct SubscriberQuery {
     pub updated_at_lt: Option<DateTimeWithTimeZone>,
 }
 
-/// Lightweight subscriber list item for admin listings
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult)]
 pub struct SubscriberListItem {
     pub id: i32,

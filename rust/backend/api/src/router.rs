@@ -35,7 +35,6 @@ use crate::modules::seed_v1;
 
 use crate::modules::billing_v1;
 
-// --- Modules added for the issues batch (2026-07-27) ---
 use crate::modules::passkey_v1;
 use crate::modules::{apple_auth_v1, facebook_auth_v1, github_auth_v1};
 use crate::modules::{device_v1, notification_v1};
@@ -49,10 +48,6 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/healthz", get(health_check))
         .route("/robots.txt", get(robots_txt))
         .route("/sitemap.xml", get(sitemap_xml))
-        // Per-session CSRF token issuer. Lives inside the main router so the
-        // SessionManagerLayer and csrf_guard both apply (it's exempted from the
-        // latter via the exact-match exempt list). The handler bootstraps a new
-        // session and returns a token bound to its id.
         .route("/csrf/v1/generate", post(csrf_v1::controller::generate))
         .nest(
             "/auth/v1",
@@ -61,18 +56,12 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     router = router.nest("/auth/google/v1", google_auth_v1::routes());
 
-    // User profile routes - always available for authenticated users
     router = router.nest("/user/v1", user_v1::routes());
 
-    // Email verification and password reset
     router = router
         .nest("/email_verification/v1", email_verification_v1::routes())
         .nest("/forgot_password/v1", forgot_password_v1::routes());
 
-    // DOS-TRACKVIEW-1: the public `track_view` endpoint writes a DB transaction
-    // per call, so the whole post nest gets a generous per-IP cap (reads are
-    // cheap SELECTs; 200/min/IP is ample for a real user and bounds a flooder
-    // that previously hit the txn-per-request view counter unbounded).
     router = router.nest(
         "/post/v1",
         post_v1::routes().layer(rate_limit::rate_limit_layer(&state, 200, 60)),
@@ -80,24 +69,18 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     router = router.nest(
         "/post/comment/v1",
-        post_comment_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
+        post_comment_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
     );
 
     router = router
         .nest("/category/v1", category_v1::routes())
         .nest("/tag/v1", tag_v1::routes())
         .nest("/mail/v1", mail_v1::routes())
-        // DOS-MEDIA-OPTIMIZER: the upload path runs the CPU-heavy image
-        // optimizer; give /media/v1 its own tight per-IP cap (it is also
-        // author-gated) so a burst of uploads cannot monopolize workers.
         .nest(
             "/media/v1",
             media_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
         )
         .nest("/feed/v1", feed_v1::routes())
-        // DOS-SEARCH-1: search runs a triple leading-wildcard ILIKE (full table
-        // scan) per request and was previously un-rate-limited. 30/min/IP bounds
-        // an anonymous caller cheaply minting a CSRF token then replaying it.
         .nest(
             "/search/v1",
             search_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
@@ -105,7 +88,7 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     router = router.nest(
         "/newsletter/v1",
-        newsletter_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)), // 100 req/min
+        newsletter_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
     );
 
     router = router.nest("/analytics/v1", analytics_v1::routes());
@@ -121,7 +104,6 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     router = router.nest("/billing/v1", billing_v1::routes());
 
-    // --- Nests added for the issues batch (2026-07-27) ---
     router = router
         .nest(
             "/device/v1",
@@ -152,28 +134,12 @@ pub fn router(state: AppState) -> Router<AppState> {
     with_observability(router)
 }
 
-/// The shared observability stack applied once to every router branch (§8.2):
-/// security headers, request id, HTTP metrics (labeled by `MatchedPath`, not
-/// the raw path — fixes a metrics-cardinality incident at ~7,750 Quran paths),
-/// and the tracing layer.
-///
-/// `track_metrics` is a `route_layer` so it runs AFTER routing, where
-/// `MatchedPath` is populated; the others wrap outside it. Applied once per
-/// branch (the private branch via [`router`], the public `/quran/v1` branch
-/// from `main`) so `request_id` and `track_metrics` are not registered twice
-/// on the same request — earlier code applied them in BOTH `router.rs` and
-/// `main.rs`; do not re-introduce that.
 pub fn with_observability(router: Router<AppState>) -> Router<AppState> {
     router
         .route_layer(middleware::from_fn(http_metrics::track_metrics))
         .layer(middleware::from_fn(security_headers::security_headers))
         .layer(middleware::from_fn(request_id_middleware))
         .layer(
-            // Do NOT capture headers in spans/responses: Cookie, Authorization,
-            // csrf-token, and webhook-signature would otherwise ship to OTLP at
-            // INFO. `include_headers(false)` is the tower-http default but is set
-            // explicitly here so the safety property is self-documenting and not
-            // contingent on knowing the library default. See plan Phase 2b / V-MED-7.
             TraceLayer::new_for_http()
                 .make_span_with(
                     DefaultMakeSpan::new()
@@ -189,10 +155,6 @@ pub fn with_observability(router: Router<AppState>) -> Router<AppState> {
 }
 
 async fn health_check(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
-    // SQLite is the sole backing store on the default build (sessions +
-    // rate-limit L2 + canonical data all share this connection), so a DB ping
-    // is the single liveness signal. The prior Redis ping was removed with the
-    // Redis pool.
     let db_status = match state.sea_db.ping().await {
         Ok(()) => "ok",
         Err(_) => "error",
@@ -245,10 +207,8 @@ async fn sitemap_xml(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let raw_base_url = state.settings.site.consumer_site_url.clone();
-    // SITEMAP-XML-1: escape both the operator base URL and every post slug
-    // before interpolating into XML. Slugs are author-controlled and only
-    // length-validated, so unescaped interpolation is a stored XML-injection
-    // vector. `feed_v1` already escapes its RSS output the same way.
+    // Slugs are author-controlled and only length-validated: escape before XML
+    // interpolation, or it's a stored XML-injection vector.
     let base_url = xml_escape(&raw_base_url);
 
     let mut urls = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");

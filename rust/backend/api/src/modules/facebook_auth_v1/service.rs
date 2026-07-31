@@ -3,15 +3,6 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl};
 
 use crate::error::{ErrorCode, ErrorResponse};
 
-/// Build the Facebook OAuth2 client from env config.
-///
-/// Facebook's server-side OAuth flow does NOT support PKCE (the dialog ignores
-/// `code_challenge`), so we rely on the session-bound CSRF `state` alone for
-/// replay protection — the same single-use, in-memory state every other
-/// provider uses. The `client_secret` is sent in the token exchange.
-///
-/// Required env: `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`,
-/// `FACEBOOK_REDIRECT_URI`.
 pub fn get_facebook_oauth_client() -> Result<BasicClient, ErrorResponse> {
     let client_id = std::env::var("FACEBOOK_CLIENT_ID").map_err(|_| {
         ErrorResponse::new(ErrorCode::InternalServerError)

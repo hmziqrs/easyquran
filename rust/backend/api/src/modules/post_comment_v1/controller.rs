@@ -16,9 +16,8 @@ use crate::{
     AppState,
 };
 
-/// DOS-COMMENT-CREATE-2: per-account comment throttle. The comment nest's
-/// per-IP 100/min layer alone lets one verified account behind rotating IPs
-/// flood comments; this bounds a single account (fail-closed on limiter store error).
+// Per-account comment throttle: per-IP limiting alone can't stop one account
+// behind rotating IPs from flooding comments.
 const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
     temp_block_attempts: 20,
     temp_block_range: 60,
@@ -42,8 +41,6 @@ pub async fn create(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
 
-    // DOS-COMMENT-CREATE-2: per-account throttle (the comment nest already has
-    // a per-IP 100/min layer; this bounds one account behind rotating IPs).
     abuse_limiter::limiter(
         &state.gate_store,
         &format!("comment:create:user:{}", user.id),
@@ -147,7 +144,6 @@ pub async fn delete(
     }
 }
 
-/// Find comments by post ID (public use)
 #[debug_handler]
 #[instrument(skip(state), fields(post_id))]
 pub async fn find_all_by_post(
@@ -176,7 +172,6 @@ pub async fn find_all_by_post(
     }
 }
 
-/// Find comments with query (dashboard use)
 #[debug_handler]
 #[instrument(skip(state, payload))]
 pub async fn find_with_query(

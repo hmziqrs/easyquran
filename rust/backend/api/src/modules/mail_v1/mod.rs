@@ -1,9 +1,3 @@
-//! Mail routes: inbound bounce/complaint webhook + admin suppression CRUD.
-//!
-//! The admin suppression API is **always-on** (the `email_suppression` table is
-//! always-on, and SMTP-only deployments must be able to clear stale rows). The
-//! webhook receiver body is gated by `mail-cloudflare` inside the handler; the
-//! route itself is always registered so the path is stable.
 
 pub mod controller;
 pub mod validator;
@@ -30,8 +24,6 @@ pub fn routes() -> Router<AppState> {
         ));
 
     let public = Router::<AppState>::new()
-        // Inbound bounce/complaint/delivery webhook (CSRF-exempt; verified by
-        // an operator-owned HMAC secret inside the handler).
         .route(
             "/webhook/{provider}",
             post(controller::mail_webhook_receiver),
@@ -39,6 +31,5 @@ pub fn routes() -> Router<AppState> {
 
     admin
         .merge(public)
-        // Cap body size: the public webhook is the key unbounded-body surface.
         .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))
 }

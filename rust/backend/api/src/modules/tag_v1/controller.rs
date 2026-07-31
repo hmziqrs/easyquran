@@ -18,12 +18,11 @@ use crate::{
 
 use super::validator::{V1CreateTagPayload, V1TagQueryParams, V1UpdateTagPayload};
 
-/// Create a new tag using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth, payload), fields(tag_id))]
 pub async fn create(
     State(state): State<AppState>,
-    _auth: AuthSession, // Assuming tag creation requires authentication
+    _auth: AuthSession,
     payload: ValidatedJson<V1CreateTagPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let new_tag = payload.0.into_new_tag();
@@ -41,12 +40,11 @@ pub async fn create(
     }
 }
 
-/// Update an existing tag using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth, payload), fields(tag_id))]
 pub async fn update(
     State(state): State<AppState>,
-    _auth: AuthSession, // Assuming tag update requires authentication
+    _auth: AuthSession,
     Path(tag_id): Path<i32>,
     payload: ValidatedJson<V1UpdateTagPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -68,12 +66,11 @@ pub async fn update(
     }
 }
 
-/// Delete a tag using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth), fields(tag_id))]
 pub async fn delete(
     State(state): State<AppState>,
-    _auth: AuthSession, // Assuming tag deletion requires authentication
+    _auth: AuthSession,
     Path(tag_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     match Tag::delete(&state.sea_db, tag_id).await {
@@ -102,7 +99,6 @@ pub async fn delete(
     }
 }
 
-/// Find a tag by ID using SeaORM
 #[debug_handler]
 #[instrument(skip(state), fields(tag_id))]
 pub async fn find_by_id(
@@ -121,7 +117,6 @@ pub async fn find_by_id(
     }
 }
 
-/// Find a tag by ID or slug using SeaORM
 #[debug_handler]
 #[instrument(skip(state), fields(slug_or_id = %slug_or_id, tag_id))]
 pub async fn find_by_id_or_slug(
@@ -157,7 +152,6 @@ pub async fn find_by_id_or_slug(
     }
 }
 
-/// Find all tags using SeaORM
 #[debug_handler]
 #[instrument(skip(state))]
 pub async fn find_all(State(state): State<AppState>) -> Result<impl IntoResponse, ErrorResponse> {
@@ -173,7 +167,6 @@ pub async fn find_all(State(state): State<AppState>) -> Result<impl IntoResponse
     }
 }
 
-/// Find tags with query using SeaORM
 #[debug_handler]
 #[instrument(skip(state, payload))]
 pub async fn find_with_query(

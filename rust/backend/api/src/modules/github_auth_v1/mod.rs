@@ -9,8 +9,6 @@ use axum::{
 
 use crate::AppState;
 
-/// GitHub Sign-In routes, mounted at `/auth/github/v1`. Mirrors `google_auth_v1`:
-/// `GET /login`, `GET /callback`, `POST /exchange`, `GET /user`.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", get(controller::github_login))

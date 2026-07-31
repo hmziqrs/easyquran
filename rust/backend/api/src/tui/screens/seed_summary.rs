@@ -43,7 +43,6 @@ pub fn draw_seed_summary(f: &mut Frame, area: Rect, app: &App, palette: &ThemePa
     f.render_widget(header, chunks[0]);
 
     if let Some(err) = &app.seed_summary.error {
-        // Truncate error message to prevent layout breaks
         let max_width = chunks[1].width.saturating_sub(4) as usize;
         let truncated_err = if err.len() > max_width {
             format!("{}...", &err[..max_width.saturating_sub(3)])
@@ -62,7 +61,6 @@ pub fn draw_seed_summary(f: &mut Frame, area: Rect, app: &App, palette: &ThemePa
             );
         f.render_widget(body, chunks[1]);
     } else if let Some(outcome) = &app.seed_summary.outcome {
-        // Split the body area to show errors/warnings if present
         let has_issues = !outcome.errors.is_empty() || !outcome.warnings.is_empty();
         let body_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -73,7 +71,6 @@ pub fn draw_seed_summary(f: &mut Frame, area: Rect, app: &App, palette: &ThemePa
             })
             .split(chunks[1]);
 
-        // Show inserted counts
         let mut items: Vec<ListItem> = Vec::new();
         let mut counts = outcome.counts().into_iter().collect::<Vec<_>>();
         counts.sort_by(|a, b| a.0.cmp(&b.0));

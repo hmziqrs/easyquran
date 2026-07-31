@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 
 pub use ruxlog_types::enums::PostStatus;
 
-/// JSON-backed list of tag IDs. Stored as JSON (TEXT under SQLite) rather than a
-/// Postgres `int[]` array so the entity is database-backend-agnostic.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]
 pub struct TagIds(pub Vec<i32>);
 
@@ -57,8 +55,6 @@ pub enum Relation {
         to = "super::super::media::Column::Id"
     )]
     FeaturedImage,
-    // We're using a tag_ids array directly in the Post model for now
-    // but for now, just removing this relation
 }
 
 impl Related<super::super::user::Entity> for Entity {

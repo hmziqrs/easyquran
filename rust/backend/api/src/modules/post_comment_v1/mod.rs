@@ -5,19 +5,15 @@ use crate::{middlewares::auth_guard, AppState};
 pub mod controller;
 pub mod validator;
 
-/// Public + authenticated (moderator) and admin comment routes
 pub fn routes() -> Router<AppState> {
-    // Base routes for creating & managing own comments
     let base = Router::<AppState>::new()
         .route("/create", post(controller::create))
         .route("/update/{comment_id}", post(controller::update))
         .route("/delete/{comment_id}", post(controller::delete))
         .route("/flag/{comment_id}", post(controller::flag))
         .route_layer(middleware::from_fn(auth_guard::verified))
-        // Public route for listing comments by post
         .route("/{post_id}", post(controller::find_all_by_post));
 
-    // Admin moderation routes nested under /admin
     let admin = Router::<AppState>::new()
         .route("/list", post(controller::find_with_query))
         .route("/hide/{comment_id}", post(controller::admin_hide))

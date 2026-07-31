@@ -1,9 +1,3 @@
-//! Billing API controllers.
-//!
-//! Admin endpoints for plan/subscription/payment/invoice management.
-//! Consumer endpoints for checkout and portal access.
-//! Public webhook endpoint for provider callbacks.
-
 use axum::{
     body::Bytes,
     extract::{Path, RawQuery, State},
@@ -36,15 +30,10 @@ use crate::services::billing::provider::{
 
 use super::validator::*;
 
-// ── Server-side checkout intent store (plan Phase 1f / 4e) ─────────────
-//
-// When a checkout session is created we persist, server-side and keyed by the
-// provider's checkout session id, the *authenticated* facts the verified
-// webhook later needs to grant entitlement: the `user_id` (always) and, for a
-// per-post purchase, the `post_id` / amount / currency. The webhook consumes
-// this intent and grants from it — never from client-shapeable `metadata`,
-// which is how a forged/legit-but-tampered session could otherwise grant
-// access to the wrong user or a different post.
+// Server-side store keyed by the provider's checkout session id: the
+// authenticated facts (user_id, and for per-post purchases post_id/amount/
+// currency, or plan_id for subscriptions) the verified webhook grants from.
+// NEVER grant from client metadata — it is attacker-shapeable.
 mod checkout_intent {
     use super::*;
     use std::collections::HashMap;
@@ -53,48 +42,25 @@ mod checkout_intent {
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct CheckoutIntent {
-        /// The authenticated user who initiated checkout. Authoritative —
-        /// preferred over `metadata.user_id` at grant time.
         pub user_id: i32,
-        /// Present only for per-post (one-time) purchases.
         pub post_id: Option<i32>,
         pub amount_cents: Option<i32>,
         pub currency: Option<String>,
-        /// Present for subscription checkouts — the exact plan the customer
-        /// is subscribing to, recorded server-side at checkout. The verified
-        /// webhook grants THIS plan rather than guessing "first active plan"
-        /// (audit finding F#3). Always `None` for per-post purchases.
         pub plan_id: Option<i32>,
     }
 
-    /// 1h TTL: long enough to outlast a customer completing payment, short
-    /// enough to reap abandoned sessions.
     const INTENT_TTL_SECS: u64 = 3600;
 
-    // Process-global checkout-intent store (replaces the prior Redis SET/GETDEL
-    // round-trip). Keyed by the provider's checkout session id; each entry
-    // carries the `Instant` it was stored so abandoned sessions are reaped by
-    // opportunistic expiry on each access. The whole map sits behind one Mutex,
-    // so `take`'s lock-then-remove is an atomic single-take — the same
-    // double-grant guarantee the prior atomic GETDEL provided, with no Redis
-    // round-trip on the default build. A restart loses live intents; the DB
-    // unique indexes on `(user_id, post_id)` and
-    // `(provider, provider_subscription_id)` are the defense-in-depth backstop
-    // against any double-grant (audit F#1).
     static INTENT_STORE: OnceLock<Mutex<HashMap<String, (CheckoutIntent, Instant)>>> = OnceLock::new();
 
     fn intent_store() -> &'static Mutex<HashMap<String, (CheckoutIntent, Instant)>> {
         INTENT_STORE.get_or_init(|| Mutex::new(HashMap::new()))
     }
 
-    /// Reap entries older than [`INTENT_TTL_SECS`]. Called under the lock so the
-    /// housekeeping is consistent with the insert/take.
     fn reap_stale(map: &mut HashMap<String, (CheckoutIntent, Instant)>) {
         map.retain(|_, (_, at)| at.elapsed().as_secs() < INTENT_TTL_SECS);
     }
 
-    /// Persist the intent for a created checkout session. Synchronous: the
-    /// in-memory map is process-local, so no I/O is awaited.
     pub fn store(session_id: &str, intent: &CheckoutIntent) -> Result<(), ErrorResponse> {
         let mut map = match intent_store().lock() {
             Ok(guard) => guard,
@@ -108,19 +74,7 @@ mod checkout_intent {
         Ok(())
     }
 
-    /// Atomically take the single-use intent for `session_id`.
-    ///
-    /// Locks the map and removes the entry in one critical section, so a
-    /// concurrent/replayed webhook — two deliveries racing through the grant
-    /// path — can never both observe the intent. This preserves the
-    /// double-grant guarantee the prior Redis `GETDEL` atomic read-and-delete
-    /// provided (audit finding F#1). The DB unique indexes on
-    /// `(user_id, post_id)` and `(provider, provider_subscription_id)` are a
-    /// defense-in-depth backstop against any double-grant that still slipped
-    /// through, but the atomic take is the primary guarantee.
-    ///
-    /// Returns `None` when no intent was stored (legacy path / expired / lost
-    /// to a restart).
+    /// Single-use: consumes the intent so a replayed webhook cannot re-grant.
     pub fn take(session_id: &str) -> Result<Option<CheckoutIntent>, ErrorResponse> {
         let mut map = match intent_store().lock() {
             Ok(guard) => guard,
@@ -130,7 +84,6 @@ mod checkout_intent {
             }
         };
         reap_stale(&mut map);
-        // lock + remove: atomic single-take. A concurrent caller finds nothing.
         Ok(map.remove(session_id).map(|(intent, _)| intent))
     }
 }
@@ -255,7 +208,6 @@ pub async fn admin_delete_plan(
     State(state): State<AppState>,
     Path(plan_id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    // Check for active subscriptions before deleting
     let sub_count = subscription::Entity::find()
         .filter(subscription::Column::PlanId.eq(plan_id))
         .count(&state.sea_db)
@@ -274,8 +226,6 @@ pub async fn admin_delete_plan(
 
     Ok(Json(json!({ "message": "Plan deleted" })))
 }
-
-// ── Admin: Subscription management ────────────────────────────────────
 
 pub async fn admin_list_subscriptions(
     State(state): State<AppState>,
@@ -302,7 +252,6 @@ pub async fn admin_cancel_subscription(
             ErrorResponse::new(ErrorCode::RecordNotFound).with_message("Subscription not found")
         })?;
 
-    // Also cancel at the provider
     if let Some(provider_sub_id) = &sub.provider_subscription_id {
         let immediately = payload.immediately.unwrap_or(false);
         let provider_name = sub.provider.clone();
@@ -315,7 +264,6 @@ pub async fn admin_cancel_subscription(
         }
     }
 
-    // Update status in DB
     let mut active: subscription::ActiveModel = sub.into();
     active.status = Set(subscription::model::SubscriptionStatus::Canceled);
     active.cancel_at_period_end = Set(false);
@@ -327,8 +275,6 @@ pub async fn admin_cancel_subscription(
 
     Ok(Json(json!({ "message": "Subscription canceled" })))
 }
-
-// ── Admin: Payments & Invoices ────────────────────────────────────────
 
 pub async fn admin_list_payments(
     State(state): State<AppState>,
@@ -353,8 +299,6 @@ pub async fn admin_list_invoices(
 
     Ok(Json(json!({ "data": invoices_list })))
 }
-
-// ── Admin: Discount codes ─────────────────────────────────────────────
 
 pub async fn admin_list_discount_codes(
     State(state): State<AppState>,
@@ -417,8 +361,6 @@ pub async fn admin_delete_discount_code(
     Ok(Json(json!({ "message": "Discount code deleted" })))
 }
 
-// ── Consumer: Public plans ────────────────────────────────────────────
-
 pub async fn public_list_plans(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
@@ -431,8 +373,6 @@ pub async fn public_list_plans(
 
     Ok(Json(json!({ "data": plans })))
 }
-
-// ── Consumer: Checkout ────────────────────────────────────────────────
 
 pub async fn create_checkout(
     State(state): State<AppState>,
@@ -479,14 +419,9 @@ pub async fn create_checkout(
                     .with_message(format!("Checkout failed: {}", e))
             })?;
 
-        // Required (plan 1f/4e, audit F#2/F#3): bind the authenticated
-        // `user_id` AND the exact `plan_id` server-side. The verified webhook
-        // grants the subscription from this intent — never from client metadata
-        // (which is attacker-shapeable and could name the wrong user) and never
-        // by guessing "first active plan" (which could grant the wrong tier).
-        // Storage is REQUIRED: if we cannot bind the intent, we must not hand
-        // the customer a checkout URL the webhook could never fulfill, so a
-        // failure returns an error instead of degrading to metadata.
+        // Bind the authenticated user_id and exact plan_id server-side; the
+        // verified webhook grants from this intent, never from client metadata.
+        // Storage is required — never return a URL the webhook can't fulfill.
         let intent = checkout_intent::CheckoutIntent {
             user_id,
             post_id: None,
@@ -505,17 +440,9 @@ pub async fn create_checkout(
     }
 }
 
-// ── Consumer: Per-post checkout ───────────────────────────────────────
-
-/// Create a one-time checkout for purchasing a single gated post.
-///
-/// The amount charged is the **server-side** price from the post's
-/// `post_access` policy — never the client's. After the provider returns a
-/// session, we bind `(user_id, post_id, amount, currency)` server-side; the
-/// verified `checkout.session.completed` webhook consumes that intent and
-/// inserts the `post_purchases` grant. Because the grant is impossible without
-/// the intent, intent storage is *required* here (a failure returns an error
-/// rather than handing the customer a checkout URL we could never fulfill).
+/// One-time post purchase. Amount is the server-side `post_access` price,
+/// never the client's. The verified webhook grants from the server-bound
+/// intent — if storing it fails, return an error, not a fulfillable URL.
 pub async fn create_post_checkout(
     State(state): State<AppState>,
     auth: AuthSession,
@@ -528,8 +455,8 @@ pub async fn create_post_checkout(
     let user_id = user.id;
     let user_email = user.email.clone();
 
-    // Only genuinely Paid posts with a configured price are purchasable. This
-    // is the authoritative amount charged — the client cannot influence it.
+    // Authoritative price: only Paid posts with a configured price are
+    // purchasable — the client cannot influence the amount charged.
     let policy = paywall::load_post_access_policy(&state.sea_db, payload.post_id).await?;
     let amount_cents = match (policy.access_type, policy.price_cents) {
         (paywall::PostAccessType::Paid, Some(cents)) if cents > 0 => cents,
@@ -566,16 +493,11 @@ pub async fn create_post_checkout(
                     .with_message(format!("Post checkout failed: {}", e))
             })?;
 
-        // Required (not best-effort): without this intent the webhook cannot
-        // grant the purchase, so a failure must NOT return a checkout URL the
-        // customer could pay into without receiving access.
         let intent = checkout_intent::CheckoutIntent {
             user_id,
             post_id: Some(payload.post_id),
             amount_cents: Some(amount_cents),
             currency: Some(currency),
-            // Per-post purchases have no plan; the webhook reads `post_id` to
-            // distinguish the grant path.
             plan_id: None,
         };
         checkout_intent::store(&session.session_id, &intent)?;
@@ -588,8 +510,6 @@ pub async fn create_post_checkout(
         })))
     }
 }
-
-// ── Consumer: My subscriptions ────────────────────────────────────────
 
 pub async fn my_subscriptions(
     State(state): State<AppState>,
@@ -609,8 +529,6 @@ pub async fn my_subscriptions(
     Ok(Json(json!({ "data": subs })))
 }
 
-// ── Consumer: My payments ─────────────────────────────────────────────
-
 pub async fn my_payments(
     State(state): State<AppState>,
     auth: AuthSession,
@@ -629,8 +547,6 @@ pub async fn my_payments(
     Ok(Json(json!({ "data": payments_list })))
 }
 
-// ── Webhook receiver ──────────────────────────────────────────────────
-
 pub async fn webhook_receiver(
     State(state): State<AppState>,
     Path(provider): Path<String>,
@@ -639,15 +555,10 @@ pub async fn webhook_receiver(
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     {
-        // Pass the full header map so each provider reads the headers its scheme
-        // actually needs (Stripe `Stripe-Signature`, Paddle `Paddle-Signature`,
-        // PayPal's five headers, etc.). The previous single-signature extract
-        // dropped everything but one header and could never verify providers
-        // that sign over a timestamp. See plan Phase 1a.
-        //
-        // `query` carries the raw URL query string. Mercado Pago's signature
-        // scheme signs over `data.id` taken from this query string, so the
-        // receiver must forward it (V-CRIT-2).
+        // Forward the full header map and raw query: each provider's signature
+        // scheme signs over different headers/fields (e.g. Mercado Pago signs
+        // over `data.id` from the query string), so dropping either breaks
+        // verification for some providers.
         let webhook_event = WebhookEvent {
             provider: provider.clone(),
             payload: body.to_vec(),
@@ -664,14 +575,6 @@ pub async fn webhook_receiver(
                     .with_message(format!("Webhook verification failed: {}", e))
             })?;
 
-        // WEBHOOK-LS-RZP-NO-REPLAY-DEDUP: LemonSqueezy/Razorpay webhooks carry
-        // no timestamp, so a captured valid event was replayable (the GETDEL
-        // checkout-intent + provider_payment_id unique index already prevent a
-        // double-grant, but a replay re-ran idempotent processing + log noise).
-        // After signature verification (only authenticated bodies populate the
-        // set), dedup on (provider, sha256(body)) for 24h so only the first
-        // authenticated delivery is processed. Fail-open on a Redis blip (the
-        // GETDEL/unique-index backstops still hold).
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(body.as_ref());
@@ -692,13 +595,6 @@ pub async fn webhook_receiver(
     }
 }
 
-/// Resolve the checkout-intent key for a webhook event, in the order the
-/// dispatch arms trust: `checkout_session_id` (the exact round-trip id the
-/// provider returned at create-checkout), then `payment_id`, then
-/// `subscription_id` as defense-in-depth. Returns `""` when none is present,
-/// which the dispatch treats as "no intent ⇒ refuse". Pure (no I/O) so it can
-/// be unit-tested directly — the session-id resolution is the input to the
-/// intent gate, and locking it keeps the V-MED-12 fail-closed guarantee.
 fn resolve_intent_session_id(event: &ParsedWebhook) -> &str {
     event
         .checkout_session_id
@@ -716,23 +612,6 @@ async fn process_webhook_event(
 ) -> Result<(), ErrorResponse> {
     match event.event_type.as_str() {
         "checkout.session.completed" => {
-            // Recover the server-bound intent. The intent is keyed by the
-            // checkout `session_id` the provider returned at create-checkout
-            // time. Each provider's `verify_webhook` extracts that id into
-            // `checkout_session_id`; after the F#11 residual fixes every
-            // provider populates it with the exact round-trip id. We still fall
-            // back to `subscription_id` then `payment_id` as defense-in-depth —
-            // and for LemonSqueezy, whose checkout-completion resource id is the
-            // order/subscription id (not the stored checkout id),
-            // `checkout_session_id` won't match the intent key, so the fallbacks
-            // also miss and the grant is refused (fail-closed, accepted
-            // deferral). The atomic GETDEL means only the first delivery to hit
-            // the right key consumes the intent — trying multiple candidates is
-            // safe (a miss returns None).
-            // Same resolution order as `resolve_intent_session_id` but with the
-            // checkout arm's documented fallback priority (subscription_id
-            // before payment_id — see the block comment above). Kept inline to
-            // avoid changing the long-standing order this arm depends on.
             let session_id = event
                 .checkout_session_id
                 .as_deref()
@@ -741,14 +620,9 @@ async fn process_webhook_event(
                 .or_else(|| event.payment_id.as_deref().filter(|s| !s.is_empty()))
                 .unwrap_or("");
 
-            // Server-bound intent (plan 1f/4e): the authoritative, authenticated
-            // facts about who paid and for what. Atomically taken (GETDEL), so a
-            // replayed/concurrent webhook cannot double-grant. A MISSING intent
-            // is refused — neither the per-post nor the subscription path grants
-            // from attacker-shapeable client `metadata` (audit F#2/F#10). Both
-            // checkouts now store the intent as a hard requirement, so a missing
-            // intent here means the session predates that binding or Redis lost
-            // it; in either case the safe action is to not grant.
+            // Authoritative grant facts come from the server-bound intent
+            // (consumed atomically). A missing intent is refused — never grant
+            // from attacker-shapeable client metadata.
             let intent = if !session_id.is_empty() {
                 checkout_intent::take(session_id).unwrap_or_else(|e| {
                     tracing::warn!(error = ?e, "Failed to read checkout intent");
@@ -758,8 +632,7 @@ async fn process_webhook_event(
                 None
             };
 
-            // Diagnose-only: the provider-normalized payer id, kept for the
-            // refusal log below. NEVER used to grant.
+            // Diagnostic only — NEVER used to grant; kept for the refusal log.
             let metadata_user_id: i32 = event.user_id.unwrap_or(0);
 
             let intent = match intent {
@@ -782,17 +655,10 @@ async fn process_webhook_event(
                 return Ok(());
             }
 
-            // Per-post (one-time) purchase: grant a `post_purchases` row from
-            // the server-bound intent ONLY. post_id in metadata is ignored for
-            // granting — an attacker cannot buy access to a post they didn't
-            // initiate a real, server-recorded checkout for.
             if let Some(post_id) = intent.post_id {
                 let amount_cents = intent.amount_cents.unwrap_or(0);
                 let currency = intent.currency.clone().unwrap_or_else(|| "usd".to_string());
 
-                // Idempotent grant. The (user_id, post_id) unique index is the
-                // real backstop against a concurrent double-grant; the pre-check
-                // keeps the common replay case out of the error path.
                 let already = post_purchase::Entity::find()
                     .filter(post_purchase::Column::UserId.eq(user_id))
                     .filter(post_purchase::Column::PostId.eq(post_id))
@@ -828,7 +694,6 @@ async fn process_webhook_event(
                     Err(e) => {
                         let s = e.to_string();
                         if s.contains("duplicate") || s.contains("unique") {
-                            // A concurrent webhook granted it first — still correct.
                             tracing::info!(
                                 user_id,
                                 post_id,
@@ -842,11 +707,9 @@ async fn process_webhook_event(
                 return Ok(());
             }
 
-            // Subscription checkout path.
             let subscription_id = event.subscription_id.clone().unwrap_or_default();
             let customer_id = event.customer_id.clone();
 
-            // Check if subscription already exists (idempotency)
             let existing = if !subscription_id.is_empty() {
                 subscription::Entity::find()
                     .filter(subscription::Column::ProviderSubscriptionId.eq(&subscription_id))
@@ -866,13 +729,9 @@ async fn process_webhook_event(
                 return Ok(());
             }
 
-            // The exact plan comes from the server-bound checkout intent
-            // (audit F#3): the customer subscribed to THIS plan at checkout, so
-            // granting it must not silently fall back to "first active plan",
-            // which could grant the wrong tier (e.g. a premium plan id where a
-            // basic one was purchased). The subscription checkout always stores
-            // `plan_id`; an absent `plan_id` means a legacy/corrupt intent, and
-            // we fail closed rather than guess.
+            // plan_id comes only from the server-bound intent — never guess
+            // "first active plan", which could grant the wrong tier. Absent
+            // plan_id means fail closed.
             let plan_id = match intent.plan_id {
                 Some(id) => id,
                 None => {
@@ -902,13 +761,9 @@ async fn process_webhook_event(
                 }),
                 status: Set(subscription::model::SubscriptionStatus::Active),
                 current_period_start: Set(Some(chrono::Utc::now().fixed_offset())),
-                // Real period end from the verified webhook (audit F#11): the
-                // paywall fails CLOSED on a missing/None end, so persisting a
-                // real value is what lets an active subscriber read gated content
-                // — and what revokes them once it lapses. A malformed timestamp
-                // degrades to None (fail-closed) rather than fabricating "now",
-                // which would expire the subscriber immediately (audit F#11
-                // round-2, data-quality cleanup).
+                // Fail-closed: a malformed timestamp degrades to None (which
+                // the paywall denies) rather than fabricating "now", which would
+                // expire the subscriber immediately.
                 current_period_end: Set(event.current_period_end.and_then(|ts| {
                     chrono::DateTime::<chrono::Utc>::from_timestamp(ts, 0)
                         .map(|dt| dt.fixed_offset())
@@ -918,11 +773,6 @@ async fn process_webhook_event(
                 metadata: Set(Some(event.data.clone())),
                 ..Default::default()
             };
-            // Duplicate-tolerant insert (audit F#1): the pre-check above keeps
-            // the common replay out of the error path, but two concurrent
-            // deliveries can both pass it and race to insert. The unique index
-            // on `(provider, provider_subscription_id)` is the real backstop;
-            // a collision here means the other delivery won, which is correct.
             match active_model.insert(&state.sea_db).await {
                 Ok(_) => {
                     tracing::info!(user_id, "Subscription created from checkout");
@@ -951,32 +801,11 @@ async fn process_webhook_event(
                     .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
 
                 if let Some(existing) = sub {
-                    // Capture the persisted period end BEFORE consuming the Model
-                    // into an ActiveModel, so the forward-only guard below can
-                    // compare against it (V-MED-2).
+                    // Capture before consuming into an ActiveModel so the
+                    // forward-only guard below can compare against it.
                     let existing_period_end = existing.current_period_end;
                     let mut active: subscription::ActiveModel = existing.into();
 
-                    // Status from the provider-normalized canonical value (audit
-                    // F#11 residual). A deletion event is terminal. For updates,
-                    // each provider folds its native status into our 5-value
-                    // vocabulary at the `verify_webhook` boundary; if the provider
-                    // didn't supply a recognizable status we leave the row's
-                    // existing status untouched (safe — the paywall keeps gating
-                    // on the persisted status + authoritative period_end) and
-                    // only refresh `current_period_end`.
-                    //
-                    // Resurrection note (audit F#11 round-2): a stale "active"
-                    // update that revives a Canceled/Expired row is NOT an
-                    // over-grant, because the paywall requires BOTH
-                    // `status ∈ {Active, Trialing}` AND a future
-                    // `current_period_end` (`paywall::user_has_active_subscription`).
-                    // A revival with a genuinely-future period is a real
-                    // reactivation; one without it is denied. No row-state guard
-                    // is added here because the paywall's dual invariant already
-                    // neutralizes every stale-revival shape — adding one would
-                    // only risk denying legitimate reactivations (first, do no
-                    // harm).
                     let mut status_changed = true;
                     let new_status = if event.event_type == canonical::SUBSCRIPTION_DELETED {
                         subscription::model::SubscriptionStatus::Canceled
@@ -987,7 +816,6 @@ async fn process_webhook_event(
                             Some("canceled") => subscription::model::SubscriptionStatus::Canceled,
                             Some("trialing") => subscription::model::SubscriptionStatus::Trialing,
                             Some("expired") => subscription::model::SubscriptionStatus::Expired,
-                            // Unknown/missing: keep the existing row status.
                             _ => {
                                 status_changed = false;
                                 // Placeholder; never written when status_changed=false.
@@ -998,16 +826,9 @@ async fn process_webhook_event(
                     if status_changed {
                         active.status = Set(new_status);
                     }
-                    // Refresh the period end from the verified webhook (audit
-                    // F#11): renewals send a fresh `current_period_end`, and the
-                    // paywall keys off it. Only overwrite when the provider
-                    // actually supplied one (cancellation events may not).
-                    //
-                    // Forward-only invariant (V-MED-2): an out-of-order or
-                    // redelivered update must NEVER shorten a valid period. Only
-                    // overwrite when the new value is strictly greater than the
-                    // existing one (or there was no existing one). Mirrors the
-                    // sibling guard in the `invoice.payment_succeeded` arm.
+                    // Forward-only: only move the period end forward, never
+                    // backward — an out-of-order/redelivered update must not
+                    // shorten a valid period.
                     if let Some(ts) = event.current_period_end {
                         let new_end = chrono::DateTime::<chrono::Utc>::from_timestamp(ts, 0)
                             .map(|dt| dt.fixed_offset());
@@ -1036,11 +857,6 @@ async fn process_webhook_event(
             }
         }
         "invoice.payment_succeeded" => {
-            // Payer: prefer the provider-normalized id; otherwise attribute the
-            // payment to the owner of the subscription it renews (looked up by
-            // `subscription_id`). Falls back to 0 only if neither resolves — a
-            // history row with no owner, never a grant. (The grant happens in
-            // CHECKOUT_COMPLETED; this arm only records payment history.)
             let mut user_id: i32 = event.user_id.unwrap_or(0);
             if user_id == 0 {
                 if let Some(sid) = event.subscription_id.as_deref().filter(|s| !s.is_empty()) {
@@ -1058,10 +874,6 @@ async fn process_webhook_event(
             let amount = event.amount_cents.unwrap_or(0) as i32;
             let currency = event.currency.clone().unwrap_or_else(|| "usd".to_string());
 
-            // Idempotency (plan 1d / CWE-294): Stripe redelivers events on retry,
-            // and a replayed request would otherwise insert a duplicate payment
-            // row. Dedup on (provider, provider_payment_id) — the mirror of the
-            // subscription dedup above — before inserting.
             if let Some(pid) = event.payment_id.as_deref().filter(|p| !p.is_empty()) {
                 let dup = payment::Entity::find()
                     .filter(payment::Column::Provider.eq(provider_name))
@@ -1097,19 +909,10 @@ async fn process_webhook_event(
                 .await
                 .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
 
-            // Renewal period refresh (audit F#11 round-2): a recurring payment
-            // that carries a fresh period end (e.g. PayPal
-            // `PAYMENT.SALE.COMPLETED`, whose provider resolved the linked
-            // subscription's `next_billing_time`) must extend the subscriber's row
-            // so the paywall keeps admitting them across billing cycles — without
-            // this, the row's `current_period_end` stays pinned to the activation
-            // value and the renewing subscriber is denied after the first period.
-            // Only applies when BOTH a subscription id and a period end are
-            // present; history-only renewals with no period (e.g. a Stripe
-            // invoice) are unaffected — their period is refreshed by the
-            // provider's `customer.subscription.*` lifecycle event instead.
-            // Defense-in-depth: only move the period FORWARD, never backward, so
-            // an out-of-order/redelivered payment cannot shorten a valid period.
+            // A recurring payment carrying a fresh period end must extend the
+            // subscriber's row, or the paywall denies them after the first
+            // period. Only move the period FORWARD (defense-in-depth vs the
+            // subscription.updated arm).
             if let (Some(sid), Some(new_end_ts)) = (
                 event.subscription_id.as_deref().filter(|s| !s.is_empty()),
                 event.current_period_end,
@@ -1124,7 +927,6 @@ async fn process_webhook_event(
                         .map(|dt| dt.fixed_offset());
                     let extend = match (sub.current_period_end.as_ref(), new_end) {
                         (Some(existing), Some(new_dt)) => new_dt > *existing,
-                        // No existing period → set it (fail-closed needs a value).
                         (None, Some(_)) => true,
                         _ => false,
                     };
@@ -1146,19 +948,10 @@ async fn process_webhook_event(
             tracing::info!(user_id, amount, "Payment recorded from invoice webhook");
         }
         "payment.confirmed" | "payment.pending" => {
-            // IDOR hardening (audit V-MED-12): the old code parsed `user_id`
-            // from `event.data["memo"]` (`rux-{user_id}-{uuid}`) and hardcoded
-            // `provider = "crypto"`. The memo is attacker-shapeable event data,
-            // so a provider whose native event normalizes to `payment.confirmed`
-            // could be used to attribute a payment (and, via any future
-            // paywall/treatment keyed on the `payments` row) to an arbitrary
-            // user with no server-side authorization. That arm is unreachable
-            // today (crypto `verify_webhook` fail-closes), but it is a latent
-            // landmine the moment any provider lands here. We make it
-            // safe-by-construction exactly like `checkout.session.completed`:
-            // the `user_id` is derived ONLY from a server-bound checkout intent
-            // (atomic GETDEL), and the recorded provider is the dispatched
-            // `provider_name`, never a hardcoded literal.
+            // IDOR guard (V-MED-12): user_id comes ONLY from a server-bound
+            // checkout intent — never from the attacker-shapeable `memo` field
+            // (the old code parsed `rux-{user_id}` from it). Provider is the
+            // dispatched provider_name, never a hardcoded literal.
             let session_id = resolve_intent_session_id(event);
 
             let intent = if !session_id.is_empty() {
@@ -1170,8 +963,7 @@ async fn process_webhook_event(
                 None
             };
 
-            // Diagnostic only — the provider-normalized payer id, kept for the
-            // refusal log. NEVER used to attribute the payment row.
+            // Diagnostic only — NEVER used to attribute the payment row.
             let memo_user_id: i32 = event
                 .data
                 .get("memo")
@@ -1184,10 +976,6 @@ async fn process_webhook_event(
             let intent = match intent {
                 Some(i) => i,
                 None => {
-                    // No resolvable server-bound intent ⇒ fail-closed: record
-                    // nothing, attribute nothing. Do NOT insert a `payments`
-                    // row from the memo, mirroring the F#2/F#10 refusal on the
-                    // checkout-completed arm.
                     tracing::warn!(
                         memo_user_id,
                         session_id,
@@ -1212,10 +1000,6 @@ async fn process_webhook_event(
                 payment::model::PaymentStatus::Pending
             };
 
-            // Authoritative amount/currency come from the server-bound intent;
-            // fall back to the structured (never JSON-path) event fields, and
-            // finally to a benign 0/"usd" so a missing amount cannot be used to
-            // fabricate a favorable record.
             let amount_cents: i32 = intent
                 .amount_cents
                 .or_else(|| event.amount_cents.map(|c| c as i32))
@@ -1226,10 +1010,6 @@ async fn process_webhook_event(
                 .or_else(|| event.currency.clone())
                 .unwrap_or_else(|| "usd".to_string());
 
-            // Idempotency (plan 1d): dedup on (provider, provider_payment_id)
-            // before inserting, using the ACTUAL dispatched provider — not a
-            // hardcoded "crypto". A row is only attributed to the user who owns
-            // the consumed checkout intent.
             if let Some(pid) = event.payment_id.as_deref().filter(|p| !p.is_empty()) {
                 let dup = payment::Entity::find()
                     .filter(payment::Column::Provider.eq(provider_name))
@@ -1284,8 +1064,6 @@ async fn process_webhook_event(
     Ok(())
 }
 
-// ── Paywall: Check post access ────────────────────────────────────────
-
 pub async fn check_post_access(
     State(state): State<AppState>,
     Path(post_id): Path<i32>,
@@ -1317,7 +1095,6 @@ pub async fn admin_set_post_access(
     Path(post_id): Path<i32>,
     Json(payload): Json<SetPostAccessPayload>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    // Upsert: delete existing access rule, insert new one
     post_access::Entity::delete_many()
         .filter(post_access::Column::PostId.eq(post_id))
         .exec(&state.sea_db)
@@ -1349,11 +1126,6 @@ mod tests {
 
     #[tokio::test]
     async fn per_post_checkout_defaults_to_not_supported_for_non_overriding_provider() {
-        // RevolutProvider does not override create_post_checkout, so it inherits
-        // the trait default. This locks the invariant the geo-router relies on:
-        // a region routed to such a provider simply cannot sell per-post access,
-        // and the checkout handler surfaces that as a Config error rather than
-        // silently creating a session that could never be granted.
         let provider = RevolutProvider::new("k".into(), "s".into());
         let result = provider
             .create_post_checkout(1, 499, "usd", "buyer@example.com", 7, "s", "c")
@@ -1372,24 +1144,12 @@ mod tests {
 
     #[tokio::test]
     async fn per_post_checkout_is_overridden_by_stripe() {
-        // Stripe must override the default so per-post purchases are available
-        // in Stripe-routed regions. We assert the override exists (no
-        // "not supported" Config error) by checking the method is callable on
-        // the Stripe provider without relying on a live network call — the
-        // override is what matters; the network path is exercised end-to-end.
-        // (We only confirm the type resolves + provider name, since calling it
-        // would hit the Stripe API.)
         let provider = StripeProvider::new("sk_test".into(), "whsec".into());
         assert_eq!(provider.provider_name(), "stripe");
     }
 
     #[test]
     fn checkout_intent_roundtrip_preserves_grant_fields() {
-        // The webhook grant path reads exactly these fields back from what the
-        // checkout handler stored. A round-trip must preserve user_id and the
-        // optional post_id/amount/currency/plan_id — if any were dropped, a
-        // paid-post purchase would grant nothing (or a subscription the wrong
-        // tier).
         let intent = checkout_intent::CheckoutIntent {
             user_id: 42,
             post_id: Some(7),
@@ -1405,8 +1165,6 @@ mod tests {
         assert_eq!(back.currency.as_deref(), Some("usd"));
         assert!(back.plan_id.is_none());
 
-        // A subscription (non-post) intent has no post_id but DOES carry the
-        // plan_id the webhook must grant (audit F#3).
         let sub = checkout_intent::CheckoutIntent {
             user_id: 5,
             post_id: None,
@@ -1422,10 +1180,6 @@ mod tests {
     }
 
     fn payment_confirmed_event_with_memo(memo: &str) -> ParsedWebhook {
-        // A payment.confirmed event whose memo embeds an arbitrary user_id
-        // (`rux-{user_id}-{uuid}`) — the attacker-shapeable shape the old code
-        // trusted. Structured intent-key fields are left empty so there is NO
-        // server-bound checkout intent to consume.
         ParsedWebhook {
             event_type: canonical::PAYMENT_CONFIRMED.to_string(),
             customer_id: String::new(),
@@ -1434,7 +1188,6 @@ mod tests {
             current_period_end: None,
             checkout_session_id: None,
             subscription_status: None,
-            // The victim's id, planted by the sender — must NOT be honored.
             user_id: None,
             amount_cents: Some(4999),
             currency: Some("usd".to_string()),
@@ -1444,13 +1197,6 @@ mod tests {
 
     #[test]
     fn payment_confirmed_with_memo_but_no_intent_is_refused() {
-        // V-MED-12 success criterion: a payment.confirmed event carrying a
-        // memo-embedded user_id but NO server-bound intent key resolves to an
-        // empty session id. The dispatch treats empty ⇒ "no intent ⇒ refuse",
-        // so no payment row is inserted and no attribution happens. We assert
-        // the gate INPUT here (the helper); the gate itself (take + insert) is
-        // unreachable from a pure test, and the empty-id short-circuit is the
-        // exact branch that refuses.
         let event = payment_confirmed_event_with_memo("rux-1337-deadbeef-uuid");
         let session_id = resolve_intent_session_id(&event);
         assert!(
@@ -1461,24 +1207,18 @@ mod tests {
 
     #[test]
     fn payment_confirmed_with_intent_key_resolves_to_it() {
-        // The happy path: a real provider-supplied checkout_session_id (or its
-        // fallbacks) resolves to a key the dispatch can consume an intent with.
-        // Whichever structured field is present wins over the memo.
         let mut event = payment_confirmed_event_with_memo("rux-1337-deadbeef-uuid");
         event.checkout_session_id = Some("cs_live_abc123".to_string());
         assert_eq!(resolve_intent_session_id(&event), "cs_live_abc123");
 
-        // payment_id fallback when checkout_session_id is absent.
         event.checkout_session_id = None;
         event.payment_id = Some("pay_456".to_string());
         assert_eq!(resolve_intent_session_id(&event), "pay_456");
 
-        // subscription_id is the last-resort fallback.
         event.payment_id = None;
         event.subscription_id = Some("sub_789".to_string());
         assert_eq!(resolve_intent_session_id(&event), "sub_789");
 
-        // An empty checkout_session_id does not shadow the payment_id fallback.
         event.subscription_id = None;
         event.checkout_session_id = Some(String::new());
         event.payment_id = Some("pay_000".to_string());

@@ -10,18 +10,15 @@ use axum::{
 use crate::{middlewares::auth_guard, AppState};
 
 pub fn routes() -> Router<AppState> {
-    // Base routes - always available for authenticated users to manage their own profile
     let base = Router::<AppState>::new()
         .route("/update", post(controller::update_profile))
         .route_layer(middleware::from_fn(auth_guard::verified))
-        // Any authenticated user can get their profile
         .merge(
             Router::<AppState>::new()
                 .route("/get", get(controller::get_profile))
                 .route_layer(middleware::from_fn(auth_guard::authenticated)),
         );
 
-    // Admin routes - role-gated via the ROLE_ADMIN middleware
     let admin = Router::<AppState>::new()
         .route("/list", post(controller::admin_list))
         .route("/view/{user_id}", post(controller::admin_view))

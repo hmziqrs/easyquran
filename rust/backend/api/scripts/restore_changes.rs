@@ -10,18 +10,14 @@ use std::process::Command;
 #[command(name = "restore_changes")]
 #[command(about = "Restore files from a zip archive")]
 struct Args {
-    /// Path to the zip archive to restore
     zip_file: PathBuf,
 
-    /// Overwrite existing files without prompting
     #[arg(short, long)]
     force: bool,
 
-    /// Show what would be restored without doing it
     #[arg(short, long)]
     dry_run: bool,
 
-    /// Target directory (defaults to project root)
     #[arg(long)]
     target_dir: Option<PathBuf>,
 }

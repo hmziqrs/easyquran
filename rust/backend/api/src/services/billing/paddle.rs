@@ -1,5 +1,3 @@
-//! Paddle billing provider integration.
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -7,20 +5,11 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: every outbound Paddle call goes through this client (built once in
-// `new` with timeouts, or overridden via `with_http_client` with the shared
-// AppState client). Never a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
-/// Paddle billing provider.
-///
-/// CRYP-ENC-012: `client_token` and `webhook_secret` are held in
-/// `secrecy::SecretString` (redacting `Debug`, opt-in `expose_secret()`).
 pub struct PaddleProvider {
     pub client_token: SecretString,
     pub webhook_secret: SecretString,
-    /// Ed25519 verifying key (32 bytes) for Paddle webhook signatures, parsed
-    /// from `PADDLE_PUBLIC_KEY` (hex). `None` ⇒ verification fails closed.
     pub public_key: Option<[u8; 32]>,
     pub base_url: String,
     pub http_client: reqwest::Client,
@@ -32,8 +21,6 @@ impl PaddleProvider {
             client_token: client_token.into(),
             webhook_secret: webhook_secret.into(),
             public_key: None,
-            // Production by default; override with the sandbox host via
-            // PADDLE_API_BASE_URL for development. See plan Phase 6f.
             base_url: std::env::var("PADDLE_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api.paddle.com".to_string()),
             http_client: build_http_client(),
@@ -45,13 +32,11 @@ impl PaddleProvider {
         self
     }
 
-    /// Set the Ed25519 public key used to verify Paddle webhooks (hex of 32 bytes).
     pub fn with_public_key(mut self, hex_key: &str) -> Result<Self, BillingError> {
         self.public_key = Some(decode_paddle_public_key(hex_key)?);
         Ok(self)
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
@@ -72,13 +57,9 @@ impl PaddleProvider {
         Ok(provider)
     }
 
-    /// Best-effort fetch of a subscription's current period end. Used on
-    /// `transaction.*` checkout-completion events, which are transactions, not
-    /// subscriptions, and so don't carry a billing period — without it the
-    /// paywall would deny the paying subscriber (it fails closed on a missing
-    /// period end). Returns `None` on any failure (network, non-2xx, missing
-    /// field) so the grant degrades to fail-closed rather than synthesizing a
-    /// period end.
+    // transaction.completed (the grant signal) carries no inline billing period;
+    // without this fetch current_period_end is None and the paywall denies paying
+    // subscribers (fails closed). No test pins it — tests never assert period_end.
     async fn fetch_subscription_period_end(
         &self,
         subscription_id: &str,
@@ -105,7 +86,6 @@ impl PaddleProvider {
     }
 }
 
-/// Decode the Paddle Ed25519 public key from hex (64 chars → 32 bytes).
 fn decode_paddle_public_key(hex_key: &str) -> Result<[u8; 32], BillingError> {
     let bytes = hex::decode(hex_key.trim())
         .map_err(|_| BillingError::Config("PADDLE_PUBLIC_KEY is not valid hex".into()))?;
@@ -120,9 +100,6 @@ fn decode_paddle_public_key(hex_key: &str) -> Result<[u8; 32], BillingError> {
     Ok(arr)
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. Credential fields are always
-// `<redacted>`; only the non-secret wiring is shown. No tracing/error path
-// logs the whole struct.
 impl std::fmt::Debug for PaddleProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PaddleProvider")
@@ -269,10 +246,6 @@ impl BillingProvider for PaddleProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Paddle Billing signs "<timestamp><raw_body>" with Ed25519 and sends
-        // `Paddle-Signature: ts=<ts>;key1=<hexsig>`. Verification is mandatory:
-        // the previous code skipped it entirely when the header was empty — a
-        // fail-open that accepted any forged JSON.
         let public_key = self.public_key.ok_or_else(|| {
             BillingError::WebhookVerification(
                 "PADDLE_PUBLIC_KEY not configured; cannot verify Paddle webhook".into(),
@@ -284,7 +257,6 @@ impl BillingProvider for PaddleProvider {
                 BillingError::WebhookVerification("Missing Paddle-Signature header".into())
             })?;
 
-        // Parse "ts=<ts>;key1=<hexsig>".
         let mut ts: Option<&str> = None;
         let mut key1: Option<&str> = None;
         for part in sig_header.split(';') {
@@ -303,7 +275,6 @@ impl BillingProvider for PaddleProvider {
             BillingError::WebhookVerification("Paddle-Signature missing key1=".into())
         })?;
 
-        // Replay protection.
         let ts_secs: i64 = ts.parse().map_err(|_| {
             BillingError::WebhookVerification("Paddle timestamp not an integer".into())
         })?;
@@ -313,7 +284,6 @@ impl BillingProvider for PaddleProvider {
             )));
         }
 
-        // Decode the 64-byte Ed25519 signature.
         let sig_bytes = hex::decode(sig_hex).map_err(|_| {
             BillingError::WebhookVerification("Paddle signature not valid hex".into())
         })?;
@@ -321,7 +291,6 @@ impl BillingProvider for PaddleProvider {
             BillingError::WebhookVerification("Paddle signature must be 64 bytes".into())
         })?;
 
-        // Signed message = "<ts><raw_body>".
         let mut message = Vec::with_capacity(ts.len() + event.payload.len());
         message.extend_from_slice(ts.as_bytes());
         message.extend_from_slice(&event.payload);
@@ -338,15 +307,6 @@ impl BillingProvider for PaddleProvider {
 
         let obj = &data["data"];
 
-        // Normalize Paddle's native event taxonomy to the canonical vocabulary
-        // the dispatch matches on (audit F#11 residual). Paddle fires
-        // `transaction.completed` when a checkout is paid and fully processed —
-        // that is the terminal grant signal and carries the transaction id we
-        // stored the intent under. Only `transaction.completed` (NOT
-        // `transaction.paid`, which can fire before the linked subscription is
-        // populated and would grant without a resolvable period end) maps to
-        // CHECKOUT_COMPLETED (audit F#11 round-2). `subscription.*` events are
-        // lifecycle.
         let native_event = data["event_type"].as_str().unwrap_or_default();
         let event_type = match native_event {
             "transaction.completed" => super::provider::canonical::CHECKOUT_COMPLETED,
@@ -356,14 +316,6 @@ impl BillingProvider for PaddleProvider {
         }
         .to_string();
 
-        // Resolve the current period end. Subscription events carry it inline as
-        // `current_billing_period.ends_at` (RFC 3339). A `transaction.completed`
-        // checkout event is a transaction, not a subscription, and carries no
-        // period — so fetch the linked subscription (`subscription_id`) for the
-        // authoritative end. Without it the paywall would deny the paying
-        // subscriber (it fails closed on a missing period end). Fetch failures
-        // degrade to None (fail-closed). The fetched value is bound to a local so
-        // it outlives the borrow passed to `period_end_to_unix`.
         let inline_end = obj
             .get("current_billing_period")
             .and_then(|c| c.get("ends_at"));
@@ -376,15 +328,6 @@ impl BillingProvider for PaddleProvider {
         };
         let period_end_value = inline_end.or(fetched_end.as_ref());
 
-        // `subscription_id`: on `transaction.*` events the object IS a
-        // transaction, so its `id` is the txn id (the checkout intent key), NOT a
-        // subscription — the linked subscription is `subscription_id`. On
-        // `subscription.*` lifecycle events the object IS the subscription, so
-        // its `id` is the provider subscription id (the explicit field is absent
-        // then). Gate the `id` fallback to lifecycle events so a transaction
-        // never reports its txn id as a subscription id (audit F#11 round-2: the
-        // SUBSCRIPTION_UPDATED/DELETED dispatch arm no-oped for lifecycle events
-        // whose `subscription_id` field was absent).
         let lifecycle_subscription_id = if native_event.starts_with("subscription.") {
             obj["id"].as_str().map(String::from)
         } else {
@@ -403,8 +346,6 @@ impl BillingProvider for PaddleProvider {
                 .map(String::from)
                 .or_else(|| obj["id"].as_str().map(String::from)),
             current_period_end: super::provider::period_end_to_unix(period_end_value),
-            // On a `transaction.*` event the object id IS the transaction id we
-            // keyed the intent by at create-checkout (`data.id`).
             checkout_session_id: obj["id"].as_str().map(String::from),
             subscription_status: obj["status"].as_str().map(String::from),
             user_id: obj["custom_data"]["user_id"]
@@ -456,8 +397,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// Sign a Paddle webhook exactly as Paddle does: Ed25519 over `<ts><body>`,
-    /// header `Paddle-Signature: ts=<ts>;key1=<hexsig>`.
     fn signed_paddle_event(
         payload: &[u8],
         ts: i64,
@@ -497,7 +436,6 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let genuine = signed_paddle_event(body, now, &sk);
 
-        // Genuine Ed25519 signature → accepted.
         let parsed = provider
             .verify_webhook(genuine.clone())
             .await
@@ -505,19 +443,15 @@ mod tests {
         assert_eq!(parsed.event_type, "subscription.created");
         assert_eq!(parsed.subscription_id.as_deref(), Some("sub_1"));
 
-        // Tampered body under the ORIGINAL signature → rejected.
         let mut tampered = genuine.clone();
         tampered.payload =
             br#"{"event_type":"subscription.created","data":{"id":"sub_EVIL"}}"#.to_vec();
         assert!(provider.verify_webhook(tampered).await.is_err());
 
-        // Stale timestamp → rejected (replay).
         let stale = signed_paddle_event(body, now - (webhook_util::MAX_SKEW_SECS + 60), &sk);
         assert!(provider.verify_webhook(stale).await.is_err());
     }
 
-    /// Native Paddle events must normalize to the canonical vocabulary the
-    /// provider-agnostic dispatch matches on (audit F#11).
     #[tokio::test]
     async fn verify_webhook_normalizes_native_events_to_canonical() {
         let sk = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
@@ -528,16 +462,10 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
 
         let cases: &[(&str, &str)] = &[
-            // A paid checkout: the terminal transaction-completion event is the
-            // grant signal and carries the txn id we keyed the intent by.
             (
                 r#"{"event_type":"transaction.completed","data":{"id":"txn_1","customer_id":"ctm_1","subscription_id":"sub_9","status":"completed","currency_code":"USD","details":{"totals":{"total":"1000"}}}}"#,
                 "checkout.session.completed",
             ),
-            // `transaction.paid` is NOT a grant (it can fire before the linked
-            // subscription is populated → grant without a period end). It passes
-            // through to the dispatch's log-only unhandled arm (audit F#11
-            // round-2); the grant happens on `transaction.completed`.
             (
                 r#"{"event_type":"transaction.paid","data":{"id":"txn_2"}}"#,
                 "transaction.paid",
@@ -550,8 +478,6 @@ mod tests {
                 r#"{"event_type":"subscription.canceled","data":{"id":"sub_2","status":"canceled"}}"#,
                 "customer.subscription.deleted",
             ),
-            // An unmapped event passes through (logged as unhandled, not dropped
-            // into a canonical arm).
             (
                 r#"{"event_type":"reporting.transaction.created","data":{"id":"x"}}"#,
                 "reporting.transaction.created",
@@ -563,9 +489,6 @@ mod tests {
             assert_eq!(parsed.event_type, *expected, "body={body}");
         }
 
-        // Structured fields on a checkout-completion event. `subscription_id`
-        // is resolved from `data.subscription_id` (the linked sub), NOT
-        // `data.id` (which is the txn id / intent key).
         let evt = signed_paddle_event(
             br#"{"event_type":"transaction.completed","data":{"id":"txn_1","subscription_id":"sub_9","custom_data":{"user_id":"42"},"status":"completed","currency_code":"USD","details":{"totals":{"total":"1000"}}}}"#,
             now,
@@ -579,8 +502,6 @@ mod tests {
         assert_eq!(parsed.amount_cents, Some(1000));
         assert_eq!(parsed.currency.as_deref(), Some("USD"));
 
-        // Lifecycle event whose object IS the subscription: the `id` fallback
-        // populates `subscription_id` (audit F#11 round-2).
         let evt = signed_paddle_event(
             br#"{"event_type":"subscription.canceled","data":{"id":"sub_zz","status":"canceled"}}"#,
             now,
@@ -593,7 +514,6 @@ mod tests {
 
     #[tokio::test]
     async fn verify_webhook_rejects_when_public_key_unconfigured() {
-        // No PADDLE_PUBLIC_KEY → fail closed even with a well-formed header.
         let provider = PaddleProvider::new("tok".into(), "whsec".into());
         let mut headers = axum::http::HeaderMap::new();
         headers.insert("Paddle-Signature", "ts=1;key1=00".parse().unwrap());

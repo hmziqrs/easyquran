@@ -1,5 +1,3 @@
-//! Error handling for validation and JSON parsing errors
-
 use crate::error::{ErrorCode, ErrorResponse, IntoErrorResponse};
 use axum::extract::multipart::MultipartRejection;
 use axum::extract::rejection::{FormRejection, JsonRejection, QueryRejection};
@@ -7,7 +5,6 @@ use serde_json::Value;
 use std::error::Error as StdError;
 use validator::ValidationErrors;
 
-/// Standardized handling for JSON validation errors
 impl IntoErrorResponse for JsonRejection {
     fn into_error_response(self) -> ErrorResponse {
         match self {
@@ -45,14 +42,12 @@ impl IntoErrorResponse for JsonRejection {
     }
 }
 
-/// Implement From<JsonRejection> for ErrorResponse for convenience
 impl From<JsonRejection> for ErrorResponse {
     fn from(err: JsonRejection) -> Self {
         err.into_error_response()
     }
 }
 
-/// Standardized handling for form validation errors
 impl IntoErrorResponse for FormRejection {
     fn into_error_response(self) -> ErrorResponse {
         match self {
@@ -92,14 +87,12 @@ impl IntoErrorResponse for FormRejection {
     }
 }
 
-/// Implement From<FormRejection> for ErrorResponse for convenience
 impl From<FormRejection> for ErrorResponse {
     fn from(err: FormRejection) -> Self {
         err.into_error_response()
     }
 }
 
-/// Standardized handling for query validation errors
 impl IntoErrorResponse for QueryRejection {
     fn into_error_response(self) -> ErrorResponse {
         match self {
@@ -126,21 +119,16 @@ impl IntoErrorResponse for QueryRejection {
     }
 }
 
-/// Implement From<QueryRejection> for ErrorResponse for convenience
 impl From<QueryRejection> for ErrorResponse {
     fn from(err: QueryRejection) -> Self {
         err.into_error_response()
     }
 }
 
-/// Standardized handling for multipart extraction errors
 impl IntoErrorResponse for MultipartRejection {
     fn into_error_response(self) -> ErrorResponse {
-        // axum MultipartRejection variants can differ across versions; do a best-effort
-        // categorization and always return our standardized structure with helpful messages.
         let as_string = self.to_string();
 
-        // Common boundary errors (e.g., sending JSON to a multipart endpoint)
         if as_string.to_ascii_lowercase().contains("boundary") {
             return ErrorResponse::new(ErrorCode::InvalidFormat)
                 .with_message("Invalid multipart/form-data boundary")
@@ -150,14 +138,12 @@ impl IntoErrorResponse for MultipartRejection {
                 }));
         }
 
-        // Content-Type issues
         if as_string.to_ascii_lowercase().contains("content-type") {
             return ErrorResponse::new(ErrorCode::InvalidFormat)
                 .with_message("Missing or invalid Content-Type for multipart/form-data")
                 .with_details(as_string);
         }
 
-        // Body/read errors or size-related
         if as_string.to_ascii_lowercase().contains("body")
             || as_string.to_ascii_lowercase().contains("read")
         {
@@ -166,14 +152,12 @@ impl IntoErrorResponse for MultipartRejection {
                 .with_details(as_string);
         }
 
-        // Fallback generic mapping
         ErrorResponse::new(ErrorCode::InvalidInput)
             .with_message("Invalid multipart/form-data payload")
             .with_details(format!("Unhandled multipart rejection: {}", self))
     }
 }
 
-/// Implement From<MultipartRejection> for ErrorResponse for convenience
 impl From<MultipartRejection> for ErrorResponse {
     fn from(err: MultipartRejection) -> Self {
         err.into_error_response()

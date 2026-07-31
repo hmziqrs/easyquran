@@ -1,7 +1,3 @@
-//! PayPal Commerce billing provider integration (Global).
-//!
-//! Supports PayPal, Venmo, credit/debit cards, and subscriptions.
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -9,26 +5,12 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: every outbound PayPal call goes through this client (built once in
-// `new` with timeouts, or overridden via `with_http_client` with the shared
-// AppState client). Never a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
-/// PayPal Commerce billing provider.
-///
-/// CRYP-ENC-012: `client_secret` and `webhook_secret` are held in
-/// `secrecy::SecretString` (redacting `Debug`, opt-in `expose_secret()`).
-/// `client_id` is PayPal's public client identifier (not a secret) and stays a
-/// plain `String`.
 pub struct PayPalProvider {
     pub client_id: String,
     pub client_secret: SecretString,
     pub webhook_secret: SecretString,
-    /// PayPal webhook ID (the identifier PayPal issues when you register the
-    /// webhook). Required by the verify-webhook-signature API. `None` ⇒
-    /// verification fails closed. (PayPal does not use a shared HMAC secret; the
-    /// legacy `webhook_secret` field is retained only for constructor
-    /// compatibility and is not used for verification.)
     pub webhook_id: Option<String>,
     pub base_url: String,
     pub http_client: reqwest::Client,
@@ -41,8 +23,6 @@ impl PayPalProvider {
             client_secret: client_secret.into(),
             webhook_secret: webhook_secret.into(),
             webhook_id: None,
-            // Production by default; override with the sandbox host via
-            // PAYPAL_API_BASE_URL for development. See plan Phase 6f.
             base_url: std::env::var("PAYPAL_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api-m.paypal.com".to_string()),
             http_client: build_http_client(),
@@ -54,13 +34,11 @@ impl PayPalProvider {
         self
     }
 
-    /// Set the PayPal webhook ID (required to verify webhooks).
     pub fn with_webhook_id(mut self, webhook_id: String) -> Self {
         self.webhook_id = Some(webhook_id);
         self
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
@@ -68,7 +46,6 @@ impl PayPalProvider {
 }
 
 impl PayPalProvider {
-    /// Get an OAuth access token from PayPal.
     async fn get_access_token(&self) -> Result<String, BillingError> {
         let client = self.http_client.clone();
         let resp = client
@@ -97,14 +74,6 @@ impl PayPalProvider {
             .ok_or_else(|| BillingError::ProviderApi("No access_token in response".to_string()))
     }
 
-    /// Best-effort fetch of a billing subscription's next charge time
-    /// (`billing_info.next_billing_time`, RFC 3339) as a Unix timestamp. Used on
-    /// `PAYMENT.SALE.COMPLETED` / `PAYMENT.CAPTURE.COMPLETED`, whose `resource` is
-    /// the SALE (no billing info of its own), to obtain the linked subscription's
-    /// authoritative next billing time so the dispatch can refresh the row's
-    /// `current_period_end` and keep the renewing subscriber admitted across
-    /// cycles. Returns `None` on any failure (auth, network, non-2xx, missing
-    /// field) → fail-closed (audit F#11 round-2).
     async fn fetch_subscription_period_end(&self, subscription_id: &str) -> Option<i64> {
         let token = self.get_access_token().await.ok()?;
         let client = self.http_client.clone();
@@ -129,9 +98,6 @@ impl PayPalProvider {
     }
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. Credential fields are always
-// `<redacted>`; only the non-secret wiring is shown. No tracing/error path
-// logs the whole struct.
 impl std::fmt::Debug for PayPalProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PayPalProvider")
@@ -161,19 +127,8 @@ impl BillingProvider for PayPalProvider {
         let token = self.get_access_token().await?;
         let client = self.http_client.clone();
 
-        // Create a REAL PayPal billing subscription (not a one-time order) so the
-        // `session_id` we store — and key the checkout intent by — is a
-        // subscription id (`I-…`). `BILLING.SUBSCRIPTION.ACTIVATED` echoes that
-        // same id back as `resource.id`, so the checkout arm's intent recovery
-        // connects (audit F#11 residual; the prior Orders flow keyed the intent
-        // on `ORDER-…` while the activation webhook emitted `I-…`, so every
-        // subscription checkout silently never granted). A subscription also
-        // carries an authoritative `billing_info.next_billing_time`, giving the
-        // grant a real period end so the paywall admits the paying subscriber.
-        //
-        // `plan_slug` is the provider-side PayPal plan id (pricing/cycle live in
-        // PayPal). `custom_id` round-trips the user id for diagnostics; the
-        // grant itself is driven by the server-bound checkout intent.
+        // session_id must be the subscription id (`I-…`): BILLING.SUBSCRIPTION.ACTIVATED
+        // echoes it back and the checkout intent only recovers on that match.
         let body = serde_json::json!({
             "plan_id": plan_slug,
             "custom_id": user_id.to_string(),
@@ -207,7 +162,6 @@ impl BillingProvider for PayPalProvider {
             .await
             .map_err(|e| BillingError::ProviderApi(e.to_string()))?;
 
-        // Extract the approval link from the response.
         let checkout_url = data["links"]
             .as_array()
             .and_then(|links| {
@@ -300,13 +254,8 @@ impl BillingProvider for PayPalProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // PayPal does NOT sign webhooks with a shared HMAC secret — the previous
-        // local HMAC could never match a real PayPal signature, so verification
-        // was effectively absent. Instead we call PayPal's
-        // verify-webhook-signature API, which checks the cert-backed signature
-        // server-side, and trust ONLY `verification_status == "SUCCESS"`.
-        // (Extra latency + a PayPal-side dependency; the access token is fetched
-        // per call — caching is a future optimization.)
+        // PayPal webhooks are cert-signed, verified via their verify-webhook-signature
+        // API, not a local HMAC (webhook_secret can't validate them).
         let webhook_id = self.webhook_id.as_ref().ok_or_else(|| {
             BillingError::WebhookVerification(
                 "PAYPAL_WEBHOOK_ID not configured; cannot verify PayPal webhook".into(),
@@ -380,8 +329,6 @@ impl BillingProvider for PayPalProvider {
             )));
         }
 
-        // Normalize PayPal's native event taxonomy to the canonical vocabulary
-        // the dispatch matches on (audit F#11 residual).
         let native_event = webhook_event["event_type"].as_str().unwrap_or_default();
         let event_type = match native_event {
             "BILLING.SUBSCRIPTION.ACTIVATED" => super::provider::canonical::CHECKOUT_COMPLETED,
@@ -399,15 +346,8 @@ impl BillingProvider for PayPalProvider {
         let resource_id = resource["id"].as_str().map(String::from);
         let billing_agreement_id = resource["billing_agreement_id"].as_str().map(String::from);
 
-        // For a SALE/CAPTURE payment the `resource` IS the sale, so `resource.id`
-        // is the SALE id (`S-…`) — NOT the subscription. The linked recurring
-        // subscription lives in `billing_agreement_id` (`I-…`). Using the SALE id
-        // as `subscription_id` meant the dispatch's subscription lookup never
-        // matched a row, so a renewal recorded no owner AND never refreshed the
-        // row's `current_period_end` → after the first cycle the paywall denied
-        // the renewing subscriber (audit F#11 round-2). For lifecycle events
-        // (BILLING.SUBSCRIPTION.*) the `resource` IS the subscription, so
-        // `resource.id` is the correct subscription id.
+        // SALE/CAPTURE resource.id is the sale (`S-…`), not the sub; the recurring
+        // sub is billing_agreement_id (`I-…`). Using the sale id breaks dispatch.
         let is_sale = matches!(
             native_event,
             "PAYMENT.SALE.COMPLETED" | "PAYMENT.CAPTURE.COMPLETED"
@@ -418,13 +358,8 @@ impl BillingProvider for PayPalProvider {
             resource_id.clone()
         };
 
-        // Resolve the billing period end. Lifecycle/activation events carry
-        // `billing_info.next_billing_time` inline; a SALE payment does NOT, so
-        // fetch the linked subscription (by `billing_agreement_id`) for the
-        // authoritative next billing time. The dispatch's PAYMENT_SUCCEEDED arm
-        // refreshes the row's `current_period_end` from this so a renewing
-        // subscriber stays admitted across cycles (audit F#11 round-2). Fetch
-        // failures degrade to None (fail-closed).
+        // SALE events have no inline next_billing_time; fetch the linked sub so
+        // current_period_end refreshes. Failures degrade to None (fail-closed).
         let inline_period_end = super::provider::period_end_to_unix(
             resource
                 .get("billing_info")
@@ -446,25 +381,15 @@ impl BillingProvider for PayPalProvider {
                 .as_str()
                 .unwrap_or_default()
                 .to_string(),
-            // The recurring subscription reference. Lifecycle events → the
-            // subscription id (`resource.id`); SALE/CAPTURE → `billing_agreement_id`.
             subscription_id,
-            // The SALE/payment id dedups the payment row (history).
             payment_id: resource_id.clone(),
-            // Lifecycle events key the checkout intent by the subscription id
-            // (`resource.id`); SALE payments never reach the checkout arm, so this
-            // value is irrelevant for them (kept as the resource id for
-            // diagnostics only).
             checkout_session_id: resource_id,
             current_period_end,
-            // PayPal status (ACTIVE/CANCELLED/SUSPENDED/EXPIRED…) folds to our
-            // vocabulary via canonical_subscription_status.
             subscription_status: resource["status"].as_str().map(String::from),
             user_id: resource["custom_id"].as_str().and_then(|s| s.parse().ok()),
             amount_cents: resource["amount"]["total"]
                 .as_str()
                 .and_then(|s| {
-                    // PayPal money is a decimal string; store as minor units.
                     s.parse::<f64>().ok().map(|f| (f * 100.0) as i64)
                 })
                 .or_else(|| {
@@ -484,9 +409,6 @@ impl BillingProvider for PayPalProvider {
         provider_customer_id: &str,
         return_url: &str,
     ) -> Result<String, BillingError> {
-        // PayPal doesn't have a native billing portal — redirect to PayPal settings.
-        // Use the sandbox customer portal only when the API base points at sandbox
-        // (i.e. dev override); otherwise the production portal. See plan Phase 6f.
         let portal_base = if self.base_url.contains("sandbox") {
             "https://www.sandbox.paypal.com"
         } else {

@@ -35,7 +35,6 @@ pub mod user;
 pub mod user_ban;
 pub mod user_session;
 
-// --- Entities added for the issues batch (2026-07-27) ---
 pub mod device;
 pub mod notification;
 pub mod passkey_credential;

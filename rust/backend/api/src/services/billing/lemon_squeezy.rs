@@ -1,5 +1,3 @@
-//! LemonSqueezy billing provider integration.
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -7,15 +5,10 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: every outbound LemonSqueezy call goes through this client (built
-// once in `new` with timeouts, or overridden via `with_http_client` with the
-// shared AppState client). Never a bare `reqwest::Client::new()`.
+// All outbound LS calls must reuse this client (timeouts enforced) — never
+// a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
-/// LemonSqueezy billing provider.
-///
-/// CRYP-ENC-012: `api_key` and `webhook_secret` are held in
-/// `secrecy::SecretString` (redacting `Debug`, opt-in `expose_secret()`).
 pub struct LemonSqueezyProvider {
     pub api_key: SecretString,
     pub webhook_secret: SecretString,
@@ -25,14 +18,11 @@ pub struct LemonSqueezyProvider {
 }
 
 impl LemonSqueezyProvider {
-    /// Create a new provider from explicit values.
     pub fn new(api_key: String, webhook_secret: String, store_id: String) -> Self {
         Self {
             api_key: api_key.into(),
             webhook_secret: webhook_secret.into(),
             store_id,
-            // Production by default; override with the sandbox host via
-            // LEMONSQUEEZY_API_BASE_URL for development. See plan Phase 6f.
             base_url: std::env::var("LEMONSQUEEZY_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api.lemonsqueezy.com".to_string()),
             http_client: build_http_client(),
@@ -44,13 +34,11 @@ impl LemonSqueezyProvider {
         self
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
     }
 
-    /// Create a new provider from environment variables.
     pub fn from_env() -> Result<Self, BillingError> {
         let api_key = std::env::var("LEMONSQUEEZY_API_KEY")
             .map_err(|_| BillingError::Config("LEMONSQUEEZY_API_KEY not set".to_string()))?;
@@ -62,9 +50,6 @@ impl LemonSqueezyProvider {
     }
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. Credential fields are always
-// `<redacted>`; only the non-secret wiring is shown. No tracing/error path
-// logs the whole struct.
 impl std::fmt::Debug for LemonSqueezyProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LemonSqueezyProvider")
@@ -223,8 +208,6 @@ impl BillingProvider for LemonSqueezyProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // LemonSqueezy signs the raw body with HMAC-SHA256(webhook_secret, body)
-        // and sends the hex digest in X-Signature. No timestamp, no freshness.
         let sig =
             super::webhook_util::header_str(&event.headers, "X-Signature").ok_or_else(|| {
                 BillingError::WebhookVerification("Missing X-Signature header".into())
@@ -247,21 +230,6 @@ impl BillingProvider for LemonSqueezyProvider {
 
         let obj = &data["data"]["attributes"];
 
-        // Normalize LemonSqueezy's native event taxonomy to the canonical
-        // vocabulary the dispatch matches on (audit F#11 residual). An
-        // `order_created` (one-time purchase) and `subscription_created` (first
-        // activation) are both the checkout-completion signal; renewals and
-        // cancellations map to the subscription lifecycle events.
-        //
-        // NOTE on id round-trip: LS keys its checkout intent by the checkout id
-        // (its `create_checkout` returns it as `session_id`), but the webhook
-        // resource id (`data.id`) is the ORDER/SUBSCRIPTION id, not the original
-        // checkout id. So the checkout arm's intent recovery will miss and the
-        // dispatch refuses to grant (fail-closed, audit F#2/F#10). Routing to
-        // the correct arm (instead of the old silent `_ =>` drop) is the fix;
-        // correlating the checkout id back through an LS API fetch is the
-        // accepted deferred enhancement. Subscription UPDATE/DELETE arms find
-        // rows by `provider_subscription_id` and DO process normally.
         let native_event = data["meta"]["event_name"].as_str().unwrap_or_default();
         let event_type = match native_event {
             "order_created" | "subscription_created" => {
@@ -272,11 +240,6 @@ impl BillingProvider for LemonSqueezyProvider {
                 super::provider::canonical::SUBSCRIPTION_DELETED
             }
             "subscription_payment_success" => super::provider::canonical::PAYMENT_SUCCEEDED,
-            // `order_refunded` is NOT a successful payment — do not map it to
-            // PAYMENT_SUCCEEDED (audit F#11 residual: a refund would be recorded
-            // as a new succeeded payment). Let it fall through to the dispatch's
-            // log-only unhandled arm. (A dedicated refund/revocation handler can
-            // be wired later.)
             other => other,
         }
         .to_string();
@@ -286,18 +249,13 @@ impl BillingProvider for LemonSqueezyProvider {
             customer_id: obj["customer_id"].as_str().unwrap_or_default().to_string(),
             subscription_id: data["data"]["id"].as_str().map(String::from),
             payment_id: obj["order_id"].as_str().map(String::from),
-            // Best-effort (see NOTE): echoes the order/sub id, not the stored
-            // checkout id. Populated so a future correlation enhancement can
-            // recover the intent without touching this parsing.
             checkout_session_id: data["data"]["id"].as_str().map(String::from),
-            // LemonSqueezy subscription attributes expose `renews_at` (RFC 3339).
             current_period_end: super::provider::period_end_to_unix(obj.get("renews_at")),
             subscription_status: obj["status"].as_str().map(String::from),
             user_id: obj["custom_data"]["user_id"]
                 .as_str()
                 .or_else(|| data["meta"]["custom_data"]["user_id"].as_str())
                 .and_then(|s| s.parse().ok()),
-            // LS order totals are integer minor units (may arrive as string).
             amount_cents: obj["total"]
                 .as_i64()
                 .or_else(|| obj["total"].as_str().and_then(|s| s.parse().ok()))
@@ -343,7 +301,6 @@ mod tests {
 
     #[test]
     fn test_lemon_squeezy_from_env_missing() {
-        // Ensure none of the required env vars are set
         std::env::remove_var("LEMONSQUEEZY_API_KEY");
         std::env::remove_var("LEMONSQUEEZY_WEBHOOK_SECRET");
         std::env::remove_var("LEMONSQUEEZY_STORE_ID");
@@ -353,8 +310,6 @@ mod tests {
 
     use crate::services::billing::webhook_util;
 
-    /// Sign a LemonSqueezy webhook: HMAC-SHA256(secret, raw body) in
-    /// `X-Signature` (no timestamp).
     fn signed_ls(payload: &[u8], secret: &str) -> WebhookEvent {
         let sig = webhook_util::hmac_sha256_hex(secret.as_bytes(), payload);
         let mut headers = axum::http::HeaderMap::new();
@@ -367,11 +322,6 @@ mod tests {
         }
     }
 
-    /// Native LemonSqueezy events must normalize to the canonical vocabulary
-    /// the provider-agnostic dispatch matches on (audit F#11). NOTE: the LS
-    /// resource id does not round-trip to the stored checkout id, so the
-    /// checkout arm fails closed on intent recovery — but the event still
-    /// reaches the correct arm (not the old silent `_ =>` drop).
     #[tokio::test]
     async fn verify_webhook_normalizes_native_events_to_canonical() {
         let provider = LemonSqueezyProvider::new("k".into(), "whsec".into(), "store_1".into());
@@ -388,9 +338,7 @@ mod tests {
             ("subscription_cancelled", "customer.subscription.deleted"),
             ("subscription_expired", "customer.subscription.deleted"),
             ("subscription_payment_success", "invoice.payment_succeeded"),
-            // A refund is NOT a succeeded payment — passes through (audit F#11).
             ("order_refunded", "order_refunded"),
-            // Unmapped → passthrough.
             ("license_key_created", "license_key_created"),
         ];
         for (event, expected) in cases {
@@ -400,7 +348,6 @@ mod tests {
             assert_eq!(parsed.event_type, *expected, "event={event}");
         }
 
-        // Structured fields.
         let evt = signed_ls(&mk("subscription_updated"), "whsec");
         let parsed = provider.verify_webhook(evt).await.unwrap();
         assert_eq!(parsed.subscription_status.as_deref(), Some("active"));

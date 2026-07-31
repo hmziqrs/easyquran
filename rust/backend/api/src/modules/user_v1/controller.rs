@@ -70,10 +70,8 @@ pub async fn admin_create(
     state: State<AppState>,
     payload: ValidatedJson<V1AdminCreateUserPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // PRIV-ESCAL-1: the route guard only requires ROLE_ADMIN. Enforce here that
-    // an admin cannot create a user whose role exceeds their own — otherwise an
-    // ADMIN could mint a SUPER_ADMIN, defeating the top tier that admin_acl_v1
-    // / seed_v1 gate with ROLE_SUPER_ADMIN.
+    // Route guard only checks ROLE_ADMIN: without this a lower-rank admin
+    // could create a higher-rank user.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -102,14 +100,8 @@ pub async fn admin_delete(
     state: State<AppState>,
     Path(user_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // PRIV-ESCAL-1 (admin_delete): the sibling handlers (admin_create /
-    // admin_update / admin_change_password) all enforce the role hierarchy, but
-    // this one was missed — an ADMIN could delete a SUPER_ADMIN (or any peer
-    // ADMIN), destroying a superior's account and — if the last SUPER_ADMIN is
-    // removed — making the ROLE_SUPER_ADMIN-only seed/admin-acl routes
-    // permanently unreachable. Mirror the caller-vs-target check used by
-    // admin_change_password: forbid touching a user at/above the caller's own
-    // level, and forbid self-deletion through the admin path.
+    // Route guard only checks ROLE_ADMIN: block self-deletion and deletion of
+    // equal/higher-rank users (privilege escalation / self-lockout).
     let caller = auth.user.ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -163,13 +155,8 @@ pub async fn admin_update(
     Path(user_id): Path<i32>,
     payload: ValidatedJson<V1AdminUpdateUserPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // PRIV-ESCAL-1: the route guard only requires ROLE_ADMIN, so enforce the
-    // role hierarchy here. (a) the requested role must not exceed the caller's
-    // own, and (b) the caller may not modify a user already at/above their own
-    // level. Together these close ADMIN -> SUPER_ADMIN self-escalation and the
-    // silent takeover primitive an admin had by editing/demoting a superior. An
-    // admin still manages their own profile via the self-service
-    // /user/v1/update endpoint, so blocking equal-rank edits here is safe.
+    // Route guard only checks ROLE_ADMIN: requested role can't exceed the
+    // caller's, and the target must be strictly lower-rank.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -234,9 +221,8 @@ pub async fn admin_change_password(
     Path(user_id): Path<i32>,
     payload: ValidatedJson<AdminChangePassword>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // PRIV-ESCAL-1: forbid resetting the password of a user at/above the
-    // caller's own level — otherwise an ADMIN could set a known password on a
-    // SUPER_ADMIN account (account takeover of a superior).
+    // Route guard only checks ROLE_ADMIN: resetting a superior's password
+    // would be an account takeover.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;

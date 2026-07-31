@@ -1,10 +1,3 @@
-//! Mail service: provider trait + router + providers.
-//!
-//! `MailRouter` (always-on) runs the cross-cutting send-time guards and holds
-//! the active provider(s). The public transactional helpers below build an
-//! [`OutboundEmail`] and hand it to the router, returning [`MailError`]; callers
-//! map that via [`mail_error_to_response`]. SMTP and the Cloudflare provider
-//! are both always available.
 
 pub mod cloudflare;
 pub mod error_map;
@@ -21,7 +14,6 @@ pub use router::MailRouter;
 
 use provider::{TEMPLATE_PASSWORD_RESET, TEMPLATE_VERIFICATION};
 
-/// Send a one-time email verification code through the mail router.
 pub async fn send_email_verification_code(
     mailer: &MailRouter,
     email: &str,
@@ -40,7 +32,6 @@ pub async fn send_email_verification_code(
     Ok(())
 }
 
-/// Send a password-reset code through the mail router.
 pub async fn send_forgot_password_email(
     mailer: &MailRouter,
     email: &str,

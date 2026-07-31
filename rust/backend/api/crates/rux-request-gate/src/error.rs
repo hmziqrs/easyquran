@@ -1,14 +1,8 @@
-/// Errors returned by the gate primitives.
-///
-/// Both variants are fail-CLOSED signals: the caller MUST deny the request.
-/// (The fail-*open* primitive, [`crate::dedup_nx`], returns a plain `bool` and
-/// therefore has no error type to misuse.)
+// Fail-closed: callers MUST deny on any GateError (store can't vouch for the count).
 #[derive(Debug, thiserror::Error)]
 pub enum GateError {
-    /// The rate-limit store failed. Deny (the store cannot vouch for the count).
     #[error("rate-limit store unavailable: {0}")]
     StoreUnavailable(String),
-    /// The store returned an unexpected result. Deny (defensive).
     #[error("rate-limit store returned an unexpected result")]
     UnexpectedResult,
 }

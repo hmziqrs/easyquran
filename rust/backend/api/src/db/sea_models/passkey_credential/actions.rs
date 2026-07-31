@@ -4,26 +4,12 @@ use sea_orm::{entity::prelude::*, Order, QueryOrder, Set};
 
 use super::*;
 
-/// base64url-no-pad encoding of a raw WebAuthn credential id. The credential
-/// id is an authenticator-generated opaque byte string; we store it as
-/// base64url text so the `/remove` and `/list` endpoints can hand it back to
-/// the client verbatim (matching the WebAuthn convention the browser uses).
 pub fn encode_credential_id(cred_id: &[u8]) -> String {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     URL_SAFE_NO_PAD.encode(cred_id)
 }
 
 impl Entity {
-    /// Persist a freshly-registered passkey. The `webauthn_rs::prelude::Passkey`
-    /// is serialized (serde_json bytes) into `public_key` so it can be
-    /// reconstructed for authentication; `credential_id` is the base64url of
-    /// `passkey.cred_id()`.
-    ///
-    /// `counter` starts at 0: a freshly-created credential has not been used
-    /// yet, and the public `Passkey` API does not expose the registration
-    /// counter directly. The first successful assertion's counter is written by
-    /// [`Entity::touch_counter`]; 0 also means "not enforced" in the clone-
-    /// detection check (a 0 counter is spec-exempt), so this is safe.
     pub async fn create<T: ConnectionTrait>(
         conn: &T,
         user_id: i32,
@@ -57,7 +43,6 @@ impl Entity {
         }
     }
 
-    /// All passkeys registered to a user (oldest first).
     pub async fn list_by_user<T: ConnectionTrait>(conn: &T, user_id: i32) -> DbResult<Vec<Model>> {
         match Self::find()
             .filter(Column::UserId.eq(user_id))
@@ -70,7 +55,6 @@ impl Entity {
         }
     }
 
-    /// Resolve a credential by its base64url credential id (discoverable login).
     pub async fn find_by_credential_id<T: ConnectionTrait>(
         conn: &T,
         credential_id: &str,
@@ -85,10 +69,6 @@ impl Entity {
         }
     }
 
-    /// Record the authenticator's latest signature counter + last-used time.
-    /// `new_counter` is authoritative for clone detection: the caller has
-    /// already rejected any assertion whose counter is not strictly greater
-    /// than the stored value, so this is a plain SET (no conditional).
     pub async fn touch_counter<T: ConnectionTrait>(
         conn: &T,
         id: i32,
@@ -114,8 +94,6 @@ impl Entity {
             .map_err(ErrorResponse::from)
     }
 
-    /// Delete a credential owned by `user_id`. Returns the number of rows
-    /// removed (0 ⇒ not found or not owned — caller treats as not-found).
     pub async fn delete_by_credential_id_for_user<T: ConnectionTrait>(
         conn: &T,
         credential_id: &str,

@@ -2,7 +2,6 @@ use sea_orm::prelude::DateTimeWithTimeZone;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 
-/// Payload to create a new post series
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewPostSeries {
     pub name: String,
@@ -11,7 +10,6 @@ pub struct NewPostSeries {
     pub description: Option<String>,
 }
 
-/// Payload to update an existing post series
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UpdatePostSeries {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -22,7 +20,6 @@ pub struct UpdatePostSeries {
     pub description: Option<String>,
 }
 
-/// Query parameters for listing series with pagination and optional search
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PostSeriesListQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,7 +30,6 @@ pub struct PostSeriesListQuery {
     pub search: Option<String>,
 }
 
-/// Projection for listing series with post counts
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult)]
 pub struct PostSeriesWithCount {
     pub id: i32,

@@ -10,15 +10,9 @@ use super::*;
 
 use super::model::ScheduledPostStatus;
 
-/// Actions for scheduled posts:
-/// - Create a schedule
-/// - Upsert (create or update) a schedule for a post
-/// - Query helpers (find by post, list pending due items, list by status)
 impl Entity {
     pub const PER_PAGE: u64 = 10;
 
-    /// Create a scheduled post entry.
-    /// Defaults status to Pending if not provided.
     pub async fn create(
         conn: &DbConn,
         post_id: i32,
@@ -40,9 +34,6 @@ impl Entity {
         Ok(model)
     }
 
-    /// Upsert a scheduled post for a given post_id.
-    /// - If an existing Pending schedule exists for the post, update its publish_at and updated_at.
-    /// - Otherwise, create a new Pending schedule.
     pub async fn upsert(
         conn: &DbConn,
         post_id: i32,
@@ -51,7 +42,6 @@ impl Entity {
         let now = chrono::Utc::now().fixed_offset();
         let txn = conn.begin().await?;
 
-        // Find an existing pending schedule for this post
         let existing = Entity::find()
             .filter(Column::PostId.eq(post_id))
             .filter(Column::Status.eq(ScheduledPostStatus::Pending))
@@ -82,7 +72,6 @@ impl Entity {
         Ok(result)
     }
 
-    /// Find the latest schedule (by updated_at desc then id desc) for a given post.
     pub async fn find_by_post_id(conn: &DbConn, post_id: i32) -> DbResult<Option<Model>> {
         let model = Entity::find()
             .filter(Column::PostId.eq(post_id))
@@ -93,8 +82,6 @@ impl Entity {
         Ok(model)
     }
 
-    /// Return pending scheduled posts due at or before the given timestamp.
-    /// Results are ordered by publish_at asc, then id asc. Optional limit.
     pub async fn due_pending(
         conn: &DbConn,
         until: DateTimeWithTimeZone,
@@ -114,8 +101,6 @@ impl Entity {
         Ok(items)
     }
 
-    /// List scheduled posts by status with pagination (page starts at 1).
-    /// Returns (items, total_count).
     pub async fn list_by_status(
         conn: &DbConn,
         status: ScheduledPostStatus,

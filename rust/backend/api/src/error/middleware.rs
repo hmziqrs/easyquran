@@ -3,7 +3,6 @@ use serde_json::json;
 
 use crate::error::{ErrorCode, ErrorResponse, IntoErrorResponse};
 
-/// Errors originating from the CSRF middleware
 #[derive(Debug, thiserror::Error)]
 pub enum CsrfError {
     #[error("CSRF token missing")]
@@ -51,7 +50,6 @@ impl IntoResponse for CsrfError {
     }
 }
 
-/// Errors originating from the CORS configuration / checks.
 #[derive(Debug, thiserror::Error)]
 pub enum CorsError {
     #[error("Origin not allowed: {origin}")]
@@ -85,7 +83,6 @@ impl IntoResponse for CorsError {
     }
 }
 
-/// Errors emitted by the dynamic route blocker middleware.
 #[derive(Debug, thiserror::Error)]
 pub enum RouteBlockerError {
     #[error("Route blocked by admin policy: {path}")]

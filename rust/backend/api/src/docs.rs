@@ -4,7 +4,6 @@ use utoipa::OpenApi;
 #[openapi(
     paths(crate::modules::quran_v1::controller::health_ready),
     components(schemas(
-        // Quran API DTOs (§6.3) — camelCase success bodies.
         crate::modules::quran_v1::dto::HealthReady,
         crate::modules::quran_v1::dto::SourceDigestsDto,
         crate::modules::quran_v1::dto::VersionData,

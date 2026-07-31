@@ -9,7 +9,6 @@ use validator::{Validate, ValidationError, ValidationErrors};
 pub const DEFAULT_PER_PAGE: u64 = 30;
 pub const MAX_PER_PAGE: u64 = 200;
 
-/// Shared request envelope for analytics endpoints.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AnalyticsEnvelope {
     #[serde(
@@ -186,13 +185,6 @@ impl AnalyticsInterval {
         }
     }
 
-    /// SQLite `strftime(...)` bucket expression truncating `column` to this
-    /// interval's granularity. Every analytics query runs against
-    /// `DatabaseBackend::Sqlite`, so this must be SQLite dialect (it previously
-    /// emitted Postgres `to_char(date_trunc(...), ...)` and was broken on
-    /// SQLite). `%G`/`%V` are the ISO year / ISO week; SQLite has no native
-    /// Postgres `IW`, so the week bucket uses the `%G-W%V` shape (e.g.
-    /// `2025-W03`), matching the prior `IYYY-"W"IW` output.
     pub fn to_bucket_expr(&self, column: &str) -> String {
         match self {
             AnalyticsInterval::Hour => format!("strftime('%Y-%m-%d %H:00', {column})"),
@@ -673,7 +665,6 @@ mod tests {
     use super::*;
     use chrono::Timelike;
 
-    // ── AnalyticsEnvelope validation ─────────────────────────────────────
 
     #[test]
     fn valid_envelope_with_all_fields_passes() {
@@ -813,7 +804,6 @@ mod tests {
         }
     }
 
-    // ── AnalyticsEnvelope::resolve() ─────────────────────────────────────
 
     #[test]
     fn resolve_defaults_to_30_day_window() {
@@ -828,7 +818,6 @@ mod tests {
         let resolved = env.resolve();
 
         let expected_duration = resolved.date_to - resolved.date_from;
-        // 30 full days = 30 * 86400 seconds; end_of_day adds 23:59:59
         assert!(
             expected_duration.num_days() >= 29 && expected_duration.num_days() <= 30,
             "expected ~30 day window, got {} days",
@@ -917,12 +906,10 @@ mod tests {
         };
         let resolved = env.resolve();
 
-        // start_of_day: 00:00:00
         assert_eq!(resolved.date_from.time().hour(), 0);
         assert_eq!(resolved.date_from.time().minute(), 0);
         assert_eq!(resolved.date_from.time().second(), 0);
 
-        // end_of_day: 23:59:59
         assert_eq!(resolved.date_to.time().hour(), 23);
         assert_eq!(resolved.date_to.time().minute(), 59);
         assert_eq!(resolved.date_to.time().second(), 59);
@@ -971,7 +958,6 @@ mod tests {
         assert_eq!(SortOrder::Desc.as_sql(), "DESC");
     }
 
-    // ── AnalyticsInterval::to_bucket_expr ────────────────────────────────
 
     #[test]
     fn interval_hour_bucket_expr() {
@@ -1042,7 +1028,6 @@ mod tests {
         assert_eq!(DashboardPeriod::default(), DashboardPeriod::ThirtyDays);
     }
 
-    // ── AnalyticsMeta builder ────────────────────────────────────────────
 
     #[test]
     fn meta_new_sets_required_fields() {
@@ -1090,7 +1075,6 @@ mod tests {
         assert!(meta.filters_applied.is_some());
     }
 
-    // ── ResolvedAnalyticsEnvelope::offset() ──────────────────────────────
 
     #[test]
     fn offset_page_one() {
@@ -1124,7 +1108,6 @@ mod tests {
         assert_eq!(resolved.offset(), 40);
     }
 
-    // ── ResolvedAnalyticsEnvelope::bounds() ──────────────────────────────
 
     #[test]
     fn bounds_returns_included_both_ends() {
@@ -1147,7 +1130,6 @@ mod tests {
         }
     }
 
-    // ── Filter defaults ──────────────────────────────────────────────────
 
     #[test]
     fn registration_trends_filters_default() {
@@ -1233,7 +1215,6 @@ mod tests {
         assert!(filters.validate().is_ok());
     }
 
-    // ── Request validation delegates to envelope ─────────────────────────
 
     #[test]
     fn registration_trends_request_invalid_envelope_fails() {
@@ -1284,7 +1265,6 @@ mod tests {
         assert!(req.validate().is_err());
     }
 
-    // ── parse_date ───────────────────────────────────────────────────────
 
     #[test]
     fn parse_date_yyyy_mm_dd() {
@@ -1321,12 +1301,10 @@ mod tests {
 
     #[test]
     fn parse_date_yyyy_mm_dd_preferred_over_rfc3339() {
-        // Both formats could parse "2025-06-15" but the YYYY-MM-DD path runs first
         let date = parse_date("2025-06-15").unwrap();
         assert_eq!(date, NaiveDate::from_ymd_opt(2025, 6, 15).unwrap());
     }
 
-    // ── Constants ────────────────────────────────────────────────────────
 
     #[test]
     fn constants_are_sensible() {

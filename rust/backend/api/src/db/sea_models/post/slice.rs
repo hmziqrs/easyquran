@@ -70,7 +70,6 @@ pub struct PostQuery {
     pub category_id: Option<i32>,
     pub search: Option<String>,
     pub tag_ids: Option<Vec<i32>>,
-    // Date range filters
     pub created_at_gt: Option<DateTimeWithTimeZone>,
     pub created_at_lt: Option<DateTimeWithTimeZone>,
     pub updated_at_gt: Option<DateTimeWithTimeZone>,
@@ -121,14 +120,11 @@ pub struct PostFeaturedImage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PostWithRelations {
-    // Core post data
     pub id: i32,
     pub title: String,
     pub slug: String,
-    // Sanitized on read (plan Phase 6e): every client-facing serialization
-    // strips XSS payloads from the EditorJS block fields the frontends render
-    // via `dangerous_inner_html` (paragraph text, list items, raw html). The
-    // stored value is untouched; see `utils::sanitize`.
+    // XSS guard: serialize_with strips payloads from EditorJS fields the
+    // frontends render via `dangerous_inner_html`. Do not drop the attribute.
     #[serde(serialize_with = "crate::utils::sanitize::serialize_sanitized_content")]
     pub content: Json,
     pub excerpt: Option<String>,
@@ -147,19 +143,15 @@ pub struct PostWithRelations {
 
     pub comment_count: i64,
 
-    // ── Paywall (plan Phase 4c) ──────────────────────────────────────────
-    /// Access policy for this post. Defaults to `Free`; the read-path controllers
-    /// overwrite it from `post_access` and clear `content` when `has_access` is
-    /// false, so paid/subscriber-only content is never shipped unentitled.
     #[serde(default = "default_access_type")]
     pub access_type: PostAccessType,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub price_cents: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub currency: Option<String>,
-    /// Whether the requesting viewer may read `content`. Controllers set this;
-    /// `into_relation` defaults it to `true` (free posts, or internal callers
-    /// that bypass the paywall such as the post author / admin editors).
+    // `has_access` defaults to true because into_relation is called for free
+    // posts and internal callers (author/admin) that bypass the paywall; read
+    // controllers overwrite it after consulting `services/paywall`.
     #[serde(default = "default_true")]
     pub has_access: bool,
 }
@@ -182,7 +174,6 @@ pub struct PostSitemap {
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult)]
 pub struct PostWithJoinedData {
-    // Post fields
     pub id: i32,
     pub title: String,
     pub slug: String,
@@ -199,12 +190,10 @@ pub struct PostWithJoinedData {
     pub tag_ids: TagIds,
     pub category_id: i32,
 
-    // Author fields from join
     pub author_name: String,
     pub author_email: String,
     pub author_avatar_id: Option<i32>,
 
-    // Author avatar media fields from join
     pub author_avatar_object_key: Option<String>,
     pub author_avatar_file_url: Option<String>,
     pub author_avatar_mime_type: Option<String>,
@@ -212,14 +201,12 @@ pub struct PostWithJoinedData {
     pub author_avatar_height: Option<i32>,
     pub author_avatar_size: Option<i64>,
 
-    // Category fields from join
     pub category_name: String,
     pub category_slug: String,
     pub category_color: String,
     pub category_cover_id: Option<i32>,
     pub category_logo_id: Option<i32>,
 
-    // Category cover media fields
     pub category_cover_object_key: Option<String>,
     pub category_cover_file_url: Option<String>,
     pub category_cover_mime_type: Option<String>,
@@ -227,7 +214,6 @@ pub struct PostWithJoinedData {
     pub category_cover_height: Option<i32>,
     pub category_cover_size: Option<i64>,
 
-    // Category logo media fields
     pub category_logo_object_key: Option<String>,
     pub category_logo_file_url: Option<String>,
     pub category_logo_mime_type: Option<String>,
@@ -235,7 +221,6 @@ pub struct PostWithJoinedData {
     pub category_logo_height: Option<i32>,
     pub category_logo_size: Option<i64>,
 
-    // Featured image media fields
     pub featured_image_object_key: Option<String>,
     pub featured_image_file_url: Option<String>,
     pub featured_image_mime_type: Option<String>,
@@ -357,8 +342,6 @@ impl PostWithJoinedData {
                 avatar,
             },
             comment_count: self.comment_count,
-            // Default to free + full access; public read-path controllers
-            // overwrite these after consulting the paywall (`services/paywall`).
             access_type: PostAccessType::Free,
             price_cents: None,
             currency: None,

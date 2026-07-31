@@ -182,7 +182,6 @@ impl Entity {
             media_query = media_query.filter(Column::UpdatedAt.lt(ts));
         }
 
-        // Sorting: support multiple field sorts; default to created_at desc
         if let Some(sorts) = &query.sorts {
             if !sorts.is_empty() {
                 for s in sorts {
@@ -223,7 +222,6 @@ impl Entity {
         match paginator.num_items().await {
             Ok(total) => match paginator.fetch_page(page - 1).await {
                 Ok(results) => {
-                    // fetch usage counts for all media items with one query
                     let ids = results.iter().map(|m| m.id).collect::<Vec<i32>>();
                     let usage_counts = media_usage::Entity::find()
                         .filter(media_usage::Column::MediaId.is_in(ids))

@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// Kind/category of an in-app + push notification. Stored as `TEXT` on the
-/// `notifications` table (migration 000054); the string values are stable
-/// (never rename a `string_value` once shipped — existing rows depend on it).
+// Stored as TEXT in the DB: each `string_value` is a stable contract — renaming
+// breaks existing rows. Do not rename once shipped.
 #[cfg_attr(
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)

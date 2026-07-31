@@ -9,8 +9,6 @@ use super::{
     SuppressionReason, SuppressionUpsert,
 };
 
-/// String value stored in the `reason` column for each variant. Must match the
-/// `SuppressionReason` `DeriveActiveEnum` string_value mapping.
 fn reason_str(r: SuppressionReason) -> &'static str {
     match r {
         SuppressionReason::Bounce => "bounce",
@@ -22,9 +20,6 @@ fn reason_str(r: SuppressionReason) -> &'static str {
 impl Entity {
     pub const PER_PAGE: u64 = 50;
 
-    /// Send-path lookup: returns the row for a canonicalized recipient, if any.
-    /// The router decides enforcement (permanent vs. soft-cooldown) from the
-    /// returned fields.
     #[instrument(skip(conn), fields(recipient))]
     pub async fn find_by_recipient(conn: &DbConn, recipient: &str) -> DbResult<Option<Model>> {
         Self::find()
@@ -34,27 +29,14 @@ impl Entity {
             .map_err(Into::into)
     }
 
-    /// Insert or update a suppression row **atomically**. `permanent` is
-    /// **sticky**: once a recipient is permanently suppressed it is never
-    /// downgraded, and a permanent reason (complaint / hard bounce) is never
-    /// downgraded to bounce. `last_seen` is bumped to now so the soft-bounce
-    /// cooldown window resets. Complaints and Manual blocks are always permanent.
-    ///
-    /// Implemented as a single `INSERT ... ON CONFLICT DO UPDATE` so the
-    /// sticky-permanent decision is evaluated server-side — a plain
-    /// read-then-write races under concurrent webhook events and can let a
-    /// soft-bounce write downgrade a just-written permanent complaint.
+    /// Server-side never-downgrade UPSERT: a read-then-write races under
+    /// concurrent webhooks and can let a soft bounce downgrade a permanent
+    /// complaint, re-enabling a suppressed recipient.
     #[instrument(skip(conn), fields(recipient))]
     pub async fn upsert(conn: &DbConn, recipient: &str, up: SuppressionUpsert) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
-        // Only `Bounce` may be non-permanent; Complaint and Manual are always
-        // permanent (no soft-cooldown semantics for them).
         let perm = up.permanent || up.reason != SuppressionReason::Bounce;
 
-        // SQLite `?` placeholders are purely positional (no `$N` re-use), so the
-        // three trailing timestamp columns each consume their own bind slot.
-        // `ON CONFLICT (col) DO UPDATE SET col = EXCLUDED.col` is valid SQLite
-        // UPSERT (>= 3.24) and is kept verbatim from the Postgres version.
         const SQL: &str = r#"INSERT INTO email_suppression
             (recipient, reason, source, diagnostic, permanent, last_seen, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -82,7 +64,6 @@ impl Entity {
         ))
         .await?;
 
-        // Read back the committed row (single indexed lookup) for the caller.
         Self::find_by_recipient(conn, recipient)
             .await?
             .ok_or_else(|| {
@@ -91,7 +72,6 @@ impl Entity {
             })
     }
 
-    /// Manual admin blacklist add (upserts; canonicalizes the recipient).
     pub async fn create(conn: &DbConn, new: NewSuppression) -> DbResult<Model> {
         let recipient = new.recipient.trim().to_lowercase();
         if recipient.is_empty() {
@@ -111,8 +91,6 @@ impl Entity {
         .await
     }
 
-    /// Remove a recipient from the suppression list. Returns `true` if a row
-    /// was deleted.
     pub async fn delete_by_recipient(conn: &DbConn, recipient: &str) -> DbResult<bool> {
         let res = Self::delete_many()
             .filter(Column::Recipient.eq(recipient))
@@ -121,7 +99,6 @@ impl Entity {
         Ok(res.rows_affected > 0)
     }
 
-    /// Paginated, filtered admin listing.
     pub async fn find_with_query(
         conn: &DbConn,
         query: SuppressionQuery,
@@ -162,7 +139,6 @@ impl Entity {
         Ok(PaginatedList::new(items, total, page, Self::PER_PAGE))
     }
 
-    /// Find a row by id (admin detail) or a 404 error.
     pub async fn find_by_id_with_404(conn: &DbConn, id: i32) -> DbResult<Model> {
         match Self::find_by_id(id).one(conn).await {
             Ok(Some(model)) => Ok(model),

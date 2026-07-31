@@ -7,13 +7,9 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub user_id: i32,
-    /// Optional device info (e.g., "MacOS · Chrome 126")
     pub device: Option<String>,
-    /// Optional IPv4/IPv6 address string
     pub ip_address: Option<String>,
-    /// Last time this session was seen/used
     pub last_seen: DateTimeWithTimeZone,
-    /// When the session was revoked (null if active)
     pub revoked_at: Option<DateTimeWithTimeZone>,
 }
 

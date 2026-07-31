@@ -3,10 +3,6 @@ use serde::{Deserialize, Serialize};
 
 pub use ruxlog_types::enums::NotificationKind;
 
-/// A single in-app notification addressed to a user. Push fan-out is a
-/// best-effort side effect of `INSERT` (see `services::notification`); this row
-/// is the durable source of truth, so a notification is never lost even when
-/// the user has zero registered devices or FCM is disabled.
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "notifications")]
 pub struct Model {
@@ -16,11 +12,8 @@ pub struct Model {
     pub kind: NotificationKind,
     pub title: String,
     pub body: String,
-    /// Arbitrary structured payload (e.g. `{"post_id": 42}`), mirrored to FCM
-    /// `data` on push. Nullable — many notifications have no payload.
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub data: Option<Json>,
-    /// `NULL` until the user marks the row read.
     pub read_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
 }

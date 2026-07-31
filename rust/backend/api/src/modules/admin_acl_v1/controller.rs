@@ -69,9 +69,6 @@ pub async fn list_constants(
 
     let result = AclService::list_constants(State(state), params).await?;
 
-    // Sanitize each constant (mask sensitive values) while preserving the
-    // pagination metadata via `PaginatedList::map`. The serialized shape stays
-    // exactly {data,total,page,per_page}.
     let sanitized = result.map(|item| {
         json!({
             "key": item.key,

@@ -336,7 +336,6 @@ pub async fn seed_post_comments(
     };
     let mut rng = seeded_rng(Some(SeedMode::Static { value: 100 }));
     for user in users {
-        // Ensure we don't try to select more posts than available
         let posts_amount = if posts.len() <= 10 {
             1
         } else {
@@ -371,7 +370,6 @@ pub async fn seed_post_comments(
         .into_response()
 }
 
-// Authentication related seeds
 #[debug_handler(state = AppState)]
 pub async fn seed_user_sessions(
     State(state): State<AppState>,
@@ -405,7 +403,7 @@ pub async fn seed_user_sessions(
             let last_seen = chrono::Utc::now().fixed_offset()
                 - chrono::Duration::hours(rng.random_range(1..720));
             let new_session = user_session::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 user_id: user.id,
                 device: Some(devices.choose(&mut rng).unwrap().to_string()),
                 ip_address: Some(ip_addresses.choose(&mut rng).unwrap().to_string()),
@@ -417,7 +415,6 @@ pub async fn seed_user_sessions(
                 },
             };
 
-            // Convert to ActiveModel and insert
             let active_model = user_session::ActiveModel {
                 id: Set(new_session.id),
                 user_id: Set(new_session.user_id),
@@ -466,7 +463,7 @@ pub async fn seed_email_verifications(
         let plaintext = email_verification::Entity::generate_code();
         let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &plaintext);
         let verification = email_verification::Model {
-            id: 0, // Auto-increment
+            id: 0,
             user_id: user.id,
             code_hash,
             created_at: chrono::Utc::now().fixed_offset(),
@@ -519,7 +516,7 @@ pub async fn seed_forgot_passwords(
         let plaintext = forgot_password::Entity::generate_code();
         let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &plaintext);
         let forgot_password = forgot_password::Model {
-            id: 0, // Auto-increment
+            id: 0,
             user_id: user.id,
             code_hash,
             created_at: chrono::Utc::now().fixed_offset(),
@@ -548,7 +545,6 @@ pub async fn seed_forgot_passwords(
         .into_response()
 }
 
-// Post-related seeds
 #[debug_handler(state = AppState)]
 pub async fn seed_post_revisions(
     State(state): State<AppState>,
@@ -582,7 +578,7 @@ pub async fn seed_post_revisions(
             });
 
             let revision = post_revision::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 post_id: post.id,
                 content: post_content.to_string(),
                 metadata: Some(serde_json::json!({
@@ -631,7 +627,7 @@ pub async fn seed_post_series(
 
     for name in series_names.iter() {
         let new_series = post_series::Model {
-            id: 0, // Auto-increment
+            id: 0,
             name: name.to_string(),
             slug: name.to_lowercase().replace(' ', "-"),
             description: Some(format!("A comprehensive series about {}", name)),
@@ -708,7 +704,7 @@ pub async fn seed_post_views(
             };
 
             let view = post_view::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 post_id: post.id,
                 user_id,
                 ip_address: Some(ip_addresses.choose(&mut rng).unwrap().to_string()),
@@ -763,7 +759,7 @@ pub async fn seed_scheduled_posts(
 
     for post in posts.into_iter().take(10) {
         let scheduled_post = scheduled_post::Model {
-            id: 0, // Auto-increment
+            id: 0,
             post_id: post.id,
             publish_at: chrono::Utc::now().fixed_offset()
                 + chrono::Duration::days(rng.random_range(1..30)),
@@ -795,7 +791,6 @@ pub async fn seed_scheduled_posts(
         .into_response()
 }
 
-// Media related seeds
 #[debug_handler(state = AppState)]
 pub async fn seed_media(State(state): State<AppState>, _auth: AuthSession) -> impl IntoResponse {
     let users = match user::Entity::find().all(&state.sea_db).await {
@@ -848,7 +843,7 @@ pub async fn seed_media(State(state): State<AppState>, _auth: AuthSession) -> im
 
     for (i, (filename, mime_type, width, height, size)) in fake_files.iter().enumerate() {
         let new_media = media::Model {
-            id: 0, // Auto-increment
+            id: 0,
             bucket: Some(state.storage.config.bucket.clone()),
             object_key: format!("seed/{}", filename),
             mime_type: mime_type.to_string(),
@@ -947,12 +942,12 @@ pub async fn seed_media_variants(
                 };
 
                 let variant = media_variant::Model {
-                    id: 0, // Auto-increment
+                    id: 0,
                     media_id: media_item.id,
                     variant_type: variant_type.to_string(),
                     width: Some(width),
                     height: Some(height),
-                    size: media_item.size / 2, // Assume compressed
+                    size: media_item.size / 2,
                     object_key: format!(
                         "variants/{}/{}_{}",
                         media_item.object_key,
@@ -1079,7 +1074,7 @@ pub async fn seed_media_usage(
             };
 
             let usage = media_usage::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 media_id: media_item.id,
                 entity_type,
                 entity_id,
@@ -1111,7 +1106,6 @@ pub async fn seed_media_usage(
         .into_response()
 }
 
-// Community and system seeds
 #[debug_handler(state = AppState)]
 pub async fn seed_comment_flags(
     State(state): State<AppState>,
@@ -1152,7 +1146,7 @@ pub async fn seed_comment_flags(
             let reason = flag_reasons.choose(&mut rng).unwrap();
 
             let flag = comment_flag::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 comment_id: comment.id,
                 user_id: flag_user.id,
                 reason: Some(reason.to_string()),
@@ -1203,7 +1197,7 @@ pub async fn seed_newsletter_subscribers(
             };
 
             let subscriber = newsletter_subscriber::Model {
-                id: 0, // Auto-increment
+                id: 0,
                 email,
                 status,
                 token: format!("token_{}", rng.random_range(1000..9999)),
@@ -1254,7 +1248,7 @@ pub async fn seed_route_status(
 
     for route in protected_routes {
         let route_status_entry = route_status::Model {
-            id: 0, // Auto-increment
+            id: 0,
             route_pattern: route.to_string(),
             is_blocked: false,
             reason: None,

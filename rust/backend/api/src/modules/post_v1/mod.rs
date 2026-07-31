@@ -7,9 +7,6 @@ use axum::extract::DefaultBodyLimit;
 use axum::{middleware, routing::post, Router};
 
 pub fn routes() -> Router<AppState> {
-    // The author-only `protected` sub-router always carries the read/query,
-    // revision, schedule and series routes plus the write routes (create /
-    // update / autosave / delete).
     let mut protected = Router::<AppState>::new()
         .route("/query", post(controller::query))
         .route(
@@ -41,7 +38,6 @@ pub fn routes() -> Router<AppState> {
         );
 
     {
-        // Author-facing write paths with the larger body limit for post bodies.
         let post_limited = Router::<AppState>::new()
             .route("/create", post(controller::create))
             .route("/update/{post_id}", post(controller::update))
@@ -57,7 +53,6 @@ pub fn routes() -> Router<AppState> {
         auth_guard::verified_with_role::<{ auth_guard::ROLE_AUTHOR }>,
     ));
 
-    // Routes requiring authentication (any logged-in user)
     let authenticated = Router::<AppState>::new()
         .route("/like/{post_id}", post(controller::like_post))
         .route("/unlike/{post_id}", post(controller::unlike_post))

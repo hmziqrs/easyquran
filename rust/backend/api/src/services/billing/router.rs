@@ -1,10 +1,3 @@
-//! Multi-provider billing router with geo-based routing.
-//!
-//! `BillingRouter` holds all initialized providers and delegates to the
-//! correct one based on client geography (for checkouts) or provider name
-//! (for webhooks, subscription management). It implements `BillingProvider`
-//! so existing controller code works transparently.
-
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -18,16 +11,6 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// ── Config types ──────────────────────────────────────────────────────────
-
-/// A single routing rule: provider + geographic filters.
-///
-/// Rules are evaluated in order. First match wins.
-/// Include/exclude lists use ISO 3166-1 alpha-2 country codes (IN, BR, US)
-/// and two-letter continent codes (AF, AS, EU, NA, OC, SA, AN).
-///
-/// If `include_countries` or `include_continents` is non-empty, only those
-/// match. `exclude_*` removes entries from the included set.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RoutingRule {
     pub provider: String,
@@ -41,7 +24,6 @@ pub struct RoutingRule {
     pub exclude_continents: Vec<String>,
 }
 
-/// Top-level JSON config for `BILLING_GEO_RULES` env var.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GeoRulesConfig {
     pub default_provider: String,
@@ -50,8 +32,6 @@ pub struct GeoRulesConfig {
 }
 
 impl GeoRulesConfig {
-    /// Load from `BILLING_GEO_RULES` env var (inline JSON) or `BILLING_GEO_RULES_FILE` (file path).
-    /// Returns a minimal passthrough config if neither is set.
     pub fn from_env() -> Self {
         if let Ok(json) = std::env::var("BILLING_GEO_RULES") {
             return serde_json::from_str(&json).expect("Failed to parse BILLING_GEO_RULES JSON");
@@ -65,7 +45,6 @@ impl GeoRulesConfig {
                 .expect("Failed to parse BILLING_GEO_RULES_FILE JSON");
         }
 
-        // No geo rules configured — use BILLING_PROVIDER or "stripe" as default
         let default = std::env::var("BILLING_PROVIDER").unwrap_or_else(|_| "stripe".to_string());
         Self {
             default_provider: default,
@@ -74,15 +53,12 @@ impl GeoRulesConfig {
     }
 }
 
-// ── Geo lookup ────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone)]
 struct GeoInfo {
     country_code: Option<String>,
     continent_code: Option<String>,
 }
 
-/// Resolves an IP to a provider name using MaxMind + routing rules.
 pub struct GeoRouter {
     reader: Option<MaxMindReader<Vec<u8>>>,
     rules: Vec<RoutingRule>,
@@ -117,8 +93,6 @@ impl GeoRouter {
         }
     }
 
-    /// Resolve an IP to a provider name. Returns the default if no rule matches
-    /// or if the matched provider isn't available.
     pub fn resolve(
         &self,
         ip: IpAddr,
@@ -147,10 +121,7 @@ impl GeoRouter {
 
     fn lookup_geo(&self, ip: IpAddr) -> Option<GeoInfo> {
         let reader = self.reader.as_ref()?;
-        // maxminddb 0.27 split lookup into `lookup()` (returns a LookupResult
-        // handle) + `decode::<T>()` (materialises the typed record). We resolve
-        // both errors (corrupt/truncated DB, decode failure) and missing-data
-        // (None) to a plain `None` — geo routing always falls back gracefully.
+        // Swallow DB/decode errors as None — geo routing falls back, never 500s.
         let result = reader.lookup(ip).ok()?;
         let geoip: maxminddb::geoip2::Country<'_> = result.decode().ok()??;
 
@@ -169,7 +140,6 @@ impl GeoRouter {
             None => return false,
         };
 
-        // Continent include/exclude
         if !rule.include_continents.is_empty() {
             match &geo.continent_code {
                 Some(cc) if rule.include_continents.iter().any(|c| c == cc) => {}
@@ -184,7 +154,6 @@ impl GeoRouter {
             }
         }
 
-        // Country include/exclude
         if !rule.include_countries.is_empty() {
             match &geo.country_code {
                 Some(cc) if rule.include_countries.iter().any(|c| c == cc) => {}
@@ -203,9 +172,6 @@ impl GeoRouter {
     }
 }
 
-// ── BillingRouter ─────────────────────────────────────────────────────────
-
-/// Holds all initialized providers and routes requests to the correct one.
 pub struct BillingRouter {
     registry: ProviderRegistry<dyn BillingProvider>,
     geo_router: GeoRouter,
@@ -223,7 +189,6 @@ impl BillingRouter {
         }
     }
 
-    /// Geo-routed checkout: selects provider based on client IP.
     pub async fn create_checkout_for_ip(
         &self,
         client_ip: IpAddr,
@@ -246,10 +211,6 @@ impl BillingRouter {
             .await
     }
 
-    /// Geo-routed one-time checkout for a per-post purchase. Like
-    /// [`create_checkout_for_ip`] but for single payments; providers that don't
-    /// support one-time checkouts return `BillingError::Config` (per-post
-    /// purchases are simply unavailable for those regions/providers).
     #[allow(clippy::too_many_arguments)]
     pub async fn create_post_checkout_for_ip(
         &self,
@@ -284,7 +245,6 @@ impl BillingRouter {
             .await
     }
 
-    /// Cancel a subscription on a specific provider.
     pub async fn cancel_subscription_for_provider(
         &self,
         provider_name: &str,
@@ -297,7 +257,6 @@ impl BillingRouter {
             .await
     }
 
-    /// Get subscription from a specific provider.
     pub async fn get_subscription_for_provider(
         &self,
         provider_name: &str,
@@ -307,7 +266,6 @@ impl BillingRouter {
         provider.get_subscription(provider_subscription_id).await
     }
 
-    /// Create portal session for a specific provider.
     pub async fn create_portal_session_for_provider(
         &self,
         provider_name: &str,
@@ -321,10 +279,6 @@ impl BillingRouter {
     }
 
     fn get_provider(&self, name: &str) -> Result<&Arc<dyn BillingProvider>, BillingError> {
-        // Forwarded to the shared registry; FrameworkError narrows back to
-        // BillingError::Config("Provider '{name}' not initialized") via the
-        // From-impl in provider.rs — preserving the exact pre-refactor error
-        // variant + message.
         self.registry.get(name).map_err(BillingError::from)
     }
 
@@ -351,7 +305,6 @@ impl BillingProvider for BillingRouter {
         success_url: &str,
         cancel_url: &str,
     ) -> Result<CheckoutSession, BillingError> {
-        // Fallback when no IP is available — use default provider
         let provider = self.get_provider(self.registry.default_provider())?;
         provider
             .create_checkout(plan_slug, customer_email, user_id, success_url, cancel_url)
@@ -378,12 +331,7 @@ impl BillingProvider for BillingRouter {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Uniform webhook dispatch through the shared registry. PRESERVES drift
-        // point #1: an unknown provider is surfaced as
-        // `BillingError::WebhookVerification("Unknown provider '{}' for webhook")`
-        // (different HTTP semantics from the generic lookup path's
-        // `BillingError::Config`), so this mapping is applied explicitly here
-        // rather than via the From-impl used by get_provider.
+        // Unknown webhook provider -> WebhookVerification, not Config: different HTTP status.
         let provider = self.registry.get_for_webhook(&event).map_err(|_| {
             BillingError::WebhookVerification(format!(
                 "Unknown provider '{}' for webhook",
@@ -404,8 +352,6 @@ impl BillingProvider for BillingRouter {
             .await
     }
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -606,11 +552,8 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ── Edge case tests ──────────────────────────────────────────────────
-
     #[test]
     fn test_rule_include_continent_exclude_country_combo() {
-        // Include all of Asia, but exclude China
         let rule = RoutingRule {
             provider: "razorpay".into(),
             include_countries: vec![],
@@ -627,7 +570,6 @@ mod tests {
 
     #[test]
     fn test_rule_include_country_override_continent() {
-        // Only IN is included, continent filter is empty — other AS countries excluded
         let rule = RoutingRule {
             provider: "razorpay".into(),
             include_countries: vec!["IN".into()],
@@ -642,7 +584,6 @@ mod tests {
 
     #[test]
     fn test_rule_exclude_only() {
-        // No includes, but exclude EU — matches everything except EU
         let rule = RoutingRule {
             provider: "global".into(),
             include_countries: vec![],
@@ -666,7 +607,6 @@ mod tests {
 
     #[test]
     fn test_resolve_multiple_rules_fallback() {
-        // Two rules for AS and SA, IP is from NA — falls back to default
         let rules = vec![
             RoutingRule {
                 provider: "razorpay".into(),
@@ -751,10 +691,8 @@ mod tests {
         let geo = GeoRouter::new_for_test(vec![], "stripe".into());
         let router = BillingRouter::new(providers, geo);
 
-        // Will fail because no real server, but should route to stripe (not crash)
         let result = router.cancel_subscription("sub_test", true).await;
         assert!(result.is_err());
-        // Verify it's a ProviderApi error (attempted to call stripe)
         assert!(matches!(result.unwrap_err(), BillingError::ProviderApi(_)));
     }
 
@@ -800,11 +738,10 @@ mod tests {
         let geo = GeoRouter::new_for_test(vec![], "stripe".into());
         let router = BillingRouter::new(providers, geo);
 
-        // Should route to revolut, not default (stripe which doesn't exist)
         let result = router
             .cancel_subscription_for_provider("revolut", "sub_1", true)
             .await;
-        assert!(result.is_err()); // No server, but routed correctly
+        assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), BillingError::ProviderApi(_)));
     }
 

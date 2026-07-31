@@ -27,35 +27,16 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_duration: 86400,
 };
 
-/// Single-use reset token minted by `verify` and consumed by `reset`
-/// (audit F#9).
-///
-/// The emailed code is deleted from the DB the moment `verify` accepts it; the
-/// only thing that can subsequently change the password is this opaque token,
-/// which is stored in a process-global in-memory TTL map and removed on first
-/// use. Consequences:
-///   - the emailed code can never be **replayed** against `verify` or `reset`
-///     once the legitimate user has verified;
-///   - the reset token itself is strictly single-use — a replayed `reset`
-///     request can never observe the token twice.
-///
-/// This closes the window the old flow left open, where `verify` merely *checked*
-/// the code and left it live so the (single) `reset` could re-check it — meaning
-/// the code stayed reusable until consumed. Backed by an in-memory TTL store;
-/// a restart drops outstanding tokens, which just forces
-/// the user to re-request a reset.
+/// Single-use reset tokens minted by `verify`, consumed by `reset`. Backed by
+/// an in-memory TTL map (not a stub): a restart drops outstanding tokens.
 mod reset_token {
     use super::*;
     use rand::Rng;
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
     use std::time::Instant;
-    // GAP-016: `Zeroize` (the trait) must be in scope for the `.zeroize()`
-    // call on the `Zeroizing<[u8;32]>` random-source wrapper below.
     use zeroize::Zeroize;
 
-    /// Reset-token TTL, in seconds. 10 minutes: longer than a user spends typing
-    /// a new password, short enough to bound an attacker's replay window.
     const TTL_SECS: u64 = 600;
 
     type TokenMap = HashMap<String, (i32, Instant)>;
@@ -71,19 +52,9 @@ mod reset_token {
     }
 
     fn namespaced_key(token: &str) -> String {
-        // Namespaced so it can't collide with session/checkout/oauth keys.
         format!("forgot_password:reset_token:{token}")
     }
 
-    /// Mint a fresh single-use token bound to `user_id`. 32 random bytes → 256
-    /// bits, hex-encoded. Returned to the client in the `verify` response.
-    ///
-    /// GAP-016 (CWE-316/459): the 32-byte random source is zeroized the moment
-    /// it has been hex-encoded, so the raw token material is not left on the
-    /// stack/heap longer than necessary. The hex `String` itself is returned to
-    /// the caller (it MUST reach the client JSON), so it is not zeroized here —
-    /// its lifetime is bounded by the short TTL and the single-use removal on
-    /// consumption.
     pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
         let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
         rand::rng().fill(bytes.as_mut());
@@ -101,10 +72,8 @@ mod reset_token {
         Ok(token)
     }
 
-    /// Atomically consume the token, returning the bound `user_id` if the token
-    /// was valid and present, or `None` if it was already used / unknown / expired.
-    /// Removal on take guarantees a replayed `reset` can never observe the same
-    /// token twice (the same atomic-take guarantee used for checkout intents).
+    /// Removal on take is required for single-use semantics — do not change to a
+    /// read (`get`), or a replayed `reset` could reuse the token.
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
         let mut map = tokens()
             .lock()
@@ -117,14 +86,8 @@ mod reset_token {
     }
 }
 
-/// The single, uniform success response returned by `generate` for EVERY
-/// `/request` call — whether or not the supplied email corresponds to a real
-/// account (SC-006). Returning the identical body/status for a known vs
-/// unknown email closes the user-enumeration oracle the old `RecordNotFound`
-/// ("Email doesn't exist") branch opened.
-///
-/// Kept as a free function (rather than inlined) so a unit test can assert both
-/// code paths produce byte-identical output without a DB.
+/// Shared by the known- and unknown-email branches of `generate` so the
+/// response leaks no account existence (SC-006). Do not diverge them.
 pub(crate) fn uniform_success_response() -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::OK,
@@ -134,46 +97,14 @@ pub(crate) fn uniform_success_response() -> (StatusCode, Json<serde_json::Value>
     )
 }
 
-/// A fixed, non-secret password used only to drive a dummy Argon2 hash on the
-/// unknown-email branch (see `equalize_unknown_email_work`). It is never stored,
-/// never verified, and never compared to anything — its only job is to feed
-/// `password_auth::generate_hash` a stable input so the Argon2 KDF does real
-/// work. Using a constant (rather than a fresh random value) keeps the input
-/// length fixed, so the hash cost is identical across requests and across the
-/// two branches.
+/// Fixed input for the dummy Argon2 hash on the unknown-email branch; constant
+/// length keeps per-request CPU cost fixed. Not dead — see equalize_unknown_email_work.
 const DUMMY_HASH_PASSWORD: &str = "timing-equalization-dummy";
 
-/// SC-006 (timing-oracle hardening): perform a dummy Argon2id hash on a fixed
-/// input and discard the result.
-///
-/// `generate`'s known-email branch does meaningful CPU work that the
-/// unknown-email branch does not — at minimum the reset-code generation and a
-/// keyed hash, and in sibling auth flows an Argon2id password hash. The cheap
-/// CPU/timing signal from that asymmetry lets an attacker averaging request
-/// latency distinguish registered from unknown emails even though the HTTP
-/// *response* is byte-identical. This helper closes that CPU gap by making the
-/// unknown path run an Argon2 KDF too, so the CPU-cost distributions of the two
-/// branches overlap. Argon2id is memory-hard and dominates the local CPU cost,
-/// which is exactly the signal we are equalizing.
-///
-/// Contract:
-///   - touches NO database, NO Redis, NO mailer;
-///   - returns the hash only so it is not optimized away — the caller drops it;
-///   - is pure / deterministic for a given input, so it is unit-testable without
-///     a server or a DB.
-///
-/// Residual risk (documented, not fixable locally): the known-email branch also
-/// performs an SMTP network round-trip, whose latency we deliberately do NOT
-/// try to match — a fixed sleep would itself become an oracle and a DoS vector.
-/// A determined attacker who can average out the SMTP network hop can still
-/// infer account existence from that residual signal; this helper only closes
-/// the cheap, deterministic CPU/timing oracle. The `abuse_limiter` already
-/// bounds request frequency, so the added per-request CPU is bounded too.
+/// Closes the timing oracle between `generate`'s branches: the unknown-email
+/// path runs this Argon2id hash so its CPU cost matches the known-email path.
+/// The result is intentionally discarded by the caller.
 fn equalize_unknown_email_work() -> String {
-    // `password_auth::generate_hash` uses the same Argon2id parameters as the
-    // rest of the codebase (it is the wrapper used by `twofa` and the user
-    // model), so the CPU cost here approximates the CPU cost of the known-email
-    // path's hashing work.
     password_auth::generate_hash(DUMMY_HASH_PASSWORD)
 }
 
@@ -184,10 +115,7 @@ pub async fn generate(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1GeneratePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Rate limiting via abuse limiter (3 attempts per 6 minutes). Kept
-    // unconditionally (SC-006: do NOT weaken abuse protection) and run BEFORE
-    // the existence check, so an attacker probing emails is throttled just as
-    // a legitimate user is.
+    // Run before the existence check so email-probing is throttled too.
     let ip = secure_ip.to_string();
     let key_prefix = format!("forgot_password:{}", ip);
     match abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await {
@@ -199,27 +127,11 @@ pub async fn generate(
     }
 
     let pool = &state.sea_db;
-    // SC-006: an UNKNOWN email must produce the SAME response as a known one.
-    // We do NOT error, and we do NOT send an email — we just short-circuit to
-    // the uniform success body. Only genuine infrastructure failures (DB down)
-    // still surface as a 500; a normal "no such user" is indistinguishable to
-    // the caller from a successful code dispatch.
+    // Unknown email: return the same response as a known one (SC-006); never 404.
     let user = match user::Entity::find_by_email(pool, payload.email.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             warn!("Forgot password requested for non-existent email; returning uniform response");
-            // SC-006 (timing-oracle hardening): equalize the CPU work between
-            // the known- and unknown-email branches. The known path does real
-            // hashing work (code generation + keyed hash, and in sibling flows
-            // an Argon2id hash); without this dummy hash the unknown path's
-            // markedly lower CPU cost is itself an enumeration oracle even
-            // though the HTTP response is byte-identical. The Argon2 KDF is
-            // memory-hard and dominates local CPU cost — exactly the signal we
-            // are matching. Run it off the async worker (same pattern as the
-            // backup-code / password hashing in `auth_v1`) so we never block
-            // the executor. It touches no DB/Redis/mailer; the result is
-            // dropped. See `equalize_unknown_email_work` for the residual
-            // (unmatched SMTP network latency) and the abuse-limiter bound.
             let _ = tokio::task::spawn_blocking(equalize_unknown_email_work)
                 .await
                 .map_err(|e| {
@@ -243,10 +155,6 @@ pub async fn generate(
                     .with_message(
                         "You have already requested a verification code. Please try again after 1 minute",
                     )
-                    // AUTH_007 parity: every TooManyAttempts 429 carries a
-                    // Retry-After, matching `abuse_limiter::map_limiter_result`.
-                    // The resend delay window is `forgot_password::Entity::DELAY_TIME`
-                    // (60s), which the message text above also promises.
                     .with_retry_after(60));
             }
         }
@@ -258,9 +166,7 @@ pub async fn generate(
         }
     }
 
-    // Generate a fresh plaintext code, store only its keyed hash, and email the
-    // plaintext. The plaintext never touches the database (audit: "brute-forceable
-    // plaintext reset codes" — fixed in Phase 3d).
+    // Store only the keyed hash; the plaintext is emailed but never persisted.
     let code = forgot_password::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
     if let Err(err) = forgot_password::Entity::regenerate(pool, user_id, code_hash).await {
@@ -273,8 +179,6 @@ pub async fn generate(
     }
 
     info!(user_id, email = %payload.email, "Recovery email sent");
-    // SC-006: identical body/status to the unknown-email branch above. The
-    // message deliberately does NOT confirm the email exists.
     Ok(uniform_success_response())
 }
 
@@ -285,7 +189,6 @@ pub async fn verify(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1VerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Throttle code-guessing. Fail-closed: a store error denies the attempt.
     let key_prefix = format!("forgot_password_verify:{}", secure_ip);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
@@ -314,10 +217,6 @@ pub async fn verify(
     };
     let user_id = verification.user_id;
 
-    // Make the emailed code single-use (audit F#9): delete its row NOW so it
-    // can't be replayed against `verify` or used by the legacy `reset` path.
-    // The password is NOT changed here — that requires the freshly-issued
-    // reset_token, which we return below.
     if let Err(err) = forgot_password::Entity::consume_code(&state.sea_db, user_id).await {
         error!(user_id, email = %payload.email, "Failed to consume forgot-password code: {}", err);
         return Err(err);
@@ -336,8 +235,7 @@ pub async fn reset(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1ResetPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Shares the verify bucket so an attacker can't reset-vote their way past
-    // the verify limiter (or vice-versa). Fail-closed.
+    // Intentionally shares the verify bucket — do not rename to a reset-specific key.
     let key_prefix = format!("forgot_password_verify:{}", secure_ip);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
@@ -347,15 +245,8 @@ pub async fn reset(
             .with_message("Password and confirm password do not match"));
     }
 
-    // V-HIGH-4: the password can ONLY be changed through the one-time
-    // `reset_token` issued by `verify`. That token is bound to a user and is
-    // atomically consumed here (single-use removal). There is NO fallback to a
-    // raw emailed `code` + `email`: `/request`, `/verify` and `/reset` are
-    // independently-reachable routes, so accepting the emailed code at `/reset`
-    // would let an attacker who merely intercepted the reset email skip
-    // `/verify` entirely and take over the account. The `reset_token` is a
-    // required (non-optional) field on `V1ResetPayload`, so a tokenless request
-    // fails at deserialization before reaching this handler.
+    // Password change requires the single-use reset_token; never add a code+
+    // email fallback here — that would let an email-interceptor skip /verify.
     let user_id = match reset_token::take(&payload.reset_token).await? {
         Some(id) => id,
         None => {
@@ -365,9 +256,6 @@ pub async fn reset(
         }
     };
 
-    // Reset password in the database. `reset` runs in a transaction that deletes
-    // any remaining code row for the user before updating the password, so the
-    // row is consumed as part of this flow even if a stale one lingered.
     match forgot_password::Entity::reset(&state.sea_db, user_id, payload.password.clone()).await {
         Ok(_) => {
             info!(user_id, "Password reset in database");
@@ -389,30 +277,18 @@ pub async fn reset(
 mod tests {
     use super::*;
 
-    // SC-006: the `/request` handler must NOT leak whether an email is
-    // registered. Both the known-email success path and the unknown-email
-    // short-circuit return `uniform_success_response()`, so an attacker probing
-    // emails cannot distinguish a hit from a miss by body or status. We assert
-    // this at the unit level by calling the shared helper twice (it is the
-    // single source of the response for both branches) and proving the outputs
-    // are byte-identical — i.e. the same constant shape is used, and it carries
-    // no existence signal.
     #[test]
     fn uniform_success_response_is_stable_and_non_leaking() {
         let (status_known, body_known) = uniform_success_response();
         let (status_unknown, body_unknown) = uniform_success_response();
 
-        // 1. Same HTTP status for both branches.
         assert_eq!(status_known, status_unknown);
         assert_eq!(status_known, StatusCode::OK);
 
-        // 2. Byte-identical JSON bodies.
         let known = serde_json::to_value(&*body_known).unwrap();
         let unknown = serde_json::to_value(&*body_unknown).unwrap();
         assert_eq!(known, unknown);
 
-        // 3. The message must NOT confirm existence (no "doesn't exist",
-        //    no "sent successfully", no "verified"). It must be conditional.
         let msg = known["message"].as_str().unwrap().to_lowercase();
         assert!(
             msg.contains("if an account exists"),
@@ -428,38 +304,22 @@ mod tests {
         );
     }
 
-    // SC-006 regression guard: the old leak shape ("Email doesn't exist",
-    // status from ErrorCode::RecordNotFound) must NOT match the uniform
-    // response. If a future edit accidentally re-introduces the oracle, this
-    // test fails — the uniform body must never equal an error body.
     #[test]
     fn uniform_response_differs_from_old_record_not_found_leak() {
         let (status, body) = uniform_success_response();
         let leak =
             ErrorResponse::new(ErrorCode::RecordNotFound).with_message("Email doesn't exist");
 
-        // The success status must not be the leak's status.
         assert_ne!(status, StatusCode::NOT_FOUND);
-        // And the bodies must differ (one is a success JSON, the other an error).
         let success = serde_json::to_value(&*body).unwrap();
         let leak_body = serde_json::to_value(&leak).unwrap_or(serde_json::Value::Null);
         assert_ne!(success, leak_body);
     }
 
-    // SC-006 timing-oracle hardening: the unknown-email branch must now do an
-    // Argon2 hash so its CPU cost approximates the known-email branch. We can't
-    // measure "the handler ran a hash" without a server, but we CAN assert the
-    // pure helper exists, runs, produces a valid Argon2id PHC string (proving
-    // real KDF work happened — not a no-op), and is deterministic in shape —
-    // so the two branches' CPU distributions overlap modulo the SMTP residual.
     #[test]
     fn equalize_unknown_email_work_runs_real_argon2() {
         let hash = equalize_unknown_email_work();
 
-        // A valid Argon2id PHC string starts with this prefix and is non-empty
-        // — proving generate_hash actually ran the KDF rather than short-
-        // circuiting. If someone replaces the body with a cheap no-op (e.g. a
-        // String::from), this fails.
         assert!(
             hash.starts_with("$argon2"),
             "equalize_unknown_email_work must produce an Argon2 PHC string, got: {hash}"
@@ -467,17 +327,8 @@ mod tests {
         assert!(!hash.is_empty());
     }
 
-    // The dummy hash must use a CONSTANT input + constant Argon2 params so the
-    // per-request CPU cost is fixed (no input-length or param variance between
-    // requests). If a future edit switches it to a random-length password or
-    // changes the params per call, the cost — and thus the timing signal — would
-    // vary, partially reopening the oracle.
     #[test]
     fn dummy_hash_uses_constant_cost() {
-        // The OUTPUT PHC strings are NOT byte-identical: Argon2id uses a fresh
-        // RANDOM salt per hash, so only the salt+hash tail differs. The
-        // cost-defining params segment (m=,t=,p=) IS constant, which is what
-        // fixes the per-request CPU cost — assert that instead of full equality.
         let a = equalize_unknown_email_work();
         let b = equalize_unknown_email_work();
         assert!(
@@ -496,34 +347,24 @@ mod tests {
             params_a, params_b,
             "Argon2 cost params (m/t/p) must be constant so per-request CPU cost is fixed"
         );
-        // The salt+hash tail MUST differ (proves a fresh random salt per call —
-        // a fixed salt would itself be a weakness).
         assert_ne!(
             a, b,
             "two Argon2id hashes must differ due to the random salt"
         );
     }
 
-    // SC-006 end-to-end (no DB): the response returned to the caller is
-    // byte-identical regardless of which branch ran, AND both branches now
-    // perform a hash. We assert the response shape is unchanged by the added
-    // equalization work — the hash must never leak into the body.
     #[test]
     fn uniform_response_unaffected_by_equalization_work() {
-        // Simulate the unknown branch: run the equalizer, then build the
-        // uniform response exactly as the handler does.
         let _ = equalize_unknown_email_work(); // result dropped, as in handler
         let (status, body) = uniform_success_response();
 
         assert_eq!(status, StatusCode::OK);
         let v = serde_json::to_value(&*body).unwrap();
-        // The hash result must NOT appear anywhere in the response body.
         let body_str = v.to_string();
         assert!(
             !body_str.contains("$argon2"),
             "equalization hash must not leak into the uniform response body"
         );
-        // Exactly one key, the conditional message — no existence signal added.
         assert_eq!(v.as_object().unwrap().len(), 1);
         assert!(v["message"]
             .as_str()

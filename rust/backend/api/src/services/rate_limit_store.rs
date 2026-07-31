@@ -1,11 +1,6 @@
-//! SQLite L2 durability for the in-memory rate-limit store.
-//!
-//! [`InMemoryStore`] is the enforcement engine (L1) — every request mutates it
-//! in-process. This module adds a durable SQLite backing (L2): the store is
-//! hydrated from `rate_limit_state` at boot, and a background task periodically
-//! flushes a snapshot back, so active blocks/counters survive a restart.
-//! Enforcement stays in-memory; this layer only adds durability via buffered,
-//! periodic (batched) writes — no DB write happens on the request hot path.
+//! SQLite L2 durability for the in-memory rate-limit store. Enforcement stays
+//! in-process (L1); this layer only periodically flushes a snapshot so blocks
+//! survive a restart. Do NOT add a DB write to the request hot path.
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,7 +16,6 @@ const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS rate_limit_state (
     block_until_at INTEGER NOT NULL DEFAULT 0
 )";
 
-/// How often the flush task writes the in-memory snapshot back to SQLite.
 const FLUSH_INTERVAL_SECS: u64 = 10;
 
 fn epoch_now() -> i64 {
@@ -31,7 +25,6 @@ fn epoch_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// Create the L2 table if it does not exist. Best-effort: a failure only logs.
 pub async fn ensure_table(db: &DatabaseConnection) {
     if let Err(e) = db
         .execute(Statement::from_string(DatabaseBackend::Sqlite, CREATE_TABLE))
@@ -41,7 +34,6 @@ pub async fn ensure_table(db: &DatabaseConnection) {
     }
 }
 
-/// Load all rows as snapshots (filtering expired ones is done by `restore`).
 pub async fn load(db: &DatabaseConnection) -> Vec<BucketSnapshot> {
     match db
         .query_all(Statement::from_sql_and_values(
@@ -73,8 +65,6 @@ pub async fn load(db: &DatabaseConnection) -> Vec<BucketSnapshot> {
     }
 }
 
-/// Spawn the periodic L2 flush task. Owns a clone of the DB handle and the L1
-/// store; runs for the process lifetime. Errors are non-fatal (logged).
 pub fn spawn_flush_task(db: DatabaseConnection, store: Arc<InMemoryStore>) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(Duration::from_secs(FLUSH_INTERVAL_SECS));
@@ -88,7 +78,6 @@ pub fn spawn_flush_task(db: DatabaseConnection, store: Arc<InMemoryStore>) {
     });
 }
 
-/// Upsert the live snapshots and prune fully-expired rows.
 async fn flush(db: &DatabaseConnection, snaps: &[BucketSnapshot]) -> Result<(), DbErr> {
     let now = epoch_now();
     db.execute(Statement::from_sql_and_values(

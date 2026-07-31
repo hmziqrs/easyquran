@@ -7,10 +7,6 @@ use sea_orm::{
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-/// Process-global in-memory route cache (replaces the prior Redis SETs). Keyed
-/// by `{known_routes_key}:{pattern}` / `{blocked_routes_key}:{pattern}` so the
-/// two logical sets share one map without collision. Readers consult this
-/// directly; there is no Redis round-trip on the default build.
 static ROUTE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 fn route_cache() -> &'static Mutex<HashMap<String, String>> {
@@ -162,10 +158,9 @@ impl Entity {
             .await
     }
 
-    /// Rebuild the process-global route cache from the DB. `known_routes_key`
-    /// and `blocked_routes_key` are used as namespace prefixes for the two
-    /// logical sets (previously Redis SET keys). The whole rebuild happens
-    /// under one lock acquisition so a reader never observes a half-built cache.
+    // Rebuild must stay atomic (one lock for retain + repopulate): release the
+    // lock mid-pass and a reader sees an empty cache and treats blocked routes
+    // as unblocked.
     pub async fn sync_all_to_cache(
         db: &DatabaseConnection,
         known_routes_key: &str,
@@ -179,7 +174,6 @@ impl Entity {
         let mut cache = route_cache()
             .lock()
             .map_err(|e| format!("route cache lock poisoned: {e}"))?;
-        // Drop only this cache's namespaces, leaving any unrelated keys intact.
         cache.retain(|k, _| !(k.starts_with(known_routes_key) || k.starts_with(blocked_routes_key)));
 
         for route in routes {

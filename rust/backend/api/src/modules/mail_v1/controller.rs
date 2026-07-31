@@ -1,15 +1,3 @@
-//! Mail webhook receiver + admin suppression-list management.
-//!
-//! - `POST /mail/v1/webhook/{provider}` (public, CSRF-exempt) — receives an
-//!   operator-owned bounce/complaint event (a Cloudflare Worker consuming the
-//!   Email Service event Queue, HMAC-signed), verifies it, dedups for 24h, and
-//!   upserts a suppression row. Cloudflare does NOT natively POST signed email
-//!   events, so this receiver authenticates an envelope our reference Worker
-//!   emits under a shared secret.
-//! - `GET/POST/DELETE /mail/v1/suppression` (admin-only, always-on) — manage the
-//!   suppression list by hand. Always-on so SMTP-only deployments can clear
-//!   stale rows too.
-
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
@@ -28,7 +16,6 @@ use crate::{
 
 use super::validator::{V1CreateSuppression, V1DeleteSuppression, V1ListSuppressionsQuery};
 
-// Imports used by the webhook receiver.
 use {
     crate::{
         db::sea_models::email_suppression::{SuppressionReason, SuppressionUpsert},
@@ -37,9 +24,6 @@ use {
     sha2::{Digest, Sha256},
 };
 
-// ── Admin suppression CRUD ────────────────────────────────────────────────
-
-/// List suppression entries (filter by reason/permanent/search, paginated).
 pub async fn list_suppressions(
     State(state): State<AppState>,
     Query(q): Query<V1ListSuppressionsQuery>,
@@ -56,7 +40,6 @@ pub async fn list_suppressions(
     ))
 }
 
-/// Manually add a recipient to the suppression list.
 pub async fn create_suppression(
     State(state): State<AppState>,
     Json(payload): Json<V1CreateSuppression>,
@@ -80,8 +63,6 @@ pub async fn create_suppression(
     ))
 }
 
-/// Remove a recipient from the suppression list. `removed` is false if there was
-/// nothing to delete.
 pub async fn delete_suppression(
     State(state): State<AppState>,
     Query(q): Query<V1DeleteSuppression>,
@@ -95,9 +76,6 @@ pub async fn delete_suppression(
     Ok(Json(json!({ "removed": removed, "recipient": recipient })))
 }
 
-// ── Inbound webhook ───────────────────────────────────────────────────────
-
-/// Receive an operator-owned bounce/complaint/delivery event.
 #[allow(unused_variables)]
 pub async fn mail_webhook_receiver(
     State(state): State<AppState>,
@@ -116,22 +94,14 @@ pub async fn mail_webhook_receiver(
         };
 
         let parsed = state.mailer.verify_webhook(event).await.map_err(|e| {
-            // Generic client message — the raw MailError can echo internal config
-            // detail; keep it server-side only.
             tracing::warn!(error = %e, "mail webhook verification failed");
             crate::services::mail::mail_error_to_response(&e)
         })?;
 
-        // Apply FIRST, THEN claim the dedup key (at-least-once). If apply fails
-        // (e.g. a transient DB blip returns 500) we have NOT claimed the dedup
-        // key, so the Worker's retry re-processes the event instead of being
-        // acknowledged as a duplicate and permanently lost. The upsert is
-        // idempotent, so a genuine duplicate still converges to one row.
+        // Apply BEFORE claiming the dedup key: if apply fails (500) the retry re-processes
+        // instead of being acked as a duplicate and permanently lost. Upsert is idempotent.
         apply_mail_event(&state, &parsed).await?;
 
-        // Replay protection: record a successfully-processed event for 24h so a
-        // Worker retry (duplicate delivery) is a cheap no-op. Best-effort on a
-        // Redis blip — the upsert above is idempotent either way.
         let mut hasher = Sha256::new();
         hasher.update(body.as_ref());
         let dedup_key = format!(
@@ -148,8 +118,6 @@ pub async fn mail_webhook_receiver(
     }
 }
 
-/// Upsert a suppression row for bounce/complaint events; delivered is a metric
-/// only.
 async fn apply_mail_event(
     state: &AppState,
     ev: &crate::services::mail::provider::ParsedMailEvent,

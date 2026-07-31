@@ -11,9 +11,7 @@ pub struct Model {
     pub post_id: i32,
     #[sea_orm(select_as = "text")]
     pub access_type: PostAccessType,
-    /// Price in cents (only set when access_type = "paid")
     pub price_cents: Option<i32>,
-    /// ISO 4217 currency code
     pub currency: Option<String>,
     pub created_at: DateTimeWithTimeZone,
 }

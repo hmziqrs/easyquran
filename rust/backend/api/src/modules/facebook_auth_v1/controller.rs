@@ -23,13 +23,6 @@ use super::{
     validator::{FacebookCallbackQuery, FacebookExchangeRequest, FacebookUserInfo},
 };
 
-/// `GET /auth/facebook/v1/login` — begin the Facebook OAuth flow.
-///
-/// Builds the Facebook authorize URL with a session-bound CSRF `state` (no
-/// PKCE — Facebook does not support it), persists the state single-use in the
-/// in-memory state store, and redirects the browser to Facebook. The state secret binds the authorize
-/// request to THIS browser session so a state issued to one session cannot
-/// complete the flow in another (login-CSRF / state-replay defense).
 #[debug_handler]
 #[instrument(skip(_state, session), fields(result))]
 pub async fn facebook_login(
@@ -45,8 +38,7 @@ pub async fn facebook_login(
         .add_scope(Scope::new("public_profile".to_string()))
         .url();
 
-    // Bind the CSRF state to THIS browser session. Empty PKCE verifier: Facebook
-    // does not use PKCE; an empty value round-trips as `None` at consume time.
+    // Empty PKCE verifier: Facebook has no PKCE; "" round-trips as `None` at consume time.
     let session_id = oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(&session_id, csrf_token.secret(), "", None)?;
 
@@ -56,12 +48,6 @@ pub async fn facebook_login(
     Ok(Redirect::temporary(auth_url.as_str()))
 }
 
-/// `GET /auth/facebook/v1/callback` — server-side flow completion.
-///
-/// Facebook redirects here with `?code=...&state=...`. We consume the
-/// single-use state, exchange the code for an access token, fetch the user's
-/// Graph profile, resolve/link/create the local user, start a session, and
-/// redirect to the SPA success route.
 #[debug_handler]
 #[instrument(skip(state, auth, query), fields(user_id, result))]
 pub async fn facebook_callback(
@@ -77,7 +63,6 @@ pub async fn facebook_callback(
     let client = get_facebook_oauth_client()?;
     let token_result = client
         .exchange_code(AuthorizationCode::new(query.code))
-        // No PKCE verifier: Facebook does not support PKCE.
         .request_async(async_http_client)
         .await
         .map_err(|e| {
@@ -99,11 +84,6 @@ pub async fn facebook_callback(
     Ok(Redirect::temporary(&redirect_url))
 }
 
-/// `POST /auth/facebook/v1/exchange` — client-side flow.
-///
-/// The SPA receives the code+state directly from Facebook (redirect_uri pointed
-/// at the SPA), then POSTs them here. We exchange + verify + server-session and
-/// return the user as JSON.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id, result))]
 pub async fn facebook_exchange(
@@ -157,9 +137,7 @@ pub async fn facebook_user_info(auth: AuthSession) -> Result<impl IntoResponse, 
     }
 }
 
-/// Fetch the user's Facebook profile via the Graph API `/me` endpoint.
 async fn fetch_facebook_user_info(
-    // V-MED-10: reuse the shared, timeout-configured client from AppState.
     http_client: &reqwest::Client,
     access_token: &str,
 ) -> Result<FacebookUserInfo, ErrorResponse> {
@@ -183,15 +161,6 @@ async fn fetch_facebook_user_info(
         })
 }
 
-/// Resolve the Facebook identity to a local user and start a server session.
-///
-/// Facebook does NOT expose a per-email `verified` flag on `/me`. Graph API
-/// returns only the user's primary, deliverable email — per Facebook's policy
-/// these are verified at signup. We therefore treat a present `email` as
-/// IdP-verified (the same trust basis Google's `verified_email=true` provides)
-/// and apply the shared `find_or_create_user_for_oauth` email-verified gate. If
-/// the user denied the email permission (`email` is `None`) we cannot create or
-/// link an account and fail closed.
 async fn finish_facebook_login(
     state: &AppState,
     auth: &mut AuthSession,
@@ -212,7 +181,7 @@ async fn finish_facebook_login(
         &user_info.id,
         email,
         name,
-        // Graph API emails are verified by Facebook policy (see fn doc).
+        // email_verified: Graph API emails are policy-verified.
         true,
     )
     .await?;

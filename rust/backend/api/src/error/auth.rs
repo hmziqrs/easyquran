@@ -1,9 +1,6 @@
-//! Error handling for the authentication module
-
 use crate::error::{response::IntoErrorResponse, ErrorCode, ErrorResponse};
 use rux_auth::{AuthError, AuthErrorCode};
 
-/// Implementation of IntoErrorResponse for the rux_auth::AuthError type
 impl IntoErrorResponse for AuthError {
     fn into_error_response(self) -> ErrorResponse {
         match self.code() {
@@ -41,7 +38,6 @@ impl IntoErrorResponse for AuthError {
     }
 }
 
-/// Implementation of From<AuthError> for ErrorResponse
 impl From<AuthError> for ErrorResponse {
     fn from(err: AuthError) -> Self {
         err.into_error_response()

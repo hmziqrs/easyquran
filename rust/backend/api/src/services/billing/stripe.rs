@@ -1,5 +1,3 @@
-//! Stripe billing provider integration.
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -7,17 +5,8 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: every outbound Stripe call goes through this client (built once in
-// `new` with timeouts, or overridden via `with_http_client` with the shared
-// AppState client). Never a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
-/// Stripe billing provider.
-///
-/// CRYP-ENC-012: `secret_key` and `webhook_secret` are held in
-/// `secrecy::SecretString` so they are never printed by a derived `Debug` (or
-/// an accidental `{:?}`/tracing call). Access is opt-in via `expose_secret()`.
-/// See the manual `Debug` impl below.
 pub struct StripeProvider {
     pub secret_key: SecretString,
     pub webhook_secret: SecretString,
@@ -30,8 +19,6 @@ impl StripeProvider {
         Self {
             secret_key: secret_key.into(),
             webhook_secret: webhook_secret.into(),
-            // Production by default; override with the sandbox/test host via
-            // STRIPE_API_BASE_URL for development. See plan Phase 6f.
             base_url: std::env::var("STRIPE_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api.stripe.com".to_string()),
             http_client: build_http_client(),
@@ -43,20 +30,11 @@ impl StripeProvider {
         self
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`
-    /// so this provider participates in connection pooling and never pins a
-    /// handler thread on a hanging upstream.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
     }
 
-    /// Best-effort fetch of a subscription's `current_period_end` (Unix seconds).
-    /// Used on `checkout.session.completed`, whose object is the Checkout Session
-    /// (which has no period end), to obtain the linked subscription's
-    /// authoritative end so the paywall can admit the paying subscriber. Returns
-    /// `None` on any failure (network, non-2xx, missing field) → fail-closed
-    /// (audit F#11 round-2).
     async fn fetch_subscription_period_end(&self, subscription_id: &str) -> Option<i64> {
         let client = self.http_client.clone();
         let url = format!("{}/v1/subscriptions/{}", self.base_url, subscription_id);
@@ -77,11 +55,6 @@ impl StripeProvider {
     }
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. The secret fields are already
-// `SecretString` (which redacts on its own), but we mirror the
-// `ObjectStorageConfig` discipline explicitly so the rendered struct shows the
-// NON-secret wiring (base_url) for diagnostics while the credential fields are
-// always `<redacted>`. No tracing/error path logs the whole struct.
 impl std::fmt::Debug for StripeProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StripeProvider")
@@ -155,11 +128,6 @@ impl BillingProvider for StripeProvider {
         success_url: &str,
         cancel_url: &str,
     ) -> Result<CheckoutSession, BillingError> {
-        // One-time payment (mode=payment) with an inline price_data so the
-        // post's server-validated price is what's charged — never trusting a
-        // client-supplied amount. metadata is echoed back in the webhook for
-        // operator visibility, but the *grant* is driven by the server-bound
-        // checkout intent (plan 1f/4e), not this metadata.
         let product_name = format!("Post #{}", post_id);
         let unit_amount = amount_cents.to_string();
         let user_id_s = user_id.to_string();
@@ -292,8 +260,6 @@ impl BillingProvider for StripeProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Stripe-Signature: "t=<unix_seconds>,v1=<hex>". The tag is
-        // HMAC-SHA256(secret, "{t}.{raw_body}") and is compared to v1.
         let sig_header = super::webhook_util::header_str(&event.headers, "Stripe-Signature")
             .ok_or_else(|| {
                 BillingError::WebhookVerification("Missing Stripe-Signature header".into())
@@ -316,7 +282,6 @@ impl BillingProvider for StripeProvider {
             BillingError::WebhookVerification("Stripe-Signature missing v1=".into())
         })?;
 
-        // Replay protection (CWE-294): reject timestamps outside the skew window.
         let ts_secs: i64 = ts_str.parse().map_err(|_| {
             BillingError::WebhookVerification("Stripe timestamp not an integer".into())
         })?;
@@ -326,7 +291,6 @@ impl BillingProvider for StripeProvider {
             )));
         }
 
-        // Sign "<t>.<raw_body>" and compare the v1 tag in constant time.
         let mut signed = Vec::with_capacity(ts_str.len() + 1 + event.payload.len());
         signed.extend_from_slice(ts_str.as_bytes());
         signed.push(b'.');
@@ -350,13 +314,6 @@ impl BillingProvider for StripeProvider {
         let is_checkout = event_type == super::provider::canonical::CHECKOUT_COMPLETED;
         let obj = &data["data"]["object"];
 
-        // Resolve the billing period end. `customer.subscription.*` events carry
-        // it inline as a Unix-seconds integer; `checkout.session.completed` does
-        // NOT (the object is the Checkout Session), so fetch the linked
-        // subscription's authoritative `current_period_end`. Without a real value
-        // the paywall fails closed (audit F#11 round-2); fetch failures degrade
-        // to None. Only subscription checkouts carry a `subscription` to fetch —
-        // one-time-payment (per-post) checkouts intentionally have None.
         let current_period_end =
             match super::provider::period_end_to_unix(obj.get("current_period_end")) {
                 Some(ts) => Some(ts),
@@ -367,19 +324,14 @@ impl BillingProvider for StripeProvider {
             };
 
         Ok(ParsedWebhook {
-            // Stripe's event taxonomy IS the canonical vocabulary the dispatch
-            // keys on, so it passes through unchanged.
             event_type,
             customer_id: obj["customer"].as_str().unwrap_or_default().to_string(),
             subscription_id: obj["subscription"].as_str().map(String::from),
             payment_id: obj["payment_intent"].as_str().map(String::from),
             current_period_end,
-            // The checkout session id (cs_…) on `checkout.session.completed` is
-            // exactly the `session_id` we stored the intent under at checkout.
             checkout_session_id: is_checkout
                 .then(|| obj["id"].as_str().map(String::from))
                 .flatten(),
-            // Stripe status strings are already our canonical vocabulary.
             subscription_status: obj["status"].as_str().map(String::from),
             user_id: obj["metadata"]["user_id"]
                 .as_str()
@@ -458,8 +410,6 @@ mod tests {
         assert_eq!(provider.base_url, "http://localhost:9999");
     }
 
-    /// Build a Stripe webhook event signed exactly as Stripe signs it:
-    /// `Stripe-Signature: t=<ts>,v1=<HMAC-SHA256(secret, "{ts}.{body}")>`.
     fn signed_stripe_event(payload: &[u8], ts: i64, secret: &str) -> WebhookEvent {
         let ts_str = ts.to_string();
         let mut msg = Vec::with_capacity(ts_str.len() + 1 + payload.len());
@@ -489,7 +439,6 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let genuine = signed_stripe_event(body, now, &secret);
 
-        // Genuine signature → accepted, and the payment id is parsed out.
         let parsed = provider
             .verify_webhook(genuine.clone())
             .await
@@ -497,14 +446,12 @@ mod tests {
         assert_eq!(parsed.event_type, "invoice.payment_succeeded");
         assert_eq!(parsed.payment_id.as_deref(), Some("pi_1"));
 
-        // Tampered body carrying the ORIGINAL signature → rejected.
         let mut tampered = genuine.clone();
         tampered.payload =
             br#"{"type":"invoice.payment_succeeded","data":{"object":{"payment_intent":"pi_EVIL"}}}"#
                 .to_vec();
         assert!(provider.verify_webhook(tampered).await.is_err());
 
-        // Missing Stripe-Signature header → rejected.
         let no_sig = WebhookEvent {
             provider: "stripe".into(),
             payload: body.to_vec(),
@@ -513,17 +460,11 @@ mod tests {
         };
         assert!(provider.verify_webhook(no_sig).await.is_err());
 
-        // Stale timestamp (outside the replay window) → rejected even though the
-        // signature is otherwise valid: re-sign at the stale ts to isolate the
-        // freshness check from the signature check.
         let stale_ts = now - (webhook_util::MAX_SKEW_SECS + 60);
         let stale = signed_stripe_event(body, stale_ts, &secret);
         assert!(provider.verify_webhook(stale).await.is_err());
     }
 
-    /// Stripe's event taxonomy IS the canonical vocabulary, so it passes through
-    /// unchanged. The checkout session id on `checkout.session.completed` is the
-    /// value the intent is keyed by (audit F#11 reference path).
     #[tokio::test]
     async fn verify_webhook_checkout_completed_round_trips_session_id() {
         let secret = "whsec_abc".to_string();
@@ -533,9 +474,7 @@ mod tests {
         let evt = signed_stripe_event(body, now, &secret);
 
         let parsed = provider.verify_webhook(evt).await.expect("must verify");
-        // Passthrough: Stripe's native type is already canonical.
         assert_eq!(parsed.event_type, "checkout.session.completed");
-        // The checkout session id (cs_…) round-trips to the stored intent key.
         assert_eq!(parsed.checkout_session_id.as_deref(), Some("cs_test_1"));
         assert_eq!(parsed.subscription_id.as_deref(), Some("sub_1"));
         assert_eq!(parsed.user_id, Some(42));

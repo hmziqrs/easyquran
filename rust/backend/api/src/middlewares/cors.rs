@@ -3,13 +3,10 @@ use tracing::{instrument, warn};
 
 use crate::error::CorsError;
 
-/// Guard that rejects requests from origins not present in the configured
-/// CORS allowlist, returning a standardized error response.
 #[instrument(skip(req, next), fields(origin))]
 pub async fn origin_guard(req: Request, next: Next) -> Result<Response, CorsError> {
     let origin_header = match req.headers().get(axum::http::header::ORIGIN) {
         None => {
-            // Non-CORS or same-origin request; nothing to enforce here.
             return Ok(next.run(req).await);
         }
         Some(header) => header,

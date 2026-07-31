@@ -232,13 +232,6 @@ pub async fn create(
 
     tracing::Span::current().record("file_size", file_bytes.len() as i64);
 
-    // M-7: enforce a MIME + extension ALLOWLIST before any bytes are hashed or
-    // persisted. Without this, an `image/svg+xml` (or any extension) is stored
-    // and served verbatim — the `image` crate only decodes jpeg/png/webp/tiff,
-    // so an SVG's raw `<script>` bytes pass straight through to S3 (stored XSS).
-    // `validate_upload` rejects SVG and any non-allowlisted content-type
-    // outright, and resolves the final (mime, extension) pair from the
-    // allowlist rather than trusting client-supplied headers.
     let (declared_mime, declared_extension) =
         validate_upload(mime_type.as_deref(), original_name.as_deref()).map_err(|msg| {
             warn!(error = %msg, "Rejected upload: file type not on allowlist");
@@ -253,10 +246,8 @@ pub async fn create(
     tracing::Span::current().record("content_hash", &content_hash);
 
     if let Some(existing) = Media::find_by_hash(&state.sea_db, &content_hash).await? {
-        // M-5: only return the existing record to its owner or staff. A non-owner
-        // otherwise learns another user's object key / bucket / public URL by
-        // uploading a byte-identical file. For everyone else, fall through and
-        // create a fresh record rather than leaking the existing one.
+        // Cross-user duplicates aren't returned: fall through creates a fresh record so
+        // the other user's object key/URL isn't leaked.
         if can_view_media(&uploader, existing.uploader_id) {
             info!(
                 media_id = existing.id,
@@ -276,21 +267,8 @@ pub async fn create(
 
     tracing::Span::current().record("is_duplicate", false);
 
-    // ── image-moderation (issue #9): classify the uploaded image BEFORE it is
-    // persisted to S3. The gate is a no-op unless the `image-moderation` feature
-    // is compiled in AND a provider is configured on AppState
-    // (`IMAGE_MODERATION_ENABLED=true` + `IMAGE_MODERATION_URL`). When a
-    // provider is configured and returns `safe: false`, the upload is rejected
-    // with `OperationNotAllowed` (403) before any bytes reach object storage.
-    //
-    // Fail-open policy: if the configured provider is unreachable or returns a
-    // malformed response, the upload is ALLOWED and the error is logged. This
-    // keeps the upload pipeline available during a moderation-provider outage;
-    // an operator who prefers fail-closed can move this `Err` branch to a
-    // rejection. Mirrors the graceful-degradation used for FCM (missing config
-    // skips push rather than blocking notifications). When the feature is on but
-    // no provider is configured (`state.storage.image_moderator` is None), the block is
-    // skipped entirely and uploads behave as the NoOp default.
+    // Fail-open on provider error is intentional: a closed gate turns any moderation
+    // outage into a full upload outage.
     if let Some(moderator) = state.storage.image_moderator.as_ref() {
         match moderator.classify(&file_bytes, &declared_mime).await {
             Ok(verdict) => {
@@ -323,7 +301,6 @@ pub async fn create(
         }
     }
 
-    // Derive useful metadata if it was not supplied
     if metadata.width.is_none() || metadata.height.is_none() {
         if let Ok(dimensions) = imagesize::blob_size(&file_bytes) {
             debug!(
@@ -362,12 +339,6 @@ pub async fn create(
     let mut variants_to_upload: Vec<image_optimizer::OptimizedImage> = Vec::new();
 
     if content_type.starts_with("image/") {
-        // DOS-MEDIA-OPTIMIZER: the `image` crate work (full RGBA decode +
-        // Lanczos3 resize/re-encode for up to 6 variants + a second validation
-        // decode per variant) is CPU/memory-heavy. Run it on a blocking thread
-        // so a burst of uploads cannot pin the async worker and head-of-line
-        // block every other request sharing that thread. (The /media/v1 nest is
-        // also rate-limited and OPTIMIZER_MAX_PIXELS is capped.)
         let req_bytes = file_bytes.clone();
         let req_metadata = metadata.clone();
         let req_reference = metadata.reference_type;
@@ -402,8 +373,8 @@ pub async fn create(
         };
 
         if let image_optimizer::OptimizationOutcome::Optimized(result) = optimization_outcome {
-            // M-7 defense-in-depth: never trust a Content-Type/extension that
-            // is not on the allowlist, even if it comes from the optimizer.
+            // Optimizer output is unsanitized: a disguised upload (e.g. SVG as PNG) can
+            // decode to a non-allowlisted type — re-check blocks storing/serving it.
             if !is_allowed_mime(&result.original.mime_type) {
                 warn!(
                     optimizer_mime = %result.original.mime_type,
@@ -563,24 +534,10 @@ pub async fn create(
     ))
 }
 
-// ── M-5 / M-6 ownership decision helpers ───────────────────────────────────
-//
-// The media model has no public/shared visibility flag, so access defaults to
-// owner-or-staff. Keeping these decisions as pure functions lets the security
-// policy be unit-tested without spinning up a DB / AuthSession (mirrors the
-// post_v1 `can_mutate_post` pattern).
-
-/// Whether `viewer` may read a specific media record owned by `uploader_id`
-/// (None = null-owner / system media). Owner or moderator/staff+ only.
 pub fn can_view_media(viewer: &user::Model, uploader_id: Option<i32>) -> bool {
     uploader_id == Some(viewer.id) || viewer.is_moderator()
 }
 
-/// Whether `actor` may delete a media record owned by `uploader_id`
-/// (None = null-owner / system media).
-///
-/// M-6: null-owner (system) media may only be deleted by staff; owned media may
-/// be deleted by its owner or staff.
 pub fn can_delete_media(actor: &user::Model, uploader_id: Option<i32>) -> bool {
     match uploader_id {
         Some(owner_id) => owner_id == actor.id || actor.is_moderator(),
@@ -601,9 +558,6 @@ pub async fn view(
 
     match Media::find_by_id_with_usage(&state.sea_db, media_id).await? {
         Some(media) => {
-            // M-5: the media model has no public/shared visibility flag, so
-            // access defaults to owner-or-admin. A non-owner non-staff viewer
-            // must not read another user's object key / bucket / public URL.
             if !can_view_media(&viewer, media.media.uploader_id) {
                 return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
                     .with_message("You can only view media you uploaded"));
@@ -641,10 +595,6 @@ pub async fn find_with_query(
             .with_message("Authentication required to list media")
     })?;
 
-    // M-5: scope to the caller by default. Only moderator/staff+ may target a
-    // different uploader id; for everyone else `into_query` overrides any
-    // supplied `uploader_id` with their own id so they cannot enumerate other
-    // users' object keys, buckets, public URLs, or usage.
     let query = payload.0.into_query(caller.id, caller.is_moderator());
     let page = query.page.unwrap_or(1);
 
@@ -706,11 +656,6 @@ pub async fn list_usage_details(
         .await
         .map_err(ErrorResponse::from)?
         .into_iter()
-        // M-5: scope to media the caller owns. A non-privileged caller must not
-        // learn the object key / bucket / public URL or usage of another user's
-        // (or null-owner system) media. Privileged (moderator/staff+) callers
-        // see everything. Out-of-scope ids are dropped from the result set
-        // rather than 403'd so the endpoint remains useful for bulk lookups.
         .filter(|media| caller.is_moderator() || media.uploader_id == Some(caller.id))
         .map(|media| (media.id, media))
         .collect::<HashMap<_, _>>();
@@ -786,9 +731,7 @@ pub async fn list_usage_details(
 
         let entry = usage_map.entry(media_id).or_default();
 
-        // M-5: skip usage for media the caller cannot see (filtered out of
-        // `media_records` above) so usage details of another user's media are
-        // never emitted.
+        // Not dead: media_records is authz-filtered above, so dropped media_ids are absent here.
         if !media_records.contains_key(&media_id) {
             continue;
         }
@@ -870,11 +813,6 @@ pub async fn delete(
             ErrorResponse::new(ErrorCode::FileNotFound).with_message("Media record not found")
         })?;
 
-    // M-6: ownership gate. Seed/system media has `uploader_id = None`; the old
-    // `if let Some(owner_id)` check skipped the block for null-owner media,
-    // letting any authenticated author delete it. Now:
-    //   - null-owner (system) media: only moderator/staff+ may delete;
-    //   - owned media: only the owner (or a moderator/staff+) may delete.
     if !can_delete_media(&uploader, media.uploader_id) {
         return Err(
             ErrorResponse::new(ErrorCode::OperationNotAllowed).with_message(
@@ -917,11 +855,6 @@ pub async fn delete(
     ))
 }
 
-/// Derive the stored object-key extension from a filename/MIME hint, applying
-/// the M-7 allowlist. Any client-supplied extension that is not on the list is
-/// stripped; if the filename yields nothing usable we fall back to the MIME
-/// subtype, again only if it is allowlisted. This keeps arbitrary extensions
-/// (svg, html, exe, …) out of the S3 key.
 #[allow(dead_code)]
 fn infer_extension(filename: Option<&str>, mime_type: Option<&str>) -> Option<String> {
     if let Some(name) = filename {
@@ -967,8 +900,6 @@ mod tests {
 
     use crate::db::sea_models::user::UserRole;
 
-    /// Build a `user::Model` with the given id and role. Only `id` and `role`
-    /// drive the ownership decisions; everything else is benign defaults.
     fn make_user(id: i32, role: UserRole) -> user::Model {
         let now = chrono::Utc
             .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
@@ -994,22 +925,15 @@ mod tests {
         }
     }
 
-    // ── M-5: view / list scoping ──────────────────────────────────────────
-
-    // (a) User A cannot view user B's media.
     #[test]
     fn non_owner_cannot_view_others_media() {
         let author_a = make_user(7, UserRole::Author);
         let author_b = make_user(8, UserRole::Author);
-        // A owns media uploaded by 7; B must not view it.
         assert!(can_view_media(&author_a, Some(7)));
         assert!(!can_view_media(&author_b, Some(7)));
-        // Symmetric the other way.
         assert!(!can_view_media(&author_a, Some(8)));
     }
 
-    // Staff (moderator and above) may view anyone's media, including
-    // null-owner system media.
     #[test]
     fn staff_can_view_any_media() {
         let moderator = make_user(100, UserRole::Moderator);
@@ -1019,23 +943,18 @@ mod tests {
         assert!(can_view_media(&moderator, None));
     }
 
-    // A non-owner author is also denied view of null-owner (system) media.
     #[test]
     fn non_owner_cannot_view_null_owner_media() {
         let author = make_user(7, UserRole::Author);
         assert!(!can_view_media(&author, None));
     }
 
-    // ── M-6: delete ownership ─────────────────────────────────────────────
-
-    // (b) A non-admin cannot delete null-owner (system) media.
     #[test]
     fn non_admin_cannot_delete_null_owner_media() {
         let author = make_user(7, UserRole::Author);
         assert!(!can_delete_media(&author, None));
     }
 
-    // (c) An admin / staff can delete null-owner media.
     #[test]
     fn admin_can_delete_null_owner_media() {
         let moderator = make_user(100, UserRole::Moderator);
@@ -1044,7 +963,6 @@ mod tests {
         assert!(can_delete_media(&admin, None));
     }
 
-    // Owner may delete their own media; another author may not.
     #[test]
     fn only_owner_or_staff_deletes_owned_media() {
         let author_a = make_user(7, UserRole::Author);
@@ -1056,8 +974,6 @@ mod tests {
         assert!(can_delete_media(&admin, Some(7)));
     }
 
-    // ── M-7: extension inference is allowlist-backed ──────────────────────
-
     #[test]
     fn infer_extension_keeps_png() {
         assert_eq!(
@@ -1066,7 +982,6 @@ mod tests {
         );
     }
 
-    // (d) SVG extension is stripped by infer_extension — never reaches the key.
     #[test]
     fn infer_extension_strips_svg() {
         assert_eq!(
@@ -1075,12 +990,9 @@ mod tests {
         );
     }
 
-    // A junk extension falls back to the MIME subtype only when allowlisted.
     #[test]
     fn infer_extension_falls_back_to_allowlisted_mime() {
-        // svg+xml subtype is not allowlisted either, so still None.
         assert_eq!(infer_extension(Some("a.dat"), Some("image/svg+xml")), None);
-        // png subtype is allowlisted.
         assert_eq!(
             infer_extension(Some("a.dat"), Some("image/png")),
             Some("png".to_string())

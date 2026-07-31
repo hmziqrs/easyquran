@@ -27,8 +27,6 @@ async fn get_db_url() -> String {
     env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./data/easyquran.db?mode=rwc".to_string())
 }
 
-/// Create the parent directory of the SQLite file so the first connection can
-/// create it.
 fn ensure_data_dir(db_url: &str) {
     let path = db_url
         .strip_prefix("sqlite:")
@@ -45,7 +43,6 @@ fn ensure_data_dir(db_url: &str) {
 
 #[tokio::main]
 async fn main() {
-    // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
     let cli = Cli::parse();
@@ -92,7 +89,7 @@ async fn main() {
 
             println!("Applied migrations:");
             for migration in applied_migrations {
-                println!("  Migration applied"); // Just print a simple message
+                println!("  Migration applied");
             }
 
             println!("Pending migrations:");
@@ -101,7 +98,7 @@ async fn main() {
                 .expect("Failed to get pending migrations");
 
             for migration in pending_migrations {
-                println!("  Migration pending"); // Just print a simple message
+                println!("  Migration pending");
             }
         }
         None => {

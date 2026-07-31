@@ -1,10 +1,3 @@
-//! Integration tests for the public `/quran/v1` API (§10 — HTTP section).
-//!
-//! Builds the real public branch (routes + observability + rate limit + client
-//! IP + public CORS) over a stub `AppState` carrying a real `QuranStore`, then
-//! drives it with one-shot requests. Helpers are defined inline because
-//! `#[cfg(test)]`-gated lib modules are not visible to integration-test crates.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -122,10 +115,6 @@ async fn app() -> axum::Router {
     app_over(state().await)
 }
 
-/// Build the public `/quran/v1` branch over a caller-supplied state (so a test
-/// can inject e.g. a mock `public_url` for `/scripts`). Mirrors production
-/// layering (§8.2): search split out with its own limit; coarse IP-only branch
-/// limit; CompressionLayer present (compression-vs-ETag/conditional-GET exercised).
 fn app_over(state: AppState) -> axum::Router {
     let ip_source = state.settings.http.ip_source.clone();
     let quran = quran_v1::routes().merge(
@@ -141,9 +130,6 @@ fn app_over(state: AppState) -> axum::Router {
     axum::Router::new().nest("/quran/v1", public).with_state(state)
 }
 
-/// The FULL merged app (private authed branch + public /quran/v1 sibling),
-/// mirroring `main` minus `RouteBlockerLayer` (which needs the app DB and is
-/// not the split-regression risk). Used for Phase 1a exit #2.
 async fn full_app() -> axum::Router {
     let state = state().await;
     let cookie_key = tower_sessions::cookie::Key::derive_from(state.settings.cookie_key.as_bytes());
@@ -181,7 +167,6 @@ async fn full_app() -> axum::Router {
         .with_state(state)
 }
 
-/// Public branch builder used by [`full_app`] (shares layering with [`app_over`]).
 fn app_over_public(state: &AppState, ip_source: axum_client_ip::ClientIpSource) -> axum::Router<AppState> {
     let quran = quran_v1::routes().merge(
         quran_v1::search_route().layer(rate_limit::rate_limit_layer(state, 1_000_000, 60)),
@@ -233,7 +218,7 @@ async fn surahs_list_shape_and_count() {
     assert_eq!(st, StatusCode::OK);
     let arr = data(&body).as_array().unwrap();
     assert_eq!(arr.len(), 114);
-    assert!(arr[0].get("ayahCount").is_some()); // camelCase, not ayas
+    assert!(arr[0].get("ayahCount").is_some());
     assert!(arr[0].get("ayas").is_none());
     assert_eq!(arr[0]["place"], "meccan");
     assert!(body.get("contentVersion").is_some());
@@ -262,7 +247,6 @@ async fn surah_ayahs_inclusive_and_ordered() {
     assert_eq!(ayahs[0]["juz"], 1);
     let (_, body, _) = get("/quran/v1/surahs/2/ayahs?from=1&to=3").await;
     assert_eq!(data(&body)["ayahs"].as_array().unwrap().len(), 3);
-    // from > to → 400, never clamped (§6.1).
     assert_eq!(
         get("/quran/v1/surahs/2/ayahs?from=3&to=1").await.0,
         StatusCode::BAD_REQUEST
@@ -276,7 +260,6 @@ async fn single_ayah_redirect_alias_and_400() {
     assert_eq!(data(&body)["key"], "1:1");
     assert!(!data(&body)["text"].as_str().unwrap().is_empty());
 
-    // /ayahs/2:255 → 308 to /quran/v1/ayahs/2/255 (§6.1).
     let resp = app()
         .await
         .oneshot(Request::builder().uri("/quran/v1/ayahs/2:255").body(Body::empty()).unwrap())
@@ -285,7 +268,6 @@ async fn single_ayah_redirect_alias_and_400() {
     assert_eq!(resp.status(), StatusCode::PERMANENT_REDIRECT);
     assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/quran/v1/ayahs/2/255");
 
-    // /ayahs/abc → 400.
     assert_eq!(get("/quran/v1/ayahs/abc").await.0, StatusCode::BAD_REQUEST);
 }
 
@@ -301,13 +283,11 @@ async fn ayahs_keys_and_global_range() {
     let (_, body, _) = get("/quran/v1/ayahs?fromGlobal=1&toGlobal=7").await;
     assert_eq!(data(&body)["ayahs"].as_array().unwrap().len(), 7);
 
-    // whole-Qur'an range without pagination → 400 range_too_large (§6.1).
     assert_eq!(
         get("/quran/v1/ayahs?fromGlobal=1&toGlobal=6236").await.0,
         StatusCode::BAD_REQUEST
     );
 
-    // paginated: exactly 300, nextCursor set.
     let (_, body, _) = get("/quran/v1/ayahs?fromGlobal=1&toGlobal=6236&limit=300").await;
     assert_eq!(data(&body)["ayahs"].as_array().unwrap().len(), 300);
     assert_eq!(data(&body)["range"]["nextCursor"], 301);
@@ -317,7 +297,6 @@ async fn ayahs_keys_and_global_range() {
 async fn script_param_default_and_validation() {
     let (_, _, h_uth) = get("/quran/v1/ayahs/1/1").await;
     let (_, _, h_sc) = get("/quran/v1/ayahs/1/1?script=simple-clean").await;
-    // two requests differing only in script have different ETags (§8.1).
     assert_ne!(h_uth.get(header::ETAG).unwrap(), h_sc.get(header::ETAG).unwrap());
     assert_eq!(get("/quran/v1/ayahs/1/1?script=bogus").await.0, StatusCode::BAD_REQUEST);
 }
@@ -370,7 +349,6 @@ async fn conditional_get_returns_304() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
-    // §10: a 304 repeats the SAME ETag + Cache-Control (not merely their presence).
     assert_eq!(resp.headers().get(header::ETAG).unwrap(), etag.as_str());
     assert_eq!(resp.headers().get(header::CACHE_CONTROL).unwrap(), cc.as_str());
     assert_eq!(resp.headers().get(header::VARY).unwrap(), "Accept-Encoding");
@@ -379,9 +357,6 @@ async fn conditional_get_returns_304() {
 #[tokio::test]
 async fn cors_preflight_wildcard_no_credentials() {
     let app = app().await;
-    // Preflight: wildcard origin, If-None-Match allowed, no credentials (§8.2).
-    // (Expose-Headers is NOT carried on preflight — it is an actual-response
-    // directive; verified on the GET below.)
     let resp = app
         .clone()
         .oneshot(
@@ -414,7 +389,6 @@ async fn cors_preflight_wildcard_no_credentials() {
         .to_lowercase();
     assert!(allow_h.contains("if-none-match"));
 
-    // Actual GET with an Origin: Expose-Headers must let JS read ETag (§8.2).
     let resp = app
         .oneshot(
             Request::builder()
@@ -493,7 +467,6 @@ async fn random_date_is_immutable_cache() {
 
 #[tokio::test]
 async fn search_results_ordered_with_highlights_and_limits() {
-    // "الحمد" percent-encoded — appears in 1:2 and elsewhere.
     let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF";
     let (st, body, headers) = get(&format!("/quran/v1/search?q={q}")).await;
     assert_eq!(st, StatusCode::OK);
@@ -511,12 +484,10 @@ async fn search_results_ordered_with_highlights_and_limits() {
             "each hit has at least one highlight"
         );
     }
-    assert_eq!(d["limit"], 20); // default
+    assert_eq!(d["limit"], 20);
     assert_eq!(d["query"], "الحمد");
-    // search is cacheable (§8.1).
     assert!(headers.contains_key(header::ETAG));
 
-    // 2-scalar query → 400 (§7.1). "من" = م ن.
     let two = "%D9%85%D9%86";
     assert_eq!(
         get(&format!("/quran/v1/search?q={two}")).await.0,
@@ -526,31 +497,26 @@ async fn search_results_ordered_with_highlights_and_limits() {
 
 #[tokio::test]
 async fn error_envelope_matches_section_6_4() {
-    // 404 — `{error:{code,message,detail}}`, message always present (§6.4).
     let (st, body, _) = get("/quran/v1/surahs/115").await;
     assert_eq!(st, StatusCode::NOT_FOUND);
     assert_eq!(body["error"]["code"], "not_found");
     assert!(!body["error"]["message"].as_str().unwrap().is_empty());
 
-    // 400 unknown script.
     let (st, body, _) = get("/quran/v1/ayahs/1/1?script=bogus").await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
     assert!(body["error"]["code"].is_string());
     assert!(!body["error"]["message"].as_str().unwrap().is_empty());
 
-    // 400 range_too_large with detail {max, requested}.
     let (st, body, _) = get("/quran/v1/ayahs?fromGlobal=1&toGlobal=6236").await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
     assert_eq!(body["error"]["code"], "range_too_large");
     assert_eq!(body["error"]["detail"]["max"], 300);
     assert_eq!(body["error"]["detail"]["requested"], 6236);
 
-    // 400 unknown query param (QQuery maps the extractor rejection to the envelope).
     let (st, body, _) = get("/quran/v1/surahs?bogus=1").await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
     assert!(body["error"]["code"].is_string());
 
-    // 400 non-numeric path (QPath rejection → envelope, not axum's stock body).
     let (st, body, _) = get("/quran/v1/surahs/abc").await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
     assert!(body["error"]["code"].is_string());
@@ -570,7 +536,6 @@ async fn cursor_pagination_page_two() {
     assert_eq!(ayahs.len(), 300);
     assert_eq!(ayahs[0]["globalIndex"], 301, "page 2 starts at global 301");
     assert_eq!(data(&body2)["range"]["nextCursor"], 601);
-    // cursor past the window end → 400 (no empty 200 terminal).
     assert_eq!(
         get("/quran/v1/ayahs?fromGlobal=1&toGlobal=7&cursor=999").await.0,
         StatusCode::BAD_REQUEST
@@ -579,7 +544,6 @@ async fn cursor_pagination_page_two() {
 
 #[tokio::test]
 async fn conditional_get_on_search_and_head_method() {
-    // /search conditional GET (distinct ETag path via respond_cached_with_etag).
     let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF";
     let (_, _, headers) = get(&format!("/quran/v1/search?q={q}")).await;
     let etag = headers.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
@@ -595,11 +559,9 @@ async fn conditional_get_on_search_and_head_method() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
-    // §10: the 304 repeats the same ETag captured on the 200 (search path).
     assert_eq!(resp.headers().get(header::ETAG).unwrap(), etag.as_str());
     assert_eq!(resp.headers().get(header::VARY).unwrap(), "Accept-Encoding");
 
-    // HEAD mirrors GET headers with an empty body (§10).
     let resp = app()
         .await
         .oneshot(
@@ -619,14 +581,9 @@ async fn conditional_get_on_search_and_head_method() {
 
 #[tokio::test]
 async fn cors_no_cookies_on_every_public_route() {
-    // Phase 1a exit #1 (§10): table-driven over the router's ENUMERATED routes —
-    // every public route has wildcard CORS, no credentials, no Set-Cookie, and a
-    // Quran route added to the router without an entry here FAILS this test.
     use wiremock::matchers::{method, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    // Mock the object store so `/scripts`'s HEAD checks resolve instantly — the
-    // CORS contract must cover `/scripts` too, so it stays in the table.
     let server = MockServer::start().await;
     let state = state_with_public_url(&server.uri()).await;
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
@@ -643,11 +600,6 @@ async fn cors_no_cookies_on_every_public_route() {
         .await;
     let app = app_over(state);
 
-    // One concrete request per `.route(` in mod.rs (§6.1). Keep in sync with
-    // `modules/quran_v1/mod.rs` — `routes()` + `search_route()` (+ the openapi
-    // route). `/ayahs/1:1` is the 308 verseKey alias. The `…/ayahs` variants
-    // carry `?limit=300` so a large unit (e.g. manzil 1 ≈ 890 ayahs) returns 200
-    // instead of `range_too_large` (400) — the CORS contract is route-level.
     #[rustfmt::skip]
     let routes = [
         "/quran/v1/surahs", "/quran/v1/surahs/1", "/quran/v1/surahs/1/ayahs?limit=300",
@@ -662,7 +614,6 @@ async fn cors_no_cookies_on_every_public_route() {
         "/quran/v1/openapi.json",
         "/quran/v1/search?q=%D8%A7%D9%84%D8%AD%D9%85%D8%AF",
     ];
-    // Adding a `.route(` to mod.rs without a table entry trips this assertion.
     let route_count = include_str!("../src/modules/quran_v1/mod.rs").matches(".route(").count();
     assert_eq!(
         routes.len(),
@@ -703,8 +654,6 @@ async fn cors_no_cookies_on_every_public_route() {
     }
 }
 
-/// §10 No-SQLite-after-startup (structural bullet): modules/quran_v1/ must
-/// contain no reference to sea_db / sqlx / rusqlite / SQLite types.
 #[test]
 fn modules_quran_v1_has_no_sqlite_refs() {
     let srcs: [&str; 6] = [
@@ -730,21 +679,14 @@ fn modules_quran_v1_has_no_sqlite_refs() {
     }
 }
 
-/// Phase 1a exit #2 (§10, "not optional"): the split must NOT have broken the
-/// private authed branch — a session cookie is still issued, off-origin is
-/// still rejected, and the public `/quran/v1` branch stays cookie-free +
-/// wildcard-CORS even under an off-origin request.
 #[tokio::test]
 async fn phase_1a_auth_regression_on_merged_router() {
-    // csrf_guard derives its signing key from the COOKIE_KEY env var directly
-    // (not from AppState), so the merged-router harness must provide it.
     std::env::set_var(
         "COOKIE_KEY",
         "test_cookie_key_padded_to_more_than_32_bytes_for_tests",
     );
     let app = full_app().await;
 
-    // (1) POST /csrf/v1/generate (CSRF-exempt) bootstraps a session → Set-Cookie.
     let resp = app
         .clone()
         .oneshot(
@@ -762,7 +704,6 @@ async fn phase_1a_auth_regression_on_merged_router() {
         "a session cookie must still be issued on the private branch"
     );
 
-    // (2) origin_guard still rejects an off-origin request on the PRIVATE branch.
     let resp = app
         .clone()
         .oneshot(
@@ -780,7 +721,6 @@ async fn phase_1a_auth_regression_on_merged_router() {
         resp.status()
     );
 
-    // (3) The PUBLIC branch has wildcard CORS + no Set-Cookie even off-origin.
     let resp = app
         .oneshot(
             Request::builder()
@@ -802,9 +742,6 @@ async fn phase_1a_auth_regression_on_merged_router() {
     );
 }
 
-/// §10 HTTP: `/scripts` omits any artifact whose HEAD fails (here a
-/// Content-Length != sizeBytes) and exposes the verified one; Axum never serves
-/// the SQLite bytes (metadata only).
 #[tokio::test]
 async fn scripts_omits_failed_head_artifacts() {
     use wiremock::matchers::{method, path_regex};
@@ -815,14 +752,12 @@ async fn scripts_omits_failed_head_artifacts() {
     let uthmani_size = state.quran.artifacts.uthmani.size_bytes;
     let sc_size = state.quran.artifacts.simple_clean.size_bytes;
 
-    // uthmani: 200 + correct Content-Length → advertised.
     let cl_u = uthmani_size.to_string();
     Mock::given(method("HEAD"))
         .and(path_regex(r".*/uthmani/.*"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
-    // simple-clean: 200 but WRONG Content-Length → omitted (size mismatch).
     let cl_sc = (sc_size + 1).to_string();
     Mock::given(method("HEAD"))
         .and(path_regex(r".*/simple-clean/.*"))
@@ -846,14 +781,9 @@ async fn scripts_omits_failed_head_artifacts() {
     let scripts = body["data"]["scripts"].as_array().unwrap();
     assert_eq!(scripts.len(), 1, "only the verified (uthmani) artifact remains");
     assert_eq!(scripts[0]["id"], "uthmani");
-    // metadata only — no SQLite bytes in the body.
     assert!(scripts[0]["downloadUrl"].as_str().unwrap().ends_with(".sqlite"));
 }
 
-/// §10 HTTP: `/scripts` happy path — when BOTH artifacts HEAD-verify, the
-/// response advertises EXACTLY [uthmani, simple-clean] (the omission path is
-/// covered by [`scripts_omits_failed_head_artifacts`]) and is long-cached, not
-/// no-store.
 #[tokio::test]
 async fn scripts_happy_path_advertises_both_artifacts() {
     use wiremock::matchers::{method, path_regex};
@@ -863,7 +793,6 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let state = state_with_public_url(&server.uri()).await;
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
-    // Both artifacts: 200 + correct identity Content-Length → advertised.
     Mock::given(method("HEAD"))
         .and(path_regex(r".*/uthmani/.*"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
@@ -903,15 +832,12 @@ async fn scripts_happy_path_advertises_both_artifacts() {
             "download URL points at the artifact, not its bytes"
         );
     }
-    // Fully-verified list is long-cached (§5.1), NOT no-store (the partial path).
     assert_eq!(
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::ARABIC_CACHE)
     );
 }
 
-/// §10 HTTP: ranges are validated against the unit's length — out-of-bounds
-/// `from`/`to` are 400 and never silently clamped (§6.1). Surah 2 has 286 ayahs.
 #[tokio::test]
 async fn range_out_of_bounds_is_400_not_clamped() {
     assert_eq!(
@@ -924,27 +850,19 @@ async fn range_out_of_bounds_is_400_not_clamped() {
         StatusCode::BAD_REQUEST,
         "from beyond the unit length must be rejected"
     );
-    // Same rule on a navigation family's `…/ayahs` route.
     assert_eq!(
         get("/quran/v1/juzs/1/ayahs?from=1&to=9999").await.0,
         StatusCode::BAD_REQUEST
     );
-    // Sanity: an in-bounds range still succeeds (the check is not over-eager).
     assert_eq!(get("/quran/v1/surahs/2/ayahs?from=1&to=3").await.0, StatusCode::OK);
 }
 
-/// §10 Verbatim: the served `text` equals the store's verbatim source value
-/// byte-for-byte. The lib golden-digest test pins store↔sqlite source, so this
-/// transitively pins API↔source — catching any controller/DTO/serialization
-/// mutation of the text at the HTTP layer.
 #[tokio::test]
 async fn api_response_text_equals_store_source() {
     use ruxlog::quran::Script;
 
     let state = state().await;
     let app = app_over(state.clone());
-    // (surah, ayah, script): 1:1 basmala-as-first-ayah, 2:1 embedded basmala,
-    // 112:1, and a mid-Qur'an ayah — across both scripts.
     for (s, a, script) in [
         (1u16, 1u16, Script::Uthmani),
         (2u16, 1u16, Script::Uthmani),
@@ -971,11 +889,9 @@ async fn api_response_text_equals_store_source() {
     }
 }
 
-/// §7.1/§10 Search: the result window never exceeds `limit`; a fixed query is
-/// deterministic (identical ordered keys across calls); `offset` paginates.
 #[tokio::test]
 async fn search_respects_limit_offset_and_is_stable() {
-    let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF"; // الحمد
+    let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF";
     let (_, b1, _) = get(&format!("/quran/v1/search?q={q}&limit=5")).await;
     let d1 = data(&b1);
     assert_eq!(d1["limit"], 5);
@@ -990,7 +906,6 @@ async fn search_respects_limit_offset_and_is_stable() {
         .map(|r| r["ayah"]["key"].as_str().unwrap().to_string())
         .collect();
 
-    // Pure function of the corpus → identical ordered keys on repeat.
     let (_, b2, _) = get(&format!("/quran/v1/search?q={q}&limit=5")).await;
     let keys2: Vec<String> = data(&b2)["results"]
         .as_array()
@@ -1000,7 +915,6 @@ async fn search_respects_limit_offset_and_is_stable() {
         .collect();
     assert_eq!(keys1, keys2, "fixed query must be deterministic");
 
-    // offset=1 begins at the 2nd base hit (page consistency).
     if keys1.len() > 1 {
         let (_, bo, _) = get(&format!("/quran/v1/search?q={q}&limit=5&offset=1")).await;
         let first_at_offset =

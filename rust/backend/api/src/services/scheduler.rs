@@ -6,14 +6,8 @@ use tracing::{error, info, instrument, warn};
 use crate::db::sea_models::post::{ActiveModel, Column, Entity, PostStatus};
 use crate::state::AppState;
 
-/// Interval between scheduler ticks in seconds.
 const TICK_INTERVAL_SECS: u64 = 60;
 
-/// Start the scheduled post publisher as a background tokio task.
-///
-/// Every `TICK_INTERVAL_SECS` seconds this task queries for posts whose
-/// `status` is `Draft` and `published_at` is set to a time in the past
-/// (or exactly now).  Matching posts are transitioned to `Published`.
 pub fn start_scheduler(state: AppState) {
     tokio::spawn(run(state));
     info!("Scheduled post publisher started (interval: {TICK_INTERVAL_SECS}s)");
@@ -34,7 +28,6 @@ async fn run(state: AppState) {
 async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
     let now = chrono::Utc::now().fixed_offset();
 
-    // Find draft posts whose scheduled publish time has arrived.
     let due_posts = Entity::find()
         .filter(Column::Status.eq(PostStatus::Draft))
         .filter(Column::PublishedAt.is_not_null())
@@ -51,12 +44,9 @@ async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
         let post_id = post.id;
         let author_id = post.author_id;
 
-        // SCHED-TOCTOU-AUTHZ: re-assert at fire time that the author may still
-        // publish. The request-time handler checked ownership + Author role when
-        // the post was scheduled, but a background tick must not publish on
-        // behalf of a principal who has since been demoted below Author or whose
-        // account was removed (orphaned FK) — otherwise the scheduler is a
-        // TOCTOU bypass of the publish authorization.
+        // Fire-time re-authorization: the request-time check is a TOCTOU window.
+        // A demoted or removed author must not be published by a background tick,
+        // so re-assert the Author role before flipping status.
         let author_ok = match crate::db::sea_models::user::Entity::find_by_id(author_id)
             .one(&state.sea_db)
             .await

@@ -6,7 +6,6 @@ use tracing::warn;
 
 use crate::error::ErrorResponse;
 
-/// Wrapper around axum's Multipart that converts rejections into our ErrorResponse
 #[derive(Debug)]
 pub struct ValidatedMultipart(pub Multipart);
 

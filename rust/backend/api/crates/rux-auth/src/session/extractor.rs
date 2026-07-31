@@ -1,5 +1,3 @@
-//! AuthSession extractor for Axum handlers
-
 use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
@@ -10,38 +8,15 @@ use super::state::AuthSessionState;
 use crate::error::{AuthError, AuthErrorCode};
 use crate::traits::{AuthBackend, AuthUser};
 
-/// Server-side session revocation check.
-///
-/// V-HIGH-2: `user_sessions.revoked_at` alone does NOT invalidate the live
-/// tower-sessions record in the session store, so a revoked cookie keeps
-/// authenticating until its inactivity expiry. Implementors that can reach a
-/// revocation source (a DB lookup on `revoked_at`, or an in-process revocation
-/// set) override [`SessionRevocation::is_session_revoked`]; the
-/// extractor calls it on every authenticated request and, if it returns `true`,
-/// deletes the session and treats the caller as unauthenticated.
-///
-/// The default implementation returns `false` so backends that opt out of
-/// server-side revocation keep compiling unchanged.
-///
-/// **Fail-open policy:** on a backend error (e.g. a store/DB blip) the extractor
-/// logs a loud `warn!` and treats the session as *not* revoked. This mirrors the
-/// rate limiter's fail-open behavior and avoids a mass lockout during a
-/// transient revocation-store outage — at the cost of a revoked session briefly
-/// staying live until the store recovers. The DB `revoked_at` stamp remains as
-/// an audit record and a secondary signal regardless.
 #[async_trait::async_trait]
 pub trait SessionRevocation {
-    /// Return `true` if the given tower-session id has been administratively
-    /// revoked and must stop authenticating immediately.
     async fn is_session_revoked(&self, _tower_session_id: &str) -> Result<bool, AuthError> {
         Ok(false)
     }
 }
 
-/// Constant-time byte equality. Used when comparing the stored
-/// `session_auth_hash` snapshot against the user's current hash so a timing
-/// side-channel cannot leak bytes of the (password) hash. A length mismatch
-/// returns `false` immediately — the length is fixed/public per scheme.
+/// Constant-time equality: a `==` on auth hashes leaks bytes via timing.
+/// Do not simplify to `==`.
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -53,59 +28,32 @@ fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
-/// Session key for storing auth state
 const SESSION_KEY: &str = "rux_auth";
 
-/// The main authentication session extractor
-///
-/// Use this in your handlers to access the authenticated user and session state.
-///
-/// ```ignore
-/// async fn handler(auth: AuthSession<MyBackend>) -> impl IntoResponse {
-///     if let Some(user) = &auth.user {
-///         // User is authenticated
-///     }
-/// }
-/// ```
 pub struct AuthSession<B: AuthBackend> {
-    /// The authenticated user (None if not logged in)
     pub user: Option<B::User>,
 
-    /// The session state (None if not logged in)
     pub state: Option<AuthSessionState<<B::User as AuthUser>::Id>>,
 
-    /// The underlying tower-sessions session
     session: Session,
 
-    /// The auth backend for database operations
     backend: B,
 }
 
 impl<B: AuthBackend + SessionRevocation> AuthSession<B> {
-    /// Create a new AuthSession from a backend and session
-    ///
-    /// This is useful when constructing AuthSession outside of the extractor
-    /// (e.g., in middleware that extracts State and Session separately).
     pub async fn new(backend: B, session: Session) -> Self {
-        // Try to load auth state from session
         let auth_state: Option<AuthSessionState<<B::User as AuthUser>::Id>> =
             session.get(SESSION_KEY).await.ok().flatten();
 
-        // If we have auth state, load the user
         let user = if let Some(ref state) = auth_state {
             match backend.get_user(&state.user_id).await {
                 Ok(Some(user)) => {
-                    // Invalidate if the credential changed since login (password
-                    // reset/change) or the user identity was swapped underneath us.
+                    // Invalidate if the credential changed since login (e.g. password reset).
                     if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
                         tracing::warn!("Session auth hash mismatch — invalidating stale session");
                         let _ = session.delete().await;
                         None
                     } else if is_revoked(&backend, &session).await {
-                        // V-HIGH-2: server-side revocation. The session was
-                        // terminated out-of-band (e.g. via sessions_terminate);
-                        // kill the live record so the cookie stops authenticating
-                        // immediately.
                         tracing::info!(
                             user_id = ?state.user_id,
                             "Session revoked server-side — invalidating"
@@ -117,7 +65,6 @@ impl<B: AuthBackend + SessionRevocation> AuthSession<B> {
                     }
                 }
                 Ok(None) => {
-                    // User was deleted - clear the session
                     let _ = session.delete().await;
                     None
                 }
@@ -130,7 +77,6 @@ impl<B: AuthBackend + SessionRevocation> AuthSession<B> {
             None
         };
 
-        // If user load failed, clear auth state
         let auth_state = if user.is_some() { auth_state } else { None };
 
         Self {
@@ -142,37 +88,15 @@ impl<B: AuthBackend + SessionRevocation> AuthSession<B> {
     }
 }
 
-/// Methods available for any [`AuthBackend`] (no revocation awareness required).
-/// Revocation invalidation lives only in `new` (the `AuthBackend +
-/// SessionRevocation` block above, which calls `is_session_revoked`); keeping
-/// `backend()` / `update_ban_status()` / etc. here lets generic middleware
-/// (the ban/role/TOTP checks in `check_requirements`, which is bounded only by
-/// `AuthBackend`) compile.
 impl<B: AuthBackend> AuthSession<B> {
-    /// Borrow the underlying tower-sessions [`Session`].
-    ///
-    /// Exposed so callers can reach session-level primitives such as the session
-    /// id — e.g. to bind an OAuth `state` token to the caller's session, closing
-    /// the login-CSRF gap where a state issued to one session is replayed in
-    /// another.
     pub fn session(&self) -> &Session {
         &self.session
     }
 
-    /// Log in a user, creating session state
-    ///
-    /// Creates a new session with the user's current verification status.
     pub async fn login(&mut self, user: &B::User) -> Result<(), AuthError> {
         let mut state = AuthSessionState::new(user.id(), user.email_verified());
         state.session_auth_hash = user.session_auth_hash().to_vec();
 
-        // Rotate the session id on privilege change (anonymous → authenticated)
-        // to defeat session fixation: an attacker who planted a known session
-        // cookie cannot ride along after the victim authenticates. `cycle_id`
-        // preserves the in-memory record's data while deleting the old id from
-        // the store and arming a fresh id (persisted when the session saves at
-        // the end of the response). The auth state is then written under the new
-        // id, and the frontend re-fetches its CSRF token (bound to the new id).
         self.session.cycle_id().await?;
         self.session.insert(SESSION_KEY, &state).await?;
         self.user = Some(user.clone());
@@ -183,7 +107,6 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Log in with device/IP metadata
     pub async fn login_with_metadata(
         &mut self,
         user: &B::User,
@@ -194,7 +117,6 @@ impl<B: AuthBackend> AuthSession<B> {
             .with_metadata(device, ip_address);
         state.session_auth_hash = user.session_auth_hash().to_vec();
 
-        // Rotate the session id on login — see `login()` for rationale.
         self.session.cycle_id().await?;
         self.session.insert(SESSION_KEY, &state).await?;
         self.user = Some(user.clone());
@@ -205,7 +127,6 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Log out, destroying the session
     pub async fn logout(&mut self) -> Result<(), AuthError> {
         if let Some(state) = &self.state {
             self.backend.on_logout(&state.user_id).await?;
@@ -218,7 +139,6 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Update the cached ban status
     pub async fn update_ban_status(
         &mut self,
         status: &crate::traits::BanStatus,
@@ -230,7 +150,6 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Refresh verification status from current user state
     pub async fn refresh_verification(&mut self) -> Result<(), AuthError> {
         if let (Some(user), Some(state)) = (&self.user, &mut self.state) {
             state.refresh_verification(user.email_verified());
@@ -239,7 +158,6 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Touch the session (update last_seen)
     pub async fn touch(&mut self) -> Result<(), AuthError> {
         if let Some(state) = &mut self.state {
             state.touch();
@@ -248,24 +166,20 @@ impl<B: AuthBackend> AuthSession<B> {
         Ok(())
     }
 
-    /// Get the auth backend
     pub fn backend(&self) -> &B {
         &self.backend
     }
 
-    /// Check if a user is authenticated
     pub fn is_authenticated(&self) -> bool {
         self.user.is_some()
     }
 
-    /// Get the user, returning an error if not authenticated
     pub fn user_required(&self) -> Result<&B::User, AuthError> {
         self.user
             .as_ref()
             .ok_or_else(|| AuthError::new(AuthErrorCode::Unauthenticated))
     }
 
-    /// Get the session state, returning an error if not authenticated
     pub fn state_required(
         &self,
     ) -> Result<&AuthSessionState<<B::User as AuthUser>::Id>, AuthError> {
@@ -275,19 +189,10 @@ impl<B: AuthBackend> AuthSession<B> {
     }
 }
 
-/// V-HIGH-2: consult the backend's revocation source for this tower-session id.
-///
-/// Returns `true` only when the backend *definitively* reports the session as
-/// revoked. On a backend error the check **fails open** (returns `false`) and
-/// logs a `warn!` — see [`SessionRevocation`] for the rationale (avoid mass
-/// lockout on a revocation-store blip). The caller is still responsible for
-/// deleting the session record when this returns `true`.
 async fn is_revoked<B>(backend: &B, session: &Session) -> bool
 where
     B: AuthBackend + SessionRevocation,
 {
-    // `session.id()` is `None` until the record has been saved at least once;
-    // an unsaved session has nothing to revoke.
     let Some(id) = session.id() else {
         return false;
     };
@@ -296,9 +201,6 @@ where
         Ok(true) => true,
         Ok(false) => false,
         Err(e) => {
-            // Fail-open: a Redis/DB blip must not lock out every user. The
-            // `revoked_at` audit row and the session's own 14-day inactivity
-            // expiry still bound the window.
             tracing::warn!(
                 error = ?e,
                 tower_session_id = %tower_sid,
@@ -324,25 +226,20 @@ where
                     .with_message("Failed to extract session")
             })?;
 
-        // Get the backend from app state
         let backend = B::from_ref(state);
 
-        // Try to load auth state from session
         let auth_state: Option<AuthSessionState<<B::User as AuthUser>::Id>> =
             session.get(SESSION_KEY).await?;
 
-        // If we have auth state, load the user
         let user = if let Some(ref state) = auth_state {
             match backend.get_user(&state.user_id).await {
                 Ok(Some(user)) => {
-                    // Invalidate if the credential changed since login (password
-                    // reset/change). See `AuthUser::session_auth_hash`.
+                    // Invalidate if the credential changed since login (e.g. password reset).
                     if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
                         tracing::warn!("Session auth hash mismatch — invalidating stale session");
                         let _ = session.delete().await;
                         None
                     } else if is_revoked(&backend, &session).await {
-                        // V-HIGH-2: server-side revocation — see `new()`.
                         tracing::info!(
                             user_id = ?state.user_id,
                             "Session revoked server-side — invalidating"
@@ -354,7 +251,6 @@ where
                     }
                 }
                 Ok(None) => {
-                    // User was deleted - clear the session
                     let _ = session.delete().await;
                     None
                 }
@@ -367,7 +263,6 @@ where
             None
         };
 
-        // If user load failed, clear auth state
         let auth_state = if user.is_some() { auth_state } else { None };
 
         Ok(Self {
@@ -432,11 +327,8 @@ mod tests {
         }
     }
 
-    // Default (no-op) revocation check — `MockBackend` never revokes.
     impl SessionRevocation for MockBackend {}
 
-    /// Backend whose revocation set is an in-memory `Mutex<HashSet>`. Mirrors the
-    /// production revocation check without requiring a live DB.
     #[derive(Clone, Default)]
     struct RevocableBackend {
         revoked: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
@@ -470,9 +362,6 @@ mod tests {
         }
     }
 
-    /// Materialize an anonymous session with a known id and return it, ready to
-    /// be handed to `AuthSession::new`. The `SessionManagerLayer` normally runs
-    /// this lifecycle in production; here we drive it directly.
     async fn anon_session() -> Session {
         let store = Arc::new(MemoryStore::default());
         let session = Session::new(None, store, None);
@@ -481,8 +370,6 @@ mod tests {
         session
     }
 
-    /// Logging in must rotate the session id so an attacker who planted a known
-    /// session cookie cannot ride along after the victim authenticates.
     #[tokio::test]
     async fn login_rotates_the_session_id() {
         let session = anon_session().await;
@@ -496,8 +383,6 @@ mod tests {
         .await
         .unwrap();
 
-        // `login` cycles the id but does not persist it (the layer saves at
-        // response time). Save here to materialize the rotated id.
         auth.session().save().await.unwrap();
         let id_after = auth
             .session()
@@ -509,7 +394,6 @@ mod tests {
         );
     }
 
-    /// Same guarantee on the metadata-bearing login path.
     #[tokio::test]
     async fn login_with_metadata_rotates_the_session_id() {
         let session = anon_session().await;
@@ -535,16 +419,11 @@ mod tests {
         );
     }
 
-    /// V-HIGH-2: after a session is marked revoked in the backend's revocation
-    /// store, a subsequent request carrying the SAME cookie must come back
-    /// unauthenticated. This is the regression test for "terminate session does
-    /// not actually invalidate the live tower-sessions record".
     #[tokio::test]
     async fn revoked_session_no_longer_authenticates() {
         let backend = RevocableBackend::default();
         let session = anon_session().await;
 
-        // Authenticate the session.
         let mut auth: AuthSession<RevocableBackend> =
             AuthSession::new(backend.clone(), session).await;
         auth.login(&MockUser {
@@ -559,34 +438,27 @@ mod tests {
             .id()
             .expect("session id present after save")
             .to_string();
-        // The session was live and authenticated.
         assert!(
             auth.user.is_some(),
             "session must authenticate before revoke"
         );
 
-        // Drop auth but keep the SAME session record (the cookie).
         let session_record = auth.session().clone();
         drop(auth);
 
-        // Out-of-band revoke (this is what sessions_terminate + the revocation store do).
         {
             let mut g = backend.revoked.lock().unwrap();
             g.insert(tower_sid.clone());
         }
 
-        // Next request: re-extract AuthSession from the same session record.
         let next: AuthSession<RevocableBackend> = AuthSession::new(backend, session_record).await;
 
-        // The user MUST now be None — the cookie stopped authenticating.
         assert!(
             next.user.is_none(),
             "a revoked session must not authenticate on the next request"
         );
     }
 
-    /// V-HIGH-2 fail-open: if the revocation source errors, the session stays
-    /// valid rather than mass-locking users on a store blip.
     #[tokio::test]
     async fn revocation_check_failure_is_fail_open() {
         #[derive(Clone)]

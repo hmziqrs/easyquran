@@ -87,10 +87,6 @@ impl Entity {
         Ok(1)
     }
 
-    /// Delete any stored forgot-password code for `user_id` WITHOUT touching the
-    /// password — used by the `verify` step to make the emailed code single-use
-    /// (audit F#9). After this returns, the emailed code can no longer be used
-    /// to reset; the caller issues a fresh single-use `reset_token` instead.
     pub async fn consume_code(conn: &DbConn, user_id: i32) -> DbResult<u64> {
         Self::delete_many()
             .filter(Column::UserId.eq(user_id))
@@ -100,8 +96,6 @@ impl Entity {
             .map_err(Into::into)
     }
 
-    /// Upsert the (already-hashed) code for a user. The caller generates the
-    /// plaintext code, emails it, and passes `hash_code(secret, plaintext)` here.
     pub async fn regenerate(conn: &DbConn, user_id: i32, code_hash: String) -> DbResult<Model> {
         let now = Utc::now().fixed_offset();
 

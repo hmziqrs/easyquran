@@ -1,12 +1,3 @@
-//! Dual-threshold abuse limiter + one-shot dedup.
-//!
-//! The counting/blocking algorithm lives in the [`crate::RateLimitStore`]
-//! implementation (atomic); these free functions wire the store result through
-//! hooks/tracing and apply the documented fail semantics:
-//! - [`check`]: **fail-CLOSED** — a store error yields `Err`.
-//! - [`dedup_nx`]: **fail-OPEN** — a store error yields `true` so a dedup
-//!   outage cannot 5xx the caller.
-
 use std::time::Duration;
 
 use tracing::{debug, error, instrument, warn};
@@ -18,11 +9,11 @@ use crate::store::RateLimitStore;
 #[derive(Clone, Copy, Debug)]
 pub struct AbuseLimiterConfig {
     pub temp_block_attempts: usize,
-    pub temp_block_range: usize,    // seconds
-    pub temp_block_duration: usize, // seconds
-    pub block_retry_limit: usize,   // long threshold
-    pub block_range: usize,         // seconds
-    pub block_duration: usize,      // seconds
+    pub temp_block_range: usize,
+    pub temp_block_duration: usize,
+    pub block_retry_limit: usize,
+    pub block_range: usize,
+    pub block_duration: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,9 +36,6 @@ pub enum LimiterDecision {
     },
 }
 
-/// Check the abuse limiter for `key_prefix`. **Fail-CLOSED**: a store error
-/// yields `Err(GateError)`. A `Blocked` decision is an `Ok` variant — the caller
-/// decides how to respond.
 #[instrument(skip(store, hooks), fields(
     scope = %key_prefix,
     decision,
@@ -118,11 +106,6 @@ pub async fn check(
     Ok(decision)
 }
 
-/// One-shot dedup gate. Returns `true` when the key was newly created (the
-/// caller should proceed) and `false` when it already existed within the window.
-///
-/// **Fail-OPEN**: a store error yields `true`, so a dedup outage cannot 5xx the
-/// caller. The fail-open contract is baked into the `bool` return type.
 pub async fn dedup_nx(store: &dyn RateLimitStore, key: &str, ttl_secs: usize) -> bool {
     match store.set_nx_ex(key, Duration::from_secs(ttl_secs as u64)).await {
         Ok(claimed) => claimed,
@@ -133,8 +116,6 @@ pub async fn dedup_nx(store: &dyn RateLimitStore, key: &str, ttl_secs: usize) ->
     }
 }
 
-/// Release a dedup claim early (best-effort) so a gated operation that failed
-/// after claiming can be retried within the window. Silent on a store error.
 pub async fn release_dedup(store: &dyn RateLimitStore, key: &str) {
     if let Err(err) = store.del(key).await {
         warn!(error = %err, %key, "dedup release failed (fail-open)");
@@ -156,7 +137,6 @@ mod tests {
         block_duration: 86400,
     };
 
-    /// A store that always errors, to prove the fail semantics.
     struct DeadStore;
     #[async_trait::async_trait]
     impl RateLimitStore for DeadStore {

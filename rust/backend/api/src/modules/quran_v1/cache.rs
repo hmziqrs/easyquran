@@ -1,41 +1,24 @@
-//! Conditional-GET + cache headers for the Quran API (§8.1).
-//!
-//! The ETag is **weak** and derived from `contentVersion + canonical-resource-key`
-//! (not the body bytes) so a CDN can validate cached JSON without re-reading it,
-//! and so two requests differing only in `script` do not collide on one ETag.
-//! The shared compression layer varies the encoded bytes for an unchanged
-//! representation, which is legal for a weak validator and illegal for a strong
-//! one — hence `W/`.
-
 use axum::body::Body;
 use axum::http::{header, HeaderMap, Response, StatusCode};
 use serde::Serialize;
 
-/// Arabic content cache (§8.1): short browser TTL (unpurgeable), long shared
-/// TTL (CDN-purgeable) + stale windows.
 pub const ARABIC_CACHE: &str =
     "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800";
 
-/// Search cache (§8.1): pure function of (contentVersion, searchVersion, q,
-/// script, limit, offset).
 pub const SEARCH_CACHE: &str = "public, max-age=60, s-maxage=300";
 
-/// Pinned-by-date resources (§8.5: a supplied `date` is immutable).
 pub const IMMUTABLE_CACHE: &str = "public, max-age=31536000, immutable";
 
-/// Operational endpoints (§6.4, §8.4): a CDN must never pin a failure or a
-/// readiness probe.
 pub const NO_STORE: &str = "no-store";
 
 const VARY: &str = "Accept-Encoding";
 
-/// `W/"<content-version>:<canonical-resource-key>"` (§8.1).
+/// Weak on purpose: the shared compression layer varies bytes for an
+/// unchanged representation; a strong validator would corrupt caches.
 pub fn weak_etag(content_version: &str, canonical_key: &str) -> String {
     format!("W/\"{content_version}:{canonical_key}\"")
 }
 
-/// Compare an `If-None-Match` header value against an ETag, tolerating the weak
-/// `W/` prefix, comma-separated lists, and `*` (RFC 9110 §8.8.3/§8.8.1).
 pub fn etag_matches(if_none_match: &str, etag: &str) -> bool {
     let trimmed = if_none_match.trim();
     if trimmed == "*" {
@@ -55,9 +38,6 @@ pub fn if_none_match(headers: &HeaderMap) -> Option<&str> {
         .and_then(|v| v.to_str().ok())
 }
 
-/// Serialize `body` and respond 200 — or 304 if the client's `If-None-Match`
-/// matches. Both carry `ETag`, `Cache-Control`, and `Vary: Accept-Encoding`; a
-/// `Vary` mismatch between 200 and 304 corrupts shared caches (§8.1).
 pub fn respond_cached<T: Serialize + ?Sized>(
     body: &T,
     content_version: &str,
@@ -88,8 +68,8 @@ pub fn respond_cached<T: Serialize + ?Sized>(
         .expect("200 response builds")
 }
 
-/// Like [`respond_cached`] but with an explicit, caller-supplied ETag (used by
-/// `/search`, whose ETag folds in `searchVersion` as well as `contentVersion`).
+/// Distinct from `respond_cached`: /search's ETag folds in `searchVersion`,
+/// not just `contentVersion`; merging would cross-pollute search caches.
 pub fn respond_cached_with_etag<T: Serialize + ?Sized>(
     body: &T,
     etag: &str,

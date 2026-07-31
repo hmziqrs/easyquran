@@ -26,8 +26,6 @@ use super::{
     validator::{GitHubCallbackQuery, GitHubEmail, GitHubExchangeRequest, GitHubUserInfo},
 };
 
-/// `GET /auth/github/v1/login` — begin the GitHub OAuth flow with PKCE +
-/// session-bound CSRF state.
 #[debug_handler]
 #[instrument(skip(_state, session), fields(result))]
 pub async fn github_login(
@@ -59,7 +57,6 @@ pub async fn github_login(
     Ok(Redirect::temporary(auth_url.as_str()))
 }
 
-/// `GET /auth/github/v1/callback` — server-side flow completion.
 #[debug_handler]
 #[instrument(skip(state, auth, query), fields(user_id, result))]
 pub async fn github_callback(
@@ -99,7 +96,6 @@ pub async fn github_callback(
     Ok(Redirect::temporary(&redirect_url))
 }
 
-/// `POST /auth/github/v1/exchange` — client-side flow.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id, result))]
 pub async fn github_exchange(
@@ -156,9 +152,6 @@ pub async fn github_user_info(auth: AuthSession) -> Result<impl IntoResponse, Er
     }
 }
 
-/// Fetch the GitHub profile (`/user`). The `email` field here is the user's
-/// PUBLIC email and is often null; the controller separately calls
-/// `/user/emails` in [`finish_github_login`] to find the primary verified email.
 async fn fetch_github_user_info(
     http_client: &reqwest::Client,
     access_token: &str,
@@ -184,8 +177,6 @@ async fn fetch_github_user_info(
         })
 }
 
-/// Fetch the user's verified emails (`/user/emails`) and return the primary
-/// verified one, if any. GitHub exposes a real per-email `verified` flag.
 async fn fetch_github_primary_verified_email(
     http_client: &reqwest::Client,
     access_token: &str,
@@ -209,7 +200,6 @@ async fn fetch_github_primary_verified_email(
                 .with_message("Failed to parse emails from GitHub")
         })?;
 
-    // Prefer the primary verified email; fall back to any verified email.
     Ok(emails
         .iter()
         .find(|e| e.primary && e.verified)
@@ -217,29 +207,20 @@ async fn fetch_github_primary_verified_email(
         .cloned())
 }
 
-/// Resolve the GitHub identity to a local user and start a server session.
-///
-/// GitHub's `/user` `email` is the user's PUBLIC email and is frequently null;
-/// we resolve the real primary verified email from `/user/emails`. If no
-/// verified email exists, we cannot create/link (email-verified gate) and fail
-/// closed.
+/// GitHub's `/user` `email` is public but unverified; only `/user/emails` carries
+/// the real `verified` flag. Treat the public email as unverified.
 async fn finish_github_login(
     state: &AppState,
     auth: &mut AuthSession,
     user_info: GitHubUserInfo,
     access_token: &str,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    // Prefer the verified primary email from /user/emails; fall back to the
-    // public email on /user if (unusually) it is set and /user/emails failed.
     let verified_email =
         fetch_github_primary_verified_email(&state.http_client, access_token).await?;
 
     let (email, email_verified) = match (verified_email.as_ref(), user_info.email.as_ref()) {
         (Some(ve), _) => (ve.email.clone(), ve.verified),
         (None, Some(public)) => {
-            // No verified email from /user/emails; the public email on /user is
-            // not asserted verified by GitHub — treat as unverified so the gate
-            // refuses account creation/linking (user must verify at GitHub).
             warn!("GitHub returned no verified email; falling back to unverified public email");
             (public.clone(), false)
         }

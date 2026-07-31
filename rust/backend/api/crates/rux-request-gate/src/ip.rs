@@ -1,16 +1,7 @@
-//! Pluggable client-IP resolution for the rate-limit layer.
-//!
-//! The default ([`ClientIpSource`]) reads the `axum_client_ip::ClientIp`
-//! extension populated by the app's trusted-proxy layer — NOT raw
-//! `X-Forwarded-For`, which would be spoofable. Consumers not using
-//! `axum-client-ip` supply their own [`IpSource`] (e.g. via [`FnIpSource`]).
-
-/// Resolve the client IP for a request. Used as the rate-limit key namespace.
 pub trait IpSource: Send + Sync {
     fn resolve(&self, request: &axum::extract::Request) -> String;
 }
 
-/// Reads the `axum_client_ip::ClientIp` extension; falls back to `"unknown"`.
 #[derive(Clone, Copy, Default, Debug)]
 pub struct ClientIpSource;
 
@@ -24,7 +15,6 @@ impl IpSource for ClientIpSource {
     }
 }
 
-/// Closure-based IP source for consumers not using axum-client-ip.
 #[derive(Clone)]
 pub struct FnIpSource<F>(pub F)
 where
@@ -46,7 +36,6 @@ mod tests {
 
     #[test]
     fn client_ip_reads_resolved_extension() {
-        // The layer trusts the axum_client_ip extension, not raw headers.
         let mut req = axum::http::Request::builder()
             .body(axum::body::Body::empty())
             .unwrap();
@@ -58,8 +47,6 @@ mod tests {
 
     #[test]
     fn client_ip_ignores_spoofed_headers_without_extension() {
-        // Attacker-supplied X-Forwarded-For must NOT be read; with no resolved
-        // extension the limiter falls back to "unknown".
         let req = axum::http::Request::builder()
             .header("x-forwarded-for", "1.2.3.4")
             .header("x-real-ip", "5.6.7.8")

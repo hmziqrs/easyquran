@@ -1,4 +1,3 @@
-// Always enabled (core)
 pub mod auth_v1;
 pub mod category_v1;
 pub mod csrf_v1;
@@ -7,7 +6,7 @@ pub mod mail_v1;
 pub mod media_v1;
 pub mod post_v1;
 pub mod tag_v1;
-pub mod user_v1; // Base profile routes always available; admin routes gated internally
+pub mod user_v1;
 
 pub mod analytics_v1;
 pub mod google_auth_v1;
@@ -25,7 +24,6 @@ pub mod billing_v1;
 
 pub mod search_v1;
 
-// --- Modules added for the issues batch (2026-07-27) ---
 pub mod apple_auth_v1;
 pub mod device_v1;
 pub mod facebook_auth_v1;
@@ -33,5 +31,4 @@ pub mod github_auth_v1;
 pub mod notification_v1;
 pub mod passkey_v1;
 
-// --- Quran content API (Phase 0+, §6) ---
 pub mod quran_v1;

@@ -18,7 +18,6 @@ use crate::{
 
 use super::validator::{V1CategoryQueryParams, V1CreateCategoryPayload, V1UpdateCategoryPayload};
 
-/// Create a new category using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth, payload), fields(category_id))]
 pub async fn create(
@@ -47,7 +46,6 @@ pub async fn create(
     }
 }
 
-/// Update an existing category using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth, payload), fields(category_id))]
 pub async fn update(
@@ -82,7 +80,6 @@ pub async fn update(
     }
 }
 
-/// Delete a category using SeaORM
 #[debug_handler]
 #[instrument(skip(state, _auth), fields(category_id))]
 pub async fn delete(
@@ -117,7 +114,6 @@ pub async fn delete(
     }
 }
 
-/// Find a category by ID using SeaORM
 #[debug_handler]
 #[instrument(skip(state), fields(slug_or_id = %slug_or_id, category_id))]
 pub async fn find_by_id_or_slug(
@@ -158,7 +154,6 @@ pub async fn find_by_id_or_slug(
     }
 }
 
-/// Find all categories using SeaORM
 #[debug_handler]
 #[instrument(skip(state))]
 pub async fn find_all(State(state): State<AppState>) -> Result<impl IntoResponse, ErrorResponse> {
@@ -174,7 +169,6 @@ pub async fn find_all(State(state): State<AppState>) -> Result<impl IntoResponse
     }
 }
 
-/// Find categories with query using SeaORM
 #[debug_handler]
 #[instrument(skip(state, payload))]
 pub async fn find_with_query(

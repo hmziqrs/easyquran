@@ -1,20 +1,3 @@
-//! SQLite-backed `tower-sessions` session store.
-//!
-//! Replaces the prior `RedisStore` for the default (no-Redis) build. Backed by
-//! the SAME shared sea-orm `DatabaseConnection` the rest of the app uses, so
-//! sessions live alongside the canonical SQLite database. The `sessions` table
-//! is created HERE at construction (`CREATE TABLE IF NOT EXISTS`) — it is
-//! deliberately NOT part of the SeaORM migration suite, mirroring the
-//! `rate_limit_store` L2 table pattern (self-contained, bootstrapped at startup,
-//! never dropped by the migrator).
-//!
-//! Records are serialized with MessagePack (`rmp_serde`) — the exact codec the
-//! previous `tower-sessions-redis-store` used — so the on-disk shape of a record
-//! is unchanged. The row key is the tower-session `Id` `Display` string (the
-//! 22-char base64url-no-pad i128), matching the key the old `RedisStore` saved
-//! under; `expiry_date` is the record's unix timestamp (INTEGER) so expired rows
-//! can be purged by a periodic sweep and filtered on load.
-
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, Value};
 use time::OffsetDateTime;
@@ -27,12 +10,10 @@ const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS sessions (
     expiry_date INTEGER NOT NULL
 )";
 
-/// Convert any error into a `tower_sessions` backend error.
 fn backend_err<E: std::fmt::Display>(e: E) -> session_store::Error {
     session_store::Error::Backend(e.to_string())
 }
 
-/// `tower-sessions` `SessionStore` backed by the shared SQLite connection.
 #[derive(Clone)]
 pub struct SqliteSessionStore {
     db: DatabaseConnection,
@@ -47,10 +28,6 @@ impl std::fmt::Debug for SqliteSessionStore {
 }
 
 impl SqliteSessionStore {
-    /// Construct the store over the shared connection and ensure the backing
-    /// `sessions` table exists. The `CREATE TABLE IF NOT EXISTS` is best-effort:
-    /// a failure logs and continues (the first save will then surface a real
-    /// error rather than boot looping the process).
     pub async fn new(db: DatabaseConnection) -> Self {
         if let Err(e) = db
             .execute(Statement::from_string(DatabaseBackend::Sqlite, CREATE_TABLE))
@@ -61,10 +38,6 @@ impl SqliteSessionStore {
         Self { db }
     }
 
-    /// Delete every row whose `expiry_date` has passed. Intended to be driven by
-    /// a periodic background task (see `main`); not required by the
-    /// `SessionStore` trait but keeps the table from growing without bound now
-    /// that there is no Redis TTL doing it for us.
     pub async fn delete_expired(&self) -> Result<(), sea_orm::DbErr> {
         let now = OffsetDateTime::now_utc().unix_timestamp();
         self.db
@@ -80,8 +53,6 @@ impl SqliteSessionStore {
 
 #[async_trait]
 impl SessionStore for SqliteSessionStore {
-    /// Insert a brand-new record, regenerating the id on the (astronomically
-    /// rare) collision. Mirrors `RedisStore::create`'s `NX` semantics.
     async fn create(&self, record: &mut Record) -> session_store::Result<()> {
         loop {
             let data = rmp_serde::to_vec(record)
@@ -104,13 +75,10 @@ impl SessionStore for SqliteSessionStore {
             if res.rows_affected() > 0 {
                 return Ok(());
             }
-            // Collision: regenerate and retry.
             record.id = Id::default();
         }
     }
 
-    /// Upsert an existing record by id (the layer only saves records it has
-    /// either created or loaded, so this is the steady-state write path).
     async fn save(&self, record: &Record) -> session_store::Result<()> {
         let data = rmp_serde::to_vec(record)
             .map_err(|e| session_store::Error::Encode(e.to_string()))?;

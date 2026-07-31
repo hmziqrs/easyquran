@@ -5,11 +5,9 @@ use ruxlog_types::PaginatedList;
 
 use super::*;
 
-/// Actions for the `user_sessions` entity
 impl Entity {
     pub const PER_PAGE: u64 = 20;
 
-    /// Create a new session record
     pub async fn create(conn: &DbConn, new_session: NewUserSession) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
 
@@ -28,7 +26,6 @@ impl Entity {
         }
     }
 
-    /// Update `last_seen` (touch) a session by id
     pub async fn touch(conn: &DbConn, session_id: i32) -> DbResult<Option<Model>> {
         let existing = match Self::find_by_id(session_id).one(conn).await {
             Ok(model) => model,
@@ -48,7 +45,6 @@ impl Entity {
         }
     }
 
-    /// Revoke a session by id (sets `revoked_at` and updates `last_seen`)
     pub async fn revoke(conn: &DbConn, session_id: i32) -> DbResult<Option<Model>> {
         let existing = match Self::find_by_id(session_id).one(conn).await {
             Ok(model) => model,
@@ -70,7 +66,6 @@ impl Entity {
         }
     }
 
-    /// List sessions for a specific user (paginated, order by last_seen desc)
     pub async fn list_by_user(
         conn: &DbConn,
         user_id: i32,
@@ -96,7 +91,6 @@ impl Entity {
         }
     }
 
-    /// Admin list with filters and sorting (paginated)
     pub async fn admin_list(
         conn: &DbConn,
         query: AdminUserSessionQuery,
@@ -131,7 +125,6 @@ impl Entity {
             q = q.filter(Column::RevokedAt.gte(revoked_since));
         }
 
-        // Sorting
         if let Some(sort_fields) = &query.sort_by {
             let is_asc = query.sort_order.as_deref() == Some("asc");
 

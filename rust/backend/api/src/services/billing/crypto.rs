@@ -1,8 +1,3 @@
-//! Crypto payment provider integration (No-KYC, direct wallet).
-//!
-//! Supports generating payment addresses and verifying on-chain transactions.
-//! Uses a configurable blockchain API (e.g., NowNodes, BlockCypher, or self-hosted).
-
 use async_trait::async_trait;
 use secrecy::SecretString;
 
@@ -10,27 +5,13 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: the crypto provider currently fail-closes on webhooks and makes no
-// outbound HTTP call, but it holds the same shared, timeout-configured client
-// as the other providers so any future on-chain fetch is already bounded.
 use crate::state::build_http_client;
 
-/// Crypto billing provider.
-///
-/// CRYP-ENC-012: `api_key` is held in `secrecy::SecretString` (redacting
-/// `Debug`, opt-in `expose_secret()`). `wallet_address` is a public receive
-/// address (intentionally visible to payers) and stays a plain `String`.
 pub struct CryptoProvider {
-    /// Wallet address to receive payments
     pub wallet_address: String,
-    /// Blockchain API base URL (e.g., "https://api.blockcypher.com/v1")
     pub api_url: String,
-    /// API key for blockchain service
     pub api_key: SecretString,
-    /// Supported currency symbol (e.g., "BTC", "ETH", "XMR", "SOL")
     pub currency: String,
-    /// V-MED-10: shared timeout-configured client (unused today — the provider
-    /// fail-closes — but held so a future on-chain fetch is bounded by default).
     pub http_client: reqwest::Client,
 }
 
@@ -45,17 +26,14 @@ impl CryptoProvider {
         }
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
     }
 
-    /// Generate a BIP-21 (BTC), EIP-681 (ETH), or chain-specific payment URI.
     fn payment_uri(&self, amount: &str, memo: &str) -> String {
         match self.currency.as_str() {
             "BTC" => {
-                // BIP-21: bitcoin:address?amount=X&label=Y
                 let encoded = urlencoding::encode(memo);
                 format!(
                     "bitcoin:{}?amount={}&label={}",
@@ -63,16 +41,13 @@ impl CryptoProvider {
                 )
             }
             "ETH" => {
-                // EIP-681: ethereum:address?value=X
                 format!("ethereum:{}?value={}", self.wallet_address, amount)
             }
             "XMR" => {
-                // Monero: monero:address?tx_description=X
                 let encoded = urlencoding::encode(memo);
                 format!("monero:{}?tx_description={}", self.wallet_address, encoded)
             }
             "SOL" => {
-                // Solana: solana:address?amount=X&label=Y
                 let encoded = urlencoding::encode(memo);
                 format!(
                     "solana:{}?amount={}&label={}",
@@ -87,11 +62,9 @@ impl CryptoProvider {
                 )
             }
             "USDT" | "USDC" => {
-                // Stablecoins on ETH: use EIP-681 with chain_id=1
                 format!("ethereum:{}@1?value={}", self.wallet_address, amount)
             }
             _ => {
-                // Generic fallback
                 format!(
                     "{}:{}?amount={}&memo={}",
                     self.currency.to_lowercase(),
@@ -103,9 +76,7 @@ impl CryptoProvider {
         }
     }
 
-    /// Parse amount from plan_slug — expects format like "0.001" or "100_USD" (fiat amount for conversion).
     fn parse_amount(slug: &str) -> &str {
-        // If slug contains underscore (e.g. "100_USD"), return just the numeric part
         if let Some(pos) = slug.find('_') {
             &slug[..pos]
         } else {
@@ -113,9 +84,6 @@ impl CryptoProvider {
         }
     }
 
-    /// Minimum confirmations required before marking payment as confirmed.
-    /// Unused while crypto webhooks fail-closed (plan §1j); the on-chain
-    /// confirmation-polling job will consult this once wired.
     #[allow(dead_code)]
     fn required_confirmations(&self) -> u64 {
         match self.currency.as_str() {
@@ -129,9 +97,6 @@ impl CryptoProvider {
     }
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. `api_key` is always `<redacted>`;
-// only the non-secret wiring is shown. `wallet_address` is intentionally
-// public (it is shown to payers). No tracing/error path logs the whole struct.
 impl std::fmt::Debug for CryptoProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CryptoProvider")
@@ -188,16 +153,6 @@ impl BillingProvider for CryptoProvider {
     }
 
     async fn verify_webhook(&self, _event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Crypto payments cannot be authenticated by a provider signature: an
-        // on-chain payment notification carries no shared secret the merchant
-        // could verify — anyone can POST a plausible `{hash, address, value}`
-        // payload. Entitlement must therefore be granted only AFTER polling the
-        // chain explorer (`CRYPTO_API_URL`) for the `tx_hash` and confirming
-        // `required_confirmations()`. That confirmation-polling subsystem is not
-        // wired yet; until it lands we reject every crypto webhook (fail closed)
-        // rather than grant entitlement on unauthenticated JSON. The previous
-        // implementation parsed and trusted the body verbatim — a forgery grants
-        // paid content for free. See plan §1j and CRYPTO_AUDIT.md.
         Err(BillingError::WebhookVerification(
             "Crypto webhooks require on-chain confirmation polling (not yet implemented); \
              rejecting fail-closed"
@@ -216,11 +171,6 @@ impl BillingProvider for CryptoProvider {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Multi-chain crypto provider
-// ──────────────────────────────────────────────────────────────────────────
-
-/// A single chain's wallet configuration (parsed from JSON).
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ChainConfig {
     pub wallet: String,
@@ -230,21 +180,12 @@ pub struct ChainConfig {
     pub api_key: Option<String>,
 }
 
-/// Multi-chain checkout result — URIs for each chain.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiChainCheckout {
     pub payment_ref: String,
     pub options: std::collections::HashMap<String, String>,
 }
 
-/// Crypto provider supporting multiple chains simultaneously.
-///
-/// Configured via `CRYPTO_CHAINS` JSON env var:
-/// ```json
-/// {"BTC":{"wallet":"bc1q..."},"ETH":{"wallet":"0x..."},"SOL":{"wallet":"So1..."}}
-/// ```
-///
-/// Returns ALL chain payment URIs at checkout so the user can choose.
 pub struct MultiChainCryptoProvider {
     pub chains: std::collections::HashMap<String, CryptoProvider>,
 }
@@ -301,8 +242,6 @@ impl MultiChainCryptoProvider {
         c
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`
-    /// into every inner [`CryptoProvider`].
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         for chain in self.chains.values_mut() {
             chain.http_client = client.clone();
@@ -360,12 +299,6 @@ impl BillingProvider for MultiChainCryptoProvider {
     }
 
     async fn verify_webhook(&self, _event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Multi-chain variant shares the same constraint as the single-chain
-        // provider (see CryptoProvider::verify_webhook): crypto webhooks carry
-        // no verifiable signature, so entitlement must come from on-chain
-        // confirmation polling, not from this payload. Reject fail-closed
-        // until that subsystem lands (plan §1j). The chain-routing logic that
-        // used to live here was dead under the new model.
         Err(BillingError::WebhookVerification(
             "Crypto webhooks require on-chain confirmation polling (not yet implemented); \
              rejecting fail-closed"
@@ -556,7 +489,6 @@ mod tests {
             .await
             .expect("checkout should succeed");
 
-        // Should extract "100" from "100_USD"
         assert!(result.checkout_url.contains("amount=100"));
     }
 
@@ -599,9 +531,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_webhook_rejected_fail_closed() {
-        // Crypto webhooks cannot be cryptographically verified, so every
-        // payload must be rejected until on-chain confirmation polling lands
-        // (plan §1j). A confirmed-looking payload is NOT trusted.
         let p = btc_provider();
         let payload = serde_json::json!({
             "hash": "abc123def456",
@@ -624,10 +553,6 @@ mod tests {
             .expect_err("must reject fail-closed");
         assert!(matches!(err, BillingError::WebhookVerification(_)));
     }
-
-    // ──────────────────────────────────────────────────────────────────
-    // Multi-chain tests
-    // ──────────────────────────────────────────────────────────────────
 
     fn multi_provider() -> MultiChainCryptoProvider {
         MultiChainCryptoProvider::new(vec![
@@ -673,7 +598,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_multi_chain_verify_rejected_fail_closed() {
-        // Multi-chain variant also rejects fail-closed (plan §1j).
         let p = multi_provider();
         let payload = serde_json::json!({
             "hash": "btc_tx_123",

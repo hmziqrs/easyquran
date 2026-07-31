@@ -9,11 +9,6 @@ pub struct Model {
 
     pub post_id: i32,
 
-    // Stored as a JSON string (EditorJS blocks). Sanitized on read through the
-    // ammonia allowlist — the same control PostWithRelations::content uses — so
-    // every client-facing serialization (autosave result, revisions list) is
-    // XSS-clean regardless of which handler produced it. Stored value is left
-    // untouched. See utils/sanitize.rs (plan Phase 6e).
     #[serde(serialize_with = "crate::utils::sanitize::serialize_sanitized_content_string")]
     pub content: String,
 
@@ -47,11 +42,6 @@ impl ActiveModelBehavior for ActiveModel {}
 mod tests {
     use super::*;
 
-    // End-to-end proof that the field-level serialize_with fires when a Model
-    // is serialized (the path the autosave + revisions-list endpoints take via
-    // serde_json::json! / Json). A malicious EditorJS payload stored in the
-    // revision's content string must come back XSS-clean, with the stored value
-    // untouched. (Plan Phase 6e; mirrors the PostWithRelations control.)
     #[test]
     fn serialized_revision_content_is_xss_clean() {
         let stored = serde_json::to_string(&serde_json::json!({
@@ -70,8 +60,6 @@ mod tests {
             created_at: chrono::Utc::now().fixed_offset(),
         };
 
-        // serde_json::json! / Json both route through Serialize, i.e. the
-        // field's serialize_with — the same code path as the controllers.
         let serialized = serde_json::to_value(&model).unwrap();
         let emitted = serialized["content"].as_str().unwrap();
 
@@ -85,7 +73,6 @@ mod tests {
         );
         assert!(emitted.contains("hi"), "benign content survives: {emitted}");
 
-        // The stored value is untouched (sanitization-on-read).
         assert!(
             stored.contains("<script>"),
             "stored content must not be mutated: {stored}"

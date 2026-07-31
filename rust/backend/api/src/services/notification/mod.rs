@@ -1,16 +1,3 @@
-//! Notification dispatch service.
-//!
-//! Wraps the "persist an in-app notification row AND fan it out as a push to
-//! the recipient's registered devices" flow. The in-app row is the durable
-//! source of truth: it is ALWAYS inserted, even when push is disabled
-//! (`state.fcm` is `None`) or every device is stale. Push is a best-effort
-//! side effect.
-//!
-//! Other modules that want to emit a notification (e.g. `post_comment_v1` when
-//! a comment is added) should call [`notify_user`]. Wiring those callers is
-//! intentionally OUT OF SCOPE for the FCM backend unit — the helper is exposed
-//! so the integrator can add call sites incrementally.
-
 use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
@@ -19,10 +6,6 @@ use crate::db::sea_models::{device, notification};
 use crate::error::DbResult;
 use ruxlog_types::enums::NotificationKind;
 
-/// Stateless-ish helper holding the DB handle and an optional FCM client.
-///
-/// Constructed per request from `AppState`; the expensive parts (DB pool, FCM
-/// client) are `Clone`-cheap.
 pub struct NotificationService {
     db: DatabaseConnection,
     fcm: Option<Arc<rux_fcm::FcmClient>>,
@@ -33,8 +16,6 @@ impl NotificationService {
         Self { db, fcm }
     }
 
-    /// Insert a notification for `user_id` and fan it out as push to that
-    /// user's devices. See [`dispatch`] for the full semantics.
     pub async fn create_and_dispatch(
         &self,
         user_id: i32,
@@ -56,7 +37,6 @@ impl NotificationService {
     }
 }
 
-/// Free helper for cross-module notification dispatch.
 #[allow(clippy::too_many_arguments)]
 pub async fn notify_user(
     db: &DatabaseConnection,
@@ -70,13 +50,8 @@ pub async fn notify_user(
     dispatch(db, fcm, user_id, kind, title.into(), body.into(), data).await
 }
 
-/// Shared core: persist the row, then best-effort push.
-///
-/// Failure modes that do NOT fail the whole call (in-app is already durable):
-/// - no FCM client configured ⇒ `warn!` + skip push;
-/// - device list load fails ⇒ `warn!` + return the row;
-/// - per-device send fails ⇒ `warn!` and continue;
-/// - FCM reports `Unregistered` ⇒ prune that device row + continue.
+// In-app insert is the durable record; push failures (no FCM, device load/send error,
+// unregistered token) are best-effort and must not fail the call.
 async fn dispatch(
     db: &DatabaseConnection,
     fcm: Option<&Arc<rux_fcm::FcmClient>>,
@@ -86,7 +61,6 @@ async fn dispatch(
     body: String,
     data: Option<serde_json::Value>,
 ) -> DbResult<notification::Model> {
-    // 1. Persist the in-app notification (always — this is the durable record).
     let model = notification::Entity::create(
         db,
         notification::NewNotification {
@@ -99,7 +73,6 @@ async fn dispatch(
     )
     .await?;
 
-    // 2. Best-effort push fan-out.
     let Some(client) = fcm else {
         tracing::warn!(
             user_id,
@@ -126,8 +99,6 @@ async fn dispatch(
         return Ok(model);
     }
 
-    // Mirror the structured `data` blob (only when it is a JSON object) into
-    // the FCM `data` block.
     let data_map = data.as_ref().and_then(|v| v.as_object()).cloned();
 
     for dev in devices {

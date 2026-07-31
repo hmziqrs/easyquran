@@ -1,9 +1,3 @@
-//! Billing and monetization service layer.
-//!
-//! All payment providers implement the `BillingProvider` trait.
-//! The `BillingRouter` holds all initialized providers and routes
-//! requests by geo or provider name. Feature-gated behind `billing`.
-
 pub mod provider;
 pub mod router;
 pub mod webhook_util;

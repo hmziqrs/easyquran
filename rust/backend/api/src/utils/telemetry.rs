@@ -236,15 +236,6 @@ fn parse_otlp_headers(headers_str: &str) -> HashMap<String, String> {
         .collect()
 }
 
-/// Whether the Quickwit/OTLP OpenTelemetry export pipelines should be
-/// initialized at boot.
-///
-/// Default-OFF: when `ENABLE_QUICKWIT_OTEL` is unset (the normal case) we skip
-/// the OTLP traces/metrics/logs exporters and run only the local `tracing` fmt
-/// layer — exactly the pre-env-gate behavior (which was a compile-time-disabled
-/// `if false { ... }` block). Setting `ENABLE_QUICKWIT_OTEL=1` (or `true`,
-/// case-insensitive) turns the OTLP exporters on. Any other value, including
-/// `0`/`false`/the empty string, leaves it disabled.
 fn quickwit_otel_enabled() -> bool {
     match env::var("ENABLE_QUICKWIT_OTEL").ok() {
         Some(v) => matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true"),
@@ -341,22 +332,18 @@ pub fn global_meter() -> Meter {
     global::meter("ruxlog-api")
 }
 
-/// Shared HTTP metrics to avoid recreating on every request
 pub struct HttpMetrics {
     pub request_duration: Histogram<f64>,
     pub request_count: Counter<u64>,
     pub response_status: Counter<u64>,
 }
 
-/// Shared observable gauges for pool metrics
 pub struct PoolMetrics {
     _db_gauge: ObservableGauge<u64>,
 }
 
 impl PoolMetrics {
     pub fn new(meter: &Meter) -> Self {
-        // The `redis.pool.connections` gauge was removed along with the Redis
-        // pool — the default build has no Redis. SQLite is the only pool.
         let db_gauge = meter
             .u64_observable_gauge("db.pool.connections")
             .with_description("Number of active database pool connections")
@@ -366,7 +353,6 @@ impl PoolMetrics {
     }
 }
 
-/// Shared authentication metrics
 pub struct AuthMetrics {
     pub login_attempts: Counter<u64>,
     pub login_success: Counter<u64>,
@@ -403,7 +389,6 @@ impl AuthMetrics {
     }
 }
 
-/// Shared image optimization metrics
 pub struct ImageMetrics {
     pub optimization_requests: Counter<u64>,
     pub optimization_success: Counter<u64>,
@@ -445,7 +430,6 @@ impl ImageMetrics {
     }
 }
 
-/// Shared abuse limiter metrics
 pub struct LimiterMetrics {
     pub checks: Counter<u64>,
     pub allowed: Counter<u64>,
@@ -481,7 +465,6 @@ impl LimiterMetrics {
     }
 }
 
-/// Shared mail service metrics
 pub struct MailMetrics {
     pub emails_sent: Counter<u64>,
     pub emails_failed: Counter<u64>,
@@ -508,11 +491,6 @@ impl MailMetrics {
     }
 }
 
-/// Mail-router-layer metrics: counts for the cross-cutting send-time guards so
-/// operators can observe how many sends each guard drops. The provider's own
-/// `mail.sent`/`mail.failed` only fire when a send actually reaches the
-/// provider, so without these the suppressed/throttled/deduped short-circuits
-/// are invisible.
 pub struct MailRouterMetrics {
     pub suppressed: Counter<u64>,
     pub throttled: Counter<u64>,

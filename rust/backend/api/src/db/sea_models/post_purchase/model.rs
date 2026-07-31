@@ -1,10 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// A user's one-time purchase of a gated post, granting permanent read access.
-/// Created by the verified billing webhook from a server-bound checkout intent
-/// (see `services/paywall` and plan Phase 4). Consulted by the paywall to decide
-/// access to `PostAccessType::Paid` posts.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "post_purchases")]
 pub struct Model {
@@ -12,9 +8,7 @@ pub struct Model {
     pub id: i32,
     pub user_id: i32,
     pub post_id: i32,
-    /// Optional link to the recorded payment row.
     pub payment_id: Option<i32>,
-    /// Billing provider that processed the purchase (e.g. "stripe").
     pub provider: String,
     pub amount_cents: i32,
     pub currency: String,

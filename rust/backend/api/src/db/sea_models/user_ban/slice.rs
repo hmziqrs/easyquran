@@ -1,7 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// New ban record to be created
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewUserBan {
     pub user_id: i32,
@@ -43,7 +42,6 @@ impl NewUserBan {
     }
 }
 
-/// Query params for listing bans
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserBanQuery {
     pub page_no: Option<i64>,

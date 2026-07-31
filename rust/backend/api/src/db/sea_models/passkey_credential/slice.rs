@@ -1,13 +1,9 @@
 use sea_orm::prelude::DateTimeWithTimeZone;
 use serde::{Deserialize, Serialize};
 
-/// Client-facing view of a registered passkey. Exposes only the fields the UI
-/// needs (list + remove). The public-key material and the user_id are never
-/// serialized to the client.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PasskeyCredentialView {
     pub id: i32,
-    /// base64url credential id — the client echoes this in `/remove`.
     pub credential_id: String,
     pub device_type: Option<String>,
     pub transports: Option<serde_json::Value>,

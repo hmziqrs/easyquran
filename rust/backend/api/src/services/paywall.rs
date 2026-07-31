@@ -1,18 +1,3 @@
-//! Server-side paywall enforcement.
-//!
-//! The single source of truth for "can this viewer read this post's `content`?"
-//! Every public read path consults [`user_has_access`] (or the pure
-//! [`decide_access`] core) and strips `content` when access is denied, so paid /
-//! subscriber-only content is never shipped to an unentitled viewer regardless of
-//! what the client claims (plan Phase 4c — the load-bearing fix for the
-//! "full paid content served unauthenticated" finding).
-//!
-//! Entitlement sources:
-//! - `Free`           → always granted.
-//! - `Paid`           → a `post_purchases` row for `(user_id, post_id)` exists
-//!   (one-time purchase, granted by the verified webhook).
-//! - `SubscriberOnly` → the user has an active subscription.
-
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
@@ -25,8 +10,6 @@ use crate::error::{DbResult, ErrorCode, ErrorResponse};
 
 pub use ruxlog_types::enums::PostAccessType;
 
-/// The access policy for a single post, mirroring a `post_access` row. Posts
-/// with no `post_access` row are [`PostAccessType::Free`] (the platform default).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostAccessPolicy {
     pub access_type: PostAccessType,
@@ -37,7 +20,6 @@ pub struct PostAccessPolicy {
 }
 
 impl PostAccessPolicy {
-    /// The implicit policy for a post with no `post_access` row.
     pub fn free() -> Self {
         Self {
             access_type: PostAccessType::Free,
@@ -46,7 +28,6 @@ impl PostAccessPolicy {
         }
     }
 
-    /// True when the policy grants content to everyone (no purchase / sub needed).
     pub fn is_open(&self) -> bool {
         matches!(self.access_type, PostAccessType::Free)
     }
@@ -62,20 +43,12 @@ impl From<post_access::model::Model> for PostAccessPolicy {
     }
 }
 
-/// Outcome of an access check: the policy that applied plus whether content was
-/// granted. Callers attach the policy to the response so the frontend can render
-/// a paywall when `granted == false`.
 #[derive(Clone, Debug)]
 pub struct AccessOutcome {
     pub policy: PostAccessPolicy,
     pub granted: bool,
 }
 
-/// Pure access decision, decoupled from I/O so it is trivially unit-testable.
-///
-/// `viewer_bypasses` should be true for the post's author or staff roles
-/// (Admin/SuperAdmin/Moderator) — they always see content. `has_purchase` and
-/// `has_active_subscription` are the entitlement facts loaded from the DB.
 pub fn decide_access(
     policy: &PostAccessPolicy,
     viewer_bypasses: bool,
@@ -92,7 +65,6 @@ pub fn decide_access(
     }
 }
 
-/// Load the access policy for one post (defaults to Free when no row exists).
 pub async fn load_post_access_policy(
     db: &DatabaseConnection,
     post_id: i32,
@@ -107,7 +79,6 @@ pub async fn load_post_access_policy(
         .unwrap_or_else(PostAccessPolicy::free))
 }
 
-/// Batch-load policies for many posts (one query), used by list/feed endpoints.
 pub async fn load_post_access_map(
     db: &DatabaseConnection,
     post_ids: &[i32],
@@ -127,7 +98,6 @@ pub async fn load_post_access_map(
     Ok(map)
 }
 
-/// True if `user_id` owns a (permanent) one-time purchase of `post_id`.
 pub async fn user_has_post_purchase(
     db: &DatabaseConnection,
     user_id: i32,
@@ -142,9 +112,6 @@ pub async fn user_has_post_purchase(
     Ok(count > 0)
 }
 
-/// Batch variant of [`user_has_post_purchase`]: returns the subset of `post_ids`
-/// the user owns. Used by list/feed gating so a page of N posts costs one query,
-/// not N.
 pub async fn user_purchased_post_ids(
     db: &DatabaseConnection,
     user_id: i32,
@@ -166,8 +133,6 @@ pub async fn user_purchased_post_ids(
     Ok(owned)
 }
 
-/// True if `user_id` has an active subscription: status Active/Trialing and,
-/// when a period end is recorded, that end is still in the future.
 pub async fn user_has_active_subscription(db: &DatabaseConnection, user_id: i32) -> DbResult<bool> {
     use ruxlog_types::enums::SubscriptionStatus;
     let subs = subscription::Entity::find()
@@ -183,13 +148,9 @@ pub async fn user_has_active_subscription(db: &DatabaseConnection, user_id: i32)
 
     let now_ts = chrono::Utc::now().timestamp();
     for s in subs {
-        // Fail closed on a missing period end (audit F#5/F#11): an
-        // `Active`-status row with NO `current_period_end` should NOT unlock
-        // subscriber content indefinitely. Such a row means the provider never
-        // told us when the paid period ends — the safe assumption is that the
-        // viewer is not currently entitled, rather than granting forever off a
-        // stale status. (New subscriptions are created with a period end from
-        // the verified webhook; a missing one is the exception, not the rule.)
+        // Fail closed: an `Active` row with no `current_period_end` must NOT
+        // unlock subscriber content forever — treat the missing end as "not in
+        // period" (do not flip this `unwrap_or` to `true`).
         let still_in_period = s
             .current_period_end
             .map(|end| end.timestamp() > now_ts)
@@ -201,8 +162,6 @@ pub async fn user_has_active_subscription(db: &DatabaseConnection, user_id: i32)
     Ok(false)
 }
 
-/// Full per-post access check for a viewer. `viewer_id` is `None` for anonymous
-/// viewers. `viewer_bypasses` short-circuits to granted (author / staff).
 pub async fn user_has_access(
     db: &DatabaseConnection,
     viewer_id: Option<i32>,
@@ -218,7 +177,6 @@ pub async fn user_has_access(
         });
     }
 
-    // Anonymous viewers can never satisfy a gated policy.
     let Some(user_id) = viewer_id else {
         return Ok(AccessOutcome {
             policy,
@@ -229,7 +187,6 @@ pub async fn user_has_access(
     let (has_purchase, has_active_sub) = match policy.access_type {
         PostAccessType::Paid => (user_has_post_purchase(db, user_id, post_id).await?, false),
         PostAccessType::SubscriberOnly => (false, user_has_active_subscription(db, user_id).await?),
-        // is_open() already handled Free above; keep the arm exhaustive.
         PostAccessType::Free => (false, false),
     };
 
@@ -261,7 +218,6 @@ mod tests {
     fn free_is_always_open_and_granted() {
         let policy = PostAccessPolicy::free();
         assert!(policy.is_open());
-        // anonymous, no entitlements
         assert!(decide_access(&policy, false, false, false));
     }
 
@@ -269,11 +225,8 @@ mod tests {
     fn paid_requires_purchase() {
         let policy = paid(499);
         assert!(!policy.is_open());
-        // anonymous / no purchase → denied
         assert!(!decide_access(&policy, false, false, false));
-        // purchased → granted
         assert!(decide_access(&policy, false, true, false));
-        // a subscription alone does NOT unlock a per-post-paid post
         assert!(!decide_access(&policy, false, false, true));
     }
 
@@ -282,15 +235,12 @@ mod tests {
         let policy = sub_only();
         assert!(!policy.is_open());
         assert!(!decide_access(&policy, false, false, false));
-        // a one-time purchase does NOT unlock subscriber-only content
         assert!(!decide_access(&policy, false, true, false));
         assert!(decide_access(&policy, false, false, true));
     }
 
     #[test]
     fn author_and_staff_bypass_the_paywall() {
-        // Even a gated post with no entitlements is granted when the viewer is
-        // the author or a staff role.
         assert!(decide_access(&paid(499), true, false, false));
         assert!(decide_access(&sub_only(), true, false, false));
     }

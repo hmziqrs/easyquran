@@ -1,85 +1,65 @@
-//! Authentication error types
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Error codes for authentication/authorization failures
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AuthErrorCode {
-    /// User must be logged in
     #[serde(rename = "AUTH_UNAUTHENTICATED")]
     Unauthenticated,
 
-    /// User is already logged in (for login/register routes)
     #[serde(rename = "AUTH_ALREADY_AUTHENTICATED")]
     AlreadyAuthenticated,
 
-    /// Invalid credentials provided
     #[serde(rename = "AUTH_INVALID_CREDENTIALS")]
     InvalidCredentials,
 
-    /// Session has expired
     #[serde(rename = "AUTH_SESSION_EXPIRED")]
     SessionExpired,
 
-    /// Session error (storage/retrieval)
     #[serde(rename = "AUTH_SESSION_ERROR")]
     SessionError,
 
-    /// Email verification required
     #[serde(rename = "AUTH_VERIFICATION_REQUIRED")]
     VerificationRequired,
 
-    /// User already verified (for verification routes)
     #[serde(rename = "AUTH_ALREADY_VERIFIED")]
     AlreadyVerified,
 
-    /// Two-factor authentication required
     #[serde(rename = "AUTH_TOTP_REQUIRED")]
     TotpRequired,
 
-    /// Invalid TOTP code
     #[serde(rename = "AUTH_TOTP_INVALID")]
     TotpInvalid,
 
-    /// Password re-entry required for sensitive action
     #[serde(rename = "AUTH_REAUTH_REQUIRED")]
     ReauthRequired,
 
-    /// Account is banned
     #[serde(rename = "AUTH_BANNED")]
     Banned,
 
-    /// Insufficient role level
     #[serde(rename = "AUTH_INSUFFICIENT_ROLE")]
     InsufficientRole,
 
-    /// Permission denied
     #[serde(rename = "AUTH_PERMISSION_DENIED")]
     PermissionDenied,
 
-    /// OAuth provider error
     #[serde(rename = "AUTH_OAUTH_ERROR")]
     OAuthError,
 
-    /// Invalid CSRF token
     #[serde(rename = "AUTH_CSRF_INVALID")]
     CsrfInvalid,
 
-    /// Backend error
     #[serde(rename = "AUTH_BACKEND_ERROR")]
     BackendError,
 
-    /// Internal error
     #[serde(rename = "AUTH_INTERNAL_ERROR")]
     InternalError,
 }
 
 impl AuthErrorCode {
-    /// Returns the HTTP status code for this error
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Unauthenticated => StatusCode::UNAUTHORIZED,
@@ -102,7 +82,6 @@ impl AuthErrorCode {
         }
     }
 
-    /// Returns the default message for this error
     pub fn default_message(&self) -> &'static str {
         match self {
             Self::Unauthenticated => "Authentication required",
@@ -126,7 +105,6 @@ impl AuthErrorCode {
     }
 }
 
-/// Authentication error with code, message, and optional context
 #[derive(Debug, Clone, Serialize)]
 pub struct AuthError {
     #[serde(rename = "code")]
@@ -139,7 +117,6 @@ pub struct AuthError {
 }
 
 impl AuthError {
-    /// Create a new error with default message
     pub fn new(code: AuthErrorCode) -> Self {
         Self {
             message: code.default_message().to_string(),
@@ -149,13 +126,11 @@ impl AuthError {
         }
     }
 
-    /// Set a custom message
     pub fn with_message(mut self, msg: impl Into<String>) -> Self {
         self.message = msg.into();
         self
     }
 
-    /// Add context data
     pub fn with_context<V: Serialize>(mut self, key: &str, value: V) -> Self {
         let ctx = self.context.get_or_insert_with(|| serde_json::json!({}));
         if let Some(obj) = ctx.as_object_mut() {
@@ -166,7 +141,6 @@ impl AuthError {
         self
     }
 
-    /// Get the error code
     pub fn code(&self) -> AuthErrorCode {
         self.error_code
     }

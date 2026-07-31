@@ -1,4 +1,3 @@
-// Always enabled
 pub mod abuse_limiter;
 pub mod acl_service;
 pub mod auth;
@@ -18,8 +17,8 @@ pub mod session_store;
 pub mod webhook_util;
 pub mod webauthn;
 
-// Security-gated: the predictable-RNG seeder + admin TUI never ship in a
-// release binary. Keep these gates intact.
+// Security: predictable-RNG seeder + admin TUI must never ship in release
+// binaries — keep the seed-system cfg gates intact.
 #[cfg(feature = "seed-system")]
 pub mod seed;
 

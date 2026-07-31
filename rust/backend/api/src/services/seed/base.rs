@@ -33,12 +33,10 @@ struct FakeUser {
     email: String,
 }
 
-/// Seed everything locally (no Supabase) and record ranges into `seed_runs`.
 pub async fn seed_all(db: &DatabaseConnection) -> SeedResult<SeedOutcome> {
     seed_all_with_progress(db, None, None).await
 }
 
-/// Seed everything with optional progress callback for TUI
 pub async fn seed_all_with_progress(
     db: &DatabaseConnection,
     progress: Option<ProgressCallback>,
@@ -52,7 +50,6 @@ pub async fn seed_all_with_progress(
             callback(msg);
         }
     };
-    // Capture ID state before seeding for tracking.
     let before_users = user::Entity::find()
         .order_by_desc(user::Column::Id)
         .one(db)
@@ -434,7 +431,6 @@ pub async fn seed_all_with_progress(
 
     log("Additional data seeded".to_string());
 
-    // Capture ID state after seeding and record the ranges.
     let after_users = user::Entity::find()
         .order_by_desc(user::Column::Id)
         .one(db)
@@ -648,7 +644,7 @@ pub async fn seed_all_with_progress(
     })
 }
 
-// --- Internal helpers copied from the original seed controller for reuse ---
+
 
 async fn seed_user_sessions(db: &DatabaseConnection) -> SeedResult<()> {
     let users = user::Entity::find().all(db).await?;
@@ -695,9 +691,6 @@ async fn seed_user_sessions(db: &DatabaseConnection) -> SeedResult<()> {
     Ok(())
 }
 
-/// Read the application secret used to hash verification/reset codes. Seeds run
-/// in dev contexts where COOKIE_KEY may be unset, so fall back to a constant —
-/// the seeded codes are never emailed and only exist to exercise the schema.
 pub(super) fn cookie_key_bytes() -> Vec<u8> {
     std::env::var("COOKIE_KEY")
         .unwrap_or_else(|_| "ruxlog-dev-seed-fallback-key".to_string())
@@ -711,7 +704,6 @@ async fn seed_email_verifications(db: &DatabaseConnection) -> SeedResult<()> {
     for user in users {
         let code = email_verification::Entity::generate_code();
         let code_hash = crate::utils::code_hash::hash_code(&secret_key, &code);
-        // Spread creation times a bit for realism
         let created_at =
             chrono::Utc::now().fixed_offset() - chrono::Duration::minutes(rng.random_range(0..90));
 

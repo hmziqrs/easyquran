@@ -42,7 +42,6 @@ pub fn draw_seed_progress(f: &mut Frame, area: Rect, app: &App, palette: &ThemeP
         );
     f.render_widget(header, chunks[0]);
 
-    // Show recent logs from the seeding process
     let log_count = (chunks[1].height as usize).saturating_sub(2).min(20);
     let recent_logs: Vec<String> = app
         .logs

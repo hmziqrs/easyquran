@@ -5,7 +5,6 @@ use tracing::{info, instrument, warn};
 use super::*;
 
 impl Entity {
-    /// Check if a user has liked a specific post
     #[instrument(skip(conn), fields(post_id, user_id))]
     pub async fn has_liked(conn: &DbConn, post_id: i32, user_id: i32) -> DbResult<bool> {
         let count = Self::find()
@@ -17,8 +16,6 @@ impl Entity {
         Ok(count > 0)
     }
 
-    /// Like a post (with transaction to update likes_count atomically)
-    /// Returns (success, new_likes_count)
     #[instrument(skip(conn), fields(post_id, user_id))]
     pub async fn like_post(conn: &DbConn, post_id: i32, user_id: i32) -> DbResult<(bool, i32)> {
         let transaction = conn.begin().await?;
@@ -30,7 +27,6 @@ impl Entity {
             .await?;
 
         if existing.is_some() {
-            // Already liked, just return current count
             let post = super::super::post::Entity::find_by_id(post_id)
                 .one(&transaction)
                 .await?;
@@ -40,7 +36,6 @@ impl Entity {
             return Ok((false, likes_count));
         }
 
-        // Create the like record
         let now = chrono::Utc::now().fixed_offset();
         let like = ActiveModel {
             post_id: Set(post_id),
@@ -87,8 +82,6 @@ impl Entity {
         Ok((true, new_likes_count))
     }
 
-    /// Unlike a post (with transaction to update likes_count atomically)
-    /// Returns (success, new_likes_count)
     #[instrument(skip(conn), fields(post_id, user_id))]
     pub async fn unlike_post(conn: &DbConn, post_id: i32, user_id: i32) -> DbResult<(bool, i32)> {
         let transaction = conn.begin().await?;
@@ -102,7 +95,6 @@ impl Entity {
         let like_record = match existing {
             Some(record) => record,
             None => {
-                // Not liked, just return current count
                 let post = super::super::post::Entity::find_by_id(post_id)
                     .one(&transaction)
                     .await?;
@@ -121,13 +113,11 @@ impl Entity {
             }
         }
 
-        // Decrement likes_count on the post (but never below 0)
         let post = super::super::post::Entity::find_by_id(post_id)
             .one(&transaction)
             .await?;
 
         let new_likes_count = if let Some(post_model) = post {
-            // Ensure we never go below 0
             let new_count = (post_model.likes_count - 1).max(0);
             let mut post_active: super::super::post::ActiveModel = post_model.into();
             post_active.likes_count = Set(new_count);
@@ -153,7 +143,6 @@ impl Entity {
         Ok((true, new_likes_count))
     }
 
-    /// Get like status for a user on a specific post
     #[instrument(skip(conn), fields(post_id, user_id))]
     pub async fn get_like_status(
         conn: &DbConn,
@@ -173,7 +162,6 @@ impl Entity {
         })
     }
 
-    /// Get like status for a user on multiple posts
     #[instrument(skip(conn), fields(user_id, post_count = post_ids.len()))]
     pub async fn get_like_status_batch(
         conn: &DbConn,
@@ -189,7 +177,6 @@ impl Entity {
         let liked_post_ids: std::collections::HashSet<i32> =
             likes.iter().map(|l| l.post_id).collect();
 
-        // Get all posts to get their likes_count
         let posts = super::super::post::Entity::find()
             .filter(super::super::post::Column::Id.is_in(post_ids.to_vec()))
             .all(conn)
@@ -207,7 +194,6 @@ impl Entity {
         Ok(statuses)
     }
 
-    /// Count total likes for a post
     #[instrument(skip(conn), fields(post_id))]
     pub async fn count_by_post(conn: &DbConn, post_id: i32) -> DbResult<u64> {
         let count = Self::find()

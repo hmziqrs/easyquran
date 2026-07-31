@@ -254,8 +254,6 @@ pub async fn verification_rates(
         order_clause = order_clause,
     );
 
-    // `$1`/`$2` are referenced in both the `requests` and `verified` CTEs, so
-    // each date bound is supplied once per CTE (4 positional `?`, no reuse).
     let params = vec![
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_from))),
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_to))),
@@ -301,16 +299,8 @@ pub async fn publishing_trends(
     let ValidatedJson(request) = payload;
     let resolved = request.envelope.resolve();
 
-    // NOTE(issue #23): this handler intentionally does NOT use
-    // `pagination::paginate_query`. The pagination unit here is a *distinct
-    // bucket*, but each bucket fans out to one output row per post status, so
-    // the output row count != bucket count. The `ROW_NUMBER()` window over the
-    // distinct buckets combined with `COUNT(*) OVER ()` is therefore kept
-    // bespoke: `paginate_query`'s `SELECT COUNT(*) FROM (<body>)` wrap would
-    // over-count (it would count bucket×status rows, not buckets) and its
-    // appended `LIMIT`/`OFFSET` would paginate the wrong shape. The page window
-    // is instead selected with `WHERE b.rn > ? AND b.rn <= ? + ?`, binding
-    // offset, offset, limit (no placeholder reuse under SQLite).
+    // Bespoke pagination, not paginate_query: each bucket fans out to one row per status,
+    // so its COUNT(*) wrap would over-count and its LIMIT/OFFSET would paginate the wrong shape.
     let limit = resolved.per_page as i64;
     let offset = resolved.offset() as i64;
 
@@ -327,11 +317,8 @@ pub async fn publishing_trends(
     });
     let has_status_filter = status_filter.is_some();
 
-    // SQLite has no Postgres `= ANY($n)` array construct, so the optional
-    // status filter is expanded into a positional `IN (?, ...)` clause with one
-    // bind per requested status (each value bound exactly once). An empty list
-    // cannot be expressed as `IN ()` (invalid SQL), so it degrades to a
-    // predicate that matches nothing, preserving the old `= ANY('{}')` result.
+    // Empty status list must match NOTHING (parity with Postgres = ANY('{}')); `IN ()` is
+    // invalid SQL so it becomes `AND 1 = 0`. Do NOT merge into the None arm — None = no filter.
     let (status_clause, status_values): (String, Vec<Value>) = match &status_filter {
         None => (String::new(), Vec::new()),
         Some(statuses) if statuses.is_empty() => (" AND 1 = 0".to_string(), Vec::new()),
@@ -385,8 +372,6 @@ pub async fn publishing_trends(
         status_clause = status_clause,
     );
 
-    // Bind order matches the `?` sequence: date_from, date_to, <status values>,
-    // then the page window `offset, offset, limit`.
     let mut params: Vec<Value> = vec![
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_from))),
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_to))),
@@ -529,10 +514,6 @@ pub async fn page_views(
         order_clause = order_clause,
     );
 
-    // The optional post_id/author_id filters re-bind the same value for the
-    // `(? IS NULL OR col = ?)` guard (SQLite has no named placeholders), so
-    // each is pushed twice. Bind order: date_from, date_to, post_id, post_id,
-    // author_id, author_id, only_unique.
     let params = vec![
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_from))),
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_to))),
@@ -645,8 +626,6 @@ pub async fn comment_rate(
         sort_order = sort_order,
     );
 
-    // The date window is bound once per CTE (view_counts + comment_counts),
-    // then `min_views` for the outer `WHERE`.
     let params = vec![
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_from))),
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_to))),
@@ -759,8 +738,6 @@ pub async fn newsletter_growth(
         order_clause = order_clause,
     );
 
-    // Each CTE filters on the same window, so the date pair is bound three
-    // times (new_subscribers, confirmed, unsubscribed) — 6 positional `?`.
     let params = vec![
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_from))),
         Value::ChronoDateTimeWithTimeZone(Some(Box::new(resolved.date_to))),
@@ -882,10 +859,6 @@ pub async fn dashboard_summary(
     let summary_range = resolve_dashboard_range(&request);
     let (date_from, date_to, page, per_page) = summary_range;
 
-    // The date window is referenced by five subqueries (users_new,
-    // views_in_period, comments_in_period, newsletter_confirmed,
-    // media_uploads); under SQLite each reference is a fresh positional `?`,
-    // so the date pair is bound once per subquery (10 placeholders total).
     let mut params = Vec::with_capacity(10);
     for _ in 0..5 {
         params.push(Value::ChronoDateTimeWithTimeZone(Some(Box::new(date_from))));

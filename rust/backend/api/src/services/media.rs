@@ -1,10 +1,3 @@
-//! Shared media-upload metadata DTO (service layer).
-//!
-//! Lives here — not in the HTTP `modules::media_v1` layer — so the image
-//! optimizer service can consume it without an inverted service→module
-//! dependency. The HTTP validators/controllers import it from here
-//! (and `modules::media_v1::validator` re-exports it for path stability).
-
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 

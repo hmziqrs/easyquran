@@ -15,7 +15,6 @@ pub struct UndoOutcome {
     pub deleted: HashMap<String, u64>,
 }
 
-/// Undo a specific seed run based on ID ranges.
 pub async fn undo_seed_run(db: &DatabaseConnection, run_id: i32) -> SeedResult<UndoOutcome> {
     let run = seed_run::Entity::find_by_id(run_id)
         .one(db)
@@ -42,7 +41,7 @@ pub async fn undo_seed_run(db: &DatabaseConnection, run_id: i32) -> SeedResult<U
         };
     }
 
-    // Dependency-aware order
+    // Delete children before parents: non-cascading FKs abort the whole run if reversed.
     del_range!(
         "comment_flags",
         comment_flag::Entity,
@@ -59,7 +58,6 @@ pub async fn undo_seed_run(db: &DatabaseConnection, run_id: i32) -> SeedResult<U
         post_revision::Entity,
         post_revision::Column::Id
     );
-    // post_series_posts not tracked; skip.
     del_range!("post_series", post_series::Entity, post_series::Column::Id);
     del_range!(
         "scheduled_posts",

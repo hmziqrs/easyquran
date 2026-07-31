@@ -5,14 +5,6 @@ use axum::{middleware, routing::post, Router};
 
 use crate::{middlewares::auth_guard, AppState};
 
-/// Passkey (WebAuthn) routes (issue #4).
-///
-/// Split by guard level and `.merge()`d so each guard applies only to its own
-/// sub-router (`.route_layer`, not `.layer`):
-///   * `verified`  — register/begin, register/finish, list, remove (managed by
-///     an authenticated, email-verified user).
-///   * `unauthenticated` — login/begin, login/finish (discoverable passkey
-///     login; the credential itself authenticates the request).
 pub fn routes() -> Router<AppState> {
     let verified = Router::<AppState>::new()
         .route("/register/begin", post(controller::register_begin))

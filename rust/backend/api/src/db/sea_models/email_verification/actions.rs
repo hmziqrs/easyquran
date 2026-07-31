@@ -8,9 +8,6 @@ use super::*;
 const ADMIN_PER_PAGE: u64 = 20;
 
 impl Entity {
-    /// Create a verification row for a user. The caller generates the plaintext
-    /// code, emails it, and passes `hash_code(secret, plaintext)` here — the
-    /// plaintext is never stored.
     pub async fn create<T: ConnectionTrait>(
         conn: &T,
         user_id: i32,
@@ -31,8 +28,6 @@ impl Entity {
         }
     }
 
-    /// Look up a verification row by user_id and/or the hash of a submitted
-    /// code. `code_hash` must already be `hash_code(secret, submitted_code)`.
     pub async fn find_by_user_id_or_code(
         conn: &DbConn,
         user_id: Option<i32>,
@@ -60,8 +55,6 @@ impl Entity {
         }
     }
 
-    /// Upsert the (already-hashed) code for a user. The caller generates the
-    /// plaintext code, emails it, and passes `hash_code(secret, plaintext)` here.
     pub async fn regenerate(conn: &DbConn, user_id: i32, code_hash: String) -> DbResult<Model> {
         let now = Utc::now().fixed_offset();
 
@@ -87,8 +80,6 @@ impl Entity {
         }
     }
 
-    /// Delete the verification row for a user. Called after a successful verify
-    /// so the (hash of the) code cannot be replayed — single-use. See plan 3d.
     pub async fn consume(conn: &DbConn, user_id: i32) -> DbResult<u64> {
         match Self::delete_many()
             .filter(Column::UserId.eq(user_id))

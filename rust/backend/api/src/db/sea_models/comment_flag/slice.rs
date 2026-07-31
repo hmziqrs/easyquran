@@ -12,7 +12,6 @@ pub struct FlagUserMedia {
     pub size: i64,
 }
 
-/// New flag to be created for a comment
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewCommentFlag {
     pub comment_id: i32,
@@ -20,21 +19,16 @@ pub struct NewCommentFlag {
     pub reason: Option<String>,
 }
 
-/// Query parameters for listing comment flags
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct CommentFlagQuery {
     pub page_no: Option<u64>,
     pub comment_id: Option<i32>,
     pub user_id: Option<i32>,
-    /// Optional search term against reason
     pub search_term: Option<String>,
-    /// e.g. ["created_at"]
     pub sort_by: Option<Vec<String>>,
-    /// "asc" or "desc"
     pub sort_order: Option<String>,
 }
 
-/// Single flag row joined with reporting user fields from query
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult, PartialEq)]
 pub struct FlagWithUserJoined {
     pub id: i32,
@@ -42,10 +36,8 @@ pub struct FlagWithUserJoined {
     pub user_id: i32,
     pub reason: Option<String>,
     pub created_at: DateTimeWithTimeZone,
-    // Joined user fields
     pub user_name: String,
     pub user_avatar_id: Option<i32>,
-    // User avatar media fields from join
     pub user_avatar_object_key: Option<String>,
     pub user_avatar_file_url: Option<String>,
     pub user_avatar_mime_type: Option<String>,
@@ -88,7 +80,6 @@ impl FlagWithUserJoined {
     }
 }
 
-/// Single flag row joined with reporting user fields
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct FlagWithUser {
     pub id: i32,
@@ -96,13 +87,11 @@ pub struct FlagWithUser {
     pub user_id: i32,
     pub reason: Option<String>,
     pub created_at: DateTimeWithTimeZone,
-    // Joined user fields
     pub user_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_avatar: Option<FlagUserMedia>,
 }
 
-/// Aggregate summary for flags on a comment
 #[derive(Clone, Debug, Serialize, Deserialize, FromQueryResult, PartialEq)]
 pub struct FlagsSummary {
     pub comment_id: i32,

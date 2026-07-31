@@ -627,14 +627,6 @@ fn encode_variant(
     }))
 }
 
-/// CRYP-GAP-017: after re-encoding, re-decode the produced bytes and verify the
-/// header + dimensions match the source before returning them for storage. This
-/// rejects partial/corrupt re-encoded output (it is dropped, never stored) by
-/// surfacing an [`OptimizationError::ValidationFailed`].
-///
-/// `expected_width` / `expected_height` are the dimensions of the in-memory
-/// `DynamicImage` that was just encoded; the freshly produced buffer must decode
-/// back to those exact dimensions.
 fn validate_encoded_output(
     buffer: &[u8],
     expected_width: u32,
@@ -646,8 +638,6 @@ fn validate_encoded_output(
         ));
     }
 
-    // Header + dimension check: the buffer must report the same dimensions as
-    // the source image we just encoded.
     let size = imagesize::blob_size(buffer).map_err(|err| {
         OptimizationError::ValidationFailed(format!("could not read re-encoded header: {err}"))
     })?;
@@ -659,8 +649,7 @@ fn validate_encoded_output(
         )));
     }
 
-    // Full re-decode: confirms the bytes are a complete, well-formed image and
-    // not a truncated/partial stream that happened to carry a valid header.
+    // Header can be valid on a truncated body; the full re-decode catches that.
     let redecoded = image::load_from_memory(buffer).map_err(|err| {
         OptimizationError::ValidationFailed(format!("re-encoded output is not decodable: {err}"))
     })?;
@@ -718,9 +707,6 @@ fn encode_to_format(
         }
     };
 
-    // CRYP-GAP-017: validate the freshly re-encoded output (header +
-    // dimensions + full re-decode) before returning it for storage. A failed
-    // validation drops the bytes — they never reach a stored OptimizedImage.
     validate_encoded_output(&buffer, image.width(), image.height())?;
 
     Ok((buffer, mime, extension))
@@ -766,8 +752,6 @@ mod tests {
         assert_eq!(normalize_extension("  "), None);
     }
 
-    // ── format_extensions ──
-
     #[test]
     fn test_format_extensions_known_formats() {
         assert_eq!(format_extensions(&ImageFormat::Png), "png");
@@ -802,8 +786,6 @@ mod tests {
         assert_eq!(format_mime(&ImageFormat::OpenExr), "image/x-exr");
     }
 
-    // ── should_skip_for_quality ──
-
     fn make_probed(format: ImageFormat, bpp: f32) -> ProbedImage {
         ProbedImage {
             width: 100,
@@ -818,14 +800,12 @@ mod tests {
 
     #[test]
     fn test_should_skip_png_already_optimized() {
-        // PNG with bpp <= 3.0 should be skipped
         assert!(should_skip_for_quality(&make_probed(ImageFormat::Png, 2.0)));
         assert!(should_skip_for_quality(&make_probed(ImageFormat::Png, 3.0)));
     }
 
     #[test]
     fn test_should_skip_png_needs_optimization() {
-        // PNG with bpp > 3.0 should NOT be skipped
         assert!(!should_skip_for_quality(&make_probed(
             ImageFormat::Png,
             3.5
@@ -834,7 +814,6 @@ mod tests {
 
     #[test]
     fn test_should_skip_jpeg_already_optimized() {
-        // JPEG with bpp <= 1.5 should be skipped
         assert!(should_skip_for_quality(&make_probed(
             ImageFormat::Jpeg,
             1.0
@@ -847,7 +826,6 @@ mod tests {
 
     #[test]
     fn test_should_skip_jpeg_needs_optimization() {
-        // JPEG with bpp > 1.5 should NOT be skipped
         assert!(!should_skip_for_quality(&make_probed(
             ImageFormat::Jpeg,
             2.0
@@ -856,7 +834,6 @@ mod tests {
 
     #[test]
     fn test_should_skip_webp_already_optimized() {
-        // WebP with bpp <= 1.5 should be skipped
         assert!(should_skip_for_quality(&make_probed(
             ImageFormat::WebP,
             1.0
@@ -887,8 +864,6 @@ mod tests {
         )));
     }
 
-    // ── validate_encoded_output (CRYP-GAP-017) ──
-
     #[test]
     fn test_validate_rejects_empty_buffer() {
         let err = validate_encoded_output(&[], 10, 10).unwrap_err();
@@ -897,7 +872,6 @@ mod tests {
 
     #[test]
     fn test_validate_rejects_garbage_bytes() {
-        // Random bytes are not a valid image header.
         let garbage = b"\x00\x01\x02\x03not an image";
         let err = validate_encoded_output(garbage, 8, 8).unwrap_err();
         assert!(matches!(err, OptimizationError::ValidationFailed(_)));
@@ -905,8 +879,6 @@ mod tests {
 
     #[test]
     fn test_validate_rejects_dimension_mismatch() {
-        // Encode a real 16x16 image, then claim the expected dimensions are
-        // different — the validator must reject it.
         let img = DynamicImage::ImageRgb8(image::RgbImage::new(16, 16));
         let (buffer, _, _) = encode_to_format(&img, TargetFormat::Png, 100).unwrap();
         let err = validate_encoded_output(&buffer, 32, 32).unwrap_err();
@@ -927,28 +899,21 @@ mod tests {
         validate_encoded_output(&buffer, 40, 30).expect("valid re-encoded JPEG must pass");
     }
 
-    // ── significant_reduction ──
-
     #[test]
     fn test_significant_reduction_candidate_larger() {
-        // candidate >= original -> false
         assert!(!significant_reduction(100, 120, 0.1));
         assert!(!significant_reduction(100, 100, 0.1));
     }
 
     #[test]
     fn test_significant_reduction_meets_threshold() {
-        // 10% reduction with 0.05 threshold -> true
         assert!(significant_reduction(100, 90, 0.05));
-        // 5% reduction with 0.05 threshold -> true (boundary)
         assert!(significant_reduction(100, 95, 0.05));
     }
 
     #[test]
     fn test_significant_reduction_below_threshold() {
-        // 4% reduction with 0.05 threshold -> false
         assert!(!significant_reduction(100, 96, 0.05));
-        // 1% reduction with 0.05 threshold -> false
         assert!(!significant_reduction(1000, 990, 0.05));
     }
 

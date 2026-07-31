@@ -1,7 +1,3 @@
-//! Revolut Pay billing provider integration (Europe).
-//!
-//! Supports fast bank transfers, card payments, and subscriptions.
-
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -9,15 +5,8 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// V-MED-10: every outbound Revolut call goes through this client (built once
-// in `new` with timeouts, or overridden via `with_http_client` with the shared
-// AppState client). Never a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
-/// Revolut Pay billing provider.
-///
-/// CRYP-ENC-012: `api_key` and `webhook_secret` are held in
-/// `secrecy::SecretString` (redacting `Debug`, opt-in `expose_secret()`).
 pub struct RevolutProvider {
     pub api_key: SecretString,
     pub webhook_secret: SecretString,
@@ -30,8 +19,6 @@ impl RevolutProvider {
         Self {
             api_key: api_key.into(),
             webhook_secret: webhook_secret.into(),
-            // Production by default; override with the sandbox URL via
-            // REVOLUT_API_BASE_URL for development. See plan Phase 6f.
             base_url: std::env::var("REVOLUT_API_BASE_URL")
                 .unwrap_or_else(|_| "https://merchant.revolut.com/api/1.0".to_string()),
             http_client: build_http_client(),
@@ -43,16 +30,12 @@ impl RevolutProvider {
         self
     }
 
-    /// V-MED-10: inject the shared, timeout-configured client from `AppState`.
     pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = client;
         self
     }
 }
 
-// CRYP-ENC-012: manual redacting `Debug`. Credential fields are always
-// `<redacted>`; only the non-secret wiring is shown. No tracing/error path
-// logs the whole struct.
 impl std::fmt::Debug for RevolutProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RevolutProvider")
@@ -195,23 +178,10 @@ impl BillingProvider for RevolutProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // Revolut Merchant API signs each webhook with HMAC-SHA256 and sends:
-        //   - `Revolut-Signature: v1=<hex>`       (the hex MAC, prefixed `v1=`)
-        //   - `Revolut-Request-Timestamp: <ts>`   (epoch millis)
-        // The signed message is `<timestamp>.<raw_body>` (timestamp, a literal
-        // dot, then the raw body) — official Revolut Merchant docs, "Verify the
-        // payload signature". The previous code read a non-existent
-        // `X-Revolut-Signature` header in a `<ts>.<hmac>` shape Revolut never
-        // sends, and matched a fabricated `ORDER.COMPLETED` event against a
-        // nested `order` object that does not exist — so every real Revolut
-        // webhook was rejected at this gate (audit F#11 round-2).
         let sig_header = super::webhook_util::header_str(&event.headers, "Revolut-Signature")
             .ok_or_else(|| {
                 BillingError::WebhookVerification("Missing Revolut-Signature header".into())
             })?;
-        // The header may list several `v1=` schemes comma-separated (revolut
-        // rotates signing secrets); accept any that verifies. Strip the `v1=`
-        // prefix from each candidate.
         let candidates: Vec<&str> = sig_header
             .split(',')
             .map(|c| c.trim())
@@ -227,8 +197,6 @@ impl BillingProvider for RevolutProvider {
                 BillingError::WebhookVerification("Missing Revolut-Request-Timestamp header".into())
             })?;
 
-        // Replay protection. Revolut sends epoch milliseconds; normalize to
-        // seconds via the same magnitude heuristic as `period_end_to_unix`.
         let ts_raw: i64 = ts.trim().parse().map_err(|_| {
             BillingError::WebhookVerification("Revolut timestamp not an integer".into())
         })?;
@@ -245,14 +213,10 @@ impl BillingProvider for RevolutProvider {
 
         let payload_str = std::str::from_utf8(&event.payload)
             .map_err(|e| BillingError::WebhookVerification(e.to_string()))?;
-        // Signed message = "<timestamp>.<raw_body>".
         let mut manifest = Vec::with_capacity(ts.len() + 1 + event.payload.len());
         manifest.extend_from_slice(ts.as_bytes());
         manifest.push(b'.');
         manifest.extend_from_slice(&event.payload);
-        // Accept the first candidate that matches a configured signing secret.
-        // Ruxlog configures one secret, so there is effectively one candidate;
-        // the loop is a no-op for normal traffic and harmless for rotation.
         let verified = candidates.iter().any(|mac_hex| {
             super::webhook_util::verify_hmac_sha256_hex(
                 self.webhook_secret.expose_secret().as_bytes(),
@@ -269,13 +233,6 @@ impl BillingProvider for RevolutProvider {
         let data: serde_json::Value = serde_json::from_str(payload_str)
             .map_err(|e| BillingError::WebhookVerification(e.to_string()))?;
 
-        // Normalize Revolut's native event taxonomy to the canonical vocabulary
-        // the dispatch matches on. Revolut Merchant fires `ORDER_COMPLETED`
-        // (underscore — the dotted `ORDER.COMPLETED` the previous code matched is
-        // not a real event) when an order is paid; that is the grant signal and
-        // carries the order id we keyed the intent by. Failure/declined events
-        // are left unmapped and fall through to the dispatch's log-only arm
-        // (never a grant).
         let native_event = data["event"].as_str().unwrap_or_default();
         let event_type = match native_event {
             "ORDER_COMPLETED" => super::provider::canonical::CHECKOUT_COMPLETED,
@@ -283,36 +240,16 @@ impl BillingProvider for RevolutProvider {
         }
         .to_string();
 
-        // The Revolut webhook payload is FLAT — { event, order_id,
-        // merchant_order_ext_ref } — so customer/amount/currency/period fields
-        // are NOT available here (they live on the Order resource via
-        // GET /orders/{id}). The grant uses the server-bound checkout intent for
-        // user_id/amount (the dispatch never trusts webhook JSON for granting),
-        // keyed by the order id Revolut returned from `create_checkout`.
         let order_id = data["order_id"].as_str().map(String::from);
 
         Ok(ParsedWebhook {
             event_type,
-            // Not present in the flat webhook; diagnostic only.
             customer_id: String::new(),
-            // Revolut Merchant is a one-time order flow (POST /orders), not
-            // recurring subscriptions — there is no subscription id on the
-            // event. (A subscription arm therefore never fires for Revolut,
-            // which is correct.)
             subscription_id: None,
             payment_id: order_id.clone(),
-            // Revolut keys the checkout intent by the order id (its
-            // `create_checkout` returns it as `session_id`); the webhook echoes
-            // it back as the top-level `order_id`.
             checkout_session_id: order_id,
-            // One-time order flow — no billing period. Revolut grants via the
-            // per-post-purchase path, not a subscription row, so the absence of a
-            // period end is correct (the paywall's fail-closed-on-None rule only
-            // applies to the subscription path).
             current_period_end: None,
             subscription_status: None,
-            // Not present in the flat webhook; the dispatch recovers user_id from
-            // the server-bound checkout intent.
             user_id: None,
             amount_cents: None,
             currency: None,
@@ -325,7 +262,6 @@ impl BillingProvider for RevolutProvider {
         provider_customer_id: &str,
         return_url: &str,
     ) -> Result<String, BillingError> {
-        // Revolut doesn't have a native billing portal
         Ok(format!(
             "https://business.revolut.com/customer/{}?return_url={}",
             provider_customer_id,
@@ -361,9 +297,6 @@ mod tests {
 
     use crate::services::billing::webhook_util;
 
-    /// Sign a Revolut webhook exactly as Revolut does: HMAC-SHA256(secret,
-    /// "<ts>.<body>"), sent as two headers `Revolut-Signature: v1=<hex>` and
-    /// `Revolut-Request-Timestamp: <ts_ms>`.
     fn signed_revolut(payload: &[u8], ts: i64, secret: &str) -> WebhookEvent {
         let ts_str = ts.to_string();
         let mut msg = Vec::with_capacity(ts_str.len() + 1 + payload.len());
@@ -382,22 +315,16 @@ mod tests {
         }
     }
 
-    /// Native Revolut events must normalize to the canonical vocabulary the
-    /// provider-agnostic dispatch matches on (audit F#11).
     #[tokio::test]
     async fn verify_webhook_normalizes_native_events_to_canonical() {
         let provider = RevolutProvider::new("k".into(), "whsec".into());
         let now = chrono::Utc::now().timestamp();
 
         let cases: &[(&str, &str)] = &[
-            // Flat Revolut webhook payload, underscore event name (official doc
-            // fixture).
             (
                 r#"{"event":"ORDER_COMPLETED","order_id":"ord_1","merchant_order_ext_ref":"Test #3928"}"#,
                 "checkout.session.completed",
             ),
-            // Failure/declined events must NOT map to a grant/payment arm; they
-            // fall through to the dispatch's log-only unhandled arm.
             (
                 r#"{"event":"ORDER_PAYMENT_FAILED","order_id":"ord_1"}"#,
                 "ORDER_PAYMENT_FAILED",
@@ -406,7 +333,6 @@ mod tests {
                 r#"{"event":"ORDER_PAYMENT_DECLINED","order_id":"ord_1"}"#,
                 "ORDER_PAYMENT_DECLINED",
             ),
-            // Unmapped → passthrough.
             (
                 r#"{"event":"ORDER_CREATED","order_id":"ord_1"}"#,
                 "ORDER_CREATED",
@@ -418,10 +344,6 @@ mod tests {
             assert_eq!(parsed.event_type, *expected, "body={body}");
         }
 
-        // Structured fields on ORDER_COMPLETED. The flat webhook carries only
-        // event + order_id; the grant recovers user_id/amount from the
-        // server-bound checkout intent (the dispatch never trusts webhook JSON
-        // for granting). The order id round-trips as the checkout intent key.
         let evt = signed_revolut(
             br#"{"event":"ORDER_COMPLETED","order_id":"ord_1","merchant_order_ext_ref":"Test #1"}"#,
             now,
@@ -431,12 +353,10 @@ mod tests {
         assert_eq!(parsed.event_type, "checkout.session.completed");
         assert_eq!(parsed.checkout_session_id.as_deref(), Some("ord_1"));
         assert_eq!(parsed.payment_id.as_deref(), Some("ord_1"));
-        // customer_id / user_id / amount / currency are not in the flat payload.
         assert_eq!(parsed.customer_id, "");
         assert_eq!(parsed.user_id, None);
         assert_eq!(parsed.amount_cents, None);
 
-        // Tampered body must be rejected at the signature gate.
         let mut evt = signed_revolut(
             br#"{"event":"ORDER_COMPLETED","order_id":"ord_1"}"#,
             now,
@@ -452,7 +372,6 @@ mod tests {
             BillingError::WebhookVerification(msg) if msg.contains("mismatch")
         ));
 
-        // A header without the `v1=` scheme is rejected.
         let mut evt = signed_revolut(
             br#"{"event":"ORDER_COMPLETED","order_id":"ord_1"}"#,
             now,

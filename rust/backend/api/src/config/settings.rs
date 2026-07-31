@@ -1,36 +1,10 @@
-//! Typed, fail-closed configuration for the API.
-//!
-//! [`Settings`] is constructed exactly once at boot via [`Settings::from_env`]
-//! and threaded through `AppState` as `Arc<Settings>`. It replaces the
-//! previously-scattered `std::env::var` reads in `main.rs` for the always-on
-//! core (cookie key, HTTP bind, site URLs, object storage, image optimizer)
-//! with a single validated struct, so a misconfigured deployment fails loud at
-//! startup instead of on the first request.
-//!
-//! Fail-closed (mandatory) values panic inside `from_env` with the SAME
-//! operator-actionable messages the old inline `expect` calls used, so boot
-//! diagnostics are unchanged. Fail-open values keep their existing defaults
-//! (e.g. `HOST=0.0.0.0`, `SITE_URL=http://localhost:8888`).
-//!
-//! Scope: this is the MVP (always-on core). Provider-specific configuration
-//! (mail/billing OAuth creds, FCM, webauthn) and the `sea_connect`
-//! connection helpers are intentionally NOT yet migrated onto `Settings` —
-//! those are shared with the `ruxlog_tui` binary (seed-system) which has its
-//! own boot path, and the telemetry OTLP path is gated separately. They will
-//! reuse this pattern in a later phase.
-
 use axum_client_ip::ClientIpSource;
 
 use crate::config::env::{env_bool, env_u64, env_u8, env_with_fallback};
 
-// V-MED-8: `ObjectStorageConfig` holds `access_key` + `secret_key`. A derived
-// `Debug` would print them in full. The manual impl below redacts the secrets
-// to the literal "<redacted>" while still printing the non-secret fields.
-// (Moved here from `state.rs` so the typed config layer owns the type; `state`
-// re-exports it for source-compatible access by existing consumers.)
+// Manual Debug redacts access_key/secret_key — replacing with derive(Debug) leaks them.
 #[derive(Clone)]
 pub struct ObjectStorageConfig {
-    // S3-compatible storage (Cloudflare R2, Garage, AWS S3, etc.)
     pub region: String,
     pub account_id: String,
     pub bucket: String,
@@ -55,10 +29,6 @@ impl std::fmt::Debug for ObjectStorageConfig {
 }
 
 impl ObjectStorageConfig {
-    /// Read S3-compatible storage config from env, fail-closed on the
-    /// mandatory connection fields. Mirrors the inline block that previously
-    /// lived in `main.rs` verbatim (same keys, same `expect` messages, same
-    /// `public_url <- endpoint` fallback) so boot diagnostics are unchanged.
     pub fn from_env() -> Self {
         let bucket = env_with_fallback(&["S3_BUCKET", "AWS_S3_BUCKET"], None)
             .expect("S3_BUCKET or AWS_S3_BUCKET must be set");
@@ -72,7 +42,6 @@ impl ObjectStorageConfig {
         let public_url =
             env_with_fallback(&["S3_PUBLIC_URL", "AWS_S3_PUBLIC_URL"], None)
                 .unwrap_or_else(|| {
-                    // Fall back to direct endpoint when explicit public URL is missing.
                     endpoint.clone()
                 });
         let region = env_with_fallback(
@@ -99,8 +68,6 @@ impl ObjectStorageConfig {
     }
 }
 
-/// Image-optimization tuning. Moved here from `state.rs`; `state` re-exports it
-/// for source-compatible access.
 #[derive(Clone, Debug)]
 pub struct OptimizerConfig {
     pub enabled: bool,
@@ -113,9 +80,6 @@ impl OptimizerConfig {
     pub fn from_env() -> Self {
         Self {
             enabled: env_bool("OPTIMIZE_ON_UPLOAD", true),
-            // DOS-MEDIA-OPTIMIZER: 12Mpx (~4000x3000) is ample for blog imagery
-            // and ~3x cheaper to decode/resize/re-encode than the prior 40Mpx
-            // default, which let a 2 MiB PNG declare ~40Mpx and pin a worker.
             max_pixels: env_u64("OPTIMIZER_MAX_PIXELS", 12_000_000),
             keep_original: env_bool("OPTIMIZER_KEEP_ORIGINAL", true),
             default_webp_quality: env_u8("OPTIMIZER_WEBP_QUALITY_DEFAULT", 80),
@@ -123,7 +87,6 @@ impl OptimizerConfig {
     }
 }
 
-/// HTTP bind + cookie-transport settings.
 pub struct HttpSettings {
     pub host: String,
     pub port: String,
@@ -156,9 +119,6 @@ impl HttpSettings {
     }
 }
 
-/// Public-facing site URLs/names used by the feed, sitemap, and newsletter
-/// confirmation handlers. All fail-open with the same defaults the handlers
-/// previously used inline.
 pub struct SiteSettings {
     pub url: String,
     pub name: String,
@@ -177,28 +137,12 @@ impl SiteSettings {
     }
 }
 
-/// Quran content API boot inputs (Phase 0). Paths to the two immutable Arabic
-/// SQLite artifacts and the Tanzil metadata XML, read once at startup to build
-/// the in-memory [`crate::quran::QuranStore`]. All three may be mounted
-/// read-only in the runtime image.
-///
-/// Every field is a `String` to match the workspace `Settings` convention
-/// (there is no `PathBuf`/`Url` precedent in this layer — §8.3); the loader
-/// converts to `&Path` / connection-URL at the call site. The relative defaults
-/// resolve against the process CWD (the repo root in dev/test).
 #[derive(Clone, Debug)]
 pub struct QuranSettings {
-    /// `QURAN_UTHMANI_PATH` — verbatim Uthmani SQLite artifact.
     pub uthmani_path: String,
-    /// `QURAN_SIMPLE_CLEAN_PATH` — simple-clean SQLite artifact (also the
-    /// Arabic search corpus).
     pub simple_clean_path: String,
-    /// `QURAN_METADATA_XML_PATH` — Tanzil `quran-data.xml` (surah + navigation
-    /// metadata).
     pub metadata_xml_path: String,
-    /// `QURAN_CONTENT_VERSION` — optional pinned assertion. When set, boot
-    /// fails if the BLAKE3-derived content version (§8.1) differs. Survives
-    /// only as an assertion, never as the source of the value.
+    /// Assertion only — never the source of the content version value.
     pub expected_content_version: Option<String>,
 }
 
@@ -218,42 +162,19 @@ impl QuranSettings {
     }
 }
 
-/// The typed, fail-closed boot configuration. Constructed once via
-/// [`Settings::from_env`] and shared (behind `Arc`) across `AppState`.
-///
-/// NOTE: deliberately does NOT `derive(Debug)` — it carries the raw
-/// `cookie_key` secret, and a derived `Debug` would leak it in logs/panics.
+/// Do NOT add `derive(Debug)` — `cookie_key` is a raw secret and would leak.
 pub struct Settings {
-    /// Validated `COOKIE_KEY` (the `validate_cookie_key` contract is enforced
-    /// in `from_env`). Held here so every consumer (cookie signing, keyed code
-    /// hashing) reads one fixed-for-process value instead of re-reading env.
     pub cookie_key: String,
     pub http: HttpSettings,
     pub site: SiteSettings,
     pub object_storage: ObjectStorageConfig,
     pub optimizer: OptimizerConfig,
-    /// Quran content API boot inputs (Phase 0): the two Arabic SQLite artifacts
-    /// + the metadata XML, loaded once into the in-memory `QuranStore`.
     pub quran: QuranSettings,
 }
 
 impl Settings {
-    /// Read and validate the always-on core configuration from the process
-    /// environment. Fail-closed: a missing `COOKIE_KEY`, the known committed
-    /// placeholder, or a missing mandatory S3 field panics here with the same
-    /// message the old inline checks produced.
-    ///
-    /// Does NOT install the field-encryption key into the process-wide
-    /// `utils::field_crypto` slot — that side-effecting install is still
-    /// performed by `state::load_field_enc_key()` in `main.rs` so the
-    /// SeaORM model layer can reach it (kept separate to preserve the exact
-    /// CRYP-KM-003 previous/prev-key install behavior).
     pub fn from_env() -> Self {
         let cookie_key = std::env::var("COOKIE_KEY").expect("COOKIE_KEY must be set");
-        // V-CRIT-1: refuse the known committed placeholder, empty/whitespace,
-        // and sub-32-byte keys BEFORE any derivation. Panicking here is
-        // intentional — booting on a weak/known cookie key is worse than
-        // failing to boot. See CRYPTO_AUDIT.md V-CRIT-1 / V-HIGH-3.
         if let Err(reason) = crate::state::validate_cookie_key(&cookie_key) {
             panic!("{}", reason);
         }
@@ -285,8 +206,6 @@ mod tests {
         std::env::set_var("COOKIE_KEY", strong);
     }
 
-    /// The mandatory S3 fields are read with `expect`; a missing bucket panics
-    /// at boot (fail-closed) rather than silently producing an empty config.
     #[test]
     fn object_storage_panics_when_bucket_missing() {
         let prev_bucket = std::env::var("S3_BUCKET").ok();
@@ -300,7 +219,6 @@ mod tests {
             "ObjectStorageConfig::from_env must panic when S3_BUCKET is missing"
         );
 
-        // Restore env.
         match prev_bucket {
             Some(v) => std::env::set_var("S3_BUCKET", v),
             None => std::env::remove_var("S3_BUCKET"),
@@ -311,8 +229,6 @@ mod tests {
         }
     }
 
-    /// Settings::from_env refuses the known committed COOKIE_KEY placeholder
-    /// (V-CRIT-1) and panics, even though it is longer than 32 bytes.
     #[test]
     fn settings_reject_known_cookie_key_placeholder() {
         let prev = std::env::var("COOKIE_KEY").ok();
@@ -330,7 +246,6 @@ mod tests {
         }
     }
 
-    /// SiteSettings preserves the documented fail-open defaults.
     #[test]
     fn site_settings_defaults() {
         let prev_url = std::env::var("SITE_URL").ok();

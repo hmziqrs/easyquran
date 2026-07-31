@@ -4,11 +4,6 @@ use validator::{Validate, ValidationError};
 
 use crate::db::sea_models::user::{NewUser, UserRole};
 
-// Password floor (CWE-521: weak password requirements) and ceiling (CWE-400:
-// Argon2 memory/CPU DoS via multi-megabyte inputs). `validator`'s
-// `length(min/max)` needs integer literals, so these are module-local consts
-// rather than a shared value; the SAME bound is applied to every
-// password-bearing field across auth_v1 / forgot_password_v1 for consistency.
 const PASSWORD_MIN: u64 = 12;
 const PASSWORD_MAX: u64 = 256;
 
@@ -64,12 +59,6 @@ pub struct V1TwoFADisablePayload {
     pub code: Option<String>,
 }
 
-/// Payload for the second step of the two-step login flow (F#4/F#7/F#16).
-///
-/// `totp_token` is the short-lived, single-use pending credential issued by
-/// `log_in` when the authenticating user has 2FA enrolled (stored in Redis at
-/// `auth:login_totp:{token}`). It authenticates ONLY the TOTP step — it is not
-/// itself a session and grants nothing else. `code` is the 6-digit TOTP code.
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1LoginTotpPayload {
     #[validate(length(min = 64, max = 64))]
@@ -86,8 +75,6 @@ pub struct V1TerminateSessionPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── validate_email ────────────────────────────────────────────────────
 
     #[test]
     fn validate_email_valid_addresses() {
@@ -129,8 +116,6 @@ mod tests {
         assert!(validate_email("user@ domain.com").is_err());
     }
 
-    // ── V1RegisterPayload::into_new_user ──────────────────────────────────
-
     #[test]
     fn into_new_user_maps_fields() {
         let payload = V1RegisterPayload {
@@ -144,8 +129,6 @@ mod tests {
         assert_eq!(new_user.password, "s3cret");
         assert_eq!(new_user.role, UserRole::User);
     }
-
-    // ── V1RegisterPayload validation ──────────────────────────────────────
 
     #[test]
     fn register_payload_valid() {
@@ -187,8 +170,6 @@ mod tests {
         assert!(payload.validate().is_err());
     }
 
-    // ── V1LoginPayload validation ─────────────────────────────────────────
-
     #[test]
     fn login_payload_valid() {
         let payload = V1LoginPayload {
@@ -206,10 +187,6 @@ mod tests {
         };
         assert!(payload.validate().is_err());
     }
-
-    // ── password max-length bound (CWE-400: Argon2 memory DoS) ───────────
-    // PASSWORD_MIN (12) is accepted, PASSWORD_MAX (256) is accepted, and
-    // anything over the cap is rejected before it reaches the hashing layer.
 
     #[test]
     fn login_payload_min_length_password_validates() {
@@ -251,8 +228,6 @@ mod tests {
         assert!(payload.validate().is_err());
     }
 
-    // The SAME bound is enforced on every password-bearing payload, so the
-    // ceiling can't drift between login and registration.
     #[test]
     fn password_bound_is_uniform_across_payloads() {
         let over_max = "a".repeat((PASSWORD_MAX + 1) as usize);
@@ -274,11 +249,6 @@ mod tests {
         );
         assert!(login.is_err());
     }
-
-    // ── V1LoginTotpPayload validation (two-step login, F#4/F#7/F#16) ──────
-    // The pending TOTP credential is a 256-bit hex string (64 chars) and the
-    // TOTP code is exactly 6 digits. Rejecting wrong-length inputs here keeps
-    // them out of the Redis lookup and the TOTP verify.
 
     fn valid_totp_token() -> String {
         "a".repeat(64)

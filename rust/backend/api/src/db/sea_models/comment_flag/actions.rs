@@ -10,10 +10,7 @@ use super::{slice::*, *};
 impl Entity {
     const PER_PAGE: u64 = 20;
 
-    /// Create or upsert a comment flag (unique per (comment_id, user_id)).
-    /// After creating/updating, sync the `flags_count` on the related post_comment.
     pub async fn create(conn: &DbConn, new_flag: NewCommentFlag) -> DbResult<Model> {
-        // Upsert-like behavior: if a flag by this user for this comment exists, update the reason.
         let existing = Entity::find()
             .filter(Column::CommentId.eq(new_flag.comment_id))
             .filter(Column::UserId.eq(new_flag.user_id))
@@ -25,7 +22,6 @@ impl Entity {
         let model = if let Some(found) = existing {
             let mut active: ActiveModel = found.into();
             active.reason = Set(new_flag.reason.clone());
-            // Keep created_at as is
             active.update(conn).await?
         } else {
             let active = ActiveModel {
@@ -38,13 +34,11 @@ impl Entity {
             active.insert(conn).await?
         };
 
-        // Sync flags_count on post_comment
         let _ = Self::sync_flags_count(conn, new_flag.comment_id).await?;
 
         Ok(model)
     }
 
-    /// List flags with pagination and optional filters, joined with user info.
     pub async fn list(
         conn: &DbConn,
         public_url: &str,
@@ -153,7 +147,6 @@ impl Entity {
         Ok(PaginatedList::new(items, total, page, Self::PER_PAGE))
     }
 
-    /// Return a summary for a specific comment's flags.
     pub async fn summary_for_comment(conn: &DbConn, comment_id: i32) -> DbResult<FlagsSummary> {
         let count = Entity::find()
             .filter(Column::CommentId.eq(comment_id))
@@ -166,8 +159,6 @@ impl Entity {
         })
     }
 
-    /// Recalculate and persist the flags_count on the related post_comment.
-    /// Returns the updated count.
     pub async fn sync_flags_count(conn: &DbConn, comment_id: i32) -> DbResult<i64> {
         use super::super::post_comment::Entity as PostCommentEntity;
 
@@ -185,8 +176,6 @@ impl Entity {
         Ok(count)
     }
 
-    /// Clear all flags for a comment and sync flags_count to 0.
-    /// Returns number of deleted rows.
     pub async fn clear_flags(conn: &DbConn, comment_id: i32) -> DbResult<u64> {
         let res = Entity::delete_many()
             .filter(Column::CommentId.eq(comment_id))

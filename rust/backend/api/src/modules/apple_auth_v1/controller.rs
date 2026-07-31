@@ -26,12 +26,6 @@ use super::{
     validator::{AppleCallbackQuery, AppleExchangeRequest},
 };
 
-/// `GET /auth/apple/v1/login` — begin the Apple Sign-in flow.
-///
-/// Builds Apple's authorize URL with PKCE + session-bound CSRF state + OIDC
-/// nonce, persists the state single-use in the in-memory state store, and redirects the browser to
-/// Apple. `response_mode=query` keeps Apple's redirect as a GET `?code&state`,
-/// matching our other providers.
 #[debug_handler]
 #[instrument(skip(_state, session), fields(result))]
 pub async fn apple_login(
@@ -61,7 +55,6 @@ pub async fn apple_login(
     Ok(Redirect::temporary(&auth_url))
 }
 
-/// `GET /auth/apple/v1/callback` — server-side flow completion.
 #[debug_handler]
 #[instrument(skip(state, auth, query), fields(user_id, result))]
 pub async fn apple_callback(
@@ -80,7 +73,6 @@ pub async fn apple_callback(
     Ok(Redirect::temporary(&redirect_url))
 }
 
-/// `POST /auth/apple/v1/exchange` — client-side flow.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id, result))]
 pub async fn apple_exchange(
@@ -116,19 +108,14 @@ pub async fn apple_user_info(auth: AuthSession) -> Result<impl IntoResponse, Err
     }
 }
 
-/// Shared code-exchange + id_token verification + user resolution + session
-/// start for the callback and client-exchange flows.
 async fn finish_apple_code(
     state: &AppState,
     auth: &mut AuthSession,
     code: &str,
     state_secret: &str,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    // Consume the single-use state: PKCE verifier + OIDC nonce.
     let session_id = oauth::oauth_session_id(auth.session())?;
     let oauth_state = oauth::consume_oauth_state(&session_id, state_secret)?;
-    // Echo the PKCE verifier in the token exchange (Apple enforces PKCE when a
-    // code_challenge was sent).
     let code_verifier = oauth_state
         .pkce_verifier
         .as_ref()
@@ -138,7 +125,6 @@ async fn finish_apple_code(
     let cfg = load_apple_config()?;
     let client_secret_jwt = mint_apple_client_secret(&cfg)?;
 
-    // Exchange the code (hand-rolled: Apple's client_secret is a signed JWT).
     let token_resp = exchange_apple_code(
         &state.http_client,
         &cfg,
@@ -148,7 +134,6 @@ async fn finish_apple_code(
     )
     .await?;
 
-    // Verify the id_token (RS256, Apple JWKS) and bind it to our nonce.
     let claims =
         verify_apple_id_token(&token_resp.id_token, &cfg.client_id, nonce.as_deref()).await?;
 
@@ -158,11 +143,8 @@ async fn finish_apple_code(
             .with_message("Apple did not provide an email address")
     })?;
 
-    // Apple may hand back a "Hide My Email" relay address. We treat relay
-    // addresses as verified iff Apple says so (email_verified == "true"); they
-    // are real, deliverable Apple-owned addresses.
     let email_verified = claims.is_email_verified();
-    let name = "Apple User".to_string(); // Apple only sends the name once, on first auth, in the callback `user` blob.
+    let name = "Apple User".to_string();
 
     let user = oauth::find_or_create_user_for_oauth(
         state,
