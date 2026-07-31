@@ -1,183 +1,301 @@
 # Web code quality plan
 
-Scope: `web/` — SvelteKit 2 + Svelte 5 (runes), `adapter-static`, prerendered SPA.
-Verified against Svelte 5.56.8 as installed. Line references are accurate at time of writing; re-confirm before editing.
+Scope: `web/` — SvelteKit 2 + Svelte 5 in runes mode, using `adapter-static` and prerendered routes.
+
+Last verified: **2026-07-31**, against the installed Svelte 5.56.8, SvelteKit 2.70.1, and Bits UI 2.18.1. Reconfirm line references and dependency status before implementing because the Svelte and TanStack packages are moving quickly.
+
+The goal is maintainability, correctness, and testability. A dependency should be added only when it removes meaningful application complexity or provides behavior that would be risky to maintain locally. No performance change should be described as an improvement until it is measured in this application.
 
 ---
 
-## 1. Critical bug: verse cache is not reactive
+## 1. Current quality baseline
+
+The project compiles cleanly, but its automated quality floor is incomplete:
+
+- `pnpm check`: **0 Svelte errors and 0 warnings**
+- `vp lint`: **10 warnings**, including unsafe API-boundary coercion and unhandled promises
+- `vp fmt --check`: **20 files** need formatting
+- web tests: **0**
+- CI workflows enforcing check, lint, format, and tests: **none**
+
+Before large refactors, make the existing commands reproducible in `web/package.json` and enforce them in CI. The first objective is not an arbitrary coverage percentage; it is regression protection for the state and persistence code that will be changed below.
+
+---
+
+## 2. Immediate correctness fixes
+
+### A. Replace the non-reactive verse `Map`
 
 **File:** `web/src/lib/stores/reader.svelte.ts:111`
 
 ```ts
-#versesBySurah = $state(new Map<number, string[]>());   // :111
-seedSurah(num, verses) { this.#versesBySurah.set(num, verses); }  // :317
+#versesBySurah = $state(new Map<number, string[]>());
 ```
 
-`$state` does not proxy `Map`/`Set`. From `node_modules/svelte/src/internal/client/proxy.js`:
+`$state` deeply proxies arrays and simple objects, but it does not make a native `Map` reactive. `seedSurah()` mutates the existing map with `.set()`, so consumers of `versesFor()` are not notified.
 
-```js
-const prototype = get_prototype_of(value);
-if (prototype !== object_prototype && prototype !== array_prototype) {
-  return value;   // Map's prototype is neither → returned unproxied
-}
-```
-
-`versesFor()` reads the `#versesBySurah` field (a reactive source), then calls `.get()` on the raw Map. A re-render therefore only occurs if the **field is reassigned** — which `seedSurah` never does.
-
-**Symptom.** `[surah]/+page.svelte:38` calls `seedSurah` inside an `$effect`, and effects run after render. So on the first visit to any surah, the sidebar's ayah-browse list (`Sidebar.svelte:148`) renders empty and stays empty. Navigate away and back and it populates, because the Map is already filled at render time. The same root cause blanks the `text` field in `bookmarkList` (`reader.svelte.ts:270`).
-
-**Fix.** Use `SvelteMap` from `svelte/reactivity`:
+Use Svelte's reactive collection implementation:
 
 ```ts
 import { SvelteMap } from "svelte/reactivity";
+
 #versesBySurah = new SvelteMap<number, string[]>();
 ```
 
-**Verify.** Open a surah with the sidebar in ayah-browse mode on a cold load; the ayah list must be populated on first paint.
+The visible regression is the Sidebar ayah list remaining empty after a cold surah load. `bookmarkList.text` has the same latent problem, although `bookmarkList` is not currently rendered anywhere.
+
+**Verification:** cold-load a surah, switch the Sidebar to Ayah mode, and confirm that the list populates without another navigation or unrelated state update. Add a regression test around cache seeding and reactive consumption.
+
+### B. Harden asynchronous boundaries
+
+These are correctness improvements, not cosmetic refactors:
+
+- `worker-client.ts`: add a timeout per request, clear the pending entry on timeout, and reject all pending requests on worker failure or disposal.
+- `manifest.ts`: always clear the timeout and detach the caller abort listener in `finally`, or use composed timeout/abort signals where supported by the browser target.
+- `search.ts`: do not call `String()` on an unknown `key`; validate that it is a string. The current coercion can turn an object into `"[object Object]"`.
+- `static/sw.js` and `vite-plugin-quran.ts`: resolve the current floating-promise warnings with explicit error handling or an intentional `void`.
+
+Prefer a small `QuranWorkerClient` class or factory with an explicit lifecycle over eight module-level mutable variables. A single deferred is sufficient for readiness; the current resolver arrays only ever represent one start operation.
 
 ---
 
-## 2. Structural refactors, ranked by payoff
+## 3. Add tests before structural refactors
 
-### A. Module-singleton stores → `createContext`
+Vitest is already available through the workspace tooling and is the recommended unit/component runner for a Vite-based Svelte project.
 
-Every store ends with a module-level instance: `export const reader = new ReaderStore()` (`reader.svelte.ts:386`), and the same in `prefs`, `consent`, `quran`, `notifications`.
+Start with pure, high-value tests that require no browser environment:
 
-SvelteKit documents this as a security issue, not just hygiene — shared server state leaks between users: *"if Alice submitted an embarrassing secret, and Bob visited the page after her, Bob would know Alice's secret."* Prerendering means it is not live today, but it becomes a cross-user leak the moment any route enables SSR. It is also why these components cannot currently be tested in isolation.
-
-Migrate to `createContext` (type-safe; no key management):
-
-```ts
-// lib/stores/reader.svelte.ts
-import { createContext } from "svelte";
-export const [getReader, setReader] = createContext<ReaderStore>();
-```
-
-Set in the app layout, read in components. Highest-leverage change in the repo.
-
-> **Version floor:** `createContext` requires **Svelte ≥ 5.40**. `web/package.json` declares `"svelte": "^5.56.1"` — do not widen that range below 5.40.
-
-### B. Unify the four persistence layers
-
-`reader`, `prefs`, `consent`, and `notifications` each hand-roll `STORAGE_KEY`, a `load()` with try/catch JSON parse + field validation, and a `persist()`. They have drifted: only `reader` registers cross-tab `storage` sync (`reader.svelte.ts:125`), so a theme or consent change in one tab never reaches another.
-
-Build one generic helper:
-
-```ts
-// lib/stores/persisted.svelte.ts
-createPersisted<T>(key: string, version: number, validate: (raw: unknown) => Partial<T>)
-```
-
-It owns: SSR guard, versioned schema gate, validated load, debounced write, and the cross-tab `storage` listener. Collapses ~120 duplicated lines and makes cross-tab behaviour uniform.
-
-### C. Split `reader.svelte.ts` (386 lines)
-
-It owns persistence, navigation, search query, browse mode, typography, bookmarks, notes, a verse cache, worker refresh, and clipboard/share. Split along the comment banners already in the file:
-
-- `bookmarks.svelte.ts`
-- `notes.svelte.ts`
-- `verse-cache.svelte.ts` (worker refresh lives here)
-- typography (`fontSize`, `arabicSizePx`, `bigger`, `smaller`) → merge into `prefs`
-- `copyVerse` / `shareVerse` (`:349`, `:363`) → pure functions in `lib/quran/share.ts`; they take a key and touch no store state
-
-### D. Collapse `VerseRow.svelte`'s four action blocks
-
-**File:** `VerseRow.svelte:81–159`. Four near-identical `Tooltip` + `TooltipTrigger` + `TooltipContent` + `button` blocks, ~20 lines each, differing only in icon, label, handler, and active class.
-
-Replace with one `{#snippet action({ icon, label, onclick, active })}` or a `VerseAction.svelte`. Takes ~80 lines to ~25. Highest-density duplication in the codebase.
-
-Each action currently expands to roughly eight component instances (`Tooltip` → `TooltipPrimitive.Root` → `TooltipTrigger` → `TooltipPrimitive.Trigger` → `TooltipContent` → `TooltipPortal` → `TooltipPrimitive.Portal`/`Content`), instantiated per row. Al-Baqarah has 286 rows. Note that `content-visibility: auto` on `VerseRow.svelte:72` defers **paint**, not component instantiation, so it does not mitigate this. Profile before and after rather than assuming a figure.
-
-### E. Break up the 100-line `onMount`
-
-**File:** `+layout.svelte:30–127`. One hook doing store hydration, service-worker registration, offline-engine boot, Firebase analytics + performance init, the consent bridge, and global crash reporting — six unrelated concerns.
-
-Extract to `lib/boot/{analytics,service-worker,crash-reporting}.ts`, each exporting a start function that returns its own cleanup. `onMount` becomes ~8 lines composing them.
-
-### F. Split `SurahReader.svelte` (243 lines)
-
-Extract:
-- `ModeTabs.svelte` — the WAI-ARIA roving-tabindex keyboard handler at `:56–69`; reusable and unit-testable
-- `FontSizeControl.svelte`
-- `PrevNext.svelte` — duplicated in shape at `SurahReader.svelte:218–241` and `RangeReader.svelte:77–102`
-
-### G. One schema for three hand-rolled wire validators
-
-Three ad-hoc parsers cover two types:
-- `search.ts:69–96` — API `SearchResponse`
-- `worker-client.ts:129–154` — the *same* `SearchResponse`, from the worker
-- `manifest.ts:33–41` — `normalizeScript`
-
-Adopt **Valibot** (~1.37 kB gzipped; tree-shakes to a few hundred bytes for schemas this small). Define one schema per wire type in `lib/quran/schemas.ts`, share it across all three call sites, and infer the TS types from it instead of maintaining them separately.
-
-This is the **only** third-party dependency worth adding — see §5.
-
----
-
-## 3. Smaller fixes
-
-| File | Issue | Fix |
-|---|---|---|
-| `reader.svelte.ts:260–263` | `Object.keys(bookmarks ? bookmarks : {})` is a dead ternary; the following `.filter()` re-checks what `toggleBookmark` already guarantees | `Object.keys(this.#s.bookmarks)`; convert the getter to `$derived.by` |
-| `reader.svelte.ts:286` | `setNote` clones the whole notes object on every keystroke (Svelte-4 habit) | `$state` is deeply reactive — mutate directly |
-| `reader.svelte.ts:200–211` | Six boolean getters for two enums; `Sidebar.svelte:183` re-derives `browseJuz ? "juz" : "page"` anyway | Compare the enum directly, or one `is(mode)` method |
-| `RangeReader.svelte:39` | `openSurah` uses `goto()` on a `<button>` for what is semantically a link — loses preload, middle-click, open-in-new-tab | Use `<a href={surahPath(g.num)}>`, as `:82` in the same file already does |
-| `RangeReader.svelte:44` | `data.kind === "juz" ? 30 : 604` hardcodes range bounds | Move to `quran-meta.ts` |
-| `reader.svelte.ts:67, :224` | Font bounds `22`/`56`/step `3` duplicated between validation and mutators | Single `constants.ts`; also collect the 140 ms debounce, 1500 ms flash, and 300 ms tooltip delay (repeated in two files) |
-| `manifest.ts:44–73` | `clearTimeout(timer)` is skipped when a fetch throws; the `signal` abort listener is never removed on success | Wrap in `try/finally` |
-| `worker-client.ts:16–26` | Eight module-level mutable globals with manually managed `readyResolve[]`/`readyReject[]` arrays that only ever hold one entry | A class with one deferred |
-| `worker-client.ts:48` | `request()` has no timeout — a dropped worker message hangs its promise forever; the `error`/`messageerror` handlers only cover load failure | Add a timeout that rejects and clears the pending entry |
-| `quran.svelte.ts:24–30` | Public mutable fields that `offline.ts:15` writes directly (`quran.status = "resolving"`), bypassing the invariants `setWorkerStatus` maintains (clearing `download`/`error`) | Private fields + getters; expose intent methods only |
-
----
-
-## 4. Tests
-
-There are currently none, though the runner is already installed (`node_modules/.bin/vitest`; `vite-plus` ships `dist/test`).
-
-Start with `lib/quran/search/__fixtures__/queries.json`, which is checked in and unused — `normalize.ts` documents itself as the cross-language parity spec the Rust backend must match byte-for-byte, so that fixture is a test suite waiting to be written.
-
-Other high-value, zero-setup targets:
-- the persistence validators (after §2B, one helper to test instead of four)
+- `lib/quran/search/__fixtures__/queries.json` against `normalize.ts`
 - `parseKey` / `verseKey`
-- `nameNumberFallback` (`search.ts:24`)
-- `RangeReader`'s surah-grouping logic (`:24–36`)
-- `ModeTabs` keyboard handling (after §2F)
+- `nameNumberFallback`
+- range grouping extracted from `RangeReader.svelte`
+- persistence decoders and schema-version behavior
+- manifest response decoding
+- Worker request settlement, timeout, and failure behavior with a fake Worker boundary
+
+Then add browser/component coverage for:
+
+- the cold-load `SvelteMap` regression
+- reading-mode keyboard and ARIA behavior
+- note autosave and persistence timing
+- Sidebar mode switching and links
+
+Add scripts for at least `test` and `test:watch`, then make CI run:
+
+1. formatting check
+2. lint with no warnings
+3. `svelte-check`
+4. unit/component tests
+5. production build
+
+Tests should land immediately after the `SvelteMap` fix and before persistence or ReaderStore is split.
 
 ---
 
-## 5. Dependency decisions
+## 4. Structural refactors, ranked by payoff
 
-**Add:** Valibot, for §2G only.
+### A. Extract a policy-aware persistence foundation
 
-**Do not add any TanStack library.** Each was evaluated against this codebase:
+`reader`, `prefs`, `consent`, and `notifications` repeat JSON parsing, validation, localStorage error handling, and hydration. Extract reusable storage mechanics, but do not force every domain through identical scheduling or side effects.
 
-| Library | Finding |
-|---|---|
-| **Virtual** | `@tanstack/svelte-virtual@3.13.35` is still a Svelte 3/4 **store** adapter — its source imports `derived, writable` from `svelte/store` and returns a `Readable`. Its peer range `^3.48.0 \|\| ^4.0.0 \|\| ^5.0.0` reflects legacy store compat, not runes support. Upstream issue #866 is open, with users reporting empty renders under Svelte 5 and needing a manual `_willUpdate()` hack. Not viable. |
-| **Query** | The v6 adapter is fully runes-based and well maintained (peers `svelte ^5.25`), but has almost no surface here: verses come from `page.data` at build time, search goes through a Web Worker, the manifest resolves once at boot. Cache keys, invalidation, refetch-on-focus and dedup have nothing to attach to. The only candidate is `quranSearch()` in `Results.svelte:20–38`; the existing ~19 lines of debounce-and-cancel are adequate. |
-| **Pacer** | No Svelte adapter exists — TanStack's own site lists "Svelte Pacer needs a contributor." The core package is pre-1.0. Not worth pre-1.0 API churn to replace 15 lines of `setTimeout`. |
-| **DB** | Built for sync engines with optimistic mutations against a server. Bookmarks and notes here are localStorage-only with no server writes, and the corpus sits behind a `postMessage` boundary in sqlite-wasm where live queries cannot reach. |
-| **Store** | Exists to give non-reactive frameworks what `$state` classes provide natively. The current store classes are the correct Svelte 5 pattern. Adopting it would be a regression. |
-| **Form** | One contact form. Revisit only if it grows real validation. |
-| **Table / Router** | No tables; SvelteKit owns routing. |
+A useful boundary owns:
 
-**Virtualization**, if it ever becomes necessary: the desktop sidebar is `collapsible="offcanvas"` (`sidebar.svelte:64–91`), which keeps its content permanently in the DOM and moves it out of view with CSS — so 114 surah entries, or 604 in page-browse mode, are a fixed cost on every page load, not on open. 114 is modest; revisit only if profiling shows the 604-entry list actually hurts. If so, use `@humanspeak/svelte-virtual-list` (Svelte-5-native, peer `svelte: ^5.0.0`, zero runtime deps) — but note it is pre-1.0.
+- SSR/browser guards
+- safe JSON reading and writing
+- schema-version checking
+- decoding `unknown` into validated domain data
+- optional subscription to the cross-tab `storage` event
+- explicit teardown of listeners
 
-Never virtualize the verse list: the prerendered verse text is the SEO payload for `/app/[surah]`, and `?verse=N` deep links depend on `ayah-{n}` anchors existing in the DOM (`[surah]/+page.svelte:48`).
+The domain store still decides when and why to persist:
+
+- **notes:** debounce writes because `localStorage` is synchronous and notes change on every keystroke
+- **preferences:** update the DOM immediately; persistence can be immediate
+- **consent:** persist immediately, then apply the Firebase consent bridge
+- **notifications:** persistence is coupled to token registration and revocation; an external-tab update may require more than assigning fields
+
+Cross-tab behavior should therefore be supported by the foundation but opted into and handled per store. Avoid a configurable “god helper” whose options become harder to understand than the duplicated code it replaces.
+
+### B. Split `reader.svelte.ts` by cohesive responsibility
+
+The file is 386 lines and currently combines transient UI state, durable settings, annotations, verse caching, navigation bookkeeping, persistence, and browser sharing.
+
+A practical split is:
+
+- `reader-session.svelte.ts` — query, browse mode, open note, and navigation token
+- `reader-settings.svelte.ts` — font size and reading mode
+- `annotations.svelte.ts` — bookmarks, notes, last-read data, and their persistence
+- `verse-cache.svelte.ts` — `SvelteMap` plus Worker refresh coordination
+- `quran/share-text.ts` — pure verse-share text formatting
+- `quran/web-share.ts` — clipboard and Web Share API side effects
+
+Do not automatically merge Arabic font size into the global appearance store. It is a reader-specific setting and can remain independently hydratable.
+
+Remove unused state and public API before moving it. At the time of this audit, persisted `current`, the public `current`/`surah` getters, `surahCount`, `fontSize`, `bookmarkList`, and `bookmarkCount` have no consumers. If an item is retained for an imminent feature, document that consumer explicitly.
+
+Directly mutate deeply reactive note and bookmark records when it improves clarity; cloning is not required for Svelte 5 reactivity. The larger note-performance win is debounced persistence, not the removal of one object spread.
+
+### C. Introduce factories first, contexts selectively
+
+The module singletons are **not a current cross-user security vulnerability**. The application is statically prerendered, and its user-specific mutations occur in browser lifecycle code. A shared module becomes dangerous if request-specific data is written to it during SSR; merely enabling an SSR route does not automatically leak the current browser-only state.
+
+Still, store factories improve unit testing and allow isolated app instances. Introduce `createReaderState()`, `createPreferences()`, and similar factories while splitting the domains. Use Svelte's type-safe `createContext` for state that:
+
+- may become request-scoped under SSR
+- needs replacement in component tests
+- should have multiple provider instances
+- belongs to a specific subtree rather than the whole browser session
+
+Keep genuinely process-wide browser services, such as a single Worker or FCM lifecycle manager, as explicit services unless contextual scoping provides a concrete benefit. Do not migrate every singleton in one high-churn change.
+
+`createContext` requires Svelte 5.40 or newer; the current dependency range satisfies that requirement.
+
+### D. Break up root boot orchestration
+
+**File:** `web/src/routes/+layout.svelte`
+
+The root `onMount` hydrates stores, registers the service worker, downloads the offline Quran corpus, initializes analytics/performance, bridges consent, and installs crash reporting.
+
+Extract lifecycle-owned services such as:
+
+- `lib/boot/service-worker.ts`
+- `lib/boot/analytics.ts`
+- `lib/boot/crash-reporting.ts`
+- `lib/boot/offline-engine.ts`
+
+Each `start` function should return its cleanup so asynchronous listeners, including the consent bridge, can be removed reliably.
+
+Do not automatically download the approximately 2.5 MB Quran corpus on every marketing-page visit. Start the offline engine when the user enters `/app`, or deliberately schedule a preload after a clear product signal. This reduces background bandwidth, battery use, and competition with resources the marketing page actually needs while preserving prerendered first paint in the reader.
+
+### E. Use existing accessible primitives in `SurahReader`
+
+Before extracting the custom WAI-ARIA tab code into `ModeTabs.svelte`, replace it with the already-installed Bits UI Tabs primitive. Bits UI handles controlled values, orientation-aware keyboard navigation, automatic activation, and panel labelling.
+
+This also fixes the current panel always using `aria-labelledby="mode-verse"`, including while Reading mode is selected.
+
+Other focused extractions remain reasonable:
+
+- `FontSizeControl.svelte`
+- `PrevNext.svelte`, shared with `RangeReader.svelte`
+
+Do not create components solely to reduce line count; extract when the result has a clear API, independent behavior, or meaningful test surface.
+
+### F. Deduplicate `VerseRow` actions for readability
+
+The four Tooltip action blocks in `VerseRow.svelte` repeat nearly identical markup. Replace them with a local snippet or a small `VerseAction.svelte` API.
+
+This is a readability and consistency improvement. It does **not** reduce the number of Tooltip roots rendered per verse, and a child component adds another component boundary. Treat any runtime-performance claim as unproven until it is profiled.
+
+The existing `content-visibility: auto` reduces offscreen layout and painting while leaving content in the DOM. Retain it and benchmark before introducing more complex rendering behavior.
+
+### G. Centralize wire schemas
+
+`search.ts`, `worker-client.ts`, and `manifest.ts` maintain overlapping manual decoders. Define each wire shape once and infer its TypeScript output from the runtime schema.
+
+**Valibot is a reasonable, low-risk candidate** because it is stable, dependency-free, modular, and tree-shakable. Its actual contribution must be measured in this production bundle; a generic package-page gzip figure is not an application measurement.
+
+This dependency is justified for correctness and developer experience, not as a direct runtime-performance optimization. A centralized handwritten decoder is also acceptable if the team prefers zero dependencies, provided it is shared and thoroughly tested.
 
 ---
 
-## 6. Execution order
+## 5. Smaller fixes
 
-1. **§1** — `SvelteMap` fix. One line, real bug.
-2. **§2B** — extract `createPersisted`; unifies four stores and fixes cross-tab drift.
-3. **§2C** — split `reader.svelte.ts`; move copy/share out as pure functions.
-4. **§2D, §2F** — collapse `VerseRow`'s action blocks; split `SurahReader`.
-5. **§4** — wire up Vitest. Steps 2–4 have produced testable units; start with the parity fixtures.
-6. **§2A** — move stores to `createContext`.
-7. **§2E, §3** — boot-module extraction and the small fixes.
-8. **§2G** — Valibot schemas for the three parsers.
+| File | Finding | Recommendation |
+|---|---|---|
+| `reader.svelte.ts` | Dead bookmark ternary and unused bookmark list/count API | Remove unused API, or simplify and memoize only when a real consumer exists |
+| `reader.svelte.ts` | Notes and bookmarks clone reactive records | Mutate directly where clearer; debounce note persistence |
+| `reader.svelte.ts` | Multiple boolean getters mirror two enums | Compare the enum directly or expose one `is(mode)` helper |
+| `RangeReader.svelte` | A button plus `goto()` performs link navigation | Use a real `<a href={surahPath(...)}>` for preload and browser link affordances |
+| `RangeReader.svelte` | Juz/page maxima are hardcoded | Move the bounds to Quran metadata/constants |
+| `reader.svelte.ts` | Font bounds and timing values are duplicated | Define named domain constants near their owning feature |
+| `manifest.ts` | Timeout and abort listener cleanup is incomplete | Use `finally` or composed abort signals |
+| `worker-client.ts` | Requests can remain pending forever | Add timeout, disposal, and deterministic rejection |
+| `quran.svelte.ts` | Public fields allow invariant-bypassing writes | Use private fields, getters, and intent methods |
+| `Sidebar.svelte` | Range links build literal `/app/...` URLs | Keep route construction centralized and compatible with the project's base-path policy |
+| `+layout.svelte` | Async consent listener is not included in cleanup | Return and compose cleanup functions from the extracted service |
 
-Steps 1–4 are independent of each other and safe to land separately. Step 6 touches every component that reads a store, so land it after the splits in step 3 have settled.
+---
+
+## 6. TanStack and third-party dependency decisions
+
+The decision is **not** “TanStack is bad for Svelte.” Several Svelte adapters are current and capable. The decision is that this application does not yet have the problems most of those libraries solve.
+
+| Library | Current decision | Evidence and future trigger |
+|---|---|---|
+| **Query** | Do not add now | The v6 Svelte adapter is runes-native and actively maintained. Current verses are prerendered, search is Worker-first, and there is no remote bookmark/note state to invalidate or reconcile. Revisit when authenticated server reads and mutations exist. |
+| **DB** | Do not add now; reevaluate for local-first sync | TanStack DB now supports local-only and localStorage collections, schema validation, optimistic updates, and automatic cross-tab synchronization. The earlier claim that it only fits sync engines was incorrect. It remains a 0.x/beta collections/live-query/transaction system and is excessive for a few small preference and annotation records. Revisit when bookmarks and notes become normalized, synchronized, offline-first records. |
+| **Store** | Do not add | The current Svelte adapter is rune-friendly and provides selectors; it is not merely a workaround for non-reactive frameworks. This app has no cross-framework portability requirement, and Svelte's fine-grained rune classes already provide the needed reactivity with less indirection. |
+| **Pacer** | Do not add | It is beta and has no Svelte adapter. One search debounce and one note autosave do not justify adopting the vanilla scheduling model. Revisit if the app develops several queues, rate limits, batches, or cancellable async scheduling flows. |
+| **Form** | Do not add | A Svelte adapter exists, but the current contact page intentionally has no form. Revisit for a genuinely complex form with nested values, async validation, or reusable field composition. |
+| **Virtual** | Do not add without a measured problem and a spike | `@tanstack/svelte-virtual@3.13.35` still imports `svelte/store` and returns a `Readable`. Its current reference documentation says it returns a direct Virtualizer while its source and examples use a store, creating an API-documentation mismatch. The latest source already calls `_willUpdate()`, so the historical manual-workaround report should not be presented as definitely required by the latest version. |
+| **Table** | Do not add | The application has no data-table surface. |
+| **Router** | Do not add | SvelteKit owns routing, loading, prerendering, and navigation. |
+
+### Virtualization policy
+
+The default Sidebar mounts 114 simple surah entries. The 604-entry page list is mounted only when Page browse mode is selected; it is not the default cost on every page load. Profile DOM size, scripting, rendering, INP, and memory on representative mobile hardware before adding virtualization.
+
+If measurement proves virtualization necessary, run a small comparison spike covering:
+
+- the current implementation
+- `virtua/svelte`
+- `@humanspeak/svelte-virtual-list`
+- the latest `@tanstack/svelte-virtual`
+
+Test dynamic heights, keyboard access, scroll restoration, route changes, mobile Safari, and bundle output. Both Svelte-focused alternatives are still pre-1.0, so a framework-native API alone is not enough to select them.
+
+Do not virtualize the verse body at present. The largest surah is modest, `content-visibility` already reduces offscreen rendering cost, and virtualization would complicate SEO/prerendered text, find-in-page, selection, accessibility, and `ayah-{n}` deep-link anchors. This is a current product decision rather than a claim that verse virtualization can never be implemented safely.
+
+---
+
+## 7. Dependency decision
+
+**Potentially add:** Valibot, narrowly for shared persistence and wire schemas, after confirming the generated bundle and agreeing that a maintained schema is preferable to shared handwritten decoders.
+
+**Do not add now:** TanStack Query, DB, Store, Pacer, Form, Virtual, Table, or Router.
+
+This decision should be revisited when product requirements change:
+
+- remote authenticated reads/mutations → evaluate Query
+- normalized local-first synchronized annotations → evaluate DB
+- several complex forms → evaluate Form
+- measured long-list rendering bottleneck → evaluate Virtual and Svelte-native alternatives
+- multiple scheduling/queueing workflows → evaluate Pacer core
+
+---
+
+## 8. Recommended execution order
+
+1. **Fix the `SvelteMap` bug** and add its regression test.
+2. **Establish quality gates**: formatting, lint with no warnings, `svelte-check`, Vitest, build, and CI.
+3. **Harden boundaries**: API decoding, manifest cleanup, Worker timeout/failure/disposal.
+4. **Extract persistence mechanics** with domain-specific scheduling; debounce note writes.
+5. **Split Reader state** and remove unused persisted/public state before introducing new abstractions.
+6. **Replace custom mode tabs with Bits UI Tabs**, then extract focused controls where useful.
+7. **Refactor `VerseRow` actions** for readability, with no assumed performance claim.
+8. **Introduce store factories and selective contexts** after domain boundaries have settled.
+9. **Extract boot services** and start the offline corpus download from the application experience rather than every marketing route.
+10. **Centralize wire schemas**, adding Valibot only after measuring the actual bundle result.
+11. **Profile the Sidebar**; adopt virtualization only if the measurements justify its UX and maintenance costs.
+
+Each step should be independently reviewable. Avoid mixing the state split, context migration, UI extraction, and a new third-party state library into one change.
+
+---
+
+## 9. Primary references
+
+- [Svelte `$state` and built-in classes](https://svelte.dev/docs/svelte/%24state)
+- [Svelte reactive collections (`SvelteMap`)](https://svelte.dev/docs/svelte/svelte-reactivity)
+- [Svelte context and replacing global state](https://svelte.dev/docs/svelte/context)
+- [SvelteKit state management and SSR guidance](https://svelte.dev/docs/kit/state-management)
+- [Svelte testing guidance](https://svelte.dev/docs/svelte/testing)
+- [Bits UI Tabs](https://bits-ui.com/docs/components/tabs)
+- [Web Storage synchronization and performance characteristics](https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API)
+- [TanStack Query Svelte v6 migration](https://tanstack.com/query/latest/docs/framework/svelte/migrate-from-v5-to-v6)
+- [TanStack DB localStorage collections](https://tanstack.com/db/latest/docs/collections/local-storage-collection)
+- [TanStack Store Svelte quick start](https://tanstack.com/store/latest/docs/framework/svelte/quick-start)
+- [TanStack Pacer supported frameworks](https://tanstack.com/pacer/latest/docs/framework)
+- [TanStack Form supported frameworks](https://tanstack.com/form/latest/docs/framework)
+- [TanStack Svelte Virtual source](https://github.com/TanStack/virtual/blob/main/packages/svelte-virtual/src/index.ts)
+- [Valibot v1 bundle design](https://valibot.dev/blog/valibot-v1-the-1-kb-schema-library/)
+- [`content-visibility` behavior](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/content-visibility)
