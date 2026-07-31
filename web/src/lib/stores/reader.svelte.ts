@@ -1,386 +1,187 @@
 /* ════════════════════════════════════════════════════════════════════════
-   reader.svelte.ts — the reading experience state.
+   reader.svelte.ts — the reading experience state (composition root).
 
-   A single Svelte 5 runes class, SSR-safe (guards every DOM/localStorage
-   access behind `browser`). Persists the durable slice (current surah, font
-   size, bookmarks, notes, last-read) to localStorage under its own key,
-   separate from appearance prefs. Recitation audio is not implemented yet —
-   the listening UI was removed; when real audio arrives it will be built
-   against the live API, not a simulated surface.
+   The reader was a single 387-line class combining transient UI state, durable
+   settings, annotations, verse caching, navigation, persistence, and browser
+   sharing. It is now composed from cohesive facets, each in its own module:
+     • reader-core          — shared reactive state + SvelteMap + nav token
+     • reader-persistence   — durable persistence + debounced note writes
+     • reader-session       — query / browse / open-note / navigation
+     • reader-settings      — Arabic font size + reading mode
+     • annotations          — bookmarks / notes / last-read
+     • verse-cache          — SvelteMap + Worker refresh coordination
+     • reader-share         — copy / share side effects + share-text
+
+   The public contract is the flat `ReaderApi` surface below — it is preserved
+   EXACTLY (member names + behavior) so every consumer (SurahReader, VerseRow,
+   Sidebar, Results, the (application)/app pages) keeps working. The singleton
+   import path is stable: `import { reader } from "$lib/stores/reader.svelte"`.
+
+   Removed (verified zero consumers): the `current`/`surah`/`surahCount`/
+   `fontSize`/`bookmarkList`/`bookmarkCount` getters and the dead bookmark
+   ternary. The persisted `current` FIELD is retained (used internally by
+   load/persist/setCurrent/openVerse). See docs/svelte-improvements.md §4.B/§5.
    ════════════════════════════════════════════════════════════════════════ */
 
-import { browser } from "$app/environment";
-import { SURAHS, surahByNum, parseKey, type VerseKey } from "$lib/data/quran";
-import { SvelteMap } from "svelte/reactivity";
+import type { VerseKey } from "$lib/data/quran";
+import { createAnnotations } from "./annotations.svelte";
+import { type BrowseMode, type ReaderMode, createReaderCore } from "./reader-core.svelte";
+import { createReaderPersistence } from "./reader-persistence.svelte";
+import { createReaderSession } from "./reader-session.svelte";
+import { createReaderSettings } from "./reader-settings.svelte";
+import { createReaderShare } from "./reader-share.svelte";
+import { createVerseCache } from "./verse-cache.svelte";
 
-const STORAGE_KEY = "easyquran.reader";
+export type { BrowseMode, ReaderMode } from "./reader-core.svelte";
 
-export type BrowseMode = "surah" | "ayah" | "juz" | "page";
-export type ReaderMode = "verse" | "reading";
-
-interface Persisted {
-  v: number;
-  current: number;
-  fontSize: number;
-  mode: ReaderMode;
-  bookmarks: Record<VerseKey, boolean>;
-  notes: Record<VerseKey, string>;
-  lastRead: { num: number; n: number } | null;
+/** The preserved flat public API of the reader singleton. */
+export interface ReaderApi {
+  // lifecycle
+  hydrate(): void;
+  dispose(): void;
+  // search
+  readonly query: string;
+  readonly hasQuery: boolean;
+  setQuery(v: string): void;
+  clearQuery(): void;
+  // sidebar browse
+  readonly browseMode: BrowseMode;
+  readonly browseSurah: boolean;
+  readonly browseAyah: boolean;
+  readonly browseJuz: boolean;
+  readonly browsePage: boolean;
+  setBrowse(browse: BrowseMode): void;
+  // open note panel (UI)
+  readonly openNote: VerseKey | null;
+  toggleNote(key: VerseKey): void;
+  // navigation
+  setCurrent(num: number): void;
+  openVerse(num: number, n: number): void;
+  // settings
+  readonly arabicSizePx: string;
+  bigger(): void;
+  smaller(): void;
+  readonly mode: ReaderMode;
+  readonly isVerseMode: boolean;
+  readonly isReadingMode: boolean;
+  setMode(mode: ReaderMode): void;
+  // annotations
+  isBookmarked(key: VerseKey): boolean;
+  toggleBookmark(key: VerseKey): void;
+  getNote(key: VerseKey): string;
+  setNote(key: VerseKey, v: string): void;
+  readonly lastRead: { num: number; n: number } | null;
+  readonly hasLastRead: boolean;
+  readonly lastReadRef: string;
+  // verse cache
+  versesFor(num: number): string[];
+  seedSurah(num: number, verses: string[]): void;
+  refreshFromWorker(num: number): Promise<void>;
+  // copy & share
+  copyVerse(key: VerseKey): Promise<boolean>;
+  shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed">;
 }
 
-interface ReaderState extends Persisted {
-  query: string;
-  browse: BrowseMode;
-  openNote: VerseKey | null;
+/**
+ * Construct a fully-wired, isolated reader instance. The singleton `reader`
+ * below is one such instance; tests (and any future subtree-scoped reader)
+ * can create their own.
+ */
+export function createReader(): ReaderApi {
+  const core = createReaderCore();
+  const persistence = createReaderPersistence(core);
+  const session = createReaderSession(core, persistence);
+  const settings = createReaderSettings(core, persistence);
+  const annotations = createAnnotations(core, persistence);
+  const verseCache = createVerseCache(core);
+  const share = createReaderShare(core);
+
+  return {
+    // lifecycle
+    hydrate: () => persistence.hydrate(),
+    dispose: () => persistence.dispose(),
+
+    // search
+    get query() {
+      return session.query;
+    },
+    get hasQuery() {
+      return session.hasQuery;
+    },
+    setQuery: (v: string) => session.setQuery(v),
+    clearQuery: () => session.clearQuery(),
+
+    // sidebar browse
+    get browseMode() {
+      return session.browseMode;
+    },
+    get browseSurah() {
+      return session.browseSurah;
+    },
+    get browseAyah() {
+      return session.browseAyah;
+    },
+    get browseJuz() {
+      return session.browseJuz;
+    },
+    get browsePage() {
+      return session.browsePage;
+    },
+    setBrowse: (browse: BrowseMode) => session.setBrowse(browse),
+
+    // open note panel
+    get openNote() {
+      return session.openNote;
+    },
+    toggleNote: (key: VerseKey) => session.toggleNote(key),
+
+    // navigation
+    setCurrent: (num: number) => session.setCurrent(num),
+    openVerse: (num: number, n: number) => session.openVerse(num, n),
+
+    // settings
+    get arabicSizePx() {
+      return settings.arabicSizePx;
+    },
+    bigger: () => settings.bigger(),
+    smaller: () => settings.smaller(),
+    get mode() {
+      return settings.mode;
+    },
+    get isVerseMode() {
+      return settings.isVerseMode;
+    },
+    get isReadingMode() {
+      return settings.isReadingMode;
+    },
+    setMode: (mode: ReaderMode) => settings.setMode(mode),
+
+    // annotations
+    isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
+    toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
+    getNote: (key: VerseKey) => annotations.getNote(key),
+    setNote: (key: VerseKey, v: string) => annotations.setNote(key, v),
+    get lastRead() {
+      return annotations.lastRead;
+    },
+    get hasLastRead() {
+      return annotations.hasLastRead;
+    },
+    get lastReadRef() {
+      return annotations.lastReadRef;
+    },
+
+    // verse cache
+    versesFor: (num: number) => verseCache.versesFor(num),
+    seedSurah: (num: number, verses: string[]) => verseCache.seedSurah(num, verses),
+    refreshFromWorker: (num: number) => verseCache.refreshFromWorker(num),
+
+    // copy & share
+    copyVerse: (key: VerseKey) => share.copyVerse(key),
+    shareVerse: (key: VerseKey) => share.shareVerse(key),
+  };
 }
 
-const DEFAULTS: ReaderState = {
-  v: 1,
-  current: 1,
-  fontSize: 33,
-  mode: "verse",
-  bookmarks: {},
-  notes: {},
-  lastRead: null,
-  query: "",
-  browse: "surah",
-  openNote: null,
-};
-
-function load(): Partial<Persisted> {
-  if (!browser) return {};
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    // Schema-version gate: this build is v1. A blob with NO `v` is legacy data
-    // from before the version field existed — migrate it forward (the validation
-    // below filters any garbage; persist() re-stamps v:1 on the next write).
-    // Only discard an EXPLICIT unknown version (a future, incompatible shape) so
-    // a schema change can never half-load.
-    if (stored?.v !== undefined && stored.v !== 1) return {};
-    const out: Partial<Persisted> = {};
-    if (
-      typeof stored.current === "number" &&
-      stored.current >= 1 &&
-      stored.current <= SURAHS.length
-    ) {
-      out.current = stored.current;
-    }
-    if (typeof stored.fontSize === "number" && stored.fontSize >= 22 && stored.fontSize <= 56) {
-      out.fontSize = stored.fontSize;
-    }
-    if (stored.mode === "verse" || stored.mode === "reading") out.mode = stored.mode;
-    if (
-      stored.bookmarks &&
-      typeof stored.bookmarks === "object" &&
-      !Array.isArray(stored.bookmarks)
-    ) {
-      const bookmarks: Record<VerseKey, boolean> = {};
-      for (const [k, val] of Object.entries(stored.bookmarks)) {
-        if (val === true) bookmarks[k] = true;
-      }
-      out.bookmarks = bookmarks;
-    }
-    if (stored.notes && typeof stored.notes === "object" && !Array.isArray(stored.notes)) {
-      const notes: Record<VerseKey, string> = {};
-      for (const [k, val] of Object.entries(stored.notes)) {
-        if (typeof val === "string") notes[k] = val;
-      }
-      out.notes = notes;
-    }
-    if (stored.lastRead === null) {
-      out.lastRead = null;
-    } else if (stored.lastRead && typeof stored.lastRead === "object") {
-      const lr = stored.lastRead;
-      if (typeof lr.num === "number" && typeof lr.n === "number") {
-        out.lastRead = { num: lr.num, n: lr.n };
-      }
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-class ReaderStore {
-  // SSR renders from DEFAULTS; saved state is pulled in after mount via
-  // hydrate() so the prerendered HTML and the first client render agree.
-  #s = $state<ReaderState>({ ...DEFAULTS });
-  #hydrated = false;
-  /** Per-open-surah synchronous verse cache — keeps copyVerse / bookmark text
-   *  working without a Worker round-trip (doc §6.3). Seeded from prerendered
-   *  page.data and refreshed from the sqlite-wasm Worker. SvelteMap (not a
-   *  plain Map in $state) so consumers of versesFor() are notified on .set(). */
-  #versesBySurah = new SvelteMap<number, string[]>();
-  /** Monotonic guard: bumped on every navigation so a stale Worker response for
-   *  a previously-open surah can never clobber the currently-selected one. */
-  #navToken = 0;
-
-  /** Hydrate saved state from localStorage after mount (see note above). */
-  hydrate(): void {
-    if (this.#hydrated || !browser) return;
-    this.#hydrated = true;
-    this.#apply(load());
-    // Cross-tab sync: when another tab writes the durable slice, re-read and
-    // re-apply the validated fields so this tab reflects the other's last write.
-    // Registered once — #hydrated guards repeat hydrate() calls. The 'storage'
-    // event only fires in *other* tabs, so this never echoes our own writes.
-    window.addEventListener("storage", (e) => {
-      if (e.key === STORAGE_KEY) this.#apply(load());
-    });
-  }
-
-  /** Apply the validated durable fields from load() into runtime state. Missing
-   *  fields are left untouched (a skipped/invalid field keeps its default). */
-  #apply(s: Partial<Persisted>): void {
-    if (s.current !== undefined) this.#s.current = s.current;
-    if (s.fontSize !== undefined) this.#s.fontSize = s.fontSize;
-    if (s.mode !== undefined) this.#s.mode = s.mode;
-    if (s.bookmarks !== undefined) this.#s.bookmarks = s.bookmarks;
-    if (s.notes !== undefined) this.#s.notes = s.notes;
-    if (s.lastRead !== undefined) this.#s.lastRead = s.lastRead;
-  }
-
-  // ── persistence ──────────────────────────────────────────────────────
-  private persist(): void {
-    if (!browser) return;
-    const { current, fontSize, mode, bookmarks, notes, lastRead } = this.#s;
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ v: 1, current, fontSize, mode, bookmarks, notes, lastRead }),
-      );
-    } catch {
-      /* storage may be unavailable (private mode, quota) — non-fatal */
-    }
-  }
-
-  // ── current surah & navigation ───────────────────────────────────────
-  get current(): number {
-    return this.#s.current;
-  }
-  get surah() {
-    return surahByNum(this.#s.current);
-  }
-  setCurrent(num: number): void {
-    this.#s.current = num;
-    this.#navToken++; // invalidate any in-flight Worker refresh for the prior surah
-    this.#s.query = "";
-    this.#s.openNote = null;
-    this.persist();
-  }
-
-  /** Jump to a specific verse (from search / bookmarks / continue-reading). */
-  openVerse(num: number, n: number): void {
-    this.#s.current = num;
-    this.#navToken++;
-    this.#s.query = "";
-    this.#s.browse = "surah";
-    this.#s.openNote = null;
-    this.#s.lastRead = { num, n };
-    this.persist();
-    if (browser) window.scrollTo(0, 0);
-  }
-
-  // ── search ───────────────────────────────────────────────────────────
-  get query(): string {
-    return this.#s.query;
-  }
-  get hasQuery(): boolean {
-    return this.#s.query.trim().length > 0;
-  }
-  setQuery(v: string): void {
-    this.#s.query = v;
-  }
-  clearQuery(): void {
-    this.#s.query = "";
-  }
-
-  // ── sidebar browse mode (Surah / Verse / Juz / Page) ─────────────────
-  get browseMode(): BrowseMode {
-    return this.#s.browse;
-  }
-  get browseSurah(): boolean {
-    return this.#s.browse === "surah";
-  }
-  get browseAyah(): boolean {
-    return this.#s.browse === "ayah";
-  }
-  get browseJuz(): boolean {
-    return this.#s.browse === "juz";
-  }
-  get browsePage(): boolean {
-    return this.#s.browse === "page";
-  }
-  setBrowse(browse: BrowseMode): void {
-    this.#s.browse = browse;
-  }
-
-  // ── font size ────────────────────────────────────────────────────────
-  get fontSize(): number {
-    return this.#s.fontSize;
-  }
-  get arabicSizePx(): string {
-    return `${this.#s.fontSize}px`;
-  }
-  bigger(): void {
-    this.#s.fontSize = Math.min(56, this.#s.fontSize + 3);
-    this.persist();
-  }
-  smaller(): void {
-    this.#s.fontSize = Math.max(22, this.#s.fontSize - 3);
-    this.persist();
-  }
-
-  // ── reading mode (verse-by-verse vs continuous mushaf text) ──────────
-  get mode(): ReaderMode {
-    return this.#s.mode;
-  }
-  get isVerseMode(): boolean {
-    return this.#s.mode === "verse";
-  }
-  get isReadingMode(): boolean {
-    return this.#s.mode === "reading";
-  }
-  setMode(mode: ReaderMode): void {
-    if (this.#s.mode === mode) return;
-    this.#s.mode = mode;
-    this.persist();
-  }
-
-  // ── bookmarks ────────────────────────────────────────────────────────
-  isBookmarked(key: VerseKey): boolean {
-    return !!this.#s.bookmarks[key];
-  }
-  toggleBookmark(key: VerseKey): void {
-    this.#s.bookmarks = { ...this.#s.bookmarks };
-    if (this.#s.bookmarks[key]) delete this.#s.bookmarks[key];
-    else this.#s.bookmarks[key] = true;
-    this.persist();
-  }
-  /** Bookmarks as an ordered list (surah order, then ayah). */
-  get bookmarkList(): { key: VerseKey; ref: string; text: string; num: number; n: number }[] {
-    return Object.keys(this.#s.bookmarks ? this.#s.bookmarks : ({} as Record<VerseKey, boolean>))
-      .filter((k) => this.#s.bookmarks[k])
-      .map((k) => {
-        const { num, n } = parseKey(k);
-        const s = surahByNum(num);
-        return {
-          key: k,
-          ref: `${s.name} ${num}:${n}`,
-          text: this.versesFor(num)[n - 1] ?? "",
-          num,
-          n,
-        };
-      })
-      .sort((a, b) => a.num - b.num || a.n - b.n);
-  }
-  get bookmarkCount(): number {
-    return Object.values(this.#s.bookmarks).filter(Boolean).length;
-  }
-
-  // ── notes ────────────────────────────────────────────────────────────
-  getNote(key: VerseKey): string {
-    return this.#s.notes[key] ?? "";
-  }
-  setNote(key: VerseKey, v: string): void {
-    this.#s.notes = { ...this.#s.notes, [key]: v };
-    this.persist();
-  }
-  get openNote(): VerseKey | null {
-    return this.#s.openNote;
-  }
-  toggleNote(key: VerseKey): void {
-    this.#s.openNote = this.#s.openNote === key ? null : key;
-  }
-
-  // ── last read ────────────────────────────────────────────────────────
-  get lastRead() {
-    return this.#s.lastRead;
-  }
-  get hasLastRead(): boolean {
-    return this.#s.lastRead !== null;
-  }
-  get lastReadRef(): string {
-    const lr = this.#s.lastRead;
-    if (!lr) return "";
-    return `${surahByNum(lr.num).name} ${lr.num}:${lr.n}`;
-  }
-
-  // ── synchronous verse cache (doc §6.3) ───────────────────────────────
-  /** Synchronous verse text for a surah from the open-surah cache (or "" if the
-   *  surah hasn't been seeded yet this session). */
-  versesFor(num: number): string[] {
-    return this.#versesBySurah.get(num) ?? [];
-  }
-  /** Seed a surah's verses into the sync cache (from prerendered page.data). */
-  seedSurah(num: number, verses: string[]): void {
-    if (verses.length) this.#versesBySurah.set(num, verses);
-  }
-
-  /**
-   * Best-effort refresh of a surah's verses from the sqlite-wasm Worker, guarded
-   * by #navToken so a response for a previously-open surah is discarded. No-op
-   * until the Worker is ready; never throws (the prerendered sync cache already
-   * serves the open surah, so failure is silently absorbed).
-   */
-  async refreshFromWorker(num: number): Promise<void> {
-    if (!browser) return;
-    const token = this.#navToken;
-    try {
-      const { quranWorker } = await import("$lib/quran/worker-client");
-      if (!quranWorker.ready) return;
-      const verses = await quranWorker.readSurah(num);
-      if (token !== this.#navToken) return; // a navigation happened since
-      if (num !== this.#s.current) return; // user moved on
-      if (verses && verses.length) this.seedSurah(num, verses);
-    } catch {
-      /* prerender/cache still serves the surah */
-    }
-  }
-
-  // ── verse text (for copy/share) ──────────────────────────────────────
-  private verseText(key: VerseKey): string {
-    const { num, n } = parseKey(key);
-    return this.versesFor(num)[n - 1] ?? "";
-  }
-
-  // ── verse actions: copy & share ──────────────────────────────────────
-  /** Copy a verse (Arabic + ref) to the clipboard. Returns success. */
-  async copyVerse(key: VerseKey): Promise<boolean> {
-    if (!browser) return false;
-    const { num, n } = parseKey(key);
-    const ref = `${surahByNum(num).name} ${num}:${n}`;
-    try {
-      await navigator.clipboard.writeText(`${this.verseText(key)}\n${ref}`);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** Share a verse via the Web Share API when available, else fall back to
-   *  copying. Returns what happened. */
-  async shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed"> {
-    if (!browser) return "failed";
-    const { num, n } = parseKey(key);
-    const ref = `${surahByNum(num).name} ${num}:${n}`;
-    const text = `${this.verseText(key)}\n${ref}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: ref, text });
-        return "shared";
-      }
-      await navigator.clipboard.writeText(text);
-      return "copied";
-    } catch {
-      return "failed";
-    }
-  }
-
-  /** Total surah count (for the sidebar list source). */
-  get surahCount(): number {
-    return SURAHS.length;
-  }
-}
-
-export const reader = new ReaderStore();
+/** The application-wide reader singleton. Process-wide in the browser; on the
+ *  server it renders from defaults and hydrates after mount. */
+export const reader: ReaderApi = createReader();

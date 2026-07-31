@@ -1,17 +1,21 @@
 /* ════════════════════════════════════════════════════════════════════════
    notifications.svelte.ts — the push-notification experience state.
 
-   A single Svelte 5 runes class, SSR-safe. It orchestrates the full FCM
-   lifecycle on top of lib/firebase/messaging (the thin client):
+   A Svelte 5 runes class, SSR-safe. It orchestrates the full FCM lifecycle on
+   top of lib/firebase/messaging (the thin client):
      • hydrate()   — detect support + permission; if the user previously enabled
                      notifications, re-establish the token and listeners.
      • subscribe() — the user-gesture flow: ask permission → get token → keep it
                      locally → best-effort register with the backend → log event.
      • unsubscribe()— revoke server-side, invalidate the FCM token, clear state.
 
-   The token is persisted to localStorage so it survives reloads, and so a token
-   obtained before accounts shipped can be registered with the backend on a later
-   login. Foreground messages are mirrored into `lastMessage` for the toast.
+   The token is persisted to localStorage (via $lib/storage) so it survives
+   reloads, and so a token obtained before accounts shipped can be registered
+   with the backend on a later login. Foreground messages are mirrored into
+   `lastMessage` for the toast. Persistence here is coupled to token
+   registration/revocation (not a free-standing pref), so writes happen inside
+   #setSubscribed. `createNotifications()` builds an isolated instance for
+   tests; the FCM messaging lifecycle stays an explicit singleton service.
    ════════════════════════════════════════════════════════════════════════ */
 
 import { browser } from "$app/environment";
@@ -30,6 +34,7 @@ import {
   unregisterTokenFromServer,
   type PermissionState,
 } from "$lib/firebase/messaging";
+import { asObject, asString, readJSON, writeJSON } from "$lib/storage";
 
 const STORAGE_KEY = "easyquran.fcm";
 
@@ -38,17 +43,14 @@ interface PersistedFcm {
   subscribed: boolean;
 }
 
-function load(): PersistedFcm {
-  if (!browser) return { token: null, subscribed: false };
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return {
-      token: typeof stored.token === "string" ? stored.token : null,
-      subscribed: Boolean(stored.subscribed),
-    };
-  } catch {
-    return { token: null, subscribed: false };
-  }
+/** Validate a raw localStorage blob into the FCM persisted shape. */
+export function decodeFcm(raw: unknown): PersistedFcm {
+  const stored = asObject(raw);
+  if (!stored) return { token: null, subscribed: false };
+  return {
+    token: asString(stored.token) ?? null,
+    subscribed: stored.subscribed === true,
+  };
 }
 
 class NotificationsStore {
@@ -104,7 +106,7 @@ class NotificationsStore {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
 
-    const stored = load();
+    const stored = decodeFcm(readJSON(STORAGE_KEY));
     this.#token = stored.token;
     this.#subscribed = stored.subscribed;
     this.#permission = getPermissionState();
@@ -183,14 +185,7 @@ class NotificationsStore {
 
   #persist(): void {
     if (!browser) return;
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ token: this.#token, subscribed: this.#subscribed }),
-      );
-    } catch {
-      /* storage may be unavailable (private mode, quota) — non-fatal */
-    }
+    writeJSON(STORAGE_KEY, { token: this.#token, subscribed: this.#subscribed });
   }
 
   #setSubscribed(subscribed: boolean, token: string | null, registered = true): void {
@@ -269,4 +264,9 @@ class NotificationsStore {
   }
 }
 
-export const notifications = new NotificationsStore();
+/** Construct an isolated notifications store instance (for tests/isolation). */
+export function createNotifications(): NotificationsStore {
+  return new NotificationsStore();
+}
+
+export const notifications = createNotifications();
