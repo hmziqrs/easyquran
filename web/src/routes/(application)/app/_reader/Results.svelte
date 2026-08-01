@@ -3,7 +3,8 @@
   reader.hasQuery. Backed by quranSearch: the offline Worker corpus when ready
   (real verse text), the live API when up, or a surah name/number fallback while
   the corpus loads. Each card shows the verse ref + Uthmani text (or just the
-  ref for name matches); clicking opens it in the reader.
+  ref for name matches), applies the response's UTF-16 highlight ranges, and
+  opens the canonical navigation anchor when clicked.
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
@@ -14,9 +15,14 @@
   import {
     SearchHitKind,
     SearchProvider,
+    searchHitAnchorAyah,
+    searchHitKey,
+    searchHitSurah,
+    searchHitText,
     type SearchHit,
     type SearchResponse,
-  } from "$lib/quran/search/normalize";
+  } from "$lib/quran/search/types";
+  import SearchResultText from "./SearchResultText.svelte";
 
   let result = $state.raw<SearchResponse | null>(null);
   let loading = $state(false);
@@ -54,16 +60,19 @@
   );
 
   function open(r: SearchHit): void {
-    const ayah = r.kind === SearchHitKind.Opener ? r.anchorAyah : r.ayah;
-    reader.openVerse(r.surah, ayah);
-    void goto(resolve(surahPath(r.surah, ayah)));
+    const surah = searchHitSurah(r);
+    const ayah = searchHitAnchorAyah(r);
+    reader.openVerse(surah, ayah);
+    void goto(resolve(surahPath(surah, ayah)));
   }
 </script>
 
 <div class="flex flex-col gap-3">
   <div class="text-sm text-fg-2">{label}</div>
   {#if result}
-    {#each result.results as r (r.key)}
+    {#each result.results as r (searchHitKey(r))}
+      {@const surah = searchHitSurah(r)}
+      {@const text = searchHitText(r)}
       <button
         type="button"
         onclick={() => open(r)}
@@ -71,13 +80,13 @@
       >
         <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
           {#if r.kind === SearchHitKind.Opener}
-            {surahByNum(r.surah).name} · Surah opener
+            {surahByNum(surah).name} · Surah opener
           {:else}
-            {surahByNum(r.surah).name} {r.surah}:{r.ayah}
+            {surahByNum(surah).name} {surah}:{r.ayah.ayah}
           {/if}
         </span>
-        {#if r.text}
-          <span dir="rtl" class="font-arabic text-[26px] leading-[2] text-fg">{r.text}</span>
+        {#if text}
+          <SearchResultText {text} highlights={r.highlights} />
         {:else}
           <span class="text-sm text-fg-3">Open surah →</span>
         {/if}

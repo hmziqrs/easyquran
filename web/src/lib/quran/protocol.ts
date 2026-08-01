@@ -8,7 +8,7 @@
 
 import type { DownloadProgress } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
-import type { SearchOpts } from "./search/normalize";
+import type { SearchOpts } from "./search/types";
 
 /** Worker lifecycle status, surfaced to the UI via the quran status store. */
 export type WorkerStatus = "init" | "downloading" | "ready" | "error";

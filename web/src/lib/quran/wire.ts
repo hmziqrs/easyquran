@@ -20,8 +20,8 @@
        Number() would coerce "", [], or true into a finite 0/1 and emit bogus
        surah=0 hits, so the strict guard is mandatory.
 
-   This module is main-thread only. It imports `./search/normalize` (which is
-   itself worker-safe) and `quran-types` (type-only), so it pulls no $env /
+   This module is main-thread only. It imports worker-safe search domain types
+   and `quran-types` (type-only), so it pulls no $env /
    SvelteKit code and could be reused on either side of the worker boundary.
    ════════════════════════════════════════════════════════════════════════ */
 
@@ -31,11 +31,13 @@ import {
   isQuranScript,
   isQuranSourceId,
   OpenerKind,
+  type Ayah,
   type ArtifactSpec,
   type QuranSurahText,
   type SurahNormalization,
 } from "$lib/data/quran-types";
-import { SearchHitKind, type SearchHit } from "./search/normalize";
+import { SearchHitKind, type SearchHit } from "./search/types";
+import { isCanonicalAyahCoordinate } from "./view/canonical-coordinates";
 import { sourceProfile } from "./view/source-profiles";
 
 /** Narrow an unknown to a string-keyed record, or null. */
@@ -64,52 +66,76 @@ export function unwrapEnvelope(raw: unknown): unknown {
 export function decodeSearchHit(raw: unknown): SearchHit | null {
   const rec = asRecord(raw);
   if (!rec) return null;
-  const surah = positiveNumber(rec.surah);
-  if (surah === null) return null;
-  const highlights = decodeHighlights(rec.highlights);
-  if (!highlights) return null;
   if (rec.kind === SearchHitKind.Opener) {
+    const surah = positiveInteger(rec.surah, 114);
+    const text = typeof rec.text === "string" ? rec.text : null;
+    if (surah === null || text === null || rec.key !== `opener:${surah}`) return null;
+    const highlights = decodeHighlights(rec.highlights, text.length);
+    if (!highlights) return null;
     if (rec.anchorAyah !== 1) return null;
     return {
       kind: SearchHitKind.Opener,
       key: `opener:${surah}`,
       surah,
       anchorAyah: 1,
-      text: typeof rec.text === "string" ? rec.text : "",
+      text,
       highlights,
     };
   }
   if (rec.kind !== SearchHitKind.Ayah) return null;
-  const ayah = positiveNumber(rec.ayah);
-  if (ayah === null) return null;
+  const ayah = decodeAyah(rec.ayah);
+  if (!ayah) return null;
+  const highlights = decodeHighlights(rec.highlights, ayah.text.length);
+  if (!highlights) return null;
   return {
     kind: SearchHitKind.Ayah,
-    key: typeof rec.key === "string" ? rec.key : "",
-    surah,
     ayah,
-    globalIndex: Number(rec.globalIndex) || 0,
-    text: typeof rec.text === "string" ? rec.text : "",
     highlights,
   };
 }
 
-function positiveNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? value : null;
+function positiveInteger(value: unknown, max = Number.MAX_SAFE_INTEGER): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= max
+    ? value
+    : null;
 }
 
-function nonNegativeNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+function nonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function decodeHighlights(raw: unknown): { start: number; end: number }[] | null {
+function decodeAyah(raw: unknown): Ayah | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const surah = positiveInteger(rec.surah, 114);
+  const ayah = positiveInteger(rec.ayah);
+  const globalIndex = positiveInteger(rec.globalIndex, 6236);
+  const text = typeof rec.text === "string" ? rec.text : null;
+  if (
+    surah === null ||
+    ayah === null ||
+    globalIndex === null ||
+    text === null ||
+    rec.key !== `${surah}:${ayah}` ||
+    !isCanonicalAyahCoordinate(globalIndex, surah, ayah)
+  ) {
+    return null;
+  }
+  return { key: `${surah}:${ayah}`, surah, ayah, globalIndex, text };
+}
+
+function decodeHighlights(
+  raw: unknown,
+  textLength: number,
+): { start: number; end: number }[] | null {
   if (!Array.isArray(raw)) return null;
   const out: { start: number; end: number }[] = [];
   for (const item of raw) {
     const rec = asRecord(item);
     if (!rec) return null;
-    const start = nonNegativeNumber(rec.start);
-    const end = nonNegativeNumber(rec.end);
-    if (start === null || end === null || end < start) return null;
+    const start = nonNegativeInteger(rec.start);
+    const end = nonNegativeInteger(rec.end);
+    if (start === null || end === null || end <= start || end > textLength) return null;
     out.push({ start, end });
   }
   return out;
@@ -126,9 +152,9 @@ export function decodeSurahNormalization(raw: unknown): SurahNormalization | nul
   const profile = sourceProfile(rec.sourceId);
   if (profile.id !== rec.sourceProfile || profile.script !== rec.script) return null;
   if (!isOpenerKind(rec.openerKind)) return null;
-  const openerEndScalar = nonNegativeNumber(rec.openerEndScalar);
-  const bodyStartScalar = nonNegativeNumber(rec.bodyStartScalar);
-  const surah = positiveNumber(rec.surah);
+  const openerEndScalar = nonNegativeInteger(rec.openerEndScalar);
+  const bodyStartScalar = nonNegativeInteger(rec.bodyStartScalar);
+  const surah = positiveInteger(rec.surah, 114);
   if (
     surah === null ||
     openerEndScalar === null ||
@@ -177,7 +203,7 @@ export function decodeQuranSurahText(raw: unknown): QuranSurahText | null {
 }
 
 /** The validated scalar fields of a SearchResponse, with the `results` array
- *  rebuilt. Each scalar is the wire value when it is a finite number / string,
+ *  rebuilt. Each scalar is the wire value when it is a safe integer / string,
  *  else null — callers decide the fallback. `query` is included so an API
  *  consumer can echo it back when it differs from the request. */
 export interface DecodedSearchPayload {
@@ -191,9 +217,9 @@ export interface DecodedSearchPayload {
 /** Decode the common SearchResponse wire shape shared by the /search API
  *  response and the worker's `search` RPC reply. Callers strip the envelope
  *  first (the API wraps in `{ data }`; the worker does not) via
- *  {@link unwrapEnvelope}. Returns null when the payload is not an object or
- *  `results` is missing/not an array. Individual malformed hits are dropped
- *  (not fatal) so a single bad row cannot blank a whole worker result set. */
+ *  {@link unwrapEnvelope}. Returns null when any part of the response violates
+ *  the tagged contract. This fail-closed behavior prevents an old ayah-only API
+ *  from masquerading as a valid canonical response with an empty result list. */
 export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null {
   const rec = asRecord(raw);
   if (!rec) return null;
@@ -201,13 +227,14 @@ export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null 
   const results: SearchHit[] = [];
   for (const item of rec.results) {
     const hit = decodeSearchHit(item);
-    if (hit) results.push(hit);
+    if (!hit) return null;
+    results.push(hit);
   }
   return {
     query: typeof rec.query === "string" ? rec.query : null,
-    total: typeof rec.total === "number" && Number.isFinite(rec.total) ? rec.total : null,
-    limit: typeof rec.limit === "number" && Number.isFinite(rec.limit) ? rec.limit : null,
-    offset: typeof rec.offset === "number" && Number.isFinite(rec.offset) ? rec.offset : null,
+    total: nonNegativeInteger(rec.total),
+    limit: nonNegativeInteger(rec.limit),
+    offset: nonNegativeInteger(rec.offset),
     results,
   };
 }

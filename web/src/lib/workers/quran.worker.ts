@@ -17,7 +17,7 @@ import {
   searchCanonicalCorpus,
   type CanonicalSearchUnit,
 } from "../quran/search/corpus";
-import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/search/normalize";
+import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/search/types";
 import {
   loadQuranSource,
   readAllSourceRows,

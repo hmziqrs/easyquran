@@ -9,11 +9,8 @@ import {
   MAX_OFFSET,
   isEligibleQuery,
   normalizeArabic,
-  SearchHitKind,
-  type Highlight,
-  type SearchHit,
-  type SearchOpts,
 } from "./normalize.ts";
+import { SearchHitKind, type Highlight, type SearchHit, type SearchOpts } from "./types.ts";
 
 interface SearchUnitBase {
   anchorGlobal: number;
@@ -175,11 +172,13 @@ function hitFor(unit: CanonicalSearchUnit, normalizedQuery: string): SearchHit {
   }
   return {
     kind: SearchHitKind.Ayah,
-    key: `${unit.surah}:${unit.ayah}`,
-    surah: unit.surah,
-    ayah: unit.ayah,
-    globalIndex: unit.globalIndex,
-    text: unit.displayText,
+    ayah: {
+      key: `${unit.surah}:${unit.ayah}`,
+      surah: unit.surah,
+      ayah: unit.ayah,
+      globalIndex: unit.globalIndex,
+      text: unit.displayText,
+    },
     highlights,
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
-import { SearchHitKind, type SearchHit } from "$lib/quran/search/normalize";
+import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";
 import {
   decodeQuranSurahText,
   decodeScript,
@@ -13,11 +13,13 @@ import {
 
 const AYAH_HIT: SearchHit = {
   kind: SearchHitKind.Ayah,
-  key: "2:255",
-  surah: 2,
-  ayah: 255,
-  globalIndex: 262,
-  text: "اللَّهُ لاَ إِلَـٰهَ إِلاَّ هُوَ",
+  ayah: {
+    key: "2:255",
+    surah: 2,
+    ayah: 255,
+    globalIndex: 262,
+    text: "اللَّهُ لاَ إِلَـٰهَ إِلاَّ هُوَ",
+  },
   highlights: [{ start: 0, end: 7 }],
 };
 
@@ -48,19 +50,22 @@ describe("canonical search wire", () => {
 
   it("rejects legacy ayah-only and malformed tagged shapes", () => {
     expect(decodeSearchHit({ surah: 2, ayah: 1, highlights: [] })).toBeNull();
-    expect(decodeSearchHit({ ...AYAH_HIT, surah: "2" })).toBeNull();
+    expect(decodeSearchHit({ ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, surah: "2" } })).toBeNull();
+    expect(
+      decodeSearchHit({ ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, globalIndex: 263 } }),
+    ).toBeNull();
     expect(decodeSearchHit({ ...AYAH_HIT, highlights: [{ start: 4, end: 2 }] })).toBeNull();
     expect(decodeSearchHit({ ...OPENER_HIT, anchorAyah: 2 })).toBeNull();
   });
 
-  it("decodes a response and drops malformed individual hits", () => {
+  it("decodes a response and fails closed on malformed individual hits", () => {
     expect(
       decodeSearchResponse({
         query: "الله",
         total: 2,
         limit: 20,
         offset: 0,
-        results: [AYAH_HIT, { ...OPENER_HIT, anchorAyah: 2 }, OPENER_HIT],
+        results: [AYAH_HIT, OPENER_HIT],
       }),
     ).toEqual({
       query: "الله",
@@ -69,6 +74,15 @@ describe("canonical search wire", () => {
       offset: 0,
       results: [AYAH_HIT, OPENER_HIT],
     });
+    expect(
+      decodeSearchResponse({
+        query: "الله",
+        total: 2,
+        limit: 20,
+        offset: 0,
+        results: [AYAH_HIT, { ...OPENER_HIT, anchorAyah: 2 }, OPENER_HIT],
+      }),
+    ).toBeNull();
     expect(decodeSearchResponse({ results: "invalid" })).toBeNull();
   });
 });

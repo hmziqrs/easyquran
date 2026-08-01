@@ -23,6 +23,9 @@ export interface CanonicalQuranRow {
   text: string;
 }
 
+/** Source coordinates without text, used for exhaustive load-time validation. */
+export type QuranCoordinateRow = Omit<CanonicalQuranRow, "text">;
+
 export interface FirstAyahRow {
   surah: number;
   text: string;
@@ -30,6 +33,7 @@ export interface FirstAyahRow {
 
 export interface QuranSourceQueries {
   readonly count: QuranQuery<number>;
+  readonly coordinates: QuranQuery<QuranCoordinateRow>;
   readonly firstAyahs: QuranQuery<FirstAyahRow>;
   /** Exact unnumbered opener text for chapter-flag or separate-row sources. */
   readonly openers?: QuranQuery<FirstAyahRow>;
@@ -79,6 +83,14 @@ export function decodeCanonicalRow(row: SqlRow): CanonicalQuranRow {
   };
 }
 
+export function decodeCoordinateRow(row: SqlRow): QuranCoordinateRow {
+  return {
+    globalIndex: decodeIntegerField(row, "globalIndex"),
+    surah: decodeIntegerField(row, "surah"),
+    ayah: decodeIntegerField(row, "ayah"),
+  };
+}
+
 export function defineQuranDatabaseAdapter(adapter: QuranDatabaseAdapter): QuranDatabaseAdapter {
   return Object.freeze(adapter);
 }
@@ -111,6 +123,10 @@ export const TANZIL_QURAN_DATABASE = defineQuranDatabaseAdapter({
   queries: Object.freeze({
     count: defineQuranQuery("SELECT count(*) AS count FROM quran_text", (row) =>
       decodeIntegerField(row, "count"),
+    ),
+    coordinates: defineQuranQuery(
+      'SELECT "index" AS globalIndex, sura AS surah, aya AS ayah FROM quran_text ORDER BY "index"',
+      decodeCoordinateRow,
     ),
     firstAyahs: defineQuranQuery(
       "SELECT sura AS surah, text FROM quran_text WHERE aya = 1 ORDER BY sura",

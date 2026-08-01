@@ -3,6 +3,7 @@ import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/da
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import { quranWorker } from "$lib/quran/worker-client";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
+import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 
 /**
  * Drive quranWorker against a fake Worker boundary: we replace globalThis.Worker
@@ -130,6 +131,61 @@ describe("quranWorker request settlement", () => {
     // Attach the handler before the synchronous emit rejects the promise.
     const assertion = expect(p).rejects.toThrow("no such surah");
     fake.emit("message", { id: req.id, ok: false, error: "no such surah" });
+    await assertion;
+  });
+
+  it("decodes the canonical tagged search response", async () => {
+    const fake = await startReady();
+    const resultPromise = quranWorker.search("الم");
+    const req = fake.posted.at(-1)!;
+    fake.emit("message", {
+      id: req.id,
+      ok: true,
+      result: {
+        query: "الم",
+        total: 1,
+        limit: 20,
+        offset: 0,
+        results: [
+          {
+            kind: SearchHitKind.Ayah,
+            ayah: {
+              key: "2:1",
+              surah: 2,
+              ayah: 1,
+              globalIndex: 8,
+              text: "بِسْمِ ٱللَّهِ الٓمٓ",
+            },
+            highlights: [{ start: 16, end: 20 }],
+          },
+        ],
+      },
+    });
+
+    expect(await resultPromise).toMatchObject({
+      query: "الم",
+      total: 1,
+      source: SearchProvider.Worker,
+      results: [{ kind: SearchHitKind.Ayah, ayah: { key: "2:1" } }],
+    });
+  });
+
+  it("rejects a legacy ayah-only search response", async () => {
+    const fake = await startReady();
+    const resultPromise = quranWorker.search("الم");
+    const assertion = expect(resultPromise).rejects.toThrow("malformed search response");
+    const req = fake.posted.at(-1)!;
+    fake.emit("message", {
+      id: req.id,
+      ok: true,
+      result: {
+        query: "الم",
+        total: 1,
+        limit: 20,
+        offset: 0,
+        results: [{ ayah: { key: "2:1" }, highlights: [] }],
+      },
+    });
     await assertion;
   });
 

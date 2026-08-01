@@ -11,16 +11,14 @@ import { QURAN } from "$lib/config/site";
 import { CATALOG } from "$lib/data/quran-meta";
 import { verseKey } from "$lib/data/quran";
 import { quranWorker } from "./worker-client";
+import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";
 import {
-  DEFAULT_LIMIT,
-  DEFAULT_OFFSET,
-  normalizeArabic,
   SearchHitKind,
   SearchProvider,
   type SearchHit,
   type SearchOpts,
   type SearchResponse,
-} from "./search/normalize";
+} from "./search/types";
 import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
 /** Surah name / Arabic / number fallback when no corpus is available. */
@@ -40,11 +38,13 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
     if (hit)
       all.push({
         kind: SearchHitKind.Ayah,
-        key: verseKey(s.num, 1),
-        surah: s.num,
-        ayah: 1,
-        globalIndex: s.startGlobal,
-        text: "",
+        ayah: {
+          key: verseKey(s.num, 1),
+          surah: s.num,
+          ayah: 1,
+          globalIndex: s.startGlobal,
+          text: "",
+        },
         highlights: [],
       });
   }
@@ -79,7 +79,8 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
         const body = await res.json();
         // Strip the `{ data }` envelope (if any) and rebuild field-by-field via
         // the shared wire decoder — never spread the untrusted API shape. Each
-        // hit is re-validated by decodeSearchHit (strict numeric surah/ayah).
+        // hit is re-validated by decodeSearchHit against the canonical tagged
+        // union. A legacy ayah-only API fails closed and falls through.
         const payload = decodeSearchResponse(unwrapEnvelope(body));
         if (payload) {
           return {

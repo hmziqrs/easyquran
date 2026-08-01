@@ -21,12 +21,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
+import {
+  projectQuranCoordinates,
+  scanQuranElements,
+  type QuranSuraAttrs,
+} from "./quran-data-source";
 import { Bismillah } from "./src/lib/data/quran-types";
 import { canonicalOpenerKind } from "./src/lib/quran/view/canonical";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = __dirname;
 const NAMES_PATH = path.join(WEB_ROOT, "src/lib/data/surah-names.json");
+const COORDINATES_PATH = path.join(WEB_ROOT, "src/lib/data/quran-coordinates.json");
 const XML_PATH = path.join(WEB_ROOT, "../db/quran/tanzil/quran-data.xml");
 
 export const QURAN_META_VIRTUAL = "quran-meta:data";
@@ -44,40 +50,8 @@ const EXPECT = {
   ayahs: 6236,
 } as const;
 
-type Attrs = Record<string, string>;
-
-/** Pull `name="value"` pairs off a self-closing element's inner text. */
-function extractAttrs(inner: string): Attrs {
-  const out: Attrs = {};
-  const re = /(\w+)="([^"]*)"/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(inner))) out[m[1]!] = m[2]!;
-  return out;
-}
-
-/** Scan all self-closing `<tag ... />` elements of one tag name, in order. */
-function scanEls(xml: string, tag: string): Attrs[] {
-  const out: Attrs[] = [];
-  const re = new RegExp(`<${tag}\\b([^/>]*)/>`, "g");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml))) out.push(extractAttrs(m[1]!));
-  return out;
-}
-
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`[easyquran:quran-data] ${msg}`);
-}
-
-interface RawSura extends Attrs {
-  index: string;
-  ayas: string;
-  start: string;
-  name: string;
-  tname: string;
-  ename: string;
-  type: string;
-  order: string;
-  rukus: string;
 }
 
 interface Compiled {
@@ -94,13 +68,13 @@ function compile(): Compiled {
     name: string;
   }[];
 
-  const suras = scanEls(xml, "sura") as RawSura[];
+  const suras = scanQuranElements(xml, "sura") as QuranSuraAttrs[];
   assert(suras.length === EXPECT.suras, `expected ${EXPECT.suras} suras, got ${suras.length}`);
 
   const nameByNum = new Map(names.map((n) => [n.num, n]));
   /** global ayah index (1-based) of surah s's first ayah = xml start + 1. */
-  const startGlobalOf = (s: RawSura) => Number(s.start) + 1;
-  const ayasOf = (s: RawSura) => Number(s.ayas);
+  const startGlobalOf = (s: QuranSuraAttrs) => Number(s.start) + 1;
+  const ayasOf = (s: QuranSuraAttrs) => Number(s.ayas);
 
   // ── catalog: authored slug/name ∪ XML-derived fields ──────────────────
   const catalog = suras.map((s) => {
@@ -133,6 +107,34 @@ function compile(): Compiled {
   });
   const totalAyahs = bounds[bounds.length - 1]!.end;
   assert(totalAyahs === EXPECT.ayahs, `expected ${EXPECT.ayahs} ayahs, got ${totalAyahs}`);
+  const projectedCoordinates = projectQuranCoordinates(suras);
+  assert(
+    projectedCoordinates.rowCount === totalAyahs,
+    `coordinate projection ${projectedCoordinates.rowCount} != ${totalAyahs}`,
+  );
+
+  // This plain JSON projection is imported by both the SSG path and the
+  // browser Worker, which cannot consume this Vite-only virtual module.
+  const coordinates = JSON.parse(
+    readFileSync(COORDINATES_PATH, "utf8"),
+  ) as typeof projectedCoordinates;
+  assert(
+    coordinates.rowCount === totalAyahs,
+    "quran-coordinates.json row count drifted from quran-data.xml",
+  );
+  assert(
+    Array.isArray(coordinates.surahs) && coordinates.surahs.length === bounds.length,
+    "quran-coordinates.json surah count drifted from quran-data.xml",
+  );
+  for (const [index, bound] of bounds.entries()) {
+    const coordinate = coordinates.surahs[index];
+    assert(
+      coordinate?.surah === bound.num &&
+        coordinate.startGlobal === bound.start &&
+        coordinate.ayahCount === bound.end - bound.start + 1,
+      `quran-coordinates.json drifted at surah ${bound.num}`,
+    );
+  }
 
   /** Convert a 1-based global ayah index to "surah:ayah". */
   const globalToKey = (g: number): string => {
@@ -144,7 +146,7 @@ function compile(): Compiled {
 
   /** Build inclusive [startGlobal,endGlobal] ranges from start-marker elements. */
   const ranges = (tag: string) => {
-    const els = scanEls(xml, tag);
+    const els = scanQuranElements(xml, tag);
     const starts = els.map((e) => ({
       index: Number(e.index),
       // global index of (sura, aya) = start(sura, 0-based) + aya = startGlobalOf(sura) + aya - 1
@@ -174,7 +176,7 @@ function compile(): Compiled {
   assert(hizbQuarter.length === EXPECT.quarters, `quarters ${hizbQuarter.length}`);
   assert(manzil.length === EXPECT.manzils, `manzils ${manzil.length}`);
 
-  const sajdaEls = scanEls(xml, "sajda");
+  const sajdaEls = scanQuranElements(xml, "sajda");
   assert(sajdaEls.length === EXPECT.sajdas, `sajdas ${sajdaEls.length}`);
   const sajdas = sajdaEls.map((e) => ({
     index: Number(e.index),
@@ -219,9 +221,9 @@ export function quranData(): Plugin {
     },
     configureServer(server) {
       // Regenerate if a source changes during dev.
-      server.watcher.add([NAMES_PATH, XML_PATH]);
+      server.watcher.add([NAMES_PATH, XML_PATH, COORDINATES_PATH]);
       server.watcher.on("change", (f) => {
-        if (f === NAMES_PATH || f === XML_PATH) {
+        if (f === NAMES_PATH || f === XML_PATH || f === COORDINATES_PATH) {
           cached = null;
           const mod = server.moduleGraph.getModuleById(RESOLVED);
           if (mod) void server.reloadModule(mod);

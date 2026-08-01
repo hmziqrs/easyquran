@@ -1,4 +1,8 @@
 import { runOne, runQuery, type CanonicalQuranRow, type QuranQueryRunner } from "../sql.ts";
+import {
+  CANONICAL_QURAN_COORDINATES,
+  validateCanonicalCoordinates,
+} from "./canonical-coordinates.ts";
 import type { QuranSourceProfile } from "./source-profiles.ts";
 import { createQuranSourceView, type QuranSourceView } from "./source-view.ts";
 
@@ -18,6 +22,12 @@ export function loadQuranSource(
       `[quran-source:${profile.id}] row count ${rowCount} != ${profile.canonicalRowCount}`,
     );
   }
+  if (profile.canonicalRowCount !== CANONICAL_QURAN_COORDINATES.rowCount) {
+    throw new Error(
+      `[quran-source:${profile.id}] profile row count ${profile.canonicalRowCount} != canonical ${CANONICAL_QURAN_COORDINATES.rowCount}`,
+    );
+  }
+  validateCanonicalCoordinates(profile.id, runQuery(runner, profile.database.queries.coordinates));
   const firstAyahs = runQuery(runner, profile.database.queries.firstAyahs);
   const openerRows = profile.database.queries.openers
     ? runQuery(runner, profile.database.queries.openers)

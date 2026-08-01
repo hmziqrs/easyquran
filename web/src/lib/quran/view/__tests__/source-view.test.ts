@@ -1,6 +1,8 @@
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
+import searchFixtures from "$lib/quran/search/__fixtures__/queries.json";
+import prefixFixtures from "$lib/quran/view/__fixtures__/prefix-cuts.json";
 import {
   OpenerKind,
   OpenerPackaging,
@@ -8,7 +10,8 @@ import {
   type QuranSourceId as QuranSourceIdValue,
 } from "$lib/data/quran-types";
 import { buildCanonicalSearchCorpus, searchCanonicalCorpus } from "$lib/quran/search/corpus";
-import { SEARCH_VERSION, SearchHitKind, normalizeArabic } from "$lib/quran/search/normalize";
+import { SEARCH_VERSION, normalizeArabic, scalarLength } from "$lib/quran/search/normalize";
+import { SearchHitKind, searchHitKey } from "$lib/quran/search/types";
 import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
 import { sourceProfile } from "$lib/quran/view/source-profiles";
 import { packagingCounts, scalarSlice, scalarToUtf16Index } from "$lib/quran/view/source-view";
@@ -73,6 +76,36 @@ describe("registered Quran source views", () => {
     expect(uthmani.view.opener(1).kind).toBe(OpenerKind.Verse);
     expect(uthmani.view.opener(9)).toEqual({ kind: OpenerKind.None });
   });
+
+  it.each([
+    ["uthmani", uthmani],
+    ["simple-clean", simple],
+  ] as const)("matches every golden scalar-cut field for %s", (_name, source) => {
+    const fixture = prefixFixtures.sources.find(
+      (candidate) => candidate.sourceId === source.profile.sourceId,
+    );
+    expect(fixture?.sourceProfile).toBe(source.profile.id);
+    expect(fixture?.surahs).toHaveLength(114);
+    const firstBySurah = new Map(
+      source.rows.filter((row) => row.ayah === 1).map((row) => [row.surah, row.text]),
+    );
+    for (const expected of fixture!.surahs) {
+      const raw = firstBySurah.get(expected.surah)!;
+      const normalization = source.view.normalization(expected.surah);
+      expect({
+        surah: normalization.surah,
+        openerKind: normalization.openerKind,
+        packaging: normalization.packaging,
+        openerEndScalar: normalization.openerEndScalar,
+        bodyStartScalar: normalization.bodyStartScalar,
+        openerText: normalization.openerText,
+        separator: scalarSlice(raw, normalization.openerEndScalar, normalization.bodyStartScalar),
+        bodyPrefix20: Array.from(source.view.body(expected.surah, 1, raw))
+          .slice(0, 20)
+          .join(""),
+      }).toEqual(expected);
+    }
+  });
 });
 
 describe("canonical web search corpus", () => {
@@ -89,6 +122,40 @@ describe("canonical web search corpus", () => {
     expect(normalizeArabic(uthmaniBasmala)).toBe(normalizeArabic(simple.view.opener(1).text!));
   });
 
+  it("matches every committed canonical search fixture", () => {
+    expect(searchFixtures.searchVersion).toBe(SEARCH_VERSION);
+    for (const fixture of searchFixtures.fixtures) {
+      const normalized = normalizeArabic(fixture.query);
+      const result = searchCanonicalCorpus(corpus, fixture.query);
+      expect({
+        normalized,
+        normalizedScalarLength: scalarLength(normalized),
+        total: result.total,
+        first: result.results.map((hit) =>
+          hit.kind === SearchHitKind.Opener
+            ? {
+                kind: hit.kind,
+                key: hit.key,
+                surah: hit.surah,
+                anchorAyah: hit.anchorAyah,
+              }
+            : {
+                kind: hit.kind,
+                key: hit.ayah.key,
+                surah: hit.ayah.surah,
+                ayah: hit.ayah.ayah,
+                globalIndex: hit.ayah.globalIndex,
+              },
+        ),
+      }).toEqual({
+        normalized: fixture.normalized,
+        normalizedScalarLength: fixture.normalizedScalarLength,
+        total: fixture.total,
+        first: fixture.first,
+      });
+    }
+  });
+
   it("attributes the full basmala to 112 openers and two numbered ayahs", () => {
     const result = searchCanonicalCorpus(corpus, uthmani.view.opener(1).text!, { limit: 50 });
     expect(result.total).toBe(114);
@@ -102,7 +169,7 @@ describe("canonical web search corpus", () => {
     });
     const hits = [...result.results, ...all.results, ...last.results];
     expect(hits.filter((hit) => hit.kind === SearchHitKind.Opener)).toHaveLength(112);
-    expect(hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map((hit) => hit.key)).toEqual([
+    expect(hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map(searchHitKey)).toEqual([
       "1:1",
       "27:30",
     ]);
@@ -110,25 +177,32 @@ describe("canonical web search corpus", () => {
 
   it("does not match across the storage-only opener/body boundary", () => {
     const result = searchCanonicalCorpus(corpus, "الرحيم الم", { limit: 50 });
-    expect(result.results.some((hit) => hit.key === "2:1" || hit.key === "opener:2")).toBe(false);
+    expect(
+      result.results.some((hit) => {
+        const key = searchHitKey(hit);
+        return key === "2:1" || key === "opener:2";
+      }),
+    ).toBe(false);
   });
 
   it("reports highlights against exact display strings and rebases ayah bodies", () => {
     const opener = searchCanonicalCorpus(corpus, uthmani.view.opener(1).text!, {
       limit: 10,
-    }).results.find((hit) => hit.key === "opener:2");
-    if (!opener) throw new Error("missing opener:2 search fixture");
+    }).results.find((hit) => searchHitKey(hit) === "opener:2");
+    if (opener?.kind !== SearchHitKind.Opener) {
+      throw new Error("missing opener:2 search fixture");
+    }
     expect(opener.highlights).toEqual([{ start: 0, end: opener.text.length }]);
 
     const ayah = searchCanonicalCorpus(corpus, "الم", { limit: 50 }).results.find(
-      (hit) => hit.key === "2:1",
+      (hit) => searchHitKey(hit) === "2:1",
     );
     expect(ayah?.kind).toBe(SearchHitKind.Ayah);
     if (ayah?.kind === SearchHitKind.Ayah) {
       expect(ayah.highlights).toEqual([
         {
-          start: scalarToUtf16Index(ayah.text, uthmani.view.normalization(2).bodyStartScalar),
-          end: ayah.text.length,
+          start: scalarToUtf16Index(ayah.ayah.text, uthmani.view.normalization(2).bodyStartScalar),
+          end: ayah.ayah.text.length,
         },
       ]);
     }

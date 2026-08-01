@@ -1,0 +1,2296 @@
+{
+  "sources": [
+    {
+      "sourceId": "uthmani",
+      "sourceProfile": "tanzil-uthmani-581cc540",
+      "surahs": [
+        {
+          "surah": 1,
+          "openerKind": "verse",
+          "packaging": "numbered-ayah",
+          "openerEndScalar": 0,
+          "bodyStartScalar": 0,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": "",
+          "bodyPrefix20": "بِسْمِ ٱللَّهِ ٱلرَّ"
+        },
+        {
+          "surah": 2,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 3,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 4,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلنَّا"
+        },
+        {
+          "surah": 5,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلَّذِ"
+        },
+        {
+          "surah": 6,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْحَمْدُ لِلَّهِ ٱل"
+        },
+        {
+          "surah": 7,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓصٓ"
+        },
+        {
+          "surah": 8,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَسْـَٔلُونَكَ عَنِ "
+        },
+        {
+          "surah": 9,
+          "openerKind": "none",
+          "packaging": "absent",
+          "openerEndScalar": 0,
+          "bodyStartScalar": 0,
+          "openerText": null,
+          "separator": "",
+          "bodyPrefix20": "بَرَآءَةٌ مِّنَ ٱلل"
+        },
+        {
+          "surah": 10,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓر ۚ تِلْكَ ءَايَـ"
+        },
+        {
+          "surah": 11,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓر ۚ كِتَـٰبٌ أُحْ"
+        },
+        {
+          "surah": 12,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓر ۚ تِلْكَ ءَايَـ"
+        },
+        {
+          "surah": 13,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓر ۚ تِلْكَ ءَاي"
+        },
+        {
+          "surah": 14,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓر ۚ كِتَـٰبٌ أَنز"
+        },
+        {
+          "surah": 15,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓر ۚ تِلْكَ ءَايَـ"
+        },
+        {
+          "surah": 16,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "أَتَىٰٓ أَمْرُ ٱللَّ"
+        },
+        {
+          "surah": 17,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سُبْحَـٰنَ ٱلَّذِىٓ "
+        },
+        {
+          "surah": 18,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْحَمْدُ لِلَّهِ ٱل"
+        },
+        {
+          "surah": 19,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "كٓهيعٓصٓ"
+        },
+        {
+          "surah": 20,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "طه"
+        },
+        {
+          "surah": 21,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱقْتَرَبَ لِلنَّاسِ "
+        },
+        {
+          "surah": 22,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلنَّا"
+        },
+        {
+          "surah": 23,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قَدْ أَفْلَحَ ٱلْمُؤ"
+        },
+        {
+          "surah": 24,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سُورَةٌ أَنزَلْنَـٰه"
+        },
+        {
+          "surah": 25,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "تَبَارَكَ ٱلَّذِى نَ"
+        },
+        {
+          "surah": 26,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "طسٓمٓ"
+        },
+        {
+          "surah": 27,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "طسٓ ۚ تِلْكَ ءَايَـٰ"
+        },
+        {
+          "surah": 28,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "طسٓمٓ"
+        },
+        {
+          "surah": 29,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 30,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 31,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 32,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "الٓمٓ"
+        },
+        {
+          "surah": 33,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلنَّب"
+        },
+        {
+          "surah": 34,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْحَمْدُ لِلَّهِ ٱل"
+        },
+        {
+          "surah": 35,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْحَمْدُ لِلَّهِ فَ"
+        },
+        {
+          "surah": 36,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يسٓ"
+        },
+        {
+          "surah": 37,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلصَّـٰٓفَّـٰتِ صَ"
+        },
+        {
+          "surah": 38,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "صٓ ۚ وَٱلْقُرْءَانِ "
+        },
+        {
+          "surah": 39,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "تَنزِيلُ ٱلْكِتَـٰبِ"
+        },
+        {
+          "surah": 40,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 41,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 42,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 43,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 44,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 45,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 46,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "حمٓ"
+        },
+        {
+          "surah": 47,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلَّذِينَ كَفَرُوا۟ "
+        },
+        {
+          "surah": 48,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِنَّا فَتَحْنَا لَك"
+        },
+        {
+          "surah": 49,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلَّذِ"
+        },
+        {
+          "surah": 50,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قٓ ۚ وَٱلْقُرْءَانِ "
+        },
+        {
+          "surah": 51,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلذَّٰرِيَـٰتِ ذَر"
+        },
+        {
+          "surah": 52,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلطُّورِ"
+        },
+        {
+          "surah": 53,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلنَّجْمِ إِذَا هَ"
+        },
+        {
+          "surah": 54,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱقْتَرَبَتِ ٱلسَّاعَ"
+        },
+        {
+          "surah": 55,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلرَّحْمَـٰنُ"
+        },
+        {
+          "surah": 56,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا وَقَعَتِ ٱلْوَ"
+        },
+        {
+          "surah": 57,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سَبَّحَ لِلَّهِ مَا "
+        },
+        {
+          "surah": 58,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قَدْ سَمِعَ ٱللَّهُ "
+        },
+        {
+          "surah": 59,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سَبَّحَ لِلَّهِ مَا "
+        },
+        {
+          "surah": 60,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلَّذِ"
+        },
+        {
+          "surah": 61,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سَبَّحَ لِلَّهِ مَا "
+        },
+        {
+          "surah": 62,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يُسَبِّحُ لِلَّهِ مَ"
+        },
+        {
+          "surah": 63,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا جَآءَكَ ٱلْمُ"
+        },
+        {
+          "surah": 64,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يُسَبِّحُ لِلَّهِ مَ"
+        },
+        {
+          "surah": 65,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلنَّب"
+        },
+        {
+          "surah": 66,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلنَّب"
+        },
+        {
+          "surah": 67,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "تَبَـٰرَكَ ٱلَّذِى ب"
+        },
+        {
+          "surah": 68,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "نٓ ۚ وَٱلْقَلَمِ وَم"
+        },
+        {
+          "surah": 69,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْحَآقَّةُ"
+        },
+        {
+          "surah": 70,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سَأَلَ سَآئِلٌۢ بِع"
+        },
+        {
+          "surah": 71,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِنَّآ أَرْسَلْنَا "
+        },
+        {
+          "surah": 72,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قُلْ أُوحِىَ إِلَىَّ"
+        },
+        {
+          "surah": 73,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلْمُز"
+        },
+        {
+          "surah": 74,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "يَـٰٓأَيُّهَا ٱلْمُد"
+        },
+        {
+          "surah": 75,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "لَآ أُقْسِمُ بِيَوْ"
+        },
+        {
+          "surah": 76,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "هَلْ أَتَىٰ عَلَى ٱل"
+        },
+        {
+          "surah": 77,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلْمُرْسَلَـٰتِ عُ"
+        },
+        {
+          "surah": 78,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "عَمَّ يَتَسَآءَلُون"
+        },
+        {
+          "surah": 79,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلنَّـٰزِعَـٰتِ غَ"
+        },
+        {
+          "surah": 80,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "عَبَسَ وَتَوَلَّىٰٓ"
+        },
+        {
+          "surah": 81,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا ٱلشَّمْسُ كُوّ"
+        },
+        {
+          "surah": 82,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا ٱلسَّمَآءُ ٱن"
+        },
+        {
+          "surah": 83,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَيْلٌ لِّلْمُطَفِّف"
+        },
+        {
+          "surah": 84,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا ٱلسَّمَآءُ ٱن"
+        },
+        {
+          "surah": 85,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلسَّمَآءِ ذَاتِ "
+        },
+        {
+          "surah": 86,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلسَّمَآءِ وَٱلطّ"
+        },
+        {
+          "surah": 87,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "سَبِّحِ ٱسْمَ رَبِّك"
+        },
+        {
+          "surah": 88,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "هَلْ أَتَىٰكَ حَدِيث"
+        },
+        {
+          "surah": 89,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلْفَجْرِ"
+        },
+        {
+          "surah": 90,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "لَآ أُقْسِمُ بِهَـٰ"
+        },
+        {
+          "surah": 91,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلشَّمْسِ وَضُحَىٰ"
+        },
+        {
+          "surah": 92,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلَّيْلِ إِذَا يَغ"
+        },
+        {
+          "surah": 93,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلضُّحَىٰ"
+        },
+        {
+          "surah": 94,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "أَلَمْ نَشْرَحْ لَكَ"
+        },
+        {
+          "surah": 95,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 40,
+          "bodyStartScalar": 41,
+          "openerText": "بِّسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلتِّينِ وَٱلزَّيْ"
+        },
+        {
+          "surah": 96,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱقْرَأْ بِٱسْمِ رَبّ"
+        },
+        {
+          "surah": 97,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 40,
+          "bodyStartScalar": 41,
+          "openerText": "بِّسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِنَّآ أَنزَلْنَـٰه"
+        },
+        {
+          "surah": 98,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "لَمْ يَكُنِ ٱلَّذِين"
+        },
+        {
+          "surah": 99,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا زُلْزِلَتِ ٱلْ"
+        },
+        {
+          "surah": 100,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلْعَـٰدِيَـٰتِ ضَ"
+        },
+        {
+          "surah": 101,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "ٱلْقَارِعَةُ"
+        },
+        {
+          "surah": 102,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "أَلْهَىٰكُمُ ٱلتَّكَ"
+        },
+        {
+          "surah": 103,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَٱلْعَصْرِ"
+        },
+        {
+          "surah": 104,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "وَيْلٌ لِّكُلِّ هُمَ"
+        },
+        {
+          "surah": 105,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "أَلَمْ تَرَ كَيْفَ ف"
+        },
+        {
+          "surah": 106,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "لِإِيلَـٰفِ قُرَيْشٍ"
+        },
+        {
+          "surah": 107,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "أَرَءَيْتَ ٱلَّذِى ي"
+        },
+        {
+          "surah": 108,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِنَّآ أَعْطَيْنَـٰ"
+        },
+        {
+          "surah": 109,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قُلْ يَـٰٓأَيُّهَا ٱ"
+        },
+        {
+          "surah": 110,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "إِذَا جَآءَ نَصْرُ "
+        },
+        {
+          "surah": 111,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "تَبَّتْ يَدَآ أَبِى"
+        },
+        {
+          "surah": 112,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قُلْ هُوَ ٱللَّهُ أَ"
+        },
+        {
+          "surah": 113,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قُلْ أَعُوذُ بِرَبِّ"
+        },
+        {
+          "surah": 114,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 39,
+          "bodyStartScalar": 40,
+          "openerText": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+          "separator": " ",
+          "bodyPrefix20": "قُلْ أَعُوذُ بِرَبِّ"
+        }
+      ]
+    },
+    {
+      "sourceId": "simple-clean",
+      "sourceProfile": "tanzil-simple-clean-a0c52760",
+      "surahs": [
+        {
+          "surah": 1,
+          "openerKind": "verse",
+          "packaging": "numbered-ayah",
+          "openerEndScalar": 0,
+          "bodyStartScalar": 0,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": "",
+          "bodyPrefix20": "بسم الله الرحمن الرح"
+        },
+        {
+          "surah": 2,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 3,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 4,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها الناس اتقوا "
+        },
+        {
+          "surah": 5,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها الذين آمنوا "
+        },
+        {
+          "surah": 6,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الحمد لله الذي خلق ا"
+        },
+        {
+          "surah": 7,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "المص"
+        },
+        {
+          "surah": 8,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يسألونك عن الأنفال ق"
+        },
+        {
+          "surah": 9,
+          "openerKind": "none",
+          "packaging": "absent",
+          "openerEndScalar": 0,
+          "bodyStartScalar": 0,
+          "openerText": null,
+          "separator": "",
+          "bodyPrefix20": "براءة من الله ورسوله"
+        },
+        {
+          "surah": 10,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الر تلك آيات الكتاب "
+        },
+        {
+          "surah": 11,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الر كتاب أحكمت آياته"
+        },
+        {
+          "surah": 12,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الر تلك آيات الكتاب "
+        },
+        {
+          "surah": 13,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "المر تلك آيات الكتاب"
+        },
+        {
+          "surah": 14,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الر كتاب أنزلناه إلي"
+        },
+        {
+          "surah": 15,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الر تلك آيات الكتاب "
+        },
+        {
+          "surah": 16,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "أتى أمر الله فلا تست"
+        },
+        {
+          "surah": 17,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سبحان الذي أسرى بعبد"
+        },
+        {
+          "surah": 18,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الحمد لله الذي أنزل "
+        },
+        {
+          "surah": 19,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "كهيعص"
+        },
+        {
+          "surah": 20,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "طه"
+        },
+        {
+          "surah": 21,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "اقترب للناس حسابهم و"
+        },
+        {
+          "surah": 22,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها الناس اتقوا "
+        },
+        {
+          "surah": 23,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قد أفلح المؤمنون"
+        },
+        {
+          "surah": 24,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سورة أنزلناها وفرضنا"
+        },
+        {
+          "surah": 25,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "تبارك الذي نزل الفرق"
+        },
+        {
+          "surah": 26,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "طسم"
+        },
+        {
+          "surah": 27,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "طس تلك آيات القرآن و"
+        },
+        {
+          "surah": 28,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "طسم"
+        },
+        {
+          "surah": 29,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 30,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 31,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 32,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الم"
+        },
+        {
+          "surah": 33,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها النبي اتق ال"
+        },
+        {
+          "surah": 34,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الحمد لله الذي له ما"
+        },
+        {
+          "surah": 35,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الحمد لله فاطر السما"
+        },
+        {
+          "surah": 36,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يس"
+        },
+        {
+          "surah": 37,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والصافات صفا"
+        },
+        {
+          "surah": 38,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ص والقرآن ذي الذكر"
+        },
+        {
+          "surah": 39,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "تنزيل الكتاب من الله"
+        },
+        {
+          "surah": 40,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 41,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 42,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 43,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 44,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 45,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 46,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "حم"
+        },
+        {
+          "surah": 47,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الذين كفروا وصدوا عن"
+        },
+        {
+          "surah": 48,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إنا فتحنا لك فتحا مب"
+        },
+        {
+          "surah": 49,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها الذين آمنوا "
+        },
+        {
+          "surah": 50,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ق والقرآن المجيد"
+        },
+        {
+          "surah": 51,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والذاريات ذروا"
+        },
+        {
+          "surah": 52,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والطور"
+        },
+        {
+          "surah": 53,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والنجم إذا هوى"
+        },
+        {
+          "surah": 54,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "اقتربت الساعة وانشق "
+        },
+        {
+          "surah": 55,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الرحمن"
+        },
+        {
+          "surah": 56,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا وقعت الواقعة"
+        },
+        {
+          "surah": 57,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سبح لله ما في السماو"
+        },
+        {
+          "surah": 58,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قد سمع الله قول التي"
+        },
+        {
+          "surah": 59,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سبح لله ما في السماو"
+        },
+        {
+          "surah": 60,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها الذين آمنوا "
+        },
+        {
+          "surah": 61,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سبح لله ما في السماو"
+        },
+        {
+          "surah": 62,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يسبح لله ما في السما"
+        },
+        {
+          "surah": 63,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا جاءك المنافقون ق"
+        },
+        {
+          "surah": 64,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يسبح لله ما في السما"
+        },
+        {
+          "surah": 65,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها النبي إذا طل"
+        },
+        {
+          "surah": 66,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها النبي لم تحر"
+        },
+        {
+          "surah": 67,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "تبارك الذي بيده المل"
+        },
+        {
+          "surah": 68,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ن والقلم وما يسطرون"
+        },
+        {
+          "surah": 69,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "الحاقة"
+        },
+        {
+          "surah": 70,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سأل سائل بعذاب واقع"
+        },
+        {
+          "surah": 71,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إنا أرسلنا نوحا إلى "
+        },
+        {
+          "surah": 72,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قل أوحي إلي أنه استم"
+        },
+        {
+          "surah": 73,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها المزمل"
+        },
+        {
+          "surah": 74,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "يا أيها المدثر"
+        },
+        {
+          "surah": 75,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "لا أقسم بيوم القيامة"
+        },
+        {
+          "surah": 76,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "هل أتى على الإنسان ح"
+        },
+        {
+          "surah": 77,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والمرسلات عرفا"
+        },
+        {
+          "surah": 78,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "عم يتساءلون"
+        },
+        {
+          "surah": 79,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والنازعات غرقا"
+        },
+        {
+          "surah": 80,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "عبس وتولى"
+        },
+        {
+          "surah": 81,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا الشمس كورت"
+        },
+        {
+          "surah": 82,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا السماء انفطرت"
+        },
+        {
+          "surah": 83,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ويل للمطففين"
+        },
+        {
+          "surah": 84,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا السماء انشقت"
+        },
+        {
+          "surah": 85,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والسماء ذات البروج"
+        },
+        {
+          "surah": 86,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والسماء والطارق"
+        },
+        {
+          "surah": 87,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "سبح اسم ربك الأعلى"
+        },
+        {
+          "surah": 88,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "هل أتاك حديث الغاشية"
+        },
+        {
+          "surah": 89,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والفجر"
+        },
+        {
+          "surah": 90,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "لا أقسم بهذا البلد"
+        },
+        {
+          "surah": 91,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والشمس وضحاها"
+        },
+        {
+          "surah": 92,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والليل إذا يغشى"
+        },
+        {
+          "surah": 93,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والضحى"
+        },
+        {
+          "surah": 94,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ألم نشرح لك صدرك"
+        },
+        {
+          "surah": 95,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والتين والزيتون"
+        },
+        {
+          "surah": 96,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "اقرأ باسم ربك الذي خ"
+        },
+        {
+          "surah": 97,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إنا أنزلناه في ليلة "
+        },
+        {
+          "surah": 98,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "لم يكن الذين كفروا م"
+        },
+        {
+          "surah": 99,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا زلزلت الأرض زلزا"
+        },
+        {
+          "surah": 100,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والعاديات ضبحا"
+        },
+        {
+          "surah": 101,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "القارعة"
+        },
+        {
+          "surah": 102,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ألهاكم التكاثر"
+        },
+        {
+          "surah": 103,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "والعصر"
+        },
+        {
+          "surah": 104,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ويل لكل همزة لمزة"
+        },
+        {
+          "surah": 105,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "ألم تر كيف فعل ربك ب"
+        },
+        {
+          "surah": 106,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "لإيلاف قريش"
+        },
+        {
+          "surah": 107,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "أرأيت الذي يكذب بالد"
+        },
+        {
+          "surah": 108,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إنا أعطيناك الكوثر"
+        },
+        {
+          "surah": 109,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قل يا أيها الكافرون"
+        },
+        {
+          "surah": 110,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "إذا جاء نصر الله وال"
+        },
+        {
+          "surah": 111,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "تبت يدا أبي لهب وتب"
+        },
+        {
+          "surah": 112,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قل هو الله أحد"
+        },
+        {
+          "surah": 113,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قل أعوذ برب الفلق"
+        },
+        {
+          "surah": 114,
+          "openerKind": "header",
+          "packaging": "embedded-prefix",
+          "openerEndScalar": 22,
+          "bodyStartScalar": 23,
+          "openerText": "بسم الله الرحمن الرحيم",
+          "separator": " ",
+          "bodyPrefix20": "قل أعوذ برب الناس"
+        }
+      ]
+    }
+  ]
+}

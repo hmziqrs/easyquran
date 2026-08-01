@@ -10,45 +10,14 @@
   import { surahByNum, surahPath } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
-  import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
+  import type { RangePageData } from "$lib/data/quran-types";
   import { bodyText } from "$lib/quran/view/source-view";
-  import { headerText } from "$lib/quran/view/presentation";
+  import { groupRangeAyahs } from "$lib/quran/view/presentation";
 
   let { data }: { data: RangePageData } = $props();
 
-  interface Group {
-    num: number;
-    name: string;
-    arabic: string;
-    ayahs: Ayah[];
-    normalization: SurahNormalization;
-    opener: string | null;
-  }
-
-  // Ayahs arrive in ascending global order; split into surah groups.
-  const groups = $derived.by<Group[]>(() => {
-    const out: Group[] = [];
-    const bySurah = new Map(data.normalizations.map((value) => [value.surah, value]));
-    for (const a of data.ayahs) {
-      let g = out[out.length - 1];
-      if (!g || g.num !== a.surah) {
-        const s = surahByNum(a.surah);
-        const normalization = bySurah.get(a.surah);
-        if (!normalization) throw new Error(`Missing Quran normalization for surah ${a.surah}`);
-        g = {
-          num: a.surah,
-          name: s.name,
-          arabic: s.arabic,
-          ayahs: [],
-          normalization,
-          opener: a.ayah === 1 ? headerText(normalization) : null,
-        };
-        out.push(g);
-      }
-      g.ayahs.push(a);
-    }
-    return out;
-  });
+  // Shared with any future SPA range loader; the component only renders it.
+  const groups = $derived(groupRangeAyahs(data.ayahs, data.normalizations));
 
   /** Open the full surah (leaves the range view). */
   function openSurah(num: number): void {
@@ -70,17 +39,18 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  {#each groups as g (g.num)}
+  {#each groups as g (g.surah)}
+    {@const surah = surahByNum(g.surah)}
     <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
       <!-- surah group header -->
       <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-9">
-        <span class="text-sm font-semibold text-fg">{g.num}. {g.name}</span>
+        <span class="text-sm font-semibold text-fg">{g.surah}. {surah.name}</span>
         <button
           type="button"
-          onclick={() => openSurah(g.num)}
+          onclick={() => openSurah(g.surah)}
           class="flex items-center gap-2 text-[12.5px] text-accent transition-colors hover:brightness-110"
         >
-          <span dir="rtl" class="font-arabic text-base">{g.arabic}</span>
+          <span dir="rtl" class="font-arabic text-base">{surah.arabic}</span>
           <span>Full surah →</span>
         </button>
       </div>

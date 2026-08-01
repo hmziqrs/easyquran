@@ -15,13 +15,8 @@
 import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
-import {
-  DEFAULT_LIMIT,
-  DEFAULT_OFFSET,
-  type SearchOpts,
-  type SearchResponse,
-  SearchProvider,
-} from "./search/normalize";
+import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
+import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
 import { decodeQuranSurahText, decodeSearchResponse } from "./wire";
 
 /** Per-request settlement handle. The timer is cleared on every settle path
@@ -171,19 +166,10 @@ export const quranWorker = {
       (r: unknown) => {
         const limit = opts?.limit ?? DEFAULT_LIMIT;
         const offset = opts?.offset ?? DEFAULT_OFFSET;
-        const empty: SearchResponse = {
-          query,
-          total: 0,
-          limit,
-          offset,
-          results: [],
-          source: SearchProvider.Worker,
-        };
         // The worker boundary is structuredClone'd `unknown`, not a typed RPC:
-        // rebuild via the shared wire decoder. Malformed hits are dropped rather
-        // than blanking the whole set; a non-object/non-array reply yields empty.
+        // rebuild via the shared wire decoder and fail closed on contract drift.
         const payload = decodeSearchResponse(r);
-        if (!payload) return empty;
+        if (!payload) throw new Error("quran worker returned a malformed search response");
         return {
           query,
           total: payload.total ?? payload.results.length,

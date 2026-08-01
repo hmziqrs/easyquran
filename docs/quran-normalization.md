@@ -42,15 +42,17 @@ points.
 
 ### 0.1 Web implementation map
 
-The web implementation deliberately separates four concerns:
+The web implementation deliberately separates these concerns:
 
-| Concern                                         | Shared module                               | Used by                                  |
-| ----------------------------------------------- | ------------------------------------------- | ---------------------------------------- |
-| Serialized domain values                        | `web/src/lib/data/quran-types.ts`           | SSG, Worker, UI, wire decoders           |
-| Artifact, script, packaging, and schema profile | `web/src/lib/quran/view/source-profiles.ts` | manifest, SSG, Worker, tooling           |
-| Typed SQL queries and row decoding              | `web/src/lib/quran/sql.ts`                  | Node and sqlite-wasm query runners       |
-| Canonical `raw` / `body` / `opener` view        | `web/src/lib/quran/view/`                   | surah/range rendering and search         |
-| Product source roles                            | `web/src/lib/quran/source-plan.ts`          | SSG defaults, Worker, fixture generation |
+| Concern                                         | Shared module                                      | Used by                                  |
+| ----------------------------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| Serialized Quran domain values                  | `web/src/lib/data/quran-types.ts`                  | SSG, Worker, UI, wire decoders           |
+| Canonical search hit contract                   | `web/src/lib/quran/search/types.ts`                | Worker, API decoder, UI, tooling         |
+| Artifact, script, packaging, and schema profile | `web/src/lib/quran/view/source-profiles.ts`        | manifest, SSG, Worker, tooling           |
+| Typed SQL queries and row decoding              | `web/src/lib/quran/sql.ts`                         | Node and sqlite-wasm query runners       |
+| Canonical coordinates from `quran-data.xml`     | `web/src/lib/data/quran-coordinates.json`         | SSG and Worker source validation         |
+| Canonical `raw` / `body` / `opener` view        | `web/src/lib/quran/view/`                          | surah/range rendering and search         |
+| Product source roles                            | `web/src/lib/quran/source-plan.ts`                 | SSG defaults, Worker, fixture generation |
 
 `runQuery()` and `runOne()` are platform-neutral. Node supplies a cached
 `node:sqlite` prepared-statement runner; the browser supplies a sqlite-wasm
@@ -187,9 +189,11 @@ never an edit to the data.
    corpus. Detection/adaptation is asserted against a registry entry; an
    unrecognized or incomplete profile is a load error, not a silent best guess.
 
-## 3. What already exists
+## 3. Pre-implementation baseline
 
-This is a consolidation as much as a new build. Present today:
+This was the baseline audited before the web implementation pass. The Rust rows
+remain current; the web prototype and raw-search gaps are resolved by the shared
+modules in §0.1 and retained here to explain the design decisions:
 
 | Piece                                                  | Location                                    | State                                                                            |
 | ------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -202,10 +206,9 @@ This is a consolidation as much as a new build. Present today:
 | Search corpus construction                             | `web/src/lib/workers/quran.worker.ts:152`   | ships, indexes raw text                                                          |
 
 The `withoutBasmalaPrefix` prototype got the hard part — the skeleton walk —
-right, and it is promoted in §4. But it is not promotable as written; §3.1
-records what an audit of it found. The other gaps are that the shipping Rust
-side has no equivalent walk, both current classifiers assume Tanzil's shape,
-and search uses none of it.
+right, and §4 records how it was promoted after correcting its defects. The
+shipping Rust side still has no equivalent walk; its classifier still assumes
+Tanzil's shape.
 
 The two classifiers make the same unsafe assumption by different routes.
 `loader.rs` recognizes only the special cases and assigns
@@ -726,7 +729,7 @@ Three runtimes consume the corpus and all three need the same answers:
 | Rust backend   | `rust/.../quran/loader.rs`            | **not part of the web implementation pass**; consume the shared fixtures when implemented                           |
 | SSG            | `web/src/lib/server/quran-sqlite.ts`  | adapt `node:sqlite` to the shared runner; validate the selected reader profile; prerender raw text plus descriptors |
 | Browser worker | `web/src/lib/workers/quran.worker.ts` | adapt sqlite-wasm to the shared runner; load source roles; build the canonical search corpus                        |
-| Tooling        | `web/scripts/gen-search-fixtures.ts`  | use the same source plan, queries, decoders, and canonical corpus as runtime code                                   |
+| Tooling        | `web/scripts/gen-*.ts`                 | generate coordinates, search, and scalar-cut fixtures through the same shared loaders, queries, views, and corpus  |
 
 The shared TypeScript stripper is promoted out of `routes/design/_variants/` into
 `$lib/quran/view/`, where the SSG reader adapter and worker can both reach it.
@@ -770,8 +773,8 @@ The three display paths apply the same rules:
 - Search renders the hit unit from §7. Copy, share, SEO fidelity checks, and API
   `Ayah.text` continue to use `raw`.
 
-This explicitly replaces the current `RangeReader` behavior that documents the
-basmala as always inline. It also closes the live-fallback gap: the browser does
+The shared range grouper replaces the former `RangeReader` behavior that treated
+the basmala as always inline. It also closes the live-fallback gap: the browser does
 not need to assume Uthmani scalar cuts for a simple-clean or future registered
 source. SSG, Worker, and live API derive or receive the descriptor for the exact
 corpus they are using.
@@ -784,6 +787,18 @@ assert that scalar-to-native conversion lands on UTF-8/UTF-16 boundaries and
 produces those same strings. Native byte/code-unit offsets are intentionally not
 compared across languages. Divergence between the two walks is the most likely
 way this layer breaks, and the fixture is what catches it.
+
+The web pass commits that fixture at
+`web/src/lib/quran/view/__fixtures__/prefix-cuts.json` and checks all 228 source/
+surah records. The Rust pass must consume this same file when implemented; until
+then cross-runtime invariant 12 remains intentionally pending with the rest of
+the Rust/API work. Regenerate the Worker-safe coordinate projection and both
+committed web fixtures from `web/` with:
+
+```sh
+pnpm dlx vite-node --config vite.config.ts scripts/gen-quran-coordinates.ts
+pnpm dlx vite-node --config vite.config.ts scripts/gen-search-fixtures.ts
+```
 
 ## 9. Invariants to assert
 
