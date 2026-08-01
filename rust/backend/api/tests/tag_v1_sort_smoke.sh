@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-# ruxlog-backend/tests/tag_v1_sort_smoke.sh
-#
-# Smoke tests for Tag listing sorts using /tag/v1/list/query
-# - Verifies multiple sort cases (single and multi-field)
-# - Uses a unique token to isolate created fixtures via `search`
-#
-# Usage:
-#   bash tests/tag_v1_sort_smoke.sh
+# Smoke tests for Tag listing sorts via /tag/v1/list/query (single and multi-field cases); uses a unique token to isolate fixtures via search. Usage: bash tests/tag_v1_sort_smoke.sh
 set -euo pipefail
 
-# -----------------------------
-# Config
-# -----------------------------
+# --- Config ---
 BASE_URL="${BASE_URL:-http://localhost:8888}"
 EMAIL="${EMAIL:-laurie40@yahoo.com}"
 PASSWORD="${PASSWORD:-laurie40@yahoo.com}"
-# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session and
-# bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below.
+# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session, bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below.
 CSRF_TOKEN=""
 COOKIES_FILE="${COOKIES_FILE:-$(dirname "$0")/cookies.txt}"
 TMP_DIR="$(mktemp -d)"
@@ -26,18 +16,12 @@ SERVER_WAIT_TIMEOUT_SECS="${SERVER_WAIT_TIMEOUT_SECS:-180}"
 
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# -----------------------------
-# Helpers
-# -----------------------------
+# --- Helpers ---
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1"; exit 1; }
 }
 
-# Obtain a real per-session CSRF token from the exempt /csrf/v1/generate
-# endpoint, which both issues the token and materializes the session (the
-# Set-Cookie is captured into $COOKIES_FILE via -c). MUST be re-called after
-# login: login rotates the session id (session-fixation defense), which
-# invalidates the prior token.
+# Obtain a per-session CSRF token from /csrf/v1/generate (also materializes the session via Set-Cookie into $COOKIES_FILE); MUST re-call after login since login rotates the session id, invalidating the prior token.
 bootstrap_csrf() {
   local out curl_status
   set +e
@@ -121,9 +105,7 @@ post_json() {
   echo "$out_file"
 }
 
-# -----------------------------
-# Preconditions
-# -----------------------------
+# --- Preconditions ---
 require_cmd curl
 require_cmd jq
 require_cmd base64
@@ -142,9 +124,7 @@ echo
 # Bootstrap a per-session CSRF token so the login POST (CSRF-protected) passes.
 bootstrap_csrf
 
-# -----------------------------
-# Log in (admin)
-# -----------------------------
+# --- Log in (admin) ---
 echo "==> Log in"
 login_payload="$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
 login_out="$TMP_DIR/login.json"
@@ -174,15 +154,11 @@ if [[ "$login_code" != "200" ]]; then
   echo "ERROR: login failed"
   exit 1
 fi
-# login rotated the session id (session-fixation defense); the pre-login token
-# is now invalid, so re-bootstrap a token bound to the new session.
+# login rotated the session id (session-fixation defense); re-bootstrap a token bound to the new session.
 bootstrap_csrf
 echo
 
-# -----------------------------
-# Create isolated test data
-# -----------------------------
-# Use a unique token placed in description so we can `search` by it
+# --- Create isolated test data (unique token in description isolates fixtures via search) ---
 TOKEN="sortsuite-$(date +%s)"
 echo "==> Create test tags (token=$TOKEN)"
 
@@ -209,8 +185,7 @@ update_tag() {
   post_json "/tag/v1/update/$id" "$payload" 200 >/dev/null
 }
 
-# Define names to exercise lexicographic ordering
-# Ensure unique slugs by appending TOKEN
+# Define names to exercise lexicographic ordering; ensure unique slugs by appending TOKEN
 create_tag "Alpha"   "alpha-$TOKEN"   true  "$TOKEN alpha"
 sleep 1
 create_tag "Beta"    "beta-$TOKEN"    false "$TOKEN beta"
@@ -320,9 +295,7 @@ check_multi_sort_primary_then_secondary() {
   assert_true "$ok_secondary" "secondary sort within groups failed for $secondary $sorder (primary $primary)"
 }
 
-# -----------------------------
-# Execute cases
-# -----------------------------
+# --- Execute cases ---
 echo "==> Single-field sort cases"
 check_single_sort "name" "asc"
 check_single_sort "name" "desc"

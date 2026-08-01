@@ -1,19 +1,4 @@
-# EasyQuran — Rust workspace.
-#
-# Verbatim port of the ruxlog backend (Axum + sea-orm), brought in to seed the
-# Rust/Axum backend called for by ROADMAP.md. Layout mirrors ruxlog so the
-# existing intra-workspace path deps resolve unchanged:
-#   - backend/api          (crate `ruxlog`, the axum binary)
-#   - backend/api/crates/* (rux-auth, rux-fcm, rux-provider-core,
-#                           rux-request-gate, rux-webhook-crypto)
-#   - backend/api/migration (sea-orm migrations)
-#   - crates/ruxlog-types  (shared types — codegen source for TS/Dart)
-#
-# NOTE: this is a verbatim copy pending a strip-down pass. The sea-orm backend
-# is Postgres in ruxlog and will be adapted to SQLite (reusing
-# db/quran/tanzil/*.sqlite); unused features (billing, FCM, passkey, newsletter,
-# analytics, image-moderation, mail, TUI) will be removed. Expect compile errors
-# until that pass lands.
+# EasyQuran Rust workspace — ruxlog backend port (Axum + sea-orm): backend/api (ruxlog + rux-* crates), backend/api/migration, crates/ruxlog-types.
 [workspace]
 members = [
     "backend/api",
@@ -30,5 +15,4 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 
-# ruxlog's frontend profiles (wasm-dev / server-dev / android-dev) are dropped —
-# this workspace is backend-only. Add release-tuning profiles here as needed.
+# ruxlog's frontend profiles are dropped; this workspace is backend-only. Add release-tuning profiles as needed.

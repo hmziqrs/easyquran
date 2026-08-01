@@ -1,23 +1,12 @@
 #!/usr/bin/env bash
-# ruxlog-backend/tests/auth_v1_smoke.sh
-# Smoke test for auth_v1: sessions list/terminate and 2FA setup/verify/disable.
-# - Requires: bash, curl, jq, base64, oathtool
-# - Assumes server is running locally and DB is migrated.
-# - Uses the same default creds and CSRF handling as the post_v1 smoke test.
-#
-# Usage:
-#   bash tests/auth_v1_smoke.sh
+# Smoke test for auth_v1: sessions list/terminate and 2FA setup/verify/disable; requires bash, curl, jq, base64, oathtool; assumes server running at BASE_URL + DB migrated; same default creds and CSRF handling as post_v1 smoke test. Usage: bash tests/auth_v1_smoke.sh
 set -euo pipefail
 
-# -----------------------------
-# Config
-# -----------------------------
+# --- Config
 BASE_URL="${BASE_URL:-http://127.0.0.1:8888}"
 EMAIL="${EMAIL:-laurie40@yahoo.com}"
 PASSWORD="${PASSWORD:-laurie40@yahoo.com}"
-# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session and
-# bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below. The previous
-# static shared-secret token is gone.
+# Per-session CSRF token (Phase 5): HMAC-bound to the live session, bootstrapped via /csrf/v1/generate — see bootstrap_csrf(); old static shared-secret removed.
 CSRF_TOKEN=""
 COOKIES_FILE="${COOKIES_FILE:-$(dirname "$0")/cookies.txt}"
 TMP_DIR="$(mktemp -d)"
@@ -26,18 +15,12 @@ RETRY_SLEEP_SECS="${RETRY_SLEEP_SECS:-1}"
 SERVER_WAIT_TIMEOUT_SECS="${SERVER_WAIT_TIMEOUT_SECS:-180}"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# -----------------------------
-# Helpers
-# -----------------------------
+# --- Helpers
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1"; exit 1; }
 }
 
-# Obtain a real per-session CSRF token from the exempt /csrf/v1/generate
-# endpoint, which both issues the token and materializes the session (the
-# Set-Cookie is captured into $COOKIES_FILE via -c). MUST be re-called after
-# login: login rotates the session id (session-fixation defense), which
-# invalidates the prior token.
+# bootstrap_csrf(): fetches a per-session CSRF token from /csrf/v1/generate (also materializes the session via Set-Cookie into $COOKIES_FILE); MUST be re-called after login since login rotates the session id, invalidating the prior token.
 bootstrap_csrf() {
   local out curl_status
   set +e
@@ -166,9 +149,7 @@ get_json() {
   echo "$out_file"
 }
 
-# -----------------------------
-# Preconditions
-# -----------------------------
+# --- Preconditions
 require_cmd curl
 require_cmd jq
 require_cmd base64
@@ -185,9 +166,7 @@ echo
 # Bootstrap a per-session CSRF token so the login POST (CSRF-protected) passes.
 bootstrap_csrf
 
-# -----------------------------
-# Log in
-# -----------------------------
+# --- Log in
 echo "==> Log in"
 login_payload="$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
 login_out="$TMP_DIR/login.json"
@@ -222,13 +201,10 @@ if [[ "$login_code" != "200" ]]; then
   echo "ERROR: login failed"
   exit 1
 fi
-# login rotated the session id (session-fixation defense); the pre-login token
-# is now invalid, so re-bootstrap a token bound to the new session.
+# login rotated the session id (session-fixation defense); re-bootstrap a token bound to the new session.
 bootstrap_csrf
 
-# -----------------------------
-# Sessions list and terminate
-# -----------------------------
+# --- Sessions list and terminate
 echo "==> Sessions list"
 sessions_list_path="$(post_json "/auth/v1/sessions/list" "{}" 200)"
 first_session_id="$(jq -r '.data[0].id // empty' "$sessions_list_path" 2>/dev/null || true)"
@@ -242,10 +218,7 @@ else
 fi
 echo
 
-# -----------------------------
-# 2FA Setup/Verify/Disable
-# Note: /2fa/setup is admin-protected in router; if forbidden, skip 2FA tests.
-# -----------------------------
+# --- 2FA Setup/Verify/Disable (note: /2fa/setup is admin-protected; skip 2FA tests if forbidden)
 echo "==> 2FA setup"
 set +e
 setup_code=$(curl -sS -X POST \

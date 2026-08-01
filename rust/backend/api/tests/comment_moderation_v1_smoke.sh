@@ -1,40 +1,12 @@
 #!/usr/bin/env bash
-# ruxlog-backend/tests/comment_moderation_v1_smoke.sh
-#
-# Smoke test for comment moderation & flagging:
-#   Public/author comment routes:
-#     - POST /post/comment/v1/create
-#     - POST /post/comment/v1/update/{comment_id}
-#     - POST /post/comment/v1/delete/{comment_id}
-#     - POST /post/comment/v1/flag/{comment_id}
-#     - POST /post/comment/v1/{post_id}                 (public list by post)
-#   Admin moderation routes:
-#     - POST /post/comment/v1/admin/list
-#     - POST /post/comment/v1/admin/hide/{comment_id}
-#     - POST /post/comment/v1/admin/unhide/{comment_id}
-#     - POST /post/comment/v1/admin/delete/{comment_id}
-#     - POST /post/comment/v1/admin/flags/clear/{comment_id}
-#     - POST /post/comment/v1/admin/flags/list
-#     - POST /post/comment/v1/admin/flags/summary/{comment_id}
-#
-# Assumptions:
-#   - Server running at BASE_URL
-#   - DB migrated
-#   - LOGIN user has moderator/admin privileges and is verified
-#   - Existing categories/tags or seed endpoints available
-#
-# Usage:
-#   bash tests/comment_moderation_v1_smoke.sh
+# Smoke test for comment moderation & flagging routes (create/update/delete/flag, public list by post, admin list/hide/unhide/delete + flags clear/list/summary); assumes server at BASE_URL, DB migrated, admin login. Usage: bash tests/comment_moderation_v1_smoke.sh
 set -euo pipefail
 
-# -----------------------------
-# Config
-# -----------------------------
+# --- Config ---
 BASE_URL="${BASE_URL:-http://127.0.0.1:8888}"
 EMAIL="${EMAIL:-laurie40@yahoo.com}"
 PASSWORD="${PASSWORD:-laurie40@yahoo.com}"
-# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session and
-# bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below.
+# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session, bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below.
 CSRF_TOKEN=""
 COOKIES_FILE="${COOKIES_FILE:-$(dirname "$0")/cookies.txt}"
 TMP_DIR="$(mktemp -d)"
@@ -44,18 +16,12 @@ SERVER_WAIT_TIMEOUT_SECS="${SERVER_WAIT_TIMEOUT_SECS:-180}"
 
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# -----------------------------
-# Helpers
-# -----------------------------
+# --- Helpers ---
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1"; exit 1; }
 }
 
-# Obtain a real per-session CSRF token from the exempt /csrf/v1/generate
-# endpoint, which both issues the token and materializes the session (the
-# Set-Cookie is captured into $COOKIES_FILE via -c). MUST be re-called after
-# login: login rotates the session id (session-fixation defense), which
-# invalidates the prior token.
+# Obtain a per-session CSRF token from /csrf/v1/generate (also materializes the session via Set-Cookie into $COOKIES_FILE); MUST re-call after login since login rotates the session id, invalidating the prior token.
 bootstrap_csrf() {
   local out curl_status
   set +e
@@ -176,9 +142,7 @@ now_rfc3339() {
   date -u +"%Y-%m-%dT%H:%M:%S+00:00"
 }
 
-# -----------------------------
-# Preconditions
-# -----------------------------
+# --- Preconditions ---
 require_cmd curl
 require_cmd jq
 require_cmd base64
@@ -194,9 +158,7 @@ echo
 # Bootstrap a per-session CSRF token so the login POST (CSRF-protected) passes.
 bootstrap_csrf
 
-# -----------------------------
-# Log in
-# -----------------------------
+# --- Log in ---
 echo "==> Log in"
 login_payload="$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
 login_out="$TMP_DIR/login.json"
@@ -226,14 +188,11 @@ if [[ "$login_code" != "200" ]]; then
   echo "ERROR: login failed"
   exit 1
 fi
-# login rotated the session id (session-fixation defense); the pre-login token
-# is now invalid, so re-bootstrap a token bound to the new session.
+# login rotated the session id (session-fixation defense); re-bootstrap a token bound to the new session.
 bootstrap_csrf
 echo
 
-# -----------------------------
-# Ensure baseline data (categories, tags, post)
-# -----------------------------
+# --- Ensure baseline data (categories, tags, post) ---
 echo "==> Ensure categories (stabilizing)"
 # Extra stabilization because server sometimes restarts right after login (observed curl 7)
 sleep 2
@@ -320,9 +279,7 @@ post_id="$(jq -r '.id' "$post_file")"
 echo "Post created id=$post_id slug=$slug"
 echo
 
-# -----------------------------
-# Create comments
-# -----------------------------
+# --- Create comments ---
 echo "==> Create comment 1"
 c1_payload="$(jq -nc --argjson post_id "$post_id" --arg content "First comment $(now_rfc3339)" '{post_id:$post_id, content:$content}')"
 c1_file="$(post_json "/post/comment/v1/create" "$c1_payload" 201)"
@@ -336,24 +293,18 @@ comment2_id="$(jq -r '.id' "$c2_file")"
 echo "Comment2 id=$comment2_id"
 echo
 
-# -----------------------------
-# Update comment 2
-# -----------------------------
+# --- Update comment 2 ---
 echo "==> Update comment2"
 update_c2_payload="$(jq -nc --arg content "Second comment updated $(now_rfc3339)" '{content:$content}')"
 post_json "/post/comment/v1/update/$comment2_id" "$update_c2_payload" 200
 echo
 
-# -----------------------------
-# List comments by post (public) - NEW ROUTE
-# -----------------------------
+# --- List comments by post (public) - NEW ROUTE ---
 echo "==> Public list by post (new route)"
 post_comments_public="$(post_json "/post/comment/v1/$post_id" "{}" 200)"
 echo
 
-# -----------------------------
-# Flag comment1 (user flag)
-# -----------------------------
+# --- Flag comment1 (user flag) ---
 echo "==> Flag comment1 (initial)"
 flag_payload="$(jq -nc '{reason:"Spam link"}')"
 flag_resp="$(post_json "/post/comment/v1/flag/$comment1_id" "$flag_payload" 200)"
@@ -367,25 +318,19 @@ flags_count_2="$(jq -r '.flags_count' "$flag_resp2")"
 echo "Flags count (after second submit by same user) = $flags_count_2 (should stay 1)"
 echo
 
-# -----------------------------
-# Admin list (all comments) - NEW ROUTE STRUCTURE
-# -----------------------------
+# --- Admin list (all comments) - NEW ROUTE STRUCTURE ---
 echo "==> Admin list comments (new route)"
 admin_list_payload="$(jq -nc --arg hf "all" '{page:1, hidden_filter:$hf}')"
 post_json "/post/comment/v1/admin/list" "$admin_list_payload" 200
 echo
 
-# -----------------------------
-# Admin flagged (min_flags>=1) - USING NEW ROUTE
-# -----------------------------
+# --- Admin flagged (min_flags>=1) - USING NEW ROUTE ---
 echo "==> Admin flagged comments (using admin/list with min_flags)"
 flagged_payload="$(jq -nc '{page:1, min_flags:1}')"
 post_json "/post/comment/v1/admin/list" "$flagged_payload" 200
 echo
 
-# -----------------------------
-# Admin hide comment1
-# -----------------------------
+# --- Admin hide comment1 ---
 echo "==> Hide comment1"
 post_json "/post/comment/v1/admin/hide/$comment1_id" "{}" 200
 
@@ -399,16 +344,12 @@ echo "==> List with hidden_filter=hidden (only hidden comments should appear)"
 post_json "/post/comment/v1/admin/list" "$(jq -nc --arg hf "hidden" '{page:1, hidden_filter:$hf}')" 200
 echo
 
-# -----------------------------
-# Admin unhide comment1
-# -----------------------------
+# --- Admin unhide comment1 ---
 echo "==> Unhide comment1"
 post_json "/post/comment/v1/admin/unhide/$comment1_id" "{}" 200
 echo
 
-# -----------------------------
-# Admin flags list / summary
-# -----------------------------
+# --- Admin flags list / summary ---
 echo "==> Flags list (comment1)"
 post_json "/post/comment/v1/admin/flags/list" "$(jq -nc --argjson cid "$comment1_id" '{page:1, comment_id:$cid}')" 200
 
@@ -416,9 +357,7 @@ echo "==> Flags summary (comment1)"
 post_json "/post/comment/v1/admin/flags/summary/$comment1_id" "{}" 200
 echo
 
-# -----------------------------
-# Admin clear flags
-# -----------------------------
+# --- Admin clear flags ---
 echo "==> Clear flags for comment1"
 post_json "/post/comment/v1/admin/flags/clear/$comment1_id" "{}" 200
 
@@ -426,30 +365,22 @@ echo "==> Flags summary (after clear)"
 post_json "/post/comment/v1/admin/flags/summary/$comment1_id" "{}" 200
 echo
 
-# -----------------------------
-# Admin delete comment2
-# -----------------------------
+# --- Admin delete comment2 ---
 echo "==> Delete comment2"
 post_json "/post/comment/v1/admin/delete/$comment2_id" "{}" 200
 echo
 
-# -----------------------------
-# User delete own comment1 (should succeed if still present and user owner)
-# -----------------------------
+# --- User delete own comment1 (should succeed if still present and user owner) ---
 echo "==> User delete comment1"
 post_json "/post/comment/v1/delete/$comment1_id" "{}" 200
 echo
 
-# -----------------------------
-# Cleanup / Final assertions (basic)
-# -----------------------------
+# --- Cleanup / Final assertions (basic) ---
 echo "==> Final public list after deletions"
 post_json "/post/comment/v1/$post_id" "{}" 200
 echo
 
-# -----------------------------
-# Test additional query functionality
-# -----------------------------
+# --- Test additional query functionality ---
 echo "==> Test query functionality - search filter"
 search_payload="$(jq -nc --argjson post_id "$post_id" '{page:1, post_id:$post_id, search:"nonexistent"}')"
 post_json "/post/comment/v1/admin/list" "$search_payload" 200

@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Shared analytics-request helper, sourced by analytics_*.sh scripts.
-#
-# Establishes an authenticated session (login) and bootstraps a real per-session
-# CSRF token (plan Phase 5) bound to it; `curl_json` then replays both via a
-# cookie jar. The previous hardcoded session cookie + static shared CSRF secret
-# are gone — the token is HMAC-bound to the live session id.
+# Shared analytics-request helper sourced by analytics_*.sh; logs in to establish a session, bootstraps a per-session CSRF token (Phase 5, HMAC-bound to the session id), and curl_json replays both via a cookie jar — replaces the old hardcoded cookie + static shared CSRF secret.
 set -euo pipefail
 
 # Base URL (override with BASE env)
@@ -20,9 +15,7 @@ require_cmd() {
 require_cmd curl
 require_cmd jq
 
-# Obtain a real per-session CSRF token from the exempt /csrf/v1/generate
-# endpoint. The session cookie is stored in the jar; the returned token is bound
-# to it. Re-call after any session-id rotation (e.g. login).
+# bootstrap_csrf(): fetches a per-session CSRF token from /csrf/v1/generate (session cookie stored in the jar, token bound to it); re-call after any session-id rotation (e.g. login).
 bootstrap_csrf() {
   local out
   out="$(curl -sS -X POST \
@@ -36,9 +29,7 @@ bootstrap_csrf() {
   fi
 }
 
-# One-time setup: log in to establish an authenticated session, then bind a CSRF
-# token to the post-login session id (login rotates it). Runs once per sourced
-# file.
+# _ruxlog_analytics_init: one-time setup — log in to establish a session, then bind a CSRF token to the post-login session id (login rotates it); runs once per sourced file.
 _ruxlog_analytics_init() {
   touch "$COOKIES_FILE"
   bootstrap_csrf # token for the login request itself
@@ -60,8 +51,7 @@ _ruxlog_analytics_init() {
 }
 _ruxlog_analytics_init
 
-# Send a JSON POST to an analytics endpoint, carrying the session cookie and the
-# matching CSRF token.
+# curl_json(): send a JSON POST to an analytics endpoint, carrying the session cookie and matching CSRF token.
 curl_json() {
   local path="$1"; shift
   local data="$1"; shift

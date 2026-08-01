@@ -1,24 +1,12 @@
 #!/usr/bin/env bash
-# ruxlog-backend/tests/api_smoke.sh
-# Comprehensive API smoke test for post_v1 features and common flows.
-# - Requires: bash, curl, jq, base64
-# - Assumes server is running locally and DB is migrated.
-# - Uses CSRF middleware header; token is base64(CSRF_KEY) with a sensible default.
-#
-# Usage:
-#   bash tests/api_smoke.sh
-#
+# Comprehensive smoke test for post_v1 features and common flows (create/autosave/revisions/schedule/series/query/sitemap); requires bash, curl, jq, base64; assumes server running at BASE_URL + DB migrated; uses CSRF header. Usage: bash tests/api_smoke.sh
 set -euo pipefail
 
-# -----------------------------
-# Config
-# -----------------------------
+# --- Config
 BASE_URL="${BASE_URL:-http://127.0.0.1:8888}"
 EMAIL="${EMAIL:-laurie40@yahoo.com}"
 PASSWORD="${PASSWORD:-laurie40@yahoo.com}"
-# Per-session CSRF token (plan Phase 5): HMAC-bound to the live session and
-# bootstrapped from /csrf/v1/generate — see bootstrap_csrf() below. The previous
-# static shared-secret token is gone.
+# Per-session CSRF token (Phase 5): HMAC-bound to the live session, bootstrapped via /csrf/v1/generate — see bootstrap_csrf(); old static shared-secret removed.
 CSRF_TOKEN=""
 COOKIES_FILE="${COOKIES_FILE:-$(dirname "$0")/cookies.txt}"
 TMP_DIR="$(mktemp -d)"
@@ -27,10 +15,7 @@ RETRY_SLEEP_SECS="${RETRY_SLEEP_SECS:-1}"
 SERVER_WAIT_TIMEOUT_SECS="${SERVER_WAIT_TIMEOUT_SECS:-180}"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# -----------------------------
-# Helpers
-# -----------------------------
-# Wait until the server is ready (use a public GET route)
+# --- Helpers (wait_for_server + json http helpers)
 wait_for_server() {
   local deadline=$(( $(date +%s) + SERVER_WAIT_TIMEOUT_SECS ))
   local code=""
@@ -60,11 +45,7 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1"; exit 1; }
 }
 
-# Obtain a real per-session CSRF token from the exempt /csrf/v1/generate
-# endpoint, which both issues the token and materializes the session (the
-# Set-Cookie is captured into $COOKIES_FILE via -c). MUST be re-called after
-# login: login rotates the session id (session-fixation defense), which
-# invalidates the prior token.
+# bootstrap_csrf(): fetches a per-session CSRF token from /csrf/v1/generate (also materializes the session via Set-Cookie into $COOKIES_FILE); MUST be re-called after login since login rotates the session id, invalidating the prior token.
 bootstrap_csrf() {
   local out curl_status
   set +e
@@ -193,9 +174,7 @@ future_rfc3339() {
   date -u -d "+10 minutes" +"%Y-%m-%dT%H:%M:%S+00:00"
 }
 
-# -----------------------------
-# Preconditions
-# -----------------------------
+# --- Preconditions
 require_cmd curl
 require_cmd jq
 require_cmd base64
@@ -211,9 +190,7 @@ echo
 # Bootstrap a per-session CSRF token so the login POST (CSRF-protected) passes.
 bootstrap_csrf
 
-# -----------------------------
-# Log in (establish session)
-# -----------------------------
+# --- Log in (establish session)
 echo "==> Log in"
 login_payload="$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
 login_out="$TMP_DIR/login.json"
@@ -249,13 +226,10 @@ if [[ "$login_code" != "200" ]]; then
   echo "ERROR: login failed"
   exit 1
 fi
-# login rotated the session id (session-fixation defense); the pre-login token
-# is now invalid, so re-bootstrap a token bound to the new session.
+# login rotated the session id (session-fixation defense); re-bootstrap a token bound to the new session.
 bootstrap_csrf
 
-# -----------------------------
-# Seed baseline data (tags, categories, posts, comments)
-# -----------------------------
+# --- Seed baseline data (tags, categories, posts, comments)
 echo "==> Ensure baseline data (categories/tags)"
 # Ensure categories exist; seed only if empty
 cats_probe_path="$(get_json "/category/v1/list" 200 --quiet)"
@@ -272,9 +246,7 @@ if [[ "${have_tags}" != "true" ]]; then
   post_json "/admin/seed/v1/seed_tags" "{}" 200
 fi
 
-# -----------------------------
-# Fetch base refs: category_id, tag_ids
-# -----------------------------
+# --- Fetch base refs: category_id, tag_ids
 echo "==> Get categories"
 cats_path="$(get_json "/category/v1/list" 200)"
 category_id="$(jq -r '.[0].id // empty' "$cats_path")"
@@ -291,9 +263,7 @@ tag_ids="$(jq -c '[.[0].id, .[1].id] | map(select(. != null))' "$tags_path" 2>/d
 echo "Selected tag_ids: $tag_ids"
 echo
 
-# -----------------------------
-# Create a new post (draft)
-# -----------------------------
+# --- Create a new post (draft)
 echo "==> Create post"
 slug="smoke-$(date +%s)"
 title="Smoke Test $(date -u +%Y-%m-%dT%H:%M:%S)"
@@ -326,9 +296,7 @@ post_id="$(jq -r '.id' "$post_file")"
 echo "Created post_id: $post_id, slug: $slug"
 echo
 
-# -----------------------------
-# Autosave the post (creates a revision)
-# -----------------------------
+# --- Autosave the post (creates a revision)
 echo "==> Autosave"
 autosave_payload="$(jq -nc \
   --argjson post_id "$post_id" \
@@ -350,18 +318,14 @@ revision_id_created="$(jq -r '.id' "$auto_file")"
 echo "Autosave created revision_id: $revision_id_created"
 echo
 
-# -----------------------------
-# List revisions for the post
-# -----------------------------
+# --- List revisions for the post
 echo "==> Revisions list"
 rev_list_file="$(post_json "/post/v1/revisions/$post_id/list" "{}" 200)"
 first_rev_id="$(jq -r '.data[0].id // empty' "$rev_list_file")"
 echo "First revision id (if any): ${first_rev_id:-<none>}"
 echo
 
-# -----------------------------
-# Restore from a revision (if exists)
-# -----------------------------
+# --- Restore from a revision (if exists)
 if [[ -n "${first_rev_id:-}" ]]; then
   echo "==> Restore revision $first_rev_id"
   post_json "/post/v1/revisions/$post_id/restore/$first_rev_id" "{}" 200
@@ -370,9 +334,7 @@ else
 fi
 echo
 
-# -----------------------------
-# Schedule the post for future publishing
-# -----------------------------
+# --- Schedule the post for future publishing
 echo "==> Schedule post"
 schedule_payload="$(jq -nc \
   --argjson post_id "$post_id" \
@@ -382,9 +344,7 @@ schedule_payload="$(jq -nc \
 post_json "/post/v1/schedule" "$schedule_payload" 200
 echo
 
-# -----------------------------
-# Series operations: create, update, list, add/remove, delete
-# -----------------------------
+# --- Series operations: create, update, list, add/remove, delete
 echo "==> Series create"
 series_slug="series-$(date +%s)"
 series_payload="$(jq -nc --arg name "My Series" --arg slug "$series_slug" --arg desc "Series created by smoke test" '{name:$name, slug:$slug, description:$desc}')"
@@ -414,52 +374,38 @@ echo "==> Series delete"
 post_json "/post/v1/series/delete/$series_id" "{}" 200
 echo
 
-# -----------------------------
-# Query/search (author-protected)
-# -----------------------------
+# --- Query/search (author-protected)
 echo "==> Post query (author-protected)"
 post_json "/post/v1/query" "$(jq -nc --arg title "$title" '{page:1, title:$title}')" 200
 echo
 
-# -----------------------------
-# Find by slug (public)
-# -----------------------------
+# --- Find by slug (public)
 echo "==> View by slug"
 post_json "/post/v1/view/$slug" "{}" 200
 echo
 
-# -----------------------------
-# List published posts (public)
-# -----------------------------
+# --- List published posts (public)
 echo "==> List published posts"
 post_json "/post/v1/list/published" "$(jq -nc '{page:1}')" 200
 echo
 
-# -----------------------------
-# Sitemap (public)
-# -----------------------------
+# --- Sitemap (public)
 echo "==> Sitemap"
 post_json "/post/v1/sitemap" "{}" 200
 echo
 
-# -----------------------------
-# Track view (auth optional; we have session)
-# -----------------------------
+# --- Track view (auth optional; we have session)
 echo "==> Track view"
 post_json "/post/v1/track_view/$post_id" "{}" 200
 echo
 
-# -----------------------------
-# Update post (author-protected)
-# -----------------------------
+# --- Update post (author-protected)
 echo "==> Update post"
 update_payload="$(jq -nc --arg title "$title (Updated)" '{title:$title}')"
 post_json "/post/v1/update/$post_id" "$update_payload" 200
 echo
 
-# -----------------------------
-# Delete post (author-protected)
-# -----------------------------
+# --- Delete post (author-protected)
 echo "==> Delete post"
 post_json "/post/v1/delete/$post_id" "{}" 200
 echo
