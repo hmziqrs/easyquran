@@ -146,13 +146,46 @@ This is a consolidation as much as a new build. Present today:
 | Load-time classification + `1/112/1` assertion | `rust/.../quran/loader.rs:325-352` | ships, **Tanzil-only** |
 | `bismillah` on the web catalog entry | `web/src/lib/data/quran-types.ts:22` | ships |
 | `showsBismillah()` | `web/src/lib/data/quran.ts:72` | ships |
-| `withoutBasmalaPrefix()` — skeleton-based stripper | `web/src/routes/design/_variants/verses.ts` | **prototype only**, not in the shipping reader |
+| `withoutBasmalaPrefix()` — skeleton-based stripper | `web/src/routes/design/_variants/verses.ts` | **prototype only**, two defects — see §3.1 |
+| Catalog `bismillah` derivation | `web/vite-plugin-quran.ts:109` | ships, **hardcoded by surah number**, never reads the text |
 | Search corpus construction | `web/src/lib/workers/quran.worker.ts:152` | ships, indexes raw text |
 
-The `withoutBasmalaPrefix` prototype already solved the hard part correctly and
-its approach is promoted wholesale in §4. The gaps are that it is unreachable
-from shipping code, the Rust side has no equivalent, the classification is
-hardcoded to one source, and search does not use any of it.
+The `withoutBasmalaPrefix` prototype got the hard part — the skeleton walk —
+right, and it is promoted in §4. But it is not promotable as written; §3.1
+records what an audit of it found. The other gaps are that the Rust side has no
+equivalent, the classification is hardcoded to one source, and search uses none
+of it.
+
+Note the method mismatch on classification: `loader.rs` **derives** the basmala
+shape from the text and asserts it, while `vite-plugin-quran.ts:109` computes
+`num === 1 ? "first-ayah" : num === 9 ? "none" : "embedded-prefix"` from the
+surah number alone. The Rust side would catch a source whose shape changed; the
+web side would keep asserting `embedded-prefix` and strip a prefix that is not
+there. Both must derive from the same detection.
+
+### 3.1 Audit findings on the existing stripper
+
+Executed against both corpora, all 114 first ayahs. Two defects, both blocking
+promotion to `$lib`:
+
+**It returns an empty string for surah 1.** `withoutBasmalaPrefix(raw(1,1))`
+strips the whole verse, because 1:1 *is* the basmala — 113 of 114 ayahs are
+stripped, and surah 1's body comes back as `""`. Today this is masked: the only
+caller, `displayVerses()`, early-returns on
+`surah.bismillah !== "embedded-prefix"` so surah 1 never reaches it. The guard
+lives in the caller, not the function. Moving the function to `$lib` without
+carrying the guard blanks Al-Fatiha's first verse.
+
+**It is completely inert on simple-clean** — 0 of 114 ayahs stripped. The
+`BISMILLAH` constant spells the definite articles with `ٱ` (U+0671 ALEF WASLA);
+simple-clean uses `ا` (U+0627). Alef wasla is a *letter*, not a combining mark,
+so the skeleton does not remove it and the prefix never matches. Search runs on
+simple-clean, so a stripper wired up as-is would silently do nothing there while
+appearing to work on the display corpus.
+
+Both are fixed by the same rule (§4.2): take the reference basmala from the
+corpus's own `index = 1` row rather than a shared constant, and treat surah 1 as
+`bodyOffset = 0` by definition.
 
 ## 4. The canonical view
 
@@ -173,11 +206,15 @@ opener(s) = { kind: "verse",  text }   // surah 1 — the basmala IS ayah 1, num
 `body` and `raw` differ for exactly one ayah per surah — ayah 1 of the 112
 embedded-prefix surahs. Everywhere else `body ≡ raw`.
 
-### 4.1 bodyOffset — normalization as 114 integers
+### 4.1 bodyOffset — normalization as 114 integers per corpus
 
 For each surah, `bodyOffset[s]` is the index into ayah 1 at which the verse body
 begins; `0` means nothing is embedded. `body(s, 1) = raw(s, 1)[bodyOffset[s]..]`
 and every other ayah is a straight passthrough.
+
+**The table is per corpus, not global.** Uthmani and simple-clean are different
+orthographies, so their offsets differ and one cannot be reused for the other.
+Both are loaded, so there are 228 integers in play, not 114.
 
 This is the whole mechanism. Consequences that matter:
 
@@ -190,15 +227,19 @@ This is the whole mechanism. Consequences that matter:
 - **Digest-compatible.** Digests run over `raw`, so they are unaffected and keep
   their full detective power.
 
-Measured against the current Tanzil Uthmani source:
+Measured against both current Tanzil sources:
 
-| | value |
-|---|---|
-| surahs with `bodyOffset > 0` | 112 |
-| surahs with `bodyOffset = 0` | 1, 9 |
-| distinct offsets | 40, and 41 for surahs 95 and 97 |
+| | Uthmani | simple-clean |
+|---|---|---|
+| surahs with `bodyOffset > 0` | 112 | 112 |
+| surahs with `bodyOffset = 0` | 1, 9 | 1, 9 |
+| distinct offsets | **40**, and **41** for surahs 95 and 97 | **23** for all 112 |
+| reference basmala | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` | `بسم الله الرحمن الرحيم` |
 
-The 41 is not an anomaly to be smoothed out — see §6.
+The 41 is not an anomaly to be smoothed out — see §6. Note it has **no analogue
+in simple-clean**, which has a single offset: that corpus carries no diacritics,
+so the 95/97 shadda does not exist there and cannot be recovered from it. Any
+`opener(s)` text intended for display must come from the Uthmani corpus.
 
 ### 4.2 Computing bodyOffset: the skeleton walk
 
@@ -231,6 +272,24 @@ header — visible, reportable, harmless. A wrong cut corrupts scripture.
 The character class is written with `\u` escapes deliberately: spelled as literal
 ranges it silently swallows the Arabic-Indic digits at U+0660–0669, which sit
 between two of its ranges.
+
+Two rules make this work across corpora, both from the §3.1 audit:
+
+**Take the reference basmala from the corpus's own `index = 1` row. Never from a
+shared constant.** Every source that has a basmala at all has it as global row 1,
+so the reference is always available in-band and is always spelled in that
+corpus's own orthography. A shared constant is what makes the current prototype
+inert on simple-clean: the constant uses `ٱ` U+0671 ALEF WASLA, simple-clean uses
+`ا` U+0627, and alef wasla is a letter that the skeleton does not remove. Reading
+the reference in-band also removes the constant as a thing that can drift from
+the data.
+
+**`bodyOffset[1] = 0` by definition, before any matching runs.** Surah 1's ayah 1
+*is* the basmala, so the walk would legitimately match the entire verse and
+return an empty body. That is a property of the algorithm, not a bug to patch
+downstream — so the guard belongs inside the function that computes the offset,
+not in each caller. Equivalently: `bodyOffset[s] > 0` only where
+`shape(s) == embedded-prefix` (invariant 7, §9).
 
 ## 5. Source profiles
 
@@ -431,6 +490,45 @@ Both search implementations — `quran.worker.ts:152` and the Rust in-memory
 corpus — build their index from the same view, or the "same search behavior
 online and offline" requirement (`quran-web-delivery.md` §1.4) breaks.
 
+### 7.1 Separate defect found during audit: Uthmani queries never match
+
+This is not caused by the basmala and is not fixed by anything above, but it
+lives in the same code path and should be fixed in the same pass.
+
+`normalizeArabic` (`web/src/lib/quran/search/normalize.ts:39`) removes
+`\p{Mn}\p{Me}\p{Cf}` and folds `آأإ→ا`, `ى→ي`, `ة→ه`. It does **not** handle two
+characters that are pervasive in the Uthmani corpus:
+
+| character | category | why it survives normalization | count in Uthmani | count in simple-clean |
+|---|---|---|---:|---:|
+| `ٱ` U+0671 ALEF WASLA | `Lo` (letter) | not a combining mark; no fold rule | 13,819 | 0 |
+| `ـ` U+0640 TATWEEL | `Lm` (modifier letter) | **not** `Mn`/`Me`/`Cf`, so the class misses it | 6,848 | 0 |
+
+The search corpus is simple-clean, which contains neither, so corpus-side
+indexing is unaffected. The **query** side is not:
+
+```text
+normalizeArabic(uthmani 1:1)       →  "بسم ٱلله ٱلرحمـن ٱلرحيم"
+normalizeArabic(simple-clean 1:1)  →  "بسم الله الرحمن الرحيم"
+equal? false
+```
+
+The reader displays Uthmani. So a user who copies a phrase out of the reader —
+or off any Uthmani mushaf site — and pastes it into search gets **zero results**,
+for text that is demonstrably in the corpus. It fails silently and looks like
+missing content rather than a normalization gap.
+
+Fix: fold `ٱ → ا` and strip `ـ` in `normalizeArabic`. Both are safe — alef wasla
+and bare alef are the same letter for matching purposes, and tatweel is a purely
+typographic elongation carrying no phonetic content.
+
+Two constraints on doing it, from the module's own header: the rule set is
+mirrored byte-for-byte by the Rust backend, and **any rule change bumps
+`SEARCH_VERSION`** (`arabic-search-v1`) and requires regenerated fixtures in
+`__fixtures__/queries.json`. So this is a coordinated change across
+`normalize.ts`, the Rust implementation, and the fixture suite — not a one-line
+edit.
+
 ## 8. Where the layer lives
 
 Three runtimes consume the corpus and all three need the same answers:
@@ -465,9 +563,43 @@ At load, per source:
    ever removes a prefix.
 7. `bodyOffset[s] > 0` exactly when `shape(s) == embedded-prefix`.
 8. `opener(1).kind == "verse"`, `opener(9).kind == "none"`.
+9. `body(s, 1)` is non-empty and has no leading or trailing whitespace, for all
+   114 surahs. This is what catches the surah-1-blanked defect (§3.1) directly
+   rather than relying on a caller-side guard.
+10. `bodyOffset` is computed **per corpus**, and each corpus's reference basmala
+    equals its own `raw(1,1)`. A corpus whose stripped count is 0 while its
+    profile says `embedded-prefix` is a hard error — that is the exact signature
+    of the simple-clean inertness in §3.1, which currently fails silently.
+11. The Rust and TypeScript implementations agree on every `bodyOffset` for both
+    corpora (§8 fixture).
 
 Invariants 5 and 6 are the ones that make "we never alter text" checkable rather
-than a claim, and they hold for any source, not just Tanzil.
+than a claim, and they hold for any source, not just Tanzil. Invariants 9 and 10
+exist because both defects found in the audit were *silent* — one masked by a
+caller-side guard, the other a no-op that looked like success.
+
+### 9.1 What the corpus audit cleared
+
+A full sweep of both Arabic corpora, the metadata XML and all 115 translation
+packs found **no structural or data defects**. Recorded so this is not re-run:
+
+| check | result |
+|---|---|
+| row count, contiguous `index` 1..6236, unique `(sura,aya)`, sequential `aya` within each surah | pass, both corpora |
+| ayah counts and `start` offsets vs `quran-data.xml` | pass, 114/114 |
+| juz 30 · page 604 · ruku 556 · hizb-quarter 240 · manzil 7 · sajda 15 | all present, monotonic, unique, every marker resolves to a real verse |
+| empty / untrimmed / double-space / control char / newline / tab / BOM / NBSP | none, both corpora |
+| codepoint inventory | 70 distinct (Uthmani), 37 (simple-clean); every one in the Arabic blocks — no stray Latin or punctuation |
+| golden corpus digests vs `quran-api.md` §3.3 | **match exactly**, both; joined byte lengths match too |
+| NFC canary | NFC-normalizing Uthmani yields `6ee54875c37e4d88…`, exactly as documented — the digest check does detect it |
+| file digests vs `web/src/lib/config/site.ts` | match, both |
+| 115 translation packs: 6,236 rows, contiguous index | pass, 115/115 |
+| translation empty verses | 4, in 3 files — exactly as `docs/translation-empty-verses.md` records |
+
+Uthmani is NFC-unstable in 5,782 of 6,236 rows, matching the documented figure.
+That is a property of the source, and the reason the digests exist.
+
+All defects found by the audit are in *our code*, not the data: §3.1 and §7.1.
 
 ## 10. Open items
 
