@@ -27,10 +27,10 @@ That packaging difference leaks into every layer that touches the corpus:
   inside Sulayman's letter). All 114 are real Quran text, but 112 of them are
   reported as *numbered ayah* hits when they are unnumbered surah openers — the
   attribution is an artifact of storage shape (§7).
-- **Row identity** — a source that stores the basmala as its own row has 6,348
-  rows, not 6,236. Depending on whether it numbers those rows 0 or 1, ayah
-  numbers for suras 2–114 either stay put or shift by one; either way global
-  indices and juz/page/ruku boundaries drift against `quran-data.xml`.
+- **Row identity** — a source that gives the basmala its own row carries 6,348
+  rows rather than 6,236, and its global indices and juz/page/ruku boundaries
+  drift against `quran-data.xml`. (Not every second source does this — see
+  §5.1.)
 
 Adding a second source today does not produce subtly wrong output. It produces
 a **hard boot failure**: `rust/backend/api/src/quran/loader.rs:346` asserts the
@@ -169,8 +169,8 @@ A profile describes how one corpus packages the basmala and is asserted at load.
 |---|---|---|
 | `embedded-prefix` | basmala prepended to ayah 1's text | Tanzil, suras 2–114 |
 | `first-ayah` | basmala is ayah 1 and is counted | Tanzil 1:1 |
-| `separate-row` | basmala is its own row (often aya 0); ayah numbers may shift | quran.com-style dumps (6,348 rows) |
-| `separate-field` | basmala in a sibling column | quran.com API `bismillah_pre` |
+| `chapter-flag` | corpus holds 6,236 numbered ayahs; the opener is a boolean on the *chapter* | quran.com / Quran Foundation API (`bismillah_pre`) |
+| `separate-row` | basmala is its own row (aya 0), corpus has 6,348 rows | named by Tanzil as the encoding it declined; not yet observed in a file we hold |
 | `none` | no basmala | surah 9 |
 
 ```text
@@ -187,19 +187,77 @@ Two changes from today's behaviour:
 - The `1/112/1` assertion becomes **one registry entry**, not a global
   invariant. Tanzil keeps asserting exactly `1/112/1` and still fails closed if
   its own source drifts. A second source asserts its own expected split.
-- Row-shape adapters run **before** canonicalization. A `separate-row` source is
-  remapped to canonical `(sura, aya)` over 1..6236 — basmala rows are consumed
-  into `opener(s)` rather than dropped, and global indices are recomputed so
-  juz/page/ruku ranges from `quran-data.xml` stay valid. `quran-data.xml` is the
-  arbiter of ayah counts for every source; it already validates against the
-  Tanzil DB (114/114 `start` offsets, 15 sajdas, 604 pages, 30 juz, 240 hizb
-  quarters, 556 rukus).
+- Row-shape adapters run **before** canonicalization, for shapes that need one.
+  A `separate-row` source would be remapped to canonical `(sura, aya)` over
+  1..6236 — basmala rows consumed into `opener(s)` rather than dropped, global
+  indices recomputed. `chapter-flag` and `embedded-prefix` sources need no
+  remapping at all (§5.1). `quran-data.xml` is the arbiter of ayah counts for
+  every source; it already validates against the Tanzil DB (114/114 `start`
+  offsets, 15 sajdas, 604 pages, 30 juz, 240 hizb quarters, 556 rukus).
 
 `separate-row` is the shape Tanzil names and declines to use — "giving number 0
-to Bismillahs" — so a source in that shape is a legitimate alternative encoding
-of the same content, not a broken file. Both encodings are downstream of the
-same Medina Mushaf convention, which is why they can be reconciled onto one
-canonical view at all.
+to Bismillahs". It is retained here as a defensive case, not a known source.
+
+### 5.1 quran.com — verified alignment
+
+quran.com reaches the *same* canonical model by a different route: it stores
+6,236 numbered ayahs with the opener as a chapter-level boolean, so `2:1` is
+`الٓمٓ` with no basmala in the text. Its `bismillah_pre` is `false` for surahs 1
+and 9 and `true` for the other 112.
+
+Critically, **its global index is the same index we already use.** Spot-checked
+`verse_index` values from the Quran Foundation API against the Tanzil DB's
+`"index"` column:
+
+| verse | quran.com `verse_index` | Tanzil global | |
+|---|---:|---:|---|
+| 1:1 | 1 | 1 | ✓ |
+| 1:7 | 7 | 7 | ✓ |
+| 2:1 | 8 | 8 | ✓ |
+| 2:255 | 262 | 262 | ✓ |
+| 114:6 | 6236 | 6236 | ✓ |
+
+So `verse_index ≡ our global index ≡ quran-data.xml start+1`, and
+`(chapter_id, verse_number) ≡ (sura, aya)`. **No re-indexing adapter is needed
+for a quran.com source** — only the opener differs, which is exactly what
+`opener(s)` already abstracts. That removes the largest piece of speculative
+work from §5.
+
+Two notes on adopting their vocabulary wholesale:
+
+- `bismillah_pre` is **less expressive than our existing `Bismillah` enum**. It
+  is `false` for both surah 1 and surah 9, collapsing "the basmala is ayah 1"
+  and "there is no basmala" into one value — quran.com recovers the difference
+  in the UI with a hardcoded `CHAPTERS_WITHOUT_BISMILLAH = ['1','9']` list. Our
+  three-value enum already distinguishes them. Map `bismillah_pre` *onto*
+  `opener(s)` on import; do not adopt it as the internal model.
+- A quran.com-shaped **schema** (a derived `verses` table holding pre-stripped
+  text) is not adoptable here regardless of its merits: it materializes modified
+  ayah text, which fixed decisions 1 and 2 forbid, drops the corpus outside the
+  golden digests, and exceeds Tanzil's verbatim-copy licence. `bodyOffset`
+  yields the identical read-time result with nothing materialized.
+
+### 5.2 Do not split on a newline
+
+Guidance circulating for Tanzil imports says to separate the basmala on an
+embedded newline (`row.text.split('\n')`). **That does not work on this data.**
+Verified on both artifacts:
+
+| | newlines found |
+|---|---:|
+| `quran-uthmani.sqlite`, all 6,236 rows | 0 |
+| `sql/quran-uthmani.sql`, all 6,236 quoted values (literal or `\n`-escaped) | 0 |
+
+The separator in `2:1` is a single U+0020 space. Tanzil's own wording is that
+applications should "add a newline … on the fly" — the newline is an output the
+consumer *produces*, not a delimiter the file provides. A splitter written that
+way silently returns the whole row unchanged, or throws for all 112 surahs if it
+asserts on the split result.
+
+Hardcoded character offsets (`text.substring(39)`) are equally wrong, for the
+reasons in §4.2 — and measurably so: the real cut lands at **40** for 110 surahs
+and **41** for surahs 95 and 97. The skeleton walk is the only approach here that
+survives both the orthographic variation and the absence of a delimiter.
 
 Detection runs at load and is compared to the registry. Mismatch is a load
 error naming both sides, in the style of the existing `Invariant` messages.
@@ -342,12 +400,17 @@ than a claim, and they hold for any source, not just Tanzil.
 
 ## 10. Open items
 
-- **The quran.com source is not in the repo.** The `separate-row` and
-  `separate-field` shapes in §5 are written from the documented quran.com/QUL
-  formats, not from a profiled file. Before that adapter is implemented the
-  actual database needs profiling the way Tanzil was — row count, ayah-number
-  base, where the basmala sits, and whether its Uthmani text preserves the 95/97
-  distinction.
+- **The quran.com source is not in the repo, and the reports of it conflict.**
+  §5.1 describes the Quran Foundation *API* model — 6,236 numbered ayahs, opener
+  as a chapter flag, no basmala in `2:1`. But the database actually downloaded
+  for this project was reported as having the basmala *embedded in ayah 1, and
+  in some places as ayah 1 itself* — which is not that model. Most likely it is a
+  QUL/mushaf-layout export rather than the canonical API corpus, and the two are
+  not interchangeable. Resolve by profiling the actual file before writing its
+  registry entry: row count, ayah-number base, where the basmala sits per surah,
+  whether `verse_index` matches ours (§5.1), and whether its Uthmani text
+  preserves the 95/97 shadda. Until then it has no profile and will not load —
+  which is the intended behaviour under fixed decision 6.
 - Whether the second source becomes a published artifact or stays a
   build/verification input. This decides whether `/quran/v1/scripts`,
   `contentVersion`, and OPFS storage grow a third file.
@@ -364,6 +427,11 @@ than a claim, and they hold for any source, not just Tanzil.
   encoded with the basmala on the first ayah's line, the 95/97 shadda and its
   idgham rationale, and the instruction to split at read time rather than in the
   file.
+- [Quran Foundation content API](https://api-docs.quran.foundation/docs/content_apis_versioned/4.0.0/get-chapter/)
+  — `bismillah_pre` on the chapter resource, and `verse_index` / `verse_key` on
+  the verse resource. Source for §5.1. Note the project states its production
+  database is private, so the shapes there are inferred from the API surface and
+  schema, not from the corpus itself.
 - `docs/quran-api.md` §3.3 — verbatim-text guarantee and the golden digests.
 - `docs/quran-web-delivery.md` §1.2, §1.4 — files unaltered; identical search
   behaviour online and offline.
