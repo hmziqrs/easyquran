@@ -3,7 +3,7 @@
 > Status: **planned, not implemented**.
 >
 > Priority: minimize the HTML and critical data needed for first paint. Quran
-> text in the requested reading window is useful content; reader controls,
+> text in the requested Surah-local page is useful content; reader controls,
 > duplicate render trees, and corpus-wide metadata are not.
 >
 > This plan supersedes the full-Surah SSG and web-build XML decisions in
@@ -17,8 +17,8 @@
 
 The migration has two independent outcomes:
 
-1. **A bounded, content-first SSG document.** A Surah URL renders a small,
-   Mushaf-aligned reading window with one copy of each ayah and no server-
+1. **A bounded, content-first SSG document.** A Surah URL renders exactly one
+   Mushaf-aligned Surah-local page with one copy of each ayah and no server-
    rendered reader controls or corpus-wide navigation data.
 2. **A compact, immutable metadata boundary.** The web build and SPA stop
    parsing `quran-data.xml`. Two checked-in positional JSON snapshots and
@@ -80,32 +80,28 @@ The current corpus produces 662 Surah-local pages. Fifty-one global pages cross
 a Surah boundary, and one global page can contain as many as three Surahs.
 Those cases are required fixtures, not edge cases to flatten away.
 
-### 2.3 Surah SSG window
+### 2.3 Surah SSG page
 
-A Surah remains one continuous scrolling document. “Previous/current/next”
-describes chunks initially present around the requested scroll position, not a
-traditional three-page reader UI.
+A Surah becomes one continuous scroll after the client starts, but its initial
+SSG document contains exactly the requested Surah-local page. It does not
+contain the previous or next page.
 
-For Surah `s`, requested local page `p`, and local page count `N`, the SSG
-window is:
+For Surah `s` and requested local page `p`:
 
 ```text
-{ p - 1, p, p + 1 } intersected with { 1 ... N }
+SSG(s, p) = { p }
 ```
 
-| Position | Initial Surah-local chunks |
-|---|---|
-| one-page Surah | current only |
-| first of a multi-page Surah | current, next |
-| interior | previous, current, next |
-| last | previous, current |
+When the URL has no local page number, `p` is always 1. This rule is identical
+for a one-page Surah, the first page, an interior page, and the last page.
 
-There is no wraparound and no crossing into an adjacent Surah.
+After first paint, the client may add another page when the reader actually
+approaches a scroll boundary. It reads the offline database first. If the
+offline data is unavailable, a future range API will be the fallback. Merely
+opening or hydrating a Surah page must not preload either neighbor.
 
-Chunks appear as one scroll in document order. A `data-current-page` anchor and
-a tiny pre-paint positioner place an interior route at its current chunk
-without a visible jump; the previous chunk remains immediately above it for
-upward scrolling.
+There is no wraparound and no client-loaded page may cross into an adjacent
+Surah.
 
 ---
 
@@ -116,8 +112,8 @@ local page belongs in the path:
 
 | Intent | Canonical URL | SSG content |
 |---|---|---|
-| Surah local page 1 | `/app/<surah-slug>` | local 1 and local 2 when present |
-| Surah local page `p > 1` | `/app/<surah-slug>/page/<p>` | clipped local `p-1`, `p`, `p+1` |
+| Surah local page 1 | `/app/<surah-slug>` | local page 1 only |
+| Surah local page `p > 1` | `/app/<surah-slug>/page/<p>` | local page `p` only |
 | global Mushaf page `g` | `/app/page/<g>` | global page `g` only |
 
 `/app/<surah-slug>/page/1` is not emitted or added to the sitemap. If hosting
@@ -130,33 +126,29 @@ fragment, for example:
 /app/al-baqarah/page/4#ayah-2-24
 ```
 
-The fragment identifies the ayah, not the paginated document. This replaces
-query-only centering for ayahs outside the initial SSG window.
+The fragment identifies the ayah, not the paginated document. The path already
+selects the one SSG page that contains it.
 
 Every emitted local page has:
 
 - a self-referencing canonical URL;
 - a title and description identifying the Surah and current local page;
 - real `<a href>` links making the local sequence crawlable;
-- an entry in the generated sitemap; and
-- `data-nosnippet` on non-current neighbor sections so they do not displace the
-  current chunk in search snippets.
+- an entry in the generated sitemap.
 
-`data-nosnippet` controls snippets, not indexing. Because neighbors are real
-SSG content, adjacent URLs deliberately overlap. Surah-local, global-page, and
-Juz views also present some of the same Quran text for different reading
-intents. Monitor canonical selection in Search Console rather than claiming
-that overlap has been eliminated.
+Adjacent Surah-local URLs do not overlap: each owns one unique clipped page.
+Global-page and Juz views still present some of the same Quran text for their
+different reading intents.
 
 This follows Google's current guidance that paginated documents have distinct
 URLs, self-canonicals, and sequential links:
 [Pagination best practices](https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading).
-See also [`data-nosnippet`](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag#data-nosnippet).
 
-Adding the 548 non-first local paths increases generated file count, and
-neighbor windows repeat chunks across files. Aggregate deploy size and build
-time may grow. That is acceptable only if each requested document and its
-critical first-paint payload become materially smaller; measure both sides.
+Adding the 548 non-first local paths increases generated file count and repeats
+the page shell, but it does not repeat ayahs between Surah-local documents.
+Across the Surah route family, each ayah is emitted exactly once. Measure both
+the per-document result and aggregate deploy size because the repeated shell
+and extra files still have a cost.
 
 ### Juz routes
 
@@ -185,8 +177,8 @@ The August 2026 production-build audit found 748 generated reader documents:
 |---|---|---|
 | Verse actions | Four tooltip buttons and four inline SVGs are SSR-rendered per ayah; 74,832 buttons occupy about 68.8 MB of raw generated HTML across the route families. | No action button, tooltip, textarea, or action SVG in SSG HTML. |
 | Duplicate modes | Both tab panels render, so Arabic text appears in Ayah-by-Ayah and Reading trees. For Al-Baqarah the hidden copy is about 126 KB raw. | One ayah node/text; CSS changes presentation. |
-| Hydration data | SvelteKit serializes loaded Quran data after rendering it as HTML. Al-Baqarah repeats about 108.6 KB raw in page data. | First bound it to the SSG window; if the measured budget still fails, isolate static content from hydration. |
-| Whole-Surah load | `/app/[surah]` calls `readSurahText` and returns the complete `LoadedSurah.verses`. | Read and return only the clipped initial window. |
+| Hydration data | SvelteKit serializes loaded Quran data after rendering it as HTML. Al-Baqarah repeats about 108.6 KB raw in page data. | First bound it to the requested local page; if the measured budget still fails, isolate static content from hydration. |
+| Whole-Surah load | `/app/[surah]` calls `readSurahText` and returns the complete `LoadedSurah.verses`. | Read and return only the requested local page. |
 | Corpus metadata | The virtual module compiles XML, names, coordinates, range families, and sajdas. The emitted metadata chunk is about 121.7 KB raw / 13.4 KB Brotli. | Embed only route metadata; fetch compact snapshots after paint or on demand. |
 | Reader JavaScript | A reader page preloads 26 JavaScript files, about 525.7 KB raw / 134.7 KB Brotli. | Dynamically import client controls and sidebar. |
 
@@ -311,9 +303,13 @@ rangeByIndex(kind, index)
 globalPageRange(globalPage)
 surahLocalPageCount(surah)
 surahLocalPage(surah, localPage)
-surahScrollWindow(surah, localPage)
+previousSurahLocalPage(surah, localPage)
+nextSurahLocalPage(surah, localPage)
 sajdaAt(surah, ayah)
 ```
+
+The previous/next accessors identify a possible client scroll request. SSG does
+not call them to load Quran text.
 
 Invalid coordinates return `undefined` or throw explicitly; they do not
 silently fall back to Al-Fatihah.
@@ -362,13 +358,13 @@ Generate 662 canonical Surah-local documents:
 For each entry:
 
 1. resolve `{ surah, localPage, globalPage }` through compact accessors;
-2. compute the clipped previous/current/next local window;
-3. query Uthmani SQLite only for those global-index intersections;
-4. normalize each returned ayah exactly once;
-5. emit a minimal route header and ordered content chunks; and
-6. serialize no catalog, range family, sajda list, or full-Surah array.
+2. query Uthmani SQLite only for that one Surah/global-page intersection;
+3. normalize each returned ayah exactly once;
+4. emit a minimal route header and that page's content; and
+5. serialize no neighbor page, catalog, range family, sajda list, or full-Surah
+   array.
 
-The route DTO is coordinate-aware. It carries VerseKeys and chunk bounds; it
+The route DTO is coordinate-aware. It carries VerseKeys and page bounds; it
 must not pass a clipped `string[]` to an API that assumes element zero is ayah
 1.
 
@@ -387,7 +383,7 @@ Canonical opener handling occurs once per rendered text unit:
 - later Surah-local pages never synthesize another opener;
 - a global page renders an opener only when it contains that Surah's ayah 1;
   and
-- prepending/restoring a chunk does not duplicate an opener or ayah.
+- prepending/restoring a page does not duplicate an opener or ayah.
 
 ---
 
@@ -418,9 +414,8 @@ may read a non-HttpOnly `reader-mode` cookie and set the mode attribute before
 paint. Missing/invalid state falls back to Ayah-by-Ayah. The regular app later
 owns changes and persists them back to the cookie.
 
-The same script may position an interior URL at its current chunk. It may not
-initialize the Worker, open OPFS, fetch metadata, or download a database in the
-render-blocking path.
+The script may not initialize the Worker, open OPFS, fetch metadata, or download
+a database in the render-blocking path.
 
 ### Client-only scope
 
@@ -444,30 +439,43 @@ adds its module and dependencies to the initial preload graph.
 
 ## 8. Hydration and continuous scrolling
 
-The initial SSG DOM is immediately readable and remains the fallback while
-offline data starts.
+The one-page SSG DOM is immediately readable and remains the fallback while
+client data starts.
 
-1. If the immutable offline database is cached, open it during normal
-   hydration and reconcile the visible window by VerseKey.
-2. If it is not cached, preserve the painted SSG window and start initialization
-   after first paint without blocking interaction.
-3. Scrolling beyond SSG neighbors reads further Surah-local ranges from the
-   offline database. It never inserts an adjacent Surah.
-4. Prepending preserves visual scroll position. Insertion is idempotent by
-   `{ surah, localPage, globalPage }` and VerseKey.
-5. As the dominant chunk changes, `history.replaceState` updates the canonical
+1. Hydration adopts the requested SSG page by VerseKey. It does not fetch the
+   previous or next page merely because the route mounted.
+2. If the immutable offline database is cached, it becomes the first source for
+   later scroll requests.
+3. If the database is not cached, preserve the painted SSG page and initialize
+   the offline data after first paint without blocking interaction.
+4. When the reader actually approaches the bottom or explicitly tries to move
+   above the top, request only that adjacent Surah-local page. Try the offline
+   database first; use the future range API when offline data is unavailable.
+5. Until the API exists, a cold reader keeps the SSG page usable while the
+   offline database initializes, then fulfills the pending scroll request.
+6. A loaded page never crosses the current Surah. Prepending preserves visual
+   position, and insertion is idempotent by `{ surah, localPage, globalPage }`
+   and VerseKey.
+7. As the visible page changes, `history.replaceState` updates the canonical
    local-page path without reload.
-6. Keep a bounded DOM window after hydration; eviction preserves scroll
-   position, anchors, annotations, and canonical URL.
+8. Keep a bounded number of pages in the DOM. Before removing a distant page,
+   remember its rendered height and leave a same-height spacer so the scrollbar
+   and visible text do not jump. A default estimated height is only a fallback
+   until that page has been measured.
+
+The future API itself is not implemented by this migration and is not an
+acceptance blocker. This migration only gives page loading a source boundary so
+the API can be added later without changing the reader.
 
 The current cache is unsafe for this model: `seedSurah(num, string[])` assumes
 array element zero is ayah 1, and `refreshFromWorker(num)` fetches a whole
 Surah. Replace it with coordinate-aware storage such as `Map<VerseKey, text>`
-plus Worker range requests. Copy/share/note operations must work for a
-non-first local chunk and never read the wrong `n - 1` element.
+plus a page-source boundary that can use Worker ranges now and the future API
+later. Copy/share/note operations must work for a non-first local page and never
+read the wrong `n - 1` element.
 
-If a deep ayah link names a chunk outside the mounted window, resolve and load
-that local chunk before scrolling to its full VerseKey anchor.
+If an in-app deep ayah action names a page outside the currently mounted set,
+resolve and load that local page before scrolling to its full VerseKey anchor.
 
 ---
 
@@ -497,7 +505,8 @@ that local chunk before scrolling to its full VerseKey anchor.
 
 - Add `/app/[surah]/page/[localPage]` prerender entries; base path is local 1.
 - Add strict bounds/404 behavior and `/page/1` normalization.
-- Replace whole-Surah SQL/DTOs with clipped coordinate-aware windows.
+- Replace whole-Surah SQL/DTOs with one clipped, coordinate-aware local page.
+- Prove that SSG HTML and page data contain neither adjacent local page.
 - Update deep links, canonicals, sitemap, and sequential crawl links.
 - Keep `/app/page/[globalPage]` single-page with cross-Surah fixtures.
 
@@ -505,17 +514,21 @@ that local chunk before scrolling to its full VerseKey anchor.
 
 - Replace two reader-mode trees with one mode-neutral ayah sequence.
 - Split semantic Quran markup from dynamically imported client controls.
-- Add pre-paint mode/current-chunk boot and CSS presentation modes.
+- Add the pre-paint mode boot and CSS presentation modes.
 - Use complete VerseKey anchors everywhere.
-- Measure bounded hydration data. If duplicated Quran text still misses the
+- Measure the one-page hydration data. If duplicated Quran text still misses the
   agreed budget, make semantic content non-hydrated and mount small interactive
   islands that read coordinates/text from the DOM.
 
-### Phase 4 — make offline state chunk-aware
+### Phase 4 — make offline state page-aware
 
 - Replace full-Surah array indexing with VerseKey/range caching.
-- Add Worker range requests and cached/cold initialization.
-- Implement prepend/append, URL updates, bounded eviction, and deep-link load.
+- Add Worker range requests, cached/cold initialization, and a page-source
+  boundary for the future API fallback.
+- Load adjacent pages only after scroll intent—not during route initiation or
+  hydration.
+- Implement prepend/append, URL updates, measured-height spacers, bounded
+  eviction, and deep-link load.
 - Verify no boundary crossing or duplicate opener/ayah insertion.
 
 ### Phase 5 — trim critical metadata and verify output
@@ -544,8 +557,10 @@ that local chunk before scrolling to its full VerseKey anchor.
 
 ### SSG content
 
-- Surah routes contain exactly the clipped window: one chunk for one-page
-  Surahs, two at boundaries, and three at interior positions.
+- Every Surah route contains exactly its requested Surah-local page, regardless
+  of whether it is the first, an interior page, or the last.
+- No Surah route contains or serializes ayahs from its previous or next local
+  page.
 - No Surah route performs a whole-Surah read or serializes a full-Surah array.
 - A global route contains exactly its page, all intersecting Surahs, and no
   neighboring page ayahs.
@@ -565,9 +580,13 @@ that local chunk before scrolling to its full VerseKey anchor.
   nodes or causing hydration mismatch; invalid/missing state selects Ayah mode.
 - Cached initialization adopts SSG; cold initialization leaves it usable and
   begins after paint.
+- Route initiation and hydration make no previous/next Surah-page read from
+  either the offline database or an API.
+- Approaching a scroll boundary loads only the needed adjacent page, preferring
+  offline data and allowing the future API as the cold-cache fallback.
 - Scrolling and eviction preserve position, never duplicate ayahs/openers, and
   never cross a Surah boundary.
-- Copy, share, bookmark, and note behavior passes on non-first local chunks.
+- Copy, share, bookmark, and note behavior passes on non-first local pages.
 
 ### URL and SEO
 
@@ -575,10 +594,8 @@ that local chunk before scrolling to its full VerseKey anchor.
   prerendered path URL and self-canonical.
 - Sequential pages use real anchors and are in the sitemap; `/page/1` is not an
   indexed duplicate.
-- Reload restores the same current chunk and initial neighbor window.
+- Reload restores the same single requested local page.
 - Deep ayah URLs select their containing local page before scrolling.
-- Neighbor chunks are `data-nosnippet`; Search Console canonical/duplicate
-  reports are reviewed after rollout.
 
 No fixed byte budget is invented here. Phase 0 establishes a checked-in
 baseline, and the implementation PR sets budgets from the measured bounded
@@ -594,8 +611,9 @@ This plan does not:
 - delete or rewrite `quran-data.xml`;
 - change Rust API parsing or Arabic SQLite source files;
 - introduce a recurring Quran data-generation command;
+- include previous or next Surah-local pages in SSG HTML or page data;
 - make global routes include previous/next global pages in SSG;
-- allow a Surah window to cross a Surah boundary;
+- allow client-loaded Surah pages to cross a Surah boundary;
 - render separate Quran trees for reader modes;
 - redesign translations, service-worker precaching, Firebase, or R2 delivery;
   or
@@ -607,7 +625,7 @@ This plan does not:
 
 `setCurrent()` currently writes persistence before `hydrate()` restores
 localStorage on a Surah load. That can overwrite bookmarks and notes with the
-default empty state. It is not an SSG-size optimization, but chunked routing
+default empty state. It is not an SSG-size optimization, but paginated routing
 will exercise the same path more often.
 
 Before shipping the route refactor, suppress writes until hydration completes
