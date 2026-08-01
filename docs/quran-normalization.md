@@ -10,6 +10,12 @@
 > adapter contract. `quran-api.md` owns the Rust runtime and the HTTP contract;
 > `quran-web-delivery.md` owns browser storage and SSG. Where they disagree
 > about basmala handling, **this document wins** and the other two get amended.
+>
+> Planned web-only metadata migration:
+> [`quran-ssg-optimization-plan.md`](./quran-ssg-optimization-plan.md) replaces
+> the web build's XML parsing and checked-in names/coordinates projections after
+> implementation. The canonical text/opener rules here and the backend's
+> retained `quran-data.xml` are unchanged.
 
 ---
 

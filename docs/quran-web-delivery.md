@@ -18,6 +18,12 @@
 > **§11 is superseded once translations ship:** it records today's live-only
 > behavior, which the Service Worker still enforces. `quran-translations.md`
 > replaces it with direct SQLite packs from R2.
+>
+> **Planned web-reader supersession:**
+> [`quran-ssg-optimization-plan.md`](./quran-ssg-optimization-plan.md) replaces
+> this record's full-Surah SSG and web-build XML parsing decisions only after
+> that migration passes its acceptance checks. Until then, this document still
+> describes the implemented system.
 
 ---
 
