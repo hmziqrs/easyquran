@@ -1,6 +1,7 @@
-# EasyQuran — Quran source normalization (design plan)
+# EasyQuran — Quran source normalization
 
-> Status: **plan** (not yet implemented). Scope: a source-independent canonical
+> Status: **implemented for the web** (SSG, browser Worker, UI, and web search).
+> The Rust/API work remains outside this pass. Scope: a source-independent canonical
 > view over the Arabic Quran databases accepted by EasyQuran — currently corpora
 > using the same 6,236-ayah Hafs/Medina numbering — so that display, search, and
 > range queries behave identically no matter which registered source backs them.
@@ -18,7 +19,7 @@
 ayah numbering is right (§1.1), its 95/97 orthography is right (§6), and its
 conversion to SQLite is byte-clean. There is no data-repair task here.
 
-The problem is that the basmala is packaged *inside* ayah 1's text for 112
+The problem is that the basmala is packaged _inside_ ayah 1's text for 112
 surahs, and every consumer has to cope with that on its own. The recommendation
 is to stop coping ad hoc and add one read-time view:
 
@@ -39,6 +40,35 @@ is to stop coping ad hoc and add one read-time view:
 Everything below is the justification and the measured evidence for those five
 points.
 
+### 0.1 Web implementation map
+
+The web implementation deliberately separates four concerns:
+
+| Concern                                         | Shared module                               | Used by                                  |
+| ----------------------------------------------- | ------------------------------------------- | ---------------------------------------- |
+| Serialized domain values                        | `web/src/lib/data/quran-types.ts`           | SSG, Worker, UI, wire decoders           |
+| Artifact, script, packaging, and schema profile | `web/src/lib/quran/view/source-profiles.ts` | manifest, SSG, Worker, tooling           |
+| Typed SQL queries and row decoding              | `web/src/lib/quran/sql.ts`                  | Node and sqlite-wasm query runners       |
+| Canonical `raw` / `body` / `opener` view        | `web/src/lib/quran/view/`                   | surah/range rendering and search         |
+| Product source roles                            | `web/src/lib/quran/source-plan.ts`          | SSG defaults, Worker, fixture generation |
+
+`runQuery()` and `runOne()` are platform-neutral. Node supplies a cached
+`node:sqlite` prepared-statement runner; the browser supplies a sqlite-wasm
+object-row runner. Query text and decoding therefore exist once, including for
+the fixture generator.
+
+To register a future IndoPak or Tajweed source:
+
+1. add its stable source ID (script style is a separate value);
+2. add a database adapter only if its schema differs from Tanzil's;
+3. add one digest-guarded source profile with artifact and opener packaging;
+4. point a role in `source-plan.ts` at it when it should back reading or search.
+
+The delivery manifest is derived from the profile registry. Platform adapters
+do not need source-specific query code. A source with different numbering still
+requires an explicit alignment design and cannot be registered by labelling it
+IndoPak or Tajweed alone.
+
 ---
 
 ## 1. The problem
@@ -56,12 +86,12 @@ design before it can be registered, not a more permissive basmala detector.
 
 That packaging difference leaks into every layer that touches the corpus:
 
-- **Display** — a reader that renders a basmala header *and* the Tanzil ayah 1
+- **Display** — a reader that renders a basmala header _and_ the Tanzil ayah 1
   shows it twice.
 - **Search** — searching `بسم الله الرحمن الرحيم` against simple-clean returns
   **114 rows**: 112 embedded prefixes, the genuine 1:1, and 27:30 (the basmala
   inside Sulayman's letter). All 114 are real Quran text, but 112 of them are
-  reported as *numbered ayah* hits when they are unnumbered surah openers — the
+  reported as _numbered ayah_ hits when they are unnumbered surah openers — the
   attribution is an artifact of storage shape (§7).
 - **Row identity** — a source that adds one row for each of the 112 unnumbered
   openers carries 6,348 rows rather than 6,236, and its global indices and
@@ -78,7 +108,7 @@ equality and hardcoding surah 9 as `none`, it labels every other surah
 new digest. Prefix detection in Rust is new work, not behavior already supplied
 by the `1 / 112 / 1` assertion.
 
-### 1.1 What is *not* wrong: the ayah numbering
+### 1.1 What is _not_ wrong: the ayah numbering
 
 Reading the raw rows invites a specific and very natural misdiagnosis — that the
 basmala occupies ayah 1 and has pushed the real first ayah down to ayah 2. It
@@ -106,7 +136,7 @@ So `الٓمٓ` **is** ayah 1. Ayah 2 is `ذَٰلِكَ ٱلْكِتَـٰبُ�
 across the whole corpus: **the only row whose entire text is the basmala is
 `index=1`** — genuinely 1:1, Al-Fatiha's numbered first verse.
 
-The layout that *would* be broken, and which this database does not have:
+The layout that _would_ be broken, and which this database does not have:
 
 ```text
    8     2    1   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ     ← does not exist
@@ -132,6 +162,7 @@ never an edit to the data.
 2. **Normalization is a read-time view, never a stored artifact.** No third
    Arabic SQLite database is built (`quran-web-delivery.md` §1.2, `quran-api.md`
    §1.10 both depend on this). This is also what the upstream vendor instructs:
+
    > Applications that are using Tanzil Quran text are recommended to add a
    > newline after each Bismillah **on the fly (not in the Quran text file)** to
    > display Bismillahs in separate lines, just like in the Medina Mushaf.
@@ -142,6 +173,7 @@ never an edit to the data.
    Tanzil keeps one ayah per line so the file has exactly 6,236 lines, and
    explicitly rejected both extra lines and aya-0 numbering to get there. The
    split is expected to happen at read time — which is exactly §4.
+
 3. **Embedded-prefix views are expressed as scalar cut records, not rewritten
    strings.** See §4. This makes decision 1 mechanically enforceable rather than
    aspirational.
@@ -159,15 +191,15 @@ never an edit to the data.
 
 This is a consolidation as much as a new build. Present today:
 
-| Piece | Location | State |
-|---|---|---|
-| `Bismillah` enum (`FirstAyah`/`None`/`EmbeddedPrefix`) | `rust/.../quran/store.rs:57` | ships, in the API and OpenAPI schema |
-| Partial classification + `1/112/1` assertion | `rust/.../quran/loader.rs:325-352` | ships, **assumes** every non-1/non-9 surah is embedded; does not test the prefix |
-| `bismillah` on the web catalog entry | `web/src/lib/data/quran-types.ts:22` | ships |
-| `showsBismillah()` | `web/src/lib/data/quran.ts:72` | ships |
-| `withoutBasmalaPrefix()` — skeleton-based stripper | `web/src/routes/design/_variants/verses.ts` | **prototype only**, two defects — see §3.1 |
-| Catalog `bismillah` derivation | `web/vite-plugin-quran.ts:109` | ships, **hardcoded by surah number**, never reads the text |
-| Search corpus construction | `web/src/lib/workers/quran.worker.ts:152` | ships, indexes raw text |
+| Piece                                                  | Location                                    | State                                                                            |
+| ------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `Bismillah` enum (`FirstAyah`/`None`/`EmbeddedPrefix`) | `rust/.../quran/store.rs:57`                | ships, in the API and OpenAPI schema                                             |
+| Partial classification + `1/112/1` assertion           | `rust/.../quran/loader.rs:325-352`          | ships, **assumes** every non-1/non-9 surah is embedded; does not test the prefix |
+| `bismillah` on the web catalog entry                   | `web/src/lib/data/quran-types.ts:22`        | ships                                                                            |
+| `showsBismillah()`                                     | `web/src/lib/data/quran.ts:72`              | ships                                                                            |
+| `withoutBasmalaPrefix()` — skeleton-based stripper     | `web/src/routes/design/_variants/verses.ts` | **prototype only**, two defects — see §3.1                                       |
+| Catalog `bismillah` derivation                         | `web/vite-plugin-quran.ts:109`              | ships, **hardcoded by surah number**, never reads the text                       |
+| Search corpus construction                             | `web/src/lib/workers/quran.worker.ts:152`   | ships, indexes raw text                                                          |
 
 The `withoutBasmalaPrefix` prototype got the hard part — the skeleton walk —
 right, and it is promoted in §4. But it is not promotable as written; §3.1
@@ -189,7 +221,7 @@ Executed against both corpora, all 114 first ayahs. Two defects, both blocking
 promotion to `$lib`:
 
 **It returns an empty string for surah 1.** `withoutBasmalaPrefix(raw(1,1))`
-strips the whole verse, because 1:1 *is* the basmala — 113 of 114 ayahs are
+strips the whole verse, because 1:1 _is_ the basmala — 113 of 114 ayahs are
 stripped, and surah 1's body comes back as `""`. Today this is masked: the only
 caller, `displayVerses()`, early-returns on
 `surah.bismillah !== "embedded-prefix"` so surah 1 never reaches it. The guard
@@ -198,7 +230,7 @@ carrying the guard blanks Al-Fatiha's first verse.
 
 **It is completely inert on simple-clean** — 0 of 114 ayahs stripped. The
 `BISMILLAH` constant spells the definite articles with `ٱ` (U+0671 ALEF WASLA);
-simple-clean uses `ا` (U+0627). Alef wasla is a *letter*, not a combining mark,
+simple-clean uses `ا` (U+0627). Alef wasla is a _letter_, not a combining mark,
 so the skeleton does not remove it and the prefix never matches. Search runs on
 simple-clean, so a stripper wired up as-is would silently do nothing there while
 appearing to work on the display corpus.
@@ -224,7 +256,7 @@ opener(c, s) = { kind: "verse",  text }   // surah 1 — the basmala IS ayah 1, 
 ```
 
 The `kind` is canonical metadata for the supported numbering model and therefore
-does not vary by source. How the text is packaged *does* vary and belongs to the
+does not vary by source. How the text is packaged _does_ vary and belongs to the
 source profile (§5). For an `embedded-prefix` corpus, `body` and `raw` differ at
 ayah 1 of the 112 header surahs. For `chapter-flag` sources the numbered ayah is
 already the body, so `body ≡ raw`; the profile must provide the header text by a
@@ -286,14 +318,14 @@ packages additionally need the opener provider declared in §5. Consequences:
 
 Measured against both current Tanzil sources:
 
-| | Uthmani | simple-clean |
-|---|---|---|
-| surahs with `bodyStartScalar > 0` | 112 | 112 |
-| surahs with `bodyStartScalar = 0` | 1, 9 | 1, 9 |
-| distinct opener ends (scalars) | **39**, and **40** for surahs 95 and 97 | **22** for all 112 |
-| distinct body starts | **40**, and **41** for surahs 95 and 97 | **23** for all 112 |
-| UTF-8 byte cuts `(openerEnd, bodyStart)` | **(75,76)**, and **(77,78)** for surahs 95 and 97 | **(41,42)** for all 112 |
-| reference basmala | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` | `بسم الله الرحمن الرحيم` |
+|                                          | Uthmani                                           | simple-clean             |
+| ---------------------------------------- | ------------------------------------------------- | ------------------------ |
+| surahs with `bodyStartScalar > 0`        | 112                                               | 112                      |
+| surahs with `bodyStartScalar = 0`        | 1, 9                                              | 1, 9                     |
+| distinct opener ends (scalars)           | **39**, and **40** for surahs 95 and 97           | **22** for all 112       |
+| distinct body starts                     | **40**, and **41** for surahs 95 and 97           | **23** for all 112       |
+| UTF-8 byte cuts `(openerEnd, bodyStart)` | **(75,76)**, and **(77,78)** for surahs 95 and 97 | **(41,42)** for all 112  |
+| reference basmala                        | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ`         | `بسم الله الرحمن الرحيم` |
 
 The 41 is not an anomaly to be smoothed out — see §6. Note it has **no analogue
 in simple-clean**, which has a single body start: that corpus carries no
@@ -349,7 +381,7 @@ is a letter that the skeleton does not remove. Reading the reference in-band
 also removes the constant as a thing that can drift from the data.
 
 **`PrefixCut[1] = {0,0}` by definition, before any matching runs.** Surah 1's
-ayah 1 *is* the basmala, so the walk would legitimately match the entire verse
+ayah 1 _is_ the basmala, so the walk would legitimately match the entire verse
 and return an empty body. That is a property of the algorithm, not a bug to
 patch downstream — so the guard belongs inside the source adapter, not in each
 caller. Equivalently: `bodyStartScalar[s] > 0` only where
@@ -360,13 +392,13 @@ caller. Equivalently: `bodyStartScalar[s] > 0` only where
 A source profile describes how one corpus packages the canonical opener and how
 exact opener text can be obtained. It is not the canonical opener model itself.
 
-| packaging | meaning | seen in |
-|---|---|---|
-| `embedded-prefix` | basmala prepended to ayah 1's text | Tanzil, suras 2–114 |
-| `numbered-ayah` | opener text is the numbered ayah itself | Tanzil 1:1 |
-| `chapter-flag` | corpus holds 6,236 numbered ayahs; the opener is a boolean on the *chapter* | quran.com / Quran Foundation API (`bismillah_pre`) |
-| `separate-row` | basmala is its own unnumbered row (often aya 0) | named by Tanzil as an encoding it declined; not yet observed in a file we hold |
-| `absent` | source contains no opener for this surah | surah 9 |
+| packaging         | meaning                                                                     | seen in                                                                        |
+| ----------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `embedded-prefix` | basmala prepended to ayah 1's text                                          | Tanzil, suras 2–114                                                            |
+| `numbered-ayah`   | opener text is the numbered ayah itself                                     | Tanzil 1:1                                                                     |
+| `chapter-flag`    | corpus holds 6,236 numbered ayahs; the opener is a boolean on the _chapter_ | quran.com / Quran Foundation API (`bismillah_pre`)                             |
+| `separate-row`    | basmala is its own unnumbered row (often aya 0)                             | named by Tanzil as an encoding it declined; not yet observed in a file we hold |
+| `absent`          | source contains no opener for this surah                                    | surah 9                                                                        |
 
 `chapter-flag` is presence metadata, not a text provider. A profile using it must
 also identify an exact, digest-guarded opener-text source: a chapter text field,
@@ -378,9 +410,10 @@ recover source-specific variants such as the shadda in the Uthmani openers for
 ```text
 profile := {
   id,
-  fileSha256,                     // exact artifact identity, when file-backed
-  corpusSha256,                   // digest over canonical raw numbered ayahs
-  sourceRowCount,                 // source rows before adaptation
+  sourceId,                       // artifact/cache identity
+  script,                         // orthography, independent of sourceId
+  artifact: { repositoryPath, r2Path, sizeBytes, sha256 },
+  database,                       // typed schema/query adapter
   canonicalRowCount: 6236,
   packaging: { [sura]: packaging },
   expectedPackagingCounts,        // per source; Tanzil is 1 / 112 / 1
@@ -404,7 +437,7 @@ value to describe both storage layouts.
 
 Two changes from today's behaviour:
 
-- The `1/112/1` *packaging* assertion becomes **one registry entry**, not a
+- The `1/112/1` _packaging_ assertion becomes **one registry entry**, not a
   global invariant. Tanzil keeps asserting exactly one numbered-ayah, 112
   embedded-prefix, and one absent package and still fails closed if its own
   source drifts. Another source asserts its own expected packaging.
@@ -423,7 +456,7 @@ to Bismillahs". It is retained here as a defensive case, not a known source.
 
 ### 5.1 quran.com API — verified coordinate alignment
 
-The Quran Foundation API exposes the *same* canonical coordinates by a different
+The Quran Foundation API exposes the _same_ canonical coordinates by a different
 route: 6,236 numbered ayahs with opener presence as a chapter-level boolean, so
 `2:1` is `الٓمٓ` with no basmala in the verse text. Its `bismillah_pre` is
 `false` for surahs 1 and 9 and `true` for the other 112.
@@ -432,13 +465,13 @@ Critically, **the API's global index is the same index we already use.**
 Spot-checked `verse_index` values against the Tanzil DB's
 `"index"` column:
 
-| verse | quran.com `verse_index` | Tanzil global | |
-|---|---:|---:|---|
-| 1:1 | 1 | 1 | ✓ |
-| 1:7 | 7 | 7 | ✓ |
-| 2:1 | 8 | 8 | ✓ |
-| 2:255 | 262 | 262 | ✓ |
-| 114:6 | 6236 | 6236 | ✓ |
+| verse | quran.com `verse_index` | Tanzil global |     |
+| ----- | ----------------------: | ------------: | --- |
+| 1:1   |                       1 |             1 | ✓   |
+| 1:7   |                       7 |             7 | ✓   |
+| 2:1   |                       8 |             8 | ✓   |
+| 2:255 |                     262 |           262 | ✓   |
+| 114:6 |                    6236 |          6236 | ✓   |
 
 So `verse_index ≡ our global index ≡ quran-data.xml start+1`, and
 `(chapter_id, verse_number) ≡ (sura, aya)`. **No numbered-ayah re-indexing
@@ -468,14 +501,14 @@ Guidance circulating for Tanzil imports says to separate the basmala on an
 embedded newline (`row.text.split('\n')`). **That does not work on this data.**
 Verified on both artifacts:
 
-| | newlines found |
-|---|---:|
-| `quran-uthmani.sqlite`, all 6,236 rows | 0 |
-| `sql/quran-uthmani.sql`, all 6,236 quoted values (literal or `\n`-escaped) | 0 |
+|                                                                            | newlines found |
+| -------------------------------------------------------------------------- | -------------: |
+| `quran-uthmani.sqlite`, all 6,236 rows                                     |              0 |
+| `sql/quran-uthmani.sql`, all 6,236 quoted values (literal or `\n`-escaped) |              0 |
 
 The separator in `2:1` is a single U+0020 space. Tanzil's own wording is that
 applications should "add a newline … on the fly" — the newline is an output the
-consumer *produces*, not a delimiter the file provides. A splitter written that
+consumer _produces_, not a delimiter the file provides. A splitter written that
 way silently returns the whole row unchanged, or throws for all 112 surahs if it
 asserts on the split result.
 
@@ -493,22 +526,22 @@ Their ayah 1 begins `بِّسْمِ` — U+0628 U+0651 U+0650 — carrying a sha
 other 110 do not have. This is **correct** and must survive normalization.
 
 Word-initial shadda appears 3,724 times in this corpus (`مِّن`, `لَّا`,
-`رَّبِّهِمْ`…). It is how Uthmani script marks *idgham*, assimilation into the
+`رَّبِّهِمْ`…). It is how Uthmani script marks _idgham_, assimilation into the
 preceding word's final consonant. The basmala case is that rule applied across a
 surah boundary:
 
-| preceding surah ends | final ب | next surah's ayah 1 |
-|---|---|---|
-| 13 → `ٱلْكِتَـٰبِ` | kasra | `بِسْمِ` |
-| 14 → `ٱلْأَلْبَـٰبِ` | kasra | `بِسْمِ` |
-| 34 → `مُّرِيبٍۭ` | tanwin | `بِسْمِ` |
-| **94 → `فَٱرْغَب`** | **no diacritic** | **`بِّسْمِ`** |
-| **96 → `وَٱقْتَرِب`** | **no diacritic** | **`بِّسْمِ`** |
+| preceding surah ends  | final ب          | next surah's ayah 1 |
+| --------------------- | ---------------- | ------------------- |
+| 13 → `ٱلْكِتَـٰبِ`    | kasra            | `بِسْمِ`            |
+| 14 → `ٱلْأَلْبَـٰبِ`  | kasra            | `بِسْمِ`            |
+| 34 → `مُّرِيبٍۭ`      | tanwin           | `بِسْمِ`            |
+| **94 → `فَٱرْغَب`**   | **no diacritic** | **`بِّسْمِ`**       |
+| **96 → `وَٱقْتَرِب`** | **no diacritic** | **`بِّسْمِ`**       |
 
-Surahs 94 and 96 are the only two in the Quran ending in a *majzoom* (jussive) ب.
+Surahs 94 and 96 are the only two in the Quran ending in a _majzoom_ (jussive) ب.
 Their final ب carries no diacritic at all — verified, U+0628 with nothing
 following it — precisely because it merges into the ب of the basmala under the
-Arabic idgham rule. The three surahs ending in a *voweled* ب correctly take no
+Arabic idgham rule. The three surahs ending in a _voweled_ ب correctly take no
 shadda. Five for five against the phonological rule.
 
 Tanzil documents this directly, and treats it as evidence that the basmala is
@@ -529,7 +562,7 @@ upstream dump at `db/quran/tanzil/arabic/sql/quran-uthmani.sql`, and all 6,236
 rows of that dump are byte-identical to `quran-uthmani.sqlite`.
 
 One incidental trap: surah 96's last ayah ends with the sajda mark ۩ (U+06E9)
-*after* the ب. Any "what letter does this surah end with" heuristic has to skip
+_after_ the ب. Any "what letter does this surah end with" heuristic has to skip
 annotation signs, or it reads 96 as ending in ۩ and misses the idgham.
 
 Requirements that follow:
@@ -547,7 +580,7 @@ Requirements that follow:
 
 Search indexes `body` **plus the openers as their own units** — not `body`
 alone. The distinction matters, and Tanzil's documentation is what settles it:
-the basmala of suras 2–114 is *Quran text*, merely unnumbered.
+the basmala of suras 2–114 is _Quran text_, merely unnumbered.
 
 > While Bismillahs are not individually numbered in suras 2 to 114, they are
 > considered as part of the Quran text in Medina Mushaf. […] Tanzil Quran text
@@ -558,15 +591,15 @@ So dropping them from the index would be under-reporting real content. The fix
 is attribution, not exclusion. Measured on simple-clean, `بسم الله الرحمن الرحيم`
 returns **114** rows today:
 
-| | now (`raw`) | `body` only | `body` + openers |
-|---|---:|---:|---:|
-| surahs 2–114 ayah 1 | 112, as ayah hits | 0 | 112, as **opener** hits |
-| genuine 1:1 | 1 | 1 | 1 |
-| 27:30 (mid-ayah, in Sulayman's letter) | 1 | 1 | 1 |
+|                                        |       now (`raw`) | `body` only |        `body` + openers |
+| -------------------------------------- | ----------------: | ----------: | ----------------------: |
+| surahs 2–114 ayah 1                    | 112, as ayah hits |           0 | 112, as **opener** hits |
+| genuine 1:1                            |                 1 |           1 |                       1 |
+| 27:30 (mid-ayah, in Sulayman's letter) |                 1 |           1 |                       1 |
 
 `raw` and `body + openers` return the same 114 content units for this exact
 phrase; `body` alone returns only the two numbered ayahs. The difference between
-the two complete indexes is what a hit *claims*: today the API says "surah 2
+the two complete indexes is what a hit _claims_: today the API says "surah 2
 ayah 1 matches", which misattributes an unnumbered opener to a numbered ayah and
 makes ayah 1 of 112 surahs look like it begins with words it does not begin with.
 As opener hits they carry no ayah number, the way the Mushaf sets them.
@@ -639,10 +672,10 @@ The web `normalizeArabic` (`web/src/lib/quran/search/normalize.ts:39`) removes
 `\p{Mn}\p{Me}\p{Cf}` and folds `آأإ→ا`, `ى→ي`, `ة→ه`. It does **not** handle two
 characters that are pervasive in the Uthmani corpus:
 
-| character | category | why it survives normalization | count in Uthmani | count in simple-clean |
-|---|---|---|---:|---:|
-| `ٱ` U+0671 ALEF WASLA | `Lo` (letter) | not a combining mark; no fold rule | 13,819 | 0 |
-| `ـ` U+0640 TATWEEL | `Lm` (modifier letter) | **not** `Mn`/`Me`/`Cf`, so the class misses it | 6,848 | 0 |
+| character             | category               | why it survives normalization                  | count in Uthmani | count in simple-clean |
+| --------------------- | ---------------------- | ---------------------------------------------- | ---------------: | --------------------: |
+| `ٱ` U+0671 ALEF WASLA | `Lo` (letter)          | not a combining mark; no fold rule             |           13,819 |                     0 |
+| `ـ` U+0640 TATWEEL    | `Lm` (modifier letter) | **not** `Mn`/`Me`/`Cf`, so the class misses it |            6,848 |                     0 |
 
 The search corpus is simple-clean, which contains neither, so corpus-side
 indexing is unaffected. The **query** side is not:
@@ -688,11 +721,12 @@ unreviewed one-character fold.
 
 Three runtimes consume the corpus and all three need the same answers:
 
-| Runtime | Entry point | Change |
-|---|---|---|
-| Rust backend | `rust/.../quran/loader.rs` | select and validate the source profile; compute native `PrefixCut`s; add source-qualified `raw`/`body`/`opener`; build canonical search units |
-| SSG | `web/src/lib/server/quran-sqlite.ts` | validate the Uthmani profile; compute scalar + UTF-16 cuts; prerender opener and body while retaining raw text for copy/fidelity |
-| Browser worker | `web/src/lib/workers/quran.worker.ts` | validate each downloaded artifact; compute native cuts after deserialize; build the same canonical search units |
+| Runtime        | Entry point                           | Change                                                                                                              |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Rust backend   | `rust/.../quran/loader.rs`            | **not part of the web implementation pass**; consume the shared fixtures when implemented                           |
+| SSG            | `web/src/lib/server/quran-sqlite.ts`  | adapt `node:sqlite` to the shared runner; validate the selected reader profile; prerender raw text plus descriptors |
+| Browser worker | `web/src/lib/workers/quran.worker.ts` | adapt sqlite-wasm to the shared runner; load source roles; build the canonical search corpus                        |
+| Tooling        | `web/scripts/gen-search-fixtures.ts`  | use the same source plan, queries, decoders, and canonical corpus as runtime code                                   |
 
 The shared TypeScript stripper is promoted out of `routes/design/_variants/` into
 `$lib/quran/view/`, where the SSG reader adapter and worker can both reach it.
@@ -792,23 +826,23 @@ masked by a caller-side guard, the other a no-op that looked like success.
 A full sweep of both Arabic corpora, the metadata XML and all 115 translation
 packs found **no structural or data defects**. Recorded so this is not re-run:
 
-| check | result |
-|---|---|
-| row count, contiguous `index` 1..6236, unique `(sura,aya)`, sequential `aya` within each surah | pass, both corpora |
-| ayah counts and `start` offsets vs `quran-data.xml` | pass, 114/114 |
-| juz 30 · page 604 · ruku 556 · hizb-quarter 240 · manzil 7 · sajda 15 | all present, monotonic, unique, every marker resolves to a real verse |
-| empty / untrimmed / double-space / control char / newline / tab / BOM / NBSP | none, both corpora |
-| codepoint inventory | 70 distinct (Uthmani), 37 (simple-clean); every one in the Arabic blocks — no stray Latin or punctuation |
-| golden corpus digests vs `quran-api.md` §3.3 | **match exactly**, both; joined byte lengths match too |
-| NFC canary | NFC-normalizing Uthmani yields `6ee54875c37e4d88…`, exactly as documented — the digest check does detect it |
-| file digests vs `web/src/lib/config/site.ts` | match, both |
-| 115 translation packs: 6,236 rows, contiguous index | pass, 115/115 |
-| translation empty verses | 4, in 3 files — exactly as `docs/translation-empty-verses.md` records |
+| check                                                                                          | result                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| row count, contiguous `index` 1..6236, unique `(sura,aya)`, sequential `aya` within each surah | pass, both corpora                                                                                          |
+| ayah counts and `start` offsets vs `quran-data.xml`                                            | pass, 114/114                                                                                               |
+| juz 30 · page 604 · ruku 556 · hizb-quarter 240 · manzil 7 · sajda 15                          | all present, monotonic, unique, every marker resolves to a real verse                                       |
+| empty / untrimmed / double-space / control char / newline / tab / BOM / NBSP                   | none, both corpora                                                                                          |
+| codepoint inventory                                                                            | 70 distinct (Uthmani), 37 (simple-clean); every one in the Arabic blocks — no stray Latin or punctuation    |
+| golden corpus digests vs `quran-api.md` §3.3                                                   | **match exactly**, both; joined byte lengths match too                                                      |
+| NFC canary                                                                                     | NFC-normalizing Uthmani yields `6ee54875c37e4d88…`, exactly as documented — the digest check does detect it |
+| file digests vs `web/src/lib/config/site.ts`                                                   | match, both                                                                                                 |
+| 115 translation packs: 6,236 rows, contiguous index                                            | pass, 115/115                                                                                               |
+| translation empty verses                                                                       | 4, in 3 files — exactly as `docs/translation-empty-verses.md` records                                       |
 
 Uthmani is NFC-unstable in 5,782 of 6,236 rows, matching the documented figure.
 That is a property of the source, and the reason the digests exist.
 
-All defects found by the audit are in *our code*, not the data: §3.1 and §7.1.
+All defects found by the audit are in _our code_, not the data: §3.1 and §7.1.
 
 ### 9.2 Validation: the proposed rule executed against all 228 first ayahs
 
@@ -819,19 +853,19 @@ mapped back onto the original — and run over ayah 1 of all 114 surahs in
 partition; native Rust byte-boundary and JavaScript UTF-16 conversion remain
 implementation work covered by the fixtures in §8.
 
-| | Uthmani | simple-clean |
-|---|---|---|
-| stripped | 112 | 112 |
-| zero-cut | 1, 9 | 1, 9 |
-| distinct opener ends (scalars) | 39, 40 | 22 |
-| distinct body starts (scalars) | 40, 41 | 23 |
-| UTF-8 byte cuts `(openerEnd, bodyStart)` | (75,76), (77,78) | (41,42) |
-| distinct opener texts | **2** — 110 plain, 2 shadda'd (95, 97) | **1** |
-| `opener + separator + body == raw`, byte-for-byte | 112/112 | 112/112 |
-| separator partitioned | exactly one U+0020 | exactly one U+0020 |
-| body non-empty and trimmed | 114/114 | 114/114 |
-| removed prefix skeleton-equals the basmala | 112/112 | 112/112 |
-| corpora disagree on basmala presence | none | none |
+|                                                   | Uthmani                                | simple-clean       |
+| ------------------------------------------------- | -------------------------------------- | ------------------ |
+| stripped                                          | 112                                    | 112                |
+| zero-cut                                          | 1, 9                                   | 1, 9               |
+| distinct opener ends (scalars)                    | 39, 40                                 | 22                 |
+| distinct body starts (scalars)                    | 40, 41                                 | 23                 |
+| UTF-8 byte cuts `(openerEnd, bodyStart)`          | (75,76), (77,78)                       | (41,42)            |
+| distinct opener texts                             | **2** — 110 plain, 2 shadda'd (95, 97) | **1**              |
+| `opener + separator + body == raw`, byte-for-byte | 112/112                                | 112/112            |
+| separator partitioned                             | exactly one U+0020                     | exactly one U+0020 |
+| body non-empty and trimmed                        | 114/114                                | 114/114            |
+| removed prefix skeleton-equals the basmala        | 112/112                                | 112/112            |
+| corpora disagree on basmala presence              | none                                   | none               |
 
 Reconstruction is lossless in both corpora: the separator between opener and
 body is exactly one U+0020, retained by the partition for reconstruction and
@@ -840,14 +874,14 @@ rather than asserted.
 
 **Stress cases** — ayah 1 texts that would fool a looser matcher, all correct:
 
-| surah | body after cut | why it is a trap |
-|---|---|---|
-| 55 | `ٱلرَّحْمَـٰنُ` | ayah 1 *is* a word that occurs inside the basmala; a greedy or last-occurrence matcher eats it |
-| 96 | `ٱقْرَأْ بِٱسْمِ رَبِّكَ ٱلَّذِى خَلَقَ` | contains `بِٱسْمِ` — the basmala's own opening letters — *after* the cut |
-| 87 | `سَبِّحِ ٱسْمَ رَبِّكَ ٱلْأَعْلَى` | contains `ٱسْمَ` |
-| 95, 97 | `وَٱلتِّينِ…` / `إِنَّآ أَنزَلْنَـٰهُ…` | shadda'd basmala, scalar body start 41 not 40 |
-| 9 | `بَرَآءَةٌ مِّنَ ٱللَّهِ…` | opens with `بَ` and names Allah, but has no basmala — correctly untouched |
-| 1 | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` | ayah 1 is the basmala; cut forced to `{0,0}`, verse preserved whole |
+| surah  | body after cut                            | why it is a trap                                                                               |
+| ------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 55     | `ٱلرَّحْمَـٰنُ`                           | ayah 1 _is_ a word that occurs inside the basmala; a greedy or last-occurrence matcher eats it |
+| 96     | `ٱقْرَأْ بِٱسْمِ رَبِّكَ ٱلَّذِى خَلَقَ`  | contains `بِٱسْمِ` — the basmala's own opening letters — _after_ the cut                       |
+| 87     | `سَبِّحِ ٱسْمَ رَبِّكَ ٱلْأَعْلَى`        | contains `ٱسْمَ`                                                                               |
+| 95, 97 | `وَٱلتِّينِ…` / `إِنَّآ أَنزَلْنَـٰهُ…`   | shadda'd basmala, scalar body start 41 not 40                                                  |
+| 9      | `بَرَآءَةٌ مِّنَ ٱللَّهِ…`                | opens with `بَ` and names Allah, but has no basmala — correctly untouched                      |
+| 1      | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` | ayah 1 is the basmala; cut forced to `{0,0}`, verse preserved whole                            |
 
 The 29 muqatta'at surahs are the most sensitive to an off-by-one, since their
 entire body is one to five base letters plus marks (`الٓمٓ`, `الٓمٓصٓ`, `كٓهيعٓصٓ`,
@@ -857,7 +891,7 @@ through intact — a cut one position early or late would corrupt them visibly.
 ## 10. Open items
 
 - **The quran.com source is not in the repo and has not been profiled.** §5.1
-  describes the Quran Foundation *API* model — 6,236 numbered ayahs, opener as a
+  describes the Quran Foundation _API_ model — 6,236 numbered ayahs, opener as a
   chapter flag, no basmala in `2:1` — which is inferred from the public API and
   schema, not measured from a corpus. A downloaded export may not match it; QUL
   and mushaf-layout exports are packaged differently from the API model. Profile
@@ -870,6 +904,7 @@ through intact — a cut one position early or late would corrupt them visibly.
   Note that an earlier concern that this project's Tanzil database itself carried
   the basmala "as ayah 1 in some places" was checked and did not hold; see §1.1.
   Do not carry that assumption into the quran.com profiling — measure it.
+
 - Whether the second source becomes a published artifact or stays a
   build/verification input. This decides whether `/quran/v1/scripts`,
   `contentVersion`, and OPFS storage grow a third file.

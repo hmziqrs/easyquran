@@ -25,8 +25,18 @@
    SvelteKit code and could be reused on either side of the worker boundary.
    ════════════════════════════════════════════════════════════════════════ */
 
-import type { ArtifactSpec } from "$lib/data/quran-types";
-import type { SearchHit } from "./search/normalize";
+import {
+  isOpenerKind,
+  isOpenerPackaging,
+  isQuranScript,
+  isQuranSourceId,
+  OpenerKind,
+  type ArtifactSpec,
+  type QuranSurahText,
+  type SurahNormalization,
+} from "$lib/data/quran-types";
+import { SearchHitKind, type SearchHit } from "./search/normalize";
+import { sourceProfile } from "./view/source-profiles";
 
 /** Narrow an unknown to a string-keyed record, or null. */
 function asRecord(raw: unknown): Record<string, unknown> | null {
@@ -54,25 +64,115 @@ export function unwrapEnvelope(raw: unknown): unknown {
 export function decodeSearchHit(raw: unknown): SearchHit | null {
   const rec = asRecord(raw);
   if (!rec) return null;
-  const { surah, ayah } = rec;
-  // Require real numbers in range — Number() would otherwise coerce "", [],
-  // or true into finite 0/1 and emit bogus surah=0 hits.
-  if (
-    typeof surah !== "number" ||
-    typeof ayah !== "number" ||
-    !Number.isFinite(surah) ||
-    !Number.isFinite(ayah) ||
-    surah < 1 ||
-    ayah < 1
-  ) {
-    return null;
+  const surah = positiveNumber(rec.surah);
+  if (surah === null) return null;
+  const highlights = decodeHighlights(rec.highlights);
+  if (!highlights) return null;
+  if (rec.kind === SearchHitKind.Opener) {
+    if (rec.anchorAyah !== 1) return null;
+    return {
+      kind: SearchHitKind.Opener,
+      key: `opener:${surah}`,
+      surah,
+      anchorAyah: 1,
+      text: typeof rec.text === "string" ? rec.text : "",
+      highlights,
+    };
   }
+  if (rec.kind !== SearchHitKind.Ayah) return null;
+  const ayah = positiveNumber(rec.ayah);
+  if (ayah === null) return null;
   return {
+    kind: SearchHitKind.Ayah,
     key: typeof rec.key === "string" ? rec.key : "",
     surah,
     ayah,
     globalIndex: Number(rec.globalIndex) || 0,
     text: typeof rec.text === "string" ? rec.text : "",
+    highlights,
+  };
+}
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? value : null;
+}
+
+function nonNegativeNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function decodeHighlights(raw: unknown): { start: number; end: number }[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: { start: number; end: number }[] = [];
+  for (const item of raw) {
+    const rec = asRecord(item);
+    if (!rec) return null;
+    const start = nonNegativeNumber(rec.start);
+    const end = nonNegativeNumber(rec.end);
+    if (start === null || end === null || end < start) return null;
+    out.push({ start, end });
+  }
+  return out;
+}
+
+/* ── normalized surah Worker payload ─────────────────────────────────── */
+
+export function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
+  const rec = asRecord(raw);
+  if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
+  if (typeof rec.sourceProfile !== "string" || !isOpenerPackaging(rec.packaging)) {
+    return null;
+  }
+  const profile = sourceProfile(rec.sourceId);
+  if (profile.id !== rec.sourceProfile || profile.script !== rec.script) return null;
+  if (!isOpenerKind(rec.openerKind)) return null;
+  const openerEndScalar = nonNegativeNumber(rec.openerEndScalar);
+  const bodyStartScalar = nonNegativeNumber(rec.bodyStartScalar);
+  const surah = positiveNumber(rec.surah);
+  if (
+    surah === null ||
+    openerEndScalar === null ||
+    bodyStartScalar === null ||
+    openerEndScalar > bodyStartScalar
+  ) {
+    return null;
+  }
+  const openerText = rec.openerText;
+  if (rec.openerKind === OpenerKind.None ? openerText !== null : typeof openerText !== "string") {
+    return null;
+  }
+  return {
+    surah,
+    sourceId: rec.sourceId,
+    script: rec.script,
+    sourceProfile: rec.sourceProfile,
+    packaging: rec.packaging,
+    openerKind: rec.openerKind,
+    openerText: openerText as string | null,
+    openerEndScalar,
+    bodyStartScalar,
+  };
+}
+
+export function decodeQuranSurahText(raw: unknown): QuranSurahText | null {
+  const rec = asRecord(raw);
+  if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
+  if (!Array.isArray(rec.verses) || !rec.verses.every((verse) => typeof verse === "string")) {
+    return null;
+  }
+  const normalization = decodeSurahNormalization(rec.normalization);
+  if (
+    !normalization ||
+    normalization.sourceId !== rec.sourceId ||
+    normalization.script !== rec.script
+  ) {
+    return null;
+  }
+  return {
+    sourceId: rec.sourceId,
+    script: rec.script,
+    verses: rec.verses.slice() as string[],
+    normalization,
   };
 }
 
@@ -121,7 +221,7 @@ export function decodeScript(raw: unknown): ArtifactSpec | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   const id = rec.id;
-  if (id !== "uthmani" && id !== "simple-clean") return null;
+  if (!isQuranSourceId(id)) return null;
   const sizeBytes = Number(rec.sizeBytes);
   const sha256 = rec.sha256;
   const downloadUrl = rec.downloadUrl;

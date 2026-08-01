@@ -19,14 +19,13 @@
     · a prev/next footer (adjacentSurahs → goto(surahPath)).
 -->
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import {
     SURAHS,
     surahByNum,
     surahMeta,
     verseKey,
-    BISMILLAH,
-    showsBismillah,
     toArabicDigits,
     surahPath,
     type Surah,
@@ -35,13 +34,15 @@
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import * as Tabs from "$lib/components/ui/tabs";
+  import { displayVerses, headerText } from "$lib/quran/view/presentation";
 
   let { surah }: { surah: Surah } = $props();
 
   // Bounded prev/next surah (no wrap): surah 1 has no prev, 114 no next.
   const prevNum = $derived(surah.num > 1 ? surah.num - 1 : null);
   const nextNum = $derived(surah.num < SURAHS.length ? surah.num + 1 : null);
-  const showBasmala = $derived(showsBismillah(surah));
+  const verses = $derived(displayVerses(surah));
+  const opener = $derived(headerText(surah.normalization));
   const badge = $derived(String(surah.num).padStart(3, "0"));
 
   function continueReading() {
@@ -148,8 +149,8 @@
     </div>
 
     <!-- Basmala (Al-Fatihah's first verse already IS it, so it is not duplicated) -->
-    {#if showBasmala}
-      <p dir="rtl" class="py-2 text-center font-arabic text-fg-3">{BISMILLAH}</p>
+    {#if opener}
+      <p dir="rtl" class="py-2 text-center font-arabic text-fg-3">{opener}</p>
     {/if}
 
     <!-- tabpanels: one per mode. bits-ui renders only the active value's panel
@@ -163,7 +164,7 @@
     >
       <TooltipProvider delayDuration={300}>
         <div class="flex flex-col">
-          {#each surah.verses as text, i (verseKey(surah.num, i + 1))}
+          {#each verses as text, i (verseKey(surah.num, i + 1))}
             <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
           {/each}
         </div>
@@ -177,7 +178,7 @@
         dir="rtl"
         class="reading-text px-5 py-8 text-fg sm:px-9"
         style="font-size:{reader.arabicSizePx}"
-      >{#each surah.verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
+      >{#each verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
     </Tabs.Content>
     </Tabs.Root>
 
@@ -185,7 +186,7 @@
     <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
       {#if prevNum !== null}
         <a
-          href={surahPath(prevNum)}
+          href={resolve(surahPath(prevNum))}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
@@ -197,7 +198,7 @@
       {/if}
       {#if nextNum !== null}
         <a
-          href={surahPath(nextNum)}
+          href={resolve(surahPath(nextNum))}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >

@@ -14,21 +14,42 @@
 
 import { QURAN } from "$lib/config/site";
 import type { ArtifactSpec } from "$lib/data/quran-types";
+import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "./source-plan";
+import { resolveSourceProfile } from "./view/source-profiles";
 import { decodeScriptsPayload, decodeVersionPayload } from "./wire";
+
+export const ManifestSource = {
+  Api: "api",
+  Baked: "baked",
+} as const;
+export type ManifestSource = (typeof ManifestSource)[keyof typeof ManifestSource];
 
 export interface ResolvedManifest {
   contentVersion: string;
   searchVersion: string;
   scripts: readonly ArtifactSpec[];
-  source: "api" | "baked";
+  source: ManifestSource;
 }
 
 const baked: ResolvedManifest = {
   contentVersion: QURAN.contentVersion,
   searchVersion: QURAN.searchVersion,
   scripts: QURAN.scripts,
-  source: "baked",
+  source: ManifestSource.Baked,
 };
+
+function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
+  try {
+    return plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN).every((sourceId) => {
+      const artifact = scripts.find((candidate) => candidate.id === sourceId);
+      if (!artifact) return false;
+      resolveSourceProfile(artifact.id, artifact.sha256);
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
 
 /** Resolve the manifest, preferring the live API and degrading to baked. */
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
@@ -58,7 +79,7 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     // decoders — this module no longer hand-rolls the field-by-field rebuild.
     const sBody = await sRes.json();
     const scripts = decodeScriptsPayload(sBody);
-    if (!scripts || scripts.length < 2) return baked;
+    if (!scripts || !hasRegisteredPlan(scripts)) return baked;
 
     const vBody = await vRes.json();
     const version = decodeVersionPayload(vBody) ?? {
@@ -69,7 +90,7 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
       contentVersion: version.contentVersion ?? QURAN.contentVersion,
       searchVersion: version.searchVersion ?? QURAN.searchVersion,
       scripts,
-      source: "api",
+      source: ManifestSource.Api,
     };
   } catch {
     return baked;

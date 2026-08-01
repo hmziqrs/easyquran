@@ -21,14 +21,23 @@ export type {
   CatalogEntry,
   LoadedSurah,
   VerseKey,
-  Script,
   Place,
-  Bismillah,
+  PrefixCut,
+  SurahNormalization,
+  QuranSurahText,
   SajdaKind,
   RangeEntry,
   NavigationData,
   SajdaEntry,
   ArtifactSpec,
+} from "$lib/data/quran-types";
+
+export {
+  Bismillah,
+  OpenerKind,
+  OpenerPackaging,
+  QuranScript,
+  QuranSourceId,
 } from "$lib/data/quran-types";
 
 /** Back-compat alias: components type the reader prop as `Surah`. */
@@ -55,21 +64,12 @@ export const surahBySlug = (slug: string): CatalogEntry => bySlug.get(slug) ?? C
 export const slugFor = (num: number): string => surahByNum(num).slug;
 
 /** Reader path for a surah, with an optional verse deep-link (?verse=N). */
-export const surahPath = (num: number, ayah?: number): string =>
+export const surahPath = (num: number, ayah?: number): `/app/${string}` =>
   `/app/${slugFor(num)}${ayah ? `?verse=${ayah}` : ""}`;
 
 /** Convert a western number to Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩). */
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
-
-/** The Basmala, shown as a centered header above the first verse. */
-export const BISMILLAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
-/**
- * Whether a surah shows the Basmala as a separate header line. Only the
- * "embedded-prefix" case (112 surahs) does; Al-Fatihah's first verse IS it
- * ("first-ayah") and At-Tawbah has none ("none").
- */
-export const showsBismillah = (s: CatalogEntry): boolean => s.bismillah === "embedded-prefix";
 
 /** Index-aware neighbours, wrapping at both ends. */
 export const adjacentSurahs = (num: number): { prev: CatalogEntry; next: CatalogEntry } => {

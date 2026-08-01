@@ -12,16 +12,18 @@
 -->
 <script lang="ts">
   import { Icon } from "$lib/components";
-  import { toArabicDigits, BISMILLAH, showsBismillah, surahMeta } from "$lib/data/quran";
+  import { toArabicDigits, surahMeta } from "$lib/data/quran";
   import type { Surah } from "$lib/data/quran";
   import { cn } from "$lib/utils";
   import { displayVerses } from "../verses";
+  import { headerText } from "$lib/quran/view/presentation";
 
   let { surah }: { surah: Surah } = $props();
 
   // Ayah 1 carries the basmala inline in the source text; the header renders it
   // separately, so it's stripped here to avoid showing it twice (see verses.ts).
   const verses = $derived(displayVerses(surah));
+  const opener = $derived(headerText(surah.normalization));
 
   let size = $state(27);
   let active = $state(1);
@@ -93,9 +95,9 @@
 
   <!-- text column -->
   <div class="min-w-0">
-    {#if showsBismillah(surah)}
+    {#if opener}
       <p dir="rtl" class="mb-8 border-b border-line pb-8 text-center font-arabic text-[22px] text-fg-3">
-        {BISMILLAH}
+        {opener}
       </p>
     {/if}
 

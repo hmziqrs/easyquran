@@ -9,7 +9,7 @@
 import { error } from "@sveltejs/kit";
 import { surahBySlug } from "$lib/data/quran";
 import { CATALOG } from "$lib/data/quran-meta";
-import { readSurahVerses, validateUthmani } from "$lib/server/quran-sqlite";
+import { readSurahText, validateReaderSource } from "$lib/server/quran-sqlite";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;
@@ -20,7 +20,7 @@ export function entries() {
 
 // Fail the build/dev fast if the Uthmani source drifted from its golden digest
 // or row count (docs/quran-api.md §3.3, §4). Runs once per process load.
-const source = validateUthmani();
+const source = validateReaderSource();
 if (!source.ok) {
   throw new Error(
     `[quran-sqlite] Uthmani source validation failed: rows=${source.rows} (want 6236), ` +
@@ -34,5 +34,5 @@ export const load: PageServerLoad = ({ params }) => {
   if (cat.slug !== params.surah) {
     throw error(404, `Unknown surah: ${params.surah}`);
   }
-  return { surah: { ...cat, verses: readSurahVerses(cat.num) } };
+  return { surah: { ...cat, ...readSurahText(cat.num) } };
 };

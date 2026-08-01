@@ -21,6 +21,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
+import { Bismillah } from "./src/lib/data/quran-types";
+import { canonicalOpenerKind } from "./src/lib/quran/view/canonical";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = __dirname;
@@ -106,7 +108,9 @@ function compile(): Compiled {
     const auth = nameByNum.get(num);
     assert(!!auth, `surah-names.json missing entry for surah ${num}`);
     const place = s.type.toLowerCase() === "meccan" ? "meccan" : "medinan";
-    const bismillah = num === 1 ? "first-ayah" : num === 9 ? "none" : "embedded-prefix";
+    const openerKind = canonicalOpenerKind(num);
+    const bismillah =
+      num === 1 ? Bismillah.FirstAyah : num === 9 ? Bismillah.None : Bismillah.EmbeddedPrefix;
     return {
       num,
       slug: auth!.slug,
@@ -116,6 +120,7 @@ function compile(): Compiled {
       ayahCount: Number(s.ayas),
       revelationOrder: Number(s.order),
       rukus: Number(s.rukus),
+      openerKind,
       bismillah,
       startGlobal: startGlobalOf(s),
     };

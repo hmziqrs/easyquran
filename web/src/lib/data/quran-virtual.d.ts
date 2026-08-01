@@ -15,6 +15,7 @@ declare module "quran-meta:data" {
     ayahCount: number;
     revelationOrder: number;
     rukus: number;
+    openerKind: "verse" | "header" | "none";
     bismillah: "first-ayah" | "none" | "embedded-prefix";
     startGlobal: number;
   }

@@ -12,7 +12,7 @@
    request can hang forever.
    ════════════════════════════════════════════════════════════════════════ */
 
-import type { DownloadProgress } from "$lib/data/quran-types";
+import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import {
@@ -20,8 +20,9 @@ import {
   DEFAULT_OFFSET,
   type SearchOpts,
   type SearchResponse,
+  SearchProvider,
 } from "./search/normalize";
-import { decodeSearchResponse } from "./wire";
+import { decodeQuranSurahText, decodeSearchResponse } from "./wire";
 
 /** Per-request settlement handle. The timer is cleared on every settle path
  *  (response, timeout, fatal, disposal) so no dangling rejection fires later. */
@@ -153,10 +154,14 @@ export const quranWorker = {
     startPromise = null;
   },
 
-  /** Read one surah's verbatim Uthmani verses from the local DB. */
-  readSurah(num: number): Promise<string[]> {
-    return request<string[]>((id) => ({ id, type: "readSurah", num })).then((r: unknown) =>
-      Array.isArray(r) ? r.map(String) : [],
+  /** Read raw Uthmani verses and their canonical view descriptor. */
+  readSurah(num: number): Promise<QuranSurahText> {
+    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num })).then(
+      (raw: unknown) => {
+        const decoded = decodeQuranSurahText(raw);
+        if (!decoded) throw new Error("quran worker returned a malformed surah");
+        return decoded;
+      },
     );
   },
 
@@ -172,7 +177,7 @@ export const quranWorker = {
           limit,
           offset,
           results: [],
-          source: "worker",
+          source: SearchProvider.Worker,
         };
         // The worker boundary is structuredClone'd `unknown`, not a typed RPC:
         // rebuild via the shared wire decoder. Malformed hits are dropped rather
@@ -185,7 +190,7 @@ export const quranWorker = {
           limit: payload.limit ?? limit,
           offset: payload.offset ?? offset,
           results: payload.results,
-          source: "worker",
+          source: SearchProvider.Worker,
         };
       },
     );

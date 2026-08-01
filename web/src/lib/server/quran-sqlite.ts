@@ -1,94 +1,133 @@
-/* ════════════════════════════════════════════════════════════════════════
-   quran-sqlite.ts — SERVER-ONLY Uthmani verse reader for SSG.
+/* Server-only registered Quran source reader for SSG.
 
-   Opens the checked-in db/quran/tanzil/arabic/quran-uthmani.sqlite through
-   Node's built-in node:sqlite (v24) and serves verbatim Uthmani verse text to
-   the prerender load (+page.server.ts). It never runs in the browser — the
-   browser reads the same file via sqlite-wasm in a Worker (Phase 2). Lives under
-   $lib/server so SvelteKit guarantees it is stripped from the client bundle.
-   ════════════════════════════════════════════════════════════════════════ */
+   This module owns filesystem and node:sqlite concerns only. Query execution,
+   schema adaptation, row decoding, source validation, and canonical views are
+   shared with sqlite-wasm through the platform-neutral source runtime. */
 
-import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { QURAN } from "$lib/config/site";
-import type { Ayah } from "$lib/data/quran-types";
+import { DatabaseSync } from "node:sqlite";
+import {
+  type Ayah,
+  type QuranSourceId as QuranSourceIdValue,
+  type QuranSurahText,
+  type SurahNormalization,
+} from "$lib/data/quran-types";
+import type { QuranQueryRunner } from "$lib/quran/sql";
+import { DEFAULT_QURAN_SOURCE_PLAN } from "$lib/quran/source-plan";
+import {
+  loadQuranSource,
+  readSourceRange,
+  readSourceSurah,
+  type LoadedQuranSource,
+} from "$lib/quran/view/source-runtime";
+import {
+  resolveSourceProfile,
+  sourceProfile,
+  type QuranSourceProfile,
+} from "$lib/quran/view/source-profiles";
+import { createNodeQueryRunner } from "./quran-node-query-runner";
 
-/**
- * Resolve the checked-in Uthmani DB from `process.cwd()`. SSR bundling relocates
- * modules into .svelte-kit/output, so `import.meta.url` traversal is unreliable
- * here; cwd is the package dir during `vp dev` / `vp build` (or the repo root),
- * and we accept either.
- */
-function findUthmaniPath(): string {
+function findSourcePath(profile: QuranSourceProfile): string {
   const candidates = [
-    path.resolve(process.cwd(), "db/quran/tanzil/arabic/quran-uthmani.sqlite"), // cwd = repo root
-    path.resolve(process.cwd(), "../db/quran/tanzil/arabic/quran-uthmani.sqlite"), // cwd = web/
+    path.resolve(process.cwd(), profile.artifact.repositoryPath),
+    path.resolve(process.cwd(), "..", profile.artifact.repositoryPath),
   ];
-  return candidates.find((p) => existsSync(p)) ?? candidates[1]!;
-}
-const UTHMANI_PATH = findUthmaniPath();
-
-const EXPECTED_ROWS = 6236;
-/** quran-api.md §3.3 golden digest for the Uthmani corpus bytes. */
-const EXPECTED_SHA256 = QURAN.scripts.find((s) => s.id === "uthmani")!.sha256;
-
-let db: DatabaseSync | null = null;
-const suraStmtCache = new Map<number, StatementSync>();
-
-function getDb(): DatabaseSync {
-  if (db) return db;
-  if (!existsSync(UTHMANI_PATH)) {
-    throw new Error(`[quran-sqlite] missing Uthmani DB at ${UTHMANI_PATH}`);
-  }
-  const handle = new DatabaseSync(UTHMANI_PATH);
-  // Read-only guard: any write throws, even if a future query mutates.
-  handle.exec("PRAGMA query_only = ON");
-  db = handle;
-  return handle;
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[1]!;
 }
 
-/** Verbatim Uthmani verse text for one surah, in ayah order (1..ayahCount). */
-export function readSurahVerses(num: number): string[] {
-  let stmt = suraStmtCache.get(num);
-  if (!stmt) {
-    stmt = getDb().prepare(`SELECT text FROM quran_text WHERE sura = ? ORDER BY aya`);
-    suraStmtCache.set(num, stmt);
-  }
-  const rows = stmt.all(num) as { text: string }[];
-  return rows.map((r) => r.text);
+interface SourceState {
+  readonly sha256: string;
+  readonly database: DatabaseSync;
+  readonly runner: QuranQueryRunner;
+  readonly source: LoadedQuranSource;
 }
 
-/** Verbatim Uthmani ayahs in an inclusive global-index range (juz / page). */
-let rangeStmt: StatementSync | null = null;
-export function readRangeAyahs(from: number, to: number): Ayah[] {
-  if (!rangeStmt) {
-    rangeStmt = getDb().prepare(
-      `SELECT "index", sura, aya, text FROM quran_text WHERE "index" BETWEEN ? AND ? ORDER BY "index"`,
-    );
+const sourceCache = new Map<QuranSourceIdValue, SourceState>();
+
+function openSource(sourceId: QuranSourceIdValue): SourceState {
+  const cached = sourceCache.get(sourceId);
+  if (cached) return cached;
+
+  const registered = sourceProfile(sourceId);
+  const sourcePath = findSourcePath(registered);
+  if (!existsSync(sourcePath)) {
+    throw new Error(`[quran-sqlite] missing ${sourceId} DB at ${sourcePath}`);
   }
-  const rows = rangeStmt.all(from, to) as {
-    index: number;
-    sura: number;
-    aya: number;
-    text: string;
-  }[];
-  return rows.map((r) => ({
-    key: `${r.sura}:${r.aya}`,
-    surah: r.sura,
-    ayah: r.aya,
-    globalIndex: r.index,
-    text: r.text,
+  const sha256 = createHash("sha256").update(readFileSync(sourcePath)).digest("hex");
+  const profile = resolveSourceProfile(sourceId, sha256);
+  const database = new DatabaseSync(sourcePath);
+  database.exec("PRAGMA query_only = ON");
+
+  try {
+    const runner = createNodeQueryRunner(database);
+    const source = loadQuranSource(runner, profile);
+    const state = Object.freeze({ sha256, database, runner, source });
+    sourceCache.set(sourceId, state);
+    return state;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
+}
+
+/** Raw verses plus the serializable canonical descriptor for one surah. */
+export function readSurahText(
+  num: number,
+  sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
+): QuranSurahText {
+  const state = openSource(sourceId);
+  return {
+    sourceId,
+    script: state.source.profile.script,
+    verses: readSourceSurah(state.runner, state.source, num),
+    normalization: state.source.view.normalization(num),
+  };
+}
+
+/** Back-compatible raw-only accessor for gallery specimens. */
+export function readSurahVerses(
+  num: number,
+  sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
+): string[] {
+  return readSurahText(num, sourceId).verses;
+}
+
+/** Raw ayahs and source descriptors in an inclusive global range. */
+export function readRangeText(
+  from: number,
+  to: number,
+  sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
+): { ayahs: Ayah[]; normalizations: SurahNormalization[] } {
+  const state = openSource(sourceId);
+  const rows = readSourceRange(state.runner, state.source, from, to);
+  const ayahs = rows.map((row) => ({
+    key: `${row.surah}:${row.ayah}`,
+    surah: row.surah,
+    ayah: row.ayah,
+    globalIndex: row.globalIndex,
+    text: row.text,
   }));
+  const represented = new Set(rows.map((row) => row.surah));
+  const normalizations = [...represented].map((surah) => state.source.view.normalization(surah));
+  return { ayahs, normalizations };
 }
 
-/** Validate the source file: identity byte digest + row count. Called in dev /
- *  at build start to catch drift before prerendering 114 pages. */
-export function validateUthmani(): { rows: number; sha256: string; ok: boolean } {
-  const buf = readFileSync(UTHMANI_PATH);
-  const sha256 = createHash("sha256").update(buf).digest("hex");
-  const { c } = getDb().prepare(`SELECT count(*) AS c FROM quran_text`).get() as { c: number };
-  const ok = c === EXPECTED_ROWS && sha256 === EXPECTED_SHA256;
-  return { rows: c, sha256, ok };
+export function validateSource(sourceId: QuranSourceIdValue): {
+  rows: number;
+  sha256: string;
+  ok: boolean;
+} {
+  const state = openSource(sourceId);
+  const profile = state.source.profile;
+  return {
+    rows: profile.canonicalRowCount,
+    sha256: state.sha256,
+    ok: state.sha256 === profile.artifact.sha256,
+  };
+}
+
+export function validateReaderSource(): { rows: number; sha256: string; ok: boolean } {
+  return validateSource(DEFAULT_QURAN_SOURCE_PLAN.reader);
 }

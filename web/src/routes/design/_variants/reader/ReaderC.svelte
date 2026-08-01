@@ -12,15 +12,17 @@
   strictly more work than variant A or B needs.
 -->
 <script lang="ts">
-  import { toArabicDigits, BISMILLAH, showsBismillah, surahMeta } from "$lib/data/quran";
+  import { toArabicDigits, surahMeta } from "$lib/data/quran";
   import type { Surah } from "$lib/data/quran";
   import { displayVerses } from "../verses";
+  import { headerText } from "$lib/quran/view/presentation";
 
   let { surah }: { surah: Surah } = $props();
 
   // Ayah 1 carries the basmala inline in the source text; the header renders it
   // separately, so it's stripped here to avoid showing it twice (see verses.ts).
   const verses = $derived(displayVerses(surah));
+  const opener = $derived(headerText(surah.normalization));
 
   let size = $state(28);
   const clamp = (n: number) => Math.max(18, Math.min(48, n));
@@ -66,9 +68,9 @@
         </div>
       </div>
 
-      {#if showsBismillah(surah)}
+      {#if opener}
         <p dir="rtl" class="border-b border-line px-6 py-5 text-center font-arabic text-[22px] text-fg-2">
-          {BISMILLAH}
+          {opener}
         </p>
       {/if}
 

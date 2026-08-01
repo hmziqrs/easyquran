@@ -3,7 +3,7 @@
 // the verbatim Uthmani ayahs from quran-uthmani.sqlite via node:sqlite.
 import { error } from "@sveltejs/kit";
 import { NAVIGATION } from "$lib/data/quran-meta";
-import { readRangeAyahs } from "./quran-sqlite";
+import { readRangeText } from "./quran-sqlite";
 import type { RangePageData } from "$lib/data/quran-types";
 
 /** Build the prerender data for `/app/juz/[n]` or `/app/page/[n]`. */
@@ -11,6 +11,7 @@ export function loadRangeData(kind: "juz" | "page", index: number): RangePageDat
   const list = kind === "juz" ? NAVIGATION.juz : NAVIGATION.page;
   const entry = list[index - 1];
   if (!entry) throw error(404, `Unknown ${kind}: ${index}`);
+  const source = readRangeText(entry.startGlobal, entry.endGlobal);
   return {
     kind,
     index,
@@ -19,6 +20,7 @@ export function loadRangeData(kind: "juz" | "page", index: number): RangePageDat
     endGlobal: entry.endGlobal,
     first: entry.first,
     last: entry.last,
-    ayahs: readRangeAyahs(entry.startGlobal, entry.endGlobal),
+    ayahs: source.ayahs,
+    normalizations: source.normalizations,
   };
 }

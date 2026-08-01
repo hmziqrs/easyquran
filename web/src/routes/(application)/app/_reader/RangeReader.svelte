@@ -1,15 +1,18 @@
 <!--
   RangeReader — renders the ayahs of a juz or page, grouped by surah. Receives
   the ayahs prerendered in page.data (SSG reads the range from quran-uthmani.sqlite
-  at build), so there is no loading state. Ayah text is verbatim from the source
-  (a surah's basmala is inline in its first ayah, so no separate header is added).
+  at build), so there is no loading state. Raw text stays in page data; rendering
+  projects ayah bodies and source-exact opener headers through the canonical view.
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { surahByNum, surahPath } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
-  import type { Ayah, RangePageData } from "$lib/data/quran-types";
+  import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
+  import { bodyText } from "$lib/quran/view/source-view";
+  import { headerText } from "$lib/quran/view/presentation";
 
   let { data }: { data: RangePageData } = $props();
 
@@ -18,16 +21,28 @@
     name: string;
     arabic: string;
     ayahs: Ayah[];
+    normalization: SurahNormalization;
+    opener: string | null;
   }
 
   // Ayahs arrive in ascending global order; split into surah groups.
   const groups = $derived.by<Group[]>(() => {
     const out: Group[] = [];
+    const bySurah = new Map(data.normalizations.map((value) => [value.surah, value]));
     for (const a of data.ayahs) {
       let g = out[out.length - 1];
       if (!g || g.num !== a.surah) {
         const s = surahByNum(a.surah);
-        g = { num: a.surah, name: s.name, arabic: s.arabic, ayahs: [] };
+        const normalization = bySurah.get(a.surah);
+        if (!normalization) throw new Error(`Missing Quran normalization for surah ${a.surah}`);
+        g = {
+          num: a.surah,
+          name: s.name,
+          arabic: s.arabic,
+          ayahs: [],
+          normalization,
+          opener: a.ayah === 1 ? headerText(normalization) : null,
+        };
         out.push(g);
       }
       g.ayahs.push(a);
@@ -37,14 +52,21 @@
 
   /** Open the full surah (leaves the range view). */
   function openSurah(num: number): void {
-    void goto(surahPath(num));
+    void goto(resolve(surahPath(num)));
   }
 
   // Bounded prev/next pagination within the range's family (juz 1..30, page 1..604).
   const MAX = $derived(data.kind === "juz" ? 30 : 604);
   const kindLabel = $derived(data.kind === "juz" ? "Juz" : "Page");
-  const prevHref = $derived(data.index > 1 ? `/app/${data.kind}/${data.index - 1}` : null);
-  const nextHref = $derived(data.index < MAX ? `/app/${data.kind}/${data.index + 1}` : null);
+  function rangePath(
+    kind: RangePageData["kind"],
+    index: number,
+  ): `/app/${RangePageData["kind"]}/${number}` {
+    return `/app/${kind}/${index}`;
+  }
+
+  const prevHref = $derived(data.index > 1 ? rangePath(data.kind, data.index - 1) : null);
+  const nextHref = $derived(data.index < MAX ? rangePath(data.kind, data.index + 1) : null);
 </script>
 
 <div class="flex flex-col gap-4">
@@ -62,11 +84,16 @@
           <span>Full surah →</span>
         </button>
       </div>
+      {#if g.opener}
+        <p dir="rtl" class="border-b border-line px-5 py-4 text-center font-arabic text-fg-3 sm:px-9">
+          {g.opener}
+        </p>
+      {/if}
       <!-- ayahs -->
       <TooltipProvider delayDuration={300}>
         <div class="flex flex-col">
           {#each g.ayahs as a (a.key)}
-            <VerseRow text={a.text} n={a.ayah} vKey={a.key} />
+            <VerseRow text={bodyText(a.text, a.ayah, g.normalization)} n={a.ayah} vKey={a.key} />
           {/each}
         </div>
       </TooltipProvider>
@@ -80,7 +107,7 @@
     >
       {#if prevHref}
         <a
-          href={prevHref}
+          href={resolve(prevHref)}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
@@ -91,7 +118,7 @@
       {/if}
       {#if nextHref}
         <a
-          href={nextHref}
+          href={resolve(nextHref)}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >

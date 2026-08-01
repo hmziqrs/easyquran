@@ -15,6 +15,15 @@
 <script lang="ts">
   import { quran } from "$lib/stores/quran.svelte";
   import { QURAN } from "$lib/config/site";
+  import { QuranScript } from "$lib/data/quran-types";
+  import { sourceProfile } from "$lib/quran/view/source-profiles";
+
+  const SCRIPT_LABELS: Readonly<Record<QuranScript, string>> = {
+    [QuranScript.Uthmani]: "Uthmani",
+    [QuranScript.SimpleClean]: "Simple-clean",
+    [QuranScript.IndoPak]: "IndoPak",
+    [QuranScript.Tajweed]: "Tajweed",
+  };
 
   /** Map each script → its immutable byte size (from the baked artifact spec). */
   const sizeOf = new Map(QURAN.scripts.map((s) => [s.id, s.sizeBytes]));
@@ -40,7 +49,7 @@
   const frac = $derived(overallFraction());
   const pct = $derived(frac == null ? 0 : Math.round(frac * 100));
   const label = $derived(
-    quran.download?.script === "uthmani" ? "Uthmani" : quran.download?.script === "simple-clean" ? "Simple-clean" : "",
+    quran.download ? SCRIPT_LABELS[sourceProfile(quran.download.script).script] : "",
   );
 </script>
 

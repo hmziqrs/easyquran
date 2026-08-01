@@ -3,7 +3,7 @@
 // layout — and so no Quranic text is ever hand-typed into the gallery.
 import { error } from "@sveltejs/kit";
 import { surahByNum } from "$lib/data/quran";
-import { readSurahVerses } from "$lib/server/quran-sqlite";
+import { readSurahText } from "$lib/server/quran-sqlite";
 import { READER_VARIANTS, isVariantId } from "../../_variants/registry";
 import type { PageServerLoad } from "./$types";
 
@@ -24,6 +24,6 @@ export const load: PageServerLoad = ({ params }) => {
   const cat = surahByNum(DEMO_SURAH);
   return {
     variant: params.variant,
-    surah: { ...cat, verses: readSurahVerses(cat.num) },
+    surah: { ...cat, ...readSurahText(cat.num) },
   };
 };

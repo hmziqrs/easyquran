@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import { quranWorker } from "$lib/quran/worker-client";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
@@ -52,8 +53,18 @@ const MANIFEST: ResolvedManifest = {
   contentVersion: "v1",
   searchVersion: "s1",
   scripts: [
-    { id: "uthmani", sizeBytes: 1, sha256: "a", downloadUrl: "https://x/uthmani" },
-    { id: "simple-clean", sizeBytes: 1, sha256: "b", downloadUrl: "https://x/simple-clean" },
+    {
+      id: QuranSourceId.TanzilUthmani,
+      sizeBytes: 1,
+      sha256: "a",
+      downloadUrl: "https://x/uthmani",
+    },
+    {
+      id: QuranSourceId.TanzilSimpleClean,
+      sizeBytes: 1,
+      sha256: "b",
+      downloadUrl: "https://x/simple-clean",
+    },
   ],
   source: "baked",
 };
@@ -91,9 +102,25 @@ describe("quranWorker request settlement", () => {
 
     const p = quranWorker.readSurah(1);
     const req = fake.posted.at(-1)!;
-    fake.emit("message", { id: req.id, ok: true, result: ["بسم", "الله"] });
+    const result = {
+      sourceId: QuranSourceId.TanzilUthmani,
+      script: QuranScript.Uthmani,
+      verses: ["بسم", "الله"],
+      normalization: {
+        surah: 1,
+        sourceId: QuranSourceId.TanzilUthmani,
+        script: QuranScript.Uthmani,
+        sourceProfile: "tanzil-uthmani-581cc540",
+        packaging: OpenerPackaging.NumberedAyah,
+        openerKind: OpenerKind.Verse,
+        openerText: "بسم",
+        openerEndScalar: 0,
+        bodyStartScalar: 0,
+      },
+    } as const;
+    fake.emit("message", { id: req.id, ok: true, result });
 
-    expect(await p).toEqual(["بسم", "الله"]);
+    expect(await p).toEqual(result);
   });
 
   it("rejects readSurah on an error response", async () => {

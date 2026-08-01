@@ -7,10 +7,16 @@
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
   import { surahByNum, surahPath } from "$lib/data/quran";
   import { quranSearch } from "$lib/quran/search";
-  import type { SearchResponse } from "$lib/quran/search/normalize";
+  import {
+    SearchHitKind,
+    SearchProvider,
+    type SearchHit,
+    type SearchResponse,
+  } from "$lib/quran/search/normalize";
 
   let result = $state.raw<SearchResponse | null>(null);
   let loading = $state(false);
@@ -42,14 +48,15 @@
       ? "Searching…"
       : result.total === 0
         ? `No verses match “${result.query.trim()}”.`
-        : result.source === "names"
+        : result.source === SearchProvider.Names
           ? `${result.total} surah${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`
-          : `${result.total} verse${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`,
+          : `${result.total} Quran text result${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`,
   );
 
-  function open(r: { surah: number; ayah: number }): void {
-    reader.openVerse(r.surah, r.ayah);
-    void goto(surahPath(r.surah, r.ayah));
+  function open(r: SearchHit): void {
+    const ayah = r.kind === SearchHitKind.Opener ? r.anchorAyah : r.ayah;
+    reader.openVerse(r.surah, ayah);
+    void goto(resolve(surahPath(r.surah, ayah)));
   }
 </script>
 
@@ -63,7 +70,11 @@
         class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
       >
         <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
-          {surahByNum(r.surah).name} {r.surah}:{r.ayah}
+          {#if r.kind === SearchHitKind.Opener}
+            {surahByNum(r.surah).name} · Surah opener
+          {:else}
+            {surahByNum(r.surah).name} {r.surah}:{r.ayah}
+          {/if}
         </span>
         {#if r.text}
           <span dir="rtl" class="font-arabic text-[26px] leading-[2] text-fg">{r.text}</span>

@@ -15,6 +15,8 @@ import {
   DEFAULT_LIMIT,
   DEFAULT_OFFSET,
   normalizeArabic,
+  SearchHitKind,
+  SearchProvider,
   type SearchHit,
   type SearchOpts,
   type SearchResponse,
@@ -37,11 +39,13 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
       (norm.length > 0 && normalizeArabic(s.arabic).includes(norm));
     if (hit)
       all.push({
+        kind: SearchHitKind.Ayah,
         key: verseKey(s.num, 1),
         surah: s.num,
         ayah: 1,
         globalIndex: s.startGlobal,
         text: "",
+        highlights: [],
       });
   }
   return {
@@ -50,7 +54,7 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
     limit,
     offset,
     results: all.slice(offset, offset + limit),
-    source: "names",
+    source: SearchProvider.Names,
   };
 }
 
@@ -84,7 +88,7 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
             limit: payload.limit || DEFAULT_LIMIT,
             offset: payload.offset || DEFAULT_OFFSET,
             results: payload.results,
-            source: "api",
+            source: SearchProvider.Api,
           };
         }
       }

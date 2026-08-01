@@ -41,33 +41,32 @@ export const SITE = {
 
 import { env } from "$env/dynamic/public";
 import { SEARCH_VERSION } from "$lib/quran/search/normalize";
+import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
 
 /** Same-origin by default; override with a full URL when the API is elsewhere. */
 const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
+const QURAN_R2_BASE = "https://r2.easyquran.fyi";
+
+/** Delivery metadata is derived from the same source registry used by SSG and the Worker. */
+const QURAN_ARTIFACTS = Object.freeze(
+  registeredSourceProfiles().map((profile) => ({
+    id: profile.sourceId,
+    sizeBytes: profile.artifact.sizeBytes,
+    sha256: profile.artifact.sha256,
+    downloadUrl: `${QURAN_R2_BASE}/${profile.artifact.r2Path}`,
+  })),
+);
 
 export const QURAN = {
   apiBase: PUBLIC_API_BASE,
-  r2Base: "https://r2.easyquran.fyi",
+  r2Base: QURAN_R2_BASE,
   /** BLAKE3(uthmani || simple-clean || xml)[0..16] (docs/quran-api.md §8.1).
    *  Baked until /quran/v1/version is live; the resolver overrides it then. */
   contentVersion: "32cc746d817cad9f",
   /** Bumped whenever the shared normalization rules change (docs §7). */
   searchVersion: SEARCH_VERSION,
   /** R2 paths mirror db/quran/tanzil (see translations/scripts/upload-sqlite.ts). */
-  scripts: [
-    {
-      id: "uthmani" as const,
-      sizeBytes: 1_593_344,
-      sha256: "581cc5405831bc072fccd8db55cd1db72c5c5440c39bd975edbf03447efecf53",
-      downloadUrl: "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
-    },
-    {
-      id: "simple-clean" as const,
-      sizeBytes: 929_792,
-      sha256: "a0c52760d6660ac5be1de5c76bb10df7a839a3e8a87ecb0e636fe2ed45b2e4a3",
-      downloadUrl: "https://r2.easyquran.fyi/tanzil/arabic/quran-simple-clean.sqlite",
-    },
-  ],
+  scripts: QURAN_ARTIFACTS,
 } as const;
 
 export type ThemeMode = "dark" | "light";

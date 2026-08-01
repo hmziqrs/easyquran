@@ -1,5 +1,5 @@
 {
-  "searchVersion": "arabic-search-v1",
+  "searchVersion": "arabic-search-v2",
   "fixtures": [
     {
       "query": "بسم الله",
@@ -8,124 +8,126 @@
       "total": 115,
       "first": [
         {
+          "kind": "ayah",
           "key": "1:1",
           "surah": 1,
           "ayah": 1,
           "globalIndex": 1
         },
         {
-          "key": "2:1",
+          "kind": "opener",
+          "key": "opener:2",
           "surah": 2,
-          "ayah": 1,
-          "globalIndex": 8
+          "anchorAyah": 1
         },
         {
-          "key": "3:1",
+          "kind": "opener",
+          "key": "opener:3",
           "surah": 3,
-          "ayah": 1,
-          "globalIndex": 294
+          "anchorAyah": 1
         },
         {
-          "key": "4:1",
+          "kind": "opener",
+          "key": "opener:4",
           "surah": 4,
-          "ayah": 1,
-          "globalIndex": 494
+          "anchorAyah": 1
         },
         {
-          "key": "5:1",
+          "kind": "opener",
+          "key": "opener:5",
           "surah": 5,
-          "ayah": 1,
-          "globalIndex": 670
+          "anchorAyah": 1
         },
         {
-          "key": "6:1",
+          "kind": "opener",
+          "key": "opener:6",
           "surah": 6,
-          "ayah": 1,
-          "globalIndex": 790
+          "anchorAyah": 1
         },
         {
-          "key": "7:1",
+          "kind": "opener",
+          "key": "opener:7",
           "surah": 7,
-          "ayah": 1,
-          "globalIndex": 955
+          "anchorAyah": 1
         },
         {
-          "key": "8:1",
+          "kind": "opener",
+          "key": "opener:8",
           "surah": 8,
-          "ayah": 1,
-          "globalIndex": 1161
+          "anchorAyah": 1
         },
         {
-          "key": "10:1",
+          "kind": "opener",
+          "key": "opener:10",
           "surah": 10,
-          "ayah": 1,
-          "globalIndex": 1365
+          "anchorAyah": 1
         },
         {
-          "key": "11:1",
+          "kind": "opener",
+          "key": "opener:11",
           "surah": 11,
-          "ayah": 1,
-          "globalIndex": 1474
+          "anchorAyah": 1
         },
         {
+          "kind": "ayah",
           "key": "11:41",
           "surah": 11,
           "ayah": 41,
           "globalIndex": 1514
         },
         {
-          "key": "12:1",
+          "kind": "opener",
+          "key": "opener:12",
           "surah": 12,
-          "ayah": 1,
-          "globalIndex": 1597
+          "anchorAyah": 1
         },
         {
-          "key": "13:1",
+          "kind": "opener",
+          "key": "opener:13",
           "surah": 13,
-          "ayah": 1,
-          "globalIndex": 1708
+          "anchorAyah": 1
         },
         {
-          "key": "14:1",
+          "kind": "opener",
+          "key": "opener:14",
           "surah": 14,
-          "ayah": 1,
-          "globalIndex": 1751
+          "anchorAyah": 1
         },
         {
-          "key": "15:1",
+          "kind": "opener",
+          "key": "opener:15",
           "surah": 15,
-          "ayah": 1,
-          "globalIndex": 1803
+          "anchorAyah": 1
         },
         {
-          "key": "16:1",
+          "kind": "opener",
+          "key": "opener:16",
           "surah": 16,
-          "ayah": 1,
-          "globalIndex": 1902
+          "anchorAyah": 1
         },
         {
-          "key": "17:1",
+          "kind": "opener",
+          "key": "opener:17",
           "surah": 17,
-          "ayah": 1,
-          "globalIndex": 2030
+          "anchorAyah": 1
         },
         {
-          "key": "18:1",
+          "kind": "opener",
+          "key": "opener:18",
           "surah": 18,
-          "ayah": 1,
-          "globalIndex": 2141
+          "anchorAyah": 1
         },
         {
-          "key": "19:1",
+          "kind": "opener",
+          "key": "opener:19",
           "surah": 19,
-          "ayah": 1,
-          "globalIndex": 2251
+          "anchorAyah": 1
         },
         {
-          "key": "20:1",
+          "kind": "opener",
+          "key": "opener:20",
           "surah": 20,
-          "ayah": 1,
-          "globalIndex": 2349
+          "anchorAyah": 1
         }
       ]
     },
@@ -136,120 +138,140 @@
       "total": 23,
       "first": [
         {
+          "kind": "ayah",
           "key": "1:2",
           "surah": 1,
           "ayah": 2,
           "globalIndex": 2
         },
         {
+          "kind": "ayah",
           "key": "6:1",
           "surah": 6,
           "ayah": 1,
           "globalIndex": 790
         },
         {
+          "kind": "ayah",
           "key": "6:45",
           "surah": 6,
           "ayah": 45,
           "globalIndex": 834
         },
         {
+          "kind": "ayah",
           "key": "7:43",
           "surah": 7,
           "ayah": 43,
           "globalIndex": 997
         },
         {
+          "kind": "ayah",
           "key": "10:10",
           "surah": 10,
           "ayah": 10,
           "globalIndex": 1374
         },
         {
+          "kind": "ayah",
           "key": "14:39",
           "surah": 14,
           "ayah": 39,
           "globalIndex": 1789
         },
         {
+          "kind": "ayah",
           "key": "16:75",
           "surah": 16,
           "ayah": 75,
           "globalIndex": 1976
         },
         {
+          "kind": "ayah",
           "key": "17:111",
           "surah": 17,
           "ayah": 111,
           "globalIndex": 2140
         },
         {
+          "kind": "ayah",
           "key": "18:1",
           "surah": 18,
           "ayah": 1,
           "globalIndex": 2141
         },
         {
+          "kind": "ayah",
           "key": "23:28",
           "surah": 23,
           "ayah": 28,
           "globalIndex": 2701
         },
         {
+          "kind": "ayah",
           "key": "27:15",
           "surah": 27,
           "ayah": 15,
           "globalIndex": 3174
         },
         {
+          "kind": "ayah",
           "key": "27:59",
           "surah": 27,
           "ayah": 59,
           "globalIndex": 3218
         },
         {
+          "kind": "ayah",
           "key": "27:93",
           "surah": 27,
           "ayah": 93,
           "globalIndex": 3252
         },
         {
+          "kind": "ayah",
           "key": "29:63",
           "surah": 29,
           "ayah": 63,
           "globalIndex": 3403
         },
         {
+          "kind": "ayah",
           "key": "31:25",
           "surah": 31,
           "ayah": 25,
           "globalIndex": 3494
         },
         {
+          "kind": "ayah",
           "key": "34:1",
           "surah": 34,
           "ayah": 1,
           "globalIndex": 3607
         },
         {
+          "kind": "ayah",
           "key": "35:1",
           "surah": 35,
           "ayah": 1,
           "globalIndex": 3661
         },
         {
+          "kind": "ayah",
           "key": "35:34",
           "surah": 35,
           "ayah": 34,
           "globalIndex": 3694
         },
         {
+          "kind": "ayah",
           "key": "37:182",
           "surah": 37,
           "ayah": 182,
           "globalIndex": 3970
         },
         {
+          "kind": "ayah",
           "key": "39:29",
           "surah": 39,
           "ayah": 29,
@@ -264,120 +286,140 @@
       "total": 384,
       "first": [
         {
+          "kind": "ayah",
           "key": "2:20",
           "surah": 2,
           "ayah": 20,
           "globalIndex": 27
         },
         {
+          "kind": "ayah",
           "key": "2:26",
           "surah": 2,
           "ayah": 26,
           "globalIndex": 33
         },
         {
+          "kind": "ayah",
           "key": "2:67",
           "surah": 2,
           "ayah": 67,
           "globalIndex": 74
         },
         {
+          "kind": "ayah",
           "key": "2:77",
           "surah": 2,
           "ayah": 77,
           "globalIndex": 84
         },
         {
+          "kind": "ayah",
           "key": "2:98",
           "surah": 2,
           "ayah": 98,
           "globalIndex": 105
         },
         {
+          "kind": "ayah",
           "key": "2:106",
           "surah": 2,
           "ayah": 106,
           "globalIndex": 113
         },
         {
+          "kind": "ayah",
           "key": "2:107",
           "surah": 2,
           "ayah": 107,
           "globalIndex": 114
         },
         {
+          "kind": "ayah",
           "key": "2:109",
           "surah": 2,
           "ayah": 109,
           "globalIndex": 116
         },
         {
+          "kind": "ayah",
           "key": "2:110",
           "surah": 2,
           "ayah": 110,
           "globalIndex": 117
         },
         {
+          "kind": "ayah",
           "key": "2:115",
           "surah": 2,
           "ayah": 115,
           "globalIndex": 122
         },
         {
+          "kind": "ayah",
           "key": "2:132",
           "surah": 2,
           "ayah": 132,
           "globalIndex": 139
         },
         {
+          "kind": "ayah",
           "key": "2:143",
           "surah": 2,
           "ayah": 143,
           "globalIndex": 150
         },
         {
+          "kind": "ayah",
           "key": "2:148",
           "surah": 2,
           "ayah": 148,
           "globalIndex": 155
         },
         {
+          "kind": "ayah",
           "key": "2:153",
           "surah": 2,
           "ayah": 153,
           "globalIndex": 160
         },
         {
+          "kind": "ayah",
           "key": "2:158",
           "surah": 2,
           "ayah": 158,
           "globalIndex": 165
         },
         {
+          "kind": "ayah",
           "key": "2:165",
           "surah": 2,
           "ayah": 165,
           "globalIndex": 172
         },
         {
+          "kind": "ayah",
           "key": "2:173",
           "surah": 2,
           "ayah": 173,
           "globalIndex": 180
         },
         {
+          "kind": "ayah",
           "key": "2:176",
           "surah": 2,
           "ayah": 176,
           "globalIndex": 183
         },
         {
+          "kind": "ayah",
           "key": "2:181",
           "surah": 2,
           "ayah": 181,
           "globalIndex": 188
         },
         {
+          "kind": "ayah",
           "key": "2:182",
           "surah": 2,
           "ayah": 182,
@@ -392,120 +434,140 @@
       "total": 77,
       "first": [
         {
+          "kind": "ayah",
           "key": "2:35",
           "surah": 2,
           "ayah": 35,
           "globalIndex": 42
         },
         {
+          "kind": "ayah",
           "key": "2:82",
           "surah": 2,
           "ayah": 82,
           "globalIndex": 89
         },
         {
+          "kind": "ayah",
           "key": "2:111",
           "surah": 2,
           "ayah": 111,
           "globalIndex": 118
         },
         {
+          "kind": "ayah",
           "key": "2:214",
           "surah": 2,
           "ayah": 214,
           "globalIndex": 221
         },
         {
+          "kind": "ayah",
           "key": "2:221",
           "surah": 2,
           "ayah": 221,
           "globalIndex": 228
         },
         {
+          "kind": "ayah",
           "key": "2:265",
           "surah": 2,
           "ayah": 265,
           "globalIndex": 272
         },
         {
+          "kind": "ayah",
           "key": "2:266",
           "surah": 2,
           "ayah": 266,
           "globalIndex": 273
         },
         {
+          "kind": "ayah",
           "key": "3:133",
           "surah": 3,
           "ayah": 133,
           "globalIndex": 426
         },
         {
+          "kind": "ayah",
           "key": "3:142",
           "surah": 3,
           "ayah": 142,
           "globalIndex": 435
         },
         {
+          "kind": "ayah",
           "key": "3:185",
           "surah": 3,
           "ayah": 185,
           "globalIndex": 478
         },
         {
+          "kind": "ayah",
           "key": "4:124",
           "surah": 4,
           "ayah": 124,
           "globalIndex": 617
         },
         {
+          "kind": "ayah",
           "key": "5:72",
           "surah": 5,
           "ayah": 72,
           "globalIndex": 741
         },
         {
+          "kind": "ayah",
           "key": "7:19",
           "surah": 7,
           "ayah": 19,
           "globalIndex": 973
         },
         {
+          "kind": "ayah",
           "key": "7:22",
           "surah": 7,
           "ayah": 22,
           "globalIndex": 976
         },
         {
+          "kind": "ayah",
           "key": "7:27",
           "surah": 7,
           "ayah": 27,
           "globalIndex": 981
         },
         {
+          "kind": "ayah",
           "key": "7:40",
           "surah": 7,
           "ayah": 40,
           "globalIndex": 994
         },
         {
+          "kind": "ayah",
           "key": "7:42",
           "surah": 7,
           "ayah": 42,
           "globalIndex": 996
         },
         {
+          "kind": "ayah",
           "key": "7:43",
           "surah": 7,
           "ayah": 43,
           "globalIndex": 997
         },
         {
+          "kind": "ayah",
           "key": "7:44",
           "surah": 7,
           "ayah": 44,
           "globalIndex": 998
         },
         {
+          "kind": "ayah",
           "key": "7:46",
           "surah": 7,
           "ayah": 46,
@@ -520,124 +582,273 @@
       "total": 179,
       "first": [
         {
+          "kind": "ayah",
           "key": "2:8",
           "surah": 2,
           "ayah": 8,
           "globalIndex": 15
         },
         {
+          "kind": "ayah",
           "key": "2:13",
           "surah": 2,
           "ayah": 13,
           "globalIndex": 20
         },
         {
+          "kind": "ayah",
           "key": "2:21",
           "surah": 2,
           "ayah": 21,
           "globalIndex": 28
         },
         {
+          "kind": "ayah",
           "key": "2:24",
           "surah": 2,
           "ayah": 24,
           "globalIndex": 31
         },
         {
+          "kind": "ayah",
           "key": "2:44",
           "surah": 2,
           "ayah": 44,
           "globalIndex": 51
         },
         {
+          "kind": "ayah",
           "key": "2:94",
           "surah": 2,
           "ayah": 94,
           "globalIndex": 101
         },
         {
+          "kind": "ayah",
           "key": "2:96",
           "surah": 2,
           "ayah": 96,
           "globalIndex": 103
         },
         {
+          "kind": "ayah",
           "key": "2:102",
           "surah": 2,
           "ayah": 102,
           "globalIndex": 109
         },
         {
+          "kind": "ayah",
           "key": "2:142",
           "surah": 2,
           "ayah": 142,
           "globalIndex": 149
         },
         {
+          "kind": "ayah",
           "key": "2:143",
           "surah": 2,
           "ayah": 143,
           "globalIndex": 150
         },
         {
+          "kind": "ayah",
           "key": "2:161",
           "surah": 2,
           "ayah": 161,
           "globalIndex": 168
         },
         {
+          "kind": "ayah",
           "key": "2:164",
           "surah": 2,
           "ayah": 164,
           "globalIndex": 171
         },
         {
+          "kind": "ayah",
           "key": "2:165",
           "surah": 2,
           "ayah": 165,
           "globalIndex": 172
         },
         {
+          "kind": "ayah",
           "key": "2:168",
           "surah": 2,
           "ayah": 168,
           "globalIndex": 175
         },
         {
+          "kind": "ayah",
           "key": "2:188",
           "surah": 2,
           "ayah": 188,
           "globalIndex": 195
         },
         {
+          "kind": "ayah",
           "key": "2:199",
           "surah": 2,
           "ayah": 199,
           "globalIndex": 206
         },
         {
+          "kind": "ayah",
           "key": "2:200",
           "surah": 2,
           "ayah": 200,
           "globalIndex": 207
         },
         {
+          "kind": "ayah",
           "key": "2:204",
           "surah": 2,
           "ayah": 204,
           "globalIndex": 211
         },
         {
+          "kind": "ayah",
           "key": "2:207",
           "surah": 2,
           "ayah": 207,
           "globalIndex": 214
         },
         {
+          "kind": "ayah",
           "key": "2:213",
           "surah": 2,
           "ayah": 213,
           "globalIndex": 220
+        }
+      ]
+    },
+    {
+      "query": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+      "normalized": "بسم الله الرحمن الرحيم",
+      "normalizedScalarLength": 22,
+      "total": 114,
+      "first": [
+        {
+          "kind": "ayah",
+          "key": "1:1",
+          "surah": 1,
+          "ayah": 1,
+          "globalIndex": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:2",
+          "surah": 2,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:3",
+          "surah": 3,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:4",
+          "surah": 4,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:5",
+          "surah": 5,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:6",
+          "surah": 6,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:7",
+          "surah": 7,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:8",
+          "surah": 8,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:10",
+          "surah": 10,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:11",
+          "surah": 11,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:12",
+          "surah": 12,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:13",
+          "surah": 13,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:14",
+          "surah": 14,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:15",
+          "surah": 15,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:16",
+          "surah": 16,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:17",
+          "surah": 17,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:18",
+          "surah": 18,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:19",
+          "surah": 19,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:20",
+          "surah": 20,
+          "anchorAyah": 1
+        },
+        {
+          "kind": "opener",
+          "key": "opener:21",
+          "surah": 21,
+          "anchorAyah": 1
         }
       ]
     }

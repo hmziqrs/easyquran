@@ -7,8 +7,84 @@
    live API and the offline Worker speak the same shape.
    ════════════════════════════════════════════════════════════════════════ */
 
-/** The two Arabic sources the reader works against. */
-export type Script = "uthmani" | "simple-clean";
+/**
+ * Runtime-safe enum pattern: unlike TypeScript `enum`, these values serialize
+ * directly across JSON/postMessage and emit no reverse-mapping code.
+ */
+export const QuranSourceId = {
+  TanzilUthmani: "uthmani",
+  TanzilSimpleClean: "simple-clean",
+} as const;
+export type QuranSourceId = (typeof QuranSourceId)[keyof typeof QuranSourceId];
+export const QURAN_SOURCE_IDS = Object.freeze(
+  Object.values(QuranSourceId),
+) as readonly QuranSourceId[];
+export const isQuranSourceId = (value: unknown): value is QuranSourceId =>
+  typeof value === "string" && QURAN_SOURCE_IDS.includes(value as QuranSourceId);
+
+/** Text/script style is independent from the artifact/source that supplies it. */
+export const QuranScript = {
+  Uthmani: "uthmani",
+  SimpleClean: "simple-clean",
+  IndoPak: "indopak",
+  Tajweed: "tajweed",
+} as const;
+export type QuranScript = (typeof QuranScript)[keyof typeof QuranScript];
+export const QURAN_SCRIPTS = Object.freeze(Object.values(QuranScript)) as readonly QuranScript[];
+export const isQuranScript = (value: unknown): value is QuranScript =>
+  typeof value === "string" && QURAN_SCRIPTS.includes(value as QuranScript);
+
+/** Source-independent opener meaning for the supported 6,236-ayah numbering. */
+export const OpenerKind = {
+  Verse: "verse",
+  Header: "header",
+  None: "none",
+} as const;
+export type OpenerKind = (typeof OpenerKind)[keyof typeof OpenerKind];
+export const OPENER_KINDS = Object.freeze(Object.values(OpenerKind)) as readonly OpenerKind[];
+export const isOpenerKind = (value: unknown): value is OpenerKind =>
+  typeof value === "string" && OPENER_KINDS.includes(value as OpenerKind);
+
+/** How one registered source physically packages a surah opener. */
+export const OpenerPackaging = {
+  NumberedAyah: "numbered-ayah",
+  EmbeddedPrefix: "embedded-prefix",
+  ChapterFlag: "chapter-flag",
+  SeparateRow: "separate-row",
+  Absent: "absent",
+} as const;
+export type OpenerPackaging = (typeof OpenerPackaging)[keyof typeof OpenerPackaging];
+export const OPENER_PACKAGING_VALUES = Object.freeze(
+  Object.values(OpenerPackaging),
+) as readonly OpenerPackaging[];
+export const isOpenerPackaging = (value: unknown): value is OpenerPackaging =>
+  typeof value === "string" && OPENER_PACKAGING_VALUES.includes(value as OpenerPackaging);
+
+/** Portable Unicode-scalar partition of an embedded opener and ayah body. */
+export interface PrefixCut {
+  openerEndScalar: number;
+  bodyStartScalar: number;
+}
+
+/** Serializable, source-qualified view descriptor for one surah. */
+export interface SurahNormalization extends PrefixCut {
+  surah: number;
+  sourceId: QuranSourceId;
+  script: QuranScript;
+  sourceProfile: string;
+  packaging: OpenerPackaging;
+  openerKind: OpenerKind;
+  /** Exact source orthography. Null only when openerKind is "none". */
+  openerText: string | null;
+}
+
+/** Raw source verses plus the descriptor needed to derive body/opener views. */
+export interface QuranSurahText {
+  sourceId: QuranSourceId;
+  script: QuranScript;
+  verses: string[];
+  normalization: SurahNormalization;
+}
 
 /** Revelation place. */
 export type Place = "meccan" | "medinan";
@@ -19,7 +95,12 @@ export type Place = "meccan" | "medinan";
  *  - "none"            no basmala at all (surah 9) — no header line
  *  - "embedded-prefix" ayah 1 begins with basmala + " " (the other 112) — header
  */
-export type Bismillah = "first-ayah" | "none" | "embedded-prefix";
+export const Bismillah = {
+  FirstAyah: "first-ayah",
+  None: "none",
+  EmbeddedPrefix: "embedded-prefix",
+} as const;
+export type Bismillah = (typeof Bismillah)[keyof typeof Bismillah];
 
 /** Sajda kind on a verse. */
 export type SajdaKind = "recommended" | "obligatory";
@@ -44,6 +125,8 @@ export interface CatalogEntry {
   revelationOrder: number;
   /** ruku count for this surah */
   rukus: number;
+  openerKind: OpenerKind;
+  /** @deprecated Use openerKind. This field describes the current Tanzil shape. */
   bismillah: Bismillah;
   /** global index of this surah's first ayah (1-based; = xml start + 1) */
   startGlobal: number;
@@ -52,9 +135,7 @@ export interface CatalogEntry {
 /** A loaded surah: catalog metadata + the Uthmani verse text, in order. This is
  *  the component-facing value (the SurahReader prop) and keeps the synchronous
  *  `verses` contract the reader store depends on. */
-export interface LoadedSurah extends CatalogEntry {
-  verses: string[];
-}
+export interface LoadedSurah extends CatalogEntry, QuranSurahText {}
 
 /** A navigation range family (juz / page / ruku / hizb-quarter / manzil). */
 export interface RangeEntry {
@@ -90,7 +171,7 @@ export interface SajdaEntry {
 
 /** A validated SQLite artifact advertised by /scripts or baked in config. */
 export interface ArtifactSpec {
-  id: Script;
+  id: QuranSourceId;
   sizeBytes: number;
   sha256: string;
   downloadUrl: string;
@@ -100,7 +181,7 @@ export interface ArtifactSpec {
  *  Named `script` (not `id`) so it never collides with the correlation `id` on
  *  WorkerResponse in the worker-client message router. */
 export interface DownloadProgress {
-  script: Script;
+  script: QuranSourceId;
   loaded: number;
   total: number;
 }
@@ -124,4 +205,6 @@ export interface RangePageData {
   first: VerseKey;
   last: VerseKey;
   ayahs: Ayah[];
+  /** One descriptor per surah represented in ayahs. */
+  normalizations: SurahNormalization[];
 }

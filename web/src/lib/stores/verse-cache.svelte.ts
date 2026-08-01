@@ -35,10 +35,10 @@ export function createVerseCache(core: ReaderCore) {
       try {
         const { quranWorker } = await import("$lib/quran/worker-client");
         if (!quranWorker.ready) return;
-        const verses = await quranWorker.readSurah(num);
+        const source = await quranWorker.readSurah(num);
         if (token !== core.nav.token) return; // a navigation happened since
         if (num !== core.s.current) return; // user moved on
-        if (verses && verses.length) core.versesBySurah.set(num, verses);
+        if (source.verses.length) core.versesBySurah.set(num, source.verses);
       } catch {
         /* prerender/cache still serves the surah */
       }

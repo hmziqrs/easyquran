@@ -9,10 +9,11 @@
 
    Rules (docs/quran-api.md §7.1):
      1. remove combining marks (Mn/Me) + format chars (Cf) — the harakat;
-     2. fold hamza-bearing alefs (آ أ إ) → bare alef (ا);
-     3. fold alef-maqsura (ى) → ya (ي);
-     4. fold ta-marbuta (ة) → ha (ه)  — §11.1 decision: improves recall, pinned;
-     5. collapse whitespace runs to a single space and trim.
+     2. remove tatweel (U+0640) and fold alef-wasla (U+0671) → bare alef;
+     3. fold hamza-bearing alefs (آ أ إ) → bare alef (ا);
+     4. fold alef-maqsura (ى) → ya (ي);
+     5. fold ta-marbuta (ة) → ha (ه)  — §11.1 decision: improves recall, pinned;
+     6. collapse whitespace runs to a single space and trim.
 
    Match semantics: substring of the normalized query within the normalized
    ayah. A query with spaces is one phrase. Results in ascending globalIndex.
@@ -23,7 +24,7 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 /** The frozen normalization rule set. Bump when any rule above changes. */
-export const SEARCH_VERSION = "arabic-search-v1";
+export const SEARCH_VERSION = "arabic-search-v2";
 export const MIN_QUERY_LEN = 3;
 export const MAX_QUERY_LEN = 64;
 export const DEFAULT_LIMIT = 20;
@@ -39,7 +40,8 @@ const HA = "ه";
 export function normalizeArabic(input: string): string {
   return input
     .replace(/[\p{Mn}\p{Me}\p{Cf}]/gu, "") // combining marks + format chars
-    .replace(/[آأإ]/g, BARE_ALEF) // آ أ إ → ا
+    .replace(/ـ/g, "") // tatweel is Lm, not a combining mark
+    .replace(/[آأإٱ]/g, BARE_ALEF) // hamza alefs + alef-wasla → ا
     .replace(/ى/g, YA) // ى alef-maqsura → ي
     .replace(/ة/g, HA) // ة ta-marbuta → ه
     .replace(/\s+/g, " ")
@@ -65,14 +67,47 @@ export interface SearchOpts {
   offset?: number;
 }
 
-export interface SearchHit {
+export interface Highlight {
+  /** UTF-16 offsets into the hit's text. */
+  start: number;
+  end: number;
+}
+
+export const SearchHitKind = {
+  Ayah: "ayah",
+  Opener: "opener",
+} as const;
+export type SearchHitKind = (typeof SearchHitKind)[keyof typeof SearchHitKind];
+
+export const SearchProvider = {
+  Worker: "worker",
+  Api: "api",
+  Names: "names",
+} as const;
+export type SearchProvider = (typeof SearchProvider)[keyof typeof SearchProvider];
+
+export interface AyahSearchHit {
+  kind: typeof SearchHitKind.Ayah;
   key: string;
   surah: number;
   ayah: number;
   globalIndex: number;
-  /** Uthmani display text (matches are computed on simple-clean). */
+  /** Raw Uthmani display text (matching is against its canonical body). */
   text: string;
+  highlights: Highlight[];
 }
+
+export interface OpenerSearchHit {
+  kind: typeof SearchHitKind.Opener;
+  key: `opener:${number}`;
+  surah: number;
+  /** Navigation target only; the match is not attributed to this ayah. */
+  anchorAyah: 1;
+  text: string;
+  highlights: Highlight[];
+}
+
+export type SearchHit = AyahSearchHit | OpenerSearchHit;
 
 export interface SearchResponse {
   query: string;
@@ -80,6 +115,6 @@ export interface SearchResponse {
   limit: number;
   offset: number;
   results: SearchHit[];
-  /** "worker" | "api" | "names" — which engine answered. */
-  source: "worker" | "api" | "names";
+  /** Which engine answered. */
+  source: SearchProvider;
 }

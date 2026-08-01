@@ -1,215 +1,180 @@
-/* ════════════════════════════════════════════════════════════════════════
-   quran.worker.ts — the offline Quran engine (sqlite-wasm, deserialize).
+/* Offline Quran engine: validated registered SQLite sources in sqlite-wasm.
 
-   Opens the two cached Arabic databases as READ-ONLY in-memory DBs via
-   `sqlite3_deserialize` (no "opfs" VFS, no SharedArrayBuffer, no COOP/COEP —
-   the host is not crossOriginIsolated and must stay that way to keep FCM's
-   cross-origin importScripts working). Bytes are durable in OPFS (opfs-cache)
-   and re-verified against sizeBytes + sha256 on every load.
+   The Worker only adapts sqlite-wasm to QuranQueryRunner and owns artifact
+   lifecycle. Query definitions, row decoding, source validation, canonical
+   views, and search-corpus construction are shared with SSG/tooling. */
 
-   Speaks the protocol in quran/protocol.ts over postMessage. Client-only: this
-   file is a module Worker instantiated from worker-client.ts via
-   `new Worker(new URL(...), { type: "module" })`; it must never be imported by
-   prerender/server code.
-   ════════════════════════════════════════════════════════════════════════ */
-
-import init, { type Sqlite3Static, type Database } from "@sqlite.org/sqlite-wasm";
+import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import { type ArtifactSpec, type QuranSourceId, type QuranSurahText } from "$lib/data/quran-types";
+import type { QuranQueryRunner } from "$lib/quran/sql";
+import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
+import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
 import { ensureArtifact } from "./opfs-cache";
-import type { ArtifactSpec } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
-  DEFAULT_LIMIT,
-  DEFAULT_OFFSET,
-  MAX_LIMIT,
-  MAX_OFFSET,
-  isEligibleQuery,
-  normalizeArabic,
-  type SearchHit,
-  type SearchOpts,
-  type SearchResponse,
-} from "../quran/search/normalize";
+  buildCanonicalSearchCorpus,
+  searchCanonicalCorpus,
+  type CanonicalSearchUnit,
+} from "../quran/search/corpus";
+import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/search/normalize";
+import {
+  loadQuranSource,
+  readAllSourceRows,
+  readSourceSurah,
+  type LoadedQuranSource,
+} from "../quran/view/source-runtime";
+import { resolveSourceProfile } from "../quran/view/source-profiles";
 
-/** Minimal worker scope (avoids DOM/webworker `self` lib clashes). */
 interface WorkerCtx {
   postMessage(msg: WorkerOutbound): void;
-  onmessage: ((e: MessageEvent<WorkerRequest>) => void) | null;
+  onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
 }
 const ctx = self as unknown as WorkerCtx;
 
 let sqlite3: Sqlite3Static | null = null;
-/** The Uthmani read DB (display + SSG-parity reads). */
-let uthmaniDb: Database | null = null;
-/** Kept for the Phase 4 search corpus (simple-clean). Held as bytes so the
- *  in-memory DB can be opened on demand without a second persistent handle. */
-let simpleCleanBytes: Uint8Array | null = null;
-/** Retain the Uthmani bytes so their backing buffer is never GC'd while the
- *  deserialized DB references its heap copy. */
-let _uthmaniBytes: Uint8Array | null = null;
+
+interface WorkerSourceState {
+  readonly bytes: Uint8Array;
+  readonly source: LoadedQuranSource;
+  readonly store: string;
+  /** Present for roles that need repeated reads; other sources reopen lazily. */
+  readonly runner: QuranQueryRunner | null;
+}
+
+const sources = new Map<QuranSourceId, WorkerSourceState>();
+let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
 
-/** Normalized search corpus over simple-clean + Uthmani display text by index.
- *  Built lazily on the first search request. */
-interface CorpusRow {
-  index: number;
-  sura: number;
-  aya: number;
-  norm: string;
-}
-let corpus: CorpusRow[] | null = null;
-let uthmaniByIndex: Map<number, string> | null = null;
-
-function emit(msg: WorkerOutbound): void {
-  ctx.postMessage(msg);
-}
-function status(s: WorkerStatus, detail?: string): void {
-  emit({ type: "status", status: s, detail });
+function emit(message: WorkerOutbound): void {
+  ctx.postMessage(message);
 }
 
-/**
- * Build a per-artifact progress callback that emits a `progress` event throttled
- * to integer-percent changes (≤101 messages per file regardless of chunk count).
- * The expected total comes from `spec.sizeBytes`, not a response header.
- */
+function status(value: WorkerStatus, detail?: string): void {
+  emit({ type: "status", status: value, detail });
+}
+
 function progressEmitter(spec: ArtifactSpec): (loaded: number, total: number) => void {
   let lastPct = -1;
   return (loaded, total) => {
     const pct = total > 0 ? Math.floor((loaded / total) * 100) : 0;
-    if (pct !== lastPct) {
-      lastPct = pct;
-      emit({ type: "progress", script: spec.id, loaded, total });
-    }
+    if (pct === lastPct) return;
+    lastPct = pct;
+    emit({ type: "progress", script: spec.id, loaded, total });
   };
 }
 
-/** Open a read-only in-memory DB from raw SQLite bytes via deserialize. */
 function openReadOnly(bytes: Uint8Array): Database {
-  const db = new sqlite3!.oo1.DB(); // :memory:
-  const READONLY = sqlite3!.capi.SQLITE_DESERIALIZE_READONLY;
-  const FLAGS = sqlite3!.capi.SQLITE_DESERIALIZE_FREEONCLOSE | READONLY;
-  // sqlite must own the buffer on its heap to free it on close:
-  const ptr = sqlite3!.wasm.allocFromTypedArray(bytes);
-  const rc = sqlite3!.capi.sqlite3_deserialize(
-    db,
+  const database = new sqlite3!.oo1.DB();
+  const flags =
+    sqlite3!.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3!.capi.SQLITE_DESERIALIZE_READONLY;
+  const pointer = sqlite3!.wasm.allocFromTypedArray(bytes);
+  const result = sqlite3!.capi.sqlite3_deserialize(
+    database,
     "main",
-    ptr,
+    pointer,
     bytes.byteLength,
     bytes.byteLength,
-    FLAGS,
+    flags,
   );
-  if (rc !== sqlite3!.capi.SQLITE_OK) {
-    sqlite3!.wasm.dealloc(ptr);
-    throw new Error(`sqlite3_deserialize failed: rc=${rc}`);
+  if (result !== sqlite3!.capi.SQLITE_OK) {
+    sqlite3!.wasm.dealloc(pointer);
+    throw new Error(`sqlite3_deserialize failed: rc=${result}`);
   }
-  return db;
+  return database;
 }
 
-/** Initialize the engine: load wasm, fetch+verify+cache both DBs, deserialize. */
 async function initialize(manifest: ResolvedManifest): Promise<void> {
   status("init");
-  // The bundler-friendly default resolves sqlite3.wasm via the package exports
-  // map; Vite emits it as a hashed asset.
   sqlite3 = await init();
 
-  const uthmaniSpec = manifest.scripts.find((s) => s.id === "uthmani") as ArtifactSpec | undefined;
-  const simpleSpec = manifest.scripts.find((s) => s.id === "simple-clean") as
-    | ArtifactSpec
-    | undefined;
-  if (!uthmaniSpec || !simpleSpec) throw new Error("manifest missing a script spec");
-
-  status("downloading", "uthmani");
-  const u = await ensureArtifact(
-    uthmaniSpec,
-    manifest.contentVersion,
-    progressEmitter(uthmaniSpec),
-  );
-  _uthmaniBytes = u.bytes;
-  uthmaniDb = openReadOnly(u.bytes);
-
-  status("downloading", "simple-clean");
-  const s = await ensureArtifact(simpleSpec, manifest.contentVersion, progressEmitter(simpleSpec));
-  simpleCleanBytes = s.bytes;
+  const persistentSources = new Set([
+    DEFAULT_QURAN_SOURCE_PLAN.reader,
+    DEFAULT_QURAN_SOURCE_PLAN.search.display,
+  ]);
+  for (const sourceId of plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN)) {
+    const spec = manifest.scripts.find((artifact) => artifact.id === sourceId);
+    if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
+    const profile = resolveSourceProfile(spec.id, spec.sha256);
+    status("downloading", sourceId);
+    const artifact = await ensureArtifact(spec, manifest.contentVersion, progressEmitter(spec));
+    const database = openReadOnly(artifact.bytes);
+    const runner = createWasmQueryRunner(database);
+    const source = loadQuranSource(runner, profile);
+    const persistent = persistentSources.has(sourceId);
+    sources.set(sourceId, {
+      bytes: artifact.bytes,
+      source,
+      store: artifact.store,
+      runner: persistent ? runner : null,
+    });
+    if (!persistent) database.close();
+  }
 
   ready = true;
+  const loaded = [...sources].map(([id, state]) => `${id}: ${state.store}`).join(", ");
   console.info(
-    `[quran] offline engine ready (uthmani: ${u.store}, simple-clean: ${s.store}); ` +
-      `surah 1 has ${readSurah(1).length} verses`,
+    `[quran] offline engine ready (${loaded}); ` +
+      `surah 1 has ${readSurah(1).verses.length} verses`,
   );
   status("ready");
 }
 
-/** Read one surah's verbatim Uthmani verses, in ayah order. */
-function readSurah(num: number): string[] {
-  if (!uthmaniDb) throw new Error("uthmani db not open");
-  const stmt = uthmaniDb.prepare("SELECT text FROM quran_text WHERE sura = ? ORDER BY aya");
-  stmt.bind([num]);
-  const out: string[] = [];
-  while (stmt.step()) out.push(stmt.get(0) as string);
-  stmt.finalize();
-  return out;
+function readSurah(num: number): QuranSurahText {
+  const state = sourceState(DEFAULT_QURAN_SOURCE_PLAN.reader);
+  if (!state.runner) throw new Error("reader source is not open");
+  return {
+    sourceId: state.source.profile.sourceId,
+    script: state.source.profile.script,
+    verses: readSourceSurah(state.runner, state.source, num),
+    normalization: state.source.view.normalization(num),
+  };
 }
 
-/** Build the normalized search corpus from simple-clean + a Uthmani text map. */
+function sourceState(sourceId: QuranSourceId): WorkerSourceState {
+  const state = sources.get(sourceId);
+  if (!state) throw new Error(`Quran source ${sourceId} is not loaded`);
+  return state;
+}
+
+function readAllRows(state: WorkerSourceState) {
+  if (state.runner) return readAllSourceRows(state.runner, state.source);
+  const database = openReadOnly(state.bytes);
+  try {
+    return readAllSourceRows(createWasmQueryRunner(database), state.source);
+  } finally {
+    database.close();
+  }
+}
+
 function ensureSearchCorpus(): void {
-  if (corpus && uthmaniByIndex) return;
-  if (!simpleCleanBytes || !uthmaniDb) throw new Error("search corpus sources unavailable");
-  const sc = openReadOnly(simpleCleanBytes);
-  const scRows: [number, number, number, string][] = [];
-  sc.exec({
-    sql: 'SELECT "index", sura, aya, text FROM quran_text ORDER BY "index"',
-    rowMode: "array",
-    resultRows: scRows,
+  if (corpus) return;
+  const match = sourceState(DEFAULT_QURAN_SOURCE_PLAN.search.match);
+  const display = sourceState(DEFAULT_QURAN_SOURCE_PLAN.search.display);
+  corpus = buildCanonicalSearchCorpus({
+    matchRows: readAllRows(match),
+    displayRows: readAllRows(display),
+    matchView: match.source.view,
+    displayView: display.source.view,
   });
-  corpus = scRows.map((r) => ({
-    index: r[0],
-    sura: r[1],
-    aya: r[2],
-    norm: normalizeArabic(r[3]),
-  }));
-  const uRows: [number, string][] = [];
-  uthmaniDb.exec({
-    sql: 'SELECT "index", text FROM quran_text ORDER BY "index"',
-    rowMode: "array",
-    resultRows: uRows,
-  });
-  uthmaniByIndex = new Map(uRows);
 }
 
-/** Substring search over the normalized simple-clean corpus (docs §7). */
 function search(query: string, opts: SearchOpts = {}): SearchResponse {
   ensureSearchCorpus();
-  const norm = normalizeArabic(query);
-  const limit = Math.min(opts.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
-  const offset = Math.min(opts.offset ?? DEFAULT_OFFSET, MAX_OFFSET);
-  if (!isEligibleQuery(norm)) {
-    return { query, total: 0, limit, offset, results: [], source: "worker" };
-  }
-  const results: SearchHit[] = [];
-  let total = 0;
-  for (const row of corpus!) {
-    if (row.norm.includes(norm)) {
-      total++;
-      if (total > offset && results.length < limit) {
-        results.push({
-          key: `${row.sura}:${row.aya}`,
-          surah: row.sura,
-          ayah: row.aya,
-          globalIndex: row.index,
-          text: uthmaniByIndex!.get(row.index) ?? "",
-        });
-      }
-    }
-  }
-  return { query, total, limit, offset, results, source: "worker" };
+  return {
+    query,
+    ...searchCanonicalCorpus(corpus!, query, opts),
+    source: SearchProvider.Worker,
+  };
 }
 
-ctx.onmessage = async (e: MessageEvent<WorkerRequest>): Promise<void> => {
-  const msg = e.data;
-  const id = msg.id;
-  const typeStr = (msg as { type: string }).type;
+ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
+  const message = event.data;
+  const id = message.id;
+  const type = (message as { type: string }).type;
   try {
-    if (msg.type === "init") {
-      await initialize(msg.manifest);
+    if (message.type === "init") {
+      await initialize(message.manifest);
       emit({ id, ok: true, result: null });
       emit({ type: "ready" });
       return;
@@ -218,25 +183,21 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>): Promise<void> => {
       emit({ id, ok: false, error: "engine not ready" });
       return;
     }
-    switch (msg.type) {
-      case "readSurah":
-        emit({ id, ok: true, result: readSurah(msg.num) });
-        return;
-      case "search":
-        emit({ id, ok: true, result: search(msg.query, msg.opts) });
-        return;
-      case "ping":
-        emit({ id, ok: true, result: "pong" });
-        return;
-      default:
-        emit({ id, ok: false, error: `unknown request ${typeStr}` });
+    if (message.type === "readSurah") {
+      emit({ id, ok: true, result: readSurah(message.num) });
+    } else if (message.type === "search") {
+      emit({ id, ok: true, result: search(message.query, message.opts) });
+    } else if (message.type === "ping") {
+      emit({ id, ok: true, result: "pong" });
+    } else {
+      emit({ id, ok: false, error: `unknown request ${type}` });
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (typeStr === "init") {
-      status("error", message);
-      emit({ type: "fatal", error: message });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (type === "init") {
+      status("error", errorMessage);
+      emit({ type: "fatal", error: errorMessage });
     }
-    emit({ id, ok: false, error: message });
+    emit({ id, ok: false, error: errorMessage });
   }
 };
