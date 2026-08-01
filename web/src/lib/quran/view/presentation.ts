@@ -21,11 +21,6 @@ export interface QuranRangeGroup {
   readonly opener: string | null;
 }
 
-/**
- * Group a canonical range for presentation. A header is emitted only when the
- * range actually contains ayah 1, so page/juz SSG and any future SPA range
- * loader share the same boundary semantics.
- */
 export function groupRangeAyahs(
   ayahs: readonly Ayah[],
   normalizations: readonly SurahNormalization[],

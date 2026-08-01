@@ -28,11 +28,6 @@
     return cn(pill, value ? on : off);
   }
 
-  // The picker needs a concrete hex even when the seed is unset — read the live
-  // computed token so the swatch opens on the colour actually rendering. Most
-  // preset tokens are oklch(), which <input type="color"> can't take, so an
-  // unparseable value is round-tripped through a probe element: the browser
-  // resolves any colour syntax to rgb() in getComputedStyle().color.
   function resolveHex(varName: string): string {
     if (typeof window === "undefined") return "#000000";
     const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
@@ -64,7 +59,6 @@
       if (copyTimer) clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = false), 1600);
     } catch {
-      /* clipboard can be blocked (permissions, insecure origin) — non-fatal */
     }
   }
 

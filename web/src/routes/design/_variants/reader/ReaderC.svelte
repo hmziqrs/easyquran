@@ -1,16 +1,3 @@
-<!--
-  Reader C — "Mushaf".
-
-  A page, not a feed. The text sits inside a ruled double frame with an
-  ornamental header band carrying the surah name, and runs as continuous
-  justified script (the `reading-text` utility: text-align justify with the
-  last line centred) with inline medallions — the layout of the printed book.
-
-  The consequence, stated plainly because it's the reason this might not win:
-  continuous text has no per-ayah row to hang a bookmark, note or copy action
-  on. Actions here have to be selection-driven or live in a toolbar, which is
-  strictly more work than variant A or B needs.
--->
 <script lang="ts">
   import { toArabicDigits, surahMeta } from "$lib/data/quran";
   import type { Surah } from "$lib/data/quran";
@@ -19,8 +6,6 @@
 
   let { surah }: { surah: Surah } = $props();
 
-  // Ayah 1 carries the basmala inline in the source text; the header renders it
-  // separately, so it's stripped here to avoid showing it twice (see verses.ts).
   const verses = $derived(displayVerses(surah));
   const opener = $derived(headerText(surah.normalization));
 
@@ -29,7 +14,6 @@
 </script>
 
 <div class="mx-auto w-full max-w-[900px] px-5 py-10">
-  <!-- controls sit OUTSIDE the frame; the page itself stays undisturbed -->
   <div class="mb-5 flex items-center justify-between gap-4">
     <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-fg-4">
       Surah {surah.num} · {surahMeta(surah)}
@@ -50,10 +34,8 @@
     </div>
   </div>
 
-  <!-- the frame: an outer rule, an inner accent hairline, and the page between -->
   <div class="rounded-[18px] border border-line-3 bg-bg-1 p-2 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.6)]">
     <div class="rounded-[12px] border border-accent-line">
-      <!-- header band -->
       <div class="relative border-b border-accent-line px-6 py-5 text-center">
         <div
           aria-hidden="true"
@@ -74,14 +56,12 @@
         </p>
       {/if}
 
-      <!-- the page: continuous justified script with inline medallions -->
       <div
         dir="rtl"
         class="reading-text px-7 py-9 text-fg sm:px-11"
         style={`font-size:${size}px`}
       >{#each verses as text, i (i)}<span>{text}</span><span class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
 
-      <!-- footer band: page furniture, like a printed folio -->
       <div class="flex items-center justify-between border-t border-accent-line px-6 py-3.5">
         <span class="font-arabic text-[13px] text-fg-4">{toArabicDigits(surah.num)}</span>
         <span class="text-[11px] uppercase tracking-[0.14em] text-fg-4">Uthmani</span>

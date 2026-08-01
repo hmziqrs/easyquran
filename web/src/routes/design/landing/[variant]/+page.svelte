@@ -1,8 +1,3 @@
-<!--
-  /design/landing/[a|b|c] — renders one landing variant full-page, plus a short
-  footer restating that variant's pitch and its tradeoff, so the note is in
-  front of you while you're looking at the thing it describes.
--->
 <script lang="ts">
   import { variantDef } from "../../_variants/registry";
   import LandingA from "../../_variants/landing/LandingA.svelte";

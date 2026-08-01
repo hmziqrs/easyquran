@@ -1,16 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   safe-storage.ts — reusable, policy-aware localStorage mechanics.
-
-   These are *mechanics only*: SSR/browser guards, safe JSON read+write, a
-   schema-version gate, and an opt-in cross-tab subscription with explicit
-   teardown. They deliberately do NOT decide *when* or *how often* a domain
-   persists — each store keeps its own scheduling and side effects (notes
-   debounce, prefs/consent write immediately, notifications couples writes to
-   token registration). Avoid wiring every domain through one configurable
-   "god helper": the options become harder to follow than the code they
-   replace.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 
 export function readJSON(key: string): unknown {
@@ -28,7 +15,6 @@ export function writeJSON(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* storage may be unavailable (private mode, quota) — non-fatal */
   }
 }
 
@@ -40,27 +26,11 @@ export function removeJSON(key: string): void {
   }
 }
 
-/**
- * Schema-version gate. Returns true when `raw` carries an EXPLICIT `v` that
- * does not equal `current` — i.e. a future, incompatible shape that must be
- * discarded wholesale so a schema change can never half-load into runtime
- * state. A blob with NO `v` is legacy data from before the field existed and
- * should be migrated forward: the domain's decoder validates every field, and
- * the next write re-stamps the current version.
- */
 export function isFutureSchema(raw: unknown, current: number): boolean {
   if (typeof raw !== "object" || raw === null || !("v" in raw)) return false;
   return (raw as { v: unknown }).v !== current;
 }
 
-/**
- * Subscribe to cross-tab `storage` events for a specific key. The `storage`
- * event only fires in *other* tabs (never the writer's own), so this is the
- * right primitive for multi-tab re-sync without echo. Returns a teardown
- * function that detaches the listener — call it from the owning store's
- * dispose path so listeners never outlive their store. No-op on SSR (returns a
- * noop teardown).
- */
 export function onStorageKey(key: string, handler: () => void): () => void {
   if (!browser) return () => {};
   const listener = (e: StorageEvent) => {

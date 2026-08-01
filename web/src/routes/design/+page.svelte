@@ -1,8 +1,3 @@
-<!--
-  /design — the index. Lists both variant sets with their pitch and, more
-  usefully, their tradeoff: the point of the gallery is to make a decision, and
-  a decision needs the cost of each option stated, not just the appeal.
--->
 <script lang="ts">
   import { VARIANTS, type VariantKind } from "./_variants/registry";
 

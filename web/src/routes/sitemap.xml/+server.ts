@@ -6,8 +6,6 @@ import { CATALOG } from "$lib/data/quran-meta";
 const escape = (value: string) => value.replace(/&/g, "&amp;");
 
 export function GET() {
-  // Marketing pages + the 114 indexable surah reader pages (doc §5 SEO cutover).
-  // The /app index itself is a redirect and stays out.
   const marketing = MARKETING_PAGES.map(
     (page) => `  <url>\n    <loc>${escape(SITE.url + page.href)}</loc>\n  </url>`,
   ).join("\n");

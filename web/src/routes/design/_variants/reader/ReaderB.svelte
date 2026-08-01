@@ -1,15 +1,3 @@
-<!--
-  Reader B — "Sidecar".
-
-  Two columns. A sticky rail on the left holds surah meta, the size control and
-  an ayah jump grid, so navigation inside a long surah never costs a scroll.
-  The text column sets each ayah number in the LEFT GUTTER rather than inline
-  at the end of the verse: the RTL line then ends cleanly on its own, and the
-  numbers form a scannable ruler down the page.
-
-  Below the lg breakpoint the rail unsticks and stacks above the text — the
-  layout needs real width to earn its keep.
--->
 <script lang="ts">
   import { Icon } from "$lib/components";
   import { toArabicDigits, surahMeta } from "$lib/data/quran";
@@ -20,8 +8,6 @@
 
   let { surah }: { surah: Surah } = $props();
 
-  // Ayah 1 carries the basmala inline in the source text; the header renders it
-  // separately, so it's stripped here to avoid showing it twice (see verses.ts).
   const verses = $derived(displayVerses(surah));
   const opener = $derived(headerText(surah.normalization));
 
@@ -36,7 +22,6 @@
 </script>
 
 <div class="mx-auto grid w-full max-w-[1240px] gap-10 px-5 py-10 lg:grid-cols-[17rem_1fr]">
-  <!-- rail -->
   <aside class="flex flex-col gap-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto">
     <div class="flex flex-col gap-2">
       <span class="eyebrow text-accent">Surah {surah.num}</span>
@@ -70,7 +55,6 @@
       </button>
     </div>
 
-    <!-- ayah jump grid — the reason the rail exists -->
     <div class="flex flex-col gap-2">
       <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-fg-4">Jump to ayah</span>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(2rem,1fr))] gap-1">
@@ -93,7 +77,6 @@
     </div>
   </aside>
 
-  <!-- text column -->
   <div class="min-w-0">
     {#if opener}
       <p dir="rtl" class="mb-8 border-b border-line pb-8 text-center font-arabic text-[22px] text-fg-3">
@@ -109,7 +92,6 @@
           active === i + 1 && "bg-accent-soft/40",
         )}
       >
-        <!-- number in the gutter: the RTL line ends on its own, uninterrupted -->
         <div class="flex flex-col items-center gap-1 pt-1.5">
           <span
             class="flex size-8 items-center justify-center rounded-full border border-accent-line font-arabic text-[13px] text-accent"

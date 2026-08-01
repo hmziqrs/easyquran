@@ -1,14 +1,3 @@
-<!--
-  /app/[surah] — the reader. The surah is derived from the URL param (single
-  source of truth for what renders), so a deep link like /app/al-baqarah
-  prerenders the right surah with no hydration mismatch.
-
-  Layout mirrors quran.com/al-baqarah: the reading content is a centered column
-  that owns the full width. The navigation sidebar is the shadcn-svelte Sidebar
-  — a FIXED, off-canvas, animated panel that takes NO layout space while
-  collapsed (unlike the old inline grid column); a SidebarTrigger toggles it
-  open. The sticky Player mounts while audio plays.
--->
 <script lang="ts">
   import { untrack } from "svelte";
   import { page } from "$app/state";
@@ -18,33 +7,19 @@
   import SurahReader from "../_reader/SurahReader.svelte";
   import Results from "../_reader/Results.svelte";
 
-  // Verses arrive from the SSG server load (prerendered Uthmani text for SEO +
-  // first paint, no backend needed). The URL param stays the source of truth for
-  // which surah renders, so deep links like /app/al-baqarah prerender correctly
-  // with no hydration mismatch.
   let { data } = $props();
   const surah = $derived(data.surah);
   const slug = $derived(page.params.surah as string);
 
-  // Keep the store's "current" + the synchronous verse cache in sync with the
-  // rendered surah. `untrack` is essential: setCurrent()/seedSurah() touch the
-  // $state proxy; without untrack this effect would depend on notes/bookmarks/
-  // mode/font and re-run on every keystroke in a note. untrack keeps the surah
-  // as the sole dependency.
   $effect(() => {
     const num = surah.num;
     untrack(() => {
       reader.setCurrent(num);
       reader.seedSurah(num, surah.verses);
-      // Backfill the sync cache from the Worker once it's ready (no-op until
-      // then). Guarded by navToken so it can't clobber a later navigation.
       void reader.refreshFromWorker(num);
     });
   });
 
-  // Deep link to a verse (?verse=N): scroll it into view on load + navigation.
-  // Works in both modes — the ayah-{n} anchor exists in verse rows (VerseRow)
-  // and in reading-mode markers (SurahReader).
   $effect(() => {
     const v = page.url.searchParams.get("verse");
     if (!v) return;
@@ -53,8 +28,6 @@
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 
-  // Per-surah SEO (doc §5): indexable, with a canonical, description, and a
-  // Chapter structured-data node. No .md/.txt variants for app routes.
   const seoTitle = $derived(`Surah ${surah.num}, ${surah.name} — Arabic Text & Reading · EasyQuran`);
   const seoDescription = $derived(
     `Read Surah ${surah.name} (${surah.arabic}) — ${surah.ayahCount} ayahs, ${surah.place === "meccan" ? "Meccan" : "Medinan"}, in the Uthmani script. Free, fast, and works offline.`,

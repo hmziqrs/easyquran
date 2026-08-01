@@ -1,15 +1,7 @@
-<!--
-  Home (marketing index) — hero, a "what's here today" value strip, and a
-  "what's coming" roadmap. The value strip only states things that are actually
-  wired now; the roadmap is framed as future work (a "Coming" tag on every card)
-  so it never reads as a live feature. An earlier app-preview demo that faked
-  unbuilt features (search bar, audio player, etc.) was removed for that reason.
--->
 <script lang="ts">
   import { Button, Container, Eyebrow, Icon, Seo } from "$lib/components";
   import type { IconName } from "$lib/components";
 
-  // What's genuinely in the reader today. Each claim is real, not aspirational.
   const values: { icon: IconName; chip: string; title: string; body: string }[] = [
     {
       icon: "arrow-right",
@@ -37,7 +29,6 @@
     },
   ];
 
-  // Planned, not shipped. Copy matches the about page + FAQ roadmap.
   const roadmap: { title: string; body: string }[] = [
     {
       title: "Native apps",
@@ -60,7 +51,6 @@
 
 <Seo path="/" />
 
-<!-- Hero -->
 <section class="pt-22 pb-7">
   <Container class="max-w-[1180px] flex flex-col items-center gap-[22px] text-center">
     <span
@@ -84,7 +74,6 @@
   </Container>
 </section>
 
-<!-- What's here today -->
 <section class="py-16">
   <Container class="max-w-[1180px] flex flex-col gap-10">
     <div class="flex flex-col gap-3">
@@ -112,7 +101,6 @@
   </Container>
 </section>
 
-<!-- What's coming -->
 <section class="border-t border-line bg-bg-2">
   <Container class="max-w-[1180px] flex flex-col gap-10 py-[72px]">
     <div class="flex flex-col gap-3">

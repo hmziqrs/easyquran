@@ -15,7 +15,6 @@ export default defineConfig({
     quranData(),
     tailwindcss(),
     sveltekit({
-      // Force runes mode everywhere except vendored libraries (can be removed in Svelte 6).
       compilerOptions: {
         runes: ({ filename }) =>
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,

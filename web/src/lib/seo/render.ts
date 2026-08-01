@@ -1,16 +1,3 @@
-/* render.ts — HTML → markdown / plain-text conversion for the text variants.
-
-   The .md, .txt, and llms-full.txt endpoints each fetch the page's OWN
-   prerendered HTML and run it through htmlToMarkdown. The rendered page is
-   the single source of truth: no content is duplicated or hand-maintained
-   here, so the text variants can never drift from what visitors see. Only
-   the <main> body is converted (nav/footer/chrome are excluded), and svgs /
-   scripts / canvases are stripped before conversion.
-
-   llms.txt is a small static index built from PAGE_META (it is metadata,
-   not page body, so no fetch is needed).
-*/
-
 import TurndownService from "turndown";
 import { MARKETING_PAGES, PAGE_META, SITE } from "$lib/config/site";
 
@@ -21,23 +8,17 @@ const turndown = new TurndownService({
   emDelimiter: "*",
   hr: "---",
 });
-// Non-content chrome that can live inside <main>: icons, scripts, canvases.
-// (svg isn't in HTMLElementTagNameMap, so it's stripped via a filter rule.)
 turndown.remove(["script", "style", "canvas", "noscript", "template"]);
 turndown.addRule("stripSvg", {
   filter: (node) => node.nodeName.toLowerCase() === "svg",
   replacement: () => "",
 });
-// Drop anything explicitly marked aria-hidden (decorative dots, duplicated
-// marquee halves) so the LLM-facing text never repeats content.
 turndown.addRule("stripAriaHidden", {
   filter: (node) =>
     typeof (node as HTMLElement).getAttribute === "function" &&
     (node as HTMLElement).getAttribute("aria-hidden") === "true",
   replacement: () => "",
 });
-// Flatten split/emphasis-mangled headings into one clean line:
-// "Read<br>the *Quran.*" -> "# Read the Quran."
 turndown.addRule("cleanHeading", {
   filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
   replacement: (content, node) => {
@@ -52,7 +33,7 @@ export function htmlToMarkdown(html: string): string {
   const body = main ? main[0] : html;
   const md = turndown
     .turndown(body)
-    .replace(/^›\s+.*$/gm, "") // section eyebrows duplicate the headings
+    .replace(/^›\s+.*$/gm, "")
     .replace(/ *copy$/gm, "")
     .replace(/ *copied ✓$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
@@ -100,7 +81,6 @@ export function mdToPlain(md: string): string {
 
     line = line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
 
-    // Emphasis: bold then italic, ** and __ before single chars.
     line = line.replace(/\*\*([^*]+)\*\*/g, "$1");
     line = line.replace(/__([^_]+)__/g, "$1");
     line = line.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2");
@@ -119,15 +99,6 @@ export function mdToPlain(md: string): string {
 
 export const pagePath = (slug: string): string => (slug === "index" ? "/" : `/${slug}`);
 
-/**
- * Prerender entries for the [slug].md / [slug].txt endpoints, derived from
- * MARKETING_PAGES so adding a public page to the config is enough. Application
- * (/app/**) routes are not in MARKETING_PAGES and so never get text variants.
- *
- * `[slug]` is a single non-nested segment, so a nested marketing page (e.g.
- * "/guides/tajweed") cannot be served by this endpoint and is skipped here —
- * it would need its own nested `[...rest].md` route.
- */
 export const textVariantEntries = (): { slug: string }[] =>
   MARKETING_PAGES.filter((p) => p.href === "/" || !p.href.slice(1).includes("/")).map((p) => ({
     slug: p.href === "/" ? "index" : p.href.replace(/^\//, ""),

@@ -1,26 +1,9 @@
-/* owner.ts — SERVER-ONLY. Fetches the maker/owner profile once and exposes
-   only the render-safe {email, x, xHandle} subset to the app.
-
-   Why server-only ($lib/server/*): the full payload (websites, CV, github,
-   linkedin, instagram, …) must never reach the browser. SvelteKit hard-
-   excludes this module from the client bundle; the only permitted importer
-   is a +layout.server.ts load.
-
-   The marketing site is fully prerendered, so this runs exactly once per
-   `vp build` (module-level memo + single-flight) and the result is baked
-   into static HTML — the browser never calls hmziq.rs. A fetch failure can
-   never throw (a throw in a prerender load fails the build), so every error
-   path falls back to hardcoded personal values.
-*/
-
 import { env } from "$env/dynamic/private";
 import type { OwnerPublic } from "$lib/types/owner";
 
 const DEFAULT_SOURCE_URL = "https://hmziq.rs/me.json";
 const OWNER_SOURCE_URL = env.OWNER_SOURCE_URL || DEFAULT_SOURCE_URL;
 const FETCH_TIMEOUT_MS = 5_000;
-/** Cache TTL — decorative for a prerender build (one fetch either way), but
- *  bounds reuse if this module is later called from a runtime server. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 export interface OwnerProfile {
@@ -34,13 +17,6 @@ export interface OwnerProfile {
   social: { github: string; linkedin: string; twitter: string; instagram: string };
 }
 
-/**
- * Rendered when the build-time fetch fails, so the contact surface is stable
- * regardless of hmziq.rs availability. These are the personal values — NOT the
- * project's salam@easyquran.app address — so an outage can't resurrect the
- * address we deliberately dropped. Only `email` + `social.twitter` are
- * load-bearing (everything else is rendered only on future opt-in).
- */
 const FALLBACK_PROFILE: OwnerProfile = {
   username: "hmziqrs",
   name: "hmziqrs",
@@ -64,12 +40,9 @@ function isOwnerProfile(d: unknown): d is OwnerProfile {
   );
 }
 
-/** Fetch + memoize the full profile. Never throws — falls back on any error. */
 export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<OwnerProfile> {
   if (!opts?.force && cached && cached.expires > Date.now()) return cached.profile;
 
-  // Single-flight: concurrent callers (e.g. parallel prerender loads) share
-  // one in-flight request rather than stampeding hmziq.rs.
   if (!inflight || opts?.force) {
     inflight = (async () => {
       const ctrl = new AbortController();
@@ -103,7 +76,6 @@ export async function getOwnerPublic(): Promise<OwnerPublic> {
   };
 }
 
-/** Full profile, for future server-side opt-in rendering. Not wired to any load. */
 export async function getOwnerProfile(): Promise<OwnerProfile> {
   return fetchOwnerProfile();
 }

@@ -32,10 +32,6 @@ export type CanonicalSearchUnit =
       globalIndex: number;
     });
 
-/**
- * Build source-independent search units: numbered bodies plus distinct opener
- * headers. Matching and display sources may use different orthographies.
- */
 export function buildCanonicalSearchCorpus(input: {
   matchRows: readonly CanonicalQuranRow[];
   displayRows: readonly CanonicalQuranRow[];

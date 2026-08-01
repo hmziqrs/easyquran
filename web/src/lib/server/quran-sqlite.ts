@@ -1,9 +1,3 @@
-/* Server-only registered Quran source reader for SSG.
-
-   This module owns filesystem and node:sqlite concerns only. Query execution,
-   schema adaptation, row decoding, source validation, and canonical views are
-   shared with sqlite-wasm through the platform-neutral source runtime. */
-
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

@@ -11,7 +11,6 @@ import type { QuranSourceProfile } from "./source-profiles.ts";
 
 const ZERO_CUT: PrefixCut = Object.freeze({ openerEndScalar: 0, bodyStartScalar: 0 });
 
-/** Harakat/tanwin, tatweel, superscript alef, and Quranic annotation signs. */
 const SKELETON_MARK = /[\u064B-\u065F\u0640\u0670\u06D6-\u06ED]/u;
 
 function isSkeletonMark(value: string): boolean {
@@ -43,10 +42,6 @@ export function scalarSlice(value: string, start: number, end?: number): string 
   return value.slice(startUtf16, endUtf16);
 }
 
-/**
- * Detect an embedded source-local opener without rewriting either string.
- * Returns scalar offsets into raw, or null when the skeleton is not its prefix.
- */
 export function detectEmbeddedPrefix(raw: string, referenceOpener: string): PrefixCut | null {
   const target = skeletonScalars(referenceOpener);
   const scalars = Array.from(raw);
@@ -67,7 +62,6 @@ export function detectEmbeddedPrefix(raw: string, referenceOpener: string): Pref
   while (scalarIndex < scalars.length && /\s/u.test(scalars[scalarIndex]!)) scalarIndex += 1;
   const bodyStartScalar = scalarIndex;
 
-  // Embedded sources must contain a separator and a non-empty numbered body.
   if (bodyStartScalar === openerEndScalar || bodyStartScalar >= scalars.length) return null;
   return { openerEndScalar, bodyStartScalar };
 }
@@ -75,7 +69,6 @@ export function detectEmbeddedPrefix(raw: string, referenceOpener: string): Pref
 export interface SourceViewInput {
   profile: QuranSourceProfile;
   firstAyahs: readonly FirstAyahRow[];
-  /** Trusted exact opener text for chapter-flag/separate-row packages. */
   openerTexts?: ReadonlyMap<number, string>;
 }
 

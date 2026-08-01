@@ -1,13 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   quran.svelte.ts — offline-data status for the Quran reader.
-
-   A small runes store that mirrors the worker lifecycle so the UI can show a
-   status pill (downloading / offline-ready / offline-Arabic-only). Verse
-   RENDERING never reads this — the reader always paints instantly from the
-   prerendered page.data / sync cache; this store only describes the offline
-   engine's background readiness.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { DownloadProgress } from "$lib/data/quran-types";
 import type { WorkerStatus } from "$lib/quran/protocol";

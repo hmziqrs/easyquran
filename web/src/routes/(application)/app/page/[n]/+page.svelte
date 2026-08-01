@@ -1,5 +1,3 @@
-<!-- /app/page/[n] — a Hafs/Madani page range view (prerendered). RangeReader
-     renders the ayahs grouped by surah; the URL is shareable. -->
 <script lang="ts">
   import { Seo } from "$lib/components";
   import ReaderShell from "../../_reader/ReaderShell.svelte";

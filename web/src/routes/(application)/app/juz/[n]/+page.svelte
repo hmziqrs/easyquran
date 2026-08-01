@@ -1,5 +1,3 @@
-<!-- /app/juz/[n] — a juz range view (prerendered). RangeReader renders the
-     ayahs grouped by surah; the URL is shareable and SEO-indexable. -->
 <script lang="ts">
   import { Seo } from "$lib/components";
   import ReaderShell from "../../_reader/ReaderShell.svelte";

@@ -1,21 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   reader-persistence.svelte.ts — durable-state persistence for the reader.
-
-   Owns the single localStorage key (`easyquran.reader`, schema-versioned v1)
-   and ALL write scheduling:
-     • writeNow()         — immediate full-blob write (bookmarks/font/mode/nav).
-     • scheduleNoteWrite()— debounced trailing write (notes change per keystroke).
-     • flushNoteWrite()   — flush pending debounced write (note close / page-hide).
-
-   Cross-tab: subscribes to the `storage` event on hydrate so another tab's write
-   re-syncs this tab. Page-hide: flushes a pending note write so the last
-   keystroke is durable. Both listeners are torn down in dispose().
-
-   The durable blob is a SINGLE record shared across the settings/annotations/
-   navigation facets, so this module is the single writer — facets call its
-   scheduling methods. Decode lives here too (validated via $lib/storage).
-   ════════════════════════════════════════════════════════════════════════ */
-
 import {
   asBooleanRecord,
   asLiteral,
@@ -44,14 +26,6 @@ import {
 
 const STORAGE_KEY = "easyquran.reader";
 
-/**
- * Decode a raw localStorage blob into a validated `Partial<Persisted>`. Missing
- * or invalid fields are simply skipped so they keep their runtime default. A
- * blob whose explicit `v` is not the current version is discarded wholesale
- * (a future, incompatible shape) — but a blob with NO `v` (legacy data from
- * before the version field existed) is migrated forward; the next write
- * re-stamps the current version.
- */
 export function decodeReader(raw: unknown): Partial<Persisted> {
   if (isFutureSchema(raw, READER_SCHEMA_VERSION)) return {};
   const stored = asObject(raw);
@@ -123,8 +97,6 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       if (hydrated) return;
       hydrated = true;
       applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY)));
-      // Cross-tab: another tab's write re-syncs this tab. The 'storage' event
-      // only fires in OTHER tabs, so our own writes never echo back here.
       teardowns.push(
         onStorageKey(STORAGE_KEY, () =>
           applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY))),
@@ -133,8 +105,6 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       teardowns.push(onPageHide(() => noteWriter.flush()));
     },
     writeNow() {
-      // An immediate write already captures the latest notes, so cancel any
-      // pending debounced write rather than fire a redundant one shortly after.
       noteWriter.cancel();
       writeBlob();
     },

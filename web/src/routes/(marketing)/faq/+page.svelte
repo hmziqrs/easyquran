@@ -1,9 +1,3 @@
-<!--
-  FAQ — accordion of the most common questions. Mirrors comp lines 395–416:
-  narrow column, brand eyebrow, big h1, a single-collapsible Accordion over
-  FAQS (question = trigger + plus/minus Icon, answer = relaxed body text),
-  and a "didn't find it?" footer line that links to /contact.
--->
 <script lang="ts">
   import { Container, Eyebrow, Icon, Seo } from "$lib/components";
   import {
@@ -14,7 +8,6 @@
   } from "$lib/components/ui/accordion";
   import { FAQS } from "$lib/data/content";
 
-  // Single-open, fully collapsible. `undefined` = every item closed.
   let value = $state<string | undefined>(undefined);
 </script>
 

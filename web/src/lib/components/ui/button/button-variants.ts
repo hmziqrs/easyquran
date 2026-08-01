@@ -1,7 +1,5 @@
 import { tv, type VariantProps } from "tailwind-variants";
 
-// Kept in a plain .ts file (not the component's module script) so the barrel
-// can re-export it without tripping TS2614 on `*.svelte` modules.
 export const buttonVariants = tv(
   {
     base: "group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent font-sans tracking-tight transition-[background-color,border-color,color,transform,filter] duration-150 ease-out active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50",

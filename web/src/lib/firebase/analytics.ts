@@ -1,14 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   firebase/analytics.ts — Firebase Analytics (GA4).
-
-   Browser-only and loaded LAZILY via dynamic import from initAnalytics(), so
-   firebase/analytics never ships on the critical path or runs during SSR. All
-   public functions are safe to call from anywhere at any time — they no-op
-   until analytics is ready and silently drop failures. Respect the consent
-   store (see stores/consent.svelte.ts): collection can be toggled at runtime
-   and consent-mode state is applied on init.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { Analytics, ConsentSettings, AnalyticsCallOptions } from "firebase/analytics";
 import { isConfigured, initApp, ANALYTICS_DEBUG } from "./index";
@@ -24,7 +13,6 @@ export function initAnalytics(): Promise<Analytics | null> {
         const core = await initApp();
         if (!core) return null;
         const { isSupported, getAnalytics } = await import("firebase/analytics");
-        // isSupported() rejects in private mode / without cookies / no IndexedDB.
         if (!(await isSupported())) return null;
         analytics = getAnalytics(core);
       } catch (err) {
@@ -92,10 +80,6 @@ export async function setUserProperties(
   }
 }
 
-/**
- * Apply Google consent-mode v2 state. Call before/after init — Firebase queues
- * it against the global gtag, so events fired while "denied" are dropped.
- */
 export async function setConsentState(settings: ConsentSettings): Promise<void> {
   if (!browser || !isConfigured) return;
   try {
@@ -117,14 +101,6 @@ export async function setAnalyticsCollectionEnabled(enabled: boolean): Promise<v
   }
 }
 
-/**
- * Log an exception to GA4 — the web-native crash signal. Crashlytics has no web
- * SDK, so this (GA4's reserved `exception` event) is the closest Firebase-native
- * equivalent. Consent-gated like every analytics call: track() drops the event
- * while collection is disabled. GA4 truncates `description` to 100 chars.
- *
- *   try { … } catch (err) { void logException(`foo failed: ${err}`, true); }
- */
 export async function logException(description: string, fatal = false): Promise<void> {
   await track("exception", { description, fatal });
 }

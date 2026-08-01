@@ -1,13 +1,3 @@
-<!--
-  Root layout — everything that is true of every route in both groups: the
-  stylesheet, the icon/manifest head, site-level structured data, preference
-  application and analytics.
-
-  The page chrome lives in the group layouts instead:
-    • (marketing)/+layout.svelte  — Nav + Footer + Tweaks
-    • (application)/app/+layout.svelte — the app shell
-  Each of those renders its own <main id="main">, which the skip link targets.
--->
 <script lang="ts">
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
@@ -26,13 +16,6 @@
 
   let { children } = $props();
 
-  // The offline Quran engine (~2.5 MB corpus + sqlite-wasm worker boot) is
-  // GATED to /app so marketing routes (/, /about, …) don't pay the bandwidth,
-  // battery, and main-thread-contension cost. The reader always paints from
-  // prerendered page.data regardless of when (or whether) it boots. The root
-  // onMount fires once at initial entry; afterNavigate covers subsequent
-  // marketing → /app navigations. startOfflineEngine is idempotent, so calling
-  // it on every /app entry is safe and cheap.
   let offlineTeardown: (() => void) | null = null;
   const ensureOfflineEngine = (pathname: string): void => {
     if (!pathname.startsWith("/app")) return;
@@ -40,26 +23,14 @@
     offlineTeardown = startOfflineEngine();
   };
 
-  // The inline <head> script in app.html already applied saved prefs before
-  // paint; re-apply on mount so the reactive store and the DOM stay in sync.
-  // `onMount` only runs in the browser, so this is also where Firebase is safe
-  // to start (gtag.js + the SDK + cookies can't run during SSR/prerender).
   onMount(() => {
-    // Hydrate durable state BEFORE starting Firebase so init reads real choices.
     consent.hydrate();
     prefs.hydrate();
     prefs.apply();
     notifications.hydrate();
 
-    // Lifecycle-owned boot services — each returns its teardown so the listeners
-    // they register (service worker, consent bridge, crash handlers) are removed
-    // if the root layout ever unmounts. The consent bridge is the key fix: it
-    // used to be registered inside a fire-and-forget IIFE with no way to remove
-    // it (see lib/boot/analytics.ts).
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
-    // Boot the offline engine immediately when the user lands directly on /app.
-    // (Marketing entries skip it; afterNavigate below starts it on /app entry.)
     ensureOfflineEngine(location.pathname);
 
     return () => {
@@ -69,28 +40,15 @@
     };
   });
 
-  // The site is a prerendered SPA, so client-side route changes don't reload the
-  // page. Two concerns run on each navigation:
-  //   • log a screen/page view so GA4 sees them (skip the initial 'enter'
-  //     navigation: onMount's analytics init already logged it, after consent),
-  //   • start the offline engine when the user enters /app from a marketing
-  //     route (idempotent — no-op if already booted on direct entry).
   afterNavigate((navigation) => {
     if (navigation.type !== "enter") {
       void import("$lib/firebase/analytics")
         .then(({ pageView }) => pageView(location.pathname))
-        .catch(() => {
-          /* analytics is best-effort */
-        });
+        .catch(() => {});
     }
     ensureOfflineEngine(location.pathname);
   });
 
-  // Site-level structured data. A @graph of WebSite + Organization, each with
-  // a stable @id so per-page WebPage/Breadcrumb nodes (emitted by <Seo>) can
-  // cross-reference them. Built as a complete <script> string and emitted via
-  // {@html} because Svelte treats <script> tag bodies as raw text and will not
-  // interpolate {expressions} in them.
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -117,8 +75,6 @@
       },
     ],
   };
-  // Closing end-tag built from two pieces so its literal never appears in
-  // source (the parser ends this code block on that sequence).
   const jsonLdScript =
     `<script type="application/ld+json">${JSON.stringify(jsonLd)}` + "<" + "/script>";
 </script>
@@ -131,7 +87,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content={SITE.name} />
-  <!-- eslint-disable-next-line svelte/no-at-html-tags -- structured data, safe by construction -->
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
   {@html jsonLdScript}
 </svelte:head>
 

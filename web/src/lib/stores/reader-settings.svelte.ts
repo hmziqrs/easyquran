@@ -1,12 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   reader-settings.svelte.ts — reader-specific display settings.
-
-   Arabic font size and reading mode are durable, discrete-click settings, so
-   they persist immediately on change (no debouncing). Arabic font size is
-   intentionally NOT merged into the global appearance store — it is a
-   reader-specific preference and stays independently hydratable here.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,

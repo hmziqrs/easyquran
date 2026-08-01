@@ -1,19 +1,10 @@
-/* ════════════════════════════════════════════════════════════════════════
-   download.ts — GENERIC, worker-safe fetch + verify primitives.
-
-   No $lib/$env/$app, no Svelte, no DOM-only APIs, no Quran types. Only
-   relative imports + web-standard APIs (fetch, crypto.subtle, streams).
-   ════════════════════════════════════════════════════════════════════════ */
-
 export interface DownloadSpec {
   url: string;
   sizeBytes?: number;
   sha256?: string;
-  /** Human label used in error messages (falls back to url). */
   label?: string;
 }
 
-/** Bytes-received progress. `total` is 0 when unknown. */
 export interface Progress {
   loaded: number;
   total: number;
@@ -28,11 +19,6 @@ export async function sha256Hex(data: BufferSource): Promise<string> {
   return out;
 }
 
-/**
- * Verify a buffer against a DownloadSpec's optional size + sha256. Throws (with
- * spec.label or url in the message) on mismatch; returns the buffer unchanged.
- * Only the constraints that are present are checked.
- */
 export async function verifyBytes<B extends Uint8Array<ArrayBuffer>>(
   buf: B,
   spec: DownloadSpec,
@@ -47,17 +33,6 @@ export async function verifyBytes<B extends Uint8Array<ArrayBuffer>>(
   return buf;
 }
 
-/**
- * Fetch a URL with identity encoding, stream the body for progress, assemble it
- * into one buffer, and verify size/sha256 when either is present.
- *
- * The expected total is `spec.sizeBytes` (0 if unknown) — `Content-Length` is
- * never read, so this introduces no cross-origin ExposeHeaders/CORS need.
- * `onProgress` is invoked once with `{loaded:0,total}` up front and then per
- * chunk as bytes arrive. Non-2xx → throw. The reader is released in a finally
- * whether we finished, threw, or aborted. Verification runs ONLY if
- * `spec.sizeBytes` or `spec.sha256` is set.
- */
 export async function downloadBytes(
   spec: DownloadSpec,
   onProgress?: ProgressFn,
@@ -93,7 +68,6 @@ export async function downloadBytes(
       await reader.cancel().catch(() => {});
     }
   } else {
-    // No body stream (e.g. opaque/unsupported response): buffer at once, no progress.
     bytes = new Uint8Array(await res.arrayBuffer());
   }
 

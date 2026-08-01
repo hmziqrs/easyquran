@@ -74,8 +74,6 @@
       : null,
   );
 
-  // Build a complete application/ld+json <script> string. The closing
-  // end-tag is split so its literal never appears in this source file.
   const ld = (obj: Record<string, unknown>) =>
     `<script type="application/ld+json">${JSON.stringify(obj)}` + "<" + "/script>";
 </script>
@@ -117,19 +115,19 @@
       <link rel="alternate" type="text/plain" href={txtHref} />
     {/if}
 
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -- structured data, safe by construction -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html ld(webpageLd)}
     {#if breadcrumbLd}
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -- structured data, safe by construction -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html ld(breadcrumbLd)}
     {/if}
     {#if faqLd}
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -- structured data, safe by construction -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html ld(faqLd)}
     {/if}
     {#if extraLd}
       {#each extraLd as node, idx (idx)}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- structured data, safe by construction -->
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
         {@html ld(node)}
       {/each}
     {/if}

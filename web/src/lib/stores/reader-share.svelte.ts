@@ -1,19 +1,7 @@
-/* ════════════════════════════════════════════════════════════════════════
-   reader-share.svelte.ts — copy/share side effects + verse-share text.
-
-   Pure text formatting (`verseShareText`) is separated from the clipboard /
-   Web Share API calls so the format is testable without a browser. The
-   side-effect helpers read from the shared verse cache (no Worker round-trip)
-   and are no-ops on the server. Kept under stores/ (the doc's suggested
-   quran/share-text.ts + quran/web-share.ts live outside this task's owned
-   files; the split here still isolates the responsibility).
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import { parseKey, surahByNum, type VerseKey } from "$lib/data/quran";
 import type { ReaderCore } from "./reader-core.svelte";
 
-/** "Surah Name num:n" reference label, e.g. "Al-Baqarah 2:255". */
 export function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);
   return `${surahByNum(num).name} ${num}:${n}`;

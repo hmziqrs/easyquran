@@ -17,7 +17,6 @@ export interface QuranSourceArtifact {
 }
 
 export interface QuranSourceProfile {
-  /** Stable profile identity, qualified by its immutable artifact digest. */
   readonly id: string;
   readonly sourceId: QuranSourceIdValue;
   readonly script: QuranScriptValue;
@@ -26,7 +25,6 @@ export interface QuranSourceProfile {
   readonly canonicalRowCount: number;
   readonly packagingBySurah: readonly OpenerPackagingValue[];
   readonly expectedPackagingCounts: Readonly<Record<OpenerPackagingValue, number>>;
-  /** A numbered verse whose entire raw text is the source's reference opener. */
   readonly referenceOpenerSurah: number;
 }
 

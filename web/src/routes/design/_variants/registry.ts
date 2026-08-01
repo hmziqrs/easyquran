@@ -1,28 +1,10 @@
-/* ════════════════════════════════════════════════════════════════════════
-   registry.ts — the catalogue of design variants.
-
-   Everything under /design is a review surface, not part of the product: the
-   routes are noindex, absent from MARKETING_PAGES (so they never reach the
-   sitemap, llms.txt or the .md/.txt variants), and nothing here is imported by
-   the shipping pages. It exists so a direction can be picked by looking at
-   three finished things side by side instead of describing them.
-
-   Each variant is a self-contained component built ONLY from the design tokens
-   (bg/fg/line/accent/pop), which is what makes the theme tweaker meaningful
-   here — every variant re-skins live as the palette changes, so layout and
-   palette can be judged together rather than one at a time.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export type VariantId = "a" | "b" | "c";
 export type VariantKind = "landing" | "reader";
 
 export interface VariantDef {
   id: VariantId;
-  /** short name used in the switcher and headings */
   name: string;
-  /** the one-sentence thesis of the direction */
   pitch: string;
-  /** what this direction trades away — the honest half of the pitch */
   tradeoff: string;
 }
 

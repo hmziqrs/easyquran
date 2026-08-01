@@ -1,10 +1,5 @@
 import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "../data/quran-types.ts";
 
-/**
- * Product-level source roles, kept separate from artifact and schema profiles.
- * Switching the reader or either side of search should not require editing a
- * platform adapter.
- */
 export interface QuranSourcePlan {
   readonly reader: QuranSourceIdValue;
   readonly search: {

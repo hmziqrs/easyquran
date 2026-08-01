@@ -1,5 +1,3 @@
-// SSG load for /app/juz/[n]. Prerenders all 30 juz pages, reading each juz's
-// ayah range from quran-uthmani.sqlite at build (no backend, offline-first).
 import { error } from "@sveltejs/kit";
 import { loadRangeData } from "$lib/server/quran-range";
 import type { PageServerLoad } from "./$types";

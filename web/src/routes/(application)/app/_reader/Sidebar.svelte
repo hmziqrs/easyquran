@@ -1,16 +1,3 @@
-<!--
-  Sidebar — the reader's navigation panel, built on the shadcn-svelte Sidebar
-  (an overlay Sheet: backdrop, Esc, focus trap; collapses fully off-screen so
-  the reading column owns the full width). Mounted inside a <SidebarProvider>
-  in [surah]/+page.svelte; a SidebarTrigger toggles it. Holds:
-    · search (reader.query) + a Ctrl/Cmd+K focus shortcut;
-    · the Surah / Verse / Juz / Page browse controls (toggle buttons);
-    · the list for the active mode — every surah, the current surah's verses
-      (deep-link via ?verse=N), or a "coming with the full dataset" note for
-      Juz / Page (no juz/page mapping in the sample data).
-  Each surah/verse is a real <a> (link semantics + SvelteKit preload); picking
-  one clears the search and closes the overlay.
--->
 <script lang="ts">
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
@@ -35,7 +22,6 @@
   const BROWSE = ["surah", "ayah", "juz", "page"] as const;
   const current = $derived(surahBySlug(page.params.surah as string));
   const sidebar = useSidebar();
-  /** The juz or page range list for the active browse mode. */
   const ranges = $derived(reader.browseJuz ? NAVIGATION.juz : NAVIGATION.page);
 
   let inputEl: HTMLInputElement | null = $state(null);
@@ -50,8 +36,6 @@
       inputEl?.select();
     }
   }
-  // Real links do the navigation (preload + new-tab affordance); we just clear
-  // any search and close the overlay on click.
   function onItemClick() {
     reader.clearQuery();
     sidebar.setOpenMobile(false);
@@ -62,7 +46,6 @@
 
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
-    <!-- search -->
     <div
       class="flex items-center gap-2.5 rounded-[11px] border border-line bg-bg-2 px-[13px] py-[11px] transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
     >
@@ -88,7 +71,6 @@
       {/if}
     </div>
 
-    <!-- Surah / Verse / Juz / Page browse controls (toggle buttons) -->
     <div class="grid grid-cols-4 gap-1 rounded-[10px] bg-bg-2 p-1" role="group" aria-label="Browse">
       {#each BROWSE as b (b)}
         <button
@@ -173,8 +155,6 @@
         </SidebarGroupContent>
       </SidebarGroup>
     {:else}
-      <!-- Juz / Page browse: the navigation ranges from quran-data.xml. Each
-           entry deep-links to its first ayah (?verse=N scrolls it into view). -->
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu class="gap-1">

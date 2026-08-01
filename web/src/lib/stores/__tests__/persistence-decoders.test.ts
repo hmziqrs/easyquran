@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vite-plus/test";
 
-// The decoders under test are pure, but their owning store modules transitively
-// import `$env/dynamic/public` (config/site via prefs; firebase/index via
-// notifications). That SvelteKit virtual module does not initialize under the
-// vitest module runner, so stub it to an empty env — the decoders use none of
-// its values.
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
 import { decodeConsent } from "../consent.svelte";

@@ -1,21 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   derive.ts — turn three "seed" colours into a full token set.
-
-   The theme tweaker lets a user pick just three colours: a background, an
-   accent, and a pop. Everything else in the palette (the panel/inset/hover
-   surface steps, the four foreground steps, the hairline steps, the soft/line
-   accent washes, the accent's own foreground) is DERIVED here, so a custom
-   theme stays internally consistent instead of needing a dozen pickers.
-
-   Derivation is plain sRGB mixing rather than color-mix() in CSS, because the
-   values are also written into a "Copy CSS" block that must paste cleanly into
-   layout.css — and because we need the background's luminance to decide which
-   DIRECTION to step (a dark seed steps toward white, a light seed toward
-   black). The output is a flat record of CSS custom properties, applied as an
-   inline style on <html> where it outranks every [data-theme]/[data-surface]
-   rule in layout.css.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export interface Rgb {
   r: number;
   g: number;
@@ -47,7 +29,6 @@ export function toHex({ r, g, b }: Rgb): string {
   return `#${p(r)}${p(g)}${p(b)}`;
 }
 
-/** Relative luminance (WCAG). Drives the light/dark decisions below. */
 export function luminance({ r, g, b }: Rgb): number {
   const ch = (v: number) => {
     const s = v / 255;
@@ -103,8 +84,6 @@ function accentTokens(seed: Rgb): Record<string, string> {
     "--accent": toHex(seed),
     "--accent-soft": rgba(seed, 0.13),
     "--accent-line": rgba(seed, 0.32),
-    // Text on an accent fill: a deeply darkened tint of the accent itself on a
-    // light accent, white on a dark one — never flat #000, which reads harsh.
     "--accent-fg": onLight ? toHex(mix(seed, BLACK, 0.88)) : "#ffffff",
     "--ring": toHex(seed),
   };
@@ -117,11 +96,6 @@ function popTokens(seed: Rgb): Record<string, string> {
   };
 }
 
-/**
- * Full custom-token record for the seeds that are set. Unparseable or missing
- * seeds contribute nothing, so the preset layer in layout.css shows through
- * for that part of the palette.
- */
 export function deriveTokens(seeds: CustomSeeds): Record<string, string> {
   const out: Record<string, string> = {};
   const bg = seeds.bg ? parseHex(seeds.bg) : null;

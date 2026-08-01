@@ -1,9 +1,3 @@
-<!--
-  Contact — no form, by design. Two ways to reach us: email and X. Echoes the
-  home page's feature-card pattern (icon chip + title + body) and fills the
-  same 1180px container frame. The email + X come from the owner profile
-  fetched server-side in +layout.server.ts (see $lib/server/owner.ts).
--->
 <script lang="ts">
   import { Container, Eyebrow, Icon, Seo } from "$lib/components";
   import { externalLinkAttrs } from "$lib/utils";
@@ -14,7 +8,6 @@
 <Seo path="/contact" schemaSubtype="ContactPage" />
 
 <Container class="flex max-w-[1180px] flex-col gap-12 pt-[72px] pb-24">
-  <!-- intro -->
   <div class="flex w-full flex-col gap-3 text-center">
     <Eyebrow class="text-accent">Contact</Eyebrow>
     <h1 class="text-[40px] leading-[1.1] tracking-[-0.03em] sm:text-[46px]">Say salam.</h1>
@@ -24,9 +17,7 @@
     </p>
   </div>
 
-  <!-- channels -->
   <div class="grid w-full gap-4 md:grid-cols-2">
-    <!-- Email -->
     <a
       href="mailto:{data.owner.email}"
       class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
@@ -50,7 +41,6 @@
       </div>
     </a>
 
-    <!-- X (Twitter) -->
     <a
       href={data.owner.x}
       {...externalLinkAttrs(data.owner.x, { me: true })}
@@ -76,7 +66,6 @@
     </a>
   </div>
 
-  <!-- meta -->
   <div class="flex w-full flex-col gap-[3px] rounded-xl border border-line bg-bg-2 px-[30px] py-5 text-center">
     <span class="text-xs text-fg-3">Typical reply time</span>
     <span class="text-[15px] text-fg">Two or three days</span>

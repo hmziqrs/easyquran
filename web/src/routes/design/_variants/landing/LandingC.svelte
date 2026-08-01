@@ -1,16 +1,3 @@
-<!--
-  Landing C — "Editorial".
-
-  A split hero: the claim on the left, a live mushaf specimen panel on the
-  right — a real, framed slice of the reader rendering real Uthmani text, so
-  the first thing a visitor sees is the product rather than a description of
-  it. Below, numbered editorial sections alternate a heading column against a
-  content column.
-
-  The specimen panel is the whole first impression, which makes this the
-  variant most sensitive to the palette: it should be checked in every surface
-  family before it's chosen.
--->
 <script lang="ts">
   import { Button, Icon } from "$lib/components";
   import { HERO, VALUES, ROADMAP, FACTS, SECTIONS } from "../copy";
@@ -27,7 +14,6 @@
     String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]!);
 </script>
 
-<!-- ── hero ─────────────────────────────────────────────────────────────── -->
 <section class="border-b border-line">
   <div
     class="mx-auto grid w-full max-w-[1240px] items-center gap-12 px-5 py-16 lg:grid-cols-[1fr_minmax(400px,520px)] lg:py-20"
@@ -57,7 +43,6 @@
       </div>
     </div>
 
-    <!-- specimen: a framed slice of the actual reading surface -->
     <div
       class="overflow-hidden rounded-2xl border border-line bg-bg-1 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.55)]"
     >
@@ -87,7 +72,6 @@
   </div>
 </section>
 
-<!-- ── what's here today ────────────────────────────────────────────────── -->
 <section class="border-b border-line">
   <div class="mx-auto grid w-full max-w-[1240px] gap-10 px-5 py-16 lg:grid-cols-[22rem_1fr]">
     <div class="flex flex-col gap-3 lg:sticky lg:top-24 lg:self-start">
@@ -112,7 +96,6 @@
   </div>
 </section>
 
-<!-- ── on the way ───────────────────────────────────────────────────────── -->
 <section class="bg-bg-2">
   <div class="mx-auto grid w-full max-w-[1240px] gap-10 px-5 py-16 lg:grid-cols-[22rem_1fr]">
     <div class="flex flex-col gap-3">

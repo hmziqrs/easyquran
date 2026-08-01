@@ -1,9 +1,3 @@
-<!--
-  RangeReader — renders the ayahs of a juz or page, grouped by surah. Receives
-  the ayahs prerendered in page.data (SSG reads the range from quran-uthmani.sqlite
-  at build), so there is no loading state. Raw text stays in page data; rendering
-  projects ayah bodies and source-exact opener headers through the canonical view.
--->
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -16,15 +10,12 @@
 
   let { data }: { data: RangePageData } = $props();
 
-  // Shared with any future SPA range loader; the component only renders it.
   const groups = $derived(groupRangeAyahs(data.ayahs, data.normalizations));
 
-  /** Open the full surah (leaves the range view). */
   function openSurah(num: number): void {
     void goto(resolve(surahPath(num)));
   }
 
-  // Bounded prev/next pagination within the range's family (juz 1..30, page 1..604).
   const MAX = $derived(data.kind === "juz" ? 30 : 604);
   const kindLabel = $derived(data.kind === "juz" ? "Juz" : "Page");
   function rangePath(
@@ -42,7 +33,6 @@
   {#each groups as g (g.surah)}
     {@const surah = surahByNum(g.surah)}
     <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
-      <!-- surah group header -->
       <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-9">
         <span class="text-sm font-semibold text-fg">{g.surah}. {surah.name}</span>
         <button
@@ -59,7 +49,6 @@
           {g.opener}
         </p>
       {/if}
-      <!-- ayahs -->
       <TooltipProvider delayDuration={300}>
         <div class="flex flex-col">
           {#each g.ayahs as a (a.key)}
@@ -70,7 +59,6 @@
     </div>
   {/each}
 
-  <!-- prev / next within the family (juz 1..30, page 1..604) -->
   {#if prevHref || nextHref}
     <div
       class="flex items-center justify-between gap-4 rounded-2xl border border-line bg-bg-1 px-5 py-[22px] sm:px-9"

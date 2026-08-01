@@ -1,23 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   notifications.svelte.ts — the push-notification experience state.
-
-   A Svelte 5 runes class, SSR-safe. It orchestrates the full FCM lifecycle on
-   top of lib/firebase/messaging (the thin client):
-     • hydrate()   — detect support + permission; if the user previously enabled
-                     notifications, re-establish the token and listeners.
-     • subscribe() — the user-gesture flow: ask permission → get token → keep it
-                     locally → best-effort register with the backend → log event.
-     • unsubscribe()— revoke server-side, invalidate the FCM token, clear state.
-
-   The token is persisted to localStorage (via $lib/storage) so it survives
-   reloads, and so a token obtained before accounts shipped can be registered
-   with the backend on a later login. Foreground messages are mirrored into
-   `lastMessage` for the toast. Persistence here is coupled to token
-   registration/revocation (not a free-standing pref), so writes happen inside
-   #setSubscribed. `createNotifications()` builds an isolated instance for
-   tests; the FCM messaging lifecycle stays an explicit singleton service.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { MessagePayload } from "firebase/messaging";
 import { isConfigured } from "$lib/firebase";
@@ -60,11 +40,6 @@ class NotificationsStore {
   #lastMessage = $state<MessagePayload | null>(null);
   #busy = $state(false);
   #hydrated = false;
-  /**
-   * Monotonic generation. Bumped at the start of every subscribe()/unsubscribe()
-   * so an in-flight #refreshToken can detect that the subscription state changed
-   * under it and bail before writing a stale "subscribed" result.
-   */
   #generation = 0;
   #refreshInFlight: Promise<void> | null = null;
 
@@ -84,7 +59,6 @@ class NotificationsStore {
     return this.#lastMessage;
   }
   get canSubscribe(): boolean {
-    // Need a definitive "yes" on support before offering the control.
     return this.#supported === true && this.#permission !== "denied";
   }
   get statusText(): string {
@@ -106,7 +80,6 @@ class NotificationsStore {
     this.#subscribed = stored.subscribed;
     this.#permission = getPermissionState();
 
-    // If the user revoked permission at the OS/browser level, stop claiming we're subscribed.
     if (this.#permission !== "granted") this.#subscribed = false;
 
     void isMessagingSupported().then((ok) => {
@@ -125,9 +98,6 @@ class NotificationsStore {
       this.#lastMessage = payload;
       void track("notification_received_foreground", { message_id: payload.messageId });
     });
-    // The modular messaging SDK exposes no token-refresh callback. The supported
-    // way to catch a refresh is to re-call getToken() on app focus and compare —
-    // re-register with the backend only when the token actually changed.
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && this.#subscribed) {
         void this.#refreshToken();
@@ -135,18 +105,9 @@ class NotificationsStore {
     });
   }
 
-  /**
-   * Re-acquire the current token and re-register it when it changed. Coalesces
-   * concurrent calls (hydrate + repeated visibilitychange) and is serialized
-   * against subscribe()/unsubscribe() via the generation counter — so a refresh
-   * that was in flight when the user opted out can never flip the store back to
-   * subscribed or re-register a token after teardown.
-   */
   #refreshToken(): Promise<void> {
     if (this.#refreshInFlight) return this.#refreshInFlight;
     const run = (async (): Promise<void> => {
-      // Re-sync the live permission — it can change while the tab is hidden, and
-      // the cached field drives both the subscription flag and statusText.
       this.#permission = getPermissionState();
       const gen = this.#generation;
       const token = await getFcmToken();
@@ -162,7 +123,6 @@ class NotificationsStore {
       const registered = await registerTokenWithServer(token);
       if (gen !== this.#generation) return;
       this.#token = token;
-      // Keep locally regardless; backend may be absent or the session not yet authed.
       this.#setSubscribed(true, token, registered);
       void track("notification_token_refresh");
     })();
@@ -187,10 +147,6 @@ class NotificationsStore {
     }
   }
 
-  /**
-   * The opt-in flow. MUST be called from a user gesture (Safari/iOS web push
-   * requires it). Returns true if the device is now subscribed.
-   */
   async subscribe(): Promise<boolean> {
     if (!browser || this.#busy) return false;
     if (this.#supported === false) return false;
@@ -220,8 +176,6 @@ class NotificationsStore {
     if (!browser || this.#busy) return false;
     this.#busy = true;
     this.#generation += 1;
-    // Let an in-flight refresh finish (its gen check now fails, so it won't write)
-    // before we invalidate the token — avoids interleaving getToken/deleteToken.
     if (this.#refreshInFlight) await this.#refreshInFlight.catch(() => {});
     try {
       if (this.#token) await unregisterTokenFromServer(this.#token);

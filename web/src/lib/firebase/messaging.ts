@@ -1,30 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   firebase/messaging.ts — Firebase Cloud Messaging (web push).
-
-   A thin, browser-only client. Browser APIs + the SDK are loaded LAZILY; every
-   entry point is guarded and swallows errors so a push failure can never break
-   reading. The stateful lifecycle (when to ask permission, when to register the
-   token with the backend, what to show the user) lives in stores/notifications;
-   this module exposes the primitives.
-
-   Background delivery (page closed / backgrounded) is handled by the service
-   worker at src/service-worker.ts, which imports firebase/messaging/sw.
-   Foreground delivery (page focused) is surfaced two ways:
-     • onForegroundMessage(cb)            — programmatic listener (Unsubscribe)
-     • window event "easyquran:fcm"        — { detail: MessagePayload }
-
-   Token refresh: the modular messaging SDK exposes no refresh callback. The
-   recommended pattern is to re-call getToken() (it returns the current, possibly
-   refreshed token) on app focus; the notifications store does this on
-   visibilitychange and compares against the stored token.
-
-   The VAPID key (FCM_VAPID_KEY in ./index) is required; without it getToken
-   cannot run. Backend registration is optional: only when PUBLIC_API_BASE_URL
-   is set does the token get POSTed to the Axum `/device/v1/*` routes (which
-   require an authenticated session — until accounts ship, the token is kept
-   locally and re-registered on a future login).
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
 import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
@@ -41,7 +14,6 @@ export function getPermissionState(): PermissionState {
   return Notification.permission as PermissionState;
 }
 
-/** Async SDK-level support check (touches IndexedDB; also feature-detects first). */
 export async function isMessagingSupported(): Promise<boolean> {
   if (!browser || !isConfigured || !FCM_VAPID_KEY) return false;
   if (
@@ -88,14 +60,6 @@ export function initMessaging(): Promise<Messaging | null> {
   return messagingPromise;
 }
 
-/**
- * Register the root service worker (static/sw.js at /) — the ONE worker that
- * both caches the app shell AND handles Firebase Cloud Messaging background
- * push — and resolve once it's active. Idempotent. Returns null if service
- * workers are unavailable or registration throws. (The worker is also registered
- * eagerly by the root layout on first paint; this re-register is a no-op that
- * just yields the existing registration for getToken.)
- */
 export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!browser || !("serviceWorker" in navigator)) return null;
   try {
@@ -108,7 +72,6 @@ export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration |
   }
 }
 
-/** Prompt for notification permission (call from a user gesture). */
 export async function requestPermission(): Promise<PermissionState> {
   if (!browser || !("Notification" in window)) return "unsupported";
   try {
@@ -162,17 +125,6 @@ export async function onForegroundMessage(
   };
 }
 
-/**
- * POST the token to the backend so the server can target this device. Returns
- * false when there's no API base configured or the request fails; callers keep
- * the token locally and retry on a future login.
- *
- * NOTE(accounts): the Axum `/device/v1/register` route is behind `auth_guard`
- * (logged-in, verified user) AND the global `csrf_guard` (double-submit). Until
- * accounts ship, this returns false (401/403) and the token stays local — by
- * design. When the web API client + auth land, send `credentials: "include"`
- * (already set) plus a `csrf-token` header obtained from `/csrf/v1/generate`.
- */
 export async function registerTokenWithServer(token: string): Promise<boolean> {
   if (!API_BASE_URL) return false;
   try {
@@ -189,10 +141,6 @@ export async function registerTokenWithServer(token: string): Promise<boolean> {
   }
 }
 
-/**
- * DELETE the token from the backend. Same auth/CSRF requirements as register;
- * no-op when no API base is configured (see registerTokenWithServer).
- */
 export async function unregisterTokenFromServer(token: string): Promise<boolean> {
   if (!API_BASE_URL) return false;
   try {

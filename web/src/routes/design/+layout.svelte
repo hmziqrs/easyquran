@@ -1,12 +1,3 @@
-<!--
-  Design gallery chrome — a thin review bar pinned to the top, then the variant
-  itself full-bleed underneath. Deliberately NOT the marketing Nav/Footer: a
-  variant has to be judged as a whole page, so the only persistent chrome is
-  the switcher and the theme tweaker.
-
-  Every page under /design is noindex (belt and braces — the routes are also
-  absent from MARKETING_PAGES, so nothing generates links to them).
--->
 <script lang="ts">
   import { page } from "$app/state";
   import { Tweaks } from "$lib/components/tweaks";
@@ -15,8 +6,6 @@
 
   let { children } = $props();
 
-  // Which gallery page we're on, parsed from the URL rather than passed down,
-  // so a variant page needs no boilerplate to light up the switcher.
   const parts = $derived(page.url.pathname.replace(/^\/design\/?/, "").split("/").filter(Boolean));
   const kind = $derived(parts[0] as VariantKind | undefined);
   const current = $derived(parts[1]);

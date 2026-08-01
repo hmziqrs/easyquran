@@ -1,17 +1,3 @@
-/*
-   worker-client.ts — main-thread proxy for the quran.worker.
-
-   Owns the Worker lifecycle, request/response correlation, and lifecycle-event
-   forwarding. The only place `new Worker(...)` is constructed, so the worker
-   bundle stays out of the server/prerender graph. `start()` is called from a
-   browser-only onMount with a resolved manifest (manifest.ts runs here, on the
-   main thread — never inside the worker).
-
-   Every request settles deterministically: on a response, on a per-request
-   timeout, on a worker load/eval/runtime fatal, or on disposal. No in-flight
-   request can hang forever.
-*/
-
 import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
@@ -19,16 +5,12 @@ import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
 import { decodeQuranSurahText, decodeSearchResponse } from "./wire";
 
-/** Per-request settlement handle. The timer is cleared on every settle path
- *  (response, timeout, fatal, disposal) so no dangling rejection fires later. */
 interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** Requests that never get a worker response must still settle. Generous: the
- *  corpus is local (OPFS), so this only trips on a genuinely stuck worker. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 let worker: Worker | null = null;
@@ -40,9 +22,6 @@ const pending = new Map<number, Pending>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
 const progressListeners = new Set<(p: DownloadProgress) => void>();
 
-/** Reject every in-flight request (worker load/eval failure, a post-init fatal
- *  message, or disposal). Module-scoped so disposal and the fatal handler share
- *  exactly one cleanup path. */
 function failAll(err: Error): void {
   for (const p of pending.values()) {
     clearTimeout(p.timer);
@@ -67,9 +46,6 @@ function handle(msg: WorkerOutbound): void {
     const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
     for (const cb of progressListeners) cb(p);
   } else if (msg.type === "fatal") {
-    // A runtime fatal (e.g. a sqlite-wasm crash) can arrive AFTER init has
-    // succeeded; reject every in-flight request too, not just readiness —
-    // otherwise readSurah/search callers hang forever.
     failAll(new Error(msg.error));
   }
 }
@@ -110,9 +86,6 @@ export const quranWorker = {
         name: "quran-db",
       });
       worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => handle(e.data));
-      // A worker-bundle load/eval failure or an undeserializable message must
-      // settle every pending request (including the init await below) — start()
-      // then rejects via that init request instead of hanging forever.
       worker.addEventListener("error", (e: ErrorEvent) => {
         failAll(
           e.error instanceof Error
@@ -133,10 +106,6 @@ export const quranWorker = {
     return startPromise;
   },
 
-  /** Tear the worker down and reject every in-flight request with a disposal
-   *  error. Resets module state so a later start() can spin up a fresh worker.
-   *  No-op when not started. Has no production caller (the worker is page
-   *  lifetime) but is required for test isolation and any future reader unmount. */
   dispose(): void {
     if (!worker) return;
     failAll(new Error("quran worker disposed"));
@@ -161,8 +130,6 @@ export const quranWorker = {
       (r: unknown) => {
         const limit = opts?.limit ?? DEFAULT_LIMIT;
         const offset = opts?.offset ?? DEFAULT_OFFSET;
-        // The worker boundary is structuredClone'd `unknown`, not a typed RPC:
-        // rebuild via the shared wire decoder and fail closed on contract drift.
         const payload = decodeSearchResponse(r);
         if (!payload) throw new Error("quran worker returned a malformed search response");
         return {

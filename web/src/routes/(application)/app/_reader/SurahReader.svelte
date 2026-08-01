@@ -1,23 +1,3 @@
-<!--
-  SurahReader — the main reading surface for a surah (verse-by-verse OR
-  continuous reading mode). Which surah renders comes from the `surah` PROP
-  (driven by the URL in /app/[surah]/+page.svelte); the reader store is used
-  only for prefs (mode, font size), per-verse state, and the player — never for
-  the current surah. Rendering from the prop is what makes deep links like
-  /app/al-baqarah prerender the right surah with no hydration mismatch.
-
-  Mirrors quran.com/al-baqarah's reading layout in EasyQuran tokens:
-    · an optional "Continue reading" pill (reader.hasLastRead);
-    · a surah Card — a decorative zero-padded number badge, the Surah {n}
-      eyebrow, name + Arabic name + meta, an A−/A+ size control, a
-      Verse-by-Verse / Reading tablist (full WAI-ARIA tabs: roving tabindex +
-      Arrow/Home/End keys), and a "Listen" button;
-    · the centered Basmala (skipped for Al-Fatihah, whose first verse is it);
-    · the verse list (one VerseRow per ayah) in verse mode, or a single
-      justified mushaf block with inline ayah medallions in reading mode — both
-      live inside the tabpanel;
-    · a prev/next footer (adjacentSurahs → goto(surahPath)).
--->
 <script lang="ts">
   import { resolve } from "$app/paths";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
@@ -38,7 +18,6 @@
 
   let { surah }: { surah: Surah } = $props();
 
-  // Bounded prev/next surah (no wrap): surah 1 has no prev, 114 no next.
   const prevNum = $derived(surah.num > 1 ? surah.num - 1 : null);
   const nextNum = $derived(surah.num < SURAHS.length ? surah.num + 1 : null);
   const verses = $derived(displayVerses(surah));
@@ -66,11 +45,9 @@
 
   <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
     <Tabs.Root value={reader.mode} onValueChange={(v) => reader.setMode(v as ReaderMode)}>
-      <!-- header -->
     <div
       class="flex flex-wrap items-start justify-between gap-6 border-b border-line px-5 pb-[26px] pt-[30px] sm:px-9"
     >
-      <!-- left: decorative number badge + title block -->
       <div class="flex items-start gap-4">
         <div
           aria-hidden="true"
@@ -94,9 +71,7 @@
         </div>
       </div>
 
-      <!-- right: action row -->
       <div class="flex flex-wrap items-center justify-end gap-2">
-        <!-- A− / A+ segmented font-size control -->
         <div
           class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
           role="group"
@@ -120,11 +95,6 @@
           </button>
         </div>
 
-        <!-- reading-mode tabs: Ayah-by-Ayah | Reading. The shadcn Tabs primitive
-             (bits-ui) owns roving tabindex, Arrow/Home/End + automatic
-             activation, orientation handling, and — importantly — labels each
-             tabpanel by its ACTIVE trigger (the prior hand-rolled panel was
-             hardwired to mode-verse even while Reading was selected). -->
         <Tabs.List
           aria-label="Reading mode"
           class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
@@ -148,16 +118,10 @@
       </div>
     </div>
 
-    <!-- Basmala (Al-Fatihah's first verse already IS it, so it is not duplicated) -->
     {#if opener}
       <p dir="rtl" class="py-2 text-center font-arabic text-fg-3">{opener}</p>
     {/if}
 
-    <!-- tabpanels: one per mode. bits-ui renders only the active value's panel
-         and labels it by that panel's OWN trigger — fixing the prior bug where
-         the single hand-rolled panel was hardwired to mode-verse even while
-         Reading was selected. Both bodies are keyed by stable vKey; only the
-         {#if reader.isReadingMode} wrapper moved into per-value Content. -->
     <Tabs.Content
       value="verse"
       class="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-line-3"
@@ -182,7 +146,6 @@
     </Tabs.Content>
     </Tabs.Root>
 
-    <!-- prev / next surah (bounded: no wrap at 1 / 114) -->
     <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
       {#if prevNum !== null}
         <a

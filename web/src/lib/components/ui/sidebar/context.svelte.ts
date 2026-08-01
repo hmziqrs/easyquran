@@ -4,18 +4,7 @@ import { SIDEBAR_KEYBOARD_SHORTCUT } from "./constants.js";
 type Getter<T> = () => T;
 
 export type SidebarStateProps = {
-  /**
-   * A getter function that returns the current open state of the sidebar.
-   * We use a getter function here to support `bind:open` on the `Sidebar.Provider`
-   * component.
-   */
   open: Getter<boolean>;
-
-  /**
-   * A function that sets the open state of the sidebar. To support `bind:open`, we need
-   * a source of truth for changing the open state to ensure it will be synced throughout
-   * the sub-components and any `bind:` references.
-   */
   setOpen: (open: boolean) => void;
 };
 
@@ -31,12 +20,6 @@ class SidebarState {
     this.props = props;
   }
 
-  // EasyQuran: the reader sidebar is ALWAYS an overlay drawer — it takes the
-  // Sheet branch in sidebar.svelte on every viewport (and during SSR), so it
-  // floats over the reading column and never pushes it. Hardcoding `true`
-  // (instead of a media query) also keeps server and client in agreement,
-  // avoiding a hydration mismatch. `openMobile` is therefore the operative
-  // open/closed state everywhere.
   get isMobile() {
     return true;
   }

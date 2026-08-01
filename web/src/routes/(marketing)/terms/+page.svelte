@@ -1,9 +1,3 @@
-<!--
-  Terms of Service — mirrors comp lines 500–517. Same skeleton as /privacy
-  minus the short-version callout: narrow 720px column, brand eyebrow, big
-  h1, "last updated" meta, the TERMS_SECTIONS rendered as h2 + body blocks,
-  and a "see also" footer line linking to /privacy.
--->
 <script lang="ts">
   import { Container, Eyebrow, Seo } from "$lib/components";
   import { LEGAL_UPDATED, TERMS_SECTIONS } from "$lib/data/content";

@@ -120,7 +120,6 @@ describe("quranWorker request settlement", () => {
     const fake = await startReady();
     const p = quranWorker.readSurah(1);
     const req = fake.posted.at(-1)!;
-    // Attach the handler before the synchronous emit rejects the promise.
     const assertion = expect(p).rejects.toThrow("no such surah");
     fake.emit("message", { id: req.id, ok: false, error: "no such surah" });
     await assertion;
@@ -184,9 +183,6 @@ describe("quranWorker request settlement", () => {
   it("rejects a request that never gets a response (timeout)", async () => {
     await startReady();
     const p = quranWorker.readSurah(1);
-    // Attach the handler before advancing the fake clock: the timer fires
-    // inside advanceTimersByTimeAsync, so attaching later would briefly leave
-    // the rejection unhandled.
     const assertion = expect(p).rejects.toThrow("timed out");
     await vi.advanceTimersByTimeAsync(30_000);
     await assertion;
@@ -196,7 +192,6 @@ describe("quranWorker request settlement", () => {
     const fake = await startReady();
     const p1 = quranWorker.readSurah(1);
     const p2 = quranWorker.readSurah(2);
-    // Attach handlers before the fatal event rejects both synchronously.
     const a1 = expect(p1).rejects.toThrow("sqlite-wasm exploded");
     const a2 = expect(p2).rejects.toThrow("sqlite-wasm exploded");
     fake.emit("message", { type: "fatal", error: "sqlite-wasm exploded" });

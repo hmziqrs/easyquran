@@ -6,7 +6,6 @@ export interface SearchOpts {
 }
 
 export interface Highlight {
-  /** UTF-16 offsets into the hit's exact display text. */
   start: number;
   end: number;
 }
@@ -34,7 +33,6 @@ export interface OpenerSearchHit {
   kind: typeof SearchHitKind.Opener;
   key: `opener:${number}`;
   surah: number;
-  /** Navigation target only; the match is not attributed to this ayah. */
   anchorAyah: 1;
   text: string;
   highlights: Highlight[];

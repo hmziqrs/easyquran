@@ -1,9 +1,3 @@
-/* Typed, platform-neutral Quran SQL adapter contract.
-
-   Node SSG and sqlite-wasm implement only QuranQueryRunner. Query text, row
-   decoding, validation, and canonical field names live here once. A source
-   with a different schema supplies another QuranDatabaseAdapter. */
-
 export type SqlValue = string | number | null | Uint8Array;
 export type SqlRow = Readonly<Record<string, unknown>>;
 
@@ -113,7 +107,6 @@ export function runOne<Result>(
   return rows[0]!;
 }
 
-/** Tanzil quran_text schema projected into the canonical row model. */
 export const TANZIL_QURAN_DATABASE = defineQuranDatabaseAdapter({
   id: QuranDatabaseAdapterId.TanzilQuranTextV1,
   queries: Object.freeze({

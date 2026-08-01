@@ -1,12 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   search.ts — unified Quran search entry point.
-
-   Precedence: the local sqlite-wasm Worker (offline-capable, full corpus) →
-   the live /quran/v1 API (when up) → a synchronous surah name/number fallback
-   (no verse text) for before the corpus is ready. All three return the same
-   SearchResponse shape; the `source` field says which engine answered.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { QURAN } from "$lib/config/site";
 import { CATALOG } from "$lib/data/quran-meta";
 import { verseKey } from "$lib/data/quran";
@@ -21,7 +12,6 @@ import {
 } from "./search/types";
 import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
-/** Surah name / Arabic / number fallback when no corpus is available. */
 function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
   const q = query.trim();
   const qLower = q.toLowerCase();
@@ -58,13 +48,11 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
   };
 }
 
-/** Search the Quran. Worker-first, then API, then name/number fallback. */
 export async function quranSearch(query: string, opts: SearchOpts = {}): Promise<SearchResponse> {
   if (quranWorker.ready) {
     try {
       return await quranWorker.search(query, opts);
     } catch {
-      /* fall through */
     }
   }
 
@@ -77,10 +65,6 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
       const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.ok) {
         const body = await res.json();
-        // Strip the `{ data }` envelope (if any) and rebuild field-by-field via
-        // the shared wire decoder — never spread the untrusted API shape. Each
-        // hit is re-validated by decodeSearchHit against the canonical tagged
-        // union. A legacy ayah-only API fails closed and falls through.
         const payload = decodeSearchResponse(unwrapEnvelope(body));
         if (payload) {
           return {
@@ -94,7 +78,6 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
         }
       }
     } catch {
-      /* fall through */
     }
   }
 

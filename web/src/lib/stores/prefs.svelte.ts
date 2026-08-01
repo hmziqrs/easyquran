@@ -1,22 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   prefs.svelte.ts — user preferences (theme, surface, accent, custom colours).
-
-   A single Svelte 5 runes class, SSR-safe (guards every DOM/localStorage
-   access behind `browser`). Persists to localStorage, applies the choice to
-   <html>, and broadcasts a custom event:
-     • "easyquran:pref" — any pref changed (settings UI re-syncs)
-
-   Three orthogonal dials drive the palette:
-     • theme   — dark | light            → [data-theme]
-     • surface — background family        → [data-surface]
-     • accent  — brand colour family      → [data-accent]
-   …plus an optional `custom` layer of up to three seed colours (background,
-   accent, pop). Those are expanded into a full token set by lib/theme/derive
-   and written as an INLINE STYLE on <html>, which outranks every selector in
-   layout.css — so a custom accent overrides the accent family while leaving
-   the chosen surface family untouched.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import {
   ACCENTS,
@@ -30,8 +11,6 @@ import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
 
 const STORAGE_KEY = "easyquran.prefs";
 
-/** Every CSS property the custom layer can ever write. Listed so `apply()` can
- *  clear a property that was just unset, instead of leaving it stuck. */
 const CUSTOM_PROPS = [
   "--bg",
   "--bg-1",
@@ -92,8 +71,6 @@ function load(): Prefs {
 }
 
 class PrefsStore {
-  // SSR renders from DEFAULTS; saved prefs hydrate after mount so the theme
-  // icon (and any pref-derived UI) matches the prerendered HTML on first paint.
   #prefs = $state<Prefs>({ ...DEFAULTS, custom: {} });
   #hydrated = false;
 
@@ -141,8 +118,6 @@ class PrefsStore {
     el.dataset.surface = this.#prefs.surface;
     el.dataset.accent = this.#prefs.accent;
 
-    // Custom layer: write what's set, clear what isn't, so unsetting a seed
-    // falls back to the preset rules rather than sticking at its last value.
     const tokens = this.customTokens;
     for (const prop of CUSTOM_PROPS) {
       const value = tokens[prop];
@@ -157,7 +132,6 @@ class PrefsStore {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#prefs));
       } catch {
-        /* storage may be unavailable (private mode, quota) — non-fatal */
       }
       this.apply();
       window.dispatchEvent(new CustomEvent("easyquran:pref", { detail: patch }));
@@ -171,8 +145,6 @@ class PrefsStore {
     this.set({ surface });
   }
   setAccent(accent: AccentId): void {
-    // Picking a preset accent clears a custom accent seed, otherwise the click
-    // would appear to do nothing (the inline style would keep winning).
     const { accent: _dropped, ...rest } = this.#prefs.custom;
     this.set({ accent, custom: rest });
   }

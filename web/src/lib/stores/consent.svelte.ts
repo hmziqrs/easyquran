@@ -1,22 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   consent.svelte.ts — the user's data-consent choices.
-
-   A Svelte 5 runes store, SSR-safe (every DOM/localStorage access is guarded
-   behind `browser`). Persists to localStorage and broadcasts a custom event on
-   change:
-     • "easyquran:consent" — a consent flag changed (the root layout applies it
-       to Firebase: GA4 consent mode + collection toggles).
-
-   This store is deliberately Firebase-agnostic — it holds booleans and emits.
-   The wiring (consent → analytics/performance) lives in the layout, which keeps
-   the store free of import cycles. Persistence mechanics come from
-   $lib/storage; policy: consent persists IMMEDIATELY, then the Firebase consent
-   bridge (in the layout) reacts to the broadcast.
-
-   Defaults reflect the project's stance (analytics/performance enabled, plainly
-   disclosed in the Privacy Policy); users can opt out at any time in Settings.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { ConsentSettings } from "firebase/analytics";
 import { asObject, readJSON, writeJSON } from "$lib/storage";
@@ -26,7 +7,6 @@ const STORAGE_KEY = "easyquran.consent";
 export interface ConsentFlags {
   analytics: boolean;
   performance: boolean;
-  /** Advertising-related storage. We run no ads today; kept for forward-compat. */
   advertising: boolean;
 }
 
@@ -34,10 +14,6 @@ type ConsentPatch = Partial<ConsentFlags>;
 
 const DEFAULT_FLAGS: ConsentFlags = { analytics: true, performance: true, advertising: false };
 
-/** Validate a raw localStorage blob into full flags, preserving the original
- *  default-on/default-off semantics: analytics/performance default ON unless
- *  explicitly `false`; advertising defaults OFF unless explicitly `true`.
- *  Non-boolean values keep the default. */
 export function decodeConsent(raw: unknown): ConsentFlags {
   const stored = asObject(raw);
   if (!stored) return { ...DEFAULT_FLAGS };
@@ -63,7 +39,6 @@ export interface Consent {
 }
 
 export function createConsent(): Consent {
-  // SSR renders from DEFAULT_FLAGS; saved flags hydrate after mount.
   let flags = $state<ConsentFlags>({ ...DEFAULT_FLAGS });
   let hydrated = false;
 
@@ -97,7 +72,6 @@ export function createConsent(): Consent {
         ad_user_data: g(flags.advertising),
         ad_personalization: g(flags.advertising),
         analytics_storage: g(flags.analytics),
-        // Always-on: needed for the site to function / stay secure.
         functionality_storage: "granted",
         security_storage: "granted",
       };

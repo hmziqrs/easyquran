@@ -1,12 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   icons.ts — inline SVG icon registry.
-
-   UI glyphs are from Phosphor (phosphoricons.com, MIT) on the 256 grid;
-   brand marks are from Simple Icons (simpleicons.org, CC0) on 24×24. Each is
-   a single path drawn with fill="currentColor". Inlining (rather than a
-   global <symbol> sprite) keeps icons SSR-friendly and tree-shakeable.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export interface IconDef {
   viewBox: string;
   d: string;
@@ -106,7 +97,6 @@ export const ICONS: Record<IconName, IconDef> = {
     d: "M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM98.71,128,40,181.81V74.19Zm11.84,10.85,12,11.05a8,8,0,0,0,10.82,0l12-11.05,58,53.15H52.57ZM157.29,128,216,74.18V181.82Z",
   },
   "x-brand": {
-    // X (formerly Twitter) mark — Simple Icons, CC0, 24×24 grid.
     viewBox: "0 0 24 24",
     d: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z",
   },

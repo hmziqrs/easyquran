@@ -1,9 +1,3 @@
-/* Offline Quran engine: validated registered SQLite sources in sqlite-wasm.
-
-   The Worker only adapts sqlite-wasm to QuranQueryRunner and owns artifact
-   lifecycle. Query definitions, row decoding, source validation, canonical
-   views, and search-corpus construction are shared with SSG/tooling. */
-
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { type ArtifactSpec, type QuranSourceId, type QuranSurahText } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
@@ -38,7 +32,6 @@ interface WorkerSourceState {
   readonly bytes: Uint8Array;
   readonly source: LoadedQuranSource;
   readonly store: string;
-  /** Present for roles that need repeated reads; other sources reopen lazily. */
   readonly runner: QuranQueryRunner | null;
 }
 

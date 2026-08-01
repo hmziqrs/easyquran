@@ -1,11 +1,3 @@
-/*
-   protocol.ts — the quran.worker RPC message types (type-only).
-
-   Shared by the worker (quran.worker.ts) and its client (worker-client.ts) so
-   both sides agree on the wire shape. Imported as types only, so it pulls no
-   runtime code (and no $env/SvelteKit code) into the worker bundle.
-*/
-
 import type { DownloadProgress } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { SearchOpts } from "./search/types";

@@ -1,9 +1,3 @@
-<!--
-  Privacy Policy — mirrors comp lines 479–498. Narrow 720px column, brand
-  eyebrow, big h1, a "last updated" meta line, a short-version callout (the
-  one piece /terms lacks), the PRIVACY_SECTIONS rendered as h2 + body blocks,
-  and a "questions?" footer line linking to /contact.
--->
 <script lang="ts">
   import { Container, Eyebrow, Panel, Seo } from "$lib/components";
   import { LEGAL_UPDATED, PRIVACY_SECTIONS } from "$lib/data/content";

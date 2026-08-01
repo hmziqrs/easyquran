@@ -1,5 +1,3 @@
-// SSG load for /app/page/[n]. Prerenders all 604 Hafs/Madani pages, reading each
-// page's ayah range from quran-uthmani.sqlite at build (no backend, offline-first).
 import { error } from "@sveltejs/kit";
 import { loadRangeData } from "$lib/server/quran-range";
 import type { PageServerLoad } from "./$types";

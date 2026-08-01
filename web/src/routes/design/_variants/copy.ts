@@ -1,12 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   copy.ts — the shared words for every landing variant.
-
-   All three variants say exactly the same things, so what's being compared is
-   form, not wording. The claims are the ones the shipping home page already
-   makes: only what's actually wired today, with everything unbuilt explicitly
-   framed as future work.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import type { IconName } from "$lib/components";
 
 export const HERO = {
@@ -21,7 +12,6 @@ export interface ValueItem {
   icon: IconName;
   title: string;
   body: string;
-  /** the same claim compressed to a label, for the denser variants */
   short: string;
 }
 
@@ -73,8 +63,6 @@ export const ROADMAP: RoadmapItem[] = [
   },
 ];
 
-/** Verifiable numbers only — each is a fact about the shipped text, not a
- *  growth metric we'd have to keep honest by hand. */
 export const FACTS: { value: string; label: string }[] = [
   { value: "114", label: "surahs" },
   { value: "6,236", label: "ayahs" },

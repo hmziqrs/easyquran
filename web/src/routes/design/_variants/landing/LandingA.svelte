@@ -1,29 +1,13 @@
-<!--
-  Landing A — "Mihrab".
-
-  Reverent and centred. The hero is an arch (a mihrab niche, drawn purely with
-  border-radius so it costs nothing and re-colours with the palette) holding the
-  real opening ayahs; the headline sits under it rather than over it. Everything
-  below is centred, generously spaced, and stripped of cards — the page behaves
-  like a doorway into the text instead of a product page about it.
-
-  Palette-wise this variant leans on the accent for the glow and the arch
-  hairline only; the surface family does all the heavy lifting, so it changes
-  character noticeably between Ink, Paper and Mocha.
--->
 <script lang="ts">
   import { Button } from "$lib/components";
   import { HERO, VALUES, ROADMAP, SECTIONS, FACTS } from "../copy";
 
   let { verses, arabicName }: { verses: string[]; arabicName: string } = $props();
 
-  // Just the opening lines — the arch is a specimen, not a reading surface.
   const specimen = $derived(verses.slice(0, 4));
 </script>
 
 <div class="relative overflow-hidden">
-  <!-- accent glow behind the arch; sits under everything and never intercepts
-       pointer events -->
   <div
     aria-hidden="true"
     class="pointer-events-none absolute left-1/2 top-[-180px] h-[560px] w-[860px] -translate-x-1/2 rounded-full opacity-70 blur-[120px]"
@@ -32,7 +16,6 @@
 
   <section class="relative px-5 pb-16 pt-14">
     <div class="mx-auto flex w-full max-w-[860px] flex-col items-center gap-9 text-center">
-      <!-- the niche -->
       <div
         class="relative w-full max-w-[520px] rounded-t-full border border-accent-line bg-bg-1/60 px-8 pb-9 pt-16 backdrop-blur-sm"
       >
@@ -68,7 +51,6 @@
     </div>
   </section>
 
-  <!-- facts as a quiet rule, not a stat-card row -->
   <section class="border-y border-line">
     <div class="mx-auto grid w-full max-w-[860px] grid-cols-2 sm:grid-cols-4">
       {#each FACTS as f (f.label)}
@@ -82,7 +64,6 @@
     </div>
   </section>
 
-  <!-- what's here today: centred rows separated by hairlines, no cards -->
   <section class="px-5 py-20">
     <div class="mx-auto flex w-full max-w-[720px] flex-col items-center gap-10 text-center">
       <div class="flex flex-col items-center gap-3">
@@ -102,7 +83,6 @@
     </div>
   </section>
 
-  <!-- on the way -->
   <section class="border-t border-line bg-bg-2 px-5 py-20">
     <div class="mx-auto flex w-full max-w-[720px] flex-col items-center gap-9 text-center">
       <div class="flex flex-col items-center gap-3">

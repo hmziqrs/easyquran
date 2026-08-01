@@ -1,17 +1,3 @@
-<!--
-  VerseRow — one ayah row in VERSE-BY-VERSE mode, quran.com-style, Arabic-only.
-  The Uthmani text fills the line at reader.arabicSizePx (the one documented
-  dynamic font-size exception), with the ayah number INLINE at the verse end as
-  a small accent medallion (the `ayah-marker` utility) holding the Arabic-Indic
-  digit. A top row holds the verse reference (left) and the icon actions
-  (right): play / bookmark / copy / share / note. It is always visible on touch
-  and revealed on hover/focus on desktop; sitting ABOVE the Arabic (not floating
-  over it) means it can never overlap the RTL text. Each action is wrapped in
-  the Tooltip snippet pattern and colours up to accent/pop when active.
-  Expanding the note reveals the sample tafsir plus a per-verse Textarea bound
-  through reader.getNote/setNote. The root id ("ayah-{n}") is the anchor the
-  page's ?verse=N deep-link scrolls into view.
--->
 <script lang="ts">
   import { reader } from "$lib/stores/reader.svelte";
   import { tafsirFor, toArabicDigits } from "$lib/data/quran";
@@ -27,8 +13,6 @@
   const noteOpen = $derived(reader.openNote === vKey);
   const hasNote = $derived(reader.getNote(vKey).length > 0);
 
-  // Transient "Copied" feedback for copy / share-fallback-to-copy. Local so it
-  // never touches the persisted store; cleared on a short timer.
   let copied = $state(false);
   let sharedCopied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,7 +30,7 @@
 
   async function onShare() {
     const r = await reader.shareVerse(vKey);
-    if (r !== "copied") return; // "shared" (native sheet) or "failed" — no banner
+    if (r !== "copied") return;
     if (!mounted) return;
     sharedCopied = true;
     if (shareTimer) clearTimeout(shareTimer);
@@ -57,7 +41,6 @@
     reader.setNote(vKey, (e.currentTarget as HTMLTextAreaElement).value);
   }
 
-  // Drop pending feedback timers if the row unmounts mid-countdown.
   $effect(() => {
     return () => {
       mounted = false;
@@ -71,8 +54,6 @@
   id="ayah-{n}"
   class="group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors content-visibility-auto [contain-intrinsic-size:auto_120px] sm:px-9"
 >
-  <!-- Top row: verse ref (left) + actions (right). Sits ABOVE the Arabic so it
-       can never overlap RTL text. Always visible on touch; hover/focus on desktop. -->
   <div
     class="mb-2.5 flex items-center justify-between gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
   >
@@ -131,7 +112,6 @@
     </div>
   </div>
 
-  <!-- Arabic line: text followed inline by the verse-end medallion (RTL flow). -->
   <p
     dir="rtl"
     class="font-arabic leading-[2.15] text-fg"

@@ -1,10 +1,3 @@
-/* Ambient declaration for the `quran-meta:data` virtual module emitted by
-   vite-plugin-quran.ts at build/dev time. This file is a global script (no
-   top-level import/export) so `declare module` declares — rather than
-   augments — the virtual module, letting svelte-check type-check imports of
-   CATALOG / NAVIGATION / SAJDAS without a physical source file. The shapes
-   mirror quran-types.ts (kept in sync; the runtime values come from the plugin). */
-
 declare module "quran-meta:data" {
   export interface CatalogEntry {
     num: number;

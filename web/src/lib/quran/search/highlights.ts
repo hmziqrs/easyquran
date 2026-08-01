@@ -7,11 +7,6 @@ export interface HighlightSegment {
   readonly highlighted: boolean;
 }
 
-/**
- * Partition text using UTF-16 offsets from the search contract. Ranges are
- * normalized defensively so API data can never produce overlapping markup or
- * slice outside the exact string being rendered.
- */
 export function highlightSegments(
   text: string,
   highlights: readonly Highlight[],

@@ -1,8 +1,3 @@
-<!--
-  About — what EasyQuran is today and where it's heading. A single narrow
-  column of reading copy, three stat tiles, and a contact CTA. Comp lines
-  361–393.
--->
 <script lang="ts">
   import { Button, Container, Eyebrow, Seo } from "$lib/components";
   import { ABOUT_STATS } from "$lib/data/content";
@@ -12,10 +7,6 @@
 
 <Seo path="/about" schemaSubtype="AboutPage" />
 
-<!--
-  Fills the same 1180px frame as the home page: heading, reading copy, stat
-  tiles and CTA bar all span the full container width.
--->
 <Container class="flex max-w-[1180px] flex-col gap-[40px] pt-[72px] pb-24">
   <div class="flex w-full flex-col gap-[30px]">
     <div class="flex flex-col gap-3.5">

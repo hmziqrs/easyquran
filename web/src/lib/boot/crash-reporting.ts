@@ -1,22 +1,8 @@
-/* ════════════════════════════════════════════════════════════════════════
-   boot/crash-reporting.ts — forward uncaught errors to GA4 as exceptions.
-
-   Crashlytics has no web SDK, so GA4's reserved `exception` event is the
-   Firebase-native equivalent. Consent-gated: logException -> track() drops the
-   event while collection is off. The analytics module is dynamic-imported per
-   report so it stays out of the critical bundle (errors are rare; the module
-   caches after first load).
-
-   The returned teardown detaches both window listeners.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export function startCrashReporting(): () => void {
   const reportException = (description: string): void =>
     void import("$lib/firebase/analytics")
       .then(({ logException }) => logException(description, true))
-      .catch(() => {
-        /* crash reporting is best-effort */
-      });
+      .catch(() => {});
 
   const onError = (event: ErrorEvent): void =>
     reportException(

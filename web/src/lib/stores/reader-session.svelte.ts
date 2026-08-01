@@ -1,17 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   reader-session.svelte.ts — transient reading-session state.
-
-   Cohesive responsibility: the sidebar search query, the browse list mode
-   (Surah/Ayah/Juz/Page), which verse's note panel is open, and navigation
-   (setCurrent/openVerse) which bumps the nav token and persists immediately
-   (navigation is a discrete action, not a keystroke stream).
-
-   `openNote`/`toggleNote` live here because they are UI state (which panel is
-   open); note *data* and its debounced persistence live in annotations. Closing
-   a note panel flushes any pending debounced save so the user's last edit lands
-   before they navigate away.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { browser } from "$app/environment";
 import type { VerseKey } from "$lib/data/quran";
 import type { BrowseMode, ReaderCore } from "./reader-core.svelte";
@@ -57,12 +43,9 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
     toggleNote(key: VerseKey): void {
       const next = core.s.openNote === key ? null : key;
       core.s.openNote = next;
-      // Closing the panel saves any in-flight edit immediately.
       if (next === null) persistence.flushNoteWrite();
     },
 
-    /** Change the current surah (URL-driven). Resets query + open note and
-     *  invalidates any in-flight Worker refresh for the prior surah. */
     setCurrent(num: number): void {
       core.s.current = num;
       core.nav.bump();
@@ -70,7 +53,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.openNote = null;
       persistence.writeNow();
     },
-    /** Jump to a specific verse (search result / bookmark / continue-reading). */
     openVerse(num: number, n: number): void {
       core.s.current = num;
       core.nav.bump();

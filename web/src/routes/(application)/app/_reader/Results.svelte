@@ -1,11 +1,3 @@
-<!--
-  Results — the search-results list shown in place of the reader when
-  reader.hasQuery. Backed by quranSearch: the offline Worker corpus when ready
-  (real verse text), the live API when up, or a surah name/number fallback while
-  the corpus loads. Each card shows the verse ref + Uthmani text (or just the
-  ref for name matches), applies the response's UTF-16 highlight ranges, and
-  opens the canonical navigation anchor when clicked.
--->
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -27,10 +19,8 @@
   let result = $state.raw<SearchResponse | null>(null);
   let loading = $state(false);
 
-  // Re-run search whenever the query changes (debounced so fast typing doesn't
-  // spam the Worker).
   $effect(() => {
-    const q = reader.query; // tracked dependency
+    const q = reader.query;
     let cancelled = false;
     loading = true;
     const timer: ReturnType<typeof setTimeout> = setTimeout(() => {

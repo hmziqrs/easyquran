@@ -1,22 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   vite-plugin-quran.ts — build-time Quran metadata generator.
-
-   Produces the `quran-meta:data` virtual module by merging:
-     • web/src/lib/data/surah-names.json  — the web-owned {num, slug, name} (114)
-     • db/quran/tanzil/quran-data.xml     — Arabic name, place, ayah/revelation
-                                            counts, rukus, and all navigation
-                                            start markers (juz/page/ruku/
-                                            hizb-quarter/manzil) + sajdas
-
-   Output is pure data (no 77 KB XML or parser shipped to the client) and is
-   shared by the SSG server load and the client bundle. Verse TEXT is never
-   produced here — it is read from quran-uthmani.sqlite at SSG time and from the
-   cached sqlite-wasm DB in the browser Worker.
-
-   The virtual module is re-exported and typed via src/lib/data/quran-meta.ts
-   and quran-meta.d.ts.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +19,6 @@ const XML_PATH = path.join(WEB_ROOT, "../db/quran/tanzil/quran-data.xml");
 export const QURAN_META_VIRTUAL = "quran-meta:data";
 const RESOLVED = "\0" + QURAN_META_VIRTUAL;
 
-/** Expected golden counts (docs/quran-api.md §4 / quran-web-delivery §4). */
 const EXPECT = {
   suras: 114,
   juzs: 30,
@@ -110,8 +90,6 @@ function compile(): Compiled {
     `coordinate projection ${projectedCoordinates.rowCount} != ${totalAyahs}`,
   );
 
-  // This plain JSON projection is imported by both the SSG path and the
-  // browser Worker, which cannot consume this Vite-only virtual module.
   const coordinates = JSON.parse(
     readFileSync(COORDINATES_PATH, "utf8"),
   ) as typeof projectedCoordinates;

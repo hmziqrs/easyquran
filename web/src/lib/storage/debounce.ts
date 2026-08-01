@@ -1,13 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   debounce.ts — a minimal trailing-edge debounce with explicit flush/cancel.
-
-   Used by the reader's annotations facet so a note that changes on every
-   keystroke doesn't hit (synchronous) localStorage on every keystroke. The
-   domain owns scheduling (delay, when to flush on close / page-hide); this
-   helper owns only the timer mechanic. No framework dependency, so it is
-   unit-testable with fake timers in isolation.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export interface Debounced {
   schedule(): void;
   flush(): void;

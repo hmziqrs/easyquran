@@ -1,28 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   reader.svelte.ts — the reading experience state (composition root).
-
-   The reader was a single 387-line class combining transient UI state, durable
-   settings, annotations, verse caching, navigation, persistence, and browser
-   sharing. It is now composed from cohesive facets, each in its own module:
-     • reader-core          — shared reactive state + SvelteMap + nav token
-     • reader-persistence   — durable persistence + debounced note writes
-     • reader-session       — query / browse / open-note / navigation
-     • reader-settings      — Arabic font size + reading mode
-     • annotations          — bookmarks / notes / last-read
-     • verse-cache          — SvelteMap + Worker refresh coordination
-     • reader-share         — copy / share side effects + share-text
-
-   The public contract is the flat `ReaderApi` surface below — it is preserved
-   EXACTLY (member names + behavior) so every consumer (SurahReader, VerseRow,
-   Sidebar, Results, the (application)/app pages) keeps working. The singleton
-   import path is stable: `import { reader } from "$lib/stores/reader.svelte"`.
-
-   Removed (verified zero consumers): the `current`/`surah`/`surahCount`/
-   `fontSize`/`bookmarkList`/`bookmarkCount` getters and the dead bookmark
-   ternary. The persisted `current` FIELD is retained (used internally by
-   load/persist/setCurrent/openVerse). See docs/svelte-improvements.md §4.B/§5.
-   ════════════════════════════════════════════════════════════════════════ */
-
 import type { VerseKey } from "$lib/data/quran";
 import { createAnnotations } from "./annotations.svelte";
 import { type BrowseMode, type ReaderMode, createReaderCore } from "./reader-core.svelte";
@@ -72,11 +47,6 @@ export interface ReaderApi {
   shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed">;
 }
 
-/**
- * Construct a fully-wired, isolated reader instance. The singleton `reader`
- * below is one such instance; tests (and any future subtree-scoped reader)
- * can create their own.
- */
 export function createReader(): ReaderApi {
   const core = createReaderCore();
   const persistence = createReaderPersistence(core);
@@ -163,6 +133,4 @@ export function createReader(): ReaderApi {
   };
 }
 
-/** The application-wide reader singleton. Process-wide in the browser; on the
- *  server it renders from defaults and hydrates after mount. */
 export const reader: ReaderApi = createReader();

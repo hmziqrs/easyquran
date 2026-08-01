@@ -1,8 +1,3 @@
-<!--
-  /design/reader/[a|b|c] — one reader variant full-page, over the real Uthmani
-  text of Surah Al-Mulk, with the variant's pitch and tradeoff restated in a
-  footer so the note sits beside the thing it describes.
--->
 <script lang="ts">
   import { variantDef } from "../../_variants/registry";
   import ReaderA from "../../_variants/reader/ReaderA.svelte";

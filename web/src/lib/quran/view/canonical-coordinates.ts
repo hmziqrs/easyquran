@@ -12,11 +12,6 @@ export interface CanonicalQuranCoordinates {
   readonly surahs: readonly CanonicalSurahCoordinates[];
 }
 
-/**
- * Compact, Worker-safe coordinate model generated from quran-data.xml. Both
- * SSG and the browser Worker import this exact artifact, while the metadata
- * plugin fails the build if the generated projection drifts from the XML.
- */
 export const CANONICAL_QURAN_COORDINATES: CanonicalQuranCoordinates = Object.freeze({
   rowCount: coordinateData.rowCount,
   surahs: Object.freeze(

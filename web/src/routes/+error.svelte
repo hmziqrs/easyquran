@@ -9,7 +9,6 @@
 
 <svelte:head>
   <title>{title} · {SITE.name}</title>
-  <!-- never index an error page, even if the host serves it as 200 -->
   <meta name="robots" content="noindex" />
   <meta name="description" content={`This page does not exist on ${SITE.domain}.`} />
 </svelte:head>

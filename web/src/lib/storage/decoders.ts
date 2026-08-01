@@ -1,15 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   decoders.ts — tiny type-narrowing helpers for decoding `unknown` localStorage
-   blobs into validated domain data.
-
-   Each domain store owns its own `decode()` (it knows its schema and defaults),
-   but the mechanical `typeof`/range/literal/record narrowing is identical
-   across reader/prefs/consent/notifications. Centralizing these removes the
-   repeated boilerplate without forcing a shared schema library. Every helper
-   returns `undefined` (or an empty record) for anything that does not match so
-   callers can "keep the default" by simply skipping an `undefined` field.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export function asObject(raw: unknown): Record<string, unknown> | undefined {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     return raw as Record<string, unknown>;

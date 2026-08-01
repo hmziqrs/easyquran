@@ -1,30 +1,3 @@
-/*
-   wire.ts — shared handwritten decoders for untrusted Quran payloads.
-
-   Every value that crosses a trust boundary — the /quran/v1 HTTP API
-   (search.ts, manifest.ts) and the structuredClone'd worker postMessage
-   (worker-client.ts) — arrives as `unknown`. Decoding it was previously
-   inlined three times with subtly different strictness. This module defines
-   each wire shape exactly once; the consumers reuse these decoders so the
-   boundary checks cannot drift apart again.
-
-   Design rules:
-     • Handwritten, zero runtime dependencies (no Valibot/Zod). The shapes are
-       small and flat; a maintained handwritten decoder is preferred here.
-     • Pure functions: `unknown → T | null`. null means "not this shape";
-       callers own the fallback policy (DEFAULT_LIMIT, baked manifest, etc.).
-     • Always REBUILD field-by-field. We never spread or alias the wire object,
-       so a hostile/malformed payload cannot leak unexpected keys or identity
-       into the app's domain types.
-     • surah/ayah are checked with `typeof === "number"` + finite + >= 1.
-       Number() would coerce "", [], or true into a finite 0/1 and emit bogus
-       surah=0 hits, so the strict guard is mandatory.
-
-   This module is main-thread only. It imports worker-safe search domain types
-   and `quran-types` (type-only), so it pulls no $env /
-   SvelteKit code and could be reused on either side of the worker boundary.
-*/
-
 import {
   isOpenerKind,
   isOpenerPackaging,
@@ -44,11 +17,6 @@ function asRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
 }
 
-/** Strip a `{ data: ... }` envelope, returning the inner payload when `data`
- *  is present and non-nullish, otherwise the body itself. Both /search and
- *  /version + /scripts may be enveloped or bare depending on the backend build;
- *  this normalizes the two. Uses `??` (not `||`) so a falsy-but-present `data`
- *  (e.g. `0`, `""`, `false`) is preserved exactly as the prior inline code did. */
 export function unwrapEnvelope(raw: unknown): unknown {
   const rec = asRecord(raw);
   if (!rec) return raw;
@@ -200,12 +168,6 @@ export interface DecodedSearchPayload {
   results: SearchHit[];
 }
 
-/** Decode the common SearchResponse wire shape shared by the /search API
- *  response and the worker's `search` RPC reply. Callers strip the envelope
- *  first (the API wraps in `{ data }`; the worker does not) via
- *  {@link unwrapEnvelope}. Returns null when any part of the response violates
- *  the tagged contract. This fail-closed behavior prevents an old ayah-only API
- *  from masquerading as a valid canonical response with an empty result list. */
 export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null {
   const rec = asRecord(raw);
   if (!rec) return null;

@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 
-// Persistence flush integration runs against a real localStorage, so force the
-// browser flag on. decodeReader tests are pure and don't touch storage.
 const flag = vi.hoisted(() => ({ value: true }));
 vi.mock("$app/environment", () => ({
   get browser() {

@@ -1,14 +1,3 @@
-<!--
-  Button — shadcn-svelte-style primitive (tailwind-variants + cn), styled to
-  match the EasyQuran button system: primary / accent / ghost / quiet, plus the
-  ink variants used on accent CTA panels. Renders <a> when `href` is set,
-  otherwise <button>. Set `arrow` to append the self-translating "→".
-
-  API is a superset of the stock shadcn-svelte Button so registry components
-  (e.g. SidebarTrigger) that use `bind:ref` / spread rest props type-check
-  against it: bindable `ref`, optional `children`, intersection (not union)
-  element-attribute type.
--->
 <script lang="ts">
   import { cn, externalLinkAttrs, type WithElementRef } from "$lib/utils";
   import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
@@ -20,7 +9,6 @@
     size?: ButtonSize;
     href?: string;
     class?: string;
-    /** append a "→" that nudges right on hover */
     arrow?: boolean;
     children?: Snippet;
   };
