@@ -11,6 +11,34 @@
 
 ---
 
+## 0. Recommendation
+
+**Do not modify any database.** The Tanzil corpus is correct as it stands — its
+ayah numbering is right (§1.1), its 95/97 orthography is right (§6), and its
+conversion to SQLite is byte-clean. There is no data-repair task here.
+
+The problem is that the basmala is packaged *inside* ayah 1's text for 112
+surahs, and every consumer has to cope with that on its own. The recommendation
+is to stop coping ad hoc and add one read-time view:
+
+1. **Adopt `raw` / `body` / `opener` as the only way layers read the corpus**
+   (§4). `raw` stays byte-identical and digest-guarded; `body` and `opener` are
+   derived.
+2. **Implement it as `bodyOffset` — 114 integers, one slice per surah** (§4.1),
+   computed by a skeleton walk (§4.2). Never a string rewrite, never a hardcoded
+   character count, never a newline split (§5.2).
+3. **Describe each source with a profile instead of assuming Tanzil** (§5), so a
+   second corpus is a registry entry rather than a boot failure.
+4. **Point display and search at `body` + `opener`** (§7, §8), which removes the
+   duplicated basmala header and fixes the misattribution of 112 search hits.
+5. **Share one fixture set between the Rust and TypeScript implementations**
+   (§8) — divergence between them is the most likely way this breaks.
+
+Everything below is the justification and the measured evidence for those five
+points.
+
+---
+
 ## 1. The problem
 
 Every Arabic Quran corpus agrees on the 6,236 ayahs. They disagree on where the
@@ -35,6 +63,49 @@ That packaging difference leaks into every layer that touches the corpus:
 Adding a second source today does not produce subtly wrong output. It produces
 a **hard boot failure**: `rust/backend/api/src/quran/loader.rs:346` asserts the
 basmala split is exactly `1 / 112 / 1` and returns `Invariant` otherwise.
+
+### 1.1 What is *not* wrong: the ayah numbering
+
+Reading the raw rows invites a specific and very natural misdiagnosis — that the
+basmala occupies ayah 1 and has pushed the real first ayah down to ayah 2. It
+has not. The numbering in this database is correct, and no data needs repair.
+
+Verified against `quran-uthmani.sqlite` at the boundary between surahs 1 and 2:
+
+```text
+index  sura  aya  text
+   7     1    7   صِرَٰطَ ٱلَّذِينَ أَنْعَمْتَ … وَلَا ٱلضَّآلِّينَ
+   8     2    1   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ الٓمٓ
+   9     2    2   ذَٰلِكَ ٱلْكِتَـٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ
+```
+
+Row `index=8` is a **single row holding both** the unnumbered basmala and
+`الٓمٓ`, space-separated — one string, 45 characters, 5 words:
+
+```text
+raw(2,1)[0:40]   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+raw(2,1)[40:]    الٓمٓ
+```
+
+So `الٓمٓ` **is** ayah 1. Ayah 2 is `ذَٰلِكَ ٱلْكِتَـٰبُ…`, as it should be. Confirmed
+across the whole corpus: **the only row whose entire text is the basmala is
+`index=1`** — genuinely 1:1, Al-Fatiha's numbered first verse.
+
+The layout that *would* be broken, and which this database does not have:
+
+```text
+   8     2    1   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ     ← does not exist
+   9     2    2   الٓمٓ
+```
+
+That shifted form is exactly what Tanzil avoided by putting the basmala on the
+first ayah's line — it keeps 6,236 rows without inventing `ayah 0` rows or
+renumbering (§2.2), and it is what the quran.com model warns against (§5.1).
+
+The distinction that resolves the confusion: **the basmala is inside ayah 1's
+`text`, but it is not inside ayah 1's `aya` number.** Row identity is correct;
+only text packaging is not. That is why the fix is a read-time view (§4) and
+never an edit to the data.
 
 ## 2. Fixed decisions
 
@@ -400,17 +471,19 @@ than a claim, and they hold for any source, not just Tanzil.
 
 ## 10. Open items
 
-- **The quran.com source is not in the repo, and the reports of it conflict.**
-  §5.1 describes the Quran Foundation *API* model — 6,236 numbered ayahs, opener
-  as a chapter flag, no basmala in `2:1`. But the database actually downloaded
-  for this project was reported as having the basmala *embedded in ayah 1, and
-  in some places as ayah 1 itself* — which is not that model. Most likely it is a
-  QUL/mushaf-layout export rather than the canonical API corpus, and the two are
-  not interchangeable. Resolve by profiling the actual file before writing its
-  registry entry: row count, ayah-number base, where the basmala sits per surah,
-  whether `verse_index` matches ours (§5.1), and whether its Uthmani text
-  preserves the 95/97 shadda. Until then it has no profile and will not load —
-  which is the intended behaviour under fixed decision 6.
+- **The quran.com source is not in the repo and has not been profiled.** §5.1
+  describes the Quran Foundation *API* model — 6,236 numbered ayahs, opener as a
+  chapter flag, no basmala in `2:1` — which is inferred from the public API and
+  schema, not measured from a corpus. A downloaded export may not match it; QUL
+  and mushaf-layout exports are packaged differently from the API model. Profile
+  the actual file before writing its registry entry: row count, ayah-number base,
+  where the basmala sits per surah, whether `verse_index` matches ours (§5.1),
+  and whether its Uthmani text preserves the 95/97 shadda. Until then it has no
+  profile and will not load — the intended behaviour under fixed decision 6.
+
+  Note that an earlier concern that this project's Tanzil database itself carried
+  the basmala "as ayah 1 in some places" was checked and did not hold; see §1.1.
+  Do not carry that assumption into the quran.com profiling — measure it.
 - Whether the second source becomes a published artifact or stays a
   build/verification input. This decides whether `/quran/v1/scripts`,
   `contentVersion`, and OPFS storage grow a third file.
