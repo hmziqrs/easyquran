@@ -19,7 +19,6 @@ import type { ReaderPersistence } from "./reader-persistence.svelte";
 
 export function createAnnotations(core: ReaderCore, persistence: ReaderPersistence) {
   return {
-    // ── bookmarks ────────────────────────────────────────────────────
     isBookmarked(key: VerseKey): boolean {
       return !!core.s.bookmarks[key];
     },
@@ -29,7 +28,6 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       persistence.writeNow();
     },
 
-    // ── notes (content + debounced persistence) ──────────────────────
     getNote(key: VerseKey): string {
       return core.s.notes[key] ?? "";
     },
@@ -38,7 +36,6 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       persistence.scheduleNoteWrite();
     },
 
-    // ── last read ────────────────────────────────────────────────────
     get lastRead(): { num: number; n: number } | null {
       return core.s.lastRead;
     },

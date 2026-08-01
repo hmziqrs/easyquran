@@ -1,5 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
-   render.ts — HTML → markdown / plain-text conversion for the text variants.
+/* render.ts — HTML → markdown / plain-text conversion for the text variants.
 
    The .md, .txt, and llms-full.txt endpoints each fetch the page's OWN
    prerendered HTML and run it through htmlToMarkdown. The rendered page is
@@ -10,7 +9,7 @@
 
    llms.txt is a small static index built from PAGE_META (it is metadata,
    not page body, so no fetch is needed).
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import TurndownService from "turndown";
 import { MARKETING_PAGES, PAGE_META, SITE } from "$lib/config/site";
@@ -48,33 +47,25 @@ turndown.addRule("cleanHeading", {
   },
 });
 
-/** Convert a full HTML document to clean markdown, using only its <main>. */
 export function htmlToMarkdown(html: string): string {
   const main = html.match(/<main[^>]*>[\s\S]*?<\/main>/i);
   const body = main ? main[0] : html;
   const md = turndown
     .turndown(body)
-    // strip UI chrome that has no markdown value
     .replace(/^›\s+.*$/gm, "") // section eyebrows duplicate the headings
-    .replace(/ *copy$/gm, "") // copy-button label
-    .replace(/ *copied ✓$/gm, "") // copied state
+    .replace(/ *copy$/gm, "")
+    .replace(/ *copied ✓$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
     .trim();
   return md + "\n";
 }
 
-/** Absolute URL of the .md variant for a page href (home -> /index.md). */
 function mdVariantUrl(href: string): string {
   const path = href === "/" ? "/index.md" : `${href}.md`;
   return `${SITE.url}${path}`;
 }
 
-/**
- * The llms.txt index: site title, a one-line description, the site URL, a
- * bullet list of the pages each linking to its .md variant, and a final
- * pointer to /llms-full.txt. Built from metadata only (no page fetch).
- */
 export function renderLlmsIndex(): string {
   const pageLines = MARKETING_PAGES.map(
     (p) => `- [${p.label}](${mdVariantUrl(p.href)}): ${PAGE_META[p.id].description}`,
@@ -96,26 +87,17 @@ export function renderLlmsIndex(): string {
   );
 }
 
-/**
- * Strip a markdown string to readable plain text: drop leading # markers,
- * list bullets, * and _ emphasis, standalone horizontal rules, and reduce
- * [text](url) links to their text. Extra blank lines are collapsed.
- */
 export function mdToPlain(md: string): string {
   const lines = md.split("\n");
   const out: string[] = [];
 
   for (let line of lines) {
-    // Standalone horizontal rules: --- / *** / ___
     if (/^\s*([-*_])\1{2,}\s*$/.test(line)) continue;
 
-    // Headings: drop leading # markers (and trailing # closes).
     line = line.replace(/^(#{1,6})\s+(.*?)\s*#*\s*$/, "$2");
 
-    // List bullets: unordered (-, *, +) and ordered (N.).
     line = line.replace(/^(\s*)(?:[-*+]|\d+\.)\s+/, "$1");
 
-    // Links: [text](url) -> text.
     line = line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
 
     // Emphasis: bold then italic, ** and __ before single chars.
@@ -135,7 +117,6 @@ export function mdToPlain(md: string): string {
   );
 }
 
-/** Route slug ↔ page path. `index` is the home page. */
 export const pagePath = (slug: string): string => (slug === "index" ? "/" : `/${slug}`);
 
 /**

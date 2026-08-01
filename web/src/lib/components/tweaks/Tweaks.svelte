@@ -1,19 +1,3 @@
-<!--
-  Tweaks — the floating theme tweaker + settings panel.
-
-  Appearance is three orthogonal preset dials (theme / surface family / accent
-  family) plus an optional custom layer of three seed colours — background,
-  accent and pop. The seeds are expanded into a full token ramp by
-  lib/theme/derive and written as an inline style on <html>, so they override
-  the presets GLOBALLY: every page, every component, marketing and reader
-  alike, because everything is already written against the same tokens.
-
-  "Copy CSS" hands back the derived rule so a palette that survives review can
-  be pasted straight into layout.css and promoted to a real preset.
-
-  Notifications and data & privacy live below the appearance block, wired to
-  the consent/notifications stores as before.
--->
 <script lang="ts">
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
@@ -30,8 +14,6 @@
 
   const themes: ThemeMode[] = ["dark", "light"];
 
-  // The three seed colours, with the fallback shown in the picker when the
-  // seed is unset (so the swatch reflects the live preset rather than black).
   const seeds: { key: keyof CustomSeeds; label: string; fallbackVar: string }[] = [
     { key: "bg", label: "Background", fallbackVar: "--bg" },
     { key: "accent", label: "Accent", fallbackVar: "--accent" },
@@ -42,7 +24,6 @@
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
 
-  // A privacy toggle reuses the accent pill: ON = data shared, OFF = opted out.
   function consentPill(value: boolean): string {
     return cn(pill, value ? on : off);
   }
@@ -87,7 +68,6 @@
     }
   }
 
-  // Escape closes the panel and restores focus to the trigger.
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && open) {
       open = false;
@@ -95,7 +75,6 @@
     }
   }
 
-  // When the panel opens, move focus to its first control.
   $effect(() => {
     if (open && firstControl) {
       firstControl.focus();
@@ -142,8 +121,6 @@
           </div>
         </div>
 
-        <!-- Surface family: swaps the whole background/foreground ramp. The
-             swatch previews the family in the CURRENTLY selected mode. -->
         <div>
           <div class="mb-1.5 text-xs text-fg-3">Surface</div>
           <div class="flex flex-col gap-1">
@@ -190,8 +167,6 @@
           </div>
         </div>
 
-        <!-- Custom seeds. Each one overrides its slice of the palette globally;
-             the rest of the selected presets keep showing through. -->
         <div>
           <div class="mb-1.5 flex items-center justify-between">
             <span class="text-xs text-fg-3">Custom colours</span>
@@ -264,8 +239,6 @@
               title="Reloads the page to apply — Firebase Performance can only be switched at startup"
               onclick={() => {
                 consent.setPerformance(!consent.performance);
-                // The Performance SDK can't be toggled after init, so reload to
-                // re-run initPerformance() with the new consent flag.
                 location.reload();
               }}
               class={consentPill(consent.performance)}

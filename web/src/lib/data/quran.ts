@@ -50,7 +50,6 @@ export const parseKey = (key: VerseKey): { num: number; n: number } => {
   return { num: +m[1]!, n: +m[2]! };
 };
 
-/** The full 114-surah catalog (metadata only — no verse text). */
 export const SURAHS: CatalogEntry[] = CATALOG;
 
 const byNum = new Map<number, CatalogEntry>(CATALOG.map((s) => [s.num, s]));
@@ -60,14 +59,11 @@ const bySlug = new Map<string, CatalogEntry>(CATALOG.map((s) => [s.slug, s]));
 export const surahByNum = (num: number): CatalogEntry => byNum.get(num) ?? CATALOG[0]!;
 /** Lookup by URL slug; falls back to Al-Fatihah. */
 export const surahBySlug = (slug: string): CatalogEntry => bySlug.get(slug) ?? CATALOG[0]!;
-/** URL slug for a surah number. */
 export const slugFor = (num: number): string => surahByNum(num).slug;
 
-/** Reader path for a surah, with an optional verse deep-link (?verse=N). */
 export const surahPath = (num: number, ayah?: number): `/app/${string}` =>
   `/app/${slugFor(num)}${ayah ? `?verse=${ayah}` : ""}`;
 
-/** Convert a western number to Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩). */
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
 
@@ -83,7 +79,6 @@ export const adjacentSurahs = (num: number): { prev: CatalogEntry; next: Catalog
 
 export interface SearchResult {
   key: VerseKey;
-  /** "Al-Fatihah 1:2" */
   ref: string;
   text: string;
   num: number;
@@ -118,7 +113,6 @@ export function searchVerses(rawQuery: string): SearchResult[] {
   return out;
 }
 
-/** "Meccan · 7 verses". */
 export const surahMeta = (s: CatalogEntry): string =>
   `${s.place === "meccan" ? "Meccan" : "Medinan"} · ${s.ayahCount} verses`;
 

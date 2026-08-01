@@ -7,29 +7,23 @@ describe("createReader — preserved public API", () => {
   const r: ReaderApi = createReader();
 
   it("exposes every USED member consumers depend on", () => {
-    // lifecycle / search / browse
     expect(typeof r.hydrate).toBe("function");
     expect(typeof r.setQuery).toBe("function");
     expect(typeof r.clearQuery).toBe("function");
     expect(typeof r.setBrowse).toBe("function");
     expect(typeof r.toggleNote).toBe("function");
-    // navigation
     expect(typeof r.setCurrent).toBe("function");
     expect(typeof r.openVerse).toBe("function");
-    // settings
     expect(typeof r.bigger).toBe("function");
     expect(typeof r.smaller).toBe("function");
     expect(typeof r.setMode).toBe("function");
-    // annotations
     expect(typeof r.isBookmarked).toBe("function");
     expect(typeof r.toggleBookmark).toBe("function");
     expect(typeof r.getNote).toBe("function");
     expect(typeof r.setNote).toBe("function");
-    // verse cache
     expect(typeof r.versesFor).toBe("function");
     expect(typeof r.seedSurah).toBe("function");
     expect(typeof r.refreshFromWorker).toBe("function");
-    // share
     expect(typeof r.copyVerse).toBe("function");
     expect(typeof r.shareVerse).toBe("function");
   });
@@ -97,7 +91,6 @@ describe("createReader — behaviour", () => {
 
   it("font size respects bounds and exposes arabicSizePx", () => {
     const r = createReader();
-    // Defaults to 33; step is 3; max 56.
     for (let i = 0; i < 100; i++) r.bigger();
     expect(r.arabicSizePx).toBe("56px");
     for (let i = 0; i < 100; i++) r.smaller();
@@ -109,7 +102,7 @@ describe("createReader — behaviour", () => {
     r.setMode("reading");
     expect(r.mode).toBe("reading");
     expect(r.isReadingMode).toBe(true);
-    r.setMode("reading"); // no-op when same
+    r.setMode("reading");
     expect(r.mode).toBe("reading");
     r.setBrowse("juz");
     expect(r.browseJuz).toBe(true);

@@ -20,8 +20,6 @@ export default defineConfig({
         runes: ({ filename }) =>
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
       },
-      // Fully prerendered static site — deployable to any static host
-      // (Cloudflare Pages, Vercel, Netlify, GitHub Pages, S3…).
       adapter: adapter({
         pages: "build",
         assets: "build",

@@ -10,10 +10,6 @@
    The returned teardown detaches both window listeners.
    ════════════════════════════════════════════════════════════════════════ */
 
-/**
- * Install global error + unhandledrejection handlers that report to GA4.
- * Returns a teardown that removes both listeners.
- */
 export function startCrashReporting(): () => void {
   const reportException = (description: string): void =>
     void import("$lib/firebase/analytics")

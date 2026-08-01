@@ -1,10 +1,3 @@
-<!--
-  NotificationToast — surfaces push messages received while the page is in the
-  foreground (background pushes are shown by the service worker). Mounted once in
-  the root layout so it appears on every route. Reacts to the notifications
-  store's `lastMessage`, auto-dismisses after a few seconds, and offers an
-  "Open" link when the payload carries a destination URL.
--->
 <script lang="ts">
   import { notifications } from "$lib/stores/notifications.svelte";
   import { cn } from "$lib/utils";
@@ -12,7 +5,6 @@
   let visible = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  // Re-arm the toast whenever a new foreground message lands.
   $effect(() => {
     const msg = notifications.lastMessage;
     if (!msg) return;

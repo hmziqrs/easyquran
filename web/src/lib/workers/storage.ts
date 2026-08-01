@@ -8,15 +8,11 @@
    (navigator.storage / FileSystemDirectoryHandle, indexedDB).
    ════════════════════════════════════════════════════════════════════════ */
 
-/** A dumb versioned key→bytes store. */
 export interface ByteStore {
-  /** Return cached bytes, or null if absent. May throw on storage failure. */
   get(version: string, key: string): Promise<Uint8Array<ArrayBuffer> | null>;
-  /** Persist bytes. Resolve true on success, false (or throw) on failure. */
   put(version: string, key: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean>;
 }
 
-/** True when the async OPFS root-directory API is available. */
 export function hasOpfs(): boolean {
   return typeof navigator !== "undefined" && !!navigator.storage?.getDirectory;
 }

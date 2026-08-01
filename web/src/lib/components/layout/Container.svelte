@@ -1,7 +1,3 @@
-<!--
-  Container — centered max-width wrapper. `width` picks the design's
-  container scale (default 1200 / narrow 880 / wide 1440).
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import type { HTMLAttributes } from "svelte/elements";

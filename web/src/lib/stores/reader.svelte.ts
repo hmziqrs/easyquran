@@ -34,30 +34,23 @@ import { createVerseCache } from "./verse-cache.svelte";
 
 export type { BrowseMode, ReaderMode } from "./reader-core.svelte";
 
-/** The preserved flat public API of the reader singleton. */
 export interface ReaderApi {
-  // lifecycle
   hydrate(): void;
   dispose(): void;
-  // search
   readonly query: string;
   readonly hasQuery: boolean;
   setQuery(v: string): void;
   clearQuery(): void;
-  // sidebar browse
   readonly browseMode: BrowseMode;
   readonly browseSurah: boolean;
   readonly browseAyah: boolean;
   readonly browseJuz: boolean;
   readonly browsePage: boolean;
   setBrowse(browse: BrowseMode): void;
-  // open note panel (UI)
   readonly openNote: VerseKey | null;
   toggleNote(key: VerseKey): void;
-  // navigation
   setCurrent(num: number): void;
   openVerse(num: number, n: number): void;
-  // settings
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -65,7 +58,6 @@ export interface ReaderApi {
   readonly isVerseMode: boolean;
   readonly isReadingMode: boolean;
   setMode(mode: ReaderMode): void;
-  // annotations
   isBookmarked(key: VerseKey): boolean;
   toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
@@ -73,11 +65,9 @@ export interface ReaderApi {
   readonly lastRead: { num: number; n: number } | null;
   readonly hasLastRead: boolean;
   readonly lastReadRef: string;
-  // verse cache
   versesFor(num: number): string[];
   seedSurah(num: number, verses: string[]): void;
   refreshFromWorker(num: number): Promise<void>;
-  // copy & share
   copyVerse(key: VerseKey): Promise<boolean>;
   shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed">;
 }
@@ -97,11 +87,9 @@ export function createReader(): ReaderApi {
   const share = createReaderShare(core);
 
   return {
-    // lifecycle
     hydrate: () => persistence.hydrate(),
     dispose: () => persistence.dispose(),
 
-    // search
     get query() {
       return session.query;
     },
@@ -111,7 +99,6 @@ export function createReader(): ReaderApi {
     setQuery: (v: string) => session.setQuery(v),
     clearQuery: () => session.clearQuery(),
 
-    // sidebar browse
     get browseMode() {
       return session.browseMode;
     },
@@ -129,17 +116,14 @@ export function createReader(): ReaderApi {
     },
     setBrowse: (browse: BrowseMode) => session.setBrowse(browse),
 
-    // open note panel
     get openNote() {
       return session.openNote;
     },
     toggleNote: (key: VerseKey) => session.toggleNote(key),
 
-    // navigation
     setCurrent: (num: number) => session.setCurrent(num),
     openVerse: (num: number, n: number) => session.openVerse(num, n),
 
-    // settings
     get arabicSizePx() {
       return settings.arabicSizePx;
     },
@@ -156,7 +140,6 @@ export function createReader(): ReaderApi {
     },
     setMode: (mode: ReaderMode) => settings.setMode(mode),
 
-    // annotations
     isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
     toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
     getNote: (key: VerseKey) => annotations.getNote(key),
@@ -171,12 +154,10 @@ export function createReader(): ReaderApi {
       return annotations.lastReadRef;
     },
 
-    // verse cache
     versesFor: (num: number) => verseCache.versesFor(num),
     seedSurah: (num: number, verses: string[]) => verseCache.seedSurah(num, verses),
     refreshFromWorker: (num: number) => verseCache.refreshFromWorker(num),
 
-    // copy & share
     copyVerse: (key: VerseKey) => share.copyVerse(key),
     shareVerse: (key: VerseKey) => share.shareVerse(key),
   };

@@ -1,8 +1,3 @@
-<!--
-  Icon — inline SVG from the local registry (see icons.ts).
-  Sized via the `size` prop (px) or a Tailwind `class` (e.g. size-4).
-  Inherits text colour through fill="currentColor".
--->
 <script lang="ts">
   import { ICONS, type IconName } from "./icons";
 

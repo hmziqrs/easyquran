@@ -13,23 +13,20 @@ import type { DownloadProgress } from "$lib/data/quran-types";
 import type { WorkerStatus } from "$lib/quran/protocol";
 
 export type QuranStatus =
-  | "idle" // not yet started
-  | "resolving" // resolving the manifest
-  | "init" // worker loading wasm
-  | "downloading" // fetching/caching the DBs
-  | "ready" // engine online; full offline + local reads
+  | "idle"
+  | "resolving"
+  | "init"
+  | "downloading"
+  | "ready"
   | "error";
 
 class QuranStore {
   status = $state<QuranStatus>("idle");
-  /** what the worker is currently working on (e.g. "uthmani"). */
   detail = $state<string>("");
   source = $state<"unknown" | "baked" | "api">("unknown");
   error = $state<string | null>(null);
-  /** Live download progress for the current artifact (null when idle/ready). */
   download = $state<DownloadProgress | null>(null);
 
-  /** Map worker lifecycle events onto this store. */
   setWorkerStatus(s: WorkerStatus, detail?: string): void {
     if (s === "ready") {
       this.status = "ready";
@@ -41,17 +38,15 @@ class QuranStore {
       this.error = detail ?? "offline data error";
       this.download = null;
     } else {
-      this.status = s; // init | downloading
+      this.status = s;
       if (detail) this.detail = detail;
     }
   }
 
-  /** Record live download progress from the worker (drives a future progress bar). */
   setDownload(p: DownloadProgress): void {
     this.download = p;
   }
 
-  /** 0..1 fraction of the current download, or null when not downloading. */
   get downloadPct(): number | null {
     const d = this.download;
     return d && d.total > 0 ? Math.min(1, d.loaded / d.total) : null;

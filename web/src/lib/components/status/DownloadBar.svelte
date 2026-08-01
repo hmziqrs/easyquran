@@ -1,17 +1,3 @@
-<!--
-  DownloadBar — a slim, top-of-viewport progress indicator shown while the
-  offline engine downloads the two Arabic SQLite files into OPFS.
-
-  Reads the `quran` status store (quran.download / quran.downloadPct). Progress
-  is reported per-artifact by the worker (see quran/protocol.ts); here it is
-  rolled into ONE 0..1 fraction across both files (they download sequentially in
-  QURAN.scripts order) so the bar fills smoothly instead of resetting between
-  the Uthmani and simple-clean downloads.
-
-  Non-modal: pointer-events-none, so it never blocks the page. Auto-hides once
-  the engine reaches `ready` (or `error`). No verse rendering depends on this —
-  the reader paints from prerendered data regardless.
--->
 <script lang="ts">
   import { quran } from "$lib/stores/quran.svelte";
   import { QURAN } from "$lib/config/site";
@@ -25,12 +11,9 @@
     [QuranScript.Tajweed]: "Tajweed",
   };
 
-  /** Map each script → its immutable byte size (from the baked artifact spec). */
   const sizeOf = new Map(QURAN.scripts.map((s) => [s.id, s.sizeBytes]));
-  /** Total bytes across both files (the denominator for overall progress). */
   const totalBytes = QURAN.scripts.reduce((sum, s) => sum + s.sizeBytes, 0);
 
-  /** Overall 0..1 fraction across both sequential downloads, or null if idle. */
   function overallFraction(): number | null {
     const d = quran.download;
     if (!d) return null;

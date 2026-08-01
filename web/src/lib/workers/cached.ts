@@ -38,7 +38,7 @@ export async function ensureCached(spec: DownloadSpec, opts: EnsureOptions): Pro
       const cached = await store.get(version, key);
       if (cached) {
         if (spec.sizeBytes !== undefined || spec.sha256 !== undefined) {
-          await verifyBytes(cached, spec); // verify-fail ⇒ fall through to download
+          await verifyBytes(cached, spec);
         }
         return { bytes: cached, from: "store" };
       }

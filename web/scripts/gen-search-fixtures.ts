@@ -1,4 +1,3 @@
-/** Generate canonical search and source-view fixtures from registered sources. */
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

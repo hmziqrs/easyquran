@@ -1,7 +1,3 @@
-<!--
-  Panel — full-bleed accent block. Variants: accent (solid brand), soft
-  (tinted), ink (inverted). CTA sections compose content inside it.
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import type { HTMLAttributes } from "svelte/elements";

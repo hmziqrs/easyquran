@@ -1,5 +1,3 @@
-/** Pure build-time parsing shared by the metadata plugin and generators. */
-
 export type QuranXmlAttrs = Record<string, string>;
 
 export interface QuranSuraAttrs extends QuranXmlAttrs {
@@ -31,7 +29,6 @@ function extractAttrs(inner: string): QuranXmlAttrs {
   return out;
 }
 
-/** Scan all self-closing `<tag ... />` elements of one tag name, in order. */
 export function scanQuranElements(xml: string, tag: string): QuranXmlAttrs[] {
   const out: QuranXmlAttrs[] = [];
   const re = new RegExp(`<${tag}\\b([^/>]*)/>`, "g");

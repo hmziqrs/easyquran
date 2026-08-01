@@ -1,4 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
+/*
    worker-client.ts — main-thread proxy for the quran.worker.
 
    Owns the Worker lifecycle, request/response correlation, and lifecycle-event
@@ -10,7 +10,7 @@
    Every request settles deterministically: on a response, on a per-request
    timeout, on a worker load/eval/runtime fatal, or on disposal. No in-flight
    request can hang forever.
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
@@ -54,7 +54,7 @@ function failAll(err: Error): void {
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
     const p = pending.get(msg.id);
-    if (!p) return; // already settled by timeout/disposal
+    if (!p) return;
     clearTimeout(p.timer);
     pending.delete(msg.id);
     if (msg.ok) p.resolve(msg.result);
@@ -93,18 +93,15 @@ export const quranWorker = {
   get ready(): boolean {
     return isReady;
   },
-  /** Subscribe to lifecycle status (init/downloading/ready/error). Returns an unsub. */
   onStatus(cb: (s: WorkerStatus, detail?: string) => void): () => void {
     statusListeners.add(cb);
     return () => statusListeners.delete(cb);
   },
-  /** Subscribe to live download progress (per artifact). Returns an unsub. */
   onProgress(cb: (p: DownloadProgress) => void): () => void {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
   },
 
-  /** Start the worker with a resolved manifest. Idempotent; safe to call once. */
   start(manifest: ResolvedManifest): Promise<void> {
     if (startPromise) return startPromise;
     startPromise = (async () => {
@@ -149,7 +146,6 @@ export const quranWorker = {
     startPromise = null;
   },
 
-  /** Read raw Uthmani verses and their canonical view descriptor. */
   readSurah(num: number): Promise<QuranSurahText> {
     return request<QuranSurahText>((id) => ({ id, type: "readSurah", num })).then(
       (raw: unknown) => {
@@ -160,7 +156,6 @@ export const quranWorker = {
     );
   },
 
-  /** Substring search over the local normalized corpus. */
   search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
     return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
       (r: unknown) => {

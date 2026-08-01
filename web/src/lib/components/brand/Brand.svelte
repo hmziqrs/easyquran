@@ -1,8 +1,3 @@
-<!--
-  Brand — the EasyQuran logo lockup: a rotated accent square with a soft
-  glow, plus the wordmark. The square rotates further on hover, driven by
-  `group-hover` on the anchor.
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import { SITE } from "$lib/config/site";

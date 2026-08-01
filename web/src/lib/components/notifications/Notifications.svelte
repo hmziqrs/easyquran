@@ -1,10 +1,3 @@
-<!--
-  Notifications — the push opt-in/opt-out control rendered inside the Tweaks
-  panel. It reads the notifications store (support, permission, subscription)
-  and drives subscribe()/unsubscribe() on click. Subscribe runs the permission
-  prompt, so it must originate from this user gesture (Safari/iOS web push
-  requires it). Degrades gracefully when push is unsupported or blocked.
--->
 <script lang="ts">
   import { notifications } from "$lib/stores/notifications.svelte";
   import { cn } from "$lib/utils";
@@ -16,8 +9,6 @@
     else await notifications.subscribe();
   }
 
-  // Disabled when there's nothing the user can do here (unsupported or blocked
-  // and not currently subscribed).
   let disabled = $derived(!notifications.subscribed && !notifications.canSubscribe);
   let label = $derived(
     notifications.busy

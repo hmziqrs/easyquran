@@ -1,7 +1,3 @@
-<!--
-  Card — the raised surface box (bg-1, hairline border, lg radius).
-  `interactive` adds the hover border lift used on linked cards.
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import type { HTMLAttributes } from "svelte/elements";

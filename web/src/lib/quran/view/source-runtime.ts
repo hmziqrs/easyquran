@@ -11,7 +11,6 @@ export interface LoadedQuranSource {
   readonly view: QuranSourceView;
 }
 
-/** Validate a registered source and build its canonical view once. */
 export function loadQuranSource(
   runner: QuranQueryRunner,
   profile: QuranSourceProfile,

@@ -1,6 +1,3 @@
-<!--
-  StatusDot — the small "available / ok" indicator dot with a soft glow ring.
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   let { class: className = "" }: { class?: string } = $props();

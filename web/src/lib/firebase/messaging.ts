@@ -36,7 +36,6 @@ let messagingPromise: Promise<Messaging | null> | null = null;
 
 const foregroundCallbacks = new Set<(payload: MessagePayload) => void>();
 
-/** Cheap, synchronous permission read from the Notifications API. */
 export function getPermissionState(): PermissionState {
   if (!browser || !("Notification" in window)) return "unsupported";
   return Notification.permission as PermissionState;
@@ -60,10 +59,6 @@ export async function isMessagingSupported(): Promise<boolean> {
   }
 }
 
-/**
- * Initialize Messaging exactly once and wire the foreground + token-refresh
- * listeners that broadcast to the page. Browser-only; no-op if unconfigured.
- */
 export function initMessaging(): Promise<Messaging | null> {
   if (!browser || !isConfigured) return Promise.resolve(null);
   if (!messagingPromise) {
@@ -124,11 +119,6 @@ export async function requestPermission(): Promise<PermissionState> {
   }
 }
 
-/**
- * Obtain the FCM registration token. Requires granted permission, a VAPID key,
- * and an active service worker. Returns null on any failure (incl. permission
- * denied / blocked / unsupported) — callers treat null as "not subscribed".
- */
 export async function getFcmToken(): Promise<string | null> {
   if (!isConfigured || !FCM_VAPID_KEY) {
     console.warn("[firebase] messaging: VAPID key missing (set FCM_VAPID_KEY in ./index).");
@@ -151,7 +141,6 @@ export async function getFcmToken(): Promise<string | null> {
   }
 }
 
-/** Invalidate the current token on this device (FCM-side). */
 export async function deleteFcmToken(): Promise<void> {
   const m = messaging ?? (await initMessaging());
   if (!m) return;
@@ -163,7 +152,6 @@ export async function deleteFcmToken(): Promise<void> {
   }
 }
 
-/** Register a foreground-message listener; returns an unsubscribe function. */
 export async function onForegroundMessage(
   cb: (payload: MessagePayload) => void,
 ): Promise<Unsubscribe> {
@@ -173,8 +161,6 @@ export async function onForegroundMessage(
     foregroundCallbacks.delete(cb);
   };
 }
-
-/* ── Optional backend registration (Axum `/device/v1/*`) ────────────────── */
 
 /**
  * POST the token to the backend so the server can target this device. Returns

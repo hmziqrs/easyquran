@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vite-plus/test";
 
-// Control the `browser` flag from `$app/environment` so both the browser path
-// and the SSR guards are deterministically testable.
 const flag = vi.hoisted(() => ({ value: true }));
 vi.mock("$app/environment", () => ({
   get browser() {

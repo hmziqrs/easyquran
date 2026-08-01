@@ -1,4 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
+/*
    offline.ts — boot the offline Quran engine (called once, after mount).
 
    Resolves the manifest (live API when up, else baked), wires worker lifecycle
@@ -11,17 +11,12 @@
    (the worker itself is a singleton that lives for the page session). The boot
    is fire-and-forget: the returned teardown is synchronous and safe to call
    before the async manifest/worker sequence settles.
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import { resolveManifest } from "./manifest";
 import { quranWorker } from "./worker-client";
 import { quran } from "$lib/stores/quran.svelte";
 
-/**
- * Start the offline engine. Wires worker status/progress onto the quran store,
- * resolves the manifest, and boots the sqlite-wasm Worker in the background.
- * Returns a teardown that removes the store-forwarding listeners.
- */
 export function bootOfflineEngine(): () => void {
   quran.status = "resolving";
 
@@ -36,7 +31,6 @@ export function bootOfflineEngine(): () => void {
   try {
     void navigator.storage?.persist?.();
   } catch {
-    /* non-fatal */
   }
 
   void (async () => {

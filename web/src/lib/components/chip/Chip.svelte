@@ -1,6 +1,3 @@
-<!--
-  Chip — small pill label. Variants: default / accent / ghost. Optional dot.
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import type { Snippet } from "svelte";

@@ -19,9 +19,7 @@ export interface QuranSourceArtifact {
 export interface QuranSourceProfile {
   /** Stable profile identity, qualified by its immutable artifact digest. */
   readonly id: string;
-  /** Manifest/cache identity for this concrete source artifact. */
   readonly sourceId: QuranSourceIdValue;
-  /** Orthographic/script style exposed to presentation consumers. */
   readonly script: QuranScriptValue;
   readonly artifact: QuranSourceArtifact;
   readonly database: QuranDatabaseAdapter;
@@ -32,7 +30,6 @@ export interface QuranSourceProfile {
   readonly referenceOpenerSurah: number;
 }
 
-/** Build and validate a registry entry. Index 0 is deliberately unused. */
 export function defineSourceProfile(profile: QuranSourceProfile): QuranSourceProfile {
   if (profile.packagingBySurah.length !== 115) {
     throw new Error(`[quran-view:${profile.id}] packaging registry must contain indexes 0..114`);
@@ -120,7 +117,6 @@ export function sourceProfile(sourceId: QuranSourceIdValue): QuranSourceProfile 
   return profile;
 }
 
-/** Fail closed when a manifest source id is paired with an unregistered digest. */
 export function resolveSourceProfile(
   sourceId: QuranSourceIdValue,
   fileSha256: string,

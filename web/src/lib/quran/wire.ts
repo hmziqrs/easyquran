@@ -1,4 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
+/*
    wire.ts — shared handwritten decoders for untrusted Quran payloads.
 
    Every value that crosses a trust boundary — the /quran/v1 HTTP API
@@ -23,7 +23,7 @@
    This module is main-thread only. It imports worker-safe search domain types
    and `quran-types` (type-only), so it pulls no $env /
    SvelteKit code and could be reused on either side of the worker boundary.
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import {
   isOpenerKind,
@@ -40,12 +40,9 @@ import { SearchHitKind, type SearchHit } from "./search/types";
 import { isCanonicalAyahCoordinate } from "./view/canonical-coordinates";
 import { sourceProfile } from "./view/source-profiles";
 
-/** Narrow an unknown to a string-keyed record, or null. */
 function asRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
 }
-
-/* ── envelope ─────────────────────────────────────────────────────────── */
 
 /** Strip a `{ data: ... }` envelope, returning the inner payload when `data`
  *  is present and non-nullish, otherwise the body itself. Both /search and
@@ -58,11 +55,6 @@ export function unwrapEnvelope(raw: unknown): unknown {
   return rec.data ?? raw;
 }
 
-/* ── search ───────────────────────────────────────────────────────────── */
-
-/** Strictly decode one search hit from an untrusted source (API JSON or worker
- *  postMessage). Rebuilds field-by-field. Returns null when surah/ayah are
- *  absent, non-numeric, non-finite, or out of range — never coerces them. */
 export function decodeSearchHit(raw: unknown): SearchHit | null {
   const rec = asRecord(raw);
   if (!rec) return null;
@@ -141,8 +133,6 @@ function decodeHighlights(
   return out;
 }
 
-/* ── normalized surah Worker payload ─────────────────────────────────── */
-
 export function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
   const rec = asRecord(raw);
   if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
@@ -202,10 +192,6 @@ export function decodeQuranSurahText(raw: unknown): QuranSurahText | null {
   };
 }
 
-/** The validated scalar fields of a SearchResponse, with the `results` array
- *  rebuilt. Each scalar is the wire value when it is a safe integer / string,
- *  else null — callers decide the fallback. `query` is included so an API
- *  consumer can echo it back when it differs from the request. */
 export interface DecodedSearchPayload {
   query: string | null;
   total: number | null;
@@ -239,11 +225,6 @@ export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null 
   };
 }
 
-/* ── manifest (/version + /scripts) ───────────────────────────────────── */
-
-/** Decode one /scripts entry → ArtifactSpec. Mirrors the prior `normalizeScript`
- *  exactly: `id` must be a known script, `sizeBytes` must coerce to a truthy
- *  finite number, and `sha256` / `downloadUrl` must be strings. */
 export function decodeScript(raw: unknown): ArtifactSpec | null {
   const rec = asRecord(raw);
   if (!rec) return null;
@@ -256,10 +237,6 @@ export function decodeScript(raw: unknown): ArtifactSpec | null {
   return { id, sizeBytes, sha256, downloadUrl };
 }
 
-/** Decode a full /scripts response body (envelope-stripped) into the validated
- *  artifact list. Returns null when the body or its `scripts` field is not the
- *  expected shape; invalid entries are dropped. Callers check `length < 2` to
- *  decide whether to fall back to baked config. */
 export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
   const data = asRecord(unwrapEnvelope(rawBody));
   if (!data) return null;
@@ -272,17 +249,11 @@ export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
   return out;
 }
 
-/** The validated fields of a /version response. Each is the wire string when
- *  present, else null — the manifest caller falls back to the baked config. */
 export interface DecodedVersion {
   contentVersion: string | null;
   searchVersion: string | null;
 }
 
-/** Decode a /version response body (envelope-stripped) into its version
- *  strings. Returns null only when the body is not an object; missing or
- *  non-string fields are surfaced as null so the caller can apply defaults
- *  without rejecting an otherwise-usable response. */
 export function decodeVersionPayload(rawBody: unknown): DecodedVersion | null {
   const data = asRecord(unwrapEnvelope(rawBody));
   if (!data) return null;

@@ -5,13 +5,6 @@ import { quranWorker } from "$lib/quran/worker-client";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 
-/**
- * Drive quranWorker against a fake Worker boundary: we replace globalThis.Worker
- * with a recorder that captures posted messages and lets the test emit
- * message/error events, so settlement paths (response, timeout, fatal, disposal)
- * can be exercised without sqlite-wasm or a real thread.
- */
-
 type Listener = (e: unknown) => void;
 
 class FakeWorker {
@@ -84,7 +77,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Start the worker and answer its init handshake so `ready` is true. */
 async function startReady(): Promise<FakeWorker> {
   const started = quranWorker.start(MANIFEST);
   const fake = FakeWorker.last!;

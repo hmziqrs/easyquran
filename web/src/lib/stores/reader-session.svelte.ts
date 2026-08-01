@@ -19,7 +19,6 @@ import type { ReaderPersistence } from "./reader-persistence.svelte";
 
 export function createReaderSession(core: ReaderCore, persistence: ReaderPersistence) {
   return {
-    // ── search ───────────────────────────────────────────────────────
     get query(): string {
       return core.s.query;
     },
@@ -33,7 +32,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.query = "";
     },
 
-    // ── sidebar browse mode ──────────────────────────────────────────
     get browseMode(): BrowseMode {
       return core.s.browse;
     },
@@ -53,7 +51,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.browse = browse;
     },
 
-    // ── open note panel (UI state) ───────────────────────────────────
     get openNote(): VerseKey | null {
       return core.s.openNote;
     },
@@ -64,7 +61,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       if (next === null) persistence.flushNoteWrite();
     },
 
-    // ── navigation ───────────────────────────────────────────────────
     /** Change the current surah (URL-driven). Resets query + open note and
      *  invalidates any in-flight Worker refresh for the prior surah. */
     setCurrent(num: number): void {

@@ -37,7 +37,6 @@ describe("decodeReader", () => {
 
   it("discards a blob whose explicit version is in the future", () => {
     expect(decodeReader({ v: 99, current: 2 })).toEqual({});
-    // a versioned-but-non-matching type also counts as future
     expect(decodeReader({ v: "2" })).toEqual({});
   });
 
@@ -60,7 +59,6 @@ describe("decodeReader", () => {
   it("keeps bookmarks/notes records only when the stored value is an object", () => {
     expect(decodeReader({ bookmarks: "nope" }).bookmarks).toBeUndefined();
     expect(decodeReader({ notes: 5 }).notes).toBeUndefined();
-    // Empty object is still a valid (empty) record.
     expect(decodeReader({ bookmarks: {} }).bookmarks).toEqual({});
   });
 
@@ -108,7 +106,7 @@ describe("createReaderPersistence scheduling", () => {
   it("scheduleNoteWrite() only writes after the trailing debounce", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
-    persistence.hydrate(); // also arms listeners; harmless here
+    persistence.hydrate();
     core.s.notes["1:1"] = "first";
     persistence.scheduleNoteWrite();
     vi.advanceTimersByTime(399);
@@ -123,11 +121,9 @@ describe("createReaderPersistence scheduling", () => {
     const persistence = createReaderPersistence(core);
     core.s.notes["2:2"] = "a";
     persistence.scheduleNoteWrite();
-    // Discrete change writes immediately and should cancel the pending note write.
     core.s.bookmarks["3:3"] = true;
     persistence.writeNow();
     expect(read()).toMatchObject({ bookmarks: { "3:3": true }, notes: { "2:2": "a" } });
-    // Advancing past the debounce window must not re-invoke the writer.
     const stampAfter = window.localStorage.getItem(KEY);
     vi.advanceTimersByTime(1000);
     expect(window.localStorage.getItem(KEY)).toBe(stampAfter);

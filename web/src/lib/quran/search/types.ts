@@ -26,7 +26,6 @@ export type SearchProvider = (typeof SearchProvider)[keyof typeof SearchProvider
 
 export interface AyahSearchHit {
   kind: typeof SearchHitKind.Ayah;
-  /** Raw numbered ayah; matching and highlights use its canonical body. */
   ayah: Ayah;
   highlights: Highlight[];
 }
@@ -49,7 +48,6 @@ export interface SearchResponse {
   limit: number;
   offset: number;
   results: SearchHit[];
-  /** Which engine answered. */
   source: SearchProvider;
 }
 

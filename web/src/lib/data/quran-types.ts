@@ -45,7 +45,6 @@ export const OPENER_KINDS = Object.freeze(Object.values(OpenerKind)) as readonly
 export const isOpenerKind = (value: unknown): value is OpenerKind =>
   typeof value === "string" && OPENER_KINDS.includes(value as OpenerKind);
 
-/** How one registered source physically packages a surah opener. */
 export const OpenerPackaging = {
   NumberedAyah: "numbered-ayah",
   EmbeddedPrefix: "embedded-prefix",
@@ -66,7 +65,6 @@ export interface PrefixCut {
   bodyStartScalar: number;
 }
 
-/** Serializable, source-qualified view descriptor for one surah. */
 export interface SurahNormalization extends PrefixCut {
   surah: number;
   sourceId: QuranSourceId;
@@ -78,7 +76,6 @@ export interface SurahNormalization extends PrefixCut {
   openerText: string | null;
 }
 
-/** Raw source verses plus the descriptor needed to derive body/opener views. */
 export interface QuranSurahText {
   sourceId: QuranSourceId;
   script: QuranScript;
@@ -86,7 +83,6 @@ export interface QuranSurahText {
   normalization: SurahNormalization;
 }
 
-/** Revelation place. */
 export type Place = "meccan" | "medinan";
 
 /**
@@ -102,10 +98,8 @@ export const Bismillah = {
 } as const;
 export type Bismillah = (typeof Bismillah)[keyof typeof Bismillah];
 
-/** Sajda kind on a verse. */
 export type SajdaKind = "recommended" | "obligatory";
 
-/** A coordinate into the text — "surah:ayah". */
 export type VerseKey = string;
 
 /** Catalog metadata for a surah — no verse text (doc §10 split). */
@@ -114,16 +108,13 @@ export interface CatalogEntry {
   num: number;
   /** URL slug, e.g. "al-baqarah" — drives /app/<slug> deep links (web-owned) */
   slug: string;
-  /** transliterated display name, e.g. "Al-Fatihah" */
   name: string;
-  /** Arabic name, e.g. "الفاتحة" */
   arabic: string;
   place: Place;
   /** ayah count (ayas from quran-data.xml) */
   ayahCount: number;
   /** revelation order (order from quran-data.xml) */
   revelationOrder: number;
-  /** ruku count for this surah */
   rukus: number;
   openerKind: OpenerKind;
   /** @deprecated Use openerKind. This field describes the current Tanzil shape. */
@@ -137,7 +128,6 @@ export interface CatalogEntry {
  *  `verses` contract the reader store depends on. */
 export interface LoadedSurah extends CatalogEntry, QuranSurahText {}
 
-/** A navigation range family (juz / page / ruku / hizb-quarter / manzil). */
 export interface RangeEntry {
   /** 1-based index within its family */
   index: number;
@@ -145,9 +135,7 @@ export interface RangeEntry {
   startGlobal: number;
   /** inclusive last global ayah index */
   endGlobal: number;
-  /** surah:ayah of the first ayah */
   first: VerseKey;
-  /** surah:ayah of the last ayah */
   last: VerseKey;
 }
 
@@ -160,7 +148,6 @@ export interface NavigationData {
   manzil: RangeEntry[];
 }
 
-/** A sajda marker (not a range). */
 export interface SajdaEntry {
   index: number;
   surah: number;
@@ -186,7 +173,6 @@ export interface DownloadProgress {
   total: number;
 }
 
-/** One ayah with its verbatim Uthmani text (the unit a range view renders). */
 export interface Ayah {
   key: VerseKey;
   surah: number;
@@ -195,7 +181,6 @@ export interface Ayah {
   text: string;
 }
 
-/** A prerendered juz or page: its range bounds + the ayahs it contains. */
 export interface RangePageData {
   kind: "juz" | "page";
   index: number;
@@ -205,6 +190,5 @@ export interface RangePageData {
   first: VerseKey;
   last: VerseKey;
   ayahs: Ayah[];
-  /** One descriptor per surah represented in ayahs. */
   normalizations: SurahNormalization[];
 }

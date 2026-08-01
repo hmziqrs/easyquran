@@ -22,14 +22,12 @@ export interface Rgb {
   b: number;
 }
 
-/** The three colours a user actually picks. Any subset may be set. */
 export interface CustomSeeds {
   bg?: string;
   accent?: string;
   pop?: string;
 }
 
-/** #rgb / #rrggbb → {r,g,b}. Returns null on anything unparseable. */
 export function parseHex(hex: string): Rgb | null {
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return null;
@@ -58,10 +56,8 @@ export function luminance({ r, g, b }: Rgb): number {
   return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
 }
 
-/** True when text on this colour should be dark (i.e. the colour is light). */
 export const isLight = (c: Rgb): boolean => luminance(c) > 0.45;
 
-/** Linear mix of two colours; `t` is how much of `b` to take (0..1). */
 function mix(a: Rgb, b: Rgb, t: number): Rgb {
   return {
     r: a.r + (b.r - a.r) * t,
@@ -73,25 +69,15 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
 const WHITE: Rgb = { r: 255, g: 255, b: 255 };
 const BLACK: Rgb = { r: 0, g: 0, b: 0 };
 
-/** Step a colour `t` toward white (positive) or black (negative). */
 const shift = (c: Rgb, t: number): Rgb => (t >= 0 ? mix(c, WHITE, t) : mix(c, BLACK, -t));
 
 const rgba = ({ r, g, b }: Rgb, a: number): string =>
   `rgba(${clamp(r)}, ${clamp(g)}, ${clamp(b)}, ${a})`;
 
-/**
- * Surface + text ramp from a single background seed.
- *
- * On a DARK seed the surfaces climb toward white and the elevated nav/footer
- * sinks below the page; on a LIGHT seed they sink toward black and the
- * elevated bar rises. The foreground ramp always runs from near-maximum
- * contrast (--fg) down to the muted label step (--fg-4), and the hairlines are
- * translucent so they sit correctly over any of the surface steps.
- */
 function backgroundTokens(seed: Rgb): Record<string, string> {
   const light = isLight(seed);
-  const dir = light ? -1 : 1; // which way "up" is for surfaces
-  const ink = light ? BLACK : WHITE; // where text is pulled from
+  const dir = light ? -1 : 1;
+  const ink = light ? BLACK : WHITE;
 
   return {
     "--bg": toHex(seed),
@@ -111,7 +97,6 @@ function backgroundTokens(seed: Rgb): Record<string, string> {
   };
 }
 
-/** Accent wash + a readable foreground for text sitting ON the accent. */
 function accentTokens(seed: Rgb): Record<string, string> {
   const onLight = isLight(seed);
   return {
@@ -148,7 +133,6 @@ export function deriveTokens(seeds: CustomSeeds): Record<string, string> {
   return out;
 }
 
-/** The derived tokens as a paste-ready CSS rule for layout.css. */
 export function tokensToCss(tokens: Record<string, string>, selector = ":root"): string {
   const body = Object.entries(tokens)
     .map(([k, v]) => `  ${k}: ${v};`)

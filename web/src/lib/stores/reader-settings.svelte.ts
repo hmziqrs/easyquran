@@ -18,7 +18,6 @@ import type { ReaderPersistence } from "./reader-persistence.svelte";
 
 export function createReaderSettings(core: ReaderCore, persistence: ReaderPersistence) {
   return {
-    // ── Arabic font size ─────────────────────────────────────────────
     get arabicSizePx(): string {
       return `${core.s.fontSize}px`;
     },
@@ -31,7 +30,6 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
       persistence.writeNow();
     },
 
-    // ── reading mode ─────────────────────────────────────────────────
     get mode(): ReaderMode {
       return core.s.mode;
     },

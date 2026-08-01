@@ -23,7 +23,6 @@ export interface CanonicalQuranRow {
   text: string;
 }
 
-/** Source coordinates without text, used for exhaustive load-time validation. */
 export type QuranCoordinateRow = Omit<CanonicalQuranRow, "text">;
 
 export interface FirstAyahRow {
@@ -35,7 +34,6 @@ export interface QuranSourceQueries {
   readonly count: QuranQuery<number>;
   readonly coordinates: QuranQuery<QuranCoordinateRow>;
   readonly firstAyahs: QuranQuery<FirstAyahRow>;
-  /** Exact unnumbered opener text for chapter-flag or separate-row sources. */
   readonly openers?: QuranQuery<FirstAyahRow>;
   readonly surah: QuranQuery<string>;
   readonly range: QuranQuery<CanonicalQuranRow>;
@@ -95,7 +93,6 @@ export function defineQuranDatabaseAdapter(adapter: QuranDatabaseAdapter): Quran
   return Object.freeze(adapter);
 }
 
-/** Execute and decode a query identically in every runtime. */
 export function runQuery<Result>(
   runner: QuranQueryRunner,
   query: QuranQuery<Result>,
@@ -104,7 +101,6 @@ export function runQuery<Result>(
   return runner.all(query.sql, params).map((row) => query.decode(row));
 }
 
-/** Require exactly one decoded row. */
 export function runOne<Result>(
   runner: QuranQueryRunner,
   query: QuranQuery<Result>,

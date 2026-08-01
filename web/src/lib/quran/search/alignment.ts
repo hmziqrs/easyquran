@@ -23,7 +23,6 @@ function wordRanges(text: string): TextRange[] {
   return ranges;
 }
 
-/** Align one normalized range while retaining a monotonic position map. */
 function alignRange(
   match: string,
   matchRange: TextRange,
@@ -138,11 +137,6 @@ function alignMatchToDisplay(
   return { starts, ends };
 }
 
-/**
- * Map normalized positions from the matching source to exact UTF-16 spans in
- * the display source. The result is built once and shared by SSG and Worker
- * search through the canonical corpus.
- */
 export function alignSearchText(matchText: string, displayText: string): SearchTextAlignment {
   const match = normalizeArabicWithMap(matchText);
   const display = normalizeArabicWithMap(displayText);

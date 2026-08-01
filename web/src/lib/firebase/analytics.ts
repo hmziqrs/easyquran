@@ -16,7 +16,6 @@ import { isConfigured, initApp, ANALYTICS_DEBUG } from "./index";
 let analytics: Analytics | null = null;
 let initPromise: Promise<Analytics | null> | null = null;
 
-/** Start analytics in the browser, exactly once. No-op during SSR/unconfigured. */
 export function initAnalytics(): Promise<Analytics | null> {
   if (!browser || !isConfigured) return Promise.resolve(null);
   if (!initPromise) {
@@ -37,16 +36,11 @@ export function initAnalytics(): Promise<Analytics | null> {
   return initPromise;
 }
 
-/** Resolve analytics once ready (resolves null if unsupported/unconfigured). */
 async function ready(): Promise<Analytics | null> {
   if (!analytics) await initAnalytics();
   return analytics;
 }
 
-/**
- * Fire a custom event once analytics is ready. No-op until init resolves and
- * silently drops failures. Avoid reserved names unless intentional.
- */
 export async function track(
   name: string,
   params?: Record<string, unknown>,
@@ -63,11 +57,6 @@ export async function track(
   }
 }
 
-/**
- * Log a page/screen view. Called on the initial load and on every client-side
- * navigation (see +layout.svelte's afterNavigate). Uses GA4's reserved
- * `screen_view` with `firebase_screen` params, plus a semantic `page_view`.
- */
 export function pageView(path: string, title?: string): Promise<void> {
   const screen = path === "/" ? "home" : path.replace(/^\//, "").replace(/\/$/, "") || "home";
   return track("screen_view", {
@@ -78,7 +67,6 @@ export function pageView(path: string, title?: string): Promise<void> {
   });
 }
 
-/** Set the current screen name without sending an event. */
 export async function setCurrentScreen(name: string): Promise<void> {
   const a = await ready();
   if (!a) return;
@@ -90,7 +78,6 @@ export async function setCurrentScreen(name: string): Promise<void> {
   }
 }
 
-/** Attach arbitrary user properties (e.g. once an account exists). */
 export async function setUserProperties(
   properties: Record<string, unknown>,
   options?: AnalyticsCallOptions,
@@ -119,10 +106,6 @@ export async function setConsentState(settings: ConsentSettings): Promise<void> 
   }
 }
 
-/**
- * Enable/disable analytics collection at runtime (user opt-out). When disabled,
- * no events are sent; re-enabling resumes collection without losing the session.
- */
 export async function setAnalyticsCollectionEnabled(enabled: boolean): Promise<void> {
   const a = await ready();
   if (!a) return;

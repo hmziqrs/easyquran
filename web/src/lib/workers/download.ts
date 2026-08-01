@@ -5,12 +5,9 @@
    relative imports + web-standard APIs (fetch, crypto.subtle, streams).
    ════════════════════════════════════════════════════════════════════════ */
 
-/** What to download and (optionally) how to check it. */
 export interface DownloadSpec {
   url: string;
-  /** Expected byte length; checked post-download if set. */
   sizeBytes?: number;
-  /** Expected SHA-256 hex digest; checked post-download if set. */
   sha256?: string;
   /** Human label used in error messages (falls back to url). */
   label?: string;
@@ -24,7 +21,6 @@ export interface Progress {
 
 export type ProgressFn = (p: Progress) => void;
 
-/** Compute the SHA-256 hex digest of a byte buffer using WebCrypto. */
 export async function sha256Hex(data: BufferSource): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
   let out = "";
@@ -87,7 +83,6 @@ export async function downloadBytes(
           onProgress?.({ loaded, total });
         }
       }
-      // Concatenate chunks into one buffer (same shape as arrayBuffer()).
       bytes = new Uint8Array(loaded);
       let off = 0;
       for (const c of chunks) {
@@ -95,7 +90,6 @@ export async function downloadBytes(
         off += c.byteLength;
       }
     } finally {
-      // Release the body stream whether we finished, threw, or aborted.
       await reader.cancel().catch(() => {});
     }
   } else {

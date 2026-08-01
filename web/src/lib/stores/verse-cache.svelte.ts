@@ -14,12 +14,9 @@ import type { ReaderCore } from "./reader-core.svelte";
 
 export function createVerseCache(core: ReaderCore) {
   return {
-    /** Synchronous verse text for a surah from the open-surah cache (or `[]`
-     *  if the surah hasn't been seeded yet this session). */
     versesFor(num: number): string[] {
       return core.versesBySurah.get(num) ?? [];
     },
-    /** Seed a surah's verses into the sync cache (from prerendered page.data). */
     seedSurah(num: number, verses: string[]): void {
       if (verses.length) core.versesBySurah.set(num, verses);
     },
@@ -36,11 +33,10 @@ export function createVerseCache(core: ReaderCore) {
         const { quranWorker } = await import("$lib/quran/worker-client");
         if (!quranWorker.ready) return;
         const source = await quranWorker.readSurah(num);
-        if (token !== core.nav.token) return; // a navigation happened since
-        if (num !== core.s.current) return; // user moved on
+        if (token !== core.nav.token) return;
+        if (num !== core.s.current) return;
         if (source.verses.length) core.versesBySurah.set(num, source.verses);
       } catch {
-        /* prerender/cache still serves the surah */
       }
     },
   };

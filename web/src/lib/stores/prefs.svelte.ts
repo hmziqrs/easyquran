@@ -58,7 +58,6 @@ export interface Prefs {
   theme: ThemeMode;
   surface: SurfaceId;
   accent: AccentId;
-  /** Free-form seed colours layered over the presets. Empty = presets only. */
   custom: CustomSeeds;
 }
 
@@ -66,7 +65,6 @@ type PrefPatch = Partial<Prefs>;
 
 const isHex = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
 
-/** Keep only the recognised seed keys, and only well-formed hex values. */
 function cleanCustom(raw: unknown): CustomSeeds {
   const out: CustomSeeds = {};
   if (!raw || typeof raw !== "object") return out;
@@ -99,7 +97,6 @@ class PrefsStore {
   #prefs = $state<Prefs>({ ...DEFAULTS, custom: {} });
   #hydrated = false;
 
-  /** Hydrate from localStorage after mount (SSR used DEFAULTS). */
   hydrate(): void {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
@@ -121,18 +118,15 @@ class PrefsStore {
   get custom(): Readonly<CustomSeeds> {
     return this.#prefs.custom;
   }
-  /** True when any seed colour is overriding the presets. */
   get hasCustom(): boolean {
     const c = this.#prefs.custom;
     return Boolean(c.bg || c.accent || c.pop);
   }
 
-  /** The derived custom token set (empty when no seeds are set). */
   get customTokens(): Record<string, string> {
     return deriveTokens(this.#prefs.custom);
   }
 
-  /** The current custom layer as a paste-ready CSS rule for layout.css. */
   css(): string {
     const selector =
       `[data-theme="${this.#prefs.theme}"][data-surface="${this.#prefs.surface}"]` +
@@ -140,7 +134,6 @@ class PrefsStore {
     return tokensToCss(this.customTokens, selector);
   }
 
-  /** Apply the current prefs to <html> (idempotent). */
   apply(): void {
     if (!browser) return;
     const el = document.documentElement;
@@ -158,7 +151,6 @@ class PrefsStore {
     }
   }
 
-  /** Patch one or more prefs, persist, apply, and notify listeners. */
   set(patch: PrefPatch): void {
     this.#prefs = { ...this.#prefs, ...patch };
     if (browser) {
@@ -188,7 +180,6 @@ class PrefsStore {
     this.set({ theme: this.#prefs.theme === "dark" ? "light" : "dark" });
   }
 
-  /** Set (hex) or clear (undefined) one custom seed colour. */
   setCustom(key: keyof CustomSeeds, hex: string | undefined): void {
     const next = { ...this.#prefs.custom };
     if (hex && isHex(hex)) next[key] = hex;
@@ -196,12 +187,10 @@ class PrefsStore {
     this.set({ custom: next });
   }
 
-  /** Drop the whole custom layer, returning to the selected presets. */
   clearCustom(): void {
     this.set({ custom: {} });
   }
 
-  /** Back to shipped defaults — presets and custom layer both. */
   reset(): void {
     this.set({ ...DEFAULTS, custom: {} });
   }

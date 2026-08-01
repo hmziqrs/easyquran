@@ -23,7 +23,6 @@ describe("decodeConsent", () => {
       performance: true,
       advertising: true,
     });
-    // non-boolean values keep defaults
     expect(decodeConsent({ analytics: "false", advertising: 1 })).toEqual({
       analytics: true,
       performance: true,

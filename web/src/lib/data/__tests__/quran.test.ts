@@ -46,8 +46,8 @@ describe("surah lookups", () => {
 
   it("adjacentSurahs wraps at both ends of the catalog", () => {
     expect(adjacentSurahs(1).next.num).toBe(2);
-    expect(adjacentSurahs(1).prev.num).toBe(114); // wraps back to the last
-    expect(adjacentSurahs(114).next.num).toBe(1); // wraps forward to the first
+    expect(adjacentSurahs(1).prev.num).toBe(114);
+    expect(adjacentSurahs(114).next.num).toBe(1);
   });
 });
 
@@ -81,7 +81,6 @@ describe("searchVerses (name/number fallback)", () => {
   });
 
   it("caps results to keep the box responsive", () => {
-    // A broad Latin/number query that cannot match 24+ entries still returns <=24.
     expect(searchVerses("a").length).toBeLessThanOrEqual(24);
   });
 });

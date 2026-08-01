@@ -72,11 +72,9 @@ function compile(): Compiled {
   assert(suras.length === EXPECT.suras, `expected ${EXPECT.suras} suras, got ${suras.length}`);
 
   const nameByNum = new Map(names.map((n) => [n.num, n]));
-  /** global ayah index (1-based) of surah s's first ayah = xml start + 1. */
   const startGlobalOf = (s: QuranSuraAttrs) => Number(s.start) + 1;
   const ayasOf = (s: QuranSuraAttrs) => Number(s.ayas);
 
-  // ── catalog: authored slug/name ∪ XML-derived fields ──────────────────
   const catalog = suras.map((s) => {
     const num = Number(s.index);
     const auth = nameByNum.get(num);
@@ -100,7 +98,6 @@ function compile(): Compiled {
     };
   });
 
-  // ordered surah boundaries for global → (surah, ayah) lookup
   const bounds = suras.map((s) => {
     const start = startGlobalOf(s);
     return { num: Number(s.index), start, end: start + ayasOf(s) - 1 };
@@ -136,7 +133,6 @@ function compile(): Compiled {
     );
   }
 
-  /** Convert a 1-based global ayah index to "surah:ayah". */
   const globalToKey = (g: number): string => {
     for (const b of bounds) {
       if (g >= b.start && g <= b.end) return `${b.num}:${g - b.start + 1}`;
@@ -144,12 +140,10 @@ function compile(): Compiled {
     return "1:1";
   };
 
-  /** Build inclusive [startGlobal,endGlobal] ranges from start-marker elements. */
   const ranges = (tag: string) => {
     const els = scanQuranElements(xml, tag);
     const starts = els.map((e) => ({
       index: Number(e.index),
-      // global index of (sura, aya) = start(sura, 0-based) + aya = startGlobalOf(sura) + aya - 1
       startGlobal: startGlobalOf(suras[Number(e.sura) - 1]!) + Number(e.aya) - 1,
       first: `${Number(e.sura)}:${Number(e.aya)}`,
     }));
@@ -193,7 +187,6 @@ function compile(): Compiled {
   };
 }
 
-/** Build (and memoize) the virtual module source. */
 let cached: string | null = null;
 function generate(): string {
   if (cached) return cached;
@@ -220,7 +213,6 @@ export function quranData(): Plugin {
       return generate();
     },
     configureServer(server) {
-      // Regenerate if a source changes during dev.
       server.watcher.add([NAMES_PATH, XML_PATH, COORDINATES_PATH]);
       server.watcher.on("change", (f) => {
         if (f === NAMES_PATH || f === XML_PATH || f === COORDINATES_PATH) {

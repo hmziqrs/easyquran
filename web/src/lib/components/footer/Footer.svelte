@@ -1,9 +1,3 @@
-<!--
-  Footer — per the design comp: a 4-column grid (brand blurb · Product ·
-  Company · Legal) on an inset ground, with a bottom row carrying the
-  copyright on the left and an Arabic line on the right. Links come from the
-  central site config so it never drifts from the nav.
--->
 <script lang="ts">
   import { NAV_LINKS, SITE } from "$lib/config/site";
   import { Icon } from "$lib/components/icon";
@@ -14,7 +8,6 @@
 
   const brand = SITE.name.toLowerCase();
 
-  // Company column = the nav's marketing links (Read lives in Product).
   const companyLinks = NAV_LINKS.filter((p) => p.href !== "/app");
   const productLinks: { href: string; label: string }[] = [
     { href: "/app", label: "Read the Qur'an" },
@@ -35,7 +28,6 @@
     <div
       class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-9"
     >
-      <!-- Brand blurb -->
       <div class="col-span-2 flex flex-col gap-3 md:col-span-1">
         <div class="flex items-center gap-2.5">
           <span
@@ -59,7 +51,6 @@
         </div>
       </div>
 
-      <!-- Product -->
       <nav aria-label="Product" class="flex flex-col gap-2.5">
         <h2 class={colHeading}>Product</h2>
         <ul class="grid gap-2.5">
@@ -69,7 +60,6 @@
         </ul>
       </nav>
 
-      <!-- Company -->
       <nav aria-label="Company" class="flex flex-col gap-2.5">
         <h2 class={colHeading}>Company</h2>
         <ul class="grid gap-2.5">
@@ -79,7 +69,6 @@
         </ul>
       </nav>
 
-      <!-- Legal -->
       <nav aria-label="Legal" class="flex flex-col gap-2.5">
         <h2 class={colHeading}>Legal</h2>
         <ul class="grid gap-2.5">

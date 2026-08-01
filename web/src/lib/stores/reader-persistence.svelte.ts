@@ -68,8 +68,6 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
   const mode = asLiteral<ReaderMode>(stored.mode, READER_MODE_VALUES);
   if (mode) out.mode = mode;
 
-  // Match original semantics: set the record only when the stored value is an
-  // object (even an empty one). asBooleanRecord/asStringRecord drop bad entries.
   const bookmarksObj = asObject(stored.bookmarks);
   if (bookmarksObj) out.bookmarks = asBooleanRecord(bookmarksObj);
 
@@ -89,7 +87,6 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
   return out;
 }
 
-/** Apply validated durable fields into reactive state; skip undefined fields. */
 function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
   if (p.current !== undefined) s.current = p.current;
   if (p.fontSize !== undefined) s.fontSize = p.fontSize;
@@ -100,18 +97,11 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
 }
 
 export interface ReaderPersistence {
-  /** Hydrate once from localStorage and arm cross-tab + page-hide listeners. */
   hydrate(): void;
-  /** Immediate full-blob write of the durable slice. Also flushes a pending
-   *  debounced note write so there is no redundant later write. */
   writeNow(): void;
-  /** Schedule a trailing debounced write (notes). */
   scheduleNoteWrite(): void;
-  /** Flush a pending debounced write immediately (if any). */
   flushNoteWrite(): void;
-  /** True once hydrate() has run. */
   readonly hydrated: boolean;
-  /** Detach listeners and flush pending writes. */
   dispose(): void;
 }
 
@@ -140,7 +130,6 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
           applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY))),
         ),
       );
-      // Flush a pending debounced note save before the tab unloads / is evicted.
       teardowns.push(onPageHide(() => noteWriter.flush()));
     },
     writeNow() {

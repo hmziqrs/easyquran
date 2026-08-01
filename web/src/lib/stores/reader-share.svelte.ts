@@ -19,20 +19,17 @@ export function verseRef(key: VerseKey): string {
   return `${surahByNum(num).name} ${num}:${n}`;
 }
 
-/** Pure: the share/copy body for a verse = arabic text + newline + reference. */
 export function verseShareText(key: VerseKey, text: string): string {
   return `${text}\n${verseRef(key)}`;
 }
 
 export function createReaderShare(core: ReaderCore) {
-  /** Sync verse text for a key from the open-surah cache ("" if unseeded). */
   const verseText = (key: VerseKey): string => {
     const { num, n } = parseKey(key);
     return (core.versesBySurah.get(num) ?? [])[n - 1] ?? "";
   };
 
   return {
-    /** Copy a verse (Arabic + ref) to the clipboard. Returns success. */
     async copyVerse(key: VerseKey): Promise<boolean> {
       if (!browser) return false;
       try {
@@ -42,8 +39,6 @@ export function createReaderShare(core: ReaderCore) {
         return false;
       }
     },
-    /** Share a verse via the Web Share API when available, else fall back to
-     *  copying. Returns what happened. */
     async shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed"> {
       if (!browser) return "failed";
       const ref = verseRef(key);

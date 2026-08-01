@@ -72,7 +72,6 @@ function openSource(sourceId: QuranSourceIdValue): SourceState {
   }
 }
 
-/** Raw verses plus the serializable canonical descriptor for one surah. */
 export function readSurahText(
   num: number,
   sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
@@ -86,7 +85,6 @@ export function readSurahText(
   };
 }
 
-/** Back-compatible raw-only accessor for gallery specimens. */
 export function readSurahVerses(
   num: number,
   sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
@@ -94,7 +92,6 @@ export function readSurahVerses(
   return readSurahText(num, sourceId).verses;
 }
 
-/** Raw ayahs and source descriptors in an inclusive global range. */
 export function readRangeText(
   from: number,
   to: number,

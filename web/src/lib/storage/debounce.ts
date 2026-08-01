@@ -9,21 +9,12 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 export interface Debounced {
-  /** Schedule (or reschedule) a trailing invocation. */
   schedule(): void;
-  /** Invoke immediately and clear any pending timer. */
   flush(): void;
-  /** Drop the pending invocation without running it. */
   cancel(): void;
-  /** Whether a trailing invocation is currently pending. */
   readonly pending: boolean;
 }
 
-/**
- * Create a trailing-edge debounce around `fn`. At most one invocation runs
- * `wait` ms after the last `schedule()`. `flush()` runs it immediately (used
- * on note-close / page-hide); `cancel()` discards a pending run.
- */
 export function trailingDebounce(fn: () => void, wait: number): Debounced {
   let timer: ReturnType<typeof setTimeout> | null = null;
 

@@ -96,7 +96,6 @@ function invariant(
   if (!condition) throw new Error(`[quran-view:${profile.id}] ${message}`);
 }
 
-/** Build and exhaustively validate a source-qualified canonical read view. */
 export function createQuranSourceView(input: SourceViewInput): QuranSourceView {
   const { profile } = input;
   const firstBySurah = new Map<number, string>();
@@ -219,7 +218,6 @@ export function createQuranSourceView(input: SourceViewInput): QuranSourceView {
   });
 }
 
-/** Derive a numbered ayah body from a serializable descriptor and raw text. */
 export function bodyText(
   raw: string,
   ayah: number,

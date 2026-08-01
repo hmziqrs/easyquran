@@ -1,4 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
+/*
    manifest.ts — resolve the Quran content manifest (scripts + versions).
 
    Tries the live /quran/v1 API (`/version` + `/scripts`) when `apiBase` is set;
@@ -10,7 +10,7 @@
    This module runs on the MAIN THREAD (it imports $env via site.ts); the worker
    receives the resolved manifest as a plain message, so no SvelteKit/$env code
    ever crosses into the worker bundle.
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import { QURAN } from "$lib/config/site";
 import type { ArtifactSpec } from "$lib/data/quran-types";
@@ -51,7 +51,6 @@ function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
   }
 }
 
-/** Resolve the manifest, preferring the live API and degrading to baked. */
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
   if (!QURAN.apiBase) return baked;
   // Compose a 3s timeout with the caller's abort signal. Both are torn down in

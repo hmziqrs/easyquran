@@ -44,7 +44,6 @@ export interface NormalizedArabicMap {
   ends: number[];
 }
 
-/** Normalize Arabic while retaining positions into the unmodified input. */
 export function normalizeArabicWithMap(input: string): NormalizedArabicMap {
   const values: { value: string; start: number; end: number }[] = [];
   let utf16 = 0;
@@ -100,7 +99,6 @@ export function scalarLength(s: string): number {
   return n;
 }
 
-/** A query is eligible after normalization when its scalar length is in range. */
 export function isEligibleQuery(norm: string): boolean {
   const len = scalarLength(norm);
   return len >= MIN_QUERY_LEN && len <= MAX_QUERY_LEN;

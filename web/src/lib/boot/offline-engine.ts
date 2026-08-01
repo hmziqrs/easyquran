@@ -17,10 +17,6 @@ import { bootOfflineEngine } from "$lib/quran/offline";
 let started = false;
 let teardown: (() => void) | null = null;
 
-/**
- * Start the offline Quran engine once. Idempotent: the first call boots and
- * captures the teardown; later calls are a no-op and return an empty teardown.
- */
 export function startOfflineEngine(): () => void {
   if (started) return () => {};
   started = true;

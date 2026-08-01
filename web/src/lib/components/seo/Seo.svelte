@@ -1,12 +1,3 @@
-<!--
-  Seo — page head metadata. Takes the route path; title + description are
-  looked up from PAGE_META (or overridden explicitly for dynamic pages like
-  /app/<slug>). Renders one svelte:head block with the title, description,
-  canonical, robots directive, Open Graph (incl. og:image), Twitter
-  (summary_large_image), markdown/plain alternate links (marketing pages only),
-  and per-page structured data: a WebPage (or subtype) node, a BreadcrumbList on
-  inner pages, and an optional FAQPage when `faq` is passed.
--->
 <script lang="ts">
   import { SITE, PAGE_META, MARKETING_PAGES } from "$lib/config/site";
 
@@ -14,22 +5,12 @@
 
   let {
     path,
-    /** schema.org @type for the page entity (e.g. "AboutPage"). Defaults to "WebPage". */
     schemaSubtype = "WebPage",
-    /** explicit title override (dynamic pages like /app/<slug>); else PAGE_META. */
     title,
-    /** explicit description override; else PAGE_META. */
     description,
-    /** optional Q&A; when present, a FAQPage graph is emitted. */
     faq,
-    /** extra JSON-LD objects to emit as their own application/ld+json scripts. */
     extraLd,
-    /** emit the .md/.txt alternate links (marketing pages only; default true). */
     includeTextVariants = true,
-    /**
-     * Keep the page out of search indexes. The /app index route uses this; the
-     * per-surah /app/<slug> pages are now indexable.
-     */
     noindex = false,
   }: {
     path: string;
@@ -54,8 +35,6 @@
 
   const current = $derived(MARKETING_PAGES.find((p) => p.href === path));
 
-  // Per-page WebPage entity (or subtype). Cross-references the site-wide
-  // WebSite + Organization @ids emitted in +layout.svelte.
   const webpageLd = $derived({
     "@context": "https://schema.org",
     "@type": schemaSubtype,
@@ -68,7 +47,6 @@
     about: { "@id": `${SITE.url}/#organization` },
   });
 
-  // Breadcrumb on every inner marketing page (Google omits it on the root).
   const breadcrumbLd = $derived(
     path !== "/" && current
       ? {

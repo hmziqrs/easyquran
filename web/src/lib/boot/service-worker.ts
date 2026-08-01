@@ -11,10 +11,6 @@
    with the other boot services (analytics / crash-reporting / offline-engine).
    ════════════════════════════════════════════════════════════════════════ */
 
-/**
- * Register the root service worker in production. No-op in dev. Returns a
- * no-op teardown (the registration has no listener to remove).
- */
 export function startServiceWorker(): () => void {
   if (import.meta.env.PROD && "serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
@@ -22,6 +18,5 @@ export function startServiceWorker(): () => void {
     });
   }
   return () => {
-    /* persistent across the page lifetime — nothing to detach */
   };
 }

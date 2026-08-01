@@ -1,10 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════
-   content.ts — site copy that isn't the Quran text: the FAQ accordion, the
-   privacy & terms section bodies, the contact-form topic chips, and the stat
-   tiles on the about page. Kept in code (not markdown) so the components can
-   render it with full styling control.
-   ════════════════════════════════════════════════════════════════════════ */
-
 export interface Faq {
   q: string;
   a: string;
@@ -116,7 +109,6 @@ export const TERMS_SECTIONS: LegalSection[] = [
   },
 ];
 
-/** The three stat tiles on the about page. */
 export interface Stat {
   value: string;
   label: string;

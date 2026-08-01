@@ -1,4 +1,3 @@
-// Barrel — import primitives as `import { Button, Container, Eyebrow } from "$lib/components"`.
 export * from "./ui/button";
 export * from "./icon";
 export * from "./layout";

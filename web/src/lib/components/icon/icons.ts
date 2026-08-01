@@ -9,7 +9,6 @@
 
 export interface IconDef {
   viewBox: string;
-  /** single path, drawn with fill="currentColor" */
   d: string;
 }
 

@@ -1,9 +1,3 @@
-<!--
-  Section — vertical page section with an optional top divider. Content is
-  auto-wrapped in a Container so it's never full-bleed.
-  • default padding: 64px (mobile) / 96px (desktop)
-  • `tight`: 48px — for denser stacked sections
--->
 <script lang="ts">
   import { cn } from "$lib/utils";
   import Container from "./Container.svelte";

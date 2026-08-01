@@ -20,11 +20,6 @@ import { browser } from "$app/environment";
 import { env } from "$env/dynamic/public";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
 
-// ── Firebase web config ────────────────────────────────────────────────
-// Hardcoded for this single project. These values are PUBLIC by Firebase's
-// design (they ship in the client bundle no matter where they're stored);
-// access is gated by Security Rules / App Check, not by secrecy. Every feature
-// module and the prerendered /firebase-config.js endpoint read from here.
 export const firebaseConfig: FirebaseOptions = {
   apiKey: "AIzaSyBTlP0JPVdOxesSY1QtqFujW4OqmaUsoMg",
   authDomain: "easyquran-fyi.firebaseapp.com",
@@ -65,16 +60,10 @@ export const ANALYTICS_DEBUG = false;
 let app: FirebaseApp | null = null;
 let appPromise: Promise<FirebaseApp | null> | null = null;
 
-/** The shared FirebaseApp once initApp() has resolved, else null. */
 export function getFirebaseApp(): FirebaseApp | null {
   return app;
 }
 
-/**
- * Initialize the shared FirebaseApp exactly once. Browser-only; no-op during
- * SSR and when unconfigured. Every feature module (analytics, performance,
- * messaging) calls this and awaits the same promise.
- */
 export function initApp(): Promise<FirebaseApp | null> {
   if (!browser || !isConfigured) return Promise.resolve(null);
   if (!appPromise) {

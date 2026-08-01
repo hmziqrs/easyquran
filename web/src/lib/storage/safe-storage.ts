@@ -13,12 +13,6 @@
 
 import { browser } from "$app/environment";
 
-/**
- * Read and JSON-parse `key`. Returns `undefined` on SSR, when the key is
- * absent, or when the stored value fails to parse. The caller is expected to
- * run the result through a domain decoder — the raw `unknown` is intentionally
- * never trusted as typed data.
- */
 export function readJSON(key: string): unknown {
   if (!browser) return undefined;
   try {
@@ -29,11 +23,6 @@ export function readJSON(key: string): unknown {
   }
 }
 
-/**
- * JSON-serialize and write `value` to `key`. No-op on SSR; swallows quota /
- * private-mode / disabled-storage errors (persistence is best-effort and must
- * never break the reading experience).
- */
 export function writeJSON(key: string, value: unknown): void {
   if (!browser) return;
   try {
@@ -43,13 +32,11 @@ export function writeJSON(key: string, value: unknown): void {
   }
 }
 
-/** Remove `key` from localStorage. No-op on SSR or when absent. */
 export function removeJSON(key: string): void {
   if (!browser) return;
   try {
     localStorage.removeItem(key);
   } catch {
-    /* non-fatal */
   }
 }
 
@@ -83,12 +70,6 @@ export function onStorageKey(key: string, handler: () => void): () => void {
   return () => window.removeEventListener("storage", listener);
 }
 
-/**
- * Subscribe to `pagehide` (covers tab close, reload, and bfcache eviction on
- * modern browsers). Use it to flush any deferred writes (e.g. a debounced note
- * save) before the page unloads so the last keystroke is durable. Returns a
- * teardown function. No-op on SSR.
- */
 export function onPageHide(handler: () => void): () => void {
   if (!browser) return () => {};
   window.addEventListener("pagehide", handler);

@@ -18,8 +18,6 @@
 import { createContext } from "svelte";
 import { reader as defaultReader, type ReaderApi } from "./reader.svelte";
 
-// createContext returns a [use, set] pair bound to a unique key. `undefined`
-// lets useReader() fall back to the singleton when no provider is mounted.
 const [useReaderCtx, setReaderCtx] = createContext<ReaderApi | undefined>();
 
 /**
@@ -32,11 +30,6 @@ export function setReaderContext(instance: ReaderApi = defaultReader): ReaderApi
   return instance;
 }
 
-/**
- * Read the subtree's reader. Returns the context-provided instance when a
- * provider is mounted, otherwise the app-wide singleton — so callers without a
- * provider keep exactly the old behavior.
- */
 export function useReader(): ReaderApi {
   return useReaderCtx() ?? defaultReader;
 }

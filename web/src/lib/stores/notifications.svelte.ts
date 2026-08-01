@@ -43,7 +43,6 @@ interface PersistedFcm {
   subscribed: boolean;
 }
 
-/** Validate a raw localStorage blob into the FCM persisted shape. */
 export function decodeFcm(raw: unknown): PersistedFcm {
   const stored = asObject(raw);
   if (!stored) return { token: null, subscribed: false };
@@ -55,11 +54,10 @@ export function decodeFcm(raw: unknown): PersistedFcm {
 
 class NotificationsStore {
   #permission = $state<PermissionState>("default");
-  #supported = $state<boolean | null>(null); // null = not yet probed
+  #supported = $state<boolean | null>(null);
   #subscribed = $state(false);
   #token = $state<string | null>(null);
   #lastMessage = $state<MessagePayload | null>(null);
-  /** True once a subscribe/unsubscribe is in flight. */
   #busy = $state(false);
   #hydrated = false;
   /**
@@ -68,7 +66,6 @@ class NotificationsStore {
    * under it and bail before writing a stale "subscribed" result.
    */
   #generation = 0;
-  /** Coalesces concurrent #refreshToken calls (hydrate + visibilitychange). */
   #refreshInFlight: Promise<void> | null = null;
 
   get permission(): PermissionState {
@@ -90,7 +87,6 @@ class NotificationsStore {
     // Need a definitive "yes" on support before offering the control.
     return this.#supported === true && this.#permission !== "denied";
   }
-  /** Human-friendly status line for the settings UI. */
   get statusText(): string {
     if (!isConfigured) return "Notifications unavailable (not configured).";
     if (this.#supported === null) return "Checking…";
@@ -101,7 +97,6 @@ class NotificationsStore {
     return "Off.";
   }
 
-  /** Detect support/permission and, if previously enabled, re-arm push. */
   hydrate(): void {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
@@ -116,14 +111,11 @@ class NotificationsStore {
 
     void isMessagingSupported().then((ok) => {
       this.#supported = ok;
-      // Unsupported? Make sure we don't advertise an active subscription.
       if (!ok) this.#subscribed = false;
     });
 
-    // Attach foreground delivery + token-refresh handling for the whole session.
     void this.#wireListeners();
 
-    // Re-establish a valid token + server registration if the user is opted in.
     if (this.#subscribed && this.#permission === "granted") void this.#refreshToken();
   }
 
@@ -158,19 +150,17 @@ class NotificationsStore {
       this.#permission = getPermissionState();
       const gen = this.#generation;
       const token = await getFcmToken();
-      if (gen !== this.#generation) return; // subscribe/unsubscribe landed mid-flight
+      if (gen !== this.#generation) return;
       if (!token) {
-        // Permission revoked or token unavailable — give up the local subscription.
         if (this.#permission !== "granted") this.#setSubscribed(false, null);
         return;
       }
       if (token === this.#token) {
-        // Unchanged: keep the flag/local state without a redundant server round-trip.
         this.#setSubscribed(true, token);
         return;
       }
       const registered = await registerTokenWithServer(token);
-      if (gen !== this.#generation) return; // state changed while registering
+      if (gen !== this.#generation) return;
       this.#token = token;
       // Keep locally regardless; backend may be absent or the session not yet authed.
       this.#setSubscribed(true, token, registered);
@@ -205,7 +195,7 @@ class NotificationsStore {
     if (!browser || this.#busy) return false;
     if (this.#supported === false) return false;
     this.#busy = true;
-    this.#generation += 1; // invalidate any in-flight #refreshToken
+    this.#generation += 1;
     try {
       const permission = await requestPermission();
       this.#permission = permission;
@@ -226,11 +216,10 @@ class NotificationsStore {
     }
   }
 
-  /** Opt out: revoke server-side, invalidate the token, clear local state. */
   async unsubscribe(): Promise<boolean> {
     if (!browser || this.#busy) return false;
     this.#busy = true;
-    this.#generation += 1; // invalidate any in-flight #refreshToken
+    this.#generation += 1;
     // Let an in-flight refresh finish (its gen check now fails, so it won't write)
     // before we invalidate the token — avoids interleaving getToken/deleteToken.
     if (this.#refreshInFlight) await this.#refreshInFlight.catch(() => {});
@@ -248,12 +237,10 @@ class NotificationsStore {
     }
   }
 
-  /** Drop the last foreground message (toast dismissed). */
   clearMessage(): void {
     this.#lastMessage = null;
   }
 
-  /** Re-read the live permission (e.g. after the user returns from settings). */
   syncPermission(): void {
     if (!browser) return;
     this.#permission = getPermissionState();
@@ -264,7 +251,6 @@ class NotificationsStore {
   }
 }
 
-/** Construct an isolated notifications store instance (for tests/isolation). */
 export function createNotifications(): NotificationsStore {
   return new NotificationsStore();
 }

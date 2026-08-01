@@ -1,8 +1,3 @@
-/* The derivation is what makes a three-colour picker produce a usable theme,
-   so the properties worth pinning are the ones a user would notice breaking:
-   surfaces must step the RIGHT WAY for the seed's lightness, text must land on
-   the opposite end, and accent foregrounds must stay readable. */
-
 import { describe, expect, it } from "vite-plus/test";
 import { deriveTokens, isLight, luminance, parseHex, tokensToCss, toHex } from "../derive";
 
@@ -28,9 +23,7 @@ describe("deriveTokens — background ramp", () => {
     expect(lum(t["--bg-1"]!)).toBeGreaterThan(lum("#101820"));
     expect(lum(t["--bg-2"]!)).toBeGreaterThan(lum(t["--bg-1"]!));
     expect(lum(t["--bg-3"]!)).toBeGreaterThan(lum(t["--bg-2"]!));
-    // the nav/footer bar sinks BELOW the page on a dark theme
     expect(lum(t["--bg-elev"]!)).toBeLessThan(lum("#101820"));
-    // text ramps from brightest (--fg) down to the muted label step
     expect(lum(t["--fg"]!)).toBeGreaterThan(lum(t["--fg-2"]!));
     expect(lum(t["--fg-2"]!)).toBeGreaterThan(lum(t["--fg-3"]!));
     expect(lum(t["--fg-3"]!)).toBeGreaterThan(lum(t["--fg-4"]!));
@@ -70,7 +63,6 @@ describe("deriveTokens — partial seeds", () => {
   it("contributes nothing for seeds that are absent or unparseable", () => {
     expect(deriveTokens({})).toEqual({});
     expect(deriveTokens({ accent: "not-a-colour" })).toEqual({});
-    // an accent-only custom layer must not touch the background family
     expect(Object.keys(deriveTokens({ accent: "#3fbfa6" }))).not.toContain("--bg");
   });
 });

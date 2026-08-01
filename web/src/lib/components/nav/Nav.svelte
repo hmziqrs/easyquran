@@ -1,10 +1,3 @@
-<!--
-  Nav — sticky, blurred top bar. Brand + the primary links (NAV_LINKS from the
-  site config) + theme toggle and the "Open the app" CTA. The active link
-  mirrors the current route via SvelteKit's `page` state; /app is active for
-  any path under it. Below `md` the links collapse into a hamburger drawer
-  (the bar keeps brand + toggle + CTA).
--->
 <script lang="ts">
   import { page } from "$app/state";
   import { NAV_LINKS } from "$lib/config/site";
@@ -18,21 +11,15 @@
   let toggleBtn: HTMLButtonElement | undefined = $state();
   let drawerEl: HTMLDivElement | undefined = $state();
 
-  // /app is active on every reader route; the marketing links are exact matches.
   function isActive(href: string) {
     return href === "/app" ? page.url.pathname.startsWith("/app") : page.url.pathname === href;
   }
 
-  // Close the drawer whenever the route changes (link taps + back/forward).
   $effect(() => {
     void page.url.pathname;
     open = false;
   });
 
-  // The drawer is modal (full-screen backdrop, Escape to close), so it owns
-  // focus while open: move focus to the first link on open, trap Tab within,
-  // and return focus to the hamburger toggle on close. `wasOpen` guards the
-  // restore so we don't grab focus on the initial mount.
   let wasOpen = false;
   $effect(() => {
     const isOpen = open;
@@ -56,7 +43,6 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") open = false;
   }
-  // Trap Tab/Shift+Tab inside the drawer while it is open.
   function onDrawerKeydown(e: KeyboardEvent) {
     if (e.key !== "Tab" || !drawerEl) return;
     const focusables = Array.from(
@@ -128,7 +114,6 @@
 </nav>
 
 {#if open}
-  <!-- click-away backdrop -->
   <button
     type="button"
     aria-label="Close menu"

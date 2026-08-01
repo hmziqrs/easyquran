@@ -24,9 +24,7 @@ import { asObject, readJSON, writeJSON } from "$lib/storage";
 const STORAGE_KEY = "easyquran.consent";
 
 export interface ConsentFlags {
-  /** Firebase Analytics (GA4) — page views, feature usage, events. */
   analytics: boolean;
-  /** Firebase Performance Monitoring — load/network traces. */
   performance: boolean;
   /** Advertising-related storage. We run no ads today; kept for forward-compat. */
   advertising: boolean;
@@ -55,15 +53,12 @@ export interface Consent {
   readonly analytics: boolean;
   readonly performance: boolean;
   readonly advertising: boolean;
-  /** GA4 consent-mode settings derived from the current flags. */
   readonly consentSettings: ConsentSettings;
-  /** Patch one or more flags, persist, and notify listeners. */
   set(patch: ConsentPatch): void;
   setAnalytics(on: boolean): void;
   setPerformance(on: boolean): void;
   allowAll(): void;
   denyAll(): void;
-  /** Hydrate from localStorage after mount (SSR used DEFAULT_FLAGS). */
   hydrate(): void;
 }
 

@@ -16,14 +16,7 @@
 
 import { consent } from "$lib/stores/consent.svelte";
 
-/**
- * Start Firebase Analytics + Performance (gated by consent) and register the
- * consent bridge. Returns a teardown that detaches the consent listener.
- */
 export function startAnalytics(): () => void {
-  // fbAnalytics stays undefined if the dynamic import or init fails; the
-  // consent bridge below is then a safe no-op, so a later retry or manual
-  // consent change isn't silently lost.
   let fbAnalytics: typeof import("$lib/firebase/analytics") | undefined;
 
   // Push the user's consent choices into GA4 consent mode + the analytics
@@ -36,9 +29,6 @@ export function startAnalytics(): () => void {
     void fbAnalytics.setAnalyticsCollectionEnabled(consent.analytics);
   };
 
-  // Register the consent bridge SYNCHRONOUSLY, outside the async init, so it
-  // (a) is always removable via the returned teardown and (b) survives an init
-  // failure (applyConsent no-ops until fbAnalytics is assigned).
   window.addEventListener("easyquran:consent", applyConsent);
 
   void (async () => {
@@ -46,8 +36,6 @@ export function startAnalytics(): () => void {
       fbAnalytics = await import("$lib/firebase/analytics");
       const fbPerf = await import("$lib/firebase/performance");
 
-      // Start analytics + performance, gated by consent. (Performance flags
-      // are honored at init; analytics can be toggled freely at runtime.)
       await fbAnalytics.initAnalytics();
       void fbPerf.initPerformance({
         dataCollectionEnabled: consent.performance,
@@ -60,8 +48,6 @@ export function startAnalytics(): () => void {
       // logged from +layout.svelte's afterNavigate.
       void fbAnalytics.pageView(location.pathname);
     } catch (err) {
-      // Analytics is best-effort — a failed dynamic import or init must not
-      // throw unhandled or disable the consent bridge registered above.
       console.warn("[firebase] init failed:", err);
     }
   })();

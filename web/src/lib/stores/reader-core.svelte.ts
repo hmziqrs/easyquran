@@ -27,27 +27,20 @@ export interface Persisted {
   current: number;
   /** Arabic font size in px. Reader-specific (NOT in the global appearance store). */
   fontSize: number;
-  /** Reading mode: verse-by-verse vs continuous mushaf text. */
   mode: ReaderMode;
-  /** Bookmark set — `true` marks a saved verse key. */
   bookmarks: Record<VerseKey, boolean>;
-  /** Per-verse notes keyed by `surah:ayah`. */
   notes: Record<VerseKey, string>;
   /** Last-read position (for the "continue reading" entry point). */
   lastRead: { num: number; n: number } | null;
 }
 
-/** Full runtime state = durable slice + transient (non-persisted) UI fields. */
 export interface ReaderState extends Persisted {
   /** Sidebar search box contents (resets on navigation). */
   query: string;
-  /** Sidebar browse list (Surah / Ayah / Juz / Page). */
   browse: BrowseMode;
-  /** Which verse's note panel is currently open (UI; note data lives in `notes`). */
   openNote: VerseKey | null;
 }
 
-/** Schema version stamped into every persisted blob. */
 export const READER_SCHEMA_VERSION = 1;
 
 /** Arabic font-size bounds and step (doc §5: named constants, not magic numbers). */
@@ -84,17 +77,12 @@ export interface NavToken {
   bump(): void;
 }
 
-/** The shared reactive core passed to every reader facet. */
 export interface ReaderCore {
-  /** Reactive runtime state (durable + transient). Mutate fields directly. */
   readonly s: ReaderState;
-  /** Per-open-surah synchronous verse cache (reactive collection). */
   readonly versesBySurah: SvelteMap<number, string[]>;
-  /** Monotonic navigation guard. */
   readonly nav: NavToken;
 }
 
-/** Construct a fresh, isolated reader core. Used by `createReader()` and tests. */
 export function createReaderCore(): ReaderCore {
   const s = $state<ReaderState>({ ...READER_DEFAULTS });
   const versesBySurah = new SvelteMap<number, string[]>();

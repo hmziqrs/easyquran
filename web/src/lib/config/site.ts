@@ -17,11 +17,9 @@ export const SITE = {
   url: "https://easyquran.fyi",
   github: "https://github.com/hmziqrs",
   tagline: "the Quran, made easy to read",
-  /** one-line value prop used in the footer (distinct from the hero tagline). */
   footerBlurb: "A free Qur'an reader — growing into hadith, audio, deeds and native apps.",
   // Owner/maker contact (email + X) is sourced server-side from
   // hmziq.rs/me.json — see $lib/server/owner.ts — so it isn't hardcoded here.
-  /** project maker + owner, credited in the footer and on the about page. */
   maker: "oxlabs",
   makerUrl: "https://oxlabs.dev",
   owner: "hmziq.rs",
@@ -43,7 +41,6 @@ import { env } from "$env/dynamic/public";
 import { SEARCH_VERSION } from "$lib/quran/search/normalize";
 import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
 
-/** Same-origin by default; override with a full URL when the API is elsewhere. */
 const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
 const QURAN_R2_BASE = "https://r2.easyquran.fyi";
 
@@ -83,12 +80,9 @@ export interface SitePage<Id extends string = PageId> {
   id: Id;
   href: string;
   label: string;
-  /** show in the primary nav (marketing) / app nav (application) */
   nav?: boolean;
 }
 
-/** Every public page. Drives the sitemap, llms.txt and the .md/.txt variants.
- *  `nav: true` additionally puts it in the top bar. */
 export const MARKETING_PAGES: SitePage<MarketingPageId>[] = [
   { id: "home", href: "/", label: "Home", nav: true },
   { id: "about", href: "/about", label: "About", nav: true },
@@ -98,8 +92,6 @@ export const MARKETING_PAGES: SitePage<MarketingPageId>[] = [
   { id: "terms", href: "/terms", label: "Terms" },
 ];
 
-/** The links rendered in the primary nav. Read jumps into the (noindex) reader;
- *  the rest are marketing pages. */
 export interface NavLink {
   href: string;
   label: string;
@@ -111,7 +103,6 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/contact", label: "Contact" },
 ];
 
-/** The /app reader. Never indexed, never in the sitemap or text variants. */
 export const APP_PAGES: SitePage<AppPageId>[] = [{ id: "app", href: "/app", label: "Read" }];
 
 /** Page-level metadata (title, description, canonical path). The single source
@@ -147,7 +138,6 @@ export const PAGE_META: Record<PageId, { title: string; description: string; pat
     description: "The terms under which EasyQuran is provided.",
     path: "/terms",
   },
-  // ── application (noindex) ──────────────────────────────────────────────
   app: { title: "EasyQuran", description: "Read the Quran.", path: "/app" },
 };
 
@@ -157,7 +147,6 @@ export interface AccentDef {
   hex: string;
 }
 
-/** The accent palette. Hex values are the dark-mode swatch colours. */
 export const ACCENTS: AccentDef[] = [
   { id: "emerald", label: "Teal", hex: "#3fbfa6" },
   { id: "gold", label: "Gold", hex: "#d9af6a" },
@@ -168,9 +157,7 @@ export const ACCENTS: AccentDef[] = [
 export interface SurfaceDef {
   id: SurfaceId;
   label: string;
-  /** one-line description shown under the swatch in the tweaker */
   note: string;
-  /** preview swatches — [dark page, light page] base backgrounds */
   darkHex: string;
   lightHex: string;
 }

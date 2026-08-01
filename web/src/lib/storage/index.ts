@@ -1,5 +1,3 @@
-/* storage/ — policy-aware persistence mechanics shared by the domain stores.
- * Import from "$lib/storage" (or the submodules directly). */
 export {
   readJSON,
   writeJSON,

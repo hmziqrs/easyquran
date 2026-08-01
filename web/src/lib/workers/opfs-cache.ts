@@ -24,7 +24,6 @@ import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "
 import { createIdbStore, createOpfsStore, hasOpfs } from "./storage";
 import { ensureCached } from "./cached";
 
-/** OPFS root directory and the legacy IDB names (kept identical for continuity). */
 const ROOT_DIR = "easyquran";
 const QURAN_DB = "easyquran-quran";
 const QURAN_STORE = "artifacts";
@@ -44,13 +43,6 @@ function toDownloadSpec(spec: ArtifactSpec): DownloadSpec {
   };
 }
 
-/**
- * Ensure an artifact is available as bytes: OPFS (read valid → else fetch+store),
- * falling back to IDB, then to a per-session fetch. Never throws on storage
- * failure — only on a genuinely unverifiable download. `onProgress` is forwarded
- * only on the OPFS fetch path (the durable, common case); cache hits and the
- * per-session fallback emit no progress.
- */
 export async function ensureArtifact(
   spec: ArtifactSpec,
   contentVersion: string,
@@ -66,7 +58,6 @@ export async function ensureArtifact(
     ? (p) => onProgress(p.loaded, p.total)
     : undefined;
 
-  // 1. OPFS (read valid → else fetch+store). Progress is forwarded ONLY here.
   if (hasOpfs()) {
     try {
       const opfs = createOpfsStore(ROOT_DIR);
@@ -87,9 +78,6 @@ export async function ensureArtifact(
     }
   }
 
-  // 2 + 3. IDB hit (verified) ⇒ "idb"; else download + best-effort IDB persist
-  // ⇒ "session". ensureCached's single-store read+verify+download+put maps
-  // exactly onto this tier; no progress is forwarded on the fallback download.
   const idb = createIdbStore(QURAN_DB, QURAN_STORE);
   const r = await ensureCached(dl, { store: idb, version: contentVersion, key: idbKey });
   return { bytes: r.bytes, store: r.from === "store" ? "idb" : "session" };

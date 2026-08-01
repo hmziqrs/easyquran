@@ -1,5 +1,4 @@
-/* ════════════════════════════════════════════════════════════════════════
-   owner.ts — SERVER-ONLY. Fetches the maker/owner profile once and exposes
+/* owner.ts — SERVER-ONLY. Fetches the maker/owner profile once and exposes
    only the render-safe {email, x, xHandle} subset to the app.
 
    Why server-only ($lib/server/*): the full payload (websites, CV, github,
@@ -12,20 +11,18 @@
    into static HTML — the browser never calls hmziq.rs. A fetch failure can
    never throw (a throw in a prerender load fails the build), so every error
    path falls back to hardcoded personal values.
-   ════════════════════════════════════════════════════════════════════════ */
+*/
 
 import { env } from "$env/dynamic/private";
 import type { OwnerPublic } from "$lib/types/owner";
 
 const DEFAULT_SOURCE_URL = "https://hmziq.rs/me.json";
-/** Optional override (e.g. for staging); falls back to the canonical URL. */
 const OWNER_SOURCE_URL = env.OWNER_SOURCE_URL || DEFAULT_SOURCE_URL;
 const FETCH_TIMEOUT_MS = 5_000;
 /** Cache TTL — decorative for a prerender build (one fetch either way), but
  *  bounds reuse if this module is later called from a runtime server. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-/** Full payload shape from hmziq.rs/me.json. Held server-side only. */
 export interface OwnerProfile {
   username: string;
   name: string;
@@ -97,7 +94,6 @@ export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<Own
   return inflight;
 }
 
-/** The render-safe subset — the ONLY owner shape returned to the client. */
 export async function getOwnerPublic(): Promise<OwnerPublic> {
   const p = await fetchOwnerProfile();
   return {

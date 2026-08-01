@@ -47,7 +47,6 @@ describe("trailingDebounce", () => {
     d.flush();
     expect(fn).toHaveBeenCalledTimes(1);
     expect(d.pending).toBe(false);
-    // No second run from the now-cleared timer.
     vi.advanceTimersByTime(1000);
     expect(fn).toHaveBeenCalledTimes(1);
   });

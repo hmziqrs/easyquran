@@ -45,7 +45,6 @@ export function isCanonicalAyahCoordinate(
   );
 }
 
-/** Validate every canonical key, not only row count or first-ayah presence. */
 export function validateCanonicalCoordinates(
   sourceProfile: string,
   rows: readonly QuranCoordinateRow[],

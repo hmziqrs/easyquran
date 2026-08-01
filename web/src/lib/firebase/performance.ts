@@ -19,17 +19,10 @@ let perf: FirebasePerformance | null = null;
 let initPromise: Promise<FirebasePerformance | null> | null = null;
 
 export interface PerfInitOptions {
-  /** Collect custom + automatic traces. Defaults true. */
   dataCollectionEnabled?: boolean;
-  /** Auto-instrument page load + network requests. Defaults true. */
   instrumentationEnabled?: boolean;
 }
 
-/**
- * Start Performance Monitoring, exactly once. Browser-only; no-op during SSR or
- * when unconfigured. Pass consent-derived flags so an opted-out user's session
- * is never instrumented in the first place.
- */
 export function initPerformance(opts: PerfInitOptions = {}): Promise<FirebasePerformance | null> {
   if (!browser || !isConfigured) return Promise.resolve(null);
   if (!initPromise) {
@@ -53,18 +46,10 @@ export function initPerformance(opts: PerfInitOptions = {}): Promise<FirebasePer
   return initPromise;
 }
 
-/** The shared FirebasePerformance instance once initialized, else null. */
 export function getPerf(): FirebasePerformance | null {
   return perf;
 }
 
-/**
- * Create and start a named custom trace. Returns the trace (call `.stop()` when
- * the measured work is done) or null if performance isn't initialized.
- *
- *   const t = await startTrace("reader_load");
- *   try { … } finally { await t?.stop(); }
- */
 export async function startTrace(name: string): Promise<PerformanceTrace | null> {
   if (!perf) await initPerformance();
   if (!perf) return null;

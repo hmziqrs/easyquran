@@ -11,6 +11,5 @@ export interface OwnerPublic {
   email: string;
   /** Absolute https://x.com/<handle> URL. */
   x: string;
-  /** Display handle, e.g. "@hmziqrs". */
   xHandle: string;
 }
