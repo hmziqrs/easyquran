@@ -601,6 +601,45 @@ That is a property of the source, and the reason the digests exist.
 
 All defects found by the audit are in *our code*, not the data: §3.1 and §7.1.
 
+### 9.2 Validation: the proposed rule executed against all 228 first ayahs
+
+§4.1/§4.2 were implemented exactly as specified — reference basmala from the
+corpus's own `raw(1,1)`, `bodyOffset[1] = 0` by definition, skeleton walk mapped
+back onto the original — and run over ayah 1 of all 114 surahs in **both**
+corpora. **0 failures.**
+
+| | Uthmani | simple-clean |
+|---|---|---|
+| stripped | 112 | 112 |
+| zero-offset | 1, 9 | 1, 9 |
+| distinct offsets | 40, 41 | 23 |
+| distinct opener texts | **2** — 110 plain, 2 shadda'd (95, 97) | **1** |
+| `opener + " " + body == raw`, byte-for-byte | 112/112 | 112/112 |
+| separator consumed | exactly one U+0020 | exactly one U+0020 |
+| body non-empty and trimmed | 114/114 | 114/114 |
+| removed prefix skeleton-equals the basmala | 112/112 | 112/112 |
+| corpora disagree on basmala presence | none | none |
+
+Reconstruction is lossless in both corpora: the only character the view ever
+consumes beyond the basmala is the single separating space. That is invariant 6
+demonstrated rather than asserted.
+
+**Stress cases** — ayah 1 texts that would fool a looser matcher, all correct:
+
+| surah | body after cut | why it is a trap |
+|---|---|---|
+| 55 | `ٱلرَّحْمَـٰنُ` | ayah 1 *is* a word that occurs inside the basmala; a greedy or last-occurrence matcher eats it |
+| 96 | `ٱقْرَأْ بِٱسْمِ رَبِّكَ ٱلَّذِى خَلَقَ` | contains `بِٱسْمِ` — the basmala's own opening letters — *after* the cut |
+| 87 | `سَبِّحِ ٱسْمَ رَبِّكَ ٱلْأَعْلَى` | contains `ٱسْمَ` |
+| 95, 97 | `وَٱلتِّينِ…` / `إِنَّآ أَنزَلْنَـٰهُ…` | shadda'd basmala, offset 41 not 40 |
+| 9 | `بَرَآءَةٌ مِّنَ ٱللَّهِ…` | opens with `بَ` and names Allah, but has no basmala — correctly untouched |
+| 1 | `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` | ayah 1 is the basmala; offset forced to 0, verse preserved whole |
+
+The 30 muqatta'at surahs are the most sensitive to an off-by-one, since their
+entire body is two to five characters (`الٓمٓ`, `الٓمٓصٓ`, `كٓهيعٓصٓ`, `حمٓ`, `قٓ`,
+`نٓ`, `طه`, `يسٓ`, `صٓ`, `الٓر`, `الٓمٓر`, `طسٓ`, `طسٓمٓ`). All came through intact —
+a cut one position early or late would corrupt them visibly.
+
 ## 10. Open items
 
 - **The quran.com source is not in the repo and has not been profiled.** §5.1
