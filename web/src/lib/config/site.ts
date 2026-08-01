@@ -12,24 +12,35 @@ export const SITE = {
 } as const;
 
 import { env } from "$env/dynamic/public";
+import { dev } from "$app/environment";
 import { SEARCH_VERSION } from "$lib/quran/search/normalize";
+import {
+  QuranDataEnvironment,
+  resolveQuranArtifactBase,
+  resolveQuranDataEnvironment,
+} from "$lib/quran/environment";
 import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
 
 const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
-const QURAN_R2_BASE = "https://r2.easyquran.fyi";
+const QURAN_DATA_ENVIRONMENT = resolveQuranDataEnvironment(
+  env.PUBLIC_ENV,
+  dev ? QuranDataEnvironment.Local : QuranDataEnvironment.Production,
+);
+const QURAN_ARTIFACT_BASE = resolveQuranArtifactBase(QURAN_DATA_ENVIRONMENT);
 
 const QURAN_ARTIFACTS = Object.freeze(
   registeredSourceProfiles().map((profile) => ({
     id: profile.sourceId,
     sizeBytes: profile.artifact.sizeBytes,
     sha256: profile.artifact.sha256,
-    downloadUrl: `${QURAN_R2_BASE}/${profile.artifact.r2Path}`,
+    downloadUrl: `${QURAN_ARTIFACT_BASE}/${profile.artifact.r2Path}`,
   })),
 );
 
 export const QURAN = {
   apiBase: PUBLIC_API_BASE,
-  r2Base: QURAN_R2_BASE,
+  dataEnvironment: QURAN_DATA_ENVIRONMENT,
+  artifactBase: QURAN_ARTIFACT_BASE,
   contentVersion: "32cc746d817cad9f",
   searchVersion: SEARCH_VERSION,
   scripts: QURAN_ARTIFACTS,

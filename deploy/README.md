@@ -72,8 +72,9 @@ failed build leaves the live site running. Without cron: `git pull && docker com
 | Browser | `PUBLIC_API_BASE_URL` | `https://easyquran.fyi/api` (baked into the bundle) |
 | SSG build | `INTERNAL_API_BASE_URL` | `http://api:8888` (build-only, not shipped) |
 
-The web build reads local `quran-uthmani.sqlite` for SSG today; the internal URL
-is forward-ready for the live `/quran/v1` API.
+The web build reads local SQLite only for SSG. Runtime artifact delivery always
+uses R2 here — Docker images are production builds. The `/_quran` local artifact
+source is a dev-server-only mode, selected with `PUBLIC_ENV=local`.
 
 ## Notes
 

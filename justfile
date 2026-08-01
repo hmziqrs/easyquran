@@ -26,14 +26,21 @@ setup: _env
 web-install:
     cd web && pnpm install
 
-# Vite dev server.
-web-dev:
-    cd web && pnpm dev
+# The Quran data environment is public and controls where the browser gets the
+# verified SQLite artifacts: local = repository files, prod = Cloudflare R2.
+# `web-preview` rebuilds first so its source matches the requested environment.
+# Examples: `just web-dev local`, `just web-build prod`, `just web-preview local`.
+web-dev environment="local":
+    @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
+    cd web && PUBLIC_ENV="{{environment}}" pnpm dev
 
-web-build:
-    cd web && pnpm build
+web-build environment="prod":
+    @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
+    cd web && PUBLIC_ENV="{{environment}}" pnpm build
 
-web-preview:
+web-preview environment="prod":
+    @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
+    cd web && PUBLIC_ENV="{{environment}}" pnpm build
     cd web && pnpm preview
 
 # svelte-check type-check.
@@ -93,3 +100,15 @@ api-fmt:
 upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
     cd db/quran/tanzil/translations && npm run upload:sqlite -- {{args}}
+
+# Docker always builds production: Quran artifacts come from R2. `local` only
+# changes exposure (localhost port override + a local proxy network).
+docker-up environment="local":
+    @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
+    @if [ "{{environment}}" = "local" ]; then \
+        docker network inspect easyquran-local >/dev/null 2>&1 || docker network create easyquran-local; \
+        PROJECT=easyquran PROXY_NETWORK=easyquran-local DOMAIN=localhost \
+        docker compose -f docker-compose.yml -f docker-compose.local.yml up --build; \
+    else \
+        docker compose -f docker-compose.yml up --build; \
+    fi

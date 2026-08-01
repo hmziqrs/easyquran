@@ -7,9 +7,7 @@
 # http://localhost:8080 directly.
 #
 # Usage (from repo root):
-#   docker network create easyquran-local 2>/dev/null || true
-#   PROJECT=easyquran PROXY_NETWORK=easyquran-local DOMAIN=localhost \
-#     docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#   just docker-up local
 #
 # Then visit http://localhost:8080  (stop with: docker compose down)
 services:

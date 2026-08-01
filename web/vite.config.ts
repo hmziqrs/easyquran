@@ -19,6 +19,12 @@ export default defineConfig({
         runes: ({ filename }) =>
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
       },
+      serviceWorker: {
+        register: false,
+        files: (file) =>
+          !/\.DS_Store/.test(file) &&
+          !/^(_headers|_redirects|robots\.txt|og\.png|sw\.js)$/.test(file),
+      },
       adapter: adapter({
         pages: "build",
         assets: "build",

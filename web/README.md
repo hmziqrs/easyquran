@@ -19,6 +19,21 @@ primitives, and Firebase Analytics. Same stack and conventions as `oxlabs.dev`.
 
 ## Commands
 
+From the repository root, use `just` to choose the Quran database source:
+
+```bash
+just web-dev local      # Vite serves the tracked SQLite files at /_quran
+just web-dev prod       # Vite uses the production R2 files
+just web-build local    # static build packages the SQLite files at /_quran
+just web-build prod     # static build fetches SQLite from R2 (default)
+just docker-up local    # local Caddy/Docker build, exposed at localhost:8080
+```
+
+`local` and `prod` are the only supported values. The selector is public and
+baked into the web build; it changes only the database download origin, never
+credentials. Direct `pnpm dev` defaults to local and direct `pnpm build`
+defaults to prod.
+
 Run from this directory (`web/`):
 
 ```bash
@@ -85,14 +100,17 @@ what's disclosed.
 
 ### Cloud Messaging
 
-- **Background delivery** (page closed/backgrounded): `static/firebase-messaging-sw.js`
-  — a classic worker that `importScripts` the compat SDK (gstatic, version-pinned —
-  keep in sync with `firebase` in `package.json`) and its config from
-  `/firebase-config.js`. That endpoint (`src/routes/firebase-config.js/+server.ts`,
-  prerendered) writes `self.__easyquranFirebase = {…}` from the hardcoded
-  config in `src/lib/firebase/index.ts` (single source of truth). A classic worker + `importScripts` is used because SvelteKit's
-  service-worker env can't read runtime `$env/*` and the build must succeed with
-  no config; synchronous config at eval time is what reliable background push needs.
+- **Background delivery** (page closed/backgrounded): handled natively by the ONE
+  root worker, `src/service-worker.ts` (built to `/service-worker.js`, scope `/`).
+  It has no `importScripts` of the gstatic compat SDK: a failing top-level
+  cross-origin `importScripts` aborts the whole worker, which would take offline
+  reading down with it. None is needed — the push payload is self-contained, so
+  the worker just receives the push and calls `showNotification`. The client
+  subscribes via `getToken` (`firebase/messaging`), passing the registration from
+  `src/lib/boot/service-worker.ts`. `/firebase-config.js`
+  (`src/routes/firebase-config.js/+server.ts`, prerendered) still serves the
+  client-side config from `src/lib/firebase/index.ts` (single source of truth) and
+  is network-only in the worker so it cannot go stale.
 - **Foreground delivery** (page focused): `onMessage` in the client dispatches an
   `easyquran:fcm` event and updates the `notifications` store; `<NotificationToast>`
   (mounted in the root layout) shows it.

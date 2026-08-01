@@ -321,11 +321,10 @@ this plan.
 - OPFS holds both existing Arabic SQLite files under the active
   `contentVersion`.
 - One Service Worker at `/` caches the same-origin shell, HTML, JS/CSS, and
-  WASM and imports the Firebase Messaging compatibility worker.
+  WASM, and handles Firebase Messaging push natively (no `importScripts`).
 - The Service Worker passes `/quran/v1/**` through and does not Cache-Storage
   cache either CDN SQLite file; OPFS is their sole browser-persistent copy.
-- It network-first/excludes `/firebase-messaging-sw.js` and
-  `/firebase-config.js` so FCM configuration cannot become stale.
+- It excludes `/firebase-config.js` so FCM configuration cannot become stale.
 - Translation routes, translation-bearing Arabic requests, and translation-pack
   URLs always bypass caches. Translation fetches also use
   `cache: "no-store"`.

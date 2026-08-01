@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
 import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
 import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
+import { registerServiceWorker } from "$lib/boot/service-worker";
 
 export type PermissionState = "granted" | "denied" | "default" | "unsupported";
 
@@ -63,7 +64,8 @@ export function initMessaging(): Promise<Messaging | null> {
 export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!browser || !("serviceWorker" in navigator)) return null;
   try {
-    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const reg = await registerServiceWorker();
+    if (!reg) return null;
     await navigator.serviceWorker.ready;
     return reg;
   } catch (err) {

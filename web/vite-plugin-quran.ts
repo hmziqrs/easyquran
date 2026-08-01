@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { createReadStream, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -8,13 +8,23 @@ import {
   type QuranSuraAttrs,
 } from "./quran-data-source";
 import { Bismillah } from "./src/lib/data/quran-types";
+import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment";
 import { canonicalOpenerKind } from "./src/lib/quran/view/canonical";
+import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = __dirname;
 const NAMES_PATH = path.join(WEB_ROOT, "src/lib/data/surah-names.json");
 const COORDINATES_PATH = path.join(WEB_ROOT, "src/lib/data/quran-coordinates.json");
 const XML_PATH = path.join(WEB_ROOT, "../db/quran/tanzil/quran-data.xml");
+const LOCAL_ARTIFACT_PREFIX = "/_quran/";
+
+const LOCAL_ARTIFACTS = new Map(
+  registeredSourceProfiles().map((profile) => [
+    profile.artifact.r2Path,
+    path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
+  ]),
+);
 
 export const QURAN_META_VIRTUAL = "quran-meta:data";
 const RESOLVED = "\0" + QURAN_META_VIRTUAL;
@@ -180,6 +190,7 @@ function generate(): string {
 }
 
 export function quranData(): Plugin {
+  let dataEnvironment: QuranDataEnvironment = QuranDataEnvironment.Production;
   return {
     name: "easyquran:quran-data",
     enforce: "pre",
@@ -190,7 +201,31 @@ export function quranData(): Plugin {
       if (id !== RESOLVED) return null;
       return generate();
     },
+    configResolved(config) {
+      dataEnvironment = resolveQuranDataEnvironment(
+        process.env.PUBLIC_ENV ?? config.env.PUBLIC_ENV,
+        config.command === "serve" ? QuranDataEnvironment.Local : QuranDataEnvironment.Production,
+      );
+    },
     configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (dataEnvironment !== QuranDataEnvironment.Local || !req.url) return next();
+        const requestUrl = new URL(req.url, "http://vite.local");
+        if (!requestUrl.pathname.startsWith(LOCAL_ARTIFACT_PREFIX)) return next();
+
+        const artifactPath = decodeURIComponent(
+          requestUrl.pathname.slice(LOCAL_ARTIFACT_PREFIX.length),
+        );
+        const localPath = LOCAL_ARTIFACTS.get(artifactPath);
+        if (!localPath) return next();
+
+        const size = statSync(localPath).size;
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/vnd.sqlite3");
+        res.setHeader("Content-Length", size);
+        res.setHeader("Cache-Control", "no-store");
+        createReadStream(localPath).on("error", next).pipe(res);
+      });
       server.watcher.add([NAMES_PATH, XML_PATH, COORDINATES_PATH]);
       server.watcher.on("change", (f) => {
         if (f === NAMES_PATH || f === XML_PATH || f === COORDINATES_PATH) {
@@ -199,6 +234,16 @@ export function quranData(): Plugin {
           if (mod) void server.reloadModule(mod);
         }
       });
+    },
+    generateBundle() {
+      if (dataEnvironment !== QuranDataEnvironment.Local) return;
+      for (const [artifactPath, localPath] of LOCAL_ARTIFACTS) {
+        this.emitFile({
+          type: "asset",
+          fileName: `${LOCAL_ARTIFACT_PREFIX.slice(1)}${artifactPath}`,
+          source: readFileSync(localPath),
+        });
+      }
     },
   };
 }

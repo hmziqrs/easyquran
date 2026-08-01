@@ -13,6 +13,7 @@ COPY web/ ./web/
 # Build-time data the web build reads from the repo root (NOT in web/):
 COPY db/quran/tanzil/quran-data.xml ./db/quran/tanzil/quran-data.xml
 COPY db/quran/tanzil/arabic/quran-uthmani.sqlite ./db/quran/tanzil/arabic/quran-uthmani.sqlite
+COPY db/quran/tanzil/arabic/quran-simple-clean.sqlite ./db/quran/tanzil/arabic/quran-simple-clean.sqlite
 # web doesn't depend on the sibling translations package (pulls heavy @aws-sdk).
 RUN sed -i '/db\/quran\/tanzil\/translations/d' pnpm-workspace.yaml
 

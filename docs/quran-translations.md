@@ -884,7 +884,7 @@ remain healthy through rollout.
 - `ReaderShell.svelte`, `SurahReader.svelte`, `RangeReader.svelte`, and
   `VerseRow.svelte`
 - surah, juz, and page route components for translation contexts
-- `web/static/sw.js` regression coverage; behavior remains bypass-only
+- `web/src/service-worker.ts` regression coverage; behavior remains bypass-only
 - CSP/environment configuration for the catalog/CDN origin
 - reader persistence, component, accessibility, and end-to-end tests
 

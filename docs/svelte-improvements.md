@@ -87,7 +87,7 @@ These are correctness improvements, not cosmetic refactors:
 - `worker-client.ts`: add a timeout per request, clear the pending entry on timeout, and reject all pending requests on worker failure or disposal.
 - `manifest.ts`: always clear the timeout and detach the caller abort listener in `finally`, or use composed timeout/abort signals where supported by the browser target.
 - `search.ts`: do not call `String()` on an unknown `key`; validate that it is a string. The current coercion can turn an object into `"[object Object]"`.
-- `static/sw.js` and `vite-plugin-quran.ts`: resolve the current floating-promise warnings with explicit error handling or an intentional `void`.
+- `src/service-worker.ts` and `vite-plugin-quran.ts`: resolve the current floating-promise warnings with explicit error handling or an intentional `void`.
 
 Prefer a small `QuranWorkerClient` class or factory with an explicit lifecycle over eight module-level mutable variables. A single deferred is sufficient for readiness; the current resolver arrays only ever represent one start operation.
 
