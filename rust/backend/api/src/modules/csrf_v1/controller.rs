@@ -8,9 +8,7 @@ use crate::{
 };
 
 pub async fn generate(session: Session) -> Result<impl IntoResponse, ErrorResponse> {
-    // The CSRF token binds to the session id, which only materializes after
-    // save(); the marker insert makes the cookie layer treat the session as
-    // non-empty. Fail closed if the store is unreachable.
+    // The CSRF token binds to the session id, which only materializes after save(); the marker insert makes the cookie layer treat the session as non-empty. Fail closed if the store is unreachable.
     if session.id().is_none() {
         let _ = session.insert("csrf_issued", true).await;
 

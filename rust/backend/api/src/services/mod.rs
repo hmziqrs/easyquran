@@ -17,8 +17,7 @@ pub mod session_store;
 pub mod webhook_util;
 pub mod webauthn;
 
-// Security: predictable-RNG seeder + admin TUI must never ship in release
-// binaries — keep the seed-system cfg gates intact.
+// Security: predictable-RNG seeder + admin TUI must never ship in release — keep the seed-system cfg gates intact.
 #[cfg(feature = "seed-system")]
 pub mod seed;
 

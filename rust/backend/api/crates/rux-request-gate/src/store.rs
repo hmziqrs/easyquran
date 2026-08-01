@@ -24,8 +24,7 @@ fn epoch_to_systime(secs: Epoch) -> Option<SystemTime> {
     }
 }
 
-// Count + block must stay under one lock; splitting them lets concurrent
-// attackers race past the threshold (no test pins this).
+// Count + block must stay under one lock; splitting them lets concurrent attackers race past the threshold (no test pins this).
 #[async_trait]
 pub trait RateLimitStore: Send + Sync {
     async fn incr_expire(&self, key: &str, window: Duration) -> Result<(u64, u64), GateError>;

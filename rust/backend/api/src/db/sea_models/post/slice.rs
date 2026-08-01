@@ -123,8 +123,7 @@ pub struct PostWithRelations {
     pub id: i32,
     pub title: String,
     pub slug: String,
-    // XSS guard: serialize_with strips payloads from EditorJS fields the
-    // frontends render via `dangerous_inner_html`. Do not drop the attribute.
+    // XSS guard: serialize_with strips payloads from EditorJS fields the frontends render via `dangerous_inner_html` — do not drop the attribute.
     #[serde(serialize_with = "crate::utils::sanitize::serialize_sanitized_content")]
     pub content: Json,
     pub excerpt: Option<String>,
@@ -149,9 +148,7 @@ pub struct PostWithRelations {
     pub price_cents: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub currency: Option<String>,
-    // `has_access` defaults to true because into_relation is called for free
-    // posts and internal callers (author/admin) that bypass the paywall; read
-    // controllers overwrite it after consulting `services/paywall`.
+    // `has_access` defaults to true because into_relation is called for free posts and internal callers (author/admin) that bypass the paywall; read controllers overwrite it after consulting `services/paywall`.
     #[serde(default = "default_true")]
     pub has_access: bool,
 }

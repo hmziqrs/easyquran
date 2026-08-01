@@ -8,8 +8,7 @@ pub struct Model {
     pub id: i32,
     pub user_id: i32,
     pub credential_id: String,
-    /// `#[serde(skip_serializing)]` is load-bearing: holds public key material
-    /// that must never reach clients.
+    /// `#[serde(skip_serializing)]` is load-bearing: holds public key material that must never reach clients.
     #[serde(skip_serializing)]
     pub public_key: Vec<u8>,
     pub counter: i64,

@@ -70,8 +70,7 @@ pub async fn admin_create(
     state: State<AppState>,
     payload: ValidatedJson<V1AdminCreateUserPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Route guard only checks ROLE_ADMIN: without this a lower-rank admin
-    // could create a higher-rank user.
+    // Route guard only checks ROLE_ADMIN: without this a lower-rank admin could create a higher-rank user.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -100,8 +99,7 @@ pub async fn admin_delete(
     state: State<AppState>,
     Path(user_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Route guard only checks ROLE_ADMIN: block self-deletion and deletion of
-    // equal/higher-rank users (privilege escalation / self-lockout).
+    // Route guard only checks ROLE_ADMIN: block self-deletion and deletion of equal/higher-rank users (privilege escalation / self-lockout).
     let caller = auth.user.ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -155,8 +153,7 @@ pub async fn admin_update(
     Path(user_id): Path<i32>,
     payload: ValidatedJson<V1AdminUpdateUserPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Route guard only checks ROLE_ADMIN: requested role can't exceed the
-    // caller's, and the target must be strictly lower-rank.
+    // Route guard only checks ROLE_ADMIN: requested role can't exceed the caller's, and the target must be strictly lower-rank.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
@@ -221,8 +218,7 @@ pub async fn admin_change_password(
     Path(user_id): Path<i32>,
     payload: ValidatedJson<AdminChangePassword>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Route guard only checks ROLE_ADMIN: resetting a superior's password
-    // would be an account takeover.
+    // Route guard only checks ROLE_ADMIN: resetting a superior's password would be an account takeover.
     let caller_level = auth.user.as_ref().map(|u| u.role.to_i32()).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;

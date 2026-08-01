@@ -42,8 +42,7 @@ pub fn routes() -> Router<AppState> {
     r
 }
 
-/// Kept separate so search gets a tighter rate limit than `routes()`;
-/// inlining would let the CPU-heavy substring scan inherit the coarse limit.
+/// Kept separate so search gets a tighter rate limit than `routes()`; inlining lets the CPU-heavy substring scan inherit the coarse limit.
 pub fn search_route() -> Router<AppState> {
     Router::<AppState>::new().route("/search", get(controller::search))
 }

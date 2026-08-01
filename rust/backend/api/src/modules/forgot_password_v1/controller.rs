@@ -27,8 +27,7 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_duration: 86400,
 };
 
-/// Single-use reset tokens minted by `verify`, consumed by `reset`. Backed by
-/// an in-memory TTL map (not a stub): a restart drops outstanding tokens.
+/// Single-use reset tokens minted by `verify`, consumed by `reset`; backed by an in-memory TTL map (a restart drops outstanding tokens).
 mod reset_token {
     use super::*;
     use rand::Rng;
@@ -72,8 +71,7 @@ mod reset_token {
         Ok(token)
     }
 
-    /// Removal on take is required for single-use semantics — do not change to a
-    /// read (`get`), or a replayed `reset` could reuse the token.
+    /// Removal on take is required for single-use semantics — never a read (`get`), or a replayed `reset` could reuse the token.
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
         let mut map = tokens()
             .lock()
@@ -86,8 +84,7 @@ mod reset_token {
     }
 }
 
-/// Shared by the known- and unknown-email branches of `generate` so the
-/// response leaks no account existence (SC-006). Do not diverge them.
+/// Shared by both `generate` branches so the response leaks no account existence (SC-006); do not diverge them.
 pub(crate) fn uniform_success_response() -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::OK,
@@ -97,13 +94,10 @@ pub(crate) fn uniform_success_response() -> (StatusCode, Json<serde_json::Value>
     )
 }
 
-/// Fixed input for the dummy Argon2 hash on the unknown-email branch; constant
-/// length keeps per-request CPU cost fixed. Not dead — see equalize_unknown_email_work.
+/// Fixed input for the dummy Argon2 hash on the unknown-email branch; constant length keeps per-request CPU cost fixed (not dead — see equalize_unknown_email_work).
 const DUMMY_HASH_PASSWORD: &str = "timing-equalization-dummy";
 
-/// Closes the timing oracle between `generate`'s branches: the unknown-email
-/// path runs this Argon2id hash so its CPU cost matches the known-email path.
-/// The result is intentionally discarded by the caller.
+/// Closes the timing oracle between `generate`'s branches: the unknown-email path runs this Argon2id hash to match the known-email path's CPU cost (result discarded by caller).
 fn equalize_unknown_email_work() -> String {
     password_auth::generate_hash(DUMMY_HASH_PASSWORD)
 }
@@ -245,8 +239,7 @@ pub async fn reset(
             .with_message("Password and confirm password do not match"));
     }
 
-    // Password change requires the single-use reset_token; never add a code+
-    // email fallback here — that would let an email-interceptor skip /verify.
+    // Password change requires the single-use reset_token; never add a code+email fallback — that would let an email-interceptor skip /verify.
     let user_id = match reset_token::take(&payload.reset_token).await? {
         Some(id) => id,
         None => {

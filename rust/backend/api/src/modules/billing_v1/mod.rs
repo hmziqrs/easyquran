@@ -64,8 +64,7 @@ pub fn routes() -> Router<AppState> {
         .route("/access/{post_id}", get(controller::check_post_access))
         .route("/webhook/{provider}", post(controller::webhook_receiver));
 
-    // axum 0.8 has no default body limit; the public webhook receiver would be
-    // a CWE-400 memory-exhaustion target without this cap.
+    // axum 0.8 has no default body limit; the public webhook receiver needs this cap to avoid CWE-400 memory exhaustion.
     public
         .merge(authenticated)
         .merge(admin)

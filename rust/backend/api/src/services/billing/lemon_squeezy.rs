@@ -5,8 +5,7 @@ use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
-// All outbound LS calls must reuse this client (timeouts enforced) — never
-// a bare `reqwest::Client::new()`.
+// All outbound LS calls must reuse this client (timeouts enforced) — never a bare `reqwest::Client::new()`.
 use crate::state::build_http_client;
 
 pub struct LemonSqueezyProvider {

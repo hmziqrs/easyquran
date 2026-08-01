@@ -127,8 +127,7 @@ impl BillingProvider for PayPalProvider {
         let token = self.get_access_token().await?;
         let client = self.http_client.clone();
 
-        // session_id must be the subscription id (`I-…`): BILLING.SUBSCRIPTION.ACTIVATED
-        // echoes it back and the checkout intent only recovers on that match.
+        // session_id must be the subscription id (`I-…`): BILLING.SUBSCRIPTION.ACTIVATED echoes it back and the checkout intent only recovers on that match.
         let body = serde_json::json!({
             "plan_id": plan_slug,
             "custom_id": user_id.to_string(),
@@ -254,8 +253,7 @@ impl BillingProvider for PayPalProvider {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedWebhook, BillingError> {
-        // PayPal webhooks are cert-signed, verified via their verify-webhook-signature
-        // API, not a local HMAC (webhook_secret can't validate them).
+        // PayPal webhooks are cert-signed, verified via their verify-webhook-signature API, not a local HMAC (webhook_secret can't validate them).
         let webhook_id = self.webhook_id.as_ref().ok_or_else(|| {
             BillingError::WebhookVerification(
                 "PAYPAL_WEBHOOK_ID not configured; cannot verify PayPal webhook".into(),
@@ -346,8 +344,7 @@ impl BillingProvider for PayPalProvider {
         let resource_id = resource["id"].as_str().map(String::from);
         let billing_agreement_id = resource["billing_agreement_id"].as_str().map(String::from);
 
-        // SALE/CAPTURE resource.id is the sale (`S-…`), not the sub; the recurring
-        // sub is billing_agreement_id (`I-…`). Using the sale id breaks dispatch.
+        // SALE/CAPTURE resource.id is the sale (`S-…`), not the sub; the recurring sub is billing_agreement_id (`I-…`) — using the sale id breaks dispatch.
         let is_sale = matches!(
             native_event,
             "PAYMENT.SALE.COMPLETED" | "PAYMENT.CAPTURE.COMPLETED"
@@ -358,8 +355,7 @@ impl BillingProvider for PayPalProvider {
             resource_id.clone()
         };
 
-        // SALE events have no inline next_billing_time; fetch the linked sub so
-        // current_period_end refreshes. Failures degrade to None (fail-closed).
+        // SALE events have no inline next_billing_time; fetch the linked sub so current_period_end refreshes — failures degrade to None (fail-closed).
         let inline_period_end = super::provider::period_end_to_unix(
             resource
                 .get("billing_info")

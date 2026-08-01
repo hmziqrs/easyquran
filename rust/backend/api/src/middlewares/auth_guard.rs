@@ -4,8 +4,7 @@ use tower_sessions::Session;
 
 use crate::{services::auth::AuthBackend, AppState};
 
-// The revoked-session set must be passed to AuthBackend so the per-request
-// is_session_revoked check runs; dropping it lets revoked sessions stay valid.
+// Pass the revoked-session set to AuthBackend so the per-request is_session_revoked check runs; dropping it lets revoked sessions stay valid.
 async fn make_auth_session(state: &AppState, session: Session) -> AuthSession<AuthBackend> {
     let backend = AuthBackend::new(
         &state.sea_db,

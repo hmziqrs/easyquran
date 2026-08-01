@@ -4,8 +4,7 @@ use std::time::Instant;
 pub async fn track_metrics(request: Request, next: Next) -> Response {
     let start = Instant::now();
     let method = request.method().to_string();
-    // Template, not raw path: raw paths carry thousands of inlined IDs that
-    // would explode http.route cardinality.
+    // Template, not raw path: raw paths carry thousands of inlined IDs that would explode http.route cardinality.
     let path = request
         .extensions()
         .get::<MatchedPath>()

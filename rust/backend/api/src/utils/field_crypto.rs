@@ -109,8 +109,7 @@ fn strip_version_prefix(blob: &str) -> (&str, bool) {
 }
 
 pub fn encrypt_with(plaintext: &str, key: &[u8; 32]) -> Result<String, FieldCryptoError> {
-    // The getrandom error must propagate: falling back to the zeroed buffer
-    // would reuse an all-zero nonce, which is catastrophic for GCM.
+    // The getrandom error must propagate: falling back to the zeroed buffer would reuse an all-zero nonce, catastrophic for GCM.
     let mut nonce_bytes = Zeroizing::new([0u8; NONCE_LEN]);
     getrandom(nonce_bytes.as_mut()).map_err(|_| FieldCryptoError::Rng)?;
     let nonce = Nonce::from_slice(&*nonce_bytes);

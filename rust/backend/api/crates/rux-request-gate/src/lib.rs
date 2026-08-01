@@ -1,6 +1,4 @@
-//! Fail semantics are deliberate and must not be "simplified": [`check`] and
-//! [`RateLimitLayer`] fail-CLOSED (503) on a store error; [`dedup_nx`] /
-//! [`release_dedup`] fail-OPEN so a store outage never 5xx's the caller.
+//! Fail semantics must not be "simplified": [`check`]/[`RateLimitLayer`] fail-CLOSED (503) on store error; [`dedup_nx`]/[`release_dedup`] fail-OPEN so a store outage never 5xx's the caller.
 
 #![forbid(unsafe_code)]
 

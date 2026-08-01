@@ -63,9 +63,7 @@ pub struct ConsumedOauthState {
     pub nonce: Option<String>,
 }
 
-/// Single-use CSRF guard: `map.remove(...)` below must stay a remove-on-read
-/// (never `get`/peek, and don't defer it past a successful parse) so a replayed
-/// `state` observes `None`. No test pins this — do not weaken without one.
+/// Single-use CSRF guard: `map.remove(...)` below must stay a remove-on-read (never `get`/peek, don't defer past a successful parse) so a replayed `state` observes `None`. No test pins this — do not weaken without one.
 pub fn consume_oauth_state(
     session_id: &str,
     state_secret: &str,

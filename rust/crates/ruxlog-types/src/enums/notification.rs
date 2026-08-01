@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-// Stored as TEXT in the DB: each `string_value` is a stable contract — renaming
-// breaks existing rows. Do not rename once shipped.
+// Stored as TEXT in the DB: each `string_value` is a stable contract — renaming breaks existing rows; do not rename once shipped.
 #[cfg_attr(
     feature = "backend",
     derive(sea_orm::DeriveActiveEnum, strum::EnumIter)

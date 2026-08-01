@@ -219,8 +219,7 @@ fn serve_range_ayahs(
         next_cursor: win.next_cursor,
     };
     let body = AyahRange { range, ayahs };
-    // Global ranges key on fromGlobal/toGlobal so overlapping ranges sharing a
-    // cursor don't collide on one ETag (a CDN would serve one as the other).
+    // Global ranges key on fromGlobal/toGlobal so overlapping ranges sharing a cursor don't collide on one ETag.
     let lo = unit_start + from.map(|n| (n as u32).saturating_sub(1)).unwrap_or(0);
     let mut parts: Vec<(&str, String)> = vec![
         ("cursor", cursor.unwrap_or(lo).to_string()),
@@ -597,8 +596,7 @@ pub async fn scripts(
                     .trim_end_matches('/')
                     .to_string();
                 let resolved = resolve_scripts(&state, &cv, &public_url).await;
-                // Only cache once fully verified: a transient HEAD failure must
-                // self-heal on the next request, not be pinned incomplete for life.
+                // Only cache once fully verified: a transient HEAD failure must self-heal, not be pinned incomplete for life.
                 if resolved.len() == 2 {
                     *guard = Some(resolved.clone());
                 }
@@ -606,8 +604,7 @@ pub async fn scripts(
             }
         }
     };
-    // Partial responses use no-store and a distinct ETag, or a CDN pins the
-    // empty body as complete.
+    // Partial responses use no-store and a distinct ETag, or a CDN pins the empty body as complete.
     let verified = scripts.len();
     let canonical = format!("scripts?verified={verified}");
     let cache_control = if verified == 2 {
@@ -691,8 +688,7 @@ pub async fn version(
         },
         translations: Vec::new(),
     };
-    // ETag folds searchVersion: a normalization change bumps searchVersion
-    // without contentVersion, so contentVersion-only would serve a stale 304.
+    // ETag folds searchVersion: a normalization change bumps it without contentVersion, so contentVersion-only serves a stale 304.
     let cv = store.content_version();
     let etag = cache::weak_etag(&format!("{cv}+{}", quran::SEARCH_VERSION), "version");
     let env = Envelope::new(data, cv);
@@ -748,8 +744,7 @@ pub async fn random(
 ) -> Result<Response<Body>, QuranApiError> {
     let store = &state.quran;
     let script = parse_script(&q.script)?;
-    // Read the clock once: deriving date and TTL from two reads can straddle
-    // 00:00 UTC and serve yesterday's ayah for a full day.
+    // Read the clock once: deriving date and TTL from two reads can straddle 00:00 UTC and serve yesterday's ayah for a full day.
     let now = Utc::now();
     let date = match q.date.as_deref() {
         None => now.date_naive(),
@@ -880,16 +875,14 @@ pub async fn search(
         })
         .collect();
     let body = SearchResponse {
-        // Echo the normalized query: the ETag keys on it, so echoing raw makes
-        // two same-normalizing queries share an ETag with differing bodies.
+        // Echo the normalized query: the ETag keys on it, so echoing raw makes two same-normalizing queries share an ETag with differing bodies.
         query: norm_q.clone(),
         total,
         limit: limit as u16,
         offset: offset as u32,
         results,
     };
-    // ETag hex-digests the query to keep the header ASCII for strict CDNs, and
-    // folds searchVersion to avoid stale 304s.
+    // ETag hex-digests the query to keep the header ASCII for strict CDNs, and folds searchVersion to avoid stale 304s.
     let cv = store.content_version();
     let q_digest = hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8]);
     let etag = cache::weak_etag(

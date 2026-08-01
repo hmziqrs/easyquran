@@ -1,6 +1,4 @@
-//! The passkey state types are deserialized from the client-held blob; this is
-//! safe because webauthn-rs cryptographically binds each state to its challenge,
-//! so tampered/replayed state is rejected at /finish.
+//! Passkey state is deserialized from the client-held blob safely: webauthn-rs cryptographically binds each state to its challenge, so tampered/replayed state is rejected at /finish.
 
 use serde::{Deserialize, Serialize};
 use validator::Validate;

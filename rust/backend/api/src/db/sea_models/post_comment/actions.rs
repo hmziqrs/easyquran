@@ -177,8 +177,7 @@ impl Entity {
             .filter(Column::PostId.eq(post_id))
             .filter(Column::Hidden.eq(false))
             .order_by(Column::CreatedAt, Order::Asc)
-            // Keep the limit: public path has no pagination, so removing it
-            // allows an unbounded SELECT + 3-table join per request.
+            // Keep the limit: public path has no pagination, so removing it allows an unbounded SELECT + 3-table join per request.
             .limit(500)
             .into_model::<CommentWithUserJoined>()
             .all(conn)

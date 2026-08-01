@@ -110,8 +110,7 @@ impl WebauthnService {
                 ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
             })?;
 
-        // Counter==0 authenticators have no counter support; the exemption is
-        // required or every login from them is rejected (WebAuthn §6.1.17).
+        // Counter==0 authenticators have no counter support; the exemption is required or every login from them is rejected (WebAuthn §6.1.17).
         let counter = result.counter();
         if counter != 0 && (counter as i64) <= stored.counter {
             warn!(
@@ -142,8 +141,7 @@ impl WebauthnService {
     }
 }
 
-// Keep the client error generic; the specific failure is logged only —
-// surfacing it leaks signal to attackers.
+// Keep the client error generic; the specific failure is logged only — surfacing it leaks signal to attackers.
 fn map_webauthn_err(err: WebauthnError) -> ErrorResponse {
     warn!(error = ?err, "WebAuthn operation failed");
     ErrorResponse::new(ErrorCode::InvalidToken).with_message("WebAuthn operation failed")

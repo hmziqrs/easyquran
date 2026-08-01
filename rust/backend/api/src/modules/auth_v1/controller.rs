@@ -69,9 +69,7 @@ pub async fn log_in(
 
     let payload = payload.0;
 
-    // AUTH-BF-1: per-account throttle on the password step. The per-IP cap
-    // does not stop an attacker rotating IPs to grind one account's password.
-    // Keyed on the normalized email; fail-closed.
+    // AUTH-BF-1: per-account throttle on the password step; the per-IP cap can't stop an attacker rotating IPs to grind one account. Keyed on normalized email; fail-closed.
     let login_key = payload.email.trim().to_lowercase();
     abuse_limiter::limiter(
         &state.gate_store,
@@ -144,9 +142,7 @@ pub async fn log_in(
                     .await
                     .ok();
 
-                    // V-HIGH-2: record the sid_map so sessions_terminate can DEL the live
-                    // tower-session record. revoked_at is audit-only; without this the cookie
-                    // authenticates until its 14-day expiry.
+                    // V-HIGH-2: record the sid_map so sessions_terminate can DEL the live tower-session record; revoked_at is audit-only, else the cookie authenticates until its 14-day expiry.
                     if (auth.session().save().await).is_ok() {
                         if let (Some(row), Some(tower_sid)) =
                             (session_row.as_ref(), auth.session().id())
@@ -227,8 +223,7 @@ pub async fn login_totp(
     let key_prefix = format!("totp:{}", user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
-    // CRYP-2FA-002: secret is encrypted at rest; a decrypt failure must fail
-    // closed (reject), never verify against the opaque envelope bytes.
+    // CRYP-2FA-002: secret is encrypted at rest; a decrypt failure must fail closed (reject), never verify against the opaque envelope bytes.
     let secret = match user.two_fa_secret_plain() {
         Ok(Some(s)) => s,
         Ok(None) => {
@@ -257,9 +252,7 @@ pub async fn login_totp(
         }
     };
 
-    // Replay gate: is_fresh_counter is the fast-path reject; the authoritative
-    // gate is advance_totp_counter_if_higher (atomic conditional UPDATE) which
-    // closes the TOCTOU race across login/verify/disable. Keep both.
+    // Replay gate: keep both — is_fresh_counter is the fast-path reject and advance_totp_counter_if_higher (atomic conditional UPDATE) is the authoritative gate closing the TOCTOU race across login/verify/disable.
     if !twofa::is_fresh_counter(matched, user.two_fa_last_totp_counter) {
         warn!(
             user_id = user.id,
@@ -363,8 +356,7 @@ pub async fn register(
         Err(err) => {
             warn!(error = ?err, "Registration failed");
             tracing::Span::current().record("result", "failure");
-            // Do not echo the raw SeaORM error: a unique-violation would leak that
-            // the email is already registered (enumeration oracle).
+            // Do not echo the raw SeaORM error: a unique-violation would leak that the email is already registered (enumeration oracle).
             Err(ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Registration could not be completed at this time"))
         }
@@ -457,9 +449,7 @@ pub async fn twofa_verify(
         }
     };
 
-    // V-MED-6: keep both checks — is_fresh_counter is the fast-path reject;
-    // advance_totp_counter_if_higher is the authoritative atomic gate closing
-    // the TOCTOU race (concurrent verifies). Removing either reopens replay.
+    // V-MED-6: keep both checks — is_fresh_counter (fast-path reject) and advance_totp_counter_if_higher (authoritative atomic gate closing the TOCTOU race); removing either reopens replay.
     let totp_counter = twofa::verify_totp_code_now(&secret, &payload.code);
 
     if let Some(matched) = totp_counter {
@@ -477,8 +467,7 @@ pub async fn twofa_verify(
                     ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid 2FA code")
                 );
             }
-            // Counter already persisted by the atomic gate above; keep Unchanged —
-            // a Set here could clobber a concurrent advance and reopen replay.
+            // Counter already persisted by the atomic gate above; keep Unchanged — a Set here could clobber a concurrent advance and reopen replay.
             let mut active: user::ActiveModel = existing.into();
             active.two_fa_enabled = sea_orm::Set(true);
             active.two_fa_last_totp_counter = sea_orm::Unchanged(Some(matched));
@@ -547,15 +536,12 @@ pub async fn twofa_disable(
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
 
-    // V-MED-6: advance_totp_counter_if_higher is the authoritative replay gate;
-    // totp_authorized records it succeeded so the final UPDATE leaves the counter
-    // column Unchanged (no redundant/racy re-write). Backup-code path skips it.
+    // V-MED-6: advance_totp_counter_if_higher is the authoritative replay gate; totp_authorized records success so the final UPDATE leaves the counter Unchanged (no racy re-write); backup-code path skips it.
     let mut totp_authorized = false;
 
     if existing.two_fa_enabled {
         if let Some(code) = payload.code.clone() {
-            // CRYP-2FA-002: decrypt failure → empty secret (falls through to backup
-            // code); never grant disable without a valid second factor.
+            // CRYP-2FA-002: decrypt failure → empty secret (falls through to backup code); never grant disable without a valid second factor.
             let secret = match existing.two_fa_secret_plain() {
                 Ok(Some(s)) => s,
                 Ok(None) => String::new(),
@@ -666,8 +652,7 @@ pub async fn sessions_terminate(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user_id = auth.user.as_ref().map(|u| u.id).unwrap_or(0);
 
-    // V-LOW-IDOR: ownership check must precede any write. The earlier revoke-first
-    // flow mutated the victim row before the 401; resolve, reject on mismatch, then revoke.
+    // V-LOW-IDOR: ownership check must precede any write (earlier revoke-first mutated the victim row before the 401); resolve, reject on mismatch, then revoke.
     let _existing = match user_session::Entity::find_by_id(id)
         .one(&state.sea_db)
         .await
@@ -680,8 +665,7 @@ pub async fn sessions_terminate(
     user_session::Entity::revoke(&state.sea_db, id).await?;
 
     {
-        // V-HIGH-2: revoke only stamps revoked_at (audit-only); the live tower-session
-        // record must also be deleted or the cookie authenticates until its 14-day expiry.
+        // V-HIGH-2: revoke only stamps revoked_at (audit-only); the live tower-session record must also be deleted or the cookie authenticates until its 14-day expiry.
         if let Some(tower_sid) = lookup_session_mapping(id) {
             auth.backend().terminate(&tower_sid).await;
         } else {
@@ -699,9 +683,7 @@ pub async fn sessions_terminate(
 
 pub(crate) use crate::services::auth::{lookup_session_mapping, record_session_mapping};
 
-/// F#16: rotate the session id at trust transitions (2FA on/off) so the per-session
-/// CSRF token rebinds. A rotation failure is logged non-fatal — the trust change
-/// itself already succeeded; surfacing a 500 would mislead the client.
+/// F#16: rotate the session id at trust transitions (2FA on/off) so the per-session CSRF token rebinds; a rotation failure is logged non-fatal (trust change already succeeded) — surfacing a 500 would mislead the client.
 async fn rotate_session_after_trust_change(auth: &mut AuthSession) {
     if let Err(err) = auth.session().cycle_id().await {
         warn!(error = %err, "F#16: failed to re-rotate session id at trust transition; CSRF token NOT rebound");

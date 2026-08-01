@@ -127,9 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = Arc::new(Settings::from_env());
 
-    // Required boot side-effect: installs the field-encryption key into the
-    // process-wide OnceLock the SeaORM model layer reads. Deleting it breaks
-    // field encryption.
+    // Required boot side-effect: installs the field-encryption key into the process-wide OnceLock the SeaORM model layer reads — deleting it breaks field encryption.
     ruxlog::state::load_field_enc_key();
 
     let sea_db = db::sea_connect::get_sea_connection().await;
@@ -229,8 +227,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             providers.insert(k, v);
         }
 
-        // Key must stay "lemon_squeezy" — must match provider_name() and the
-        // /webhook/lemon_squeezy route; "lemonsqueezy" 404'd every webhook.
+        // Key must stay "lemon_squeezy" — must match provider_name() and the /webhook/lemon_squeezy route; "lemonsqueezy" 404'd every webhook.
         if let Some((k, v)) = try_init("lemon_squeezy", || {
             let api_key = env::var("LEMONSQUEEZY_API_KEY").ok()?;
             let wh = env::var("LEMONSQUEEZY_WEBHOOK_SECRET").ok()?;
@@ -577,8 +574,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-    // HKDF-SHA256 is load-bearing — do NOT swap for a raw hash. A fast hash
-    // turns a weak COOKIE_KEY into a brute-forceable signing key.
+    // HKDF-SHA256 is load-bearing — do NOT swap for a raw hash; a fast hash turns a weak COOKIE_KEY into a brute-forceable signing key.
     let cookie_key = Key::derive_from(settings.cookie_key.as_bytes());
 
     let cookie_secure = settings.http.cookie_secure;
@@ -588,8 +584,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_same_site(SameSite::Lax)
         .with_secure(cookie_secure)
         .with_http_only(true)
-        // Cookie name must stay hardcoded — the CSRF guard and frontend depend
-        // on it; a configurable name widens the cookie-fixing surface.
+        // Cookie name must stay hardcoded — the CSRF guard and frontend depend on it; a configurable name widens the cookie-fixing surface.
         .with_name("ruxlog.sid")
         .with_private(cookie_key);
 
@@ -626,8 +621,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(axum::Extension(state.clone()))
         .layer(compression.clone())
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
-        // session_layer must stay outer to csrf_guard — the Session must exist
-        // when csrf_guard recomputes the per-session HMAC.
+        // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
         .layer(cors)

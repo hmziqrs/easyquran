@@ -28,9 +28,7 @@ pub struct BlockInfo {
 type BlockFn = Arc<dyn Fn(BlockInfo) -> Response + Send + Sync>;
 type UnavailableFn = Arc<dyn Fn() -> Response + Send + Sync>;
 
-/// Path component of the bucket key. `Fixed`/`Matched` collapse parameterized
-/// routes (`/ayahs/{s}/{a}`, `/pages/N`) into one bucket — `Raw` would fan them
-/// into unbounded independent buckets (memory exhaustion).
+/// Path component of the bucket key: `Fixed`/`Matched` collapse parameterized routes into one bucket; `Raw` fans them into unbounded buckets (memory exhaustion).
 #[derive(Clone)]
 pub enum PathKey {
     Raw,
@@ -176,9 +174,7 @@ where
             {
                 Ok(values) => values,
                 Err(err) => {
-                    // Fail closed: if the store is unavailable we cannot enforce
-                    // a per-IP limit, so rejecting (503) is safer than silently
-                    // allowing unbounded traffic.
+                    // Fail closed: store unavailable means we can't enforce the per-IP limit, so 503 beats silently allowing unbounded traffic.
                     warn!(
                         error = %err,
                         key = %key,

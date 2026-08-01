@@ -142,8 +142,7 @@ pub fn load_field_enc_key() -> [u8; 32] {
         panic!("{}", reason);
     }
 
-    // FIELD_ENC_KEY_PREV installs the decrypt-only previous key for rolling
-    // rotation; removing it orphans fields encrypted before the rotation.
+    // FIELD_ENC_KEY_PREV installs the decrypt-only previous key for rolling rotation; removing it orphans fields encrypted before the rotation.
     let prev_raw = std::env::var("FIELD_ENC_KEY_PREV")
         .ok()
         .filter(|s| !s.trim().is_empty());

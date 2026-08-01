@@ -35,8 +35,7 @@ pub trait AuthUser: Clone + Debug + Send + Sync + 'static {
 
     fn id(&self) -> Self::Id;
 
-    /// Session-invalidation hash: return password-hash bytes (password users) or
-    /// email bytes (OAuth users); changing it invalidates existing sessions.
+    /// Session-invalidation hash: password-hash bytes (password users) or email bytes (OAuth users); changing it invalidates existing sessions.
     fn session_auth_hash(&self) -> &[u8];
 
     fn email_verified(&self) -> bool;

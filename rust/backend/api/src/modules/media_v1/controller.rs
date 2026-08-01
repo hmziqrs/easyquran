@@ -246,8 +246,7 @@ pub async fn create(
     tracing::Span::current().record("content_hash", &content_hash);
 
     if let Some(existing) = Media::find_by_hash(&state.sea_db, &content_hash).await? {
-        // Cross-user duplicates aren't returned: fall through creates a fresh record so
-        // the other user's object key/URL isn't leaked.
+        // Cross-user duplicate not returned; fall through creates a fresh record so no key/URL leak.
         if can_view_media(&uploader, existing.uploader_id) {
             info!(
                 media_id = existing.id,
@@ -267,8 +266,7 @@ pub async fn create(
 
     tracing::Span::current().record("is_duplicate", false);
 
-    // Fail-open on provider error is intentional: a closed gate turns any moderation
-    // outage into a full upload outage.
+    // Fail-open on moderation provider error: a closed gate turns any moderation outage into a full upload outage.
     if let Some(moderator) = state.storage.image_moderator.as_ref() {
         match moderator.classify(&file_bytes, &declared_mime).await {
             Ok(verdict) => {
@@ -373,8 +371,7 @@ pub async fn create(
         };
 
         if let image_optimizer::OptimizationOutcome::Optimized(result) = optimization_outcome {
-            // Optimizer output is unsanitized: a disguised upload (e.g. SVG as PNG) can
-            // decode to a non-allowlisted type — re-check blocks storing/serving it.
+            // Re-check optimizer output type: a disguised upload (SVG as PNG) can decode to a non-allowlisted type.
             if !is_allowed_mime(&result.original.mime_type) {
                 warn!(
                     optimizer_mime = %result.original.mime_type,

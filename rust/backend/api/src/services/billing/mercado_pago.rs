@@ -88,8 +88,7 @@ impl MercadoPagoProvider {
     }
 }
 
-// Manual redacting Debug — do not replace with #[derive(Debug)]:
-// it would leak access_token and webhook_secret into logs.
+// Manual redacting Debug — do not replace with #[derive(Debug)] (would leak access_token and webhook_secret into logs).
 impl std::fmt::Debug for MercadoPagoProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MercadoPagoProvider")
@@ -116,9 +115,7 @@ impl BillingProvider for MercadoPagoProvider {
     ) -> Result<CheckoutSession, BillingError> {
         let client = self.http_client.clone();
 
-        // notification_url MUST NOT be derived from success_url — Mercado Pago
-        // POSTs webhooks to it, so a caller-controlled value enables
-        // provider-mediated SSRF. Use only the operator-configured public base.
+        // notification_url MUST NOT be derived from success_url — Mercado Pago POSTs webhooks to it, so a caller-controlled value enables provider-mediated SSRF; use only the operator-configured public base.
         let notification_url = std::env::var("MERCADO_PAGO_WEBHOOK_URL")
             .ok()
             .map(|u| u.trim().to_string())
@@ -316,9 +313,7 @@ impl MercadoPagoProvider {
         let data_id = extract_query_param(query, "data.id").ok_or_else(|| {
             BillingError::WebhookVerification("Mercado Pago webhook query missing data.id".into())
         })?;
-        // MP signs data.id LOWERCASED only when alphanumeric; non-alphanumeric
-        // values are signed as-is. Don't simplify to unconditional lowercase —
-        // it would break signatures for data.id values with other characters.
+        // MP signs data.id lowercased ONLY when alphanumeric (non-alphanumeric values signed as-is); don't simplify to unconditional lowercase — it breaks signatures for non-alphanumeric data.id values.
         let data_id_signed = if data_id.chars().all(|c| c.is_ascii_alphanumeric()) {
             data_id.to_ascii_lowercase()
         } else {

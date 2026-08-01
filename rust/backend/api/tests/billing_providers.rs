@@ -29,8 +29,7 @@ mod billing_mock_tests {
         hex::encode(mac.finalize().into_bytes())
     }
 
-    // Local, not webhook_util: the test signer must stay independent of the
-    // verifier under test, or a derivation bug passes here while prod breaks.
+    // Local, not webhook_util: the test signer must stay independent of the verifier under test, or a derivation bug passes here while prod breaks.
     fn polar_webhooks_key(secret: &str) -> Vec<u8> {
         let trimmed = secret.strip_prefix("whsec_").unwrap_or(secret);
         base64::engine::general_purpose::STANDARD

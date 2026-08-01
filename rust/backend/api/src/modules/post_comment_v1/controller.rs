@@ -16,8 +16,7 @@ use crate::{
     AppState,
 };
 
-// Per-account comment throttle: per-IP limiting alone can't stop one account
-// behind rotating IPs from flooding comments.
+// Per-account comment throttle: per-IP limiting alone can't stop one account behind rotating IPs from flooding comments.
 const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
     temp_block_attempts: 20,
     temp_block_range: 60,

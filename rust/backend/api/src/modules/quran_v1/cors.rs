@@ -3,8 +3,7 @@ use std::time::Duration;
 use axum::http::{header, HeaderName, Method};
 use tower_http::cors::{Any, CorsLayer};
 
-/// Headers are load-bearing for the browser conditional-GET flow: trimming
-/// If-None-Match / ETag / Cache-Control / Retry-After silently breaks preflight.
+/// Headers are load-bearing for the browser conditional-GET flow: trimming If-None-Match/ETag/Cache-Control/Retry-After silently breaks preflight.
 pub fn public_cors_layer() -> CorsLayer {
     CorsLayer::new()
         .allow_origin(Any)

@@ -79,9 +79,7 @@ pub fn compute_range(before: i32, after: i32) -> TableRange {
     }
 }
 
-/// Default seeding is OS entropy — never make this deterministic by default;
-/// predictable seeds predict any downstream "random" tokens. The Static arm is
-/// the only reproducibility opt-in (dev-only).
+/// Default seeding is OS entropy — never make this deterministic by default; predictable seeds predict downstream "random" tokens. The Static arm is the only reproducibility opt-in (dev-only).
 pub fn seeded_rng(seed_mode: Option<SeedMode>) -> ChaCha20Rng {
     match seed_mode.unwrap_or_default() {
         SeedMode::Random => ChaCha20Rng::from_os_rng(),

@@ -7,8 +7,7 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let stmts: &[&str] = &[
-            // `users.avatar_id` intentionally has no DB-level FK: it would form a
-            // cycle with `media.uploader_id → users` (no valid insert/delete order).
+            // `users.avatar_id` has no DB-level FK on purpose: it would cycle with `media.uploader_id → users` (no valid insert/delete order).
             r#"CREATE TABLE IF NOT EXISTS "users" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "name" TEXT NOT NULL,

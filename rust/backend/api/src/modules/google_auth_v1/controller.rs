@@ -39,8 +39,7 @@ pub async fn google_login(
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-    // OIDC nonce binds this flow to the signed id_token checked at callback;
-    // defeats token-injection/replay. (oauth2 4.4 has no nonce builder.)
+    // OIDC nonce binds this flow to the signed id_token checked at callback; defeats token-injection/replay. (oauth2 4.4 has no nonce builder.)
     let nonce = oauth::generate_oauth_nonce();
 
     let (auth_url, csrf_token) = client

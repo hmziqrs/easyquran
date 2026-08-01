@@ -10,8 +10,7 @@ use crate::{
 
 use user_oauth_identity::NewOauthIdentity;
 
-/// `email_verified` must be true before linking onto or creating an account:
-/// an unverified-at-IdP identity with a victim's email must not take it over.
+/// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(state), fields(provider = %provider, provider_user_id = %provider_user_id, email = %email))]
 pub async fn find_or_create_user_for_oauth(
@@ -116,8 +115,7 @@ pub async fn finish_oauth_login(
     .await
     .ok();
 
-    // record_session_mapping lets sessions_terminate revoke this session later;
-    // save() first because auth.login cycles the session id.
+    // record_session_mapping lets sessions_terminate revoke this session later; save() first because auth.login cycles the session id.
     if (auth.session().save().await).is_ok() {
         if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
             crate::services::auth::record_session_mapping(row.id, &tower_sid.to_string());

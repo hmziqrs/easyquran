@@ -173,8 +173,7 @@ fn hash_backup_code(code: &str) -> String {
     password_auth::generate_hash(code)
 }
 
-// Rejection sampling, not `% len`: 256 isn't a multiple of the alphabet size,
-// so modulo would skew the distribution and bias the backup codes.
+// Rejection sampling, not `% len`: 256 isn't a multiple of the alphabet size, so modulo would skew the distribution and bias the backup codes.
 fn sample_index(len: usize) -> Option<usize> {
     let limit = 256 - (256 % len);
     loop {
@@ -211,8 +210,7 @@ fn pow10(n: u32) -> u32 {
     v
 }
 
-// Constant-time compare — don't replace with `==`, which leaks via timing
-// whether backup/TOTP codes match.
+// Constant-time compare — don't replace with `==`, which leaks via timing whether backup/TOTP codes match.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;

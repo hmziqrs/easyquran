@@ -1,8 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// `provider_user_id` is stored plaintext so the unique (provider, provider_user_id)
-/// index can match it on login — do not hash.
+/// `provider_user_id` is stored plaintext so the unique (provider, provider_user_id) index can match it on login — do not hash.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user_oauth_identities")]
 pub struct Model {

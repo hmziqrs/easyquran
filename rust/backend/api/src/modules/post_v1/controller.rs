@@ -334,9 +334,7 @@ pub async fn track_view(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user_id: Option<i32> = auth.user.map(|user| user.id);
 
-    // Dedup per (post, ip): rate-limiting caps requests/IP, but an attacker rotating
-    // IPs still yields one DB write per request. This bounds writes to one per
-    // (post, ip) per 5 min. Fail-open on store error.
+    // Dedup per (post, ip) bounds writes to one per (post, ip) per 5 min (fail-open on store error); rate-limiting caps requests/IP but can't stop rotating IPs.
     let ip_str = client_ip.0.to_string();
     let dedup_key = format!("trackview:{post_id}:{ip_str}");
     let user_agent = headers

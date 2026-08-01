@@ -25,8 +25,7 @@ pub mod controller {
         pub limit: Option<u64>,
     }
 
-    /// Never derive a gated post's summary from its body — that leaks paid
-    /// content to anonymous readers.
+    /// Never derive a gated post's summary from its body — that leaks paid content to anonymous readers.
     fn gated_summary(policy: &PostAccessPolicy) -> String {
         match policy.access_type {
             PostAccessType::SubscriberOnly => {

@@ -5,8 +5,7 @@ use crate::middlewares::auth_guard;
 use crate::AppState;
 use axum::{middleware, routing::post, Router};
 
-// Seed routes mutate core tables — must stay feature-gated (`seed-system`,
-// excluded from `full`) AND behind ROLE_SUPER_ADMIN. Do not relax either gate.
+// Seed routes mutate core tables — must stay feature-gated (`seed-system`, excluded from `full`) AND behind ROLE_SUPER_ADMIN; do not relax either gate.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/seed_tags", post(controller::seed_tags))

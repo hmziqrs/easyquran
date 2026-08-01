@@ -22,8 +22,7 @@ struct RawServiceAccount {
 pub struct ServiceAccount {
     pub client_email: String,
     pub project_id: String,
-    // Long-lived signing secret — wrapped in SecretString; the struct deliberately
-    // omits derive(Debug) so an accidental {:?} can't leak it.
+    // Long-lived signing secret in SecretString; struct omits derive(Debug) so an accidental {:?} can't leak it.
     private_key: SecretString,
     private_key_id: String,
     cache: RwLock<CachedToken>,

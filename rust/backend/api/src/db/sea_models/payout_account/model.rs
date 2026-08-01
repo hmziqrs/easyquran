@@ -17,8 +17,7 @@ pub struct Model {
     pub provider: String,
     pub provider_account_id: String,
     pub status: PayoutAccountStatus,
-    /// Encrypted envelope `{"enc": "..."}`, NOT plaintext metadata.
-    /// Read via [`Model::decrypted_metadata`]; writes auto-encrypt in `ActiveModelBehavior`.
+    /// Encrypted envelope `{"enc": "..."}`, NOT plaintext metadata; read via [`Model::decrypted_metadata`], writes auto-encrypt in `ActiveModelBehavior`.
     pub metadata: Option<Json>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

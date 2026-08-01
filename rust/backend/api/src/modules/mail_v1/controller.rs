@@ -98,8 +98,7 @@ pub async fn mail_webhook_receiver(
             crate::services::mail::mail_error_to_response(&e)
         })?;
 
-        // Apply BEFORE claiming the dedup key: if apply fails (500) the retry re-processes
-        // instead of being acked as a duplicate and permanently lost. Upsert is idempotent.
+        // Apply before claiming dedup key: if apply fails, retry re-processes instead of losing the message; upsert idempotent.
         apply_mail_event(&state, &parsed).await?;
 
         let mut hasher = Sha256::new();

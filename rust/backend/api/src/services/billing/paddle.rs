@@ -57,9 +57,7 @@ impl PaddleProvider {
         Ok(provider)
     }
 
-    // transaction.completed (the grant signal) carries no inline billing period;
-    // without this fetch current_period_end is None and the paywall denies paying
-    // subscribers (fails closed). No test pins it — tests never assert period_end.
+    // transaction.completed carries no inline billing period; without this fetch current_period_end is None and the paywall denies paying subscribers (fails closed). No test pins it.
     async fn fetch_subscription_period_end(
         &self,
         subscription_id: &str,

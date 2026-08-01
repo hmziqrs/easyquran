@@ -4,8 +4,7 @@ pub const VERSE_COUNT: u32 = 6236;
 pub const SURA_COUNT: usize = 114;
 pub const RESPONSE_CAP: u32 = 300;
 
-/// Bump when Arabic normalization semantics change — a stale value serves
-/// wrong search results behind cached ETags.
+/// Bump when Arabic normalization semantics change — a stale value serves wrong search results behind cached ETags.
 pub const SEARCH_VERSION: &str = "arabic-search-v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -149,8 +148,7 @@ impl SuraMeta {
     }
 }
 
-/// Zero-sized phantom markers: make `Range<Juz>` vs `Range<Page>` distinct
-/// types so cross-family indexing is a compile error, not a silent bug.
+/// Zero-sized phantom markers: make `Range<Juz>` vs `Range<Page>` distinct types so cross-family indexing is a compile error, not a silent bug.
 pub struct Juz;
 pub struct Page;
 pub struct Ruku;

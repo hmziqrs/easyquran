@@ -53,8 +53,7 @@ pub struct CreateCheckoutPayload {
     pub cancel_url: Option<String>,
 }
 
-/// Amount is taken from the post's server-side access policy — do NOT add a
-/// client-supplied amount field to this payload.
+/// Amount comes from the post's server-side access policy — do NOT add a client-supplied amount field to this payload.
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreatePostCheckoutPayload {
     #[validate(range(min = 1))]

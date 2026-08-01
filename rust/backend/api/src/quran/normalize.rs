@@ -1,6 +1,4 @@
-//! One normalization spec for BOTH corpus build and queries, so online and
-//! offline match identically. Changing any rule here MUST bump
-//! `crate::quran::SEARCH_VERSION` or cached/ETagged results go inconsistent.
+//! One normalization spec for BOTH corpus build and queries so online/offline match identically; changing any rule here MUST bump `crate::quran::SEARCH_VERSION` or cached/ETagged results go inconsistent.
 
 pub fn normalize_arabic(input: &str) -> (String, Vec<u32>) {
     let mut out = String::with_capacity(input.len());
@@ -45,9 +43,7 @@ fn is_combining_mark(ch: char) -> bool {
 
 fn fold(ch: char) -> char {
     match ch {
-        // U+0670 (superscript alef) is ambiguous: a real alef in "العٰلمين", a
-        // reading marker in "الرحمن". Fold (not drop) — folding keeps the common
-        // case correct; results are over simple-clean, so unaffected.
+        // U+0670 (superscript alef) is ambiguous (real alef vs reading marker); fold (not drop) — folding keeps the common case correct; results are over simple-clean, so unaffected.
         '\u{0622}' | '\u{0623}' | '\u{0625}' | '\u{0671}' | '\u{0670}' => '\u{0627}',
         '\u{0649}' => '\u{064A}',
         '\u{0629}' => '\u{0647}',

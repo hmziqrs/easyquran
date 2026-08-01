@@ -148,9 +148,7 @@ pub async fn user_has_active_subscription(db: &DatabaseConnection, user_id: i32)
 
     let now_ts = chrono::Utc::now().timestamp();
     for s in subs {
-        // Fail closed: an `Active` row with no `current_period_end` must NOT
-        // unlock subscriber content forever — treat the missing end as "not in
-        // period" (do not flip this `unwrap_or` to `true`).
+        // Fail closed: an `Active` row with no `current_period_end` must NOT unlock forever — treat missing end as "not in period" (do not flip this `unwrap_or` to `true`).
         let still_in_period = s
             .current_period_end
             .map(|end| end.timestamp() > now_ts)

@@ -1,6 +1,4 @@
-// Raw payload bytes (signatures need exact bytes — never re-encode), the full
-// header set, and the URL query are all load-bearing: providers sign over
-// different headers and Mercado Pago signs over the query string's data.id.
+// Raw payload bytes, full header set, and URL query are load-bearing: providers sign over different headers and Mercado Pago signs over the query string's data.id — never re-encode.
 #[derive(Debug, Clone)]
 pub struct WebhookEvent {
     pub provider: String,

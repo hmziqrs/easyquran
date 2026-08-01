@@ -19,9 +19,7 @@ pub fn rate_limit_layer(state: &AppState, max_requests: u64, window_secs: u64) -
         .build()
 }
 
-/// IP-only (path-independent) key is required: per-path keying lets parameterized
-/// routes (e.g. /ayahs/{s}/{a} × 6236) fan into thousands of buckets, bypassing
-/// the per-IP ceiling by rotating path values.
+/// IP-only (path-independent) key required: per-path keying lets parameterized routes (e.g. /ayahs/{s}/{a} × 6236) fan into thousands of buckets, bypassing the per-IP ceiling.
 pub fn rate_limit_layer_branch(
     state: &AppState,
     max_requests: u64,

@@ -66,8 +66,7 @@ pub async fn subscribe(
     };
     limiter(&state.gate_store, &key, config).await?;
 
-    // Per-IP bucket: the per-email limiter above is beaten by rotating the
-    // email field; without this a single source floods inserts.
+    // Per-IP bucket: the per-email limiter is beaten by rotating email; without it one source floods inserts.
     limiter(
         &state.gate_store,
         &format!("newsletter:subscribe:ip:{client_ip}"),
@@ -93,8 +92,7 @@ pub async fn subscribe(
             info!(email = %email, "Newsletter subscription created");
             let site_url = state.settings.site.url.clone();
 
-            // Fragment, not `?token=`: fragments aren't sent to servers, so the
-            // secret stays out of access/proxy logs and the Referer header.
+            // Fragment, not ?token=: fragments aren't sent to servers, so the secret stays out of logs/Referer.
             let confirm_url = format!(
                 "{}/newsletter/confirm#email={}&token={}",
                 site_url.trim_end_matches('/'),

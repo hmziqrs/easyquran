@@ -29,9 +29,7 @@ impl Entity {
             .map_err(Into::into)
     }
 
-    /// Server-side never-downgrade UPSERT: a read-then-write races under
-    /// concurrent webhooks and can let a soft bounce downgrade a permanent
-    /// complaint, re-enabling a suppressed recipient.
+    /// Server-side never-downgrade UPSERT: a read-then-write races under concurrent webhooks and could let a soft bounce downgrade a permanent complaint, re-enabling a suppressed recipient.
     #[instrument(skip(conn), fields(recipient))]
     pub async fn upsert(conn: &DbConn, recipient: &str, up: SuppressionUpsert) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();

@@ -13,8 +13,7 @@ pub const NO_STORE: &str = "no-store";
 
 const VARY: &str = "Accept-Encoding";
 
-/// Weak on purpose: the shared compression layer varies bytes for an
-/// unchanged representation; a strong validator would corrupt caches.
+/// Weak on purpose: compression varies bytes for an unchanged rep, so a strong validator would corrupt caches.
 pub fn weak_etag(content_version: &str, canonical_key: &str) -> String {
     format!("W/\"{content_version}:{canonical_key}\"")
 }
@@ -68,8 +67,7 @@ pub fn respond_cached<T: Serialize + ?Sized>(
         .expect("200 response builds")
 }
 
-/// Distinct from `respond_cached`: /search's ETag folds in `searchVersion`,
-/// not just `contentVersion`; merging would cross-pollute search caches.
+/// Distinct from `respond_cached`: /search's ETag folds `searchVersion`, not just `contentVersion`; merging cross-pollutes search caches.
 pub fn respond_cached_with_etag<T: Serialize + ?Sized>(
     body: &T,
     etag: &str,

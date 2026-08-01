@@ -1,6 +1,4 @@
-//! SQLite L2 durability for the in-memory rate-limit store. Enforcement stays
-//! in-process (L1); this layer only periodically flushes a snapshot so blocks
-//! survive a restart. Do NOT add a DB write to the request hot path.
+//! SQLite L2 durability for the in-memory rate-limit store; enforcement stays in-process (L1), this layer only periodically flushes a snapshot so blocks survive a restart. Do NOT add a DB write to the request hot path.
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

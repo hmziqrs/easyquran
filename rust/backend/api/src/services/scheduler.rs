@@ -44,9 +44,7 @@ async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
         let post_id = post.id;
         let author_id = post.author_id;
 
-        // Fire-time re-authorization: the request-time check is a TOCTOU window.
-        // A demoted or removed author must not be published by a background tick,
-        // so re-assert the Author role before flipping status.
+        // Fire-time re-authorization: the request-time check is a TOCTOU window — re-assert the Author role before publishing so a demoted/removed author isn't published by a background tick.
         let author_ok = match crate::db::sea_models::user::Entity::find_by_id(author_id)
             .one(&state.sea_db)
             .await

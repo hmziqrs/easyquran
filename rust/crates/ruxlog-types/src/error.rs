@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Wire contract: each variant's `#[serde(rename]` token is a public,
-/// client-matched value — never renumber (only 4 are spot-checked by tests).
-/// Some codes share an HTTP status but are distinct by cause; do not merge them.
+/// Wire contract: each variant's `#[serde(rename)]` token is a public, client-matched value — never renumber (only 4 spot-checked by tests); some codes share an HTTP status but are distinct by cause, so don't merge them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {

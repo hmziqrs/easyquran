@@ -207,8 +207,7 @@ async fn fetch_github_primary_verified_email(
         .cloned())
 }
 
-/// GitHub's `/user` `email` is public but unverified; only `/user/emails` carries
-/// the real `verified` flag. Treat the public email as unverified.
+/// GitHub's `/user` `email` is public but unverified; only `/user/emails` carries the real `verified` flag. Treat the public email as unverified.
 async fn finish_github_login(
     state: &AppState,
     auth: &mut AuthSession,

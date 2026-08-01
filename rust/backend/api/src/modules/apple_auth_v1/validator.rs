@@ -17,8 +17,7 @@ pub struct AppleExchangeRequest {
     pub state: String,
 }
 
-// Apple sends `email_verified` / `is_private_email` as the STRINGS "true"/"false",
-// not booleans — keep them as Option<String> or deserialization/verification breaks.
+// Apple sends `email_verified` / `is_private_email` as the STRINGS "true"/"false", not booleans — keep them as Option<String> or deserialization/verification breaks.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppleIdTokenClaims {
     pub iss: String,

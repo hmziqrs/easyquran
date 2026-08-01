@@ -70,8 +70,7 @@ impl FcmClient {
                 .ok_or_else(|| FcmError::Api(status, "missing 'name' in response".to_string()));
         }
 
-        // Map 404/UNREGISTERED to the `Unregistered` sentinel — the fan-out
-        // loop prunes the device row on this variant. Do not collapse.
+        // Map 404/UNREGISTERED to the `Unregistered` sentinel — the fan-out loop prunes the device row on this variant; do not collapse.
         if status == 404 || body.to_uppercase().contains("UNREGISTERED") {
             return Err(FcmError::Unregistered);
         }

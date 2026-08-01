@@ -15,8 +15,7 @@ pub struct AuthSessionState<UserId> {
 
     pub is_banned: bool,
 
-    /// Security: recomputed/compared per request so a password change or user
-    /// deletion+recreate invalidates all prior sessions. Do not drop.
+    /// Security: recomputed per request so a password change or user deletion+recreate invalidates prior sessions — do not drop.
     pub session_auth_hash: Vec<u8>,
 
     pub device: Option<String>,

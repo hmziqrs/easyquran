@@ -18,9 +18,7 @@ use crate::{
 };
 
 const DUMMY_VERIFY_PASSWORD: &str = "timing-equalization-dummy-fixture";
-// Timing-oracle mitigation: the not-found and OAuth login branches run a dummy
-// Argon2id verify against this fixed hash so they cost the same as a real
-// wrong-password attempt. Removing it leaks account existence via request latency.
+// Timing-oracle mitigation: not-found and OAuth login branches run a dummy Argon2id verify against this fixed hash to cost the same as a real wrong-password attempt; removing it leaks account existence via request latency.
 static DUMMY_VERIFY_HASH: LazyLock<String> =
     LazyLock::new(|| password_auth::generate_hash(DUMMY_VERIFY_PASSWORD));
 
@@ -239,9 +237,7 @@ impl AuthUser for user::Model {
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        // Bind sessions to the per-user random session_auth_secret, not email —
-        // email is public/derivable. Falling back to the password hash keeps
-        // password users' sessions valid if the secret column is unexpectedly absent.
+        // Bind sessions to the per-user random session_auth_secret, not email (public/derivable); falling back to the password hash keeps password users' sessions valid if the secret column is unexpectedly absent.
         if !self.session_auth_secret.is_empty() {
             return self.session_auth_secret.as_bytes();
         }

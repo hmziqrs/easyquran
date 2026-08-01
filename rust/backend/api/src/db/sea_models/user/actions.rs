@@ -144,8 +144,7 @@ impl Entity {
 
             if let Some(email) = update_user.email {
                 if email != prev_email {
-                    // Trust reset on email change: clear is_verified and rotate
-                    // session_auth_secret so the badge and prior sessions die with the old address.
+                    // Trust reset on email change: clear is_verified and rotate session_auth_secret so the badge and prior sessions die with the old address.
                     user_active.email = Set(email);
                     user_active.is_verified = Set(false);
                     user_active.session_auth_secret = Set(super::model::new_session_auth_secret()

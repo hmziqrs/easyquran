@@ -15,8 +15,7 @@ pub trait SessionRevocation {
     }
 }
 
-/// Constant-time equality: a `==` on auth hashes leaks bytes via timing.
-/// Do not simplify to `==`.
+/// Constant-time equality: a `==` on auth hashes leaks bytes via timing — do not simplify to `==`.
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;

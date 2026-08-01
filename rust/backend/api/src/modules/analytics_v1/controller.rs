@@ -299,8 +299,7 @@ pub async fn publishing_trends(
     let ValidatedJson(request) = payload;
     let resolved = request.envelope.resolve();
 
-    // Bespoke pagination, not paginate_query: each bucket fans out to one row per status,
-    // so its COUNT(*) wrap would over-count and its LIMIT/OFFSET would paginate the wrong shape.
+    // Bespoke pagination: each bucket fans out one row per status, so paginate_query's COUNT(*)/LIMIT would miscount.
     let limit = resolved.per_page as i64;
     let offset = resolved.offset() as i64;
 
@@ -317,8 +316,7 @@ pub async fn publishing_trends(
     });
     let has_status_filter = status_filter.is_some();
 
-    // Empty status list must match NOTHING (parity with Postgres = ANY('{}')); `IN ()` is
-    // invalid SQL so it becomes `AND 1 = 0`. Do NOT merge into the None arm — None = no filter.
+    // Empty status list matches nothing (AND 1 = 0, since IN () is invalid); distinct from None = no filter.
     let (status_clause, status_values): (String, Vec<Value>) = match &status_filter {
         None => (String::new(), Vec::new()),
         Some(statuses) if statuses.is_empty() => (" AND 1 = 0".to_string(), Vec::new()),

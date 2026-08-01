@@ -140,9 +140,7 @@ impl Related<super::super::media::Entity> for Entity {
     }
 }
 
-// before_save encrypts two_fa_secret (random nonce) and google_id
-// (deterministic, for encrypt-then-lookup) on every write; the envelope
-// check avoids double-wrapping existing ciphertext. Write path is untested.
+// before_save encrypts two_fa_secret (random nonce) and google_id (deterministic, for encrypt-then-lookup) on every write; the envelope check avoids double-wrapping existing ciphertext. Write path is untested.
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     async fn before_save<C>(mut self, _db: &C, _insert: bool) -> Result<Self, DbErr>

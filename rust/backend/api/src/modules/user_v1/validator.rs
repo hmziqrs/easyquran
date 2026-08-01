@@ -7,8 +7,7 @@ use crate::db::sea_models::user::{
 };
 use crate::utils::SortParam;
 
-// DoS guard (CWE-400): cap password length so Argon2id never hashes unbounded
-// input. Keep in sync with auth_v1 / forgot_password_v1.
+// DoS guard (CWE-400): cap password length so Argon2id never hashes unbounded input; keep in sync with auth_v1 / forgot_password_v1.
 const PASSWORD_MIN: u64 = 12;
 const PASSWORD_MAX: u64 = 256;
 

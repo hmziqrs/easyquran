@@ -207,8 +207,7 @@ async fn sitemap_xml(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let raw_base_url = state.settings.site.consumer_site_url.clone();
-    // Slugs are author-controlled and only length-validated: escape before XML
-    // interpolation, or it's a stored XML-injection vector.
+    // Slugs are author-controlled and only length-validated: escape before XML interpolation, or it's a stored XML-injection vector.
     let base_url = xml_escape(&raw_base_url);
 
     let mut urls = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");

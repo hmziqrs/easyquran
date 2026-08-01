@@ -74,8 +74,7 @@ impl Entity {
             .await?;
 
         if let Some(model) = sub {
-            // Constant-time compare: a plain `==` leaks token validity via
-            // timing, enabling mass confirmation probing.
+            // Constant-time compare: a plain `==` leaks token validity via timing, enabling mass confirmation probing.
             use subtle::ConstantTimeEq;
             let token_ok = model.token.as_bytes().ct_eq(token.as_bytes()).unwrap_u8() == 1;
             if token_ok && model.status != SubscriberStatus::Unsubscribed {

@@ -50,8 +50,7 @@ pub async fn notify_user(
     dispatch(db, fcm, user_id, kind, title.into(), body.into(), data).await
 }
 
-// In-app insert is the durable record; push failures (no FCM, device load/send error,
-// unregistered token) are best-effort and must not fail the call.
+// In-app insert is the durable record; push failures (no FCM, device load/send error, unregistered token) are best-effort and must not fail the call.
 async fn dispatch(
     db: &DatabaseConnection,
     fcm: Option<&Arc<rux_fcm::FcmClient>>,

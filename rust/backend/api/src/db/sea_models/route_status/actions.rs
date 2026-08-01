@@ -158,9 +158,7 @@ impl Entity {
             .await
     }
 
-    // Rebuild must stay atomic (one lock for retain + repopulate): release the
-    // lock mid-pass and a reader sees an empty cache and treats blocked routes
-    // as unblocked.
+    // Rebuild must stay atomic (one lock for retain + repopulate): release the lock mid-pass and a reader sees an empty cache and treats blocked routes as unblocked.
     pub async fn sync_all_to_cache(
         db: &DatabaseConnection,
         known_routes_key: &str,

@@ -31,8 +31,7 @@ fn hkdf_sha256(ikm: &[u8], info: &[u8]) -> [u8; 32] {
 
 fn csrf_signing_key() -> &'static [u8] {
     CSRF_SIGNING_KEY.get_or_init(|| {
-        // No fallback key: a default would make every client's CSRF token forgeable.
-        // COOKIE_KEY (>= 32 bytes) must be set in prod — panic rather than degrade.
+        // No fallback key: a default makes every client's CSRF token forgeable — COOKIE_KEY (>= 32 bytes) must be set in prod, panic rather than degrade.
         let ikm = match std::env::var("COOKIE_KEY") {
             Ok(k) if !k.is_empty() => k.into_bytes(),
             #[cfg(not(test))]

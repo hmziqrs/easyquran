@@ -201,16 +201,14 @@ impl MailProvider for MailRouter {
         if suppressed {
             router_metrics.suppressed.add(1, &[]);
             if transactional {
-                // Anti-enumeration: MUST return Ok and look identical to a real
-                // send — erroring would leak that the account is suppressed.
+                // Anti-enumeration: MUST return Ok and look identical to a real send — erroring would leak that the account is suppressed.
                 debug!(template = ?msg.template, "suppressed transactional send dropped");
                 return Ok(SendReceipt::default());
             }
             return Err(MailError::Suppressed);
         }
 
-        // Dedup must run before rate-limiting, else a duplicate blast burns
-        // provider quota and self-DoSes all non-transactional mail.
+        // Dedup must run before rate-limiting, else a duplicate blast burns provider quota and self-DoSes all non-transactional mail.
         let dedup_claim = if msg.template == Some(TEMPLATE_NEWSLETTER) {
             let key = self.dedup_key(&msg);
             if rux_request_gate::dedup_nx(&self.gate_store, &key, self.limits.dedup_ttl_secs).await
@@ -225,8 +223,7 @@ impl MailProvider for MailRouter {
             None
         };
 
-        // Transactional sends are rate-limited at the controller (per user_id);
-        // exempt here or they get double-limited under a different key.
+        // Transactional sends are rate-limited at the controller (per user_id); exempt here or they get double-limited under a different key.
         if self.rate_limit_enabled && !transactional {
             if let Err(e) = self.check_rate(&msg.to).await {
                 self.release_dedup(dedup_claim.as_deref()).await;

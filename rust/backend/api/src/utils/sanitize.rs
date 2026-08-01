@@ -74,8 +74,7 @@ where
     }
 }
 
-/// Sitemap (router.rs) interpolates author-controlled slugs raw into XML; without
-/// this, a slug like `</loc></url>` injects into /sitemap.xml. No test pins it.
+/// Sitemap (router.rs) interpolates author-controlled slugs raw into XML; without this, a slug like `</loc></url>` injects into /sitemap.xml. No test pins it.
 pub fn xml_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {

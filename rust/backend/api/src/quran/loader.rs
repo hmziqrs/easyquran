@@ -70,8 +70,7 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
     let simple_clean =
         Corpus::from_texts(&simple_clean_rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>());
 
-    // Golden digest is a literal, not recomputed from source: a normalizing
-    // loader would corrupt both sides identically and slip past a self-derived check.
+    // Golden digest is a literal, not recomputed: a normalizing loader would corrupt both sides identically and slip past a self-derived check.
     let dig_uthmani = corpus_digest(&uthmani);
     let dig_simple_clean = corpus_digest(&simple_clean);
     invariant(
@@ -93,8 +92,7 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
     let doc = roxmltree::Document::parse(xml_str)?;
     let meta = build_meta(&doc, &uthmani_rows, &uthmani)?;
 
-    // Update order is a fixed contract with the web client; reordering changes
-    // contentVersion and breaks its change-detection.
+    // Update order is a fixed contract with the web client; reordering changes contentVersion and breaks its change-detection.
     let mut hasher = blake3::Hasher::new();
     hasher.update(&uthmani_bytes);
     hasher.update(&simple_clean_bytes);
