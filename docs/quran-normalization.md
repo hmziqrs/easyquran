@@ -24,8 +24,8 @@ surahs, and every consumer has to cope with that on its own. The recommendation
 is to stop coping ad hoc and add one read-time view:
 
 1. **Adopt source-qualified `raw` / `body` / `opener` accessors as the only way
-   layers read a corpus** (§4). `raw` stays byte-identical and digest-guarded;
-   `body` and `opener` are derived.
+   layers read a corpus** (§4). `raw` stays byte-identical; `body` and `opener`
+   are derived.
 2. **Represent an embedded prefix with a small scalar cut record per surah**
    (§4.1), computed by a skeleton walk (§4.2) and converted to each runtime's
    native string indices at load. Never a string rewrite, never a hardcoded
@@ -63,7 +63,7 @@ To register a future IndoPak or Tajweed source:
 
 1. add its stable source ID (script style is a separate value);
 2. add a database adapter only if its schema differs from Tanzil's;
-3. add one digest-guarded source profile with artifact and opener packaging;
+3. add one registered source profile with artifact and opener packaging;
 4. point a role in `source-plan.ts` at it when it should back reading or search.
 
 The delivery manifest is derived from the profile registry. Platform adapters
@@ -101,14 +101,12 @@ That packaging difference leaks into every layer that touches the corpus:
   need not all use that exact row convention (§5).
 
 Adding a third source today is not supported by the fixed `Script` enum, paths,
-or digest fields. Replacing one of the two configured files with a different
-source fails its golden digest before basmala classification. More importantly,
-the current classifier is not a safe detector: after recognizing 1:1 by exact
-equality and hardcoding surah 9 as `none`, it labels every other surah
-`embedded-prefix` without checking that a prefix exists. A quran.com-shaped
-6,236-row source would therefore be misclassified if it were admitted under a
-new digest. Prefix detection in Rust is new work, not behavior already supplied
-by the `1 / 112 / 1` assertion.
+or source assumptions. More importantly, the current classifier is not a safe
+detector: after recognizing 1:1 by exact equality and hardcoding surah 9 as
+`none`, it labels every other surah `embedded-prefix` without checking that a
+prefix exists. A quran.com-shaped 6,236-row source would therefore be
+misclassified. Prefix detection in Rust is new work, not behavior already
+supplied by the `1 / 112 / 1` assertion.
 
 ### 1.1 What is _not_ wrong: the ayah numbering
 
@@ -181,9 +179,7 @@ never an edit to the data.
    aspirational.
 4. **Verbatim text stays reachable from every layer.** Normalization adds a
    view; it never replaces the raw accessor.
-5. **The golden digests keep guarding the raw corpus** and are computed over
-   raw text, before any view is applied (`quran-api.md` §3.3).
-6. **Canonical opener semantics and source packaging are separate.** The
+5. **Canonical opener semantics and source packaging are separate.** The
    canonical model says whether a surah has a numbered opener, an unnumbered
    header, or none. A source profile says how that opener is packaged in one
    corpus. Detection/adaptation is asserted against a registry entry; an
@@ -247,7 +243,7 @@ corpus's own `index = 1` row rather than a shared constant, and treat surah 1 as
 Three source-qualified accessors over any registered corpus `c`:
 
 ```text
-raw(c, s, a)   → verbatim numbered-ayah text from c                 [copy, SEO, fidelity, digests]
+raw(c, s, a)   → verbatim numbered-ayah text from c                 [copy, SEO, fidelity]
 body(c, s, a)  → numbered ayah minus an embedded opener             [display, search, highlighting]
 opener(c, s)   → canonical kind + profile-declared text for c       [the header line]
 ```
@@ -316,9 +312,6 @@ packages additionally need the opener provider declared in §5. Consequences:
   is no second in-memory copy of either corpus. Rust returns borrowed slices;
   JavaScript substring allocation remains engine-dependent and is not part of
   the correctness contract.
-- **Digest-compatible.** Digests run over `raw`, so they are unaffected and keep
-  their full detective power.
-
 Measured against both current Tanzil sources:
 
 |                                          | Uthmani                                           | simple-clean             |
@@ -404,8 +397,8 @@ exact opener text can be obtained. It is not the canonical opener model itself.
 | `absent`          | source contains no opener for this surah                                    | surah 9                                                                        |
 
 `chapter-flag` is presence metadata, not a text provider. A profile using it must
-also identify an exact, digest-guarded opener-text source: a chapter text field,
-a companion opener artifact, or an explicitly registered opener set in the same
+also identify an exact, trusted opener-text source: a chapter text field, a
+companion opener artifact, or an explicitly registered opener set in the same
 orthography. A boolean plus `raw(c,1,1)` is insufficient because it cannot
 recover source-specific variants such as the shadda in the Uthmani openers for
 95 and 97. A source without a trusted provider is incomplete and will not load.
@@ -415,7 +408,7 @@ profile := {
   id,
   sourceId,                       // artifact/cache identity
   script,                         // orthography, independent of sourceId
-  artifact: { repositoryPath, r2Path, sizeBytes, sha256 },
+  artifact: { repositoryPath, r2Path, sizeBytes },
   database,                       // typed schema/query adapter
   canonicalRowCount: 6236,
   packaging: { [sura]: packaging },
@@ -424,12 +417,10 @@ profile := {
 }
 ```
 
-Load order is explicit: compute the immutable file/corpus identity, select the
-matching registry entry, run that entry's schema adapter to derive the observed
-row/package facts, then compare every observed fact with the entry. The digest
-selects a known profile; it does not waive structural validation. Unknown
-digests, missing opener providers, or observed/expected mismatches all fail
-closed with distinct errors.
+Load order is explicit: select the registered source profile, run its schema
+adapter to derive the observed row/package facts, then compare every observed
+fact with the entry. Unknown sources, missing opener providers, or
+observed/expected mismatches all fail closed with distinct errors.
 
 Separately, canonical metadata for this numbering model is fixed at one
 `verse`, 112 `header`, and one `none`. `SuraMeta`/the web catalog expose that
@@ -493,10 +484,9 @@ Two notes on adopting their vocabulary wholesale:
   boolean as the internal model or treat it as opener text.
 - A quran.com-shaped **schema** (a derived `verses` table holding pre-stripped
   Tanzil text) is not adoptable here regardless of its merits: it materializes
-  modified ayah text, which fixed decisions 1 and 2 forbid, drops the corpus
-  outside the golden digests, and exceeds Tanzil's verbatim-copy licence. The
-  canonical read-time view yields the same presentation without materializing
-  rewritten Tanzil ayahs.
+  modified ayah text, which fixed decisions 1 and 2 forbid, and exceeds Tanzil's
+  verbatim-copy licence. The canonical read-time view yields the same
+  presentation without materializing rewritten Tanzil ayahs.
 
 ### 5.2 Do not split on a newline
 
@@ -807,33 +797,31 @@ At load, per registered source:
 1. Canonical row count is 6,236 after any row-shape adaptation.
 2. `(sura, aya)` keys and per-surah ayah counts match `quran-data.xml`.
 3. The detected packaging split matches the registry entry for that source.
-4. Golden digest over `raw` matches the registry literal (unchanged; the digest
-   is a hardcoded constant, never recomputed from the source being checked).
-5. `body(c,s,a) == raw(c,s,a)` for every ayah where `a > 1`, and for every ayah
+4. `body(c,s,a) == raw(c,s,a)` for every ayah where `a > 1`, and for every ayah
    whose package is not `embedded-prefix`.
-6. For every embedded prefix,
+5. For every embedded prefix,
    `openerText + separator + body(c,s,1) == raw(c,s,1)` byte-for-byte, where all
    three values are subslices of the original. This proves that the view only
    partitions text; it never rewrites it.
-7. `bodyStartScalar[c,s] > 0` exactly when
+6. `bodyStartScalar[c,s] > 0` exactly when
    `packaging(c,s) == embedded-prefix`; `openerEndScalar <= bodyStartScalar`.
-8. Canonical `openerKind(1) == "verse"`, `openerKind(9) == "none"`, and all
+7. Canonical `openerKind(1) == "verse"`, `openerKind(9) == "none"`, and all
    other surahs are `"header"`, independent of source packaging.
-9. Every `verse`/`header` opener has exact text in every corpus exposed for that
+8. Every `verse`/`header` opener has exact text in every corpus exposed for that
    script. A `chapter-flag` boolean without a trusted text provider fails load.
-10. `body(c,s,1)` is non-empty and has no leading or trailing whitespace for all
-    114 surahs. This catches the surah-1-blanked defect (§3.1) inside the adapter.
-11. Prefix cuts are computed **per corpus**. An embedded-prefix corpus whose
+9. `body(c,s,1)` is non-empty and has no leading or trailing whitespace for all
+   114 surahs. This catches the surah-1-blanked defect (§3.1) inside the adapter.
+10. Prefix cuts are computed **per corpus**. An embedded-prefix corpus whose
     detected cut count is 0 is a hard error — the exact signature of the current
     simple-clean prototype's inertness.
-12. Rust and TypeScript agree on every scalar cut and derived opener/separator/
+11. Rust and TypeScript agree on every scalar cut and derived opener/separator/
     body fixture. Each runtime separately proves its native indices are valid.
-13. Surah, range, and search presentation tests exercise the same descriptor;
+12. Surah, range, and search presentation tests exercise the same descriptor;
     a range containing ayah 1 renders one header and a range starting at ayah 2
     renders none.
 
-Invariants 5 and 6 make “we never alter text” checkable rather than a claim.
-Invariants 10 and 11 exist because both prototype defects were silent — one
+Invariants 4 and 5 make “we never alter text” checkable rather than a claim.
+Invariants 9 and 10 exist because both prototype defects were silent — one
 masked by a caller-side guard, the other a no-op that looked like success.
 
 ### 9.1 What the corpus audit cleared
@@ -848,14 +836,12 @@ packs found **no structural or data defects**. Recorded so this is not re-run:
 | juz 30 · page 604 · ruku 556 · hizb-quarter 240 · manzil 7 · sajda 15                          | all present, monotonic, unique, every marker resolves to a real verse                                       |
 | empty / untrimmed / double-space / control char / newline / tab / BOM / NBSP                   | none, both corpora                                                                                          |
 | codepoint inventory                                                                            | 70 distinct (Uthmani), 37 (simple-clean); every one in the Arabic blocks — no stray Latin or punctuation    |
-| golden corpus digests vs `quran-api.md` §3.3                                                   | **match exactly**, both; joined byte lengths match too                                                      |
-| NFC canary                                                                                     | NFC-normalizing Uthmani yields `6ee54875c37e4d88…`, exactly as documented — the digest check does detect it |
-| file digests vs `web/src/lib/config/site.ts`                                                   | match, both                                                                                                 |
 | 115 translation packs: 6,236 rows, contiguous index                                            | pass, 115/115                                                                                               |
 | translation empty verses                                                                       | 4, in 3 files — exactly as `docs/translation-empty-verses.md` records                                       |
 
 Uthmani is NFC-unstable in 5,782 of 6,236 rows, matching the documented figure.
-That is a property of the source, and the reason the digests exist.
+That is a property of the source, so read-time views must never normalize or
+rewrite the stored text.
 
 All defects found by the audit are in _our code_, not the data: §3.1 and §7.1.
 
@@ -912,9 +898,9 @@ through intact — a cut one position early or late would corrupt them visibly.
   and mushaf-layout exports are packaged differently from the API model. Profile
   the actual file before writing its registry entry: row count, ayah-number base,
   where the basmala sits per surah, whether `verse_index` matches ours (§5.1),
-  and which digest-guarded field or companion artifact supplies exact opener
+  and which trusted field or companion artifact supplies exact opener
   text, including the 95/97 spelling. Until then it has no profile and will not
-  load — the intended behaviour under fixed decision 6.
+  load — the intended behaviour under fixed decision 5.
 
   Note that an earlier concern that this project's Tanzil database itself carried
   the basmala "as ayah 1 in some places" was checked and did not hold; see §1.1.
@@ -944,7 +930,6 @@ through intact — a cut one position early or late would corrupt them visibly.
   supplies `verse_index` / `verse_key`. Sources for §5.1. The API shape is not a
   profiled export, so packaging claims there remain limited to the public API
   surface and schema.
-- `docs/quran-api.md` §3.3 — verbatim-text guarantee and the golden digests.
 - `docs/quran-web-delivery.md` §1.2, §1.4 — files unaltered; identical search
   behaviour online and offline.
 - `db/quran/tanzil/quran-data.xml` — ayah counts and navigation markers; the

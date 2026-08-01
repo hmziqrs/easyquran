@@ -10,6 +10,7 @@ import {
   isEligibleQuery,
   normalizeArabic,
 } from "./normalize.ts";
+import { alignSearchText } from "./alignment.ts";
 import { SearchHitKind, type Highlight, type SearchHit, type SearchOpts } from "./types.ts";
 
 interface SearchUnitBase {
@@ -17,7 +18,8 @@ interface SearchUnitBase {
   rank: 0 | 1;
   matchNorm: string;
   displayText: string;
-  displayMatchText: string;
+  matchDisplayStarts: number[];
+  matchDisplayEnds: number[];
   displayBaseUtf16: number;
 }
 
@@ -56,14 +58,14 @@ export function buildCanonicalSearchCorpus(input: {
         if (!matchOpener.text || displayOpener.kind !== OpenerKind.Header || !displayOpener.text) {
           throw new Error(`[quran-search] missing opener text for surah ${matchRow.surah}`);
         }
+        const alignment = alignSearchText(matchOpener.text, displayOpener.text);
         units.push({
           kind: SearchHitKind.Opener,
           surah: matchRow.surah,
           anchorGlobal: matchRow.globalIndex,
           rank: 0,
-          matchNorm: normalizeArabic(matchOpener.text),
+          ...alignment,
           displayText: displayOpener.text,
-          displayMatchText: displayOpener.text,
           displayBaseUtf16: 0,
         });
       }
@@ -72,6 +74,7 @@ export function buildCanonicalSearchCorpus(input: {
     const matchBody = input.matchView.body(matchRow.surah, matchRow.ayah, matchRow.text);
     const displayBody = input.displayView.body(displayRow.surah, displayRow.ayah, displayRow.text);
     const descriptor = input.displayView.normalization(displayRow.surah);
+    const alignment = alignSearchText(matchBody, displayBody);
     units.push({
       kind: SearchHitKind.Ayah,
       surah: matchRow.surah,
@@ -79,9 +82,8 @@ export function buildCanonicalSearchCorpus(input: {
       globalIndex: matchRow.globalIndex,
       anchorGlobal: matchRow.globalIndex,
       rank: 1,
-      matchNorm: normalizeArabic(matchBody),
+      ...alignment,
       displayText: displayRow.text,
-      displayMatchText: displayBody,
       displayBaseUtf16:
         displayRow.ayah === 1 ? scalarToUtf16Index(displayRow.text, descriptor.bodyStartScalar) : 0,
     });
@@ -90,68 +92,20 @@ export function buildCanonicalSearchCorpus(input: {
   return units.sort((a, b) => a.anchorGlobal - b.anchorGlobal || a.rank - b.rank);
 }
 
-interface NormalizedMap {
-  normalized: string;
-  starts: number[];
-  ends: number[];
-}
-
-const REMOVED = /[\p{Mn}\p{Me}\p{Cf}\u0640]/u;
-
-/** Normalize while retaining UTF-16 positions into the original display text. */
-function normalizeWithMap(input: string): NormalizedMap {
-  const values: { value: string; start: number; end: number }[] = [];
-  let utf16 = 0;
-  for (const scalar of input) {
-    const start = utf16;
-    utf16 += scalar.length;
-    if (REMOVED.test(scalar)) {
-      const previous = values.at(-1);
-      if (previous) previous.end = utf16;
-      continue;
-    }
-    let value = scalar;
-    if (/[آأإٱ]/u.test(value)) value = "ا";
-    else if (value === "ى") value = "ي";
-    else if (value === "ة") value = "ه";
-
-    if (/\s/u.test(value)) {
-      if (values.length === 0) continue;
-      if (values.at(-1)?.value === " ") {
-        values.at(-1)!.end = utf16;
-        continue;
-      }
-      value = " ";
-    }
-    values.push({ value, start, end: utf16 });
-  }
-  if (values.at(-1)?.value === " ") values.pop();
-
-  const starts: number[] = [];
-  const ends: number[] = [];
-  let normalized = "";
-  for (const value of values) {
-    normalized += value.value;
-    for (let i = 0; i < value.value.length; i++) {
-      starts.push(value.start);
-      ends.push(value.end);
-    }
-  }
-  return { normalized, starts, ends };
-}
-
-function highlightsFor(text: string, normalizedQuery: string, baseUtf16: number): Highlight[] {
-  const mapped = normalizeWithMap(text);
+function highlightsFor(unit: CanonicalSearchUnit, normalizedQuery: string): Highlight[] {
   const highlights: Highlight[] = [];
   let from = 0;
-  while (from <= mapped.normalized.length - normalizedQuery.length) {
-    const start = mapped.normalized.indexOf(normalizedQuery, from);
+  while (from <= unit.matchNorm.length - normalizedQuery.length) {
+    const start = unit.matchNorm.indexOf(normalizedQuery, from);
     if (start < 0) break;
     const last = start + normalizedQuery.length - 1;
-    const rawStart = mapped.starts[start];
-    const rawEnd = mapped.ends[last];
-    if (rawStart !== undefined && rawEnd !== undefined) {
-      highlights.push({ start: baseUtf16 + rawStart, end: baseUtf16 + rawEnd });
+    const rawStart = unit.matchDisplayStarts[start];
+    const rawEnd = unit.matchDisplayEnds[last];
+    if (rawStart !== undefined && rawEnd !== undefined && rawStart < rawEnd) {
+      highlights.push({
+        start: unit.displayBaseUtf16 + rawStart,
+        end: unit.displayBaseUtf16 + rawEnd,
+      });
     }
     from = start + Math.max(1, normalizedQuery.length);
   }
@@ -159,7 +113,7 @@ function highlightsFor(text: string, normalizedQuery: string, baseUtf16: number)
 }
 
 function hitFor(unit: CanonicalSearchUnit, normalizedQuery: string): SearchHit {
-  const highlights = highlightsFor(unit.displayMatchText, normalizedQuery, unit.displayBaseUtf16);
+  const highlights = highlightsFor(unit, normalizedQuery);
   if (unit.kind === SearchHitKind.Opener) {
     return {
       kind: SearchHitKind.Opener,

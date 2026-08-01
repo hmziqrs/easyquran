@@ -207,4 +207,19 @@ describe("canonical web search corpus", () => {
       ]);
     }
   });
+
+  it("maps simple-clean matches onto different Uthmani spellings", () => {
+    const result = searchCanonicalCorpus(corpus, "سبحان الله", { limit: 50 });
+    expect(result.total).toBe(9);
+    expect(result.results).toHaveLength(result.total);
+    for (const hit of result.results) {
+      expect(hit.highlights.length).toBeGreaterThan(0);
+      const text = hit.kind === SearchHitKind.Opener ? hit.text : hit.ayah.text;
+      for (const highlight of hit.highlights) {
+        expect(highlight.start).toBeGreaterThanOrEqual(0);
+        expect(highlight.end).toBeGreaterThan(highlight.start);
+        expect(highlight.end).toBeLessThanOrEqual(text.length);
+      }
+    }
+  });
 });
