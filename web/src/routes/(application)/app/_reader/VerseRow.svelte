@@ -16,12 +16,8 @@
 <li
   id="ayah-{vKey.replace(":", "-")}"
   data-verse-key={vKey}
-  class="verse-row group relative scroll-mt-24 border-b border-line px-5 py-[22px] transition-colors sm:px-9"
+  class="verse-row group relative scroll-mt-24 border-b border-line px-5 pb-[22px] pt-[62px] transition-colors sm:px-9"
 >
-  {#if Tools}
-    <Tools {text} {vKey} />
-  {/if}
-
   <span
     dir="rtl"
     class="verse-text font-arabic leading-[2.15] text-fg"
@@ -29,20 +25,17 @@
   >
     {text}<span class="ayah-marker">{toArabicDigits(n)}</span>
   </span>
+
+  {#if Tools}
+    <Tools {text} {vKey} />
+  {/if}
 </li>
 
 <style>
-  .verse-row {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 120px;
-  }
-
   :global([data-reader-mode="reading"]) .verse-row {
     display: inline;
     padding: 0;
     border: 0;
-    content-visibility: visible;
-    contain: none;
   }
 
   :global([data-reader-mode="reading"]) .verse-text {

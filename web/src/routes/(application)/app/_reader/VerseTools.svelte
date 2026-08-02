@@ -48,7 +48,7 @@
 </script>
 
 <div
-  class="verse-toolbar mb-2.5 flex items-center justify-between gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+  class="verse-toolbar absolute inset-x-5 top-[22px] flex items-center justify-between gap-2 opacity-100 sm:inset-x-9 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
 >
   <span class="font-mono text-[11px] tracking-wide text-fg-3">{vKey}</span>
   <div class="flex items-center gap-0.5">

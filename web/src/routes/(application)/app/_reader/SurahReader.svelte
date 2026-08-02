@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import type { Attachment } from "svelte/attachments";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
@@ -13,9 +15,10 @@
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
+  import { virtualPageWindow } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
-  import { reader } from "$lib/stores/reader.svelte";
+  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import VerseRow from "./VerseRow.svelte";
 
   let {
@@ -39,17 +42,33 @@
     [initial, ...loadedPages].sort((a, b) => a.page.localPage - b.page.localPage),
   );
   let readerPages: HTMLElement | null = $state(null);
-  let pendingPage: number | null = null;
-  let loadingPage: number | null = $state(null);
+  const pendingPages = new SvelteSet<number>();
+  const loadingPages = new SvelteSet<number>();
   let loadFailed = $state(false);
   let clientMounted = $state(false);
   let activeLocalPage = $state<number | null>(null);
+  let virtualCenterPage = $state<number | null>(null);
   let lastScrollY = 0;
+  let touchY: number | null = null;
   let scrollFrame = 0;
+  let suppressScroll = false;
+  let virtualShiftPage: number | null = null;
+  let positionQueue = Promise.resolve();
+  const pageHeights = new SvelteMap<string, SvelteMap<number, number>>();
   const badge = $derived(String(initial.surah.num).padStart(3, "0"));
   const visibleLocalPage = $derived(activeLocalPage ?? initial.page.localPage);
+  const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
+  const renderedPageNumbers = $derived.by(
+    () =>
+      new Set(
+        virtualPageWindow(
+          pages.map((page) => page.page.localPage),
+          virtualFocusPage,
+        ),
+      ),
+  );
   const previousHref = $derived.by(() => {
     if (firstLoaded.page.localPage === initial.page.localPage && previousPage) {
       return previousPage.href;
@@ -79,6 +98,149 @@
       : nextSurah?.name,
   );
 
+  function layoutKey(): string {
+    return `${reader.mode}:${reader.arabicSizePx}`;
+  }
+
+  function defaultPageHeight(): number {
+    const scale = Number.parseFloat(reader.arabicSizePx) / 33;
+    return Math.round((reader.isReadingMode ? 720 : 1320) * scale);
+  }
+
+  function pageHeight(localPage: number): number {
+    return pageHeights.get(layoutKey())?.get(localPage) ?? defaultPageHeight();
+  }
+
+  function savePageHeight(localPage: number, height: number): void {
+    if (!Number.isFinite(height) || height <= 0) return;
+    const key = layoutKey();
+    let heights = pageHeights.get(key);
+    if (!heights) {
+      heights = new SvelteMap<number, number>();
+      pageHeights.set(key, heights);
+    }
+    const rounded = Math.ceil(height);
+    if (heights.get(localPage) !== rounded) heights.set(localPage, rounded);
+  }
+
+  function measurePage(localPage: number): Attachment<HTMLElement> {
+    return (node) => {
+      const measure = () => savePageHeight(localPage, node.getBoundingClientRect().height);
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      measure();
+      return () => observer.disconnect();
+    };
+  }
+
+  const captureReaderPages: Attachment<HTMLElement> = (node) => {
+    readerPages = node;
+    return () => {
+      if (readerPages === node) readerPages = null;
+    };
+  };
+
+  function renderedAnchor(): { localPage: number; top: number } | null {
+    if (!readerPages) return null;
+    const marker = Math.min(window.innerHeight * 0.35, 260);
+    const sections = [
+      ...readerPages.querySelectorAll<HTMLElement>("[data-page-rendered]"),
+    ];
+    if (!sections.length) return null;
+    let closest = sections[0]!;
+    let distance = Number.POSITIVE_INFINITY;
+    for (const section of sections) {
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= marker && rect.bottom > marker) {
+        closest = section;
+        break;
+      }
+      const nextDistance = Math.min(Math.abs(rect.top - marker), Math.abs(rect.bottom - marker));
+      if (nextDistance < distance) {
+        closest = section;
+        distance = nextDistance;
+      }
+    }
+    return {
+      localPage: Number(closest.dataset.localPage),
+      top: closest.getBoundingClientRect().top,
+    };
+  }
+
+  function preserveViewport(change: () => void): Promise<void> {
+    const operation = async () => {
+      const anchor = renderedAnchor();
+      suppressScroll = true;
+      try {
+        change();
+        await tick();
+        if (anchor && readerPages) {
+          const node = readerPages.querySelector<HTMLElement>(
+            `[data-page-rendered][data-local-page="${anchor.localPage}"]`,
+          );
+          if (node) {
+            const delta = node.getBoundingClientRect().top - anchor.top;
+            if (Math.abs(delta) > 0.5) window.scrollTo(0, window.scrollY + delta);
+          }
+        }
+        lastScrollY = window.scrollY;
+        await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()));
+      } finally {
+        suppressScroll = false;
+      }
+    };
+    const result = positionQueue.then(operation, operation);
+    positionQueue = result.catch(() => undefined);
+    return result;
+  }
+
+  function shiftVirtualWindow(localPage: number): void {
+    if (renderedPageNumbers.has(localPage) || virtualShiftPage === localPage) return;
+    virtualShiftPage = localPage;
+    void preserveViewport(() => {
+      virtualCenterPage = localPage;
+    }).finally(() => {
+      virtualShiftPage = null;
+    });
+  }
+
+  function warmVirtualWindow(direction: number): void {
+    if (!readerPages || direction === 0) return;
+    const candidates = [
+      ...readerPages.querySelectorAll<HTMLElement>("[data-page-spacer]"),
+    ].filter((spacer) => {
+      const page = Number(spacer.dataset.localPage);
+      const rect = spacer.getBoundingClientRect();
+      return (
+        rect.bottom > -900 &&
+        rect.top < window.innerHeight + 900 &&
+        (direction > 0 ? page > virtualFocusPage : page < virtualFocusPage)
+      );
+    });
+    candidates.sort((a, b) => {
+      const aPage = Number(a.dataset.localPage);
+      const bPage = Number(b.dataset.localPage);
+      return direction > 0 ? aPage - bPage : bPage - aPage;
+    });
+    const localPage = Number(candidates[0]?.dataset.localPage);
+    if (Number.isSafeInteger(localPage)) shiftVirtualWindow(localPage);
+  }
+
+  function changeMode(mode: ReaderMode): void {
+    if (reader.mode === mode) return;
+    void preserveViewport(() => {
+      virtualCenterPage = visibleLocalPage;
+      reader.setMode(mode);
+    });
+  }
+
+  function changeFontSize(change: () => void): void {
+    void preserveViewport(() => {
+      virtualCenterPage = visibleLocalPage;
+      change();
+    });
+  }
+
   function cachePage(pageData: SurahLocalPageData): void {
     reader.seedAyahs(
       pageData.ayahs.map((ayah) => ({
@@ -93,15 +255,16 @@
       localPage < 1 ||
       localPage > initial.pageCount ||
       pages.some((item) => item.page.localPage === localPage) ||
-      loadingPage === localPage
+      loadingPages.has(localPage)
     ) {
       return;
     }
     if (!quranWorker.ready) {
-      pendingPage = localPage;
+      pendingPages.add(localPage);
       return;
     }
-    loadingPage = localPage;
+    pendingPages.delete(localPage);
+    loadingPages.add(localPage);
     loadFailed = false;
     try {
       const quranData = await loadQuranData();
@@ -127,12 +290,24 @@
         normalization,
       };
       cachePage(pageData);
-      loadedPages = [...loadedPages, pageData];
+      if (localPage < firstLoaded.page.localPage) {
+        await preserveViewport(() => {
+          loadedPages = [...loadedPages, pageData];
+        });
+      } else {
+        loadedPages = [...loadedPages, pageData];
+        await tick();
+      }
     } catch {
       loadFailed = true;
     } finally {
-      loadingPage = null;
+      loadingPages.delete(localPage);
     }
+  }
+
+  function requestPreviousPage(): void {
+    const localPage = firstLoaded.page.localPage - 1;
+    if (localPage >= 1) void loadPage(localPage);
   }
 
   function requestNextPage(): void {
@@ -141,6 +316,7 @@
   }
 
   function setVisiblePage(localPage: number): void {
+    if (!renderedPageNumbers.has(localPage)) shiftVirtualWindow(localPage);
     if (localPage === visibleLocalPage) return;
     activeLocalPage = localPage;
     replaceState(resolve(surahLocalPagePath(initial.surah, localPage)), {});
@@ -173,13 +349,20 @@
 
   function processScroll(direction: number): void {
     scrollFrame = 0;
+    warmVirtualWindow(direction);
     updateVisiblePage();
-    if (direction <= 0 || !readerPages) return;
-    if (readerPages.getBoundingClientRect().bottom - window.innerHeight < 900) requestNextPage();
+    if (!readerPages) return;
+    const rect = readerPages.getBoundingClientRect();
+    if (direction < 0 && rect.top > -900) requestPreviousPage();
+    if (direction > 0 && rect.bottom - window.innerHeight < 900) requestNextPage();
   }
 
   function onScroll(): void {
     const currentY = window.scrollY;
+    if (suppressScroll) {
+      lastScrollY = currentY;
+      return;
+    }
     const direction = Math.sign(currentY - lastScrollY);
     lastScrollY = currentY;
     if (scrollFrame) cancelAnimationFrame(scrollFrame);
@@ -187,16 +370,44 @@
   }
 
   function onWheel(event: WheelEvent): void {
-    if (event.deltaY > 0) processScroll(1);
+    if (event.deltaY !== 0) processScroll(Math.sign(event.deltaY));
   }
 
-  function captureReaderPages(node: HTMLElement) {
-    readerPages = node;
-    return {
-      destroy() {
-        if (readerPages === node) readerPages = null;
-      },
-    };
+  function onTouchStart(event: TouchEvent): void {
+    touchY = event.touches[0]?.clientY ?? null;
+  }
+
+  function onTouchMove(event: TouchEvent): void {
+    const nextY = event.touches[0]?.clientY;
+    if (touchY === null || nextY === undefined) return;
+    const direction = Math.sign(touchY - nextY);
+    touchY = nextY;
+    if (direction !== 0) processScroll(direction);
+  }
+
+  function onTouchEnd(): void {
+    touchY = null;
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.isContentEditable ||
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
+      target?.tagName === "SELECT"
+    ) {
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
+      processScroll(-1);
+    } else if (
+      event.key === "ArrowDown" ||
+      event.key === "PageDown" ||
+      event.key === "End"
+    ) {
+      processScroll(1);
+    }
   }
 
   function continueReading(): void {
@@ -209,10 +420,10 @@
     lastScrollY = window.scrollY;
     cachePage(initial);
     const stop = quranWorker.onStatus((status) => {
-      if (status !== "ready" || pendingPage === null) return;
-      const localPage = pendingPage;
-      pendingPage = null;
-      void loadPage(localPage);
+      if (status !== "ready") return;
+      for (const localPage of [...pendingPages].sort((a, b) => a - b)) {
+        void loadPage(localPage);
+      }
     });
     return () => {
       stop();
@@ -221,7 +432,14 @@
   });
 </script>
 
-<svelte:window onscroll={onScroll} onwheel={onWheel} />
+<svelte:window
+  onscroll={onScroll}
+  onwheel={onWheel}
+  ontouchstart={onTouchStart}
+  ontouchmove={onTouchMove}
+  ontouchend={onTouchEnd}
+  onkeydown={onKeyDown}
+/>
 
 <div class="flex flex-col gap-4">
   {#if reader.hasLastRead}
@@ -264,94 +482,103 @@
       </div>
 
       {#if clientMounted}
-      <div class="flex flex-wrap items-center justify-end gap-2">
-        <div
-          class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
-          role="group"
-          aria-label="Arabic text size"
-        >
-          <button
-            type="button"
-            onclick={() => reader.smaller()}
-            aria-label="Smaller Arabic text"
-            class="flex h-[26px] w-7 items-center justify-center rounded-md text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <div
+            class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
+            role="group"
+            aria-label="Arabic text size"
           >
-            A&minus;
-          </button>
-          <button
-            type="button"
-            onclick={() => reader.bigger()}
-            aria-label="Larger Arabic text"
-            class="flex h-[26px] w-7 items-center justify-center rounded-md text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
-          >
-            A+
-          </button>
-        </div>
+            <button
+              type="button"
+              onclick={() => changeFontSize(() => reader.smaller())}
+              aria-label="Smaller Arabic text"
+              class="flex h-[26px] w-7 items-center justify-center rounded-md text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+            >
+              A&minus;
+            </button>
+            <button
+              type="button"
+              onclick={() => changeFontSize(() => reader.bigger())}
+              aria-label="Larger Arabic text"
+              class="flex h-[26px] w-7 items-center justify-center rounded-md text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+            >
+              A+
+            </button>
+          </div>
 
-        <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" aria-label="Reading mode">
-          <button
-            type="button"
-            aria-pressed={reader.isVerseMode}
-            onclick={() => reader.setMode("verse")}
-            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
+          <div
+            class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
+            aria-label="Reading mode"
           >
-            <Icon name="rows" size={13} />
-            <span class="hidden sm:inline">Ayah-by-Ayah</span>
-            <span class="sm:hidden">Ayahs</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={reader.isReadingMode}
-            onclick={() => reader.setMode("reading")}
-            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
-          >
-            <Icon name="continuous" size={13} />
-            <span>Reading</span>
-          </button>
+            <button
+              type="button"
+              aria-pressed={reader.isVerseMode}
+              onclick={() => changeMode("verse")}
+              class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
+            >
+              <Icon name="rows" size={13} />
+              <span class="hidden sm:inline">Ayah-by-Ayah</span>
+              <span class="sm:hidden">Ayahs</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={reader.isReadingMode}
+              onclick={() => changeMode("reading")}
+              class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
+            >
+              <Icon name="continuous" size={13} />
+              <span>Reading</span>
+            </button>
+          </div>
         </div>
-      </div>
       {/if}
     </div>
 
-    <div use:captureReaderPages class="reader-pages" data-reader-mode={reader.mode}>
+    <div {@attach captureReaderPages} class="reader-pages" data-reader-mode={reader.mode}>
       <TooltipProvider delayDuration={300}>
         {#each pages as pageData (pageData.page.localPage)}
-          <section
-            class="surah-page"
-            data-local-page={pageData.page.localPage}
-            aria-labelledby="surah-page-{pageData.page.localPage}-title"
-          >
-            <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
-              {initial.surah.name}, page {pageData.page.localPage} of {initial.pageCount}
-            </h2>
-            {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-              <p dir="rtl" class="surah-opener py-3 text-center font-arabic text-fg-3">
-                {headerText(pageData.normalization)}
-              </p>
-            {/if}
-            <ol class="ayah-list list-none p-0">
-              {#each pageData.ayahs as ayah (ayah.key)}
-                <VerseRow
-                  text={bodyText(ayah.text, ayah.ayah, pageData.normalization)}
-                  n={ayah.ayah}
-                  vKey={ayah.key}
-                />
-              {/each}
-            </ol>
-          </section>
+          {#if renderedPageNumbers.has(pageData.page.localPage)}
+            <section
+              class="surah-page"
+              data-local-page={pageData.page.localPage}
+              data-page-rendered
+              aria-labelledby="surah-page-{pageData.page.localPage}-title"
+              {@attach measurePage(pageData.page.localPage)}
+            >
+              <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
+                {initial.surah.name}, page {pageData.page.localPage} of {initial.pageCount}
+              </h2>
+              {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
+                <p dir="rtl" class="surah-opener py-3 text-center font-arabic text-fg-3">
+                  {headerText(pageData.normalization)}
+                </p>
+              {/if}
+              <ol class="ayah-list list-none p-0">
+                {#each pageData.ayahs as ayah (ayah.key)}
+                  <VerseRow
+                    text={bodyText(ayah.text, ayah.ayah, pageData.normalization)}
+                    n={ayah.ayah}
+                    vKey={ayah.key}
+                  />
+                {/each}
+              </ol>
+            </section>
+          {:else}
+            <div
+              class="page-spacer"
+              data-local-page={pageData.page.localPage}
+              data-page-spacer
+              aria-hidden="true"
+              style:height={`${pageHeight(pageData.page.localPage)}px`}
+            ></div>
+          {/if}
         {/each}
       </TooltipProvider>
     </div>
 
-    {#if loadingPage !== null}
-      <p class="border-t border-line px-5 py-3 text-center text-sm text-fg-3">
-        Loading page {loadingPage}…
-      </p>
-    {:else if loadFailed}
-      <p class="border-t border-line px-5 py-3 text-center text-sm text-fg-3">
-        The next page is not cached yet. Use the page link below to continue.
-      </p>
-    {/if}
+    <span class="sr-only" aria-live="polite">
+      {loadFailed ? "An adjacent page could not be loaded. Use the page links to continue." : ""}
+    </span>
 
     <nav
       aria-label="Surah pages"
@@ -384,6 +611,16 @@
 </div>
 
 <style>
+  .reader-pages {
+    overflow-anchor: none;
+  }
+
+  .page-spacer {
+    contain: strict;
+    overflow-anchor: none;
+    pointer-events: none;
+  }
+
   .ayah-list {
     display: flex;
     flex-direction: column;
