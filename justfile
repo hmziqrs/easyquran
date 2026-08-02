@@ -53,8 +53,8 @@ web-baseline label="phase0":
     cd web && node scripts/measure-baselines.ts "{{label}}"
 
 # Prove compact Quran metadata is neither embedded in generated output nor SW-precached.
-web-assert-metadata:
-    cd web && node scripts/assert-quran-metadata-boundary.ts
+web-assert-quran-data:
+    cd web && node scripts/assert-quran-data-boundary.ts
 
 # ── API (Rust/Axum on SQLite, in ./rust) ─────────────────────────────────────
 # Recipes `cd rust/` so the binary's dotenvy picks up `rust/.env`

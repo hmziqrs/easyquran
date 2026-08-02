@@ -56,7 +56,7 @@ The web implementation deliberately separates these concerns:
 | Canonical search hit contract                   | `web/src/lib/quran/search/types.ts`                | Worker, API decoder, UI, tooling         |
 | Artifact, script, packaging, and schema profile | `web/src/lib/quran/view/source-profiles.ts`        | manifest, SSG, Worker, tooling           |
 | Typed SQL queries and row decoding              | `web/src/lib/quran/sql.ts`                         | Node and sqlite-wasm query runners       |
-| Canonical coordinates from the immutable catalog | `web/static/quran-meta/quran-catalog.json`       | SSG and Worker source validation         |
+| Canonical coordinates from immutable Quran data | `web/static/quran-meta/quran-data.json`          | SSG and Worker source validation         |
 | Canonical `raw` / `body` / `opener` view        | `web/src/lib/quran/view/`                          | surah/range rendering and search         |
 | Product source roles                            | `web/src/lib/quran/source-plan.ts`                 | SSG defaults, Worker, fixture generation |
 

@@ -1,7 +1,7 @@
 export const prerender = true;
 
 import { SITE, MARKETING_PAGES } from "$lib/config/site";
-import { QURAN_CATALOG } from "$lib/server/quran-metadata";
+import { QURAN_DATA } from "$lib/server/quran-data";
 
 const escape = (value: string) => value.replace(/&/g, "&amp;");
 
@@ -9,7 +9,7 @@ export function GET() {
   const marketing = MARKETING_PAGES.map(
     (page) => `  <url>\n    <loc>${escape(SITE.url + page.href)}</loc>\n  </url>`,
   ).join("\n");
-  const surahs = QURAN_CATALOG.surahs
+  const surahs = QURAN_DATA.surahs
     .map((s) => `  <url>\n    <loc>${escape(SITE.url + "/app/" + s.slug)}</loc>\n  </url>`)
     .join("\n");
   const juz = Array.from(

@@ -10,10 +10,10 @@ import {
   decodeVersionPayload,
   unwrapEnvelope,
 } from "$lib/quran/wire";
-import { QURAN_CATALOG } from "$lib/server/quran-metadata";
+import { QURAN_DATA } from "$lib/server/quran-data";
 
 const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
-  QURAN_CATALOG.globalIndexOf(surah, ayah) === globalIndex;
+  QURAN_DATA.globalIndexOf(surah, ayah) === globalIndex;
 
 const AYAH_HIT: SearchHit = {
   kind: SearchHitKind.Ayah,

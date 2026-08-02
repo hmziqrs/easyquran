@@ -20,8 +20,8 @@ The migration has two independent outcomes:
 1. **A bounded, content-first SSG document.** A Surah URL renders exactly one
    Mushaf-aligned Surah-local page with one copy of each ayah and no server-
    rendered reader controls or corpus-wide navigation data.
-2. **A compact, immutable metadata boundary.** The web build and SPA stop
-   parsing `quran-data.xml`. Two checked-in positional JSON snapshots and
+2. **A compact, immutable data boundary.** The web build and SPA stop
+   parsing `quran-data.xml`. One checked-in positional `quran-data.json` file and
    TypeScript accessors replace the current XML virtual module,
    `surah-names.json`, and `quran-coordinates.json`.
 
@@ -34,7 +34,7 @@ web SSG nor browser code may read, parse, watch, copy, or bundle it after this
 migration.
 
 The compact JSON conversion is a one-time migration. A disposable converter
-may produce and verify the snapshots, but no converter or data-maintenance
+may produce and verify the snapshot, but no converter or data-maintenance
 command remains in the repository afterward.
 
 ---
@@ -179,7 +179,7 @@ The August 2026 production-build audit found 748 generated reader documents:
 | Duplicate modes | Both tab panels render, so Arabic text appears in Ayah-by-Ayah and Reading trees. For Al-Baqarah the hidden copy is about 126 KB raw. | One ayah node/text; CSS changes presentation. |
 | Hydration data | SvelteKit serializes loaded Quran data after rendering it as HTML. Al-Baqarah repeats about 108.6 KB raw in page data. | First bound it to the requested local page; if the measured budget still fails, isolate static content from hydration. |
 | Whole-Surah load | `/app/[surah]` calls `readSurahText` and returns the complete `LoadedSurah.verses`. | Read and return only the requested local page. |
-| Corpus metadata | The virtual module compiles XML, names, coordinates, range families, and sajdas. The emitted metadata chunk is about 121.7 KB raw / 13.4 KB Brotli. | Embed only route metadata; fetch compact snapshots after paint or on demand. |
+| Corpus metadata | The virtual module compiles XML, names, coordinates, range families, and sajdas. The emitted metadata chunk is about 121.7 KB raw / 13.4 KB Brotli. | Embed only route metadata; fetch the one compact data file after paint or on demand. |
 | Reader JavaScript | A reader page preloads 26 JavaScript files, about 525.7 KB raw / 134.7 KB Brotli. | Dynamically import client controls and sidebar. |
 
 The closed sidebar's 114 menu items are **not** currently in SSG HTML. Its cost
@@ -195,36 +195,35 @@ theme-script comments, and favicon markup—comes after structural work.
 
 ---
 
-## 5. Two immutable compact JSON snapshots
+## 5. One immutable compact JSON file
 
-The immutable files are:
+The only tracked web Quran metadata JSON file is:
 
 ```text
-web/static/quran-meta/quran-catalog.json
-web/static/quran-meta/quran-navigation.json
+web/static/quran-meta/quran-data.json
 ```
 
-There are exactly two tracked web metadata JSON files after migration. They
-absorb and replace:
+It absorbs and replaces:
 
 ```text
 web/src/lib/data/surah-names.json
 web/src/lib/data/quran-coordinates.json
 ```
 
-There is no `v1` directory, schema-release namespace, or rolling snapshot. The
-files are immutable corpus assets. The source-version string inside provenance
+There is no `v1` directory, schema-release namespace, split catalog/navigation
+file, or rolling snapshot. This is one immutable corpus asset. The source-version string inside provenance
 describes the upstream Tanzil input; it is not a version of this web format.
 The `/quran-meta/` path avoids the existing `/_quran/` service-worker and local
-SQLite artifact behavior, and the snapshots are excluded from service-worker
-precache so their first request remains lazy.
+SQLite artifact behavior, and the file is excluded from service-worker precache
+so its first request remains lazy.
 
-### 5.1 Catalog snapshot
+### 5.1 Snapshot shape
 
-`quran-catalog.json` has a provenance tuple and 114 positional Surah
-rows. Surah number is `row index + 1`. A row retains every non-derived XML
-Surah value and carries forward the app's stable slug/display name before
-`surah-names.json` is removed.
+`quran-data.json` has one provenance tuple, 114 positional Surah rows, compact
+numeric series for page, Juz, ruku, hizb-quarter, and manzil starts, and sajda
+markers. Surah number and range number are `row index + 1`. A Surah row retains
+every non-derived XML value and carries forward the app's stable slug/display
+name before `surah-names.json` is removed.
 
 Conceptual shape:
 
@@ -233,7 +232,13 @@ Conceptual shape:
   ["sha256-of-quran-data.xml", "upstream-source-version", "source-license"],
   [
     ["al-fatihah", "Al-Fatihah", "الفاتحة", "Al-Faatiha", "The Opening", 0, 7, 5, 1]
-  ]
+  ],
+  [1, 7],
+  [1, 141],
+  [1, 11],
+  [1, 7],
+  [1, 669],
+  [[7, 206, 0]]
 ]
 ```
 
@@ -242,9 +247,15 @@ route slugs are copied by the disposable converter and proven against the
 current catalog before removal.
 
 ```ts
-export const CatalogRoot = {
+export const QuranDataRoot = {
   Source: 0,
   Surahs: 1,
+  Page: 2,
+  Juz: 3,
+  Ruku: 4,
+  HizbQuarter: 5,
+  Manzil: 6,
+  Sajdas: 7,
 } as const;
 
 export const SurahField = {
@@ -263,25 +274,7 @@ export const SurahField = {
 Global starts/ends come from the prefix sum of `AyahCount`. Surah number,
 opener kind, and bismillah packaging are also derived rather than repeated.
 
-### 5.2 Navigation snapshot
-
-`quran-navigation.json` contains compact numeric series for page, Juz, ruku,
-hizb-quarter, and manzil starts, plus sajda markers. Range ends,
-`first`/`last` VerseKeys, and Surah-local intersections are derived.
-
-Its root is positional too:
-
-```ts
-export const NavigationRoot = {
-  Source: 0,
-  Page: 1,
-  Juz: 2,
-  Ruku: 3,
-  HizbQuarter: 4,
-  Manzil: 5,
-  Sajdas: 6,
-} as const;
-```
+Range ends, `first`/`last` VerseKeys, and Surah-local intersections are derived.
 
 ```ts
 export const RangeKind = {
@@ -301,11 +294,10 @@ export const SajdaField = {
 
 Each range series stores its first 1-based global start followed by positive
 deltas. Range index is `array index + 1`. Sajda rows need only Surah, ayah, and
-a kind code. In a measured candidate encoding, the two snapshots together are
-about 12.5 KB raw / 4.1 KB Brotli while retaining more Surah metadata than the
-current compiled catalog.
+a kind code. The resulting single file is about 12.5 KB raw while retaining
+more Surah metadata than the current compiled representation.
 
-### 5.3 Accessors are the public boundary
+### 5.2 Accessors are the public boundary
 
 No route, component, store, or worker indexes raw arrays directly. Accessors
 return named objects:
@@ -330,34 +322,34 @@ not call them to load Quran text.
 Invalid coordinates return `undefined` or throw explicitly; they do not
 silently fall back to Al-Fatihah.
 
-Provide two adapters over the same contracts:
+Provide two adapters over the same `QuranData` contract:
 
 - a synchronous server-only loader for prerendering; and
-- an asynchronous browser loader fetching snapshots after first paint or when
+- an asynchronous browser loader fetching the one file after first paint or when
   sidebar/navigation is opened.
 
 Compact arrays never enter Svelte page data. The SSG loader selects only values
-needed by the route. A bundle assertion verifies that rendering a page does not
-pull all range families into critical client JavaScript; two JSON files alone
-do not guarantee tree shaking.
+needed by the route. A boundary assertion verifies that rendering a page does
+not embed or precache the file and that importing the client loader does not
+fetch it before explicit demand.
 
-### 5.4 One-time conversion and provenance
+### 5.3 One-time conversion and provenance
 
 The migration performs this sequence once:
 
 1. read the unchanged XML, current names, and current coordinates;
-2. emit the two compact snapshots;
+2. emit the one compact snapshot;
 3. compare every expanded catalog/range/sajda entry with current output;
 4. record XML SHA-256 and upstream source provenance;
-5. commit the snapshots; and
+5. commit the snapshot; and
 6. delete the disposable converter and superseded JSON inputs.
 
 The web build does not compare against or hash XML afterward. JSON-only tests
 validate structure and immutable corpus totals. Replacing XML would be a new,
-explicit data migration with new snapshots/provenance—not a recurring command.
+explicit data migration with a new snapshot/provenance—not a recurring command.
 
 The Rust backend may continue hashing/parsing XML for its own `contentVersion`.
-The immutable web snapshots do not follow backend release versions and are not
+The immutable web snapshot does not follow backend release versions and is not
 invalidated by an XML-only backend version change.
 
 ---
@@ -507,7 +499,7 @@ resolve and load that local page before scrolling to its full VerseKey anchor.
 
 ### Phase 1 — create the immutable metadata boundary
 
-- Produce and verify two compact snapshots with a disposable converter.
+- Produce and verify one compact snapshot with a disposable converter.
 - Add TypeScript maps, accessors, and server/client loaders.
 - Move entries, sitemap, normalization, sidebar search, and range lookups to
   accessors.
@@ -549,7 +541,7 @@ resolve and load that local page before scrolling to its full VerseKey anchor.
 
 ### Phase 5 — trim critical metadata and verify output
 
-- Lazy-load sidebar/catalog/navigation after paint or explicit intent.
+- Lazy-load the one Quran data file after paint or explicit sidebar/navigation intent.
 - Remove unused DTO fields and repeated inline presentation values.
 - Compare per-document, page-data, critical JS, aggregate output, and build
   time with Phase 0.
@@ -561,7 +553,7 @@ resolve and load that local page before scrolling to its full VerseKey anchor.
 
 ### Data and coordinates
 
-- Exactly two declared tracked web metadata JSON snapshots exist.
+- Exactly one tracked web Quran metadata JSON exists: `quran-data.json`.
 - Web build/runtime has no XML read, parser, watcher, virtual metadata module,
   Docker copy, or maintained converter/generator.
 - Snapshot provenance records the unchanged XML digest and upstream source metadata.

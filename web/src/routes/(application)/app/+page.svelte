@@ -4,14 +4,14 @@
   import { resolve } from "$app/paths";
   import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
-  import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
+  import { loadQuranData } from "$lib/data/quran-data-client";
   import { surahPath } from "$lib/data/quran";
 
   onMount(() => {
     reader.hydrate();
     const num = reader.lastRead?.num ?? 1;
-    void loadQuranCatalog().then((catalog) => {
-      const surah = catalog.surahByNum(num) ?? catalog.surahs[0]!;
+    void loadQuranData().then((quranData) => {
+      const surah = quranData.surahByNum(num) ?? quranData.surahs[0]!;
       return goto(resolve(surahPath(surah)), { replaceState: true });
     });
   });

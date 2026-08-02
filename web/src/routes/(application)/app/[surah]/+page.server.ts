@@ -1,12 +1,12 @@
 import { error } from "@sveltejs/kit";
-import { QURAN_CATALOG, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-metadata";
+import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { readSurahText, validateReaderSource } from "$lib/server/quran-sqlite";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;
 
 export function entries() {
-  return QURAN_CATALOG.surahs.map((s) => ({ surah: s.slug }));
+  return QURAN_DATA.surahs.map((s) => ({ surah: s.slug }));
 }
 
 const source = validateReaderSource();
@@ -18,13 +18,13 @@ if (!source.ok) {
 }
 
 export const load: PageServerLoad = ({ params }) => {
-  const cat = QURAN_CATALOG.surahBySlug(params.surah);
+  const cat = QURAN_DATA.surahBySlug(params.surah);
   if (!cat) {
     throw error(404, `Unknown surah: ${params.surah}`);
   }
   return {
     surah: { ...toSurahRenderMetadata(cat), ...readSurahText(cat.num) },
-    previous: cat.num > 1 ? toSurahLink(QURAN_CATALOG.surahByNum(cat.num - 1)!) : undefined,
-    next: cat.num < 114 ? toSurahLink(QURAN_CATALOG.surahByNum(cat.num + 1)!) : undefined,
+    previous: cat.num > 1 ? toSurahLink(QURAN_DATA.surahByNum(cat.num - 1)!) : undefined,
+    next: cat.num < 114 ? toSurahLink(QURAN_DATA.surahByNum(cat.num + 1)!) : undefined,
   };
 };

@@ -3,8 +3,8 @@
   import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
   import { surahPath } from "$lib/data/quran";
-  import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
-  import type { QuranCatalog } from "$lib/data/quran-catalog";
+  import { loadQuranData } from "$lib/data/quran-data-client";
+  import type { QuranData } from "$lib/data/quran-data";
   import { quranSearch } from "$lib/quran/search";
   import {
     SearchHitKind,
@@ -20,7 +20,7 @@
 
   interface SearchState {
     result: SearchResponse;
-    catalog: QuranCatalog;
+    quranData: QuranData;
   }
 
   const searchPromise = $derived.by((): Promise<SearchState | null> => {
@@ -28,8 +28,8 @@
     if (!query) return Promise.resolve(null);
     return new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 140)).then(async () => {
       if (reader.query.trim() !== query) return null;
-      const [result, catalog] = await Promise.all([quranSearch(query), loadQuranCatalog()]);
-      return { result, catalog };
+      const [result, quranData] = await Promise.all([quranSearch(query), loadQuranData()]);
+      return { result, quranData };
     });
   });
 
@@ -41,10 +41,10 @@
     return `${result.total} Quran text result${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`;
   }
 
-  function open(r: SearchHit, catalog: QuranCatalog): void {
+  function open(r: SearchHit, quranData: QuranData): void {
     const surah = searchHitSurah(r);
     const ayah = searchHitAnchorAyah(r);
-    const entry = catalog.surahByNum(surah);
+    const entry = quranData.surahByNum(surah);
     if (!entry) return;
     reader.openVerse(surah, ayah);
     void goto(resolve(surahPath(entry, ayah)));
@@ -62,14 +62,14 @@
         {@const text = searchHitText(r)}
         <button
           type="button"
-          onclick={() => open(r, state.catalog)}
+          onclick={() => open(r, state.quranData)}
           class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
         >
           <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
             {#if r.kind === SearchHitKind.Opener}
-              {state.catalog.surahByNum(surah)?.name ?? `Surah ${surah}`} · Surah opener
+              {state.quranData.surahByNum(surah)?.name ?? `Surah ${surah}`} · Surah opener
             {:else}
-              {state.catalog.surahByNum(surah)?.name ?? `Surah ${surah}`} {surah}:{r.ayah.ayah}
+              {state.quranData.surahByNum(surah)?.name ?? `Surah ${surah}`} {surah}:{r.ayah.ayah}
             {/if}
           </span>
           {#if text}

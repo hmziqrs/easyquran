@@ -1,5 +1,5 @@
 import { QURAN } from "$lib/config/site";
-import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
+import { loadQuranData } from "$lib/data/quran-data-client";
 import { verseKey } from "$lib/data/quran";
 import { quranWorker } from "./worker-client";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";
@@ -13,7 +13,7 @@ import {
 import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
 async function nameNumberFallback(query: string, opts: SearchOpts): Promise<SearchResponse> {
-  const catalog = await loadQuranCatalog();
+  const catalog = await loadQuranData();
   const q = query.trim();
   const qLower = q.toLowerCase();
   const norm = normalizeArabic(q);
@@ -50,7 +50,7 @@ async function nameNumberFallback(query: string, opts: SearchOpts): Promise<Sear
 }
 
 export async function quranSearch(query: string, opts: SearchOpts = {}): Promise<SearchResponse> {
-  const catalog = await loadQuranCatalog();
+  const catalog = await loadQuranData();
   const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
     catalog.globalIndexOf(surah, ayah) === globalIndex;
   if (quranWorker.ready) {

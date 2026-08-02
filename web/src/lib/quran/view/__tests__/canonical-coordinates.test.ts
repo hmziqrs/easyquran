@@ -4,9 +4,9 @@ import {
   validateCanonicalCoordinates,
 } from "$lib/quran/view/canonical-coordinates";
 import type { QuranCoordinateRow } from "$lib/quran/sql";
-import { QURAN_CATALOG } from "$lib/server/quran-metadata";
+import { QURAN_DATA } from "$lib/server/quran-data";
 
-const CANONICAL_QURAN_COORDINATES = QURAN_CATALOG.coordinates;
+const CANONICAL_QURAN_COORDINATES = QURAN_DATA.coordinates;
 
 function canonicalRows(): QuranCoordinateRow[] {
   return CANONICAL_QURAN_COORDINATES.surahs.flatMap((surah) =>

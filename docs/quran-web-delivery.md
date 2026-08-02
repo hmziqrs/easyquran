@@ -83,10 +83,9 @@ Both contain 6,236 rows with the same contiguous global indices and the same
   simple-clean display script. Its smaller, undiacritated text is loaded into a
   small in-memory array and substring-scanned.
 - `quran-data.xml` supplies surah metadata and navigation markers to the Rust
-  backend. The web no longer reads it: two one-time, immutable compact JSON
-  snapshots carry the web catalog and navigation data.
-- `web/static/quran-meta/quran-catalog.json` owns URL slugs, mapped to the API's
-  numeric surah identifier.
+  backend. The web no longer reads it: one one-time, immutable compact
+  `web/static/quran-meta/quran-data.json` carries the web catalog and navigation
+  data, including URL slugs mapped to the API's numeric surah identifier.
 
 There is no need to merge the files, and no need to add FTS: the complete
 simple-clean corpus is about 744 KB, small enough for a normalized substring
@@ -113,7 +112,7 @@ BACKEND
 
 SSG
   opens quran-uthmani.sqlite directly with node:sqlite
-  parses XML and uses quran.ts slug metadata
+  reads quran-data.json through a server-only accessor
     └── prerenders 114 SEO pages
 
 BROWSER
@@ -130,7 +129,7 @@ BROWSER
 | Live content and search | Rust backend, in memory | Runtime source and before-cache fallback |
 | Local Arabic reads | `sqlite-wasm` in a Web Worker | Open the two existing databases unchanged |
 | Local Arabic search | Worker in-memory array | Normalize and substring-scan simple-clean rows |
-| Navigation metadata | XML parsed at backend startup and web build | Surah/range/sajda metadata without another database |
+| Navigation metadata | XML at backend startup; one immutable JSON in the web | Surah/range/sajda metadata without another database |
 | Persistent storage | OPFS | Keep both existing databases under `contentVersion` |
 | Artifact delivery | S3/CDN, advertised by Axum | Serve the two existing immutable files; Axum does not proxy them |
 | Asset caching | One Service Worker at `/` | Cache the app shell and WASM; leave SQLite to OPFS |
@@ -181,8 +180,8 @@ The two web-facing jobs:
 - **SSG for SEO.** `+page.server.ts` reads `quran-uthmani.sqlite` directly
   through `node:sqlite` and prerenders all 114 `/app/<slug>` pages without a
   running backend during `vite build`. A server-only loader reads the compact
-  catalog/navigation snapshots solely to select the route data; the full
-  snapshots do not enter HTML, Svelte page data, or initial browser JavaScript.
+  one Quran data snapshot solely to select the route data; the full snapshot
+  does not enter HTML, Svelte page data, or initial browser JavaScript.
 - **Live JSON.** `/quran/v1` serves Arabic reads, range metadata, normalized
   substring search, and live translations. `/quran/v1/scripts` advertises the
   immutable CDN URLs, sizes, and checksums.
@@ -245,9 +244,9 @@ endGlobal   = next marker global index - 1
 last end    = 6236
 ```
 
-Rust parses the XML into its in-memory store at startup. SvelteKit reads the two
-checked-in compact snapshots through a server-only loader during prerender and
-the browser fetches them only after first paint or explicit navigation intent.
+Rust parses the XML into its in-memory store at startup. SvelteKit reads the one
+checked-in compact snapshot through a server-only loader during prerender and
+the browser fetches it only after first paint or explicit navigation intent.
 This gives local juz, page, ruku, hizb-quarter, manzil, and sajda navigation
 without touching either database or embedding corpus-wide metadata in the
 initial bundle.

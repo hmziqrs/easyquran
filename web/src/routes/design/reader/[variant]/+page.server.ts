@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit";
-import { QURAN_CATALOG, toSurahRenderMetadata } from "$lib/server/quran-metadata";
+import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { readSurahText } from "$lib/server/quran-sqlite";
 import { READER_VARIANTS, isVariantId } from "../../_variants/registry";
 import type { PageServerLoad } from "./$types";
@@ -16,7 +16,7 @@ export const load: PageServerLoad = ({ params }) => {
   if (!isVariantId(params.variant)) {
     throw error(404, `Unknown reader variant: ${params.variant}`);
   }
-  const cat = QURAN_CATALOG.surahByNum(DEMO_SURAH)!;
+  const cat = QURAN_DATA.surahByNum(DEMO_SURAH)!;
   return {
     variant: params.variant,
     surah: { ...toSurahRenderMetadata(cat), ...readSurahText(cat.num) },

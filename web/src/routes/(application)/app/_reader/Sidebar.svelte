@@ -3,11 +3,8 @@
   import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
   import { surahMeta, surahPath, parseKey, verseKey } from "$lib/data/quran";
-  import {
-    loadQuranCatalog,
-    loadQuranNavigation,
-  } from "$lib/data/quran-metadata-client";
-  import { RangeKind } from "$lib/data/quran-navigation";
+  import { loadQuranData } from "$lib/data/quran-data-client";
+  import { RangeKind } from "$lib/data/quran-data";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -26,7 +23,7 @@
 
   const BROWSE = ["surah", "ayah", "juz", "page"] as const;
   const sidebar = useSidebar();
-  const catalogPromise = $derived(sidebar.openMobile ? loadQuranCatalog() : null);
+  const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
   let inputEl: HTMLInputElement | null = $state(null);
 
@@ -93,16 +90,16 @@
   </SidebarHeader>
 
   <SidebarContent>
-    {#if catalogPromise}
-      {#await catalogPromise}
+    {#if dataPromise}
+      {#await dataPromise}
         <p class="px-4 py-3 text-sm text-fg-3">Loading Quran navigation…</p>
-      {:then catalog}
-        {@const current = catalog.surahBySlug(page.params.surah as string)}
+      {:then quranData}
+        {@const current = quranData.surahBySlug(page.params.surah as string)}
         {#if reader.browseSurah}
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu class="gap-1">
-                {#each catalog.surahs as s (s.num)}
+                {#each quranData.surahs as s (s.num)}
                   {@const active = page.params.surah === s.slug}
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -169,48 +166,42 @@
             </SidebarGroupContent>
           </SidebarGroup>
         {:else}
-          {#await loadQuranNavigation()}
-            <p class="px-4 py-3 text-sm text-fg-3">Loading ranges…</p>
-          {:then navigation}
-            {@const ranges = navigation.ranges(
-              reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
-            )}
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu class="gap-1">
-                  {#each ranges as rg (rg.index)}
-                    {@const { num, n } = parseKey(rg.first)}
-                    {@const href = resolve(
-                      `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`,
-                    )}
-                    <SidebarMenuItem>
-                      <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                        {#snippet child({ props })}
-                          <a
-                            {...props}
-                            {href}
-                            data-sveltekit-preload-data="hover"
-                            onclick={onItemClick}
+          {@const ranges = quranData.ranges(
+            reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
+          )}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu class="gap-1">
+                {#each ranges as rg (rg.index)}
+                  {@const { num, n } = parseKey(rg.first)}
+                  {@const href = resolve(
+                    `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`,
+                  )}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                      {#snippet child({ props })}
+                        <a
+                          {...props}
+                          {href}
+                          data-sveltekit-preload-data="hover"
+                          onclick={onItemClick}
+                        >
+                          <span
+                            class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
                           >
-                            <span
-                              class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
-                            >
-                              {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
-                            </span>
-                            <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-                              {catalog.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
-                            </span>
-                          </a>
-                        {/snippet}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  {/each}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          {:catch}
-            <p class="px-4 py-3 text-sm text-fg-3">Quran ranges could not be loaded.</p>
-          {/await}
+                            {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
+                          </span>
+                          <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+                            {quranData.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
+                          </span>
+                        </a>
+                      {/snippet}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                {/each}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         {/if}
       {:catch}
         <p class="px-4 py-3 text-sm text-fg-3">Quran navigation could not be loaded.</p>

@@ -1,7 +1,7 @@
 import { resolveManifest } from "./manifest";
 import { quranWorker } from "./worker-client";
 import { quran } from "$lib/stores/quran.svelte";
-import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
+import { loadQuranData } from "$lib/data/quran-data-client";
 
 export function bootOfflineEngine(): () => void {
   quran.status = "resolving";
@@ -15,9 +15,9 @@ export function bootOfflineEngine(): () => void {
 
   void (async () => {
     try {
-      const [manifest, catalog] = await Promise.all([resolveManifest(), loadQuranCatalog()]);
+      const [manifest, quranData] = await Promise.all([resolveManifest(), loadQuranData()]);
       quran.source = manifest.source;
-      await quranWorker.start(manifest, catalog.coordinates);
+      await quranWorker.start(manifest, quranData.coordinates);
     } catch (e) {
       quran.status = "error";
       quran.error = e instanceof Error ? e.message : String(e);
