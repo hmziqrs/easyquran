@@ -19,9 +19,12 @@
 6. Axum serves metadata, partial reads, search, SEO/build consumers, and
    clients without an offline database. It does not proxy complete database
    downloads.
-7. Published database objects are versioned and never overwritten in place.
-8. The content version is **derived from a content hash**, never hand-typed, so
-   backend and browser can identify the same immutable source set (§8.1).
+7. The Quran corpus is **immutable and unversioned**. Published database objects
+   are never overwritten in place; the integrity/cache identity is the pinned
+   sha256 digest, not a version.
+8. Backend and browser identify the same immutable source set by its
+   **content-addressed digest** (`sourceDigests.uthmani` / `.simpleClean`), never
+   a hand-typed value (§3.3, §8.1).
 9. API responses and the two published Arabic databases carry byte-identical
    source ayah text (§3.3).
 10. The existing `quran-uthmani.sqlite` and `quran-simple-clean.sqlite` files
@@ -35,7 +38,7 @@
 
 ### Goals
 
-- Add a public Quran API under `/quran/v1`.
+- Add a public Quran API under `/quran`.
 - Fetch Arabic by surah, juz, Hafs/Madani page, ruku, hizb quarter,
   manzil, individual ayah, and global range.
 - Search Arabic from the in-memory corpus.
@@ -227,7 +230,7 @@ must never run inside a request handler or behind a lazy `OnceCell`.
 2. Read all rows in global-index order.
 3. Parse `quran-data.xml`.
 4. Build and validate metadata ranges.
-5. Compute the source digests and `contentVersion` (§3.3, §8.1).
+5. Compute the source digests (§3.3, §8.1).
 6. Construct `QuranStore` and close the SQLite connections.
 
 `immutable=1` is safe for this startup read because deployed source files are
@@ -325,8 +328,6 @@ struct QuranStore {
     simple_clean: Corpus,
     meta: QuranMeta,
     search: SearchIndex,
-    content_version: Arc<str>,
-    search_version: Arc<str>,
     source_digests: SourceDigests,
 }
 ```
@@ -349,7 +350,7 @@ The public API accepts numeric surah identifiers `1..=114`. URL slugs are a web
 routing concern and remain in the existing `web/src/lib/data/quran.ts` contract;
 the web adapter resolves a slug to a number before calling Axum. The backend
 therefore needs no slug file, and a web-only URL spelling change does not change
-Quran API content or `contentVersion`.
+Quran API content or its digest.
 
 ### 4.4 Translation service — future
 
@@ -383,10 +384,6 @@ single-flight natively and is preferred over hand-rolling it.
 Expose the two existing databases from `/scripts`. These exact files are used
 by the backend at startup and downloaded by the web reader:
 
-The version strings in the examples are placeholders, not golden values; the
-real `contentVersion` is the BLAKE3-derived value from §8.1 and must not be
-copied from the Uthmani SHA-256 prefix.
-
 ```json
 {
   "data": {
@@ -395,24 +392,24 @@ copied from the Uthmani SHA-256 prefix.
         "id": "uthmani",
         "sizeBytes": 1593344,
         "sha256": "581cc5405831bc072fccd8db55cd1db72c5c5440c39bd975edbf03447efecf53",
-        "downloadUrl": "https://cdn.example/quran/arabic/uthmani/32cc746d817cad9f/quran-uthmani.sqlite"
+        "downloadUrl": "https://cdn.example/quran/arabic/uthmani/quran-uthmani.sqlite"
       },
       {
         "id": "simple-clean",
         "sizeBytes": 929792,
         "sha256": "a0c52760d6660ac5be1de5c76bb10df7a839a3e8a87ecb0e636fe2ed45b2e4a3",
-        "downloadUrl": "https://cdn.example/quran/arabic/simple-clean/32cc746d817cad9f/quran-simple-clean.sqlite"
+        "downloadUrl": "https://cdn.example/quran/arabic/simple-clean/quran-simple-clean.sqlite"
       }
     ]
-  },
-  "contentVersion": "32cc746d817cad9f"
+  }
 }
 ```
 
-Object keys are immutable and versioned by the content set:
+Object keys are immutable and content-addressed; there is no version path
+segment — the artifact `sha256` is the identity:
 
 ```text
-quran/arabic/<script>/<content-version>/<filename>.sqlite
+quran/arabic/<script>/<filename>.sqlite
 ```
 
 At boot, `HEAD` both URLs once with `Accept-Encoding: identity`.
@@ -422,8 +419,8 @@ bytes.
 
 The existing databases have only `quran_text` and deliberately remain
 byte-for-byte source artifacts; they do not need a `meta` table. The web client
-stores them under an OPFS directory named by the enclosing `contentVersion` and
-verifies each file against `/scripts.sizeBytes` and `/scripts.sha256`.
+stores them under an OPFS directory keyed by the artifact `sha256` and verifies
+each file against `/scripts.sizeBytes` and `/scripts.sha256`.
 
 ### 5.2 Translation packs — future
 
@@ -522,7 +519,9 @@ Rules for every Arabic or translation database:
 - never overwrite a published object — enforced with a conditional write
   (`If-None-Match: *`) plus a bucket policy denying unconditional `PutObject`,
   with bucket versioning as a backstop;
-- use a new applicable content or pack version for a replacement;
+- for translation packs (future), use a new applicable pack version for a
+  replacement; Arabic objects are immutable at a stable, digest-addressed key
+  and are never replaced;
 - `Content-Type: application/vnd.sqlite3`;
 - no `Content-Encoding`: publish the exact SQLite bytes with identity encoding
   so `Content-Length`, byte ranges, `sizeBytes`, and `sha256` all describe the
@@ -672,7 +671,7 @@ Do not preload every pack. See §6.4 for the status of each failure cause.
 
 ## 6. API surface
 
-Public prefix: `/quran/v1`
+Public prefix: `/quran`
 
 ### 6.1 Arabic and metadata
 
@@ -684,6 +683,8 @@ special case:
 | `GET /surahs` | all surah metadata |
 | `GET /surahs/{surah}` | one surah |
 | `GET /surahs/{surah}/ayahs` | ayahs in a surah |
+| `GET /sources/{sourceId}/surah/{surah}` | one source's full surah text + normalization (web `readSurah`) |
+| `GET /sources/{sourceId}/range?from=&to=` | global-index ayah window ≤300 + per-surah normalizations (web `readRangeText`) |
 | `GET /ayahs/{surah}/{ayah}` | one ayah |
 | `GET /ayahs?keys=2:255,1:1` | up to 50 arbitrary ayahs, order preserved |
 | `GET /ayahs?fromGlobal=1&toGlobal=7` | inclusive global range |
@@ -693,10 +694,9 @@ special case:
 | `GET /hizb-quarters`, `GET /hizb-quarters/{quarter}`, `GET /hizb-quarters/{quarter}/ayahs` | all 240 quarter ranges |
 | `GET /manzils`, `GET /manzils/{manzil}`, `GET /manzils/{manzil}/ayahs` | manzils |
 | `GET /sajdas`, `GET /sajdas/{sajda}` | sajda markers |
-| `GET /scripts` | scripts, content version, and database download URLs |
+| `GET /scripts` | scripts and database download URLs (digest-addressed) |
 | `GET /random` | deterministic ayah for a UTC date |
 | `GET /search?q=…` | Arabic search |
-| `GET /version` | all version axes (§8.1) |
 | `GET /health/ready` | readiness (§8.4), `Cache-Control: no-store` |
 | `GET /openapi.json` | OpenAPI document |
 
@@ -706,7 +706,7 @@ markers, not 60 complete hizb records. Each response carries `hizb` and
 
 `GET /ayahs/{verseKey}` is **not** a separate resource. A single-segment
 `2:255` form is accepted only as an alias and answers
-`308 Permanent Redirect` to `/quran/v1/ayahs/2/255`; a segment not matching
+`308 Permanent Redirect` to `/quran/ayahs/2/255`; a segment not matching
 `^[1-9][0-9]{0,2}:[1-9][0-9]{0,2}$` returns 400. Two URLs for one resource would
 otherwise produce two ETags and two CDN entries for identical bytes.
 
@@ -765,19 +765,14 @@ other clients.
 
 ### 6.3 Response types
 
-Every Quran content, metadata, search, version, and artifact-metadata response
-uses one envelope, so a client caching a single ayah can still tell which
-content version it holds. Readiness and the OpenAPI document are operational
-exceptions:
+Every Quran content, metadata, search, and artifact-metadata response uses one
+envelope. Readiness and the OpenAPI document are operational exceptions:
 
 ```rust
 struct Envelope<T> {
     data: T,
-    content_version: String,
-    // translation routes add:
-    // translation_content_version: Option<String>,
 }
-
+```
 struct RangeMeta {
     kind: RangeKind, // surah | juz | page | ruku | hizb-quarter | manzil | global
     index: Option<u16>,        // None for kind = global
@@ -828,6 +823,7 @@ struct SearchResponse {
 }
 
 struct SearchHit {
+    kind: SearchHitKind, // REQUIRED discriminator; "ayah" today ("opener" deferred, not shipped)
     ayah: Ayah,
     /// UTF-16 code-unit offsets into `ayah.text`, for a JavaScript consumer.
     highlights: Vec<Highlight>, // { start: u32, end: u32 }
@@ -840,13 +836,39 @@ struct Artifact {
     download_url: String,
 }
 
+// `GET /sources/{sourceId}/surah/{surah}` — web `readSurah` shape.
+struct SourceSurahText {
+    source_id: String,           // "uthmani" | "simple-clean"
+    script: String,
+    verses: Vec<String>,
+    normalization: SurahNormalization,
+}
+
+struct SurahNormalization {
+    surah: u16,
+    source_id: String,
+    script: String,
+    source_profile: String,
+    packaging: OpenerPackaging,   // numbered-ayah | embedded-prefix | chapter-flag | separate-row | absent
+    opener_kind: OpenerKind,
+    opener_text: Option<String>,
+    opener_end_scalar: u32,
+    body_start_scalar: u32,
+}
+
+// `GET /sources/{sourceId}/range?from=&to=` — web `readRangeText` shape.
+struct RangeText {
+    ayahs: Vec<LeanAyah>,         // { key, surah, ayah, global_index, text }
+    normalizations: Vec<SurahNormalization>,
+}
+
 ```
 
 `script` lives on `RangeMeta`, not on each `Ayah`, since it is constant across a
-response. `content_version` and `translation_id` live on the envelope or the
-range, never on each verse — per-verse copies cost 572 allocations and ~16.6 KB
-of redundant JSON on a 286-ayah surah. Internally these are `Arc<str>`, so even
-the envelope copy is a refcount bump.
+response. The `sourceId` is one of `uthmani` or `simple-clean`; the `readSurah`
+and `range` endpoints return the web worker's exact shapes (raw text plus
+per-surah normalization so the client can split basmala openers identically
+online and offline).
 
 Serialization, which must be stated because the defaults are wrong here:
 
@@ -949,11 +971,11 @@ Normalization applies only to search values, never response text:
   after).
 
 Corpus and query normalization implement one shared specification and must pass
-the same versioned fixtures in Rust and Node. A divergence is a correctness
-bug, not a tuning knob. The frozen rule set is identified by
-`searchVersion`. Changing it bumps `searchVersion`, invalidates search ETags,
-and ships with updated backend/web code. It does not alter or require rebuilding
-the existing SQLite files.
+the same fixtures in Rust and Node. A divergence is a correctness bug, not a
+tuning knob. The frozen rule set has no version tag — it is itself immutable,
+like the corpus. Changing the rule set ships with updated backend/web code and
+invalidates search ETags (the digest is the cache identity). It does not alter
+or require rebuilding the existing SQLite files.
 
 Limits:
 
@@ -978,7 +1000,7 @@ The API never opens or scans all translation packs for one request.
 
 The web reader downloads the existing simple-clean database, reads its 6,236
 rows into a small in-memory normalized array, and uses the same substring
-semantics, limits, ordering, and versioned normalization fixtures as the
+semantics, limits, ordering, and frozen normalization fixtures as the
 backend. No FTS table or derived SQLite database is required.
 
 A fixed query suite must return identical ordered verse keys online and
@@ -989,87 +1011,62 @@ change which verses match.
 
 ## 8. Caching, CORS, and runtime
 
-### 8.1 Versioning and API caching
+### 8.1 Integrity, identity, and API caching
 
-The version axes are deliberately separate:
+The Quran corpus is immutable, so it has no version. Its identity is the
+**pinned sha256 digest** of each source set — `sourceDigests.uthmani` and
+`sourceDigests.simpleClean` — surfaced on `/health/ready`. There is no
+`contentVersion`, `searchVersion`, `apiVersion`, `/version` endpoint, or
+version-derived URL segment anywhere in the API.
 
-| Axis | Covers | Moves when |
+| Identity | Covers | Source of truth |
 |---|---|---|
-| `/quran/v1` | wire shape | a breaking field or route change; **never** for content |
-| `contentVersion` | the two Arabic SQLite files and metadata XML | any of those bytes change |
-| `searchVersion` | shared Arabic normalization rules and fixtures | normalization semantics change |
-| per-pack `contentVersion` | one translation | that pack's bytes change |
-| `catalogVersion` / catalog `schemaVersion` | the catalog document / its shape | catalog contents / catalog format |
-| `PRAGMA user_version` | one SQLite file's schema | that file's schema changes; checked at open |
+| `sourceDigests` (sha256) | the two Arabic SQLite corpora | computed at boot; pinned, never hand-typed |
+| artifact `sha256` | each published SQLite file | `/scripts` envelope |
+| `PRAGMA user_version` | one SQLite file's schema (file-local) | that file's schema; checked at open |
+| per-pack/catalog identity | one translation / the catalog (future) | translation system, separate from the Quran corpus |
 
-`contentVersion` is **derived, not declared**: at boot compute
-`blake3(uthmani_bytes ‖ simple_clean_bytes ‖ xml_bytes)` and
-take the leading 16 hex characters. `QURAN_CONTENT_VERSION` survives only as an
-*assertion* — boot fails if the computed digest differs from the pinned value.
+The digest is **derived, not declared**: at boot compute `sha256` of each
+corpus's 6,236 texts joined by `\n` in global-index order (§3.3) and assert it
+against the pinned constant. Boot fails on mismatch; the digest is never sent
+to clients as a version. The web client does not recompute it — it reads
+`/scripts.sha256` and `/health/ready.sourceDigests`, keys its OPFS directory by
+the artifact `sha256`, and redownloads a file only if that digest differs.
 
-The exact concatenation order above is part of the contract. The web client
-does not recompute it; `/version` and `/scripts` return the backend-derived
-value, and the client uses that value as its OPFS directory name.
+An operator-typed version string would join the backend's source inputs and the
+published objects with nothing but discipline, and both failure modes are
+silent: forget to bump it and every cached response plus every `If-None-Match`
+returns 304 for changed content; bump it spuriously and `/scripts` advertises a
+`downloadUrl` for a key that was never uploaded. A content-addressed digest
+makes same-day republishes structurally distinct and removes the bump-it-by-hand
+failure mode entirely.
 
-An operator-typed version string would join the backend's three source inputs
-and the published objects with nothing but
-discipline, and both failure modes are silent: forget to bump it and every
-cached response plus every `If-None-Match` returns 304 for changed content;
-bump it spuriously and
-`/scripts` advertises a `downloadUrl` for a key that was never uploaded. A
-digest also makes same-day republishes structurally distinct, which a date
-string cannot express under the never-overwrite rule.
-
-Note that a wire-representation change moves `/v1`, not `contentVersion`, and a
-normalization change moves `searchVersion`.
-
-`GET /version` returns every axis so a client can compare without parsing
-headers:
-
-```json
-{
-  "data": {
-    "apiVersion": "v1",
-    "searchVersion": "arabic-search-v1",
-    "sourceDigests": {
-      "uthmani": "32cc746d…",
-      "simpleClean": "37593472…"
-    },
-    "translations": [
-      { "id": "en.sahih", "contentVersion": "2011-04-24" }
-    ]
-  },
-  "contentVersion": "32cc746d817cad9f"
-}
-```
-
-The two existing Arabic databases remain verbatim and have no internal version
-marker. Their shared version is carried by the immutable object keys and the
-`/scripts` envelope. The web client compares that `contentVersion` with its
-OPFS directory name and redownloads both files whenever it changes.
+The two existing Arabic databases remain verbatim and carry no internal
+version marker. Their identity is carried by their sha256 in the `/scripts`
+envelope and by the immutable object key (`quran/arabic/<script>/<filename>.sqlite`).
 
 Cache headers:
 
 ```text
 Cache-Control: public, max-age=300, s-maxage=86400,
                stale-while-revalidate=604800, stale-if-error=604800
-ETag: W/"<content-version>:<canonical-resource-key>"
+ETag: W/"<source-digest>:<canonical-resource-key>"
 Vary: Accept-Encoding
 ```
 
 The short browser TTL with a long shared TTL is deliberate and the inverse of
 the obvious arrangement: browser caches cannot be purged, CDN caches can, so the
-unpurgeable layer gets the short life. (If the content version is later moved
-into the URL path, serve `max-age=31536000, immutable` instead and give the
-unversioned alias the policy above.)
+unpurgeable layer gets the short life. (If the digest is later moved into the
+URL path, serve `max-age=31536000, immutable` instead and give the digest-free
+alias the policy above.)
 
 `<canonical-resource-key>` is the resource kind plus its normalized identifiers
 plus **every** accepted query parameter in fixed alphabetical order, with
 defaults made explicit — e.g. `surahs/2/ayahs?from=1&script=uthmani&to=286`.
 Verse keys normalize to `surah/ayah`. Omitting `script` here
 would let `?script=simple-clean` and `?script=uthmani` collide on one ETag, and
-a shared CDN would then serve the wrong script. Translation ETags are
-`W/"<arabic-content-version>+<pack-content-version>:<key>"`.
+a shared CDN would then serve the wrong script. Translation ETags (future) are
+`W/"<arabic-source-digest>+<pack-sha256>:<key>"`.
 
 The ETag is weak because the shared compression layer varies the encoded bytes
 for an unchanged representation, which is legal for weak validators and illegal
@@ -1081,11 +1078,11 @@ Support `If-None-Match`, `304 Not Modified`, and `HEAD`. A 304 repeats `ETag`,
 shared caches.
 
 Search is cacheable — it is a pure function of
-`(contentVersion, searchVersion, normalized q, script, limit, offset)`:
+`(sourceDigest, normalized q, script, limit, offset)`:
 
 ```text
 Cache-Control: public, max-age=60, s-maxage=300
-ETag: W/"<content-version>+<search-version>:search?limit=20&offset=0&q=<normalized-q>&script=uthmani"
+ETag: W/"<source-digest>:search?limit=20&offset=0&q=<normalized-q>&script=uthmani"
 ```
 
 `no-store` here would force every repeat of a popular query to re-scan the
@@ -1109,7 +1106,7 @@ let public = modules::quran_v1::routes()
     .layer(settings.http.ip_source.clone().into_extension())
     .layer(public_cors_layer());
 
-let app = Router::new().merge(private).nest("/quran/v1", public).with_state(state);
+let app = Router::new().merge(private).nest("/quran", public).with_state(state);
 ```
 
 Nesting inside `router.rs` cannot escape the existing layers, because `main.rs`
@@ -1171,7 +1168,7 @@ cardinality incident. Using `MatchedPath` also improves the existing routes.
 Rate limiting: apply a coarse per-IP limit to all public routes and a tighter
 one to search. The existing `/search/v1` limit of 30/min is a *mechanism*
 precedent, not a value precedent — it was calibrated for a CSRF-gated POST that
-a caller must first mint a token for, whereas `GET /quran/v1/search` is
+a caller must first mint a token for, whereas `GET /quran/search` is
 method-exempt from CSRF. Note also that the existing limiter keys per path, so
 "coarse across all Quran routes" needs a path-independent key strategy.
 
@@ -1192,7 +1189,6 @@ struct QuranSettings {
     uthmani_path: PathBuf,          // QURAN_UTHMANI_PATH
     simple_clean_path: PathBuf,     // QURAN_SIMPLE_CLEAN_PATH
     metadata_xml_path: PathBuf,     // QURAN_METADATA_XML_PATH
-    expected_content_version: Option<String>, // QURAN_CONTENT_VERSION, asserted
 }
 
 struct TranslationSettings { // future
@@ -1212,8 +1208,9 @@ struct TranslationSettings { // future
 ```
 
 Download URLs are **not** hand-entered settings. Arabic and translation URLs
-are derived from `settings.object_storage.public_url`, the bucket, and their
-versions.
+are derived from `settings.object_storage.public_url` and the bucket; Arabic
+keys are stable and digest-addressed (`quran/arabic/<script>/<filename>.sqlite`),
+translation keys (future) carry their pack identity.
 
 `max_download_bytes` bounds a broken or hostile upstream; without it a
 misbehaving endpoint can fill the cache volume.
@@ -1247,13 +1244,11 @@ The future translation cache directory is writable and should be persistent
 
 ### 8.4 Health
 
-Keep liveness separate from readiness. `GET /quran/v1/health/ready`:
+Keep liveness separate from readiness. `GET /quran/health/ready`:
 
 ```json
 {
   "ready": true,
-  "contentVersion": "32cc746d817cad9f",
-  "searchVersion": "arabic-search-v1",
   "sourceDigests": { "uthmani": "32cc746d…", "simpleClean": "37593472…" },
   "verseCount": 6236,
   "surahCount": 114,
@@ -1273,7 +1268,7 @@ Keep liveness separate from readiness. `GET /quran/v1/health/ready`:
 
 The `translations` block never affects the top-level `ready`. Arabic is either
 loaded or the process exited (§4.1), so `ready` is effectively constant after
-boot and this endpoint is primarily a version/observability surface.
+boot and this endpoint is primarily a digest/observability surface.
 
 Without those translation fields the guarantee "a translation failure must not
 make Arabic unavailable" is **unobservable**: an operator whose catalog fetch has
@@ -1332,7 +1327,7 @@ yesterday's ayah for most of the following day.
 - Validate the source invariants and assert the golden digests.
 - Add `Arc<QuranStore>` to `AppState`.
 - Include or mount startup data in the backend deployment.
-- Upload the two Arabic artifacts to versioned immutable keys — 2.5 MB of bytes
+- Upload the two Arabic artifacts to immutable digest-addressed keys — 2.5 MB of bytes
   with no build pipeline needed, so there is no reason to defer it to Phase 3.
 
 Exit: all 6,236 source rows in both scripts are available verbatim from memory,
@@ -1387,8 +1382,8 @@ greenfield and is separated for that reason.
 - Add the normalized `SearchIndex` with offset maps.
 - Add `/search`, limits, rate limiting, metrics, and smoke tests.
 - Resolve the ta-marbuta question (§11.1) before shipping.
-- Freeze the normalization fixtures and `searchVersion`; use the same substring
-  semantics online and offline.
+- Freeze the normalization fixtures; use the same substring semantics online and
+  offline.
 
 Exit: search performs no SQLite query, per the assertion in §10.
 
@@ -1477,10 +1472,11 @@ Each exit criterion below is stated as something a test can actually observe.
 ### Search
 
 - A fixed query set returns identical ordered verse keys online and offline.
-- Rust and web normalization pass the same versioned fixture corpus.
+- Rust and web normalization pass the same frozen fixture corpus.
 - Highlight offsets fall on valid UTF-16 boundaries in the response script.
 - A 2-scalar query returns 400; early termination caps allocations at `limit`.
-- Changing a normalization fixture requires a `searchVersion` change.
+- A normalization fixture change is a correctness change that ships with updated
+  backend and web code; there is no version tag to bump.
 
 ### Translation future
 

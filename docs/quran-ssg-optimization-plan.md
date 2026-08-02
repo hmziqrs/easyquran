@@ -227,7 +227,7 @@ Conceptual shape:
 ```json
 [
   1,
-  ["sha256-of-quran-data.xml", "source-version", "source-license"],
+  ["sha256-of-quran-data.xml", "source-license"],
   [
     ["al-fatihah", "Al-Fatihah", "الفاتحة", "Al-Faatiha", "The Opening", 0, 7, 5, 1]
   ]
@@ -340,9 +340,11 @@ The web build does not compare against or hash XML afterward. JSON-only tests
 validate structure and immutable corpus totals. Replacing XML would be a new,
 explicit data migration with new snapshots/provenance—not a recurring command.
 
-The Rust backend may continue hashing/parsing XML for its own
-`contentVersion`. The client metadata cache has its own schema/version and does
-not assume an XML-only backend version invalidates a web snapshot.
+The Rust backend may continue hashing/parsing XML for its own integrity
+anchor, the pinned sha256 digest surfaced on `/health/ready` as
+`sourceDigests` (there is no corpus `contentVersion`). The client metadata
+cache has its own schema and does not assume a backend digest invalidates a
+web snapshot.
 
 ---
 

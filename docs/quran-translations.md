@@ -35,7 +35,8 @@ The implementation preserves these invariants:
 - Translation text remains byte-identical to its Tanzil source.
 - A translation download or query failure never blocks Arabic rendering,
   navigation, or search.
-- Only catalog-approved translation IDs and versioned R2 objects are opened.
+- Only catalog-approved translation IDs and content-addressed R2 objects
+  (keyed by SHA-256) are opened.
 - Tanzil and translator attribution remains visible while a translation is
   active.
 
@@ -53,8 +54,8 @@ Tanzil SQL sources
     └── existing fidelity-aware SQLite builder
           └── one quran_text database per translation
                     │
-                    ├── deterministic size + SHA-256 + contentVersion
-                    ├── versioned immutable R2 object
+                    ├── deterministic size + SHA-256
+                    ├── content-addressed immutable R2 object
                     └── approved web catalog entry
                                       │
                                       ▼
@@ -142,8 +143,8 @@ No translation data or translation UI is wired into the reader yet.
 
 1. Current translation objects use flat keys such as
    `tanzil/translations/sqlite/en.sahih.sqlite`; `--force` can replace them.
-2. `index.min.json` lacks SQLite size, SQLite SHA-256, content version, direct
-   versioned URL, source link, and terms link.
+2. `index.min.json` lacks SQLite size, SQLite SHA-256, a direct CDN URL,
+   source link, and terms link.
 3. Translation files are built with fidelity checks but the current verifier
    primarily validates SQL sources, not every final SQLite artifact.
 4. The Worker protocol accepts only Arabic initialization, surah reads, search,
@@ -159,8 +160,9 @@ No translation data or translation UI is wired into the reader yet.
 1. **Arabic-only is the default.** A reader explicitly selects a translation.
 2. **One active translation.** The first release never displays or retains two
    translation sources simultaneously.
-3. **Direct SQLite delivery.** The browser downloads the selected versioned
-   SQLite artifact from R2 and queries it in the existing Quran Worker.
+3. **Direct SQLite delivery.** The browser downloads the selected
+   content-addressed SQLite artifact from R2 and queries it in the existing
+   Quran Worker.
 4. **Offline after download.** The installed translation is stored in OPFS when
    available, IndexedDB as a fallback, or session memory as a final fallback.
 5. **One persistent slot.** The most recently installed translation is retained.
@@ -249,8 +251,9 @@ picker.
 - Going offline leaves Arabic untouched. An installed translation continues to
   work; an uninstalled selection shows the download-required state.
 - A retry action repeats only the failed translation operation.
-- When a newer content version is advertised, the installed version keeps
-  working until the replacement downloads, verifies, and opens successfully.
+- When the catalog advertises a different SHA-256 for the selected source,
+  the installed pack keeps working until the replacement downloads, verifies,
+  and opens successfully.
 
 ### 5.4 Existing reader actions
 
@@ -280,9 +283,9 @@ Close the database before hashing. There must be no `-wal` or `-shm` sidecar.
 The web opens the verified bytes read-only through `sqlite3_deserialize`, just
 as it does for Arabic sources.
 
-No internal content-version table is required: the SHA-256 in the catalog and
-versioned R2 key identifies the exact complete file. Schema validation protects
-against opening a different SQLite artifact type.
+No internal identity table is required: the catalog SHA-256 and the
+content-addressed R2 key together identify the exact complete file. Schema
+validation protects against opening a different SQLite artifact type.
 
 ### 6.2 Build gates
 
@@ -302,27 +305,28 @@ The data pipeline must prove for all 115 translations:
 - no WAL/SHM/temp sidecar exists;
 - final `sizeBytes` and SHA-256 are non-zero;
 - rebuilding unchanged input produces the same logical text digest, while any
-  final-file byte difference naturally produces a different content version.
+  final-file byte difference naturally produces a different SHA-256.
 
 A new or removed blank row fails the build as source drift. It requires review
 and an explicit fixture update; it is never auto-corrected.
 
-### 6.3 Content and catalog versions
+### 6.3 Content and catalog digests
 
 For each final closed SQLite file:
 
 ```text
-sha256         = SHA-256(exact SQLite bytes)
-contentVersion = first 16 hexadecimal characters of sha256
+sha256 = SHA-256(exact SQLite bytes)
 ```
 
-The rich SQL catalog remains provenance. Generate a separate web delivery
-catalog containing only approved sources:
+The full 64-hex `sha256` is the immutable artifact identity. It is the only
+content identifier the web trusts for a translation pack. The rich SQL catalog
+remains provenance. Generate a separate web delivery catalog containing only
+approved sources:
 
 ```jsonc
 {
   "schemaVersion": 1,
-  "catalogVersion": "<sha256-prefix-of-canonical-catalog>",
+  "catalogDigest": "<sha256-prefix-of-canonical-catalog>",
   "source": "Tanzil.net",
   "sourceUrl": "https://tanzil.net/trans/",
   "termsUrl": "https://tanzil.net/docs/terms_of_use",
@@ -335,29 +339,28 @@ catalog containing only approved sources:
       "name": "Saheeh International",
       "translator": "Saheeh International",
       "sourceLastUpdate": "April 24, 2011",
-      "contentVersion": "0123456789abcdef",
       "sizeBytes": 1234567,
-      "sha256": "<full SQLite SHA-256>",
-      "downloadUrl": "https://cdn.example/tanzil/translations/sqlite/en.sahih/0123456789abcdef/en.sahih.sqlite"
+      "sha256": "<full 64-hex SQLite SHA-256>",
+      "downloadUrl": "https://cdn.example/tanzil/translations/sqlite/en.sahih/<sha256>/en.sahih.sqlite"
     }
   ]
 }
 ```
 
 Sort entries by an explicit product order, with ID as the deterministic
-tie-breaker. Compute `catalogVersion` from canonical catalog content excluding
-the `catalogVersion` field.
+tie-breaker. Compute `catalogDigest` from canonical catalog content excluding
+the `catalogDigest` field.
 
 The catalog ID is the only lookup key accepted by the web. `downloadUrl` must
-resolve to the configured CDN origin and expected translation/version path.
+resolve to the configured CDN origin and the expected content-addressed path.
 
 ### 6.4 Publication
 
-Publish with versioned keys:
+Publish with content-addressed keys:
 
 ```text
 tanzil/translations/catalog.v1.json
-tanzil/translations/sqlite/<id>/<contentVersion>/<id>.sqlite
+tanzil/translations/sqlite/<id>/<sha256>/<id>.sqlite
 ```
 
 SQLite object rules:
@@ -366,7 +369,7 @@ SQLite object rules:
 - identity encoding;
 - `Cache-Control: public, max-age=31536000, immutable, no-transform`;
 - conditional create with `If-None-Match: *`;
-- no `--force` path capable of replacing an existing versioned key;
+- no `--force` path capable of replacing an existing content-addressed key;
 - public `GET` and `HEAD`;
 - `Accept-Ranges: bytes`, even though the first release downloads whole files.
 
@@ -386,8 +389,8 @@ After publishing, fully download and hash at least one LTR pack, one RTL pack,
 the largest pack, and every pack containing a known blank row.
 
 Keep the existing flat SQLite keys during migration, but new catalog entries
-must advertise only versioned keys. Remove legacy objects only under a separate
-retention task after confirming no supported client references them.
+must advertise only content-addressed keys. Remove legacy objects only under a
+separate retention task after confirming no supported client references them.
 
 ---
 
@@ -410,10 +413,10 @@ Validation includes:
 - unique ID with `^[a-z]{2,3}[.][a-z0-9-]+$`;
 - non-empty language/name/translator metadata;
 - known `ltr | rtl` direction;
-- 16-hex content version and 64-hex SHA-256;
+- 64-hex SHA-256;
 - sensible positive byte size capped above the known largest pack;
 - HTTPS URL on the configured CDN origin;
-- exact `/tanzil/translations/sqlite/<id>/<version>/<id>.sqlite` path;
+- exact `/tanzil/translations/sqlite/<id>/<sha256>/<id>.sqlite` path;
 - no credentials, query, fragment, encoded separator, or traversal segment.
 
 An invalid catalog falls back to Arabic-only. A single invalid entry may be
@@ -422,21 +425,21 @@ the rejected ID without logging sensitive URLs.
 
 ### 7.2 Storage layout and lifecycle
 
-Use a translation-specific byte store so Arabic version cleanup cannot remove
+Use a translation-specific byte store so Arabic artifact cleanup cannot remove
 translation files accidentally:
 
 ```text
 OPFS root: easyquran-translations/
-version:   <id>-<contentVersion>/
+digest:    <id>-<sha256>/
 key:       <id>.sqlite
 ```
 
-Add `delete(version, key)` and bounded cleanup support to the shared `ByteStore`
+Add `delete(digest, key)` and bounded cleanup support to the shared `ByteStore`
 contract for both OPFS and IndexedDB implementations.
 
 Rules:
 
-1. Look for the selected exact `(id, contentVersion)` locally.
+1. Look for the selected exact `(id, sha256)` locally.
 2. Read the bytes and verify size/SHA before every open. A corrupt local value
    is deleted and treated as a cache miss.
 3. If missing and online, download into memory with progress and a strict byte
@@ -446,7 +449,7 @@ Rules:
 5. Open and validate SQLite read-only.
 6. Mark the new pack installed/active only after validation and a successful
    range smoke query.
-7. Close the old translation database, then delete its old versioned bytes.
+7. Close the old translation database, then delete its old bytes.
 
 Steady state stores at most one translation. During a replacement, two verified
 packs may coexist briefly. Session-memory fallback does not promise offline
@@ -564,7 +567,6 @@ interface TranslationCatalogEntry {
   direction: TranslationDirection;
   name: string;
   translator: string;
-  contentVersion: string;
   sizeBytes: number;
   sha256: string;
   downloadUrl: string;
@@ -676,7 +678,8 @@ selection after consent, never verse text or reading position.
 
 - Treat catalog JSON, CDN headers, SQLite bytes, Worker messages, OPFS/IDB
   values, and persisted selection as untrusted.
-- Pin downloads to the configured HTTPS CDN origin and exact versioned prefix.
+- Pin downloads to the configured HTTPS CDN origin and exact content-addressed
+  prefix.
 - Reject redirects, credentials, unexpected queries/fragments, traversal, and
   encoded path separators.
 - Bound catalog bytes, SQLite bytes, download time, response arrays, and Worker
@@ -705,8 +708,8 @@ Licensing review is a release gate, not a post-launch cleanup task.
 - exact source-to-SQLite text equality;
 - coordinate, count, schema, journal-mode, and integrity gates;
 - exact known-empty fixture and failure on drift;
-- deterministic approved catalog ordering/version;
-- correct versioned URLs, sizes, and SHA-256 values;
+- deterministic approved catalog ordering and digest;
+- correct content-addressed URLs, sizes, and SHA-256 values;
 - publisher refuses an existing immutable key;
 - public `HEAD` and sampled full-download verification.
 
@@ -782,11 +785,12 @@ known-empty source:
 
 - Remove translation-service architecture from `quran-api.md`.
 - Replace live translation request notes in `quran-web-delivery.md` with direct
-  versioned SQLite download/offline behavior.
+  content-addressed SQLite download/offline behavior.
 - Align `translation-empty-verses.md` with the neutral placeholder decision.
 - Approve the production allowlist, ordering, attribution wording, and licensing
   review.
-- Freeze catalog, versioning, storage-slot, Worker, and empty-row contracts.
+- Freeze catalog, content-addressing, storage-slot, Worker, and empty-row
+  contracts.
 
 Exit: no plan requires a translation application service and an approved launch
 catalog exists.
@@ -794,8 +798,8 @@ catalog exists.
 ### Phase 1 — harden and publish translation artifacts
 
 - Extend verification to every final SQLite file.
-- Generate SQLite size, SHA-256, contentVersion, and approved web catalog.
-- Change publication to conditional versioned keys.
+- Generate SQLite size, SHA-256, and approved web catalog.
+- Change publication to conditional content-addressed keys.
 - Configure CORS and object headers.
 - Publish to staging and verify representative full downloads.
 
@@ -893,7 +897,7 @@ remain healthy through rollout.
 - `docs/quran-api.md`: remove future translation-service sections
 - `docs/quran-web-delivery.md`: document direct SQLite download and offline use
 - `docs/translation-empty-verses.md`: record the chosen UI behavior
-- `db/quran/tanzil/translations/README.md`: document versioned catalog/publishing
+- `db/quran/tanzil/translations/README.md`: document content-addressed catalog/publishing
 - `.env.example` and deployment docs: catalog URL and web feature flag
 
 Do not modify Arabic SQLite, Arabic source-view normalization, Arabic search, or
@@ -903,15 +907,15 @@ Arabic content routes unless a failing regression proves it necessary.
 
 ## 13. Release and rollback
 
-Release order is versioned SQLite objects → mutable catalog → web flag.
+Release order is content-addressed SQLite objects → mutable catalog → web flag.
 
 Rollback:
 
 1. Disable the web translation flag; Arabic behavior returns immediately.
-2. Restore the previous catalog if a new entry is invalid. Its versioned SQLite
-   object remains immutable and recoverable.
+2. Restore the previous catalog if a new entry is invalid. Its content-addressed
+   SQLite object remains immutable and recoverable.
 3. Never overwrite or delete a bad pack in place. Publish corrected bytes under
-   a new content version and catalog version.
+   a new SHA-256 and a fresh catalog digest.
 4. Leave older objects available for at least the supported web-build window
    before a separate retention task considers removal.
 
@@ -929,7 +933,7 @@ progress.
 Translations are complete for the first release when:
 
 - all 115 SQLite packs pass source fidelity and coordinate validation;
-- approved packs have immutable versioned URLs, exact sizes, and SHA-256;
+- approved packs have immutable content-addressed URLs, exact sizes, and SHA-256;
 - the public catalog is deterministic, allowlisted, attributed, and validated;
 - a corrupt/truncated/wrong pack can never persist as installed or render;
 - the Worker can install, query, replace, reopen offline, and remove one pack;
@@ -956,8 +960,9 @@ Translations are complete for the first release when:
    manager and quota/eviction UX.
 4. **Copy/share with translation** — requires an explicit control and
    attribution format.
-5. **Translation search** — may scan one installed pack or require a versioned
-   index; it needs its own normalization and highlighting contract.
+5. **Translation search** — may scan one installed pack or require a
+   content-addressed index; it needs its own normalization and highlighting
+   contract.
 6. **Multiple simultaneous translations** — requires a new layout, memory, and
    attribution design.
 7. **Background/preselected downloads** — do not spend bandwidth or storage
