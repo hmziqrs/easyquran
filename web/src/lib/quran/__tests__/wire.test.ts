@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";
 import {
+  decodeQuranRangeText,
   decodeQuranSurahText,
   decodeScript,
   decodeScriptsPayload,
@@ -145,6 +146,50 @@ describe("normalized surah Worker wire", () => {
         normalization: { ...payload.normalization, openerEndScalar: 8 },
       }),
     ).toBeNull();
+  });
+});
+
+describe("coordinate-aware range Worker wire", () => {
+  const normalization = {
+    surah: 2,
+    sourceId: QuranSourceId.TanzilUthmani,
+    script: QuranScript.Uthmani,
+    sourceProfile: "tanzil-uthmani-581cc540",
+    packaging: OpenerPackaging.EmbeddedPrefix,
+    openerKind: OpenerKind.Header,
+    openerText: "opener",
+    openerEndScalar: 6,
+    bodyStartScalar: 7,
+  } as const;
+  const payload = {
+    ayahs: [
+      { key: "2:1", surah: 2, ayah: 1, globalIndex: 8, text: "first" },
+      { key: "2:2", surah: 2, ayah: 2, globalIndex: 9, text: "second" },
+    ],
+    normalizations: [normalization],
+  };
+
+  it("preserves explicit coordinates for a clipped page", () => {
+    expect(decodeQuranRangeText(payload, validateCoordinate)).toEqual(payload);
+  });
+
+  it("rejects gaps, coordinate mismatches, and missing normalization", () => {
+    expect(
+      decodeQuranRangeText(
+        {
+          ...payload,
+          ayahs: [payload.ayahs[0], { ...payload.ayahs[1], globalIndex: 10 }],
+        },
+        validateCoordinate,
+      ),
+    ).toBeNull();
+    expect(
+      decodeQuranRangeText(
+        { ...payload, ayahs: [{ ...payload.ayahs[0], key: "2:2" }] },
+        validateCoordinate,
+      ),
+    ).toBeNull();
+    expect(decodeQuranRangeText({ ...payload, normalizations: [] })).toBeNull();
   });
 });
 

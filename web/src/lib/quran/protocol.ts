@@ -12,6 +12,7 @@ export type WorkerRequest =
       coordinates: CanonicalQuranCoordinates;
     }
   | { id: number; type: "readSurah"; num: number }
+  | { id: number; type: "readRange"; from: number; to: number }
   | { id: number; type: "search"; query: string; opts?: SearchOpts }
   | { id: number; type: "ping" };
 

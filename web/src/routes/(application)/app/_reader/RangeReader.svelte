@@ -54,11 +54,11 @@
         </p>
       {/if}
       <TooltipProvider delayDuration={300}>
-        <div class="flex flex-col">
+        <ol class="flex list-none flex-col p-0">
           {#each g.ayahs as a (a.key)}
             <VerseRow text={bodyText(a.text, a.ayah, g.normalization)} n={a.ayah} vKey={a.key} />
           {/each}
-        </div>
+        </ol>
       </TooltipProvider>
     </div>
   {/each}

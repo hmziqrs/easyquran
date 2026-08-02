@@ -6,6 +6,7 @@ import {
   type Place,
   type RangeEntry,
   type SajdaEntry,
+  type SurahLocalPage,
   type VerseKey,
 } from "$lib/data/quran-types";
 
@@ -70,6 +71,10 @@ export interface QuranData {
   rangeCount(kind: RangeKind): number;
   rangeByIndex(kind: RangeKind, index: number): RangeEntry | undefined;
   ranges(kind: RangeKind): readonly RangeEntry[];
+  surahLocalPageCount(surah: number): number;
+  surahLocalPage(surah: number, localPage: number): SurahLocalPage | undefined;
+  surahLocalPages(surah: number): readonly SurahLocalPage[];
+  surahLocalPageForAyah(surah: number, ayah: number): SurahLocalPage | undefined;
   sajdas(): readonly SajdaEntry[];
   sajdaAt(surah: number, ayah: number): SajdaEntry | undefined;
 }
@@ -210,6 +215,7 @@ export function createQuranData(raw: unknown): QuranData {
   }
 
   const rangeCache = new Map<RangeKind, readonly RangeEntry[]>();
+  const localPageCache = new Map<number, readonly SurahLocalPage[]>();
   let sajdaCache: readonly SajdaEntry[] | undefined;
   const data: QuranData = {
     source,
@@ -270,6 +276,48 @@ export function createQuranData(raw: unknown): QuranData {
       );
       rangeCache.set(kind, family);
       return family;
+    },
+    surahLocalPageCount(surah) {
+      return data.surahLocalPages(surah).length;
+    },
+    surahLocalPage(surah, localPage) {
+      if (!Number.isSafeInteger(localPage) || localPage < 1) return undefined;
+      return data.surahLocalPages(surah)[localPage - 1];
+    },
+    surahLocalPages(surah) {
+      const cached = localPageCache.get(surah);
+      if (cached) return cached;
+      const entry = data.surahByNum(surah);
+      if (!entry) return Object.freeze([]);
+      const surahEnd = entry.startGlobal + entry.ayahCount - 1;
+      const pages = data
+        .ranges(RangeKind.Page)
+        .filter((page) => page.endGlobal >= entry.startGlobal && page.startGlobal <= surahEnd)
+        .map((page, index) => {
+          const startGlobal = Math.max(page.startGlobal, entry.startGlobal);
+          const endGlobal = Math.min(page.endGlobal, surahEnd);
+          return Object.freeze({
+            surah,
+            localPage: index + 1,
+            globalPage: page.index,
+            startGlobal,
+            endGlobal,
+            startAyah: startGlobal - entry.startGlobal + 1,
+            endAyah: endGlobal - entry.startGlobal + 1,
+            first: `${surah}:${startGlobal - entry.startGlobal + 1}`,
+            last: `${surah}:${endGlobal - entry.startGlobal + 1}`,
+          });
+        });
+      const frozen = Object.freeze(pages);
+      localPageCache.set(surah, frozen);
+      return frozen;
+    },
+    surahLocalPageForAyah(surah, ayah) {
+      const globalIndex = data.globalIndexOf(surah, ayah);
+      if (!globalIndex) return undefined;
+      return data
+        .surahLocalPages(surah)
+        .find((page) => globalIndex >= page.startGlobal && globalIndex <= page.endGlobal);
     },
     sajdas() {
       if (sajdaCache) return sajdaCache;

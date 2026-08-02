@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
-import { parseKey, surahPath, toArabicDigits, verseKey } from "$lib/data/quran";
+import {
+  parseKey,
+  surahAyahPath,
+  surahLocalPagePath,
+  surahPath,
+  toArabicDigits,
+  verseKey,
+} from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
 
 describe("verseKey / parseKey", () => {
   it("round-trips a surah:ayah key", () => {
@@ -51,6 +59,33 @@ describe("immutable Quran metadata", () => {
     expect(QURAN_DATA.rangeByIndex(RangeKind.Page, 605)).toBeUndefined();
     expect(QURAN_DATA.sajdas()).toHaveLength(15);
   });
+
+  it("tiles every Surah into 662 clipped Mushaf pages without crossing boundaries", () => {
+    const pages = QURAN_DATA.surahs.flatMap((surah) => [...QURAN_DATA.surahLocalPages(surah.num)]);
+    expect(pages).toHaveLength(662);
+
+    for (const surah of QURAN_DATA.surahs) {
+      const localPages = QURAN_DATA.surahLocalPages(surah.num);
+      expect(localPages[0]).toMatchObject({ startAyah: 1, localPage: 1 });
+      expect(localPages.at(-1)).toMatchObject({ endAyah: surah.ayahCount });
+      for (let i = 1; i < localPages.length; i += 1) {
+        expect(localPages[i]!.startAyah).toBe(localPages[i - 1]!.endAyah + 1);
+      }
+    }
+
+    expect(QURAN_DATA.surahLocalPage(1, 1)).toMatchObject({
+      globalPage: 1,
+      first: "1:1",
+      last: "1:7",
+    });
+    expect(QURAN_DATA.surahLocalPage(2, 1)).toMatchObject({
+      globalPage: 2,
+      startAyah: 1,
+      endAyah: 5,
+    });
+    expect(QURAN_DATA.surahLocalPages(2).at(-1)).toMatchObject({ endAyah: 286 });
+    expect(QURAN_DATA.surahLocalPageForAyah(2, 255)?.localPage).toBeGreaterThan(1);
+  });
 });
 
 describe("routing and formatting helpers", () => {
@@ -58,10 +93,26 @@ describe("routing and formatting helpers", () => {
     const fatihah = QURAN_DATA.surahByNum(1)!;
     expect(surahPath(fatihah)).toBe("/app/al-fatihah");
     expect(surahPath(fatihah, 5)).toBe("/app/al-fatihah?verse=5");
+    expect(surahLocalPagePath(fatihah, 1)).toBe("/app/al-fatihah");
+    expect(surahLocalPagePath(fatihah, 2)).toBe("/app/al-fatihah/page/2");
+    expect(surahAyahPath(fatihah, 2, 5)).toBe("/app/al-fatihah/page/2#ayah-1-5");
   });
 
   it("converts western digits to Arabic-Indic", () => {
     expect(toArabicDigits(0)).toBe("٠");
     expect(toArabicDigits(123)).toBe("١٢٣");
+  });
+});
+
+describe("Surah-local server payload", () => {
+  it("reads only the requested Al-Baqarah page", () => {
+    const baqarah = QURAN_DATA.surahByNum(2)!;
+    const first = readSurahLocalPageData(baqarah, 1)!;
+    expect(first.ayahs.map((ayah) => ayah.key)).toEqual(["2:1", "2:2", "2:3", "2:4", "2:5"]);
+    expect(first.ayahs.some((ayah) => ayah.key === "2:286")).toBe(false);
+
+    const last = readSurahLocalPageData(baqarah, first.pageCount)!;
+    expect(last.page.endAyah).toBe(286);
+    expect(last.ayahs.at(-1)?.key).toBe("2:286");
   });
 });

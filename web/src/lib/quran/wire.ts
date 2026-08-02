@@ -6,6 +6,7 @@ import {
   OpenerKind,
   type Ayah,
   type ArtifactSpec,
+  type QuranRangeText,
   type QuranSurahText,
   type SurahNormalization,
 } from "$lib/data/quran-types";
@@ -86,6 +87,36 @@ function decodeAyah(raw: unknown, validateCoordinate?: AyahCoordinateValidator):
     return null;
   }
   return { key: `${surah}:${ayah}`, surah, ayah, globalIndex, text };
+}
+
+export function decodeQuranRangeText(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): QuranRangeText | null {
+  const rec = asRecord(raw);
+  if (!rec || !Array.isArray(rec.ayahs) || !Array.isArray(rec.normalizations)) return null;
+  const ayahs: Ayah[] = [];
+  for (const item of rec.ayahs) {
+    const ayah = decodeAyah(item, validateCoordinate);
+    if (!ayah) return null;
+    const previous = ayahs.at(-1);
+    if (previous && ayah.globalIndex !== previous.globalIndex + 1) return null;
+    ayahs.push(ayah);
+  }
+  const normalizations: SurahNormalization[] = [];
+  for (const item of rec.normalizations) {
+    const normalization = decodeSurahNormalization(item);
+    if (!normalization) return null;
+    normalizations.push(normalization);
+  }
+  const represented = new Set(ayahs.map((ayah) => ayah.surah));
+  if (
+    represented.size !== normalizations.length ||
+    normalizations.some((normalization) => !represented.has(normalization.surah))
+  ) {
+    return null;
+  }
+  return { ayahs, normalizations };
 }
 
 function decodeHighlights(

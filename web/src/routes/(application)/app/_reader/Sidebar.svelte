@@ -2,7 +2,13 @@
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahMeta, surahPath, parseKey, verseKey } from "$lib/data/quran";
+  import {
+    surahAyahPath,
+    surahMeta,
+    surahPath,
+    parseKey,
+    verseKey,
+  } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind } from "$lib/data/quran-data";
   import { Icon } from "$lib/components/icon";
@@ -41,6 +47,15 @@
     reader.clearQuery();
     sidebar.setOpenMobile(false);
   }
+
+  function selectBrowse(browse: (typeof BROWSE)[number]) {
+    reader.setBrowse(browse);
+    if (browse !== "ayah") return;
+    void loadQuranData().then((quranData) => {
+      const current = quranData.surahBySlug(page.params.surah as string);
+      if (current) void reader.refreshFromWorker(current.num);
+    });
+  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -77,7 +92,7 @@
         <button
           type="button"
           aria-pressed={reader.browseMode === b}
-          onclick={() => reader.setBrowse(b)}
+          onclick={() => selectBrowse(b)}
           class={cn(
             "rounded-[7px] py-2 text-[12.5px] font-medium capitalize transition-colors",
             reader.browseMode === b ? "bg-bg-3 text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
@@ -136,12 +151,18 @@
                 {#if current}
                   {#each reader.versesFor(current.num) as v, i (verseKey(current.num, i + 1))}
                     {@const n = i + 1}
-                    <SidebarMenuItem>
+                    {@const localPage = quranData.surahLocalPageForAyah(current.num, n)}
+                    {#if v}
+                      <SidebarMenuItem>
                       <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
                         {#snippet child({ props })}
                           <a
                             {...props}
-                            href={resolve(surahPath(current, n))}
+                            href={resolve(
+                              localPage
+                                ? surahAyahPath(current, localPage.localPage, n)
+                                : surahPath(current, n),
+                            )}
                             data-sveltekit-preload-data="hover"
                             onclick={onItemClick}
                           >
@@ -159,7 +180,8 @@
                           </a>
                         {/snippet}
                       </SidebarMenuButton>
-                    </SidebarMenuItem>
+                      </SidebarMenuItem>
+                    {/if}
                   {/each}
                 {/if}
               </SidebarMenu>

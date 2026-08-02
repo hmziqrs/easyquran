@@ -1,13 +1,19 @@
 import type {
   CanonicalQuranCoordinates,
   DownloadProgress,
+  QuranRangeText,
   QuranSurahText,
 } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
-import { decodeQuranSurahText, decodeSearchResponse, type AyahCoordinateValidator } from "./wire";
+import {
+  decodeQuranRangeText,
+  decodeQuranSurahText,
+  decodeSearchResponse,
+  type AyahCoordinateValidator,
+} from "./wire";
 
 interface Pending {
   resolve: (v: unknown) => void;
@@ -58,6 +64,7 @@ function handle(msg: WorkerOutbound): void {
     return;
   }
   if (msg.type === "status") {
+    if (msg.status === "ready") isReady = true;
     for (const cb of statusListeners) cb(msg.status, msg.detail);
   } else if (msg.type === "progress") {
     const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
@@ -93,6 +100,25 @@ export const quranWorker = {
   onProgress(cb: (p: DownloadProgress) => void): () => void {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
+  },
+
+  whenReady(): Promise<void> {
+    if (isReady) return Promise.resolve();
+    if (startPromise) return startPromise;
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        statusListeners.delete(listener);
+        reject(new Error("quran worker did not become ready"));
+      }, DEFAULT_TIMEOUT_MS);
+      const listener = (status: WorkerStatus, detail?: string) => {
+        if (status !== "ready" && status !== "error") return;
+        clearTimeout(timer);
+        statusListeners.delete(listener);
+        if (status === "ready") resolve();
+        else reject(new Error(detail ?? "quran worker failed to start"));
+      };
+      statusListeners.add(listener);
+    });
   },
 
   start(manifest: ResolvedManifest, coordinates: CanonicalQuranCoordinates): Promise<void> {
@@ -134,6 +160,20 @@ export const quranWorker = {
       (raw: unknown) => {
         const decoded = decodeQuranSurahText(raw);
         if (!decoded) throw new Error("quran worker returned a malformed surah");
+        return decoded;
+      },
+    );
+  },
+
+  readRange(
+    from: number,
+    to: number,
+    validateCoordinate?: AyahCoordinateValidator,
+  ): Promise<QuranRangeText> {
+    return request<QuranRangeText>((id) => ({ id, type: "readRange", from, to })).then(
+      (raw: unknown) => {
+        const decoded = decodeQuranRangeText(raw, validateCoordinate);
+        if (!decoded) throw new Error("quran worker returned a malformed range");
         return decoded;
       },
     );

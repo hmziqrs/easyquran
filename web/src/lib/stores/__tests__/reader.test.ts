@@ -22,7 +22,7 @@ describe("createReader — preserved public API", () => {
     expect(typeof r.getNote).toBe("function");
     expect(typeof r.setNote).toBe("function");
     expect(typeof r.versesFor).toBe("function");
-    expect(typeof r.seedSurah).toBe("function");
+    expect(typeof r.seedAyahs).toBe("function");
     expect(typeof r.refreshFromWorker).toBe("function");
     expect(typeof r.copyVerse).toBe("function");
     expect(typeof r.shareVerse).toBe("function");
@@ -54,9 +54,12 @@ describe("createReader — behaviour", () => {
     expect(r.versesFor(1)).toEqual([]);
   });
 
-  it("seedSurah/versesFor read back seeded verses", () => {
+  it("seedAyahs/versesFor preserve explicit verse coordinates", () => {
     const r = createReader();
-    r.seedSurah(1, ["bismillah", "verse2"]);
+    r.seedAyahs([
+      { key: "1:1", text: "bismillah" },
+      { key: "1:2", text: "verse2" },
+    ]);
     expect(r.versesFor(1)).toEqual(["bismillah", "verse2"]);
   });
 
@@ -66,7 +69,10 @@ describe("createReader — behaviour", () => {
     flushSync();
     expect(obs.runs()).toBe(1);
     expect(obs.latest()).toEqual([]);
-    r.seedSurah(2, ["a", "b"]);
+    r.seedAyahs([
+      { key: "2:1", text: "a" },
+      { key: "2:2", text: "b" },
+    ]);
     flushSync();
     expect(obs.runs()).toBeGreaterThan(1);
     expect(obs.latest()).toEqual(["a", "b"]);

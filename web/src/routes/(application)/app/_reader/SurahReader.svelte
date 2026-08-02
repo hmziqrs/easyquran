@@ -1,35 +1,227 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import {
+    surahLocalPagePath,
     surahMeta,
-    verseKey,
-    toArabicDigits,
-    surahPath,
-    type Surah,
+    type SurahLocalPageData,
+    type SurahLocalPageLink,
+    type SurahLink,
   } from "$lib/data/quran";
-  import type { SurahLink } from "$lib/data/quran-types";
+  import { loadQuranData } from "$lib/data/quran-data-client";
   import { Icon } from "$lib/components/icon";
-  import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
-  import * as Tabs from "$lib/components/ui/tabs";
-  import { displayVerses, headerText } from "$lib/quran/view/presentation";
+  import { quranWorker } from "$lib/quran/worker-client";
+  import { bodyText } from "$lib/quran/view/source-view";
+  import { headerText } from "$lib/quran/view/presentation";
+  import { reader } from "$lib/stores/reader.svelte";
+  import VerseRow from "./VerseRow.svelte";
 
   let {
-    surah,
-    previous,
-    next,
-  }: { surah: Surah; previous?: SurahLink; next?: SurahLink } = $props();
+    initial,
+    previousPage,
+    nextPage,
+    previousSurah,
+    nextSurah,
+    onVisiblePage,
+  }: {
+    initial: SurahLocalPageData;
+    previousPage: SurahLocalPageLink | null;
+    nextPage: SurahLocalPageLink | null;
+    previousSurah: SurahLink | null;
+    nextSurah: SurahLink | null;
+    onVisiblePage?: (pageData: SurahLocalPageData) => void;
+  } = $props();
 
-  const verses = $derived(displayVerses(surah));
-  const opener = $derived(headerText(surah.normalization));
-  const badge = $derived(String(surah.num).padStart(3, "0"));
+  let loadedPages = $state.raw<SurahLocalPageData[]>([]);
+  const pages = $derived.by(() =>
+    [initial, ...loadedPages].sort((a, b) => a.page.localPage - b.page.localPage),
+  );
+  let readerPages: HTMLElement | null = $state(null);
+  let pendingPage: number | null = null;
+  let loadingPage: number | null = $state(null);
+  let loadFailed = $state(false);
+  let clientMounted = $state(false);
+  let activeLocalPage = $state<number | null>(null);
+  let lastScrollY = 0;
+  let scrollFrame = 0;
+  const badge = $derived(String(initial.surah.num).padStart(3, "0"));
+  const visibleLocalPage = $derived(activeLocalPage ?? initial.page.localPage);
+  const firstLoaded = $derived(pages[0]!);
+  const lastLoaded = $derived(pages.at(-1)!);
+  const previousHref = $derived.by(() => {
+    if (firstLoaded.page.localPage === initial.page.localPage && previousPage) {
+      return previousPage.href;
+    }
+    if (firstLoaded.page.localPage > 1) {
+      return surahLocalPagePath(initial.surah, firstLoaded.page.localPage - 1);
+    }
+    return previousSurah ? surahLocalPagePath(previousSurah, 1) : null;
+  });
+  const nextHref = $derived.by(() => {
+    if (lastLoaded.page.localPage === initial.page.localPage && nextPage) {
+      return nextPage.href;
+    }
+    if (lastLoaded.page.localPage < initial.pageCount) {
+      return surahLocalPagePath(initial.surah, lastLoaded.page.localPage + 1);
+    }
+    return nextSurah ? surahLocalPagePath(nextSurah, 1) : null;
+  });
+  const previousLabel = $derived(
+    firstLoaded.page.localPage > 1
+      ? `Page ${firstLoaded.page.localPage - 1}`
+      : previousSurah?.name,
+  );
+  const nextLabel = $derived(
+    lastLoaded.page.localPage < initial.pageCount
+      ? `Page ${lastLoaded.page.localPage + 1}`
+      : nextSurah?.name,
+  );
 
-  function continueReading() {
-    const lr = reader.lastRead;
-    if (lr) reader.openVerse(lr.num, lr.n);
+  function cachePage(pageData: SurahLocalPageData): void {
+    reader.seedAyahs(
+      pageData.ayahs.map((ayah) => ({
+        key: ayah.key,
+        text: bodyText(ayah.text, ayah.ayah, pageData.normalization),
+      })),
+    );
   }
+
+  async function loadPage(localPage: number): Promise<void> {
+    if (
+      localPage < 1 ||
+      localPage > initial.pageCount ||
+      pages.some((item) => item.page.localPage === localPage) ||
+      loadingPage === localPage
+    ) {
+      return;
+    }
+    if (!quranWorker.ready) {
+      pendingPage = localPage;
+      return;
+    }
+    loadingPage = localPage;
+    loadFailed = false;
+    try {
+      const quranData = await loadQuranData();
+      const page = quranData.surahLocalPage(initial.surah.num, localPage);
+      if (!page) throw new Error(`Unknown Surah page ${initial.surah.num}:${localPage}`);
+      const range = await quranWorker.readRange(
+        page.startGlobal,
+        page.endGlobal,
+        (globalIndex, surah, ayah) =>
+          quranData.globalIndexOf(surah, ayah) === globalIndex,
+      );
+      const normalization = range.normalizations.find(
+        (value) => value.surah === initial.surah.num,
+      );
+      if (!normalization || range.ayahs.some((ayah) => ayah.surah !== initial.surah.num)) {
+        throw new Error(`Invalid Surah page ${initial.surah.num}:${localPage}`);
+      }
+      const pageData: SurahLocalPageData = {
+        surah: initial.surah,
+        page,
+        pageCount: initial.pageCount,
+        ayahs: range.ayahs,
+        normalization,
+      };
+      cachePage(pageData);
+      loadedPages = [...loadedPages, pageData];
+    } catch {
+      loadFailed = true;
+    } finally {
+      loadingPage = null;
+    }
+  }
+
+  function requestNextPage(): void {
+    const localPage = lastLoaded.page.localPage + 1;
+    if (localPage <= initial.pageCount) void loadPage(localPage);
+  }
+
+  function setVisiblePage(localPage: number): void {
+    if (localPage === visibleLocalPage) return;
+    activeLocalPage = localPage;
+    replaceState(resolve(surahLocalPagePath(initial.surah, localPage)), {});
+    const pageData = pages.find((item) => item.page.localPage === localPage);
+    if (pageData) onVisiblePage?.(pageData);
+  }
+
+  function updateVisiblePage(): void {
+    if (!readerPages) return;
+    const marker = Math.min(window.innerHeight * 0.35, 260);
+    const sections = [...readerPages.querySelectorAll<HTMLElement>("[data-local-page]")];
+    if (!sections.length) return;
+    let closest = sections[0]!;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const section of sections) {
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= marker && rect.bottom > marker) {
+        closest = section;
+        break;
+      }
+      const distance = Math.min(Math.abs(rect.top - marker), Math.abs(rect.bottom - marker));
+      if (distance < closestDistance) {
+        closest = section;
+        closestDistance = distance;
+      }
+    }
+    const localPage = Number(closest.dataset.localPage);
+    if (Number.isSafeInteger(localPage)) setVisiblePage(localPage);
+  }
+
+  function processScroll(direction: number): void {
+    scrollFrame = 0;
+    updateVisiblePage();
+    if (direction <= 0 || !readerPages) return;
+    if (readerPages.getBoundingClientRect().bottom - window.innerHeight < 900) requestNextPage();
+  }
+
+  function onScroll(): void {
+    const currentY = window.scrollY;
+    const direction = Math.sign(currentY - lastScrollY);
+    lastScrollY = currentY;
+    if (scrollFrame) cancelAnimationFrame(scrollFrame);
+    scrollFrame = requestAnimationFrame(() => processScroll(direction));
+  }
+
+  function onWheel(event: WheelEvent): void {
+    if (event.deltaY > 0) processScroll(1);
+  }
+
+  function captureReaderPages(node: HTMLElement) {
+    readerPages = node;
+    return {
+      destroy() {
+        if (readerPages === node) readerPages = null;
+      },
+    };
+  }
+
+  function continueReading(): void {
+    const lastRead = reader.lastRead;
+    if (lastRead) reader.openVerse(lastRead.num, lastRead.n);
+  }
+
+  onMount(() => {
+    clientMounted = true;
+    lastScrollY = window.scrollY;
+    cachePage(initial);
+    const stop = quranWorker.onStatus((status) => {
+      if (status !== "ready" || pendingPage === null) return;
+      const localPage = pendingPage;
+      pendingPage = null;
+      void loadPage(localPage);
+    });
+    return () => {
+      stop();
+      if (scrollFrame) cancelAnimationFrame(scrollFrame);
+    };
+  });
 </script>
+
+<svelte:window onscroll={onScroll} onwheel={onWheel} />
 
 <div class="flex flex-col gap-4">
   {#if reader.hasLastRead}
@@ -45,7 +237,6 @@
   {/if}
 
   <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
-    <Tabs.Root value={reader.mode} onValueChange={(v) => reader.setMode(v as ReaderMode)}>
     <div
       class="flex flex-wrap items-start justify-between gap-6 border-b border-line px-5 pb-[26px] pt-[30px] sm:px-9"
     >
@@ -58,20 +249,21 @@
         </div>
         <div class="flex min-w-0 flex-col gap-1.5">
           <span class="text-xs font-semibold uppercase tracking-[0.1em] text-accent">
-            Surah {surah.num}
+            Surah {initial.surah.num} · Page {visibleLocalPage} of {initial.pageCount}
           </span>
           <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
             <h1 class="text-[32px] font-semibold tracking-[-0.025em]">
-              {surah.num}. {surah.name}
+              {initial.surah.num}. {initial.surah.name}
             </h1>
             <span dir="rtl" class="font-arabic text-[30px] leading-none text-fg-2">
-              {surah.arabic}
+              {initial.surah.arabic}
             </span>
           </div>
-          <span class="text-sm text-fg-3">{surahMeta(surah)}</span>
+          <span class="text-sm text-fg-3">{surahMeta(initial.surah)}</span>
         </div>
       </div>
 
+      {#if clientMounted}
       <div class="flex flex-wrap items-center justify-end gap-2">
         <div
           class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
@@ -96,80 +288,133 @@
           </button>
         </div>
 
-        <Tabs.List
-          aria-label="Reading mode"
-          class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
-        >
-          <Tabs.Trigger
-            value="verse"
-            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors data-[state=active]:bg-bg-3 data-[state=active]:text-fg data-[state=inactive]:text-fg-3 data-[state=inactive]:hover:text-fg"
+        <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" aria-label="Reading mode">
+          <button
+            type="button"
+            aria-pressed={reader.isVerseMode}
+            onclick={() => reader.setMode("verse")}
+            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
           >
             <Icon name="rows" size={13} />
             <span class="hidden sm:inline">Ayah-by-Ayah</span>
             <span class="sm:hidden">Ayahs</span>
-          </Tabs.Trigger>
-          <Tabs.Trigger
-            value="reading"
-            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors data-[state=active]:bg-bg-3 data-[state=active]:text-fg data-[state=inactive]:text-fg-3 data-[state=inactive]:hover:text-fg"
+          </button>
+          <button
+            type="button"
+            aria-pressed={reader.isReadingMode}
+            onclick={() => reader.setMode("reading")}
+            class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
           >
             <Icon name="continuous" size={13} />
             <span>Reading</span>
-          </Tabs.Trigger>
-        </Tabs.List>
+          </button>
+        </div>
       </div>
+      {/if}
     </div>
 
-    {#if opener}
-      <p dir="rtl" class="py-2 text-center font-arabic text-fg-3">{opener}</p>
+    <div use:captureReaderPages class="reader-pages" data-reader-mode={reader.mode}>
+      <TooltipProvider delayDuration={300}>
+        {#each pages as pageData (pageData.page.localPage)}
+          <section
+            class="surah-page"
+            data-local-page={pageData.page.localPage}
+            aria-labelledby="surah-page-{pageData.page.localPage}-title"
+          >
+            <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
+              {initial.surah.name}, page {pageData.page.localPage} of {initial.pageCount}
+            </h2>
+            {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
+              <p dir="rtl" class="surah-opener py-3 text-center font-arabic text-fg-3">
+                {headerText(pageData.normalization)}
+              </p>
+            {/if}
+            <ol class="ayah-list list-none p-0">
+              {#each pageData.ayahs as ayah (ayah.key)}
+                <VerseRow
+                  text={bodyText(ayah.text, ayah.ayah, pageData.normalization)}
+                  n={ayah.ayah}
+                  vKey={ayah.key}
+                />
+              {/each}
+            </ol>
+          </section>
+        {/each}
+      </TooltipProvider>
+    </div>
+
+    {#if loadingPage !== null}
+      <p class="border-t border-line px-5 py-3 text-center text-sm text-fg-3">
+        Loading page {loadingPage}…
+      </p>
+    {:else if loadFailed}
+      <p class="border-t border-line px-5 py-3 text-center text-sm text-fg-3">
+        The next page is not cached yet. Use the page link below to continue.
+      </p>
     {/if}
 
-    <Tabs.Content
-      value="verse"
-      class="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-line-3"
+    <nav
+      aria-label="Surah pages"
+      class="flex items-center justify-between gap-4 border-t border-line px-5 py-[22px] sm:px-9"
     >
-      <TooltipProvider delayDuration={300}>
-        <div class="flex flex-col">
-          {#each verses as text, i (verseKey(surah.num, i + 1))}
-            <VerseRow text={text} n={i + 1} vKey={verseKey(surah.num, i + 1)} />
-          {/each}
-        </div>
-      </TooltipProvider>
-    </Tabs.Content>
-    <Tabs.Content
-      value="reading"
-      class="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-line-3"
-    >
-      <div
-        dir="rtl"
-        class="reading-text px-5 py-8 text-fg sm:px-9"
-        style="font-size:{reader.arabicSizePx}"
-      >{#each verses as text, i (verseKey(surah.num, i + 1))}<span>{text}</span><span id="ayah-{i + 1}" class="ayah-marker">{toArabicDigits(i + 1)}</span> {/each}</div>
-    </Tabs.Content>
-    </Tabs.Root>
-
-    <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
-      {#if previous}
+      {#if previousHref && previousLabel}
         <a
-          href={resolve(surahPath(previous))}
+          href={resolve(previousHref)}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
           <span aria-hidden="true">←</span>
-          {previous.name}
+          {previousLabel}
         </a>
       {:else}
         <span></span>
       {/if}
-      {#if next}
+      {#if nextHref && nextLabel}
         <a
-          href={resolve(surahPath(next))}
+          href={resolve(nextHref)}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
-          {next.name}
+          {nextLabel}
           <span aria-hidden="true">→</span>
         </a>
       {/if}
-    </div>
+    </nav>
   </div>
 </div>
+
+<style>
+  .ayah-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .reader-pages[data-reader-mode="reading"] .surah-page {
+    border-bottom: 1px solid var(--line);
+    padding: 2rem 1.25rem;
+  }
+
+  .reader-pages[data-reader-mode="reading"] .surah-page:last-child {
+    border-bottom: 0;
+  }
+
+  .reader-pages[data-reader-mode="reading"] .surah-opener {
+    padding-top: 0;
+  }
+
+  .reader-pages[data-reader-mode="reading"] .ayah-list {
+    display: block;
+    direction: rtl;
+    text-align: justify;
+    text-align-last: center;
+    font-family: var(--font-arabic);
+    line-height: 2.35;
+    word-spacing: 0.14em;
+  }
+
+  @media (min-width: 640px) {
+    .reader-pages[data-reader-mode="reading"] .surah-page {
+      padding-inline: 2.25rem;
+    }
+  }
+</style>

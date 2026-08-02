@@ -1,5 +1,10 @@
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { type ArtifactSpec, type QuranSourceId, type QuranSurahText } from "$lib/data/quran-types";
+import {
+  type ArtifactSpec,
+  type QuranRangeText,
+  type QuranSourceId,
+  type QuranSurahText,
+} from "$lib/data/quran-types";
 import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
@@ -16,6 +21,7 @@ import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/s
 import {
   loadQuranSource,
   readAllSourceRows,
+  readSourceRange,
   readSourceSurah,
   type LoadedQuranSource,
 } from "../quran/view/source-runtime";
@@ -123,6 +129,24 @@ function readSurah(num: number): QuranSurahText {
   };
 }
 
+function readRange(from: number, to: number): QuranRangeText {
+  const state = sourceState(DEFAULT_QURAN_SOURCE_PLAN.reader);
+  if (!state.runner) throw new Error("reader source is not open");
+  const rows = readSourceRange(state.runner, state.source, from, to);
+  return {
+    ayahs: rows.map((row) => ({
+      key: `${row.surah}:${row.ayah}`,
+      surah: row.surah,
+      ayah: row.ayah,
+      globalIndex: row.globalIndex,
+      text: row.text,
+    })),
+    normalizations: [...new Set(rows.map((row) => row.surah))].map((surah) =>
+      state.source.view.normalization(surah),
+    ),
+  };
+}
+
 function sourceState(sourceId: QuranSourceId): WorkerSourceState {
   const state = sources.get(sourceId);
   if (!state) throw new Error(`Quran source ${sourceId} is not loaded`);
@@ -177,6 +201,8 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
     }
     if (message.type === "readSurah") {
       emit({ id, ok: true, result: readSurah(message.num) });
+    } else if (message.type === "readRange") {
+      emit({ id, ok: true, result: readRange(message.from, message.to) });
     } else if (message.type === "search") {
       emit({ id, ok: true, result: search(message.query, message.opts) });
     } else if (message.type === "ping") {

@@ -152,6 +152,44 @@ export interface Ayah {
   text: string;
 }
 
+export interface QuranRangeText {
+  ayahs: Ayah[];
+  normalizations: SurahNormalization[];
+}
+
+export interface SurahLocalPage {
+  surah: number;
+  localPage: number;
+  globalPage: number;
+  startGlobal: number;
+  endGlobal: number;
+  startAyah: number;
+  endAyah: number;
+  first: VerseKey;
+  last: VerseKey;
+}
+
+export interface SurahLocalPageData {
+  surah: SurahRenderMetadata;
+  page: SurahLocalPage;
+  pageCount: number;
+  ayahs: Ayah[];
+  normalization: SurahNormalization;
+}
+
+export interface SurahLocalPageLink {
+  localPage: number;
+  href: `/app/${string}`;
+}
+
+export interface SurahRouteData {
+  pageData: SurahLocalPageData;
+  previousPage: SurahLocalPageLink | null;
+  nextPage: SurahLocalPageLink | null;
+  previousSurah: SurahLink | null;
+  nextSurah: SurahLink | null;
+}
+
 export interface RangePageData {
   kind: "juz" | "page";
   index: number;

@@ -7,11 +7,18 @@ export type {
   Place,
   PrefixCut,
   SurahNormalization,
+  SurahLink,
+  SurahRenderMetadata,
   QuranSurahText,
   SajdaKind,
   RangeEntry,
   SajdaEntry,
   ArtifactSpec,
+  QuranRangeText,
+  SurahLocalPage,
+  SurahLocalPageData,
+  SurahLocalPageLink,
+  SurahRouteData,
 } from "$lib/data/quran-types";
 
 export {
@@ -38,6 +45,20 @@ export const surahPath = (
   const slug = typeof surah === "string" ? surah : surah.slug;
   return `/app/${slug}${ayah ? `?verse=${ayah}` : ""}`;
 };
+
+export const surahLocalPagePath = (
+  surah: string | Pick<CatalogEntry, "slug">,
+  localPage: number,
+): `/app/${string}` => {
+  const slug = typeof surah === "string" ? surah : surah.slug;
+  return localPage > 1 ? `/app/${slug}/page/${localPage}` : `/app/${slug}`;
+};
+
+export const surahAyahPath = (
+  surah: Pick<CatalogEntry, "slug" | "num">,
+  localPage: number,
+  ayah: number,
+): `/app/${string}` => `${surahLocalPagePath(surah, localPage)}#ayah-${surah.num}-${ayah}`;
 
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SurahPageRoute from "../_reader/SurahPageRoute.svelte";
+  import SurahPageRoute from "../../../_reader/SurahPageRoute.svelte";
 
   let { data } = $props();
 </script>

@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahPath } from "$lib/data/quran";
+  import { surahAyahPath } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import type { QuranData } from "$lib/data/quran-data";
   import { quranSearch } from "$lib/quran/search";
@@ -46,8 +46,10 @@
     const ayah = searchHitAnchorAyah(r);
     const entry = quranData.surahByNum(surah);
     if (!entry) return;
+    const localPage = quranData.surahLocalPageForAyah(surah, ayah);
+    if (!localPage) return;
     reader.openVerse(surah, ayah);
-    void goto(resolve(surahPath(entry, ayah)));
+    void goto(resolve(surahAyahPath(entry, localPage.localPage, ayah)));
   }
 </script>
 
