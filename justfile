@@ -47,6 +47,15 @@ web-preview environment="prod":
 web-check:
     cd web && pnpm check
 
+# Measure SSG output sizes (raw/gzip/brotli HTML, page-data, critical-JS modulepreload graph).
+# Run after `web-build`; pass a stable phase label for the checked-in comparison.
+web-baseline label="phase0":
+    cd web && node scripts/measure-baselines.ts "{{label}}"
+
+# Prove compact Quran metadata is neither embedded in generated output nor SW-precached.
+web-assert-metadata:
+    cd web && node scripts/assert-quran-metadata-boundary.ts
+
 # ── API (Rust/Axum on SQLite, in ./rust) ─────────────────────────────────────
 # Recipes `cd rust/` so the binary's dotenvy picks up `rust/.env`
 # (DATABASE_URL, COOKIE_KEY, S3_*, SMTP_*). `api-dev` also runs migrations on boot.

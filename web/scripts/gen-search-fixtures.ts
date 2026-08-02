@@ -19,6 +19,7 @@ import { SearchHitKind } from "../src/lib/quran/search/types.ts";
 import { registeredSourceProfiles, sourceProfile } from "../src/lib/quran/view/source-profiles.ts";
 import { scalarSlice } from "../src/lib/quran/view/source-view.ts";
 import { loadQuranSource, readAllSourceRows } from "../src/lib/quran/view/source-runtime.ts";
+import { QURAN_CATALOG } from "../src/lib/server/quran-metadata.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(scriptDir, "..");
@@ -30,7 +31,7 @@ function load(sourceId: QuranSourceId) {
   const database = new DatabaseSync(path.join(WEB, "..", profile.artifact.repositoryPath));
   database.exec("PRAGMA query_only = ON");
   const runner = createNodeQueryRunner(database);
-  const source = loadQuranSource(runner, profile);
+  const source = loadQuranSource(runner, profile, QURAN_CATALOG.coordinates);
   const rows = readAllSourceRows(runner, source);
   database.close();
   return { profile, rows, view: source.view };

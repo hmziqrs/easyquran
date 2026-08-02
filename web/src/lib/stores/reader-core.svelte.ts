@@ -1,5 +1,4 @@
 import { SvelteMap } from "svelte/reactivity";
-import { SURAHS } from "$lib/data/quran";
 import type { VerseKey } from "$lib/data/quran";
 
 export type BrowseMode = "surah" | "ayah" | "juz" | "page";
@@ -70,5 +69,5 @@ export function createReaderCore(): ReaderCore {
   return { s, versesBySurah, nav };
 }
 
-export const SURAH_COUNT = SURAHS.length;
+export const SURAH_COUNT = 114;
 export const READER_MODE_VALUES: readonly ReaderMode[] = READER_MODES;

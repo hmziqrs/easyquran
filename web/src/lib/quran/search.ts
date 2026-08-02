@@ -1,5 +1,5 @@
 import { QURAN } from "$lib/config/site";
-import { CATALOG } from "$lib/data/quran-meta";
+import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
 import { verseKey } from "$lib/data/quran";
 import { quranWorker } from "./worker-client";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";
@@ -12,14 +12,15 @@ import {
 } from "./search/types";
 import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
-function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
+async function nameNumberFallback(query: string, opts: SearchOpts): Promise<SearchResponse> {
+  const catalog = await loadQuranCatalog();
   const q = query.trim();
   const qLower = q.toLowerCase();
   const norm = normalizeArabic(q);
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const offset = opts.offset ?? DEFAULT_OFFSET;
   const all: SearchHit[] = [];
-  for (const s of CATALOG) {
+  for (const s of catalog.surahs) {
     const hit =
       s.name.toLowerCase().includes(qLower) ||
       s.arabic.includes(q) ||
@@ -49,11 +50,13 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
 }
 
 export async function quranSearch(query: string, opts: SearchOpts = {}): Promise<SearchResponse> {
+  const catalog = await loadQuranCatalog();
+  const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
+    catalog.globalIndexOf(surah, ayah) === globalIndex;
   if (quranWorker.ready) {
     try {
-      return await quranWorker.search(query, opts);
-    } catch {
-    }
+      return await quranWorker.search(query, opts, validateCoordinate);
+    } catch {}
   }
 
   if (QURAN.apiBase) {
@@ -65,7 +68,7 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
       const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.ok) {
         const body = await res.json();
-        const payload = decodeSearchResponse(unwrapEnvelope(body));
+        const payload = decodeSearchResponse(unwrapEnvelope(body), validateCoordinate);
         if (payload) {
           return {
             query,
@@ -77,8 +80,7 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
           };
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return nameNumberFallback(query, opts);

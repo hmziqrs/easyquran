@@ -56,7 +56,7 @@ The web implementation deliberately separates these concerns:
 | Canonical search hit contract                   | `web/src/lib/quran/search/types.ts`                | Worker, API decoder, UI, tooling         |
 | Artifact, script, packaging, and schema profile | `web/src/lib/quran/view/source-profiles.ts`        | manifest, SSG, Worker, tooling           |
 | Typed SQL queries and row decoding              | `web/src/lib/quran/sql.ts`                         | Node and sqlite-wasm query runners       |
-| Canonical coordinates from `quran-data.xml`     | `web/src/lib/data/quran-coordinates.json`         | SSG and Worker source validation         |
+| Canonical coordinates from the immutable catalog | `web/static/quran-meta/quran-catalog.json`       | SSG and Worker source validation         |
 | Canonical `raw` / `body` / `opener` view        | `web/src/lib/quran/view/`                          | surah/range rendering and search         |
 | Product source roles                            | `web/src/lib/quran/source-plan.ts`                 | SSG defaults, Worker, fixture generation |
 
@@ -788,11 +788,11 @@ The web pass commits that fixture at
 `web/src/lib/quran/view/__fixtures__/prefix-cuts.json` and checks all 228 source/
 surah records. The Rust pass must consume this same file when implemented; until
 then cross-runtime invariant 12 remains intentionally pending with the rest of
-the Rust/API work. Regenerate the Worker-safe coordinate projection and both
-committed web fixtures from `web/` with:
+the Rust/API work. Canonical coordinates now come from the immutable compact
+catalog and have no maintenance command. Regenerate only the search/view
+fixtures from `web/` with:
 
 ```sh
-pnpm dlx vite-node --config vite.config.ts scripts/gen-quran-coordinates.ts
 pnpm dlx vite-node --config vite.config.ts scripts/gen-search-fixtures.ts
 ```
 

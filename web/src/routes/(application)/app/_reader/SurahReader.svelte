@@ -2,24 +2,25 @@
   import { resolve } from "$app/paths";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import {
-    SURAHS,
-    surahByNum,
     surahMeta,
     verseKey,
     toArabicDigits,
     surahPath,
     type Surah,
   } from "$lib/data/quran";
+  import type { SurahLink } from "$lib/data/quran-types";
   import { Icon } from "$lib/components/icon";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import * as Tabs from "$lib/components/ui/tabs";
   import { displayVerses, headerText } from "$lib/quran/view/presentation";
 
-  let { surah }: { surah: Surah } = $props();
+  let {
+    surah,
+    previous,
+    next,
+  }: { surah: Surah; previous?: SurahLink; next?: SurahLink } = $props();
 
-  const prevNum = $derived(surah.num > 1 ? surah.num - 1 : null);
-  const nextNum = $derived(surah.num < SURAHS.length ? surah.num + 1 : null);
   const verses = $derived(displayVerses(surah));
   const opener = $derived(headerText(surah.normalization));
   const badge = $derived(String(surah.num).padStart(3, "0"));
@@ -147,25 +148,25 @@
     </Tabs.Root>
 
     <div class="flex items-center justify-between gap-4 px-5 py-[22px] sm:px-9">
-      {#if prevNum !== null}
+      {#if previous}
         <a
-          href={resolve(surahPath(prevNum))}
+          href={resolve(surahPath(previous))}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
           <span aria-hidden="true">←</span>
-          {surahByNum(prevNum).name}
+          {previous.name}
         </a>
       {:else}
         <span></span>
       {/if}
-      {#if nextNum !== null}
+      {#if next}
         <a
-          href={resolve(surahPath(nextNum))}
+          href={resolve(surahPath(next))}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
-          {surahByNum(nextNum).name}
+          {next.name}
           <span aria-hidden="true">→</span>
         </a>
       {/if}

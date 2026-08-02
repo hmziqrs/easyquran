@@ -1,8 +1,13 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
-  import { SURAHS, surahBySlug, surahMeta, surahPath, parseKey, surahByNum, verseKey } from "$lib/data/quran";
-  import { NAVIGATION } from "$lib/data/quran-meta";
+  import { surahMeta, surahPath, parseKey, verseKey } from "$lib/data/quran";
+  import {
+    loadQuranCatalog,
+    loadQuranNavigation,
+  } from "$lib/data/quran-metadata-client";
+  import { RangeKind } from "$lib/data/quran-navigation";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -20,9 +25,8 @@
   } from "$lib/components/ui/sidebar";
 
   const BROWSE = ["surah", "ayah", "juz", "page"] as const;
-  const current = $derived(surahBySlug(page.params.surah as string));
   const sidebar = useSidebar();
-  const ranges = $derived(reader.browseJuz ? NAVIGATION.juz : NAVIGATION.page);
+  const catalogPromise = $derived(sidebar.openMobile ? loadQuranCatalog() : null);
 
   let inputEl: HTMLInputElement | null = $state(null);
 
@@ -89,98 +93,128 @@
   </SidebarHeader>
 
   <SidebarContent>
-    {#if reader.browseSurah}
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <SidebarMenu class="gap-1">
-            {#each SURAHS as s (s.num)}
-              {@const active = page.params.surah === s.slug}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={active}
-                  aria-current={active ? "page" : undefined}
-                  class="h-auto items-start gap-3 px-3.5 py-3"
-                >
-                  {#snippet child({ props })}
-                    <a
-                      {...props}
-                      href={surahPath(s.num)}
-                      data-sveltekit-preload-data="hover"
-                      onclick={onItemClick}
+    {#if catalogPromise}
+      {#await catalogPromise}
+        <p class="px-4 py-3 text-sm text-fg-3">Loading Quran navigation…</p>
+      {:then catalog}
+        {@const current = catalog.surahBySlug(page.params.surah as string)}
+        {#if reader.browseSurah}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu class="gap-1">
+                {#each catalog.surahs as s (s.num)}
+                  {@const active = page.params.surah === s.slug}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={active}
+                      aria-current={active ? "page" : undefined}
+                      class="h-auto items-start gap-3 px-3.5 py-3"
                     >
-                      <span class="flex min-w-0 flex-1 flex-col gap-1">
-                        <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
-                        <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
-                      </span>
-                      <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
-                        {s.arabic}
-                      </span>
-                    </a>
-                  {/snippet}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            {/each}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    {:else if reader.browseAyah}
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <SidebarMenu class="gap-1">
-            {#each reader.versesFor(current.num) as v, i (verseKey(current.num, i + 1))}
-              {@const n = i + 1}
-              <SidebarMenuItem>
-                <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                  {#snippet child({ props })}
-                    <a
-                      {...props}
-                      href={surahPath(current.num, n)}
-                      data-sveltekit-preload-data="hover"
-                      onclick={onItemClick}
-                    >
-                      <span
-                        class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
-                      >
-                        {n}
-                      </span>
-                      <span dir="rtl" class="min-w-0 flex-1 truncate font-arabic text-[15px]">
-                        {v}
-                      </span>
-                    </a>
-                  {/snippet}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            {/each}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    {:else}
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <SidebarMenu class="gap-1">
-            {#each ranges as rg (rg.index)}
-              {@const { num, n } = parseKey(rg.first)}
-              {@const href = `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`}
-              <SidebarMenuItem>
-                <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                  {#snippet child({ props })}
-                    <a {...props} {href} data-sveltekit-preload-data="hover" onclick={onItemClick}>
-                      <span
-                        class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
-                      >
-                        {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
-                      </span>
-                      <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-                        {surahByNum(num).name} {num}:{n}
-                      </span>
-                    </a>
-                  {/snippet}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            {/each}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+                      {#snippet child({ props })}
+                        <a
+                          {...props}
+                          href={resolve(surahPath(s))}
+                          data-sveltekit-preload-data="hover"
+                          onclick={onItemClick}
+                        >
+                          <span class="flex min-w-0 flex-1 flex-col gap-1">
+                            <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
+                            <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
+                          </span>
+                          <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
+                            {s.arabic}
+                          </span>
+                        </a>
+                      {/snippet}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                {/each}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        {:else if reader.browseAyah}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu class="gap-1">
+                {#if current}
+                  {#each reader.versesFor(current.num) as v, i (verseKey(current.num, i + 1))}
+                    {@const n = i + 1}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                        {#snippet child({ props })}
+                          <a
+                            {...props}
+                            href={resolve(surahPath(current, n))}
+                            data-sveltekit-preload-data="hover"
+                            onclick={onItemClick}
+                          >
+                            <span
+                              class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                            >
+                              {n}
+                            </span>
+                            <span
+                              dir="rtl"
+                              class="min-w-0 flex-1 truncate font-arabic text-[15px]"
+                            >
+                              {v}
+                            </span>
+                          </a>
+                        {/snippet}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  {/each}
+                {/if}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        {:else}
+          {#await loadQuranNavigation()}
+            <p class="px-4 py-3 text-sm text-fg-3">Loading ranges…</p>
+          {:then navigation}
+            {@const ranges = navigation.ranges(
+              reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
+            )}
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu class="gap-1">
+                  {#each ranges as rg (rg.index)}
+                    {@const { num, n } = parseKey(rg.first)}
+                    {@const href = resolve(
+                      `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`,
+                    )}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                        {#snippet child({ props })}
+                          <a
+                            {...props}
+                            {href}
+                            data-sveltekit-preload-data="hover"
+                            onclick={onItemClick}
+                          >
+                            <span
+                              class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
+                            >
+                              {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
+                            </span>
+                            <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+                              {catalog.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
+                            </span>
+                          </a>
+                        {/snippet}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  {/each}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          {:catch}
+            <p class="px-4 py-3 text-sm text-fg-3">Quran ranges could not be loaded.</p>
+          {/await}
+        {/if}
+      {:catch}
+        <p class="px-4 py-3 text-sm text-fg-3">Quran navigation could not be loaded.</p>
+      {/await}
     {/if}
   </SidebarContent>
 

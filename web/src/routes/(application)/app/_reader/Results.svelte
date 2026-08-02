@@ -2,7 +2,9 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahByNum, surahPath } from "$lib/data/quran";
+  import { surahPath } from "$lib/data/quran";
+  import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
+  import type { QuranCatalog } from "$lib/data/quran-catalog";
   import { quranSearch } from "$lib/quran/search";
   import {
     SearchHitKind,
@@ -16,71 +18,69 @@
   } from "$lib/quran/search/types";
   import SearchResultText from "./SearchResultText.svelte";
 
-  let result = $state.raw<SearchResponse | null>(null);
-  let loading = $state(false);
+  interface SearchState {
+    result: SearchResponse;
+    catalog: QuranCatalog;
+  }
 
-  $effect(() => {
-    const q = reader.query;
-    let cancelled = false;
-    loading = true;
-    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
-      void (async () => {
-        const trimmed = q.trim();
-        const r = trimmed ? await quranSearch(trimmed) : null;
-        if (!cancelled) {
-          result = r;
-          loading = false;
-        }
-      })();
-    }, 140);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+  const searchPromise = $derived.by((): Promise<SearchState | null> => {
+    const query = reader.query.trim();
+    if (!query) return Promise.resolve(null);
+    return new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 140)).then(async () => {
+      if (reader.query.trim() !== query) return null;
+      const [result, catalog] = await Promise.all([quranSearch(query), loadQuranCatalog()]);
+      return { result, catalog };
+    });
   });
 
-  const label = $derived(
-    loading || !result
-      ? "Searching…"
-      : result.total === 0
-        ? `No verses match “${result.query.trim()}”.`
-        : result.source === SearchProvider.Names
-          ? `${result.total} surah${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`
-          : `${result.total} Quran text result${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`,
-  );
+  function resultLabel(result: SearchResponse): string {
+    if (result.total === 0) return `No verses match “${result.query.trim()}”.`;
+    if (result.source === SearchProvider.Names) {
+      return `${result.total} surah${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`;
+    }
+    return `${result.total} Quran text result${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`;
+  }
 
-  function open(r: SearchHit): void {
+  function open(r: SearchHit, catalog: QuranCatalog): void {
     const surah = searchHitSurah(r);
     const ayah = searchHitAnchorAyah(r);
+    const entry = catalog.surahByNum(surah);
+    if (!entry) return;
     reader.openVerse(surah, ayah);
-    void goto(resolve(surahPath(surah, ayah)));
+    void goto(resolve(surahPath(entry, ayah)));
   }
 </script>
 
 <div class="flex flex-col gap-3">
-  <div class="text-sm text-fg-2">{label}</div>
-  {#if result}
-    {#each result.results as r (searchHitKey(r))}
-      {@const surah = searchHitSurah(r)}
-      {@const text = searchHitText(r)}
-      <button
-        type="button"
-        onclick={() => open(r)}
-        class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
-      >
-        <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
-          {#if r.kind === SearchHitKind.Opener}
-            {surahByNum(surah).name} · Surah opener
+  {#await searchPromise}
+    <div class="text-sm text-fg-2">Searching…</div>
+  {:then state}
+    {#if state}
+      <div class="text-sm text-fg-2">{resultLabel(state.result)}</div>
+      {#each state.result.results as r (searchHitKey(r))}
+        {@const surah = searchHitSurah(r)}
+        {@const text = searchHitText(r)}
+        <button
+          type="button"
+          onclick={() => open(r, state.catalog)}
+          class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
+        >
+          <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
+            {#if r.kind === SearchHitKind.Opener}
+              {state.catalog.surahByNum(surah)?.name ?? `Surah ${surah}`} · Surah opener
+            {:else}
+              {state.catalog.surahByNum(surah)?.name ?? `Surah ${surah}`} {surah}:{r.ayah.ayah}
+            {/if}
+          </span>
+          {#if text}
+            <SearchResultText {text} highlights={r.highlights} />
           {:else}
-            {surahByNum(surah).name} {surah}:{r.ayah.ayah}
+            <span class="text-sm text-fg-3">Open surah →</span>
           {/if}
-        </span>
-        {#if text}
-          <SearchResultText {text} highlights={r.highlights} />
-        {:else}
-          <span class="text-sm text-fg-3">Open surah →</span>
-        {/if}
-      </button>
-    {/each}
-  {/if}
+        </button>
+      {/each}
+    {/if}
+  {:catch}
+    <div class="text-sm text-fg-2">Search is temporarily unavailable.</div>
+  {/await}
 </div>

@@ -5,6 +5,7 @@
 **/target
 .git
 .playwright-mcp
+.claude/worktrees
 web/build
 web/.svelte-kit
 
@@ -13,11 +14,11 @@ web/.svelte-kit
 **/.env.*
 !**/.env.example
 
-# Databases — EXCLUDE ALL except the two the web BUILD reads at SSG time:
-#   db/quran/tanzil/quran-data.xml              (vite plugin: surah metadata)
+# Databases — EXCLUDE ALL except the one the web BUILD reads at SSG time:
 #   db/quran/tanzil/arabic/quran-uthmani.sqlite (node:sqlite: verse text)
-# The api image creates its own easyquran.db at runtime; translation/simple-clean
-# sqlite are never needed to build.
+# Surah metadata is committed JSON (web/static/quran-meta/); quran-data.xml
+# is backend-only (Dockerfile.api). The api image creates its own easyquran.db at
+# runtime; translation/simple-clean sqlite are never needed to build.
 *.db
 *.db-*
 **/*.sqlite

@@ -62,6 +62,6 @@
   {#if reader.hasQuery}
     <Results />
   {:else}
-    <SurahReader {surah} />
+    <SurahReader {surah} previous={data.previous} next={data.next} />
   {/if}
 </ReaderShell>

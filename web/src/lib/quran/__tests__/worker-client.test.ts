@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import { quranWorker } from "$lib/quran/worker-client";
+import { QURAN_CATALOG } from "$lib/server/quran-metadata";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 
@@ -78,7 +79,7 @@ afterEach(() => {
 });
 
 async function startReady(): Promise<FakeWorker> {
-  const started = quranWorker.start(MANIFEST);
+  const started = quranWorker.start(MANIFEST, QURAN_CATALOG.coordinates);
   const fake = FakeWorker.last!;
   const init = fake.posted.find(
     (m): m is Extract<WorkerRequest, { type: "init" }> => m.type === "init",

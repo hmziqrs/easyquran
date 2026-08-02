@@ -1,10 +1,12 @@
 import { browser } from "$app/environment";
-import { parseKey, surahByNum, type VerseKey } from "$lib/data/quran";
+import { parseKey, type VerseKey } from "$lib/data/quran";
+import { peekQuranCatalog } from "$lib/data/quran-metadata-client";
 import type { ReaderCore } from "./reader-core.svelte";
 
 export function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);
-  return `${surahByNum(num).name} ${num}:${n}`;
+  const name = peekQuranCatalog()?.surahByNum(num)?.name ?? `Surah ${num}`;
+  return `${name} ${num}:${n}`;
 }
 
 export function verseShareText(key: VerseKey, text: string): string {

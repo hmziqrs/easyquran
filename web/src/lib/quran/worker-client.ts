@@ -1,9 +1,13 @@
-import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
+import type {
+  CanonicalQuranCoordinates,
+  DownloadProgress,
+  QuranSurahText,
+} from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
-import { decodeQuranSurahText, decodeSearchResponse } from "./wire";
+import { decodeQuranSurahText, decodeSearchResponse, type AyahCoordinateValidator } from "./wire";
 
 interface Pending {
   resolve: (v: unknown) => void;
@@ -78,7 +82,7 @@ export const quranWorker = {
     return () => progressListeners.delete(cb);
   },
 
-  start(manifest: ResolvedManifest): Promise<void> {
+  start(manifest: ResolvedManifest, coordinates: CanonicalQuranCoordinates): Promise<void> {
     if (startPromise) return startPromise;
     startPromise = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
@@ -97,7 +101,7 @@ export const quranWorker = {
         failAll(new Error("quran worker message could not be deserialized"));
       });
       try {
-        await request<null>((id) => ({ id, type: "init", manifest }));
+        await request<null>((id) => ({ id, type: "init", manifest, coordinates }));
         isReady = true;
       } catch (err) {
         throw err instanceof Error ? err : new Error(String(err));
@@ -125,12 +129,16 @@ export const quranWorker = {
     );
   },
 
-  search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
+  search(
+    query: string,
+    opts?: SearchOpts,
+    validateCoordinate?: AyahCoordinateValidator,
+  ): Promise<SearchResponse> {
     return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
       (r: unknown) => {
         const limit = opts?.limit ?? DEFAULT_LIMIT;
         const offset = opts?.offset ?? DEFAULT_OFFSET;
-        const payload = decodeSearchResponse(r);
+        const payload = decodeSearchResponse(r, validateCoordinate);
         if (!payload) throw new Error("quran worker returned a malformed search response");
         return {
           query,

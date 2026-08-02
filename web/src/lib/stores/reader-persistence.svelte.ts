@@ -82,9 +82,14 @@ export interface ReaderPersistence {
 export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
   const noteWriter = trailingDebounce(() => writeBlob(), NOTE_PERSIST_DEBOUNCE_MS);
   let hydrated = false;
+  let dirty = false;
   let teardowns: Array<() => void> = [];
 
   function writeBlob(): void {
+    if (!hydrated) {
+      dirty = true;
+      return;
+    }
     const { v, current, fontSize, mode, bookmarks, notes, lastRead } = core.s;
     writeJSON(STORAGE_KEY, { v, current, fontSize, mode, bookmarks, notes, lastRead });
   }
@@ -96,13 +101,19 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
     hydrate() {
       if (hydrated) return;
       hydrated = true;
-      applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY)));
+      const stored = decodeReader(readJSON(STORAGE_KEY));
+      if (dirty) stored.current = undefined;
+      applyPersisted(core.s, stored);
       teardowns.push(
         onStorageKey(STORAGE_KEY, () =>
           applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY))),
         ),
       );
       teardowns.push(onPageHide(() => noteWriter.flush()));
+      if (dirty) {
+        dirty = false;
+        writeBlob();
+      }
     },
     writeNow() {
       noteWriter.cancel();

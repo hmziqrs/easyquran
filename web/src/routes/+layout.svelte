@@ -17,6 +17,9 @@
   let { children } = $props();
 
   let offlineTeardown: (() => void) | null = null;
+  let firstPaintComplete = false;
+  let paintFrame = 0;
+  let postPaintFrame = 0;
   const ensureOfflineEngine = (pathname: string): void => {
     if (!pathname.startsWith("/app")) return;
     if (offlineTeardown) return;
@@ -31,9 +34,16 @@
 
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
-    ensureOfflineEngine(location.pathname);
+    paintFrame = requestAnimationFrame(() => {
+      postPaintFrame = requestAnimationFrame(() => {
+        firstPaintComplete = true;
+        ensureOfflineEngine(location.pathname);
+      });
+    });
 
     return () => {
+      cancelAnimationFrame(paintFrame);
+      cancelAnimationFrame(postPaintFrame);
       for (const teardown of cleanups) teardown();
       offlineTeardown?.();
       offlineTeardown = null;
@@ -46,7 +56,7 @@
         .then(({ pageView }) => pageView(location.pathname))
         .catch(() => {});
     }
-    ensureOfflineEngine(location.pathname);
+    if (firstPaintComplete) ensureOfflineEngine(location.pathname);
   });
 
   const jsonLd = {

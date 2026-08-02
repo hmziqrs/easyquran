@@ -1,5 +1,6 @@
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { type ArtifactSpec, type QuranSourceId, type QuranSurahText } from "$lib/data/quran-types";
+import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
@@ -77,7 +78,10 @@ function openReadOnly(bytes: Uint8Array): Database {
   return database;
 }
 
-async function initialize(manifest: ResolvedManifest): Promise<void> {
+async function initialize(
+  manifest: ResolvedManifest,
+  coordinates: CanonicalQuranCoordinates,
+): Promise<void> {
   status("init");
   sqlite3 = await init();
 
@@ -93,7 +97,7 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
     const artifact = await ensureArtifact(spec, manifest.contentVersion, progressEmitter(spec));
     const database = openReadOnly(artifact.bytes);
     const runner = createWasmQueryRunner(database);
-    const source = loadQuranSource(runner, profile);
+    const source = loadQuranSource(runner, profile, coordinates);
     const persistent = persistentSources.has(sourceId);
     sources.set(sourceId, {
       bytes: artifact.bytes,
@@ -167,7 +171,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
   const type = (message as { type: string }).type;
   try {
     if (message.type === "init") {
-      await initialize(message.manifest);
+      await initialize(message.manifest, message.coordinates);
       emit({ id, ok: true, result: null });
       emit({ type: "ready" });
       return;

@@ -10,8 +10,9 @@ import {
   type SurahNormalization,
 } from "$lib/data/quran-types";
 import { SearchHitKind, type SearchHit } from "./search/types";
-import { isCanonicalAyahCoordinate } from "./view/canonical-coordinates";
 import { sourceProfile } from "./view/source-profiles";
+
+export type AyahCoordinateValidator = (globalIndex: number, surah: number, ayah: number) => boolean;
 
 function asRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
@@ -23,7 +24,10 @@ export function unwrapEnvelope(raw: unknown): unknown {
   return rec.data ?? raw;
 }
 
-export function decodeSearchHit(raw: unknown): SearchHit | null {
+export function decodeSearchHit(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): SearchHit | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   if (rec.kind === SearchHitKind.Opener) {
@@ -43,7 +47,7 @@ export function decodeSearchHit(raw: unknown): SearchHit | null {
     };
   }
   if (rec.kind !== SearchHitKind.Ayah) return null;
-  const ayah = decodeAyah(rec.ayah);
+  const ayah = decodeAyah(rec.ayah, validateCoordinate);
   if (!ayah) return null;
   const highlights = decodeHighlights(rec.highlights, ayah.text.length);
   if (!highlights) return null;
@@ -64,7 +68,7 @@ function nonNegativeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function decodeAyah(raw: unknown): Ayah | null {
+function decodeAyah(raw: unknown, validateCoordinate?: AyahCoordinateValidator): Ayah | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   const surah = positiveInteger(rec.surah, 114);
@@ -77,7 +81,7 @@ function decodeAyah(raw: unknown): Ayah | null {
     globalIndex === null ||
     text === null ||
     rec.key !== `${surah}:${ayah}` ||
-    !isCanonicalAyahCoordinate(globalIndex, surah, ayah)
+    (validateCoordinate && !validateCoordinate(globalIndex, surah, ayah))
   ) {
     return null;
   }
@@ -168,13 +172,16 @@ export interface DecodedSearchPayload {
   results: SearchHit[];
 }
 
-export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null {
+export function decodeSearchResponse(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): DecodedSearchPayload | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   if (!Array.isArray(rec.results)) return null;
   const results: SearchHit[] = [];
   for (const item of rec.results) {
-    const hit = decodeSearchHit(item);
+    const hit = decodeSearchHit(item, validateCoordinate);
     if (!hit) return null;
     results.push(hit);
   }

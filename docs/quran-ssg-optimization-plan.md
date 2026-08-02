@@ -1,6 +1,6 @@
 # EasyQuran — SSG reader optimization plan
 
-> Status: **planned, not implemented**.
+> Status: **Phase 1 metadata boundary implemented; page/DOM phases remain planned**.
 >
 > Priority: minimize the HTML and critical data needed for first paint. Quran
 > text in the requested Surah-local page is useful content; reader controls,
@@ -197,11 +197,11 @@ theme-script comments, and favicon markup—comes after structural work.
 
 ## 5. Two immutable compact JSON snapshots
 
-The plan uses these names:
+The immutable files are:
 
 ```text
-web/static/quran-meta/v1/quran-catalog.json
-web/static/quran-meta/v1/quran-navigation.json
+web/static/quran-meta/quran-catalog.json
+web/static/quran-meta/quran-navigation.json
 ```
 
 There are exactly two tracked web metadata JSON files after migration. They
@@ -212,12 +212,16 @@ web/src/lib/data/surah-names.json
 web/src/lib/data/quran-coordinates.json
 ```
 
+There is no `v1` directory, schema-release namespace, or rolling snapshot. The
+files are immutable corpus assets. The source-version string inside provenance
+describes the upstream Tanzil input; it is not a version of this web format.
 The `/quran-meta/` path avoids the existing `/_quran/` service-worker and local
-SQLite artifact behavior.
+SQLite artifact behavior, and the snapshots are excluded from service-worker
+precache so their first request remains lazy.
 
 ### 5.1 Catalog snapshot
 
-`quran-catalog.json` has a schema/provenance header and 114 positional Surah
+`quran-catalog.json` has a provenance tuple and 114 positional Surah
 rows. Surah number is `row index + 1`. A row retains every non-derived XML
 Surah value and carries forward the app's stable slug/display name before
 `surah-names.json` is removed.
@@ -226,8 +230,7 @@ Conceptual shape:
 
 ```json
 [
-  1,
-  ["sha256-of-quran-data.xml", "source-version", "source-license"],
+  ["sha256-of-quran-data.xml", "upstream-source-version", "source-license"],
   [
     ["al-fatihah", "Al-Fatihah", "الفاتحة", "Al-Faatiha", "The Opening", 0, 7, 5, 1]
   ]
@@ -240,9 +243,8 @@ current catalog before removal.
 
 ```ts
 export const CatalogRoot = {
-  Version: 0,
-  Source: 1,
-  Surahs: 2,
+  Source: 0,
+  Surahs: 1,
 } as const;
 
 export const SurahField = {
@@ -267,13 +269,27 @@ opener kind, and bismillah packaging are also derived rather than repeated.
 hizb-quarter, and manzil starts, plus sajda markers. Range ends,
 `first`/`last` VerseKeys, and Surah-local intersections are derived.
 
+Its root is positional too:
+
+```ts
+export const NavigationRoot = {
+  Source: 0,
+  Page: 1,
+  Juz: 2,
+  Ruku: 3,
+  HizbQuarter: 4,
+  Manzil: 5,
+  Sajdas: 6,
+} as const;
+```
+
 ```ts
 export const RangeKind = {
-  Page: 0,
-  Juz: 1,
-  Ruku: 2,
-  HizbQuarter: 3,
-  Manzil: 4,
+  Page: "page",
+  Juz: "juz",
+  Ruku: "ruku",
+  HizbQuarter: "hizbQuarter",
+  Manzil: "manzil",
 } as const;
 
 export const SajdaField = {
@@ -332,7 +348,7 @@ The migration performs this sequence once:
 1. read the unchanged XML, current names, and current coordinates;
 2. emit the two compact snapshots;
 3. compare every expanded catalog/range/sajda entry with current output;
-4. record XML SHA-256, source metadata, and snapshot schema version;
+4. record XML SHA-256 and upstream source provenance;
 5. commit the snapshots; and
 6. delete the disposable converter and superseded JSON inputs.
 
@@ -340,9 +356,9 @@ The web build does not compare against or hash XML afterward. JSON-only tests
 validate structure and immutable corpus totals. Replacing XML would be a new,
 explicit data migration with new snapshots/provenance—not a recurring command.
 
-The Rust backend may continue hashing/parsing XML for its own
-`contentVersion`. The client metadata cache has its own schema/version and does
-not assume an XML-only backend version invalidates a web snapshot.
+The Rust backend may continue hashing/parsing XML for its own `contentVersion`.
+The immutable web snapshots do not follow backend release versions and are not
+invalidated by an XML-only backend version change.
 
 ---
 
@@ -548,7 +564,7 @@ resolve and load that local page before scrolling to its full VerseKey anchor.
 - Exactly two declared tracked web metadata JSON snapshots exist.
 - Web build/runtime has no XML read, parser, watcher, virtual metadata module,
   Docker copy, or maintained converter/generator.
-- Snapshot provenance records unchanged XML digest and schema version.
+- Snapshot provenance records the unchanged XML digest and upstream source metadata.
 - Counts are exactly 114 Surahs, 6,236 ayahs, 604 pages, 30 Juz, 556 rukus, 240
   hizb quarters, 7 manzils, and 15 sajdas.
 - The 604 global pages tile ayahs `1..6236` without gaps/overlap.

@@ -10,6 +10,10 @@ import {
   decodeVersionPayload,
   unwrapEnvelope,
 } from "$lib/quran/wire";
+import { QURAN_CATALOG } from "$lib/server/quran-metadata";
+
+const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
+  QURAN_CATALOG.globalIndexOf(surah, ayah) === globalIndex;
 
 const AYAH_HIT: SearchHit = {
   kind: SearchHitKind.Ayah,
@@ -43,30 +47,40 @@ describe("unwrapEnvelope", () => {
 
 describe("canonical search wire", () => {
   it.each([AYAH_HIT, OPENER_HIT])("rebuilds a tagged hit", (value) => {
-    const decoded = decodeSearchHit(value);
+    const decoded = decodeSearchHit(value, validateCoordinate);
     expect(decoded).toEqual(value);
     expect(decoded).not.toBe(value);
   });
 
   it("rejects legacy ayah-only and malformed tagged shapes", () => {
-    expect(decodeSearchHit({ surah: 2, ayah: 1, highlights: [] })).toBeNull();
-    expect(decodeSearchHit({ ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, surah: "2" } })).toBeNull();
+    expect(decodeSearchHit({ surah: 2, ayah: 1, highlights: [] }, validateCoordinate)).toBeNull();
     expect(
-      decodeSearchHit({ ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, globalIndex: 263 } }),
+      decodeSearchHit({ ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, surah: "2" } }, validateCoordinate),
     ).toBeNull();
-    expect(decodeSearchHit({ ...AYAH_HIT, highlights: [{ start: 4, end: 2 }] })).toBeNull();
-    expect(decodeSearchHit({ ...OPENER_HIT, anchorAyah: 2 })).toBeNull();
+    expect(
+      decodeSearchHit(
+        { ...AYAH_HIT, ayah: { ...AYAH_HIT.ayah, globalIndex: 263 } },
+        validateCoordinate,
+      ),
+    ).toBeNull();
+    expect(
+      decodeSearchHit({ ...AYAH_HIT, highlights: [{ start: 4, end: 2 }] }, validateCoordinate),
+    ).toBeNull();
+    expect(decodeSearchHit({ ...OPENER_HIT, anchorAyah: 2 }, validateCoordinate)).toBeNull();
   });
 
   it("decodes a response and fails closed on malformed individual hits", () => {
     expect(
-      decodeSearchResponse({
-        query: "الله",
-        total: 2,
-        limit: 20,
-        offset: 0,
-        results: [AYAH_HIT, OPENER_HIT],
-      }),
+      decodeSearchResponse(
+        {
+          query: "الله",
+          total: 2,
+          limit: 20,
+          offset: 0,
+          results: [AYAH_HIT, OPENER_HIT],
+        },
+        validateCoordinate,
+      ),
     ).toEqual({
       query: "الله",
       total: 2,
@@ -75,13 +89,16 @@ describe("canonical search wire", () => {
       results: [AYAH_HIT, OPENER_HIT],
     });
     expect(
-      decodeSearchResponse({
-        query: "الله",
-        total: 2,
-        limit: 20,
-        offset: 0,
-        results: [AYAH_HIT, { ...OPENER_HIT, anchorAyah: 2 }, OPENER_HIT],
-      }),
+      decodeSearchResponse(
+        {
+          query: "الله",
+          total: 2,
+          limit: 20,
+          offset: 0,
+          results: [AYAH_HIT, { ...OPENER_HIT, anchorAyah: 2 }, OPENER_HIT],
+        },
+        validateCoordinate,
+      ),
     ).toBeNull();
     expect(decodeSearchResponse({ results: "invalid" })).toBeNull();
   });

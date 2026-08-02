@@ -82,11 +82,11 @@ Both contain 6,236 rows with the same contiguous global indices and the same
 - `quran-simple-clean.sqlite` is the search source and the optional
   simple-clean display script. Its smaller, undiacritated text is loaded into a
   small in-memory array and substring-scanned.
-- `quran-data.xml` supplies surah metadata and navigation markers. The backend
-  parses it at startup; the web build parses it into the bundle. It is not
-  another runtime database.
-- `web/src/lib/data/quran.ts` owns URL slugs, mapped to the API's numeric surah
-  identifier.
+- `quran-data.xml` supplies surah metadata and navigation markers to the Rust
+  backend. The web no longer reads it: two one-time, immutable compact JSON
+  snapshots carry the web catalog and navigation data.
+- `web/static/quran-meta/quran-catalog.json` owns URL slugs, mapped to the API's
+  numeric surah identifier.
 
 There is no need to merge the files, and no need to add FTS: the complete
 simple-clean corpus is about 744 KB, small enough for a normalized substring
@@ -180,8 +180,9 @@ The two web-facing jobs:
 
 - **SSG for SEO.** `+page.server.ts` reads `quran-uthmani.sqlite` directly
   through `node:sqlite` and prerenders all 114 `/app/<slug>` pages without a
-  running backend during `vite build`. The build parses `quran-data.xml` for
-  metadata and uses the slug mappings in `web/src/lib/data/quran.ts`.
+  running backend during `vite build`. A server-only loader reads the compact
+  catalog/navigation snapshots solely to select the route data; the full
+  snapshots do not enter HTML, Svelte page data, or initial browser JavaScript.
 - **Live JSON.** `/quran/v1` serves Arabic reads, range metadata, normalized
   substring search, and live translations. `/quran/v1/scripts` advertises the
   immutable CDN URLs, sizes, and checksums.
@@ -244,10 +245,12 @@ endGlobal   = next marker global index - 1
 last end    = 6236
 ```
 
-Rust parses the XML into its in-memory store at startup; the SvelteKit build
-parses the same XML into the bundle. This gives local juz, page, ruku,
-hizb-quarter, manzil, and sajda navigation without touching either database and
-without a third file to maintain.
+Rust parses the XML into its in-memory store at startup. SvelteKit reads the two
+checked-in compact snapshots through a server-only loader during prerender and
+the browser fetches them only after first paint or explicit navigation intent.
+This gives local juz, page, ruku, hizb-quarter, manzil, and sajda navigation
+without touching either database or embedding corpus-wide metadata in the
+initial bundle.
 
 The browser computes the deterministic `/random` result locally using the same
 frozen UTC-date constants as the API. The API's 300-ayah response cap suffices

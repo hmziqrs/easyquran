@@ -84,6 +84,8 @@ export interface CatalogEntry {
   slug: string;
   name: string;
   arabic: string;
+  transliteration: string;
+  meaning: string;
   place: Place;
   ayahCount: number;
   revelationOrder: number;
@@ -93,7 +95,25 @@ export interface CatalogEntry {
   startGlobal: number;
 }
 
-export interface LoadedSurah extends CatalogEntry, QuranSurahText {}
+export interface CanonicalSurahCoordinates {
+  readonly surah: number;
+  readonly startGlobal: number;
+  readonly ayahCount: number;
+}
+
+export interface CanonicalQuranCoordinates {
+  readonly rowCount: number;
+  readonly surahs: readonly CanonicalSurahCoordinates[];
+}
+
+export type SurahRenderMetadata = Pick<
+  CatalogEntry,
+  "num" | "slug" | "name" | "arabic" | "place" | "ayahCount"
+>;
+
+export type SurahLink = Pick<CatalogEntry, "num" | "slug" | "name" | "arabic">;
+
+export interface LoadedSurah extends SurahRenderMetadata, QuranSurahText {}
 
 export interface RangeEntry {
   index: number;
@@ -150,4 +170,5 @@ export interface RangePageData {
   last: VerseKey;
   ayahs: Ayah[];
   normalizations: SurahNormalization[];
+  surahs: SurahLink[];
 }

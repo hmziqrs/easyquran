@@ -1,0 +1,295 @@
+{
+  "label": "phase1",
+  "perRoute": [
+    {
+      "route": "al-fatihah",
+      "html": {
+        "raw": 50788,
+        "gzip": 7613,
+        "brotli": 6051
+      },
+      "data": {
+        "raw": 1190,
+        "gzip": 660,
+        "brotli": 537
+      },
+      "js": {
+        "files": 28,
+        "raw": 407384,
+        "gzip": 139781,
+        "brotli": 123539,
+        "largest": {
+          "href": "../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "al-baqarah",
+      "html": {
+        "raw": 1507749,
+        "gzip": 107791,
+        "brotli": 37616
+      },
+      "data": {
+        "raw": 109366,
+        "gzip": 23244,
+        "brotli": 18963
+      },
+      "js": {
+        "files": 28,
+        "raw": 407384,
+        "gzip": 139781,
+        "brotli": 123539,
+        "largest": {
+          "href": "../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "al-kahf",
+      "html": {
+        "raw": 548821,
+        "gzip": 37841,
+        "brotli": 17230
+      },
+      "data": {
+        "raw": 28162,
+        "gzip": 7792,
+        "brotli": 6688
+      },
+      "js": {
+        "files": 28,
+        "raw": 407384,
+        "gzip": 139781,
+        "brotli": 123539,
+        "largest": {
+          "href": "../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "an-nas",
+      "html": {
+        "raw": 46109,
+        "gzip": 7395,
+        "brotli": 5944
+      },
+      "data": {
+        "raw": 1081,
+        "gzip": 596,
+        "brotli": 484
+      },
+      "js": {
+        "files": 28,
+        "raw": 407384,
+        "gzip": 139781,
+        "brotli": 123539,
+        "largest": {
+          "href": "../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "page/1",
+      "html": {
+        "raw": 45651,
+        "gzip": 6778,
+        "brotli": 5407
+      },
+      "data": {
+        "raw": 1579,
+        "gzip": 771,
+        "brotli": 624
+      },
+      "js": {
+        "files": 28,
+        "raw": 389334,
+        "gzip": 134261,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "page/2",
+      "html": {
+        "raw": 38217,
+        "gzip": 6708,
+        "brotli": 5432
+      },
+      "data": {
+        "raw": 1718,
+        "gzip": 867,
+        "brotli": 696
+      },
+      "js": {
+        "files": 28,
+        "raw": 389334,
+        "gzip": 134261,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "page/150",
+      "html": {
+        "raw": 53985,
+        "gzip": 8085,
+        "brotli": 6172
+      },
+      "data": {
+        "raw": 3772,
+        "gzip": 1595,
+        "brotli": 1292
+      },
+      "js": {
+        "files": 28,
+        "raw": 389334,
+        "gzip": 134261,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "page/300",
+      "html": {
+        "raw": 53512,
+        "gzip": 7853,
+        "brotli": 6112
+      },
+      "data": {
+        "raw": 3542,
+        "gzip": 1547,
+        "brotli": 1253
+      },
+      "js": {
+        "files": 28,
+        "raw": 389334,
+        "gzip": 134261,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "page/604",
+      "html": {
+        "raw": 81173,
+        "gzip": 7963,
+        "brotli": 5875
+      },
+      "data": {
+        "raw": 3287,
+        "gzip": 1172,
+        "brotli": 913
+      },
+      "js": {
+        "files": 28,
+        "raw": 389334,
+        "gzip": 134261,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "juz/1",
+      "html": {
+        "raw": 706159,
+        "gzip": 43853,
+        "brotli": 20206
+      },
+      "data": {
+        "raw": 56434,
+        "gzip": 13565,
+        "brotli": 10805
+      },
+      "js": {
+        "files": 28,
+        "raw": 389328,
+        "gzip": 134257,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "juz/15",
+      "html": {
+        "raw": 861333,
+        "gzip": 51575,
+        "brotli": 22895
+      },
+      "data": {
+        "raw": 62794,
+        "gzip": 16300,
+        "brotli": 12668
+      },
+      "js": {
+        "files": 28,
+        "raw": 389328,
+        "gzip": 134257,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    },
+    {
+      "route": "juz/30",
+      "html": {
+        "raw": 2427296,
+        "gzip": 88328,
+        "brotli": 34561
+      },
+      "data": {
+        "raw": 100505,
+        "gzip": 24429,
+        "brotli": 17261
+      },
+      "js": {
+        "files": 28,
+        "raw": 389328,
+        "gzip": 134257,
+        "brotli": 118675,
+        "largest": {
+          "href": "../../_app/immutable/chunks/Bz9qQeNj.js",
+          "raw": 121979
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "readerDocs": 748,
+    "readerHtml": {
+      "docs": 748,
+      "raw": 98446163,
+      "gzip": 8782653
+    },
+    "readerData": {
+      "docs": 748,
+      "raw": 5622293,
+      "gzip": 1824858
+    },
+    "buildSize": 106938501
+  }
+}

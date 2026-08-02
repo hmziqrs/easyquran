@@ -1,13 +1,12 @@
 import { error } from "@sveltejs/kit";
-import { surahBySlug } from "$lib/data/quran";
-import { CATALOG } from "$lib/data/quran-meta";
+import { QURAN_CATALOG, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-metadata";
 import { readSurahText, validateReaderSource } from "$lib/server/quran-sqlite";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;
 
 export function entries() {
-  return CATALOG.map((s) => ({ surah: s.slug }));
+  return QURAN_CATALOG.surahs.map((s) => ({ surah: s.slug }));
 }
 
 const source = validateReaderSource();
@@ -19,9 +18,13 @@ if (!source.ok) {
 }
 
 export const load: PageServerLoad = ({ params }) => {
-  const cat = surahBySlug(params.surah);
-  if (cat.slug !== params.surah) {
+  const cat = QURAN_CATALOG.surahBySlug(params.surah);
+  if (!cat) {
     throw error(404, `Unknown surah: ${params.surah}`);
   }
-  return { surah: { ...cat, ...readSurahText(cat.num) } };
+  return {
+    surah: { ...toSurahRenderMetadata(cat), ...readSurahText(cat.num) },
+    previous: cat.num > 1 ? toSurahLink(QURAN_CATALOG.surahByNum(cat.num - 1)!) : undefined,
+    next: cat.num < 114 ? toSurahLink(QURAN_CATALOG.surahByNum(cat.num + 1)!) : undefined,
+  };
 };

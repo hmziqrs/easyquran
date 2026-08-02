@@ -1,14 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
-  import { slugFor } from "$lib/data/quran";
+  import { loadQuranCatalog } from "$lib/data/quran-metadata-client";
+  import { surahPath } from "$lib/data/quran";
 
   onMount(() => {
     reader.hydrate();
     const num = reader.lastRead?.num ?? 1;
-    goto(`/app/${slugFor(num)}`, { replaceState: true });
+    void loadQuranCatalog().then((catalog) => {
+      const surah = catalog.surahByNum(num) ?? catalog.surahs[0]!;
+      return goto(resolve(surahPath(surah)), { replaceState: true });
+    });
   });
 </script>
 

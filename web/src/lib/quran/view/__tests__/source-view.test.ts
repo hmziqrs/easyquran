@@ -16,6 +16,7 @@ import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
 import { sourceProfile } from "$lib/quran/view/source-profiles";
 import { packagingCounts, scalarSlice, scalarToUtf16Index } from "$lib/quran/view/source-view";
 import { loadQuranSource, readAllSourceRows } from "$lib/quran/view/source-runtime";
+import { QURAN_CATALOG } from "$lib/server/quran-metadata";
 
 function load(sourceId: QuranSourceIdValue) {
   const profile = sourceProfile(sourceId);
@@ -23,7 +24,7 @@ function load(sourceId: QuranSourceIdValue) {
   const database = new DatabaseSync(dbPath);
   database.exec("PRAGMA query_only = ON");
   const runner = createNodeQueryRunner(database);
-  const source = loadQuranSource(runner, profile);
+  const source = loadQuranSource(runner, profile, QURAN_CATALOG.coordinates);
   const rows = readAllSourceRows(runner, source);
   database.close();
   return { profile, rows, view: source.view };

@@ -9,6 +9,7 @@ import {
   type SurahNormalization,
 } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
+import { QURAN_CATALOG } from "$lib/server/quran-metadata";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "$lib/quran/source-plan";
 import {
   loadQuranSource,
@@ -56,7 +57,7 @@ function openSource(sourceId: QuranSourceIdValue): SourceState {
 
   try {
     const runner = createNodeQueryRunner(database);
-    const source = loadQuranSource(runner, profile);
+    const source = loadQuranSource(runner, profile, QURAN_CATALOG.coordinates);
     const state = Object.freeze({ sha256, database, runner, source });
     sourceCache.set(sourceId, state);
     return state;
