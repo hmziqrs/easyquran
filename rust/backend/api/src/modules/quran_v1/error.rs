@@ -52,6 +52,10 @@ impl QuranApiError {
         }
     }
 
+    pub fn internal(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", msg)
+    }
+
     #[allow(dead_code)]
     pub fn with_detail(mut self, detail: impl Serialize) -> Self {
         self.detail = serde_json::to_value(detail).ok();
@@ -87,7 +91,7 @@ pub async fn shape_routing_errors(req: Request, next: Next) -> Response {
     let resp = next.run(req).await;
     match resp.status() {
         StatusCode::NOT_FOUND => {
-            QuranApiError::not_found("no such route under /quran/v1").into_response()
+            QuranApiError::not_found("no such route under /quran").into_response()
         }
         StatusCode::METHOD_NOT_ALLOWED => {
             let allow = resp.headers().get(header::ALLOW).cloned();

@@ -1,5 +1,3 @@
-//! One normalization spec for BOTH corpus build and queries so online/offline match identically; changing any rule here MUST bump `crate::quran::SEARCH_VERSION` or cached/ETagged results go inconsistent.
-
 pub fn normalize_arabic(input: &str) -> (String, Vec<u32>) {
     let mut out = String::with_capacity(input.len());
     let mut map = Vec::with_capacity(input.chars().count());
@@ -33,6 +31,7 @@ fn is_combining_mark(ch: char) -> bool {
     matches!(
         ch,
         '\u{064B}'..='\u{0658}'
+            | '\u{0670}' // SUPERSCRIPT ALEF (category Mn): drop to match the web's /\p{Mn}/u so online/offline agree (v2; was fold→alef).
             | '\u{0640}' // TATWEEL: drop so a Uthmani re-normalization still substring-matches the needle.
             | '\u{06D6}'..='\u{06DC}'
             | '\u{06DF}'..='\u{06E8}'
@@ -43,8 +42,7 @@ fn is_combining_mark(ch: char) -> bool {
 
 fn fold(ch: char) -> char {
     match ch {
-        // U+0670 (superscript alef) is ambiguous (real alef vs reading marker); fold (not drop) — folding keeps the common case correct; results are over simple-clean, so unaffected.
-        '\u{0622}' | '\u{0623}' | '\u{0625}' | '\u{0671}' | '\u{0670}' => '\u{0627}',
+        '\u{0622}' | '\u{0623}' | '\u{0625}' | '\u{0671}' => '\u{0627}',
         '\u{0649}' => '\u{064A}',
         '\u{0629}' => '\u{0647}',
         c => c,
@@ -81,6 +79,16 @@ mod tests {
     fn drops_harakat() {
         let (s, _) = normalize_arabic("بِسْمِ");
         assert_eq!(s.chars().filter(|c| *c != ' ').count(), 3);
+    }
+
+    #[test]
+    fn drops_superscript_alef() {
+        // U+0670 (superscript alef) is category Mn — dropped, not folded to bare alef, so Rust matches the web's /\p{Mn}/u.
+        // Input: alef-wasla, lam, ra, shadda, fatha, ha, meem, sukun, superscript-alef, nun (ٱلرَّحْمَٰن).
+        let (s, _) = normalize_arabic("\u{0671}\u{0644}\u{0631}\u{0651}\u{0654}\u{062D}\u{0645}\u{0652}\u{0670}\u{0646}");
+        assert!(!s.contains('\u{0670}'), "U+0670 dropped: {s:?}");
+        // Expected: bare-alef lam ra ha meem nun (الرحمن), identical to the web's normalizeArabic output.
+        assert_eq!(s, "\u{0627}\u{0644}\u{0631}\u{062D}\u{0645}\u{0646}");
     }
 
     #[test]

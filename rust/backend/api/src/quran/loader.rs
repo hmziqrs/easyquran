@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use roxmltree::Node;
 use sha2::{Digest, Sha256};
@@ -92,28 +91,6 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
     let doc = roxmltree::Document::parse(xml_str)?;
     let meta = build_meta(&doc, &uthmani_rows, &uthmani)?;
 
-    // Update order is a fixed contract with the web client; reordering changes contentVersion and breaks its change-detection.
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(&uthmani_bytes);
-    hasher.update(&simple_clean_bytes);
-    hasher.update(&xml_bytes);
-    let content_version: Arc<str> = {
-        let hex = hasher.finalize().to_hex();
-        Arc::from(hex.as_str()[..16].to_string())
-    };
-
-    if let Some(expected) = settings.expected_content_version.as_deref() {
-        invariant(
-            expected == &*content_version,
-            || {
-                format!(
-                    "QURAN_CONTENT_VERSION assertion failed: env pinned {expected:?} but the \
-                     computed content version is {content_version} (§8.1)"
-                )
-            },
-        )?;
-    }
-
     let artifacts = Artifacts {
         uthmani: ArtifactFile {
             id: Script::Uthmani,
@@ -133,7 +110,6 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         uthmani,
         simple_clean,
         meta,
-        content_version,
         source_digests: SourceDigests {
             uthmani: dig_uthmani.into_boxed_str(),
             simple_clean: dig_simple_clean.into_boxed_str(),
@@ -504,7 +480,6 @@ mod tests {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
-            expected_content_version: None,
         }
     }
 
@@ -534,12 +509,6 @@ mod tests {
         assert!(tiles(&store.meta.rukus), "rukus must tile");
         assert!(tiles(&store.meta.hizb_quarters), "hizb-quarters must tile");
         assert!(tiles(&store.meta.manzils), "manzils must tile");
-
-        assert_eq!(store.content_version().len(), 16);
-        assert!(store
-            .content_version()
-            .chars()
-            .all(|c| c.is_ascii_hexdigit()));
 
         assert_eq!(store.meta.sura(1).unwrap().start_global, 1);
         assert_eq!(store.meta.sura(1).unwrap().end_global, 7);
@@ -643,7 +612,6 @@ mod tests {
             uthmani_path: tmp.join("u.sqlite").to_string_lossy().into_owned(),
             simple_clean_path: tmp.join("s.sqlite").to_string_lossy().into_owned(),
             metadata_xml_path: tmp.join("m.xml").to_string_lossy().into_owned(),
-            expected_content_version: None,
         };
         let store = load_quran_store(&temp_settings)
             .await

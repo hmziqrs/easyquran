@@ -11,7 +11,7 @@ publish = false
 default = ["openapi"]
 # Security: the seeder + admin TUI use a predictable ChaCha20 RNG seed and must never ship in a release binary — excluded from default; do not enable for releases.
 seed-system = []
-# OpenAPI docs (utoipa + swagger UI). Serves `GET /quran/v1/openapi.json` (§6.1).
+# OpenAPI docs (utoipa + swagger UI). Serves `GET /quran/openapi.json` (§6.1).
 openapi = ["utoipa", "utoipa-swagger-ui"]
 
 [dependencies]

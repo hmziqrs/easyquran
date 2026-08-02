@@ -441,9 +441,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let quran_store = match ruxlog::quran::load_quran_store(&settings.quran).await {
         Ok(store) => {
-            let cv = store.content_version().to_string();
             tracing::info!(
-                content_version = %cv,
+                source_digest = %store.source_digests().uthmani,
                 verse_count = ruxlog::quran::VERSE_COUNT,
                 "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
             );
@@ -650,7 +649,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = axum::Router::new()
         .merge(private)
-        .nest("/quran/v1", public)
+        .nest("/quran", public)
         .with_state(state);
 
     let host = settings.http.host.clone();

@@ -34,6 +34,22 @@ fn parse_script(opt: &Option<String>) -> Result<Script, QuranApiError> {
     }
 }
 
+fn parse_source(s: &str) -> Result<Script, QuranApiError> {
+    Script::parse(s)
+        .ok_or_else(|| invalid(format!("unknown source '{s}'; expected one of: uthmani, simple-clean")))
+}
+
+impl From<quran::ViewError> for QuranApiError {
+    fn from(e: quran::ViewError) -> Self {
+        match e {
+            quran::ViewError::InvalidSurah(n) | quran::ViewError::Locate(n) => {
+                quran_not_found(format!("surah {n} not found (valid 1..=114)"))
+            }
+            other => QuranApiError::internal(other.to_string()),
+        }
+    }
+}
+
 fn ayah_dto(v: &quran::AyahView) -> Ayah {
     Ayah {
         key: format!("{}:{}", v.surah, v.ayah),
@@ -103,10 +119,10 @@ fn json_cached<T: Serialize>(
     canonical_key: &str,
     body: T,
 ) -> Response<Body> {
-    let env = Envelope::new(body, store.content_version());
+    let env = Envelope::new(body);
     cache::respond_cached(
         &env,
-        store.content_version(),
+        store.etag_tag(),
         canonical_key,
         cache::ARABIC_CACHE,
         cache::if_none_match(headers),
@@ -408,7 +424,7 @@ pub async fn ayah_key_redirect(
     let suffix = rq.filter(|s| !s.is_empty()).map(|s| format!("?{s}")).unwrap_or_default();
     Ok(Response::builder()
         .status(StatusCode::PERMANENT_REDIRECT)
-        .header(header::LOCATION, format!("/quran/v1/ayahs/{surah}/{ayah}{suffix}"))
+        .header(header::LOCATION, format!("/quran/ayahs/{surah}/{ayah}{suffix}"))
         .body(Body::empty())
         .expect("308 builds"))
 }
@@ -583,7 +599,6 @@ pub async fn scripts(
     headers: HeaderMap,
 ) -> Result<Response<Body>, QuranApiError> {
     let store = &state.quran;
-    let cv = store.content_version().to_string();
     let scripts = {
         let mut guard = state.quran_scripts.lock().await;
         match guard.as_ref() {
@@ -595,7 +610,7 @@ pub async fn scripts(
                     .public_url
                     .trim_end_matches('/')
                     .to_string();
-                let resolved = resolve_scripts(&state, &cv, &public_url).await;
+                let resolved = resolve_scripts(&state, &public_url).await;
                 // Only cache once fully verified: a transient HEAD failure must self-heal, not be pinned incomplete for life.
                 if resolved.len() == 2 {
                     *guard = Some(resolved.clone());
@@ -612,17 +627,17 @@ pub async fn scripts(
     } else {
         cache::NO_STORE
     };
-    let env = Envelope::new(ScriptsData { scripts }, &cv);
+    let env = Envelope::new(ScriptsData { scripts });
     Ok(cache::respond_cached(
         &env,
-        &cv,
+        store.etag_tag(),
         &canonical,
         cache_control,
         cache::if_none_match(&headers),
     ))
 }
 
-async fn resolve_scripts(state: &AppState, cv: &str, public_url: &str) -> Vec<Artifact> {
+async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
     let store = &state.quran;
     let entries = [
         (store.artifacts.uthmani.clone(), "quran-uthmani.sqlite"),
@@ -631,7 +646,7 @@ async fn resolve_scripts(state: &AppState, cv: &str, public_url: &str) -> Vec<Ar
     let mut out = Vec::with_capacity(2);
     for (file, filename) in entries {
         let id = file.id.as_str().to_string();
-        let url = format!("{public_url}/quran/arabic/{id}/{cv}/{filename}");
+        let url = format!("{public_url}/quran/arabic/{id}/{filename}");
         match verify_head(&state.http_client, &url, file.size_bytes).await {
             Ok(true) => out.push(Artifact {
                 id,
@@ -673,40 +688,13 @@ pub async fn openapi_json() -> axum::Json<utoipa::openapi::OpenApi> {
     axum::Json(crate::docs::ApiDoc::openapi())
 }
 
-pub async fn version(
-    State(state): State<AppState>,
-    QQuery(_): QQuery<NoQuery>,
-    headers: HeaderMap,
-) -> Result<Response<Body>, QuranApiError> {
-    let store = &state.quran;
-    let data = VersionData {
-        api_version: "v1".to_string(),
-        search_version: quran::SEARCH_VERSION.to_string(),
-        source_digests: SourceDigestsDto {
-            uthmani: store.source_digests().uthmani.to_string(),
-            simple_clean: store.source_digests().simple_clean.to_string(),
-        },
-        translations: Vec::new(),
-    };
-    // ETag folds searchVersion: a normalization change bumps it without contentVersion, so contentVersion-only serves a stale 304.
-    let cv = store.content_version();
-    let etag = cache::weak_etag(&format!("{cv}+{}", quran::SEARCH_VERSION), "version");
-    let env = Envelope::new(data, cv);
-    Ok(cache::respond_cached_with_etag(
-        &env,
-        &etag,
-        cache::ARABIC_CACHE,
-        cache::if_none_match(&headers),
-    ))
-}
-
 #[cfg_attr(
     feature = "openapi",
     utoipa::path(
         get,
-        path = "/quran/v1/health/ready",
+        path = "/quran/health/ready",
         tag = "quran",
-        responses((status = 200, description = "Readiness + version/observability surface", body = crate::modules::quran_v1::dto::HealthReady))
+        responses((status = 200, description = "Readiness + observability surface", body = crate::modules::quran_v1::dto::HealthReady))
     )
 )]
 pub async fn health_ready(
@@ -716,8 +704,6 @@ pub async fn health_ready(
     let store = &state.quran;
     let body = HealthReady {
         ready: true,
-        content_version: store.content_version().to_string(),
-        search_version: quran::SEARCH_VERSION.to_string(),
         source_digests: SourceDigestsDto {
             uthmani: store.source_digests().uthmani.to_string(),
             simple_clean: store.source_digests().simple_clean.to_string(),
@@ -766,10 +752,10 @@ pub async fn random(
         let left = 86400 - now.num_seconds_from_midnight() as u64;
         format!("public, max-age={}", left.max(1))
     };
-    let env = Envelope::new(body, store.content_version());
+    let env = Envelope::new(body);
     Ok(cache::respond_cached(
         &env,
-        store.content_version(),
+        store.etag_tag(),
         &ck,
         &cache_control,
         cache::if_none_match(&headers),
@@ -869,6 +855,7 @@ pub async fn search(
                 .map(|h| Highlight { start: h.start, end: h.end })
                 .collect();
             SearchHit {
+                kind: SearchHitKind::Ayah,
                 ayah: ayah_dto(&view),
                 highlights,
             }
@@ -882,18 +869,98 @@ pub async fn search(
         offset: offset as u32,
         results,
     };
-    // ETag hex-digests the query to keep the header ASCII for strict CDNs, and folds searchVersion to avoid stale 304s.
-    let cv = store.content_version();
     let q_digest = hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8]);
     let etag = cache::weak_etag(
-        &format!("{cv}+{}", quran::SEARCH_VERSION),
+        store.etag_tag(),
         &format!("search?limit={limit}&offset={offset}&q={q_digest}&script={}", script.as_str()),
     );
-    let env = Envelope::new(body, cv);
+    let env = Envelope::new(body);
     Ok(cache::respond_cached_with_etag(
         &env,
         &etag,
         cache::SEARCH_CACHE,
         cache::if_none_match(&headers),
+    ))
+}
+
+pub async fn source_surah(
+    State(state): State<AppState>,
+    QPath((source, surah)): QPath<(String, u16)>,
+    QQuery(_): QQuery<NoQuery>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, QuranApiError> {
+    let store = &state.quran;
+    let script = parse_source(&source)?;
+    if store.meta().sura(surah).is_none() {
+        return Err(quran_not_found(format!(
+            "surah {surah} not found (valid 1..=114)"
+        )));
+    }
+    let body = quran::surah_text_view(store, script, surah)?;
+    Ok(json_cached(
+        store,
+        &headers,
+        &format!("sources/{source}/surah/{surah}"),
+        body,
+    ))
+}
+
+pub async fn source_range(
+    State(state): State<AppState>,
+    QPath(source): QPath<String>,
+    QQuery(q): QQuery<RangeTextQuery>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, QuranApiError> {
+    let store = &state.quran;
+    let script = parse_source(&source)?;
+    let from = q.from.unwrap_or(1).max(1);
+    let to = q.to.unwrap_or(VERSE_COUNT).min(VERSE_COUNT);
+    if from > to {
+        return Err(invalid(format!("from ({from}) must be <= to ({to})")));
+    }
+    let count = to - from + 1;
+    if count > RESPONSE_CAP {
+        return Err(range_too_large(count));
+    }
+    let mut ayahs = Vec::with_capacity(count as usize);
+    let mut represented: Vec<u16> = Vec::new();
+    let mut prev_surah: Option<u16> = None;
+    for g in from..=to {
+        let (surah, ayah) = store
+            .meta()
+            .locate(g)
+            .ok_or_else(|| QuranApiError::internal(format!("global {g} not locatable")))?;
+        let text = store
+            .verse(script, g)
+            .ok_or_else(|| QuranApiError::internal(format!("verse {g} missing")))?
+            .to_string();
+        ayahs.push(LeanAyah {
+            key: format!("{surah}:{ayah}"),
+            surah,
+            ayah,
+            global_index: g,
+            text,
+        });
+        if prev_surah != Some(surah) {
+            represented.push(surah);
+            prev_surah = Some(surah);
+        }
+    }
+    let mut normalizations = Vec::with_capacity(represented.len());
+    for surah in &represented {
+        normalizations.push(quran::surah_normalization(store, script, *surah)?);
+    }
+    let body = RangeText {
+        ayahs,
+        normalizations,
+    };
+    Ok(json_cached(
+        store,
+        &headers,
+        &canonical(
+            &format!("sources/{source}/range"),
+            vec![("from", from.to_string()), ("to", to.to_string())],
+        ),
+        body,
     ))
 }

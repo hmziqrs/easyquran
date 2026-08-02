@@ -142,8 +142,6 @@ pub struct QuranSettings {
     pub uthmani_path: String,
     pub simple_clean_path: String,
     pub metadata_xml_path: String,
-    /// Assertion only — never the source of the content version value.
-    pub expected_content_version: Option<String>,
 }
 
 impl QuranSettings {
@@ -157,7 +155,6 @@ impl QuranSettings {
             }),
             metadata_xml_path: std::env::var("QURAN_METADATA_XML_PATH")
                 .unwrap_or_else(|_| "db/quran/tanzil/quran-data.xml".to_string()),
-            expected_content_version: std::env::var("QURAN_CONTENT_VERSION").ok(),
         }
     }
 }
