@@ -1,6 +1,3 @@
-# Build-context hygiene (context = repo root, shared by both images).
-# Keeps node_modules / build artifacts / VCS / heavy data out of image builds.
-
 **/node_modules
 **/target
 .git
@@ -9,16 +6,10 @@
 web/build
 web/.svelte-kit
 
-# Secrets
 **/.env
 **/.env.*
 !**/.env.example
 
-# Databases — EXCLUDE ALL except the one the web BUILD reads at SSG time:
-#   db/quran/tanzil/arabic/quran-uthmani.sqlite (node:sqlite: verse text)
-# Surah metadata is committed JSON (web/static/quran-meta/); quran-data.xml
-# is backend-only (Dockerfile.api). The api image creates its own easyquran.db at
-# runtime; translation/simple-clean sqlite are never needed to build.
 *.db
 *.db-*
 **/*.sqlite

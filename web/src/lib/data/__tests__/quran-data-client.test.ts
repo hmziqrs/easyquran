@@ -40,4 +40,21 @@ describe("browser Quran data loader", () => {
     expect(await loadQuranData()).toBe(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("allows a failed request to be retried", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(snapshot, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadQuranData()).rejects.toThrow("returned 503");
+    expect((await loadQuranData()).surahs).toHaveLength(114);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

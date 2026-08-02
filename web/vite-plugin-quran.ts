@@ -1,4 +1,4 @@
-import { createReadStream, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -15,6 +15,16 @@ const LOCAL_ARTIFACTS = new Map(
   ]),
 );
 
+function localArtifactPath(rawUrl: string): string | undefined {
+  try {
+    const pathname = new URL(rawUrl, "http://vite.local").pathname;
+    if (!pathname.startsWith(LOCAL_ARTIFACT_PREFIX)) return undefined;
+    return LOCAL_ARTIFACTS.get(decodeURIComponent(pathname.slice(LOCAL_ARTIFACT_PREFIX.length)));
+  } catch {
+    return undefined;
+  }
+}
+
 export function quranArtifacts(): Plugin {
   let dataEnvironment: QuranDataEnvironment = QuranDataEnvironment.Production;
   return {
@@ -29,14 +39,8 @@ export function quranArtifacts(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (dataEnvironment !== QuranDataEnvironment.Local || !req.url) return next();
-        const requestUrl = new URL(req.url, "http://vite.local");
-        if (!requestUrl.pathname.startsWith(LOCAL_ARTIFACT_PREFIX)) return next();
-
-        const artifactPath = decodeURIComponent(
-          requestUrl.pathname.slice(LOCAL_ARTIFACT_PREFIX.length),
-        );
-        const localPath = LOCAL_ARTIFACTS.get(artifactPath);
-        if (!localPath) return next();
+        const localPath = localArtifactPath(req.url);
+        if (!localPath || !existsSync(localPath)) return next();
 
         const size = statSync(localPath).size;
         res.statusCode = 200;

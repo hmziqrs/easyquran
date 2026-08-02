@@ -157,6 +157,9 @@ describe("manifest wire", () => {
   it("decodes registered script ids and script envelopes", () => {
     expect(decodeScript(scripts[0])).toEqual(scripts[0]);
     expect(decodeScript({ ...scripts[0], id: "unknown" })).toBeNull();
+    expect(decodeScript({ ...scripts[0], sizeBytes: 0 })).toBeNull();
+    expect(decodeScript({ ...scripts[0], sizeBytes: -1 })).toBeNull();
+    expect(decodeScript({ ...scripts[0], sizeBytes: "1" })).toBeNull();
     expect(decodeScriptsPayload({ data: { scripts } })).toEqual(scripts);
   });
 

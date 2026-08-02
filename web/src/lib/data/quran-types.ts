@@ -123,14 +123,6 @@ export interface RangeEntry {
   last: VerseKey;
 }
 
-export interface NavigationData {
-  juz: RangeEntry[];
-  page: RangeEntry[];
-  ruku: RangeEntry[];
-  hizbQuarter: RangeEntry[];
-  manzil: RangeEntry[];
-}
-
 export interface SajdaEntry {
   index: number;
   surah: number;

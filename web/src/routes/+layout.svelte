@@ -85,8 +85,7 @@
       },
     ],
   };
-  const jsonLdScript =
-    `<script type="application/ld+json">${JSON.stringify(jsonLd)}` + "<" + "/script>";
+  const jsonLdText = JSON.stringify(jsonLd);
 </script>
 
 <svelte:head>
@@ -97,8 +96,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content={SITE.name} />
-  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-  {@html jsonLdScript}
+  <svelte:element this={"script"} type="application/ld+json">{jsonLdText}</svelte:element>
 </svelte:head>
 
 <a

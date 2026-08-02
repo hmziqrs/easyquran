@@ -13,7 +13,7 @@ function fail(message: string): never {
   throw new Error(`[quran-data-boundary] ${message}`);
 }
 
-function filesUnder(root: string): string[] {
+function filesUnder(root: string, ignoredDirectories: ReadonlySet<string> = new Set()): string[] {
   if (!existsSync(root)) return [];
   const files: string[] = [];
   const stack = [root];
@@ -21,8 +21,11 @@ function filesUnder(root: string): string[] {
     const current = stack.pop()!;
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
-      if (entry.isDirectory()) stack.push(full);
-      else files.push(full);
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(entry.name)) stack.push(full);
+      } else {
+        files.push(full);
+      }
     }
   }
   return files;
@@ -35,10 +38,18 @@ if (trackedSnapshots.length !== 1 || trackedSnapshots[0] !== SNAPSHOT) {
 }
 if (existsSync(path.join(META, "v1"))) fail("versioned data directories are forbidden");
 
-const staticImports = filesUnder(path.join(WEB, "src")).filter((file) => {
-  if (!/[.](?:ts|svelte)$/.test(file)) return false;
+const ignoredSourceDirectories = new Set([
+  ".svelte-kit",
+  ".vite",
+  "baselines",
+  "build",
+  "node_modules",
+  "static",
+]);
+const staticImports = filesUnder(WEB, ignoredSourceDirectories).filter((file) => {
+  if (!/[.](?:cjs|js|mjs|svelte|ts)$/.test(file)) return false;
   const sourceText = readFileSync(file, "utf8");
-  return /\b(?:import|export)\s+(?:[^"'\n]+\s+from\s+)?["'][^"']*quran-data[.]json/.test(
+  return /(?:\b(?:import|export)\s+(?:[^"'\n]+\s+from\s+)?["'][^"']*quran-data[.]json|\bimport\s*\(\s*["'][^"']*quran-data[.]json)/.test(
     sourceText,
   );
 });
@@ -58,6 +69,10 @@ if (typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) {
 
 const textExtensions = new Set([".html", ".json", ".js", ".css", ".xml", ".txt"]);
 const builtSnapshot = path.join(BUILD, `quran-meta/${SNAPSHOT_NAME}`);
+if (!existsSync(builtSnapshot)) fail(`build/quran-meta/${SNAPSHOT_NAME} is missing`);
+if (!readFileSync(builtSnapshot).equals(readFileSync(SNAPSHOT))) {
+  fail(`build/quran-meta/${SNAPSHOT_NAME} differs from the tracked snapshot`);
+}
 const leaked = filesUnder(BUILD).filter((file) => {
   if (file === builtSnapshot) return false;
   if (!textExtensions.has(path.extname(file))) return false;

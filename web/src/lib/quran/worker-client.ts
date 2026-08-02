@@ -34,6 +34,19 @@ function failAll(err: Error): void {
   pending.clear();
 }
 
+function resetWorker(error?: Error): void {
+  if (error) failAll(error);
+  worker?.terminate();
+  worker = null;
+  isReady = false;
+  startPromise = null;
+}
+
+function reportWorkerFailure(error: Error): void {
+  resetWorker(error);
+  for (const listener of statusListeners) listener("error", error.message);
+}
+
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
     const p = pending.get(msg.id);
@@ -50,7 +63,7 @@ function handle(msg: WorkerOutbound): void {
     const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
     for (const cb of progressListeners) cb(p);
   } else if (msg.type === "fatal") {
-    failAll(new Error(msg.error));
+    reportWorkerFailure(new Error(msg.error));
   }
 }
 
@@ -84,39 +97,36 @@ export const quranWorker = {
 
   start(manifest: ResolvedManifest, coordinates: CanonicalQuranCoordinates): Promise<void> {
     if (startPromise) return startPromise;
-    startPromise = (async () => {
+    const attempt = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
         type: "module",
         name: "quran-db",
       });
       worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => handle(e.data));
       worker.addEventListener("error", (e: ErrorEvent) => {
-        failAll(
+        reportWorkerFailure(
           e.error instanceof Error
             ? e.error
             : new Error(`quran worker failed to load: ${e.message}`),
         );
       });
       worker.addEventListener("messageerror", () => {
-        failAll(new Error("quran worker message could not be deserialized"));
+        reportWorkerFailure(new Error("quran worker message could not be deserialized"));
       });
-      try {
-        await request<null>((id) => ({ id, type: "init", manifest, coordinates }));
-        isReady = true;
-      } catch (err) {
-        throw err instanceof Error ? err : new Error(String(err));
-      }
+      await request<null>((id) => ({ id, type: "init", manifest, coordinates }));
+      isReady = true;
     })();
-    return startPromise;
+    startPromise = attempt;
+    void attempt.catch((error: unknown) => {
+      if (startPromise === attempt) {
+        resetWorker(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    return attempt;
   },
 
   dispose(): void {
-    if (!worker) return;
-    failAll(new Error("quran worker disposed"));
-    worker.terminate();
-    worker = null;
-    isReady = false;
-    startPromise = null;
+    resetWorker(new Error("quran worker disposed"));
   },
 
   readSurah(num: number): Promise<QuranSurahText> {

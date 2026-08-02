@@ -7,14 +7,20 @@ let dataPromise: Promise<QuranData> | undefined;
 let loadedData: QuranData | undefined;
 
 export function loadQuranData(): Promise<QuranData> {
-  dataPromise ??= fetch(asset(QURAN_DATA_URL), {
-    headers: { accept: "application/json" },
-  }).then(async (response) => {
-    if (!response.ok) throw new Error(`[quran-data] ${QURAN_DATA_URL} returned ${response.status}`);
-    loadedData = createQuranData(await response.json());
-    return loadedData;
-  });
-  return dataPromise;
+  if (dataPromise) return dataPromise;
+  const url = asset(QURAN_DATA_URL);
+  const request = fetch(url, { headers: { accept: "application/json" } })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`[quran-data] ${url} returned ${response.status}`);
+      loadedData = createQuranData(await response.json());
+      return loadedData;
+    })
+    .catch((error: unknown) => {
+      if (dataPromise === request) dataPromise = undefined;
+      throw error;
+    });
+  dataPromise = request;
+  return request;
 }
 
 export function peekQuranData(): QuranData | undefined {

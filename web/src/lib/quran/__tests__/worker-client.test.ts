@@ -42,8 +42,6 @@ class FakeWorker {
   }
 }
 
-const RealWorker = globalThis.Worker;
-
 const MANIFEST: ResolvedManifest = {
   contentVersion: "v1",
   searchVersion: "s1",
@@ -67,14 +65,12 @@ const MANIFEST: ResolvedManifest = {
 beforeEach(() => {
   vi.useFakeTimers();
   FakeWorker.last = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Worker = FakeWorker;
+  vi.stubGlobal("Worker", FakeWorker);
 });
 
 afterEach(() => {
   quranWorker.dispose();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Worker = RealWorker;
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -191,6 +187,8 @@ describe("quranWorker request settlement", () => {
 
   it("a post-init fatal rejects every in-flight request", async () => {
     const fake = await startReady();
+    const statuses: Array<[string, string | undefined]> = [];
+    const detach = quranWorker.onStatus((status, detail) => statuses.push([status, detail]));
     const p1 = quranWorker.readSurah(1);
     const p2 = quranWorker.readSurah(2);
     const a1 = expect(p1).rejects.toThrow("sqlite-wasm exploded");
@@ -198,6 +196,20 @@ describe("quranWorker request settlement", () => {
     fake.emit("message", { type: "fatal", error: "sqlite-wasm exploded" });
     await a1;
     await a2;
+    expect(fake.terminated).toBe(true);
+    expect(quranWorker.ready).toBe(false);
+    expect(statuses.at(-1)).toEqual(["error", "sqlite-wasm exploded"]);
+    detach();
+
+    const restarted = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const next = FakeWorker.last!;
+    const init = next.posted.find(
+      (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
+    )!;
+    next.emit("message", { id: init.id, ok: true, result: null });
+    await restarted;
+    expect(next).not.toBe(fake);
+    expect(quranWorker.ready).toBe(true);
   });
 
   it("dispose rejects in-flight requests and terminates the worker", async () => {

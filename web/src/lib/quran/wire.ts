@@ -199,10 +199,18 @@ export function decodeScript(raw: unknown): ArtifactSpec | null {
   if (!rec) return null;
   const id = rec.id;
   if (!isQuranSourceId(id)) return null;
-  const sizeBytes = Number(rec.sizeBytes);
+  const sizeBytes = positiveInteger(rec.sizeBytes);
   const sha256 = rec.sha256;
   const downloadUrl = rec.downloadUrl;
-  if (!sizeBytes || typeof sha256 !== "string" || typeof downloadUrl !== "string") return null;
+  if (
+    sizeBytes === null ||
+    typeof sha256 !== "string" ||
+    sha256.length === 0 ||
+    typeof downloadUrl !== "string" ||
+    downloadUrl.length === 0
+  ) {
+    return null;
+  }
   return { id, sizeBytes, sha256, downloadUrl };
 }
 

@@ -10,7 +10,6 @@ export type {
   QuranSurahText,
   SajdaKind,
   RangeEntry,
-  NavigationData,
   SajdaEntry,
   ArtifactSpec,
 } from "$lib/data/quran-types";

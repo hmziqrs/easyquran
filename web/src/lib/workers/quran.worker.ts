@@ -109,11 +109,6 @@ async function initialize(
   }
 
   ready = true;
-  const loaded = [...sources].map(([id, state]) => `${id}: ${state.store}`).join(", ");
-  console.info(
-    `[quran] offline engine ready (${loaded}); ` +
-      `surah 1 has ${readSurah(1).verses.length} verses`,
-  );
   status("ready");
 }
 
