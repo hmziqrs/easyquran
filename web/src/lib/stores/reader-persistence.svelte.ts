@@ -23,6 +23,7 @@ import {
   type ReaderCore,
   type ReaderMode,
 } from "./reader-core.svelte";
+import { applyReaderPresentation } from "./reader-presentation";
 
 const STORAGE_KEY = "easyquran.reader";
 
@@ -104,10 +105,12 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       const stored = decodeReader(readJSON(STORAGE_KEY));
       if (dirty) stored.current = undefined;
       applyPersisted(core.s, stored);
+      applyReaderPresentation(core.s.mode, core.s.fontSize);
       teardowns.push(
-        onStorageKey(STORAGE_KEY, () =>
-          applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY))),
-        ),
+        onStorageKey(STORAGE_KEY, () => {
+          applyPersisted(core.s, decodeReader(readJSON(STORAGE_KEY)));
+          applyReaderPresentation(core.s.mode, core.s.fontSize);
+        }),
       );
       teardowns.push(onPageHide(() => noteWriter.flush()));
       if (dirty) {

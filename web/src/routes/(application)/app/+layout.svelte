@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
   import { Nav } from "$lib/components/nav";
   import { Tweaks } from "$lib/components/tweaks";
   import { reader } from "$lib/stores/reader.svelte";
@@ -8,8 +9,13 @@
 
   onMount(() => {
     reader.hydrate();
+    document.documentElement.dataset.readerHydrated = "true";
   });
 </script>
+
+<svelte:head>
+  <link rel="preload" href={amiriArabic} as="font" type="font/woff2" crossorigin="anonymous" />
+</svelte:head>
 
 <div class="flex min-h-screen flex-col">
   <Nav />

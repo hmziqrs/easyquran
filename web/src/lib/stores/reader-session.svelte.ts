@@ -63,5 +63,10 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       persistence.writeNow();
       if (browser) window.scrollTo(0, 0);
     },
+    markRead(num: number, n: number): void {
+      if (core.s.lastRead?.num === num && core.s.lastRead.n === n) return;
+      core.s.lastRead = { num, n };
+      persistence.writeNow();
+    },
   };
 }

@@ -6,6 +6,7 @@ import {
   type ReaderMode,
 } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
+import { applyReaderPresentation } from "./reader-presentation";
 
 export function createReaderSettings(core: ReaderCore, persistence: ReaderPersistence) {
   return {
@@ -14,10 +15,12 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
     },
     bigger(): void {
       core.s.fontSize = Math.min(ARABIC_FONT_MAX, core.s.fontSize + ARABIC_FONT_STEP);
+      applyReaderPresentation(core.s.mode, core.s.fontSize);
       persistence.writeNow();
     },
     smaller(): void {
       core.s.fontSize = Math.max(ARABIC_FONT_MIN, core.s.fontSize - ARABIC_FONT_STEP);
+      applyReaderPresentation(core.s.mode, core.s.fontSize);
       persistence.writeNow();
     },
 
@@ -33,6 +36,7 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
     setMode(mode: ReaderMode): void {
       if (core.s.mode === mode) return;
       core.s.mode = mode;
+      applyReaderPresentation(core.s.mode, core.s.fontSize);
       persistence.writeNow();
     },
   };

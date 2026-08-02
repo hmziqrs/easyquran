@@ -14,6 +14,7 @@ describe("createReader — preserved public API", () => {
     expect(typeof r.toggleNote).toBe("function");
     expect(typeof r.setCurrent).toBe("function");
     expect(typeof r.openVerse).toBe("function");
+    expect(typeof r.markRead).toBe("function");
     expect(typeof r.bigger).toBe("function");
     expect(typeof r.smaller).toBe("function");
     expect(typeof r.setMode).toBe("function");
@@ -133,6 +134,8 @@ describe("createReader — behaviour", () => {
     r.openVerse(2, 255);
     expect(r.hasLastRead).toBe(true);
     expect(r.lastRead).toEqual({ num: 2, n: 255 });
+    r.markRead(2, 256);
+    expect(r.lastRead).toEqual({ num: 2, n: 256 });
   });
 
   it("two createReader() instances are isolated", () => {

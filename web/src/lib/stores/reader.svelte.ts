@@ -26,6 +26,7 @@ export interface ReaderApi {
   toggleNote(key: VerseKey): void;
   setCurrent(num: number): void;
   openVerse(num: number, n: number): void;
+  markRead(num: number, n: number): void;
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -93,6 +94,7 @@ export function createReader(): ReaderApi {
 
     setCurrent: (num: number) => session.setCurrent(num),
     openVerse: (num: number, n: number) => session.openVerse(num, n),
+    markRead: (num: number, n: number) => session.markRead(num, n),
 
     get arabicSizePx() {
       return settings.arabicSizePx;

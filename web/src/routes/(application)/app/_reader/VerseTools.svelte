@@ -7,7 +7,11 @@
   import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
 
-  let { text, vKey }: { text: string; vKey: string } = $props();
+  let {
+    text,
+    vKey,
+    onToggleNote,
+  }: { text: string; vKey: string; onToggleNote?: () => void } = $props();
 
   const tafsir = $derived(tafsirFor(vKey));
   const bookmarked = $derived(reader.isBookmarked(vKey));
@@ -96,7 +100,7 @@
       activeClass: sharedCopied ? "text-accent" : undefined,
     })}
     {@render verseAction({
-      onclick: () => reader.toggleNote(vKey),
+      onclick: () => (onToggleNote ? onToggleNote() : reader.toggleNote(vKey)),
       label: "Note & tafsir",
       ariaLabel: noteOpen ? "Close note and tafsir" : "Open note and tafsir",
       icon: "note",

@@ -18,7 +18,7 @@
   {/if}
 
   <SidebarInset>
-    <header class="sticky top-[60px] z-10 border-b border-line bg-bg/80 py-2.5 backdrop-blur-xl">
+    <header class="sticky top-[60px] z-10 min-h-[49px] border-b border-line bg-bg/80 py-2.5 backdrop-blur-xl">
       <Container class="max-w-[1180px] flex items-center gap-3">
         {#if mounted}
           <SidebarTrigger />
