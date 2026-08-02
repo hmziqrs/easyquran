@@ -90,7 +90,7 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
     if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
     const profile = resolveSourceProfile(spec.id, spec.sha256);
     status("downloading", sourceId);
-    const artifact = await ensureArtifact(spec, manifest.contentVersion, progressEmitter(spec));
+    const artifact = await ensureArtifact(spec, progressEmitter(spec));
     const database = openReadOnly(artifact.bytes);
     const runner = createWasmQueryRunner(database);
     const source = loadQuranSource(runner, profile);

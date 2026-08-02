@@ -1,4 +1,3 @@
-export const SEARCH_VERSION = "arabic-search-v2";
 export const MIN_QUERY_LEN = 3;
 export const MAX_QUERY_LEN = 64;
 export const DEFAULT_LIMIT = 20;

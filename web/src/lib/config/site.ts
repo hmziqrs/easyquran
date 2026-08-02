@@ -13,7 +13,6 @@ export const SITE = {
 
 import { env } from "$env/dynamic/public";
 import { dev } from "$app/environment";
-import { SEARCH_VERSION } from "$lib/quran/search/normalize";
 import {
   QuranDataEnvironment,
   resolveQuranArtifactBase,
@@ -41,8 +40,6 @@ export const QURAN = {
   apiBase: PUBLIC_API_BASE,
   dataEnvironment: QURAN_DATA_ENVIRONMENT,
   artifactBase: QURAN_ARTIFACT_BASE,
-  contentVersion: "32cc746d817cad9f",
-  searchVersion: SEARCH_VERSION,
   scripts: QURAN_ARTIFACTS,
 } as const;
 

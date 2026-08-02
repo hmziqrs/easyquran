@@ -210,17 +210,3 @@ export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
   }
   return out;
 }
-
-export interface DecodedVersion {
-  contentVersion: string | null;
-  searchVersion: string | null;
-}
-
-export function decodeVersionPayload(rawBody: unknown): DecodedVersion | null {
-  const data = asRecord(unwrapEnvelope(rawBody));
-  if (!data) return null;
-  return {
-    contentVersion: typeof data.contentVersion === "string" ? data.contentVersion : null,
-    searchVersion: typeof data.searchVersion === "string" ? data.searchVersion : null,
-  };
-}

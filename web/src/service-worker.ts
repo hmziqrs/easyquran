@@ -80,7 +80,7 @@ sw.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  if (url.pathname.startsWith("/quran/v1/")) return;
+  if (url.pathname.startsWith("/quran/")) return;
   if (url.pathname.startsWith("/_quran/")) return;
   if (url.hostname.endsWith("r2.easyquran.fyi")) return;
   if (url.pathname === "/firebase-config.js") return;

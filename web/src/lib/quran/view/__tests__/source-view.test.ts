@@ -10,7 +10,7 @@ import {
   type QuranSourceId as QuranSourceIdValue,
 } from "$lib/data/quran-types";
 import { buildCanonicalSearchCorpus, searchCanonicalCorpus } from "$lib/quran/search/corpus";
-import { SEARCH_VERSION, normalizeArabic, scalarLength } from "$lib/quran/search/normalize";
+import { normalizeArabic, scalarLength } from "$lib/quran/search/normalize";
 import { SearchHitKind, searchHitKey } from "$lib/quran/search/types";
 import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
 import { sourceProfile } from "$lib/quran/view/source-profiles";
@@ -116,14 +116,12 @@ describe("canonical web search corpus", () => {
     displayView: uthmani.view,
   });
 
-  it("uses v2 normalization for pasted Uthmani text", () => {
+  it("normalizes pasted Uthmani text to match simple-clean", () => {
     const uthmaniBasmala = uthmani.view.opener(1).text!;
-    expect(SEARCH_VERSION).toBe("arabic-search-v2");
     expect(normalizeArabic(uthmaniBasmala)).toBe(normalizeArabic(simple.view.opener(1).text!));
   });
 
   it("matches every committed canonical search fixture", () => {
-    expect(searchFixtures.searchVersion).toBe(SEARCH_VERSION);
     for (const fixture of searchFixtures.fixtures) {
       const normalized = normalizeArabic(fixture.query);
       const result = searchCanonicalCorpus(corpus, fixture.query);

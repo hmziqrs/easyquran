@@ -7,7 +7,6 @@ import {
   decodeScriptsPayload,
   decodeSearchHit,
   decodeSearchResponse,
-  decodeVersionPayload,
   unwrapEnvelope,
 } from "$lib/quran/wire";
 
@@ -141,16 +140,5 @@ describe("manifest wire", () => {
     expect(decodeScript(scripts[0])).toEqual(scripts[0]);
     expect(decodeScript({ ...scripts[0], id: "unknown" })).toBeNull();
     expect(decodeScriptsPayload({ data: { scripts } })).toEqual(scripts);
-  });
-
-  it("decodes version envelopes with nullable missing fields", () => {
-    expect(decodeVersionPayload({ data: { contentVersion: "c", searchVersion: "s" } })).toEqual({
-      contentVersion: "c",
-      searchVersion: "s",
-    });
-    expect(decodeVersionPayload({ contentVersion: "c" })).toEqual({
-      contentVersion: "c",
-      searchVersion: null,
-    });
   });
 });
