@@ -21,6 +21,9 @@
 /manifest.webmanifest
   Cache-Control: no-cache
 
+/quran-meta/*
+  Cache-Control: no-cache
+
 /*.html
   Cache-Control: no-cache
 

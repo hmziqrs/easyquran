@@ -122,6 +122,22 @@ class OfflineStore {
       }
       return;
     }
+    const cacheName = `eq-pack-${active.hash}`;
+    let intact = false;
+    try {
+      if (await caches.has(cacheName)) {
+        const staged = await caches.open(cacheName);
+        intact = (await staged.keys()).length === active.entries;
+      }
+    } catch {}
+    if (!intact) {
+      await clearActivePack().catch(() => {});
+      await caches.delete(cacheName).catch(() => {});
+      this.#activePack = null;
+      this.#mirror();
+      this.#status = "idle";
+      return;
+    }
     if (!this.#activePack || this.#activePack.hash !== active.hash) {
       this.#activePack = active;
       this.#mirror();

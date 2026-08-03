@@ -181,6 +181,10 @@ async function activate(): Promise<void> {
   await sw.clients.claim();
   const keys = await caches.keys();
   const priorExisted = keys.some((k) => /^eq-(app|precache)-/.test(k) && k !== APP_CACHE);
+  const prev = await metaGet<string>("installedVersion");
+  if (prev && prev !== version) {
+    await metaSet("maintenance", { cursor: null });
+  }
   await metaSet("installedVersion", version);
   if (priorExisted) announceTakeover();
 }
@@ -483,7 +487,8 @@ async function revalidateCache(cacheName: string, start: number, tag: string): P
   const cache = await caches.open(cacheName);
   const all = await cache.keys();
   const slice = all.slice(start).map((req, i) => ({ req, idx: start + i }));
-  let highwater = start;
+  const done = new Set<number>();
+  let contiguous = start;
   await pool(slice, MAINTENANCE_CONCURRENCY, async (item) => {
     try {
       const res = await fetch(item.req, { cache: "no-store" });
@@ -493,8 +498,9 @@ async function revalidateCache(cacheName: string, start: number, tag: string): P
     } catch {
       // keep stale on failure
     }
-    if (item.idx + 1 > highwater) highwater = item.idx + 1;
-    await metaSet("maintenance", { cursor: `${tag}:${highwater}` });
+    done.add(item.idx);
+    while (done.has(contiguous)) contiguous++;
+    await metaSet("maintenance", { cursor: `${tag}:${contiguous}` });
   });
 }
 

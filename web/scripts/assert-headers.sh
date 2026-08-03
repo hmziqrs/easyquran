@@ -24,9 +24,12 @@ else
 	fail_ "no /_app/immutable/* reference on /app — cannot verify immutable"
 fi
 
-contains "/_app/version.json is no-cache" "$(curl -sSI "$ORIGIN/_app/version.json")" 'no-cache'
-contains "HTML page (/app) is no-cache"   "$(curl -sSI -H 'Accept: text/html' "$ORIGIN/app")" 'no-cache'
-contains "/app/__data.json is no-cache"   "$(curl -sSI "$ORIGIN/app/__data.json")" 'no-cache'
+contains "/_app/version.json is no-cache"    "$(curl -sSI "$ORIGIN/_app/version.json")" 'no-cache'
+contains "/service-worker.js is no-cache"    "$(curl -sSI "$ORIGIN/service-worker.js")" 'no-cache'
+contains "/manifest.webmanifest is no-cache" "$(curl -sSI "$ORIGIN/manifest.webmanifest")" 'no-cache'
+contains "/quran-meta/quran-data.json is no-cache" "$(curl -sSI "$ORIGIN/quran-meta/quran-data.json")" 'no-cache'
+contains "HTML page (/app) is no-cache"      "$(curl -sSI "$ORIGIN/app")" 'no-cache'
+contains "/app/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/app/al-kahf/__data.json")" 'no-cache'
 
 robots_ok=0
 for p in /app.txt /app.md /index.txt /index.md; do
@@ -47,7 +50,7 @@ else
 	fail_ "no br/gzip content-encoding on /app"
 fi
 
-contains "unknown URL returns branded 404" "$(curl -sS "$ORIGIN/this-route-does-not-exist-easyquran-xyz")" 'Page not found'
+contains "unknown URL returns branded 404 shell" "$(curl -sS "$ORIGIN/this-route-does-not-exist-easyquran-xyz")" '__sveltekit'
 
 code=$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN/offline/manifest.json" || true)
 if [[ "$code" == "200" ]]; then

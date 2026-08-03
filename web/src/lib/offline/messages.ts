@@ -5,6 +5,7 @@ export const PREPARE_RELOAD = "PREPARE_RELOAD" as const;
 
 export const SW_BROADCAST_CHANNEL = "easyquran-sw";
 export const UPDATE_BROADCAST_CHANNEL = "easyquran-update";
+export const PREPARE_RELOAD_EVENT = "easyquran-prepare-reload";
 
 export type ClientToSwMessage =
   | { type: typeof SKIP_WAITING }

@@ -2,24 +2,16 @@
 	encode zstd gzip
 	root * /srv
 
+	header Cache-Control "no-cache"
+
 	@immutable path /_app/immutable/*
 	header @immutable Cache-Control "public, max-age=31536000, immutable"
 
 	@pack path_regexp ^/offline/pack\.[0-9a-f]+\.json$
 	header @pack Cache-Control "public, max-age=31536000, immutable"
 
-	@nocache {
-		path /_app/version.json /offline/manifest.json /service-worker.js /manifest.webmanifest
-		path /quran-meta/*
-		path_regexp /__data\.json$
-	}
-	header @nocache Cache-Control "no-cache"
-
 	@robots path *.md *.txt
 	header @robots X-Robots-Tag "noindex, follow"
-
-	@navigate header Accept *text/html*
-	header @navigate Cache-Control "no-cache"
 
 	handle_errors {
 		rewrite * /404.html

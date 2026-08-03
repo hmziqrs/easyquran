@@ -3,6 +3,7 @@ import { updated } from "$app/state";
 import { registerServiceWorker } from "$lib/boot/service-worker";
 import {
   PREPARE_RELOAD,
+  PREPARE_RELOAD_EVENT,
   SKIP_WAITING,
   SW_BROADCAST_CHANNEL,
   UPDATE_BROADCAST_CHANNEL,
@@ -152,6 +153,8 @@ class UpdateStore {
     try {
       window.sessionStorage.removeItem(RELOAD_GUARD);
     } catch {}
+    this.#waiting = false;
+    this.#mirrorWaiting();
     window.location.reload();
   }
 
@@ -160,6 +163,9 @@ class UpdateStore {
     if (waiting) {
       this.#armReloadGuard();
       this.#channel?.postMessage({ type: PREPARE_RELOAD });
+      try {
+        window.dispatchEvent(new CustomEvent(PREPARE_RELOAD_EVENT));
+      } catch {}
       waiting.postMessage({ type: SKIP_WAITING });
       return;
     }
