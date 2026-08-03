@@ -443,7 +443,6 @@ CREATE TABLE pack_meta (
     direction       TEXT NOT NULL,
     name            TEXT NOT NULL,
     translator      TEXT NOT NULL,
-    content_version TEXT NOT NULL,
     source_url      TEXT
 );
 
@@ -466,10 +465,6 @@ CREATE VIRTUAL TABLE verses_fts USING fts5(
 `pack_meta.schema_kind` prevents consumers from opening the wrong translation
 artifact type. These future translation packs are unrelated to the Arabic
 browser/search design and are not required for the Arabic MVP.
-
-`content_version` is derived from the catalog's `lastUpdate`, which is free-text
-English (`"April 24, 2011"`) and parses for all 115 entries; it is not a field
-that already exists in that form.
 
 Build gates:
 
@@ -510,7 +505,7 @@ Built pack sizes, measured across a full conversion of all 115 dumps
 Translation object keys:
 
 ```text
-quran/translations/<id>/<content-version>/<id>.sqlite
+quran/translations/<id>/<sha256>/<id>.sqlite
 ```
 
 Rules for every Arabic or translation database:
@@ -571,10 +566,9 @@ The translation catalog contains:
       "direction": "ltr",
       "name": "Saheeh International",
       "translator": "Saheeh International",
-      "contentVersion": "2011-04-24",
       "sizeBytes": 1048576,
       "sha256": "…",
-      "downloadUrl": "https://cdn.example/quran/translations/en.sahih/2011-04-24/en.sahih.sqlite"
+      "downloadUrl": "https://cdn.example/quran/translations/en.sahih/<sha256>/en.sahih.sqlite"
     }
   ]
 }

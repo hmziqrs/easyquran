@@ -153,8 +153,6 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 # roxmltree: pure-Rust DOM XML parser for the 77 KB quran-data.xml read once at boot (§8.3); not quick-xml (absent from the graph).
 roxmltree = "0.20"
-# blake3: content-version digest (§8.1) — blake3(uthmani ‖ simple-clean ‖ xml) leading 16 hex chars; one-shot at boot, performance-irrelevant.
-blake3 = "1.5"
 # Declared explicitly (both resolve transitively today) so the Quran store and shared search normalization own a stable version floor (§8.3).
 memchr = "2"
 unicode-normalization = "0.1"

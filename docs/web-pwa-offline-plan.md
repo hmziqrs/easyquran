@@ -64,8 +64,8 @@ Non-goals:
 | SW precache | `eq-precache-${version}` | `build` + `files` (excludes `quran-meta/`, `_headers`, `_redirects`, `robots.txt`, `og.png`) + `/404.html`. **No prerendered pages, not even `/`.** |
 | SW runtime cache | `eq-runtime-v1` | Stale-while-revalidate for other same-origin GETs. Never versioned, never swept, and cache keys keep query strings (SvelteKit's `__data.json?x-sveltekit-invalidated=…` params create duplicate entries). |
 | Navigations | `networkFirstNav()` | Network → cached copy → `404.html`. Successful navigations are cached **into the version-keyed precache**, so the "visited pages" library is wiped on every deploy. No network timeout. |
-| Quran databases | `web/src/lib/workers/opfs-cache.ts` | Downloaded from R2 (or `/_quran/` locally), sha256+size verified, stored in OPFS `easyquran/<contentVersion>/<id>.sqlite`, IDB fallback, in-memory last resort. `navigator.storage.persist()` requested. Old content-version directories are **never deleted**. |
-| Content versioning | `web/src/lib/quran/manifest.ts` | `contentVersion` / `searchVersion` from the API (`/version`, `/scripts`, 3 s timeout) with baked fallback — already offline-safe. |
+| Quran databases | `web/src/lib/workers/opfs-cache.ts` | Downloaded from R2 (or `/_quran/` locally), sha256+size verified, stored in OPFS `easyquran/<sha256>/<id>.sqlite` keyed by the per-file digest, IDB fallback, in-memory last resort. `navigator.storage.persist()` requested. The DBs are immutable, so the key never changes — there is no version axis to prune. |
+| Artifact manifest | `web/src/lib/quran/manifest.ts` | Fetches `/scripts` (3 s timeout) with baked fallback — the per-file `sha256` + size + `downloadUrl` of each source. Already offline-safe. |
 | App version file | `build/_app/version.json` | Emitted by SvelteKit (currently `{"version":"<build timestamp>"}`). **Unused**: no `kit.version` config, no polling, `updated` store never read. |
 | Deploy | `deploy/Dockerfile.web` | `caddy file-server` — **no Caddyfile, no Cache-Control on anything, no compression**. `static/_headers` / `_redirects` are Cloudflare Pages/Netlify conventions and are inert on Caddy. Interim by decision: replaced by an ISR-capable origin when translated SEO pages land (§6.3). |
 
@@ -104,8 +104,9 @@ Two conclusions fall out of the numbers:
 5. `quran-meta/quran-data.json` is only cached after the first `/app` visit
    (runtime SWR); it is deliberately excluded from the `files` precache but
    never explicitly added back.
-6. Old OPFS content-version directories and legacy IDB entries accumulate
-   forever.
+6. OPFS/IDB entries are keyed by each source's immutable `sha256`, so version
+   bumps no longer accumulate; a corrected artifact (the ~never case) would
+   strand its old digest-keyed entry.
 7. Unknown URLs return Caddy's unstyled 404 (the `404.html` SPA fallback is
    only used by the SW when offline).
 
@@ -118,16 +119,19 @@ Two conclusions fall out of the numbers:
 | Domain | Identity | Changes when | Invalidates |
 |---|---|---|---|
 | **App build** | `kit.version.name` → `_app/version.json` and `$service-worker`'s `version` | every deploy | SW precache (`eq-app-*`), triggers resumable page/data maintenance |
-| **Quran content** | `contentVersion` (API `/version` or baked constant) | ~never (corrected artifacts) | OPFS/IDB database entries |
-| **Search corpus** | `searchVersion` | search normalization changes | in-worker corpus rebuild |
+| **Quran content** | pinned per-file `sha256` (served on `/scripts`, baked into `source-profiles.ts`) | ~never (corrected artifacts) | OPFS/IDB database entries |
+| **Search corpus** | *(none)* — normalization rules are baked into the app at build time | a normalization-rule change (app deploy) | in-worker corpus rebuilds once per worker lifetime |
 | **Translation content** *(future)* | per-translation pack version (translations catalog) + the origin's ISR TTL for rendered pages | a translation pack is corrected / catalog changes | that translation's OPFS pack; ISR entries simply expire by TTL |
 
-An app deploy must **not** touch OPFS databases, and a content-version bump
-must not require an app deploy (the API manifest already delivers it). This
-separation already exists — preserve it. ISR extends the same principle:
-**freshness of translated pages is owned by the origin's TTL, not by the app
-version** — a deploy neither implies nor requires re-rendering them, and the
-SW never treats them as part of the app shell.
+An app deploy must **not** touch OPFS databases: each source is keyed by its
+immutable `sha256`, so a deploy shipping the same pinned digests re-uses the
+cached bytes verbatim. Arabic content identity *is* those pinned digests
+(`source-profiles.ts`), so a (theoretical) corrected artifact is an app-deploy
+event, not a runtime version bump — there is no `contentVersion` to deliver
+out-of-band. ISR extends the same principle: **freshness of translated pages
+is owned by the origin's TTL, not by the app version** — a deploy neither
+implies nor requires re-rendering them, and the SW never treats them as part
+of the app shell.
 
 ### 3.2 The proposed `version.json` — assessment
 
@@ -343,14 +347,13 @@ an update in one tab as accepting it for every open EasyQuran tab (§7):
 
 ### 4.4 Database storage hygiene (worker layer, not SW)
 
-After the worker reaches `ready` on `contentVersion` **V**:
-
-- OPFS: delete `easyquran/<anything ≠ V>/` directories.
-- IDB fallback store: delete keys not prefixed `V:`.
-
-One-shot, fire-and-forget, logged on failure. This is the only cache the app
-deletes outside the SW lifecycle, and only *after* the replacement is proven
-to load.
+Each source is stored at a digest-keyed path (`easyquran/<sha256>/<id>.sqlite`,
+IDB key `<sha256>:<id>`), and the DBs are immutable, so the key never changes
+and there is normally nothing to prune — one stable entry per source. A
+corrected artifact (the ~never case) would strand its old digest-keyed entry;
+accepted, since corrections are exceptional and there is no production
+installed base to migrate. No `contentVersion` axis and no `pruneOldVersions()`
+step exist.
 
 ### 4.5 The SPA shell, on both origins
 
@@ -676,12 +679,13 @@ shows no ready toast.
 Versioned app cache plus persistent page/data/meta caches; fail-closed shell-route
 precache (`/`, `/app`, the SPA shell of §4.5, `quran-data.json`, manifest);
 navigation timeout; reserved-parameter-only data-key normalization; resumable
-post-activation maintenance + metadata-backed trim; OPFS/IDB old-version cleanup.
+post-activation maintenance + metadata-backed trim; digest-keyed OPFS/IDB (no
+version axis).
 *Accept:* DevTools-offline: installed app launches to `/app`; a visited Surah
 renders; an *unvisited* Surah soft-navigates successfully after its data was
 cached by a prior session; after a deploy, previously visited pages still
-render offline (survived the version bump); OPFS contains exactly one
-content-version directory.
+render offline (survived the version bump); OPFS contains exactly one entry
+per source, keyed by its digest.
 
 **Phase 3 — full offline.**
 Pack build step + manifest, Settings UI with progress + storage estimate,
