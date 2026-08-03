@@ -211,8 +211,7 @@ web/src/lib/data/quran-coordinates.json
 ```
 
 There is no `v1` directory, schema-release namespace, split catalog/navigation
-file, or rolling snapshot. This is one immutable corpus asset. The source-version string inside provenance
-describes the upstream Tanzil input; it is not a version of this web format.
+file, or rolling snapshot. This is one immutable corpus asset.
 The `/quran-meta/` path avoids the existing `/_quran/` service-worker and local
 SQLite artifact behavior, and the file is excluded from service-worker precache
 so its first request remains lazy.
@@ -229,7 +228,7 @@ Conceptual shape:
 
 ```json
 [
-  ["sha256-of-quran-data.xml", "upstream-source-version", "source-license"],
+  ["sha256-of-quran-data.xml", "source-license"],
   [
     ["al-fatihah", "Al-Fatihah", "الفاتحة", "Al-Faatiha", "The Opening", 0, 7, 5, 1]
   ],
@@ -348,9 +347,11 @@ The web build does not compare against or hash XML afterward. JSON-only tests
 validate structure and immutable corpus totals. Replacing XML would be a new,
 explicit data migration with a new snapshot/provenance—not a recurring command.
 
-The Rust backend may continue hashing/parsing XML for its own `contentVersion`.
-The immutable web snapshot does not follow backend release versions and is not
-invalidated by an XML-only backend version change.
+The Rust backend may continue hashing/parsing XML for its own integrity
+anchor, the pinned sha256 digest surfaced on `/health/ready` as
+`sourceDigests` (there is no corpus `contentVersion`). The client metadata
+cache has its own schema and does not assume a backend digest invalidates a
+web snapshot.
 
 ---
 

@@ -13,9 +13,8 @@ pub const NO_STORE: &str = "no-store";
 
 const VARY: &str = "Accept-Encoding";
 
-/// Weak on purpose: compression varies bytes for an unchanged rep, so a strong validator would corrupt caches.
-pub fn weak_etag(content_version: &str, canonical_key: &str) -> String {
-    format!("W/\"{content_version}:{canonical_key}\"")
+pub fn weak_etag(tag: &str, canonical_key: &str) -> String {
+    format!("W/\"{tag}:{canonical_key}\"")
 }
 
 pub fn etag_matches(if_none_match: &str, etag: &str) -> bool {
@@ -39,12 +38,12 @@ pub fn if_none_match(headers: &HeaderMap) -> Option<&str> {
 
 pub fn respond_cached<T: Serialize + ?Sized>(
     body: &T,
-    content_version: &str,
+    tag: &str,
     canonical_key: &str,
     cache_control: &str,
     inm: Option<&str>,
 ) -> Response<Body> {
-    let etag = weak_etag(content_version, canonical_key);
+    let etag = weak_etag(tag, canonical_key);
     if let Some(inm) = inm {
         if etag_matches(inm, &etag) {
             return Response::builder()
@@ -67,7 +66,6 @@ pub fn respond_cached<T: Serialize + ?Sized>(
         .expect("200 response builds")
 }
 
-/// Distinct from `respond_cached`: /search's ETag folds `searchVersion`, not just `contentVersion`; merging cross-pollutes search caches.
 pub fn respond_cached_with_etag<T: Serialize + ?Sized>(
     body: &T,
     etag: &str,

@@ -1,6 +1,7 @@
 import { QURAN } from "$lib/config/site";
 import { loadQuranData } from "$lib/data/quran-data-client";
 import { verseKey } from "$lib/data/quran";
+import { quranApi } from "./api-client";
 import { quranWorker } from "./worker-client";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";
 import {
@@ -10,7 +11,6 @@ import {
   type SearchOpts,
   type SearchResponse,
 } from "./search/types";
-import { decodeSearchResponse, unwrapEnvelope } from "./wire";
 
 async function nameNumberFallback(query: string, opts: SearchOpts): Promise<SearchResponse> {
   const catalog = await loadQuranData();
@@ -61,26 +61,9 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
 
   if (QURAN.apiBase) {
     try {
-      const url = new URL(`${QURAN.apiBase}/search`);
-      url.searchParams.set("q", query);
-      url.searchParams.set("limit", String(opts.limit ?? DEFAULT_LIMIT));
-      url.searchParams.set("offset", String(opts.offset ?? DEFAULT_OFFSET));
-      const res = await fetch(url, { headers: { accept: "application/json" } });
-      if (res.ok) {
-        const body = await res.json();
-        const payload = decodeSearchResponse(unwrapEnvelope(body), validateCoordinate);
-        if (payload) {
-          return {
-            query,
-            total: payload.total ?? payload.results.length,
-            limit: payload.limit || DEFAULT_LIMIT,
-            offset: payload.offset || DEFAULT_OFFSET,
-            results: payload.results,
-            source: SearchProvider.Api,
-          };
-        }
-      }
-    } catch {}
+      return await quranApi.search(query, opts);
+    } catch {
+    }
   }
 
   return nameNumberFallback(query, opts);

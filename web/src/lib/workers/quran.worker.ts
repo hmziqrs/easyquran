@@ -9,8 +9,7 @@ import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
-import { QURAN_DB, QURAN_STORE, ROOT_DIR, ensureArtifact } from "./opfs-cache";
-import { pruneIdb, pruneOpfs } from "./storage";
+import { ensureArtifact } from "./opfs-cache";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
@@ -46,7 +45,6 @@ interface WorkerSourceState {
 const sources = new Map<QuranSourceId, WorkerSourceState>();
 let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
-let prunedOldVersions = false;
 
 function emit(message: WorkerOutbound): void {
   ctx.postMessage(message);
@@ -102,7 +100,7 @@ async function initialize(
     if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
     const profile = resolveSourceProfile(spec.id, spec.sha256);
     status("downloading", sourceId);
-    const artifact = await ensureArtifact(spec, manifest.contentVersion, progressEmitter(spec));
+    const artifact = await ensureArtifact(spec, progressEmitter(spec));
     const database = openReadOnly(artifact.bytes);
     const runner = createWasmQueryRunner(database);
     const source = loadQuranSource(runner, profile, coordinates);
@@ -118,22 +116,6 @@ async function initialize(
 
   ready = true;
   status("ready");
-  pruneOldVersions(manifest.contentVersion);
-}
-
-async function pruneOldVersions(contentVersion: string): Promise<void> {
-  if (prunedOldVersions) return;
-  prunedOldVersions = true;
-  try {
-    await pruneOpfs(ROOT_DIR, contentVersion);
-  } catch (err) {
-    console.warn("[quran.worker] OPFS prune failed", err);
-  }
-  try {
-    await pruneIdb(QURAN_DB, QURAN_STORE, contentVersion);
-  } catch (err) {
-    console.warn("[quran.worker] IDB prune failed", err);
-  }
 }
 
 function readSurah(num: number): QuranSurahText {

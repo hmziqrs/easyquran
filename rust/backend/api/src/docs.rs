@@ -6,8 +6,6 @@ use utoipa::OpenApi;
     components(schemas(
         crate::modules::quran_v1::dto::HealthReady,
         crate::modules::quran_v1::dto::SourceDigestsDto,
-        crate::modules::quran_v1::dto::VersionData,
-        crate::modules::quran_v1::dto::TranslationVersion,
         crate::modules::quran_v1::dto::Ayah,
         crate::modules::quran_v1::dto::AyahRange,
         crate::modules::quran_v1::dto::AyahsList,
@@ -31,7 +29,7 @@ use utoipa::OpenApi;
     info(
         title = "EasyQuran API",
         version = "1.0.0",
-        description = "EasyQuran — Quran content API (Arabic MVP). Public read-only surface under /quran/v1."
+        description = "EasyQuran — Quran content API (Arabic MVP). Public read-only surface under /quran."
     )
 )]
 pub struct ApiDoc;

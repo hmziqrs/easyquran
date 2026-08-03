@@ -6,6 +6,8 @@ import { QURAN_DATA } from "$lib/server/quran-data";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 
+vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
+
 type Listener = (e: unknown) => void;
 
 class FakeWorker {
@@ -43,8 +45,6 @@ class FakeWorker {
 }
 
 const MANIFEST: ResolvedManifest = {
-  contentVersion: "v1",
-  searchVersion: "s1",
   scripts: [
     {
       id: QuranSourceId.TanzilUthmani,

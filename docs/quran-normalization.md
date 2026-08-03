@@ -633,13 +633,14 @@ SearchHit = {
 ```
 
 The web adapter exposes the same union instead of requiring `ayah`, `key`, and
-`globalIndex` on every result. This is a **versioned breaking HTTP/client
-contract change** because the current Rust DTO requires `ayah: Ayah` and the
-current worker shape requires ayah identity. It ships with the corresponding
-`quran-api.md`, OpenAPI, decoder, component, and fixture changes.
-`SEARCH_VERSION` versions matching/cache semantics, not JSON shape: if
-`/quran/v1` has external consumers when this lands, the union requires a new
-HTTP API version rather than silently changing the v1 response.
+`globalIndex` on every result. The shipped `/quran/search` response already
+requires `kind` on every hit (today only `kind: "ayah"` is emitted; the
+`opener` arm is the deferred forward shape above), so the union is the contract,
+not a relaxation. The immutable anchor for cache identity is the pinned sha256
+digest surfaced on `/health/ready` — the Quran corpus is immutable, so there
+is no corpus or search label to bump. Any change to this contract lands
+as a coordinated update to `quran-api.md`, OpenAPI, decoder, component, and
+fixtures.
 
 Ordering is stable by `(anchorGlobal, rank)`: an opener uses the surah's
 `startGlobal` with rank 0; a numbered ayah uses its `globalIndex` with rank 1.
@@ -654,9 +655,10 @@ contiguous within either canonical unit, and a chapter-flag source could never
 match it. Pin this behavior in both implementations.
 
 Changing the indexed units from 6,236 raw rows to canonical ayahs plus openers
-changes both match attribution and some boundary-spanning matches, so it bumps
-`SEARCH_VERSION` to `arabic-search-v2` even without the query-normalization
-correction in §7.1.
+changes both match attribution and some boundary-spanning matches. The rule
+set is frozen and carries no label; correctness is pinned by the shared
+fixtures and the corpus sha256, not by bumping a tag, even before the
+query-normalization correction in §7.1.
 
 Both search implementations — `quran.worker.ts:152` and the Rust in-memory
 corpus — build their index from the same view, or the "same search behavior
@@ -702,7 +704,8 @@ The minimum coordinated correction for this pass is therefore:
 1. fold `ٱ → ا` and strip `ـ` in TypeScript;
 2. settle U+0670 identically in both runtimes — for the current simple-clean
    matching contract, retain the existing web behavior and drop it in Rust;
-3. bump `SEARCH_VERSION` from `arabic-search-v1` to `arabic-search-v2`;
+3. the normalization rule set is frozen — pin the change through the regenerated
+   fixtures and the corpus sha256 instead of bumping a label;
 4. regenerate `__fixtures__/queries.json` and consume the same fixture file from
    Rust tests, not only from web tooling;
 5. add the full Uthmani 1:1 string as a query fixture and assert it normalizes to
@@ -757,8 +760,10 @@ normalization: {
 `bodyStartScalar` is 0 when the numbered ayah is already the body. Source
 packaging remains internal unless a diagnostic endpoint needs it. The existing
 public `bismillah` field is not widened with storage variants; it is deprecated
-in favor of `openerKind`, then removed only in an explicitly versioned API
-revision. The search union in §7 ships in that same revision.
+in favor of `openerKind`. The descriptor is anchored by the corpus sha256 on
+`/health/ready`, not by any API or content label. The shipped `readSurah` and
+`range` endpoints already carry this descriptor on their `normalization` field
+(see `quran-api.md`).
 
 The three display paths apply the same rules:
 
@@ -913,13 +918,16 @@ through intact — a cut one position early or late would corrupt them visibly.
   Do not carry that assumption into the quran.com profiling — measure it.
 
 - Whether the second source becomes a published artifact or stays a
-  build/verification input. This decides whether `/quran/v1/scripts`,
-  `contentVersion`, and OPFS storage grow a third file.
+  build/verification input. This decides whether `/quran/scripts` and OPFS
+  storage grow a third file. The corpus is immutable, so identity is the
+  artifact sha256 only: the OPFS cache is keyed by that digest, and `/scripts`
+  lists each artifact by its content hash with no per-build path segment in
+  the download URL.
 - **Complete arbitrary Uthmani-paste search.** §7.1 deliberately fixes the
   demonstrated basmala failure and online/offline parity without pretending
   that U+0670 has one context-free mapping to simple-clean. Supporting every
-  copied Uthmani phrase needs a measured source-aware design and its own search
-  version.
+  copied Uthmani phrase needs a measured source-aware search design, not
+  another unreviewed one-character fold.
 
 ---
 

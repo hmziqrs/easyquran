@@ -1,11 +1,6 @@
-use std::sync::Arc;
-
 pub const VERSE_COUNT: u32 = 6236;
 pub const SURA_COUNT: usize = 114;
 pub const RESPONSE_CAP: u32 = 300;
-
-/// Bump when Arabic normalization semantics change — a stale value serves wrong search results behind cached ETags.
-pub const SEARCH_VERSION: &str = "arabic-search-v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -272,7 +267,6 @@ pub struct QuranStore {
     pub uthmani: Corpus,
     pub simple_clean: Corpus,
     pub meta: QuranMeta,
-    pub content_version: Arc<str>,
     pub source_digests: SourceDigests,
     pub artifacts: Artifacts,
     pub search: super::search::SearchIndex,
@@ -293,8 +287,8 @@ impl QuranStore {
     }
 
     #[inline]
-    pub fn content_version(&self) -> &str {
-        &self.content_version
+    pub fn etag_tag(&self) -> &str {
+        &self.source_digests.uthmani
     }
 
     #[inline]

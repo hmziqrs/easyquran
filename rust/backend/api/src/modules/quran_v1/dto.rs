@@ -1,20 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use crate::quran::{Bismillah, Place, SajdaKind, Script};
+use crate::quran::{Bismillah, Place, SajdaKind, Script, SurahNormalizationDto};
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Envelope<T: Serialize> {
     pub data: T,
-    pub content_version: String,
 }
 
 impl<T: Serialize> Envelope<T> {
-    pub fn new(data: T, content_version: impl Into<String>) -> Self {
-        Self {
-            data,
-            content_version: content_version.into(),
-        }
+    pub fn new(data: T) -> Self {
+        Self { data }
     }
 }
 
@@ -103,6 +99,25 @@ pub struct AyahsList {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct LeanAyah {
+    pub key: String,
+    pub surah: u16,
+    pub ayah: u16,
+    pub global_index: u32,
+    pub text: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RangeText {
+    pub ayahs: Vec<LeanAyah>,
+    pub normalizations: Vec<SurahNormalizationDto>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SuraDto {
     pub index: u16,
     pub ayah_count: u16,
@@ -173,28 +188,8 @@ pub struct SourceDigestsDto {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct TranslationVersion {
-    pub id: String,
-    pub content_version: String,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct VersionData {
-    pub api_version: String,
-    pub search_version: String,
-    pub source_digests: SourceDigestsDto,
-    pub translations: Vec<TranslationVersion>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct HealthReady {
     pub ready: bool,
-    pub content_version: String,
-    pub search_version: String,
     pub source_digests: SourceDigestsDto,
     pub verse_count: u32,
     pub surah_count: u16,
@@ -219,10 +214,19 @@ pub struct SearchResponse {
     pub results: Vec<SearchHit>,
 }
 
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum SearchHitKind {
+    Ayah,
+    Opener,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SearchHit {
+    pub kind: SearchHitKind,
     pub ayah: Ayah,
     /// Offsets are UTF-16 code units for JS consumers — not byte or char indices.
     pub highlights: Vec<Highlight>,
@@ -262,6 +266,16 @@ pub struct RangeAyahsQuery {
 pub struct ScriptQuery {
     #[serde(default)]
     pub script: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "openapi", derive(utoipa::IntoParams))]
+pub struct RangeTextQuery {
+    #[serde(default)]
+    pub from: Option<u32>,
+    #[serde(default)]
+    pub to: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Default)]

@@ -1,6 +1,6 @@
 export interface ByteStore {
-  get(version: string, key: string): Promise<Uint8Array<ArrayBuffer> | null>;
-  put(version: string, key: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean>;
+  get(tag: string, key: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  put(tag: string, key: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean>;
 }
 
 export function hasOpfs(): boolean {
@@ -10,16 +10,16 @@ export function hasOpfs(): boolean {
 export function createOpfsStore(rootDir: string): ByteStore {
   if (!hasOpfs()) throw new Error("OPFS is not available in this environment");
 
-  async function versionDir(version: string, create: boolean): Promise<FileSystemDirectoryHandle> {
+  async function tagDir(tag: string, create: boolean): Promise<FileSystemDirectoryHandle> {
     const root = await navigator.storage.getDirectory();
     const top = await root.getDirectoryHandle(rootDir, { create });
-    return top.getDirectoryHandle(version, { create });
+    return top.getDirectoryHandle(tag, { create });
   }
 
   return {
-    async get(version, key) {
+    async get(tag, key) {
       try {
-        const dir = await versionDir(version, false);
+        const dir = await tagDir(tag, false);
         const fh = await dir.getFileHandle(key);
         const file = await fh.getFile();
         return new Uint8Array(await file.arrayBuffer());
@@ -28,8 +28,8 @@ export function createOpfsStore(rootDir: string): ByteStore {
         throw err;
       }
     },
-    async put(version, key, bytes) {
-      const dir = await versionDir(version, true);
+    async put(tag, key, bytes) {
+      const dir = await tagDir(tag, true);
       const fh = await dir.getFileHandle(key, { create: true });
       const writable = await fh.createWritable();
       await writable.write(bytes);
@@ -61,14 +61,14 @@ function openIdb(dbName: string, storeName: string): Promise<IDBDatabase> {
 }
 
 export function createIdbStore(dbName: string, storeName: string): ByteStore {
-  const idbKey = (version: string, key: string): string => `${version}:${key}`;
+  const idbKey = (tag: string, key: string): string => `${tag}:${key}`;
   return {
-    async get(version, key) {
+    async get(tag, key) {
       try {
         const db = await openIdb(dbName, storeName);
         return await new Promise((resolve, reject) => {
           const tx = db.transaction(storeName, "readonly");
-          const req = tx.objectStore(storeName).get(idbKey(version, key));
+          const req = tx.objectStore(storeName).get(idbKey(tag, key));
           req.onsuccess = () =>
             resolve(req.result instanceof ArrayBuffer ? new Uint8Array(req.result) : null);
           req.onerror = () => reject(req.error);
@@ -77,12 +77,12 @@ export function createIdbStore(dbName: string, storeName: string): ByteStore {
         return null;
       }
     },
-    async put(version, key, bytes) {
+    async put(tag, key, bytes) {
       try {
         const db = await openIdb(dbName, storeName);
         await new Promise<void>((resolve, reject) => {
           const tx = db.transaction(storeName, "readwrite");
-          tx.objectStore(storeName).put(bytes.buffer, idbKey(version, key));
+          tx.objectStore(storeName).put(bytes.buffer, idbKey(tag, key));
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
         });
@@ -92,42 +92,4 @@ export function createIdbStore(dbName: string, storeName: string): ByteStore {
       }
     },
   };
-}
-
-export async function pruneOpfs(rootDir: string, keepVersion: string): Promise<void> {
-  if (!hasOpfs()) return;
-  const root = await navigator.storage.getDirectory();
-  const top = await root.getDirectoryHandle(rootDir);
-  for await (const [name] of top.entries()) {
-    if (name === keepVersion) continue;
-    try {
-      await top.removeEntry(name, { recursive: true });
-    } catch (err) {
-      console.warn(`[storage] pruneOpfs: failed to remove ${name}`, err);
-    }
-  }
-}
-
-export async function pruneIdb(dbName: string, storeName: string, keepVersion: string): Promise<void> {
-  try {
-    const db = await openIdb(dbName, storeName);
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      const req = store.openCursor();
-      req.onsuccess = () => {
-        const cursor = req.result;
-        if (!cursor) return;
-        const key = cursor.key;
-        if (typeof key === "string" && !key.startsWith(`${keepVersion}:`)) {
-          cursor.delete();
-        }
-        cursor.continue();
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn(`[storage] pruneIdb: failed`, err);
-  }
 }

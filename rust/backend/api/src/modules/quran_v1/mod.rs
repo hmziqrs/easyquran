@@ -13,6 +13,8 @@ pub fn routes() -> Router<AppState> {
         .route("/surahs", get(controller::list_surahs))
         .route("/surahs/{surah}", get(controller::get_surah))
         .route("/surahs/{surah}/ayahs", get(controller::surah_ayahs))
+        .route("/sources/{sourceId}/surah/{surah}", get(controller::source_surah))
+        .route("/sources/{sourceId}/range", get(controller::source_range))
         .route("/ayahs", get(controller::ayahs_multi))
         .route("/ayahs/{verseKey}", get(controller::ayah_key_redirect))
         .route("/ayahs/{surah}/{ayah}", get(controller::get_ayah))
@@ -35,7 +37,6 @@ pub fn routes() -> Router<AppState> {
         .route("/sajdas/{sajda}", get(controller::get_sajda))
         .route("/scripts", get(controller::scripts))
         .route("/random", get(controller::random))
-        .route("/version", get(controller::version))
         .route("/health/ready", get(controller::health_ready));
     #[cfg(feature = "openapi")]
     let r = r.route("/openapi.json", get(controller::openapi_json));

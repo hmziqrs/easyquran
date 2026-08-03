@@ -35,8 +35,8 @@ Standing constraints. Cited elsewhere by number — keep the numbering stable.
    the Uthmani verse text in the DOM.
 2. **Reuse the existing Arabic databases.**
    `quran-uthmani.sqlite` and `quran-simple-clean.sqlite` are downloaded from
-   the immutable CDN URLs advertised by `/quran/v1/scripts` and stored in an
-   OPFS directory named by the backend's `contentVersion`. The files are not
+   the immutable CDN URLs advertised by `/quran/scripts` and stored in an OPFS
+   directory named by the artifact's pinned `sha256` digest. The files are not
    altered and require no `meta` table.
 3. **Offline Arabic-reader parity.** Surah and ayah reads, arbitrary ayah
    batches and global ranges, juz/page/ruku/hizb-quarter/manzil navigation,
@@ -54,8 +54,7 @@ Standing constraints. Cited elsewhere by number — keep the numbering stable.
    helpers, and component-facing loaded-surah shape in
    `web/src/lib/data/quran.ts` remain stable.
 
-Operational resources such as health, OpenAPI, and version metadata remain
-online-only.
+Operational resources such as health and OpenAPI remain online-only.
 
 ---
 
@@ -130,13 +129,13 @@ BROWSER
 | Local Arabic reads | `sqlite-wasm` in a Web Worker | Open the two existing databases unchanged |
 | Local Arabic search | Worker in-memory array | Normalize and substring-scan simple-clean rows |
 | Navigation metadata | XML at backend startup; one immutable JSON in the web | Surah/range/sajda metadata without another database |
-| Persistent storage | OPFS | Keep both existing databases under `contentVersion` |
+| Persistent storage | OPFS | Keep both existing databases under their pinned `sha256` |
 | Artifact delivery | S3/CDN, advertised by Axum | Serve the two existing immutable files; Axum does not proxy them |
 | Asset caching | One Service Worker at `/` | Cache the app shell and WASM; leave SQLite to OPFS |
 
 ---
 
-## 4. Source invariants and `contentVersion`
+## 4. Source invariants and the digest
 
 The web build and backend consume the checked-in source files directly. There
 is no database builder and no generated SQLite artifact.
@@ -153,17 +152,16 @@ Invariants that must hold for every release:
 - Uthmani bismillah classification is exactly one first-ayah, 112 embedded
   prefixes, and one absent; the shadda variants at 95:1 and 97:1 are preserved;
 - the CDN identity-encoded byte length and SHA-256 for each file match what
-  `/quran/v1/scripts` advertises.
+  `/quran/scripts` advertises.
 
-The databases deliberately have no internal EasyQuran version field. Their
-enclosing `contentVersion` is computed by the backend from:
+The databases deliberately carry no internal EasyQuran release tag; the Quran
+corpus is immutable and the project does not tag it. Their identity is the
+pinned SHA-256 digest of their bytes — `sourceDigests.uthmani` and
+`sourceDigests.simpleClean` — surfaced on `/health/ready`. The digest is a
+content hash, not a release label.
 
-```text
-BLAKE3(uthmani bytes || simple-clean bytes || XML bytes)[0..16 hex]
-```
-
-The browser uses that value as the OPFS directory name and validates each
-download against its advertised `sizeBytes` and `sha256`. When `contentVersion`
+The browser uses that digest as the OPFS directory name and validates each
+download against its advertised `sizeBytes` and `sha256`. When the digest
 changes, it downloads both current files into a new directory before promoting
 it.
 
@@ -182,8 +180,8 @@ The two web-facing jobs:
   running backend during `vite build`. A server-only loader reads the compact
   one Quran data snapshot solely to select the route data; the full snapshot
   does not enter HTML, Svelte page data, or initial browser JavaScript.
-- **Live JSON.** `/quran/v1` serves Arabic reads, range metadata, normalized
-  substring search, and live translations. `/quran/v1/scripts` advertises the
+- **Live JSON.** `/quran` serves Arabic reads, range metadata, normalized
+  substring search, and live translations. `/quran/scripts` advertises the
   immutable CDN URLs, sizes, and checksums.
 
 Crawlers do not depend on client WASM. Prerendered Uthmani HTML is the SEO and
@@ -198,11 +196,12 @@ synchronous access handles are Worker-only. The Worker opens both source
 databases read-only — Uthmani for the reader, simple-clean when that script is
 requested and to initialize search — keeping their existing `quran_text` schema.
 
-**Persistence and version changes.**
+**Persistence and digest changes.**
 
-1. Compare `/quran/v1/version.contentVersion` with the active OPFS directory.
+1. Compare the pinned digest from `/health/ready`'s `sourceDigests` with the
+   active OPFS directory (named by the digest).
 2. If both files are present and valid there, open them.
-3. Otherwise fetch `/quran/v1/scripts`, download both files directly from their
+3. Otherwise fetch `/quran/scripts`, download both files directly from their
    CDN URLs with identity encoding, and stream them into a temporary directory.
 4. Verify each final byte count and SHA-256.
 5. Open both read-only and run a minimal schema/row-count check.
@@ -221,7 +220,7 @@ Prerendered verses are serialized into `page.data` so hydration matches the DOM
 byte-for-byte; the already-painted surah is not re-queried. `reader.svelte.ts`
 keeps a per-open-surah synchronous verse cache so helpers like `verseText`,
 `copyVerse`, `bookmarkList.text`, and `durationFor` work without a Worker
-round-trip. Async navigation is guarded by a request/version token so a stale
+round-trip. Async navigation is guarded by a request token so a stale
 response cannot overwrite the selected surah.
 
 **API adapter.** The web owns slugs; Axum accepts numeric identifiers `1..=114`.
@@ -260,17 +259,17 @@ for before-cache complete-surah fallback because the largest surah has 286 ayahs
 ## 8. Search
 
 One algorithm, two implementations — normalize every simple-clean verse with
-`searchVersion` rules, substring match, return ascending `globalIndex` order.
-Online, Rust builds the normalized array at startup; offline, the Worker reads
-all 6,236 rows once and builds the same array.
+the frozen normalization rules, substring match, return ascending `globalIndex`
+order. Online, Rust builds the normalized array at startup; offline, the Worker
+reads all 6,236 rows once and builds the same array.
 
 `quran-normalization.md` owns the normalization rules themselves. What this
 document fixes is the parity contract: both sides share fixtures and rules, and
 enforce the same query length, `limit`, `offset`, phrase/subsequence semantics,
 and ordering. A fixed query suite must return identical ordered verse keys
 online and offline. Highlighting may differ internally but cannot change the
-match set. A normalization change bumps `searchVersion` and ships new Rust and
-web code; it never modifies or rebuilds a SQLite file.
+match set. A normalization change ships new Rust and web code; it never modifies
+or rebuilds a SQLite file.
 
 No FTS extension, FTS table, token query language, or search database exists.
 
@@ -278,11 +277,11 @@ No FTS extension, FTS table, token query language, or search database exists.
 
 ## 9. Offline and caching
 
-- OPFS holds both existing Arabic SQLite files under the active
-  `contentVersion`.
+- OPFS holds both existing Arabic SQLite files under the pinned `sha256`
+  digest.
 - One Service Worker at `/` caches the same-origin shell, HTML, JS/CSS, and
   WASM, and handles Firebase Messaging push natively (no `importScripts`).
-- The Service Worker passes `/quran/v1/**` through and does not Cache-Storage
+- The Service Worker passes `/quran/**` through and does not Cache-Storage
   cache either CDN SQLite file; OPFS is their sole browser-persistent copy.
 - It excludes `/firebase-config.js` so FCM configuration cannot become stale.
 - Translation routes, translation-bearing Arabic requests, and translation-pack
@@ -325,17 +324,18 @@ not request or store them. Translation search, if added, is backend-only.
 
 ---
 
-## 12. Release/version handshake
+## 12. Release and digest handshake
 
-1. Validate the three authoritative inputs and compute `contentVersion`.
+1. Validate the three authoritative inputs and pin their SHA-256 digests
+   (`sourceDigests.uthmani` / `.simpleClean`).
 2. Upload the two SQLite files unchanged to their never-overwritten CDN keys.
 3. Deploy the API, which verifies both CDN objects before `/scripts` advertises
    them.
 4. Build SSG from the same checked-in Uthmani database and XML. SSG does not
-   independently calculate or declare a version.
-5. At hydration, read `contentVersion` from `/quran/v1/version` and compare it
-   with the active OPFS directory. On mismatch, keep the prerendered page
-   internally consistent while both files download and validate, then switch as
-   one unit.
+   independently compute or declare a digest.
+5. At hydration, read the digest from `/health/ready`'s `sourceDigests` and
+   compare it with the active OPFS directory. On mismatch, keep the prerendered
+   page internally consistent while both files download and validate, then
+   switch as one unit.
 6. Retain still-supported immutable objects so older web bundles can continue or
    safely use live JSON.

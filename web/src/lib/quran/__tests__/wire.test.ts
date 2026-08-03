@@ -8,7 +8,6 @@ import {
   decodeScriptsPayload,
   decodeSearchHit,
   decodeSearchResponse,
-  decodeVersionPayload,
   unwrapEnvelope,
 } from "$lib/quran/wire";
 import { QURAN_DATA } from "$lib/server/quran-data";
@@ -206,16 +205,5 @@ describe("manifest wire", () => {
     expect(decodeScript({ ...scripts[0], sizeBytes: -1 })).toBeNull();
     expect(decodeScript({ ...scripts[0], sizeBytes: "1" })).toBeNull();
     expect(decodeScriptsPayload({ data: { scripts } })).toEqual(scripts);
-  });
-
-  it("decodes version envelopes with nullable missing fields", () => {
-    expect(decodeVersionPayload({ data: { contentVersion: "c", searchVersion: "s" } })).toEqual({
-      contentVersion: "c",
-      searchVersion: "s",
-    });
-    expect(decodeVersionPayload({ contentVersion: "c" })).toEqual({
-      contentVersion: "c",
-      searchVersion: null,
-    });
   });
 });

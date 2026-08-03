@@ -11,7 +11,6 @@ import {
 } from "../src/lib/quran/search/corpus.ts";
 import {
   DEFAULT_LIMIT,
-  SEARCH_VERSION,
   normalizeArabic,
   scalarLength,
 } from "../src/lib/quran/search/normalize.ts";
@@ -107,7 +106,7 @@ mkdirSync(path.dirname(SEARCH_OUT), { recursive: true });
 mkdirSync(path.dirname(VIEW_OUT), { recursive: true });
 writeFileSync(
   SEARCH_OUT,
-  JSON.stringify({ searchVersion: SEARCH_VERSION, fixtures }, null, 2) + "\n",
+  JSON.stringify({ fixtures }, null, 2) + "\n",
 );
 writeFileSync(VIEW_OUT, JSON.stringify({ sources: sourceViews }, null, 2) + "\n");
 console.log(

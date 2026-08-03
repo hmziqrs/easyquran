@@ -4,6 +4,9 @@ import type {
   QuranRangeText,
   QuranSurahText,
 } from "$lib/data/quran-types";
+import { QURAN } from "$lib/config/site";
+import { quranApi } from "./api-client";
+import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
@@ -156,13 +159,16 @@ export const quranWorker = {
   },
 
   readSurah(num: number): Promise<QuranSurahText> {
-    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num })).then(
-      (raw: unknown) => {
+    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num }))
+      .then((raw: unknown) => {
         const decoded = decodeQuranSurahText(raw);
         if (!decoded) throw new Error("quran worker returned a malformed surah");
         return decoded;
-      },
-    );
+      })
+      .catch((err) => {
+        if (QURAN.apiBase) return quranApi.readSurah(DEFAULT_QURAN_SOURCE_PLAN.reader, num);
+        throw err;
+      });
   },
 
   readRange(
