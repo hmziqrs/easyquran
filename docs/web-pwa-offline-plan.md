@@ -117,7 +117,7 @@ Two conclusions fall out of the numbers:
 
 | Domain | Identity | Changes when | Invalidates |
 |---|---|---|---|
-| **App build** | `kit.version.name` → `_app/version.json` and `$service-worker`'s `version` | every deploy | SW precache (`eq-app-*`), triggers page/data revalidation sweeps |
+| **App build** | `kit.version.name` → `_app/version.json` and `$service-worker`'s `version` | every deploy | SW precache (`eq-app-*`), triggers resumable page/data maintenance |
 | **Quran content** | `contentVersion` (API `/version` or baked constant) | ~never (corrected artifacts) | OPFS/IDB database entries |
 | **Search corpus** | `searchVersion` | search normalization changes | in-worker corpus rebuild |
 | **Translation content** *(future)* | per-translation pack version (translations catalog) + the origin's ISR TTL for rendered pages | a translation pack is corrected / catalog changes | that translation's OPFS pack; ISR entries simply expire by TTL |
@@ -141,8 +141,10 @@ interval, and embeds the same string into the service worker bundle as
 `version`. We adopt the proposal by configuring that mechanism rather than
 building a parallel one:
 
-- `kit.version.name` becomes `"<package.json version>+<build ref>"` — the
-  package version is the human-facing release, exactly as proposed.
+- `kit.version.name` becomes `"<release tag>+<build ref>"` in deployed images.
+  If a non-container build supplies only `BUILD_REF`, `web/package.json`
+  supplies the release part; a direct build with neither variable uses
+  SvelteKit's default version identity.
 - The no-cache header requirement is real and is **currently unmet** (Caddy
   sends no headers at all) — fixed in §6.
 
@@ -150,11 +152,13 @@ building a parallel one:
 "fetch version → if changed, invalidate → refetch" loop is strictly worse than
 the SW lifecycle that already ships:
 
-- *Atomicity.* The SW `install` step downloads the complete new precache while
-  the old one keeps serving; `activate` swaps and deletes old caches in one
-  step. A manual boot-time purge has a window where the old cache is gone and
-  the new one is partial — a refresh mid-purge strands the user, and offline
-  users who purge on a stale version flag would delete their only working copy.
+- *Atomicity.* The SW `install` step downloads and verifies the complete new
+  precache while the old one keeps serving; a failed fetch rejects the install,
+  so the old worker remains active. Activation changes control only after that
+  invariant holds. A manual boot-time purge has a window where the old cache is
+  gone and the new one is partial — a refresh mid-purge strands the user, and
+  offline users who purge on a stale version flag would delete their only
+  working copy.
 - *No boot penalty.* Boot never blocks on a network check; the version poll is
   a background concern.
 - *Free change detection.* A new `version.name` changes the compiled SW bytes;
@@ -173,32 +177,71 @@ In `web/vite.config.ts`, inside the existing `sveltekit({ … })` options:
 import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-// BUILD_REF: git short SHA in CI/cron deploys; Docker has no .git, so wire it
-// through Dockerfile.web (an ARG REVISION already exists). Falls back to build
-// time so two builds of the same pkg version can never collide.
-const buildRef = process.env.BUILD_REF ?? Date.now().toString(36);
+const release = process.env.BUILD_VERSION ?? pkg.version;
+const buildRef = process.env.BUILD_REF;
 
 sveltekit({
   version: {
-    name: `${pkg.version}+${buildRef}`,
+    // SvelteKit requires an explicitly supplied name to be deterministic.
+    // Local builds without BUILD_REF use SvelteKit's own build-timestamp default.
+    ...(buildRef ? { name: `${release}+${buildRef}` } : {}),
     pollInterval: 5 * 60_000, // long-lived reader tabs learn about deploys
   },
   // …existing serviceWorker/adapter config
 });
 ```
 
-`deploy/Dockerfile.web` passes it through:
+`deploy/Dockerfile.web` must declare and export both arguments in the **build
+stage, before** `pnpm --filter web build` (Docker arguments are stage-scoped).
+They may be redeclared in the final stage for OCI labels:
 
 ```dockerfile
-ARG REVISION=unknown
+FROM node:24-slim AS build
+# …
+ARG VERSION=dev
+ARG REVISION
+ENV BUILD_VERSION=${VERSION}
 ENV BUILD_REF=${REVISION}
+RUN test -n "$BUILD_REF" || { echo "REVISION build-arg is required for container builds" >&2; exit 1; }
+RUN pnpm install && pnpm --filter web build
+
+FROM caddy:2-alpine
+ARG VERSION=dev
+ARG REVISION=unknown
+# …OCI labels only; this declaration cannot affect the build stage
+```
+
+`docker-compose.yml` passes `REVISION` alongside the existing `VERSION`, and
+`deploy/deploy.sh` exports the checked-out commit before building:
+
+```yaml
+args:
+  VERSION: ${VERSION:-dev}
+  REVISION: ${REVISION:?REVISION must be set for a container build}
+```
+
+```bash
+export VERSION="$LATEST_TAG"
+export REVISION="$(git rev-parse --short=12 HEAD)"
 ```
 
 Notes:
 
-- The suffix is mandatory. Tag-driven deploys (`deploy.sh`) bump the package
-  version, but manual `docker compose up --build` runs must still produce a
-  distinct version or caches never bust.
+- The suffix is mandatory for container builds. `deploy.sh` supplies both the
+  release tag and commit; it does **not** rely on `web/package.json` being
+  bumped. Run a manual build as
+  `REVISION="$(git rev-parse --short=12 HEAD)" docker compose up --build`.
+  If building modified uncommitted sources, supply an explicit unique suffix
+  such as `<sha>-local1`; two different outputs must never share a version.
+- **Dokploy:** it runs `docker compose up` from its own checkout and does not
+  export `REVISION`, so the compose `:?` guard fails that build by design.
+  Add `REVISION` (the deployed commit) in the Dokploy application's
+  Environment tab, and note this in `deploy/README.md`'s Dokploy section when
+  this lands.
+- Do not use `Date.now()` or randomness as an explicit `version.name` fallback.
+  SvelteKit's [configuration contract](https://svelte.dev/docs/kit/configuration#version)
+  requires configured names to be deterministic. Omitting `name` for a direct
+  local build deliberately delegates to SvelteKit's default.
 - Poll is belt; add braces: call `updated.check()` on
   `visibilitychange → visible` (a tab resumed after days should not wait up to
   5 minutes) and call `registration.update()` at the same moment so the SW
@@ -217,10 +260,23 @@ path, same push handlers) and changes its cache layout and routing.
 |---|---|---|---|
 | `eq-app-${version}` | yes | `build` + `files` + shell routes: `/`, `/app`, the SPA shell (§4.5) + `/quran-meta/quran-data.json` + `/manifest.webmanifest` | The app shell. Version-keyed so a deploy is an atomic swap; immutable assets never revalidate. |
 | `eq-pages-v1` | **no** | HTML of successfully fetched navigations | The "pages I visited stay readable" library. Survives deploys (fixes §2.3-3). |
-| `eq-data-v1` | **no** | `__data.json` responses (and the offline pack contents, §5) | Powers offline SPA navigation to any cached route. Survives deploys. |
+| `eq-data-v1` | **no** | `__data.json` responses encountered during normal navigation | The visited runtime-data library. Survives deploys and takes precedence over the optional pack. |
+| `eq-pack-<hash>` | content-addressed | Tier-2 `__data.json` responses synthesized from one downloaded pack (§5) | Isolates explicit downloads from runtime entries, permits fail-closed staging, and makes disable an exact cache deletion. Only the hash named by `eq-meta-v1` is active. |
+| `eq-meta-v1` | **no** | Active pack hash, pack state, page/data recency, maintenance cursor, and per-client app-version acknowledgements | Small SW-readable bookkeeping. Do not use `localStorage` as the source of truth because service workers cannot read it. |
 
-`activate` deletes every cache not in this set — which automatically migrates
-existing users off `eq-precache-*` / `eq-runtime-v1`.
+**Install invariant:** all required `eq-app-${version}` entries must be present
+before installation succeeds. Replace the current `Promise.allSettled` behavior
+with `cache.addAll()` or an equivalent `Promise.all()` that rejects on a failed
+fetch, non-2xx response, or `cache.put()`. On failure, delete the partial new
+cache and rethrow so the previous worker and cache stay active. This is what
+makes the app-cache update atomic; it is also a required fault-injection test.
+
+Previous `eq-app-*` caches and the legacy `eq-precache-*` / `eq-runtime-v1`
+caches are retained through the multi-tab handoff (§4.3). After every old client
+has moved, migrate missing cached navigation HTML and `__data.json` entries into
+the new persistent caches before deleting the legacy names; never overwrite a
+newer entry. Persistent page/data caches and the active pack are never deleted
+merely because the app version changed.
 
 ### 4.2 Request routing
 
@@ -228,12 +284,12 @@ existing users off `eq-precache-*` / `eq-runtime-v1`.
 |---|---|
 | non-GET | pass through |
 | `/quran/v1/*`, `/_quran/*`, `*.r2.easyquran.fyi`, `/firebase-config.js`, `/translations/*` | pass through (unchanged; the worker layer owns DB caching) |
-| `/_app/version.json`, `/service-worker.js` | pass through — the update detectors must never be SW-cached |
+| `/_app/version.json`, `/service-worker.js`, `/offline/manifest.json`, `/offline/pack.*.json` | network-only/pass through — detectors and the bulk-transfer artifact must never enter Cache Storage as ordinary runtime entries. Fetch the pack with `cache: "no-store"`; its expanded route responses are the persistent copy. |
 | `/_app/immutable/*` | cache-first in `eq-app-*` (content-hashed, safe forever) |
 | navigations (`request.mode === "navigate"`) | network-first **with a ~3.5 s timeout** → `eq-app-*` shell-route match → `eq-pages-v1` match → the SPA shell (§4.5). Successful responses are written to `eq-pages-v1`. |
-| translated reader routes *(future ISR; URL scheme TBD in `quran-translations.md` deferred-8)* | same navigation strategy — network-first into `eq-pages-v1` — but **never precached, never in the tier-2 pack**. The origin's TTL is the freshness authority; the SW copy is only an offline last-known-good. **Hard requirement on the future URL scheme:** translated routes must be distinguished by *path* (e.g. `/app/<surah>/tr/<id>`), not by query string — the SW routes them differently and `eq-data-v1` strips query strings, so a `?tr=` scheme would collapse translated and Arabic data onto one cache key. |
-| `*/__data.json` | stale-while-revalidate in `eq-data-v1`, **keys normalized by stripping the query string** (`x-sveltekit-invalidated=…` currently fragments the cache). ISR routes' data responses follow the navigation rule above, not SWR. |
-| other same-origin GET | stale-while-revalidate in `eq-app-*`'s runtime section — practically: icons, favicons, og image; small and safe to re-fetch per version |
+| translated reader routes *(future ISR; URL scheme TBD in `quran-translations.md` deferred-8)* | same navigation strategy — network-first into `eq-pages-v1` — but **never precached, never in the tier-2 pack**. The origin's TTL is the freshness authority; the SW copy is only an offline last-known-good. **Hard requirement on the future URL scheme:** translated routes must be distinguished by *path* (e.g. `/app/<surah>/tr/<id>`), not by query string, so the SW can select the ISR strategy without interpreting product query parameters. |
+| prerendered `*/__data.json` | stale-while-revalidate in `eq-data-v1`; on a runtime miss, fall back to the active `eq-pack-<hash>`. Normalize only SvelteKit's reserved `x-sveltekit-invalidated` parameter, not the entire query string. Preserve application query parameters and the trailing-slash marker. ISR routes' data responses use their exact request key and follow the network-first rule above, not SWR. |
+| other same-origin GET | stale-while-revalidate in `eq-app-*`'s runtime section — practically: icons, favicons, og image; small and safe to re-fetch per version. Never store a response whose `Cache-Control` contains `no-store`. |
 
 Details that make this bulletproof rather than merely plausible:
 
@@ -243,27 +299,47 @@ Details that make this bulletproof rather than merely plausible:
   (§4.5 defines what "the shell" is on each origin.)
 - **Navigation timeout.** Today's network-first blocks on lie-fi until the
   browser gives up. 3.5 s then cache keeps repeat visits usable on bad
-  connections without making fresh content unreachable (a later `activate`
-  sweep refreshes the stale copy).
+  connections without making fresh content unreachable (post-activation
+  maintenance refreshes the stale copy later).
 - **Stale HTML degrades to readable, not broken.** After a deploy, a cached
   page in `eq-pages-v1` references immutable chunks that no longer exist.
   Offline, scripts fail to load — but the page is fully server-rendered
   Arabic text with working plain links. Readable > hydrated. Online, the
-  revalidation sweep (below) replaces it before this matters.
+  resumable maintenance job (below) replaces it before this matters.
 
-### 4.3 `activate` sweeps (the "if the version changed" half of the proposal)
+### 4.3 Activation and post-activation maintenance
 
-On activation of a new version, after old caches are deleted:
+Service-worker activation is scope-wide, not tab-local: `skipWaiting()` activates
+the new worker and [`clients.claim()`](https://developer.mozilla.org/en-US/docs/Web/API/Clients/claim)
+transfers every live client in scope. The update flow therefore treats accepting
+an update in one tab as accepting it for every open EasyQuran tab (§7):
 
-1. **Revalidate `eq-pages-v1` and `eq-data-v1` in the background** — iterate
-   `cache.keys()`, refetch each entry (small concurrency, e.g. 6; abort the
-   sweep silently if offline), replace on success, keep the stale copy on
-   failure. The offline library converges to the new build without the user
-   revisiting anything, and without ever deleting the only copy.
-2. **Trim `eq-pages-v1`** to a sane bound (e.g. 300 entries, oldest-first) so
-   a completionist reader doesn't accrete 40 MB of HTML they'll never re-open.
-   `eq-data-v1` is bounded by the site itself (≤ 8.3 MB) — no trim needed.
-3. `clients.claim()` (unchanged).
+1. **Activate only a complete app cache.** The install invariant in §4.1 has
+   already proven every required entry. Activation calls `clients.claim()` and
+   announces the new `version` to every window client. It does **not** delete
+   older `eq-app-*` or legacy cache names yet.
+2. **Reload every live tab once.** Each client synchronously persists its reader
+   position, sets a per-tab reload guard, and reloads on the update-takeover
+   message or `controllerchange`. A first-ever SW install does not trigger this
+   flow; the worker announces a takeover only when a prior `eq-app-*` or legacy
+   `eq-precache-*` cache was present.
+3. **Acknowledge the new build.** After boot, each client posts
+   `{ type: "APP_READY", version }`. `eq-meta-v1` records acknowledgements by
+   `Client.id` and prunes IDs no longer returned by `clients.matchAll()`. Only
+   when every live window client reports the current version may the SW migrate
+   missing navigation HTML and data entries from legacy cache names (never
+   overwrite a newer persistent entry), then delete those names and older
+   `eq-app-*` caches. A frozen tab can delay cleanup, costing temporary storage
+   but never losing its runnable build.
+4. **Run maintenance outside `activate`.** The first ready client asks the SW to
+   revalidate `eq-pages-v1` and runtime-only `eq-data-v1` with small concurrency
+   (e.g. 6). Store a cursor in `eq-meta-v1` so termination or lost connectivity
+   is harmless and the next ready client can resume. Replace only on success and
+   keep the stale copy on failure. Never sweep `eq-pack-*` entry-by-entry; §5's
+   manifest/hash protocol owns pack freshness.
+5. **Trim `eq-pages-v1`** to a sane bound (e.g. 300 entries). Record
+   `lastUsedAt` in `eq-meta-v1`; Cache Storage does not provide a portable LRU
+   timestamp. `eq-data-v1` remains bounded by the set of prerendered routes.
 
 ### 4.4 Database storage hygiene (worker layer, not SW)
 
@@ -317,36 +393,57 @@ non-atomic. Instead the build emits one artifact:
   ```jsonc
   {
     "version": 1,
-    "appVersion": "0.3.2+a1b2c3d",     // informational
     "entries": { "/app/al-kahf/__data.json": 0, … },  // route → index
     "bodies": [ /* raw __data.json strings */ ]
   }
   ```
 
-- …plus `build/offline/manifest.json` (`{ "pack": "/offline/pack.<hash>.json", "bytes": … }`),
-  served no-cache. The pack itself is content-hashed → served immutable.
+- The generator sorts normalized route keys before serialization so identical
+  route data produces byte-identical output on every filesystem. Do **not** put
+  app/build identity inside this artifact: it would change the content hash on
+  every deploy. If useful for diagnostics, put `appVersion` in the unhashed
+  manifest instead.
+- …plus `build/offline/manifest.json`
+  (`{ "pack": "/offline/pack.<hash>.json", "bytes": …, "entries": 1308,
+  "appVersion": "0.3.2+a1b2c3d" }`), served `no-cache`. The pack itself is
+  content-hashed → served immutable.
 - **The hash makes re-downloads nearly free.** `__data.json` bodies change only
   when the Quran data derivation or a route's load shape changes — not on
-  ordinary deploys. Same hash → the pack already in `eq-data-v1`'s bookkeeping
-  is still valid → the "re-download on update" step is a no-op manifest check.
+  ordinary deploys. Same hash → the active `eq-pack-<hash>` is still valid → the
+  "re-download on update" step is a no-op manifest check.
 
 Client flow (Settings → "Offline" section):
 
-1. Show current state via `navigator.storage.estimate()` + a stored flag
-   (`easyquran.offline-pack = { hash, savedAt }` in `localStorage`).
-2. On enable: fetch manifest → fetch pack (streaming progress; reuse the
-   `DownloadBar` pattern) → for each entry, `cache.put()` a synthesized
-   `Response` (correct `content-type: application/json`) into `eq-data-v1`,
-   query-stripped key. Store the flag.
-3. On each app-version update (the §4.3 sweep): if the flag is set, re-check
-   the manifest; refresh the pack only when the hash changed.
-4. Disable: delete pack-sourced entries (tracked via the entries index) and
-   clear the flag.
+1. Show current state via `navigator.storage.estimate()` plus the active-pack
+   record (`{ hash, entries, savedAt }`) in `eq-meta-v1`. Confirm that the
+   referenced cache exists with the recorded entry count; clear a stale pointer
+   if eviction made it incomplete. `localStorage` may mirror this for instant UI
+   paint, but it is never authoritative and the SW cannot read it.
+2. On enable: fetch the manifest network-only → if its hash is already active,
+   stop → otherwise fetch the pack with streaming progress and
+   `cache: "no-store"` (reuse the `DownloadBar` pattern).
+3. Populate an **inactive** `eq-pack-<hash>` cache. For each deterministically
+   ordered entry, `cache.put()` a synthesized `Response` with
+   `content-type: application/json` under the same normalized key used by the
+   request router. Validate the schema, declared entry count, every index/body,
+   and the final cache entry count. Any failure deletes this staged cache and
+   leaves the previous active pack untouched.
+4. Commit with one `eq-meta-v1` write that changes the active hash. The request
+   router ignores every pack cache except the referenced hash, so this pointer
+   write is the atomic visibility boundary. Then delete the previously active
+   pack cache and update the optional UI mirror.
+5. On boot after an app update, if a pack is active, re-check the manifest from
+   client code (not the SW `activate` event). Refresh through steps 2–4 only
+   when the hash changed. Runtime cache maintenance never walks pack entries.
+6. Disable by clearing the active pointer first and then deleting exactly its
+   `eq-pack-<hash>` cache. `eq-data-v1` and the visited-page library are
+   untouched.
 
 The pack deliberately contains **data, not HTML**: offline hard navigations to
-never-visited routes land on the SPA shell (§4.5), which client-renders from
-the pack. That asymmetry is fine — it is exactly how a SvelteKit soft
-navigation works anyway.
+never-visited routes land on the SPA shell (§4.5), whose data request misses
+`eq-data-v1`, falls back to the active `eq-pack-<hash>`, and client-renders the
+route. That asymmetry is fine — it is exactly how a SvelteKit soft navigation
+works anyway.
 
 Because the pack step walks `build/**/__data.json`, it inherently contains
 only prerendered (Arabic core) routes — future ISR translation routes never
@@ -377,7 +474,7 @@ come and go; the contract and the script stay.
 | Path | Cache-Control | Notes |
 |---|---|---|
 | `/_app/immutable/*` | `public, max-age=31536000, immutable` | content-hashed |
-| `/_app/version.json`, `/offline/manifest.json` | `no-store` | the update detectors |
+| `/_app/version.json`, `/offline/manifest.json` | `no-cache` | update detectors; allow storage only for conditional revalidation/cheap 304s, but the SW always passes them through |
 | `/offline/pack.*.json` | `public, max-age=31536000, immutable` | content-hashed |
 | `/service-worker.js`, `/manifest.webmanifest`, `/quran-meta/*`, HTML pages, `*/__data.json` (prerendered) | `no-cache` | revalidate with ETag; cheap 304s |
 | translated (ISR) pages + their `__data.json` *(future)* | `public, max-age=0, s-maxage=<TTL>, stale-while-revalidate=<TTL>` | browsers revalidate every time (`max-age=0`), shared caches serve for the TTL (`s-maxage`); set by the route itself via `setHeaders`. The TTL *is* the "translation lives for some amount of time" rule, expressed in standard HTTP so any proxy/CDN can enforce it |
@@ -395,7 +492,7 @@ A ~25-line checked-in `deploy/Caddyfile` (replacing the bare
 `precompress: false → true`), one `header` matcher per contract row, and
 `handle_errors { rewrite * /404.html }`. Compression alone cuts the ~30 KB
 pages to single-digit KB on the wire and makes the tier-2 pack and §4.3
-sweeps cheap.
+maintenance cheap.
 
 If the adapter-node migration is scheduled within the next couple of releases,
 skip this and land the contract there directly — do not build the same rules
@@ -435,8 +532,9 @@ Traefik, Rust API alongside):
 
 If the site also deploys to Cloudflare Pages/Netlify, mirror the static
 contract rows in `web/static/_headers` (the robots rules there today are the
-template). Rule of thumb anywhere: **`_app/immutable/*` immutable-forever,
-`version.json` no-store, everything else no-cache, ISR rows via `s-maxage`.**
+template). Rule of thumb anywhere: **`_app/immutable/*` and hashed packs are
+immutable-forever; `version.json`, the pack manifest, and ordinary static
+responses are no-cache; ISR rows use `s-maxage`.**
 
 ### 6.5 Registration hardening
 
@@ -451,15 +549,28 @@ template). Rule of thumb anywhere: **`_app/immutable/*` immutable-forever,
 
 ### 7.1 Flow
 
-1. `updated.current` flips true (poll / visibility check), **or** the
-   registration reports a `waiting` worker.
-2. Show one toast via the existing `notifications` store: *"A new version is
-   ready · Reload"*. Never modal, never auto-reloads mid-ayah.
-3. On accept: post `{ type: "SKIP_WAITING" }` to `registration.waiting`; on
-   `controllerchange`, reload **only the tab that clicked** (guard flag —
-   `controllerchange` fires in every tab).
-4. Other open tabs: adopt the documented SvelteKit pattern so their next
-   navigation is a full load on the new version:
+1. `updated.current` is an **early detector**, not proof that a worker is ready.
+   When it flips true (poll / visibility check), call and await
+   `registration.update()`. Follow `updatefound` and the installing worker's
+   `statechange` until `registration.waiting` exists. If a waiting worker was
+   already present, skip directly to step 2.
+2. Only after a worker is waiting, show one generic app toast: *"A new version
+   is ready · Reload open tabs"*. Extend the toast UI with an explicit action
+   API or add a small update-toast store; do not put synthetic FCM
+   `MessagePayload` values into the existing push-notification store. If SW
+   registration is unavailable but `updated.current` is true, offer a plain
+   `location.reload()` action instead.
+3. On accept, use a `BroadcastChannel` plus a message from the waiting worker to
+   send update preparation to every window client. Each tab synchronously
+   persists reader position and arms a once-only reload guard. Then post
+   `{ type: "SKIP_WAITING" }` to the confirmed `registration.waiting` worker.
+4. The new worker activates, calls `clients.claim()`, and announces the version.
+   Every armed tab reloads once on the takeover message or `controllerchange`,
+   then posts `{ type: "APP_READY", version }` after boot (§4.3). Activation is
+   global, so keeping other tabs on the old build is not a supported state.
+5. Before the user accepts, retain the documented SvelteKit hard-navigation
+   guard so an attempted client navigation cannot mix old route metadata with
+   a newly deployed origin:
 
    ```ts
    beforeNavigate(({ willUnload, to }) => {
@@ -467,16 +578,20 @@ template). Rule of thumb anywhere: **`_app/immutable/*` immutable-forever,
    });
    ```
 
-5. The SW adds the matching `message` listener (`skipWaiting()` on request).
-   No auto-`skipWaiting` on install — an old tab lazily importing a chunk that
-   the new precache dropped is exactly the breakage we refuse to ship.
+6. The SW adds the matching message listeners (`skipWaiting()` only on the
+   explicit request, update-takeover broadcast, and `APP_READY` bookkeeping).
+   No auto-`skipWaiting` on install. Until acceptance, the old worker and cache
+   continue serving every old tab; after acceptance, every tab reloads onto the
+   already-complete new cache.
 
 ### 7.2 Reading position survives
 
 `SurahReader` already persists position to `sessionStorage`
-(`easyquran.reader-position`) and restores it on reload-type navigations.
-The update reload therefore lands the reader on the same Surah page at the
-same anchor. Add this to the acceptance checklist so it stays true.
+(`easyquran.reader-position`) and restores it on reload-type navigations. Add a
+synchronous handler for the update-preparation message (or expose the existing
+`writeHistoryState()` through a small app event) so every tab writes its latest
+anchor before the coordinator reloads it. Test two reader tabs at different
+positions; both must return to their own Surah page and anchor.
 
 ---
 
@@ -505,11 +620,12 @@ same anchor. Add this to the acceptance checklist so it stays true.
 |---|---|
 | First visit ever, offline | Nothing we can do (no SW yet) — browser error. |
 | Installed app launched offline | `/app` served from `eq-app-*`; DB from OPFS; worker `resolveManifest` times out in 3 s → baked manifest → reader boots. |
-| Offline hard-nav to never-visited route, tier 2 on | SPA shell (§4.5) → route chunks from precache → pack data from `eq-data-v1` → full render. |
+| Offline hard-nav to never-visited route, tier 2 on | SPA shell (§4.5) → route chunks from precache → runtime-data miss → active `eq-pack-<hash>` fallback → full render. |
 | Offline, tier 2 off, route never visited | Shell renders, data fetch fails → route-level error UI with the offline indicator explaining why. Acceptable; tier 2 is the fix. |
-| Deploy while N tabs open | New SW installs and waits; every tab gets the toast; acting tab reloads; others hard-navigate on next nav. Old precache serves old tabs until then. |
-| Deploy removes old immutable chunks, old tab lazy-imports one | Online: SvelteKit falls back to a full-page navigation on failed dynamic import — lands on new version. Offline: chunk is in the old precache (not yet deleted while SW waits) — still works. |
-| `__data.json` shape changes in a deploy | Sweep (§4.3) refreshes cached entries when online. Residual risk: offline across a shape-breaking deploy → shell render fails for stale entries → error UI. Rare and self-heals online. |
+| Deploy while N tabs open | New SW installs completely and waits; every tab gets the toast. Acceptance in any tab persists all reader positions, activates globally, and reloads every live tab once. Old app caches remain until every live client acknowledges the new version. |
+| Deploy removes old immutable chunks, old tab lazy-imports one | Before acceptance, the old worker/cache remains intact. After acceptance there is no intentionally old tab: every live client reloads, acknowledges the new build, and only then permits old app-cache cleanup. A frozen/unacknowledged tab delays cleanup rather than losing chunks. |
+| Required precache request fails during install | Installation rejects and deletes its partial `eq-app-*`; the old worker/cache remains active and no update-ready toast is shown. |
+| `__data.json` shape changes in a deploy | Resumable maintenance (§4.3) refreshes runtime entries when online, while a changed pack hash stages and swaps the full tier-2 dataset (§5.2). Residual risk: offline across a shape-breaking deploy → shell render fails for stale entries → error UI. Rare and self-heals online. |
 | Translated (ISR) route, offline *(future)* | Visited: served stale from `eq-pages-v1`, offline indicator showing; TTL staleness offline is accepted — the alternative is nothing. Unvisited: shell + error UI pointing at the translation pack flow (`quran-translations.md`), which is the real offline path for translation text. |
 | ISR entry expires at the origin | Purely an origin/proxy concern: next request re-renders. The SW neither knows nor cares — it never caches by TTL, only replaces on successful fetch. |
 | Lie-fi (connected, 0 throughput) | 3.5 s navigation timeout → cached page/shell. |
@@ -536,20 +652,31 @@ node migration is imminent, defer implementation to it and keep only the
 script + `precompress: true` + `updateViaCache: "none"`.
 *Accept:* assertion script passes against the serving origin; pages arrive
 brotli-compressed; `_app/immutable/*` shows `immutable`; `version.json` shows
-`no-store`; unknown URL returns branded 404.
+`no-cache`; unknown URL returns branded 404.
 
 **Phase 1 — version identity & update loop.**
-`kit.version { name, pollInterval }` from package.json + `BUILD_REF`;
-`updated` toast; `SKIP_WAITING` protocol; `beforeNavigate` hard-nav guard;
-visibility-triggered `updated.check()` + `registration.update()`.
+deterministic `kit.version { name, pollInterval }` from `BUILD_VERSION` +
+build-stage `BUILD_REF`; detector → `registration.update()` → waiting-worker
+state machine; generic action toast; all-tab preparation/`SKIP_WAITING`/
+`APP_READY` protocol; `beforeNavigate` hard-nav guard; visibility-triggered
+`updated.check()` + `registration.update()`. The SW side lands against the
+**legacy cache layout**: swap the precache fill to fail-closed and implement
+§4.3 steps 1–3 (takeover, reload, acknowledgements), introducing `eq-meta-v1`
+early for the acknowledgement records; the rest of the §4.1 cache layout is
+Phase 2.
 *Accept:* deploy a trivial change with the old tab open → toast within
-5 min (or instantly on tab refocus) → reload lands on new version at the same
-reader position; second tab full-navigates on its next click.
+5 min (or instantly on tab refocus) but only after the worker is waiting →
+accept in one of two reader tabs → both reload exactly once, return to their own
+reader positions, and report the same new app version; the superseded app cache
+(still named `eq-precache-*` in this phase) is deleted only after both
+acknowledgements. A forced precache failure leaves the old build active and
+shows no ready toast.
 
 **Phase 2 — cache architecture v2.**
-New cache trio, shell-route precache (`/`, `/app`, the SPA shell of §4.5,
-`quran-data.json`, manifest), navigation timeout, query-normalized
-`eq-data-v1`, activate sweeps + trim, OPFS/IDB old-version cleanup.
+Versioned app cache plus persistent page/data/meta caches; fail-closed shell-route
+precache (`/`, `/app`, the SPA shell of §4.5, `quran-data.json`, manifest);
+navigation timeout; reserved-parameter-only data-key normalization; resumable
+post-activation maintenance + metadata-backed trim; OPFS/IDB old-version cleanup.
 *Accept:* DevTools-offline: installed app launches to `/app`; a visited Surah
 renders; an *unvisited* Surah soft-navigates successfully after its data was
 cached by a prior session; after a deploy, previously visited pages still
@@ -558,10 +685,14 @@ content-version directory.
 
 **Phase 3 — full offline.**
 Pack build step + manifest, Settings UI with progress + storage estimate,
-sweep integration, disable path.
+staged `eq-pack-<hash>` cache + atomic active-pointer commit, boot-time manifest
+check, and exact disable path.
 *Accept:* enable on wifi (< 30 s), kill network, cold-launch installed app,
 navigate via search/juz/global-page routes to Surahs never visited — all
-render; deploy without data changes → no pack re-download (hash unchanged).
+render; deploy without data changes → one manifest revalidation, zero individual
+pack-entry requests, and no pack re-download (hash unchanged). Inject a quota
+failure halfway through staging → the previous pack remains fully active and
+the partial candidate is deleted. Disable → visited runtime data still works.
 
 **Phase 4 — polish.**
 Manifest `id`/`start_url`/shortcuts, offline indicator + copy audit, iOS
@@ -576,14 +707,25 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
   deploy checklist. This is the regression net for the whole update system.
 - **Unit (vitest)** — pure pieces: cache-name/version derivation, request →
   strategy routing decision function (extract it as a pure function for this),
-  data-key query stripping, pack index encode/decode, trim ordering.
+  reserved-parameter data-key normalization, deterministic pack serialization,
+  pack index encode/decode, active-pointer transitions, acknowledgement cleanup,
+  and metadata-backed trim ordering.
+- **SW lifecycle integration** — simulate one required precache failure and
+  assert the install rejects without deleting the old cache; simulate two
+  clients through waiting → takeover → `APP_READY` and assert old app caches are
+  retained until both acknowledge; terminate/resume a maintenance sweep from
+  its stored cursor.
+- **Pack fault injection** — fail schema validation, an intermediate
+  `cache.put()`, and the final count check. In every case the active pointer and
+  previous pack remain unchanged and the staged cache is removed.
 - **Manual matrix (per release of phases 2–3)** — Chrome desktop, Chrome
   Android (installed), Safari iOS (installed): the §10 acceptance lines plus
   DevTools → Application → "Offline" walkthrough. Keep the checklist at the
   bottom of this doc as phases land.
 - **Local SW loop** — `just web-build && cd web && pnpm preview` exercises the
-  real SW; two builds in a row exercise the update path locally (version
-  suffix differs each build by design).
+  real SW; two direct local builds exercise SvelteKit's default timestamp
+  version. Container-loop tests pass explicit, distinct `REVISION` values when
+  the built output changes.
 
 ---
 
@@ -591,9 +733,11 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
 
 - **(a) Reuse SvelteKit's `_app/version.json` instead of a custom
   `version.json`.** Same file the framework already generates, polls, and
-  embeds in the SW. The package.json version goes *into* `kit.version.name`,
-  so the original intent (human-meaningful release id, no-cache delivery,
-  boot/interval checks) is fully preserved with zero parallel machinery.
+  embeds in the SW. Production combines the deploy's release tag and commit
+  into a deterministic `kit.version.name`; direct local builds may use
+  SvelteKit's default. The original intent (human-meaningful release id,
+  no-cache delivery, boot/interval checks) is preserved with zero parallel
+  machinery.
 - **(b) SW lifecycle as the only cache invalidator; no boot-time purge.**
   Atomic swap vs. a hand-rolled delete-then-refill window; see §3.2.
 - **(c) App-shell + data offline model; no full-HTML precache.** 40 MB
@@ -604,8 +748,8 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
   update semantics, and no capability we lack.
 - **(e) Content-hashed offline pack now; client-side data synthesis later
   (maybe).** §5.3.
-- **(f) Persistent (unversioned) page/data caches with post-activate
-  revalidation sweeps** — chosen over version-keyed runtime caches, which
+- **(f) Persistent (unversioned) page/data caches with resumable post-activate
+  maintenance** — chosen over version-keyed runtime caches, which
   silently delete the user's offline library at every deploy (today's
   behavior).
 - **(g) HTTP rules are a host-agnostic contract, not server config.** The
@@ -619,6 +763,16 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
   packed, cached only as an offline last-known-good. Offline translation
   *text* remains the pack/OPFS design in `quran-translations.md`; this plan
   does not duplicate it in Cache Storage.
+- **(i) An accepted SW update reloads every live tab.** `skipWaiting()` plus
+  `clients.claim()` is scope-wide. Pretending activation is tab-local would
+  leave old JavaScript executing against a new cache. All tabs persist position,
+  reload once, and acknowledge the new version; old app caches remain until the
+  acknowledgement set covers every live client.
+- **(j) Tier-2 data has its own content-addressed cache.** Runtime data and an
+  explicit full download have different freshness, rollback, and deletion
+  semantics. An inactive `eq-pack-<hash>` is fully populated and verified, then
+  one SW-readable metadata pointer makes it active. Runtime sweeps and disable
+  can no longer corrupt each other's guarantees.
 
 ---
 
