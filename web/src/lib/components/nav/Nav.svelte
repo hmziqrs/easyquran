@@ -2,6 +2,7 @@
   import { page } from "$app/state";
   import { NAV_LINKS } from "$lib/config/site";
   import { prefs } from "$lib/stores/prefs.svelte";
+  import { online } from "$lib/offline/online.svelte";
   import { cn } from "$lib/utils";
   import { Button } from "$lib/components/ui/button";
   import { Brand } from "$lib/components/brand";
@@ -87,6 +88,17 @@
     </div>
 
     <div class="flex items-center gap-2">
+      {#if online.hydrated && !online.online}
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-bg-2 px-2.5 py-1 text-xs text-fg-2"
+          role="status"
+          aria-label="Offline"
+          title="You are offline"
+        >
+          <span class="inline-block size-1.5 rounded-full bg-pop" aria-hidden="true"></span>
+          <span class="hidden sm:inline">Offline</span>
+        </span>
+      {/if}
       <button
         type="button"
         onclick={() => prefs.toggleTheme()}

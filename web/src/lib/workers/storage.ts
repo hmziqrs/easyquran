@@ -93,3 +93,41 @@ export function createIdbStore(dbName: string, storeName: string): ByteStore {
     },
   };
 }
+
+export async function pruneOpfs(rootDir: string, keepVersion: string): Promise<void> {
+  if (!hasOpfs()) return;
+  const root = await navigator.storage.getDirectory();
+  const top = await root.getDirectoryHandle(rootDir);
+  for await (const [name] of top.entries()) {
+    if (name === keepVersion) continue;
+    try {
+      await top.removeEntry(name, { recursive: true });
+    } catch (err) {
+      console.warn(`[storage] pruneOpfs: failed to remove ${name}`, err);
+    }
+  }
+}
+
+export async function pruneIdb(dbName: string, storeName: string, keepVersion: string): Promise<void> {
+  try {
+    const db = await openIdb(dbName, storeName);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+      const req = store.openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) return;
+        const key = cursor.key;
+        if (typeof key === "string" && !key.startsWith(`${keepVersion}:`)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn(`[storage] pruneIdb: failed`, err);
+  }
+}

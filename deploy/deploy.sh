@@ -49,6 +49,7 @@ git checkout --force "$LATEST_TAG"
 
 # Stamp the images (OCI label org.opencontainers.image.version) with the tag.
 export VERSION="$LATEST_TAG"
+export REVISION="$(git rev-parse --short=12 HEAD)"
 $COMPOSE build web api || { log "ERROR: build failed for $LATEST_TAG; containers left as-is"; exit 1; }
 $COMPOSE up -d web api
 

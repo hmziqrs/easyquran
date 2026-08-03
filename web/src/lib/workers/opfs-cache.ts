@@ -3,9 +3,9 @@ import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "
 import { createIdbStore, createOpfsStore, hasOpfs } from "./storage";
 import { ensureCached } from "./cached";
 
-const ROOT_DIR = "easyquran";
-const QURAN_DB = "easyquran-quran";
-const QURAN_STORE = "artifacts";
+export const ROOT_DIR = "easyquran";
+export const QURAN_DB = "easyquran-quran";
+export const QURAN_STORE = "artifacts";
 
 export type CacheStore = "opfs" | "idb" | "session";
 export interface CachedArtifact {

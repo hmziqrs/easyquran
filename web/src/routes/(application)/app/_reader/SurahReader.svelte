@@ -22,6 +22,7 @@
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { PREPARE_RELOAD, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import {
     currentUrlLocalPage,
@@ -606,9 +607,17 @@
       }
       scheduleForwardFill();
     });
+    let updateChannel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      updateChannel = new BroadcastChannel(UPDATE_BROADCAST_CHANNEL);
+      updateChannel.addEventListener("message", (event) => {
+        if (event.data?.type === PREPARE_RELOAD) writeHistoryState();
+      });
+    }
     scheduleForwardFill();
     return () => {
       stop();
+      updateChannel?.close();
       if (scrollFrame) cancelAnimationFrame(scrollFrame);
       if (forwardFillFrame) cancelAnimationFrame(forwardFillFrame);
       if (historyWriteTimer) clearTimeout(historyWriteTimer);
