@@ -381,14 +381,17 @@ async function handleData(req: Request): Promise<Response> {
   const data = await caches.open(DATA_CACHE);
   const hit = await data.match(key);
 
-  const revalidate = fetch(req)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
+  const revalidate = fetch(req, { signal: controller.signal })
     .then(async (res) => {
       if (res && res.ok && isCacheable(res)) {
         await data.put(new Request(key), res.clone()).catch(() => {});
       }
       return res;
     })
-    .catch(() => null as Response | null);
+    .catch(() => null as Response | null)
+    .finally(() => clearTimeout(timeout));
 
   if (hit) {
     void revalidate;

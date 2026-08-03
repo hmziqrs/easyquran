@@ -42,13 +42,17 @@
 
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
+    const hadControllerAtBoot = Boolean(navigator.serviceWorker?.controller);
     const postAppReady = (): void => {
       const ctrl = navigator.serviceWorker?.controller;
       if (ctrl) ctrl.postMessage({ type: APP_READY });
     };
     postAppReady();
-    navigator.serviceWorker?.addEventListener("controllerchange", postAppReady);
-    cleanups.push(() => navigator.serviceWorker?.removeEventListener("controllerchange", postAppReady));
+    const onControllerChange = (): void => {
+      if (!hadControllerAtBoot) postAppReady();
+    };
+    navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
+    cleanups.push(() => navigator.serviceWorker?.removeEventListener("controllerchange", onControllerChange));
 
     paintFrame = requestAnimationFrame(() => {
       postPaintFrame = requestAnimationFrame(() => {

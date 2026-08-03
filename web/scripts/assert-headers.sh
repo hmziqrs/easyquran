@@ -24,6 +24,12 @@ else
 	fail_ "no /_app/immutable/* reference on /app — cannot verify immutable"
 fi
 
+for p in /app /app/al-kahf; do
+	code=$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN$p" || true)
+	[[ "$code" == "200" ]] || fail_ "$p is HTTP $code, expected 200 (clean-URL HTML not served — try_files?)"
+done
+ok "clean-URL HTML routes resolve (200)"
+
 contains "/_app/version.json is no-cache"    "$(curl -sSI "$ORIGIN/_app/version.json")" 'no-cache'
 contains "/service-worker.js is no-cache"    "$(curl -sSI "$ORIGIN/service-worker.js")" 'no-cache'
 contains "/manifest.webmanifest is no-cache" "$(curl -sSI "$ORIGIN/manifest.webmanifest")" 'no-cache'

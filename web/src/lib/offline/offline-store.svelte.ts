@@ -222,8 +222,8 @@ class OfflineStore {
       void this.#refreshEstimate();
     } catch (err) {
       console.warn("[offline] enable failed:", err);
-      this.#status = "error";
       if (targetHash) await caches.delete(`eq-pack-${targetHash}`).catch(() => {});
+      this.#status = prevHash ? "active" : "error";
     } finally {
       this.#busy = false;
     }

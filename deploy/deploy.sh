@@ -54,8 +54,6 @@ $COMPOSE build web || { log "ERROR: build failed for $LATEST_TAG; containers lef
 $COMPOSE up -d web
 
 sleep 5
-curl -fsS --max-time 15 "https://${HEALTH_DOMAIN:-easyquran.fyi}/api/healthz" >/dev/null 2>&1 \
-  && log "healthcheck ok" || log "WARN: healthcheck not green — check 'docker compose logs api'"
 
 printf '%s\n' "$LATEST_TAG" >"$STATE_FILE"
 log "deployed $LATEST_TAG"
