@@ -62,7 +62,7 @@ src/
 - **Design tokens → Tailwind** — `layout.css` declares token values, then maps
   them via `@theme inline` so utilities are theme-aware at runtime.
 - **shadcn semantic names must be declared twice** — as `:root` custom
-  properties *and* inside `@theme inline`. With only the `:root` half, registry
+  properties _and_ inside `@theme inline`. With only the `:root` half, registry
   components compile but render **unstyled**.
 - **No FOUC** — the inline script in `app.html` applies theme/accent before
   first paint; `prefs.apply()` re-syncs on mount.

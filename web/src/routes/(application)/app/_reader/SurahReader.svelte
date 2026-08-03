@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import type { Attachment } from "svelte/attachments";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteSet } from "svelte/reactivity";
   import { beforeNavigate, goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page as appPage } from "$app/state";
@@ -9,7 +9,6 @@
     parseKey,
     surahAyahPath,
     surahLocalPagePath,
-    surahMeta,
     type SurahLocalPageData,
     type SurahLocalPageLink,
     type SurahLink,
@@ -23,32 +22,25 @@
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
+  import {
+    currentUrlLocalPage,
+    parseHistoryState,
+    persistReaderPosition,
+    reloadPositionState,
+    type SurahReaderHistoryState,
+  } from "./reader-history";
+  import {
+    captureViewportAnchor,
+    closestPage,
+    nextFrame,
+    restoreViewportAnchor,
+    viewportMarker,
+    type ViewportAnchor,
+  } from "./viewport-anchor";
+  import ReaderHeader from "./ReaderHeader.svelte";
+  import ReaderPageNav from "./ReaderPageNav.svelte";
   import VerseRow from "./VerseRow.svelte";
-
-  type ViewportAnchor =
-    | {
-        kind: "verse";
-        localPage: number;
-        verseKey: string;
-        viewportPoint: number;
-        ratio: number;
-      }
-    | {
-        kind: "page";
-        localPage: number;
-        viewportPoint: number;
-        ratio: number;
-      };
-
-  interface SurahReaderHistoryState {
-    version: 1;
-    surahNum: number;
-    activeLocalPage: number;
-    pages: SurahLocalPageData[];
-    anchor: ViewportAnchor | null;
-  }
-
-  const readerPositionKey = "easyquran.reader-position";
 
   let {
     initial,
@@ -92,9 +84,8 @@
   let virtualShiftPage: number | null = null;
   let stableAnchor: ViewportAnchor | null = null;
   let positionQueue = Promise.resolve();
-  const pageHeights = new SvelteMap<string, SvelteMap<number, number>>();
+  const heightCache = new PageHeightCache();
   const loadAheadPx = 900;
-  const badge = $derived(String(initial.surah.num).padStart(3, "0"));
   const visibleLocalPage = $derived(activeLocalPage ?? initial.page.localPage);
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   const firstLoaded = $derived(pages[0]!);
@@ -108,79 +99,19 @@
         ),
       ),
   );
-  const previousHref = $derived.by(() => {
-    if (lastLoaded.page.localPage === initial.page.localPage && previousPage) {
-      return previousPage.href;
-    }
-    if (lastLoaded.page.localPage > 1) {
-      return surahLocalPagePath(initial.surah, lastLoaded.page.localPage - 1);
-    }
-    return previousSurah ? surahLocalPagePath(previousSurah, 1) : null;
-  });
-  const nextHref = $derived.by(() => {
-    if (lastLoaded.page.localPage === initial.page.localPage && nextPage) {
-      return nextPage.href;
-    }
-    if (lastLoaded.page.localPage < initial.pageCount) {
-      return surahLocalPagePath(initial.surah, lastLoaded.page.localPage + 1);
-    }
-    return nextSurah ? surahLocalPagePath(nextSurah, 1) : null;
-  });
-  const previousLabel = $derived(
-    lastLoaded.page.localPage > 1
-      ? `Page ${lastLoaded.page.localPage - 1}`
-      : previousSurah?.name,
-  );
-  const nextLabel = $derived(
-    lastLoaded.page.localPage < initial.pageCount
-      ? `Page ${lastLoaded.page.localPage + 1}`
-      : nextSurah?.name,
-  );
 
-  function viewportMarker(): number {
-    return Math.min(window.innerHeight * 0.35, 260);
+  function captureAnchor(): ViewportAnchor | null {
+    return captureViewportAnchor(readerPages);
   }
 
-  function widthBucket(width = readerWidth): number {
-    return Math.max(320, Math.round(Math.max(width, 320) / 24) * 24);
+  function restoreAnchor(anchor: ViewportAnchor): void {
+    if (restoreViewportAnchor(readerPages, anchor)) lastScrollY = window.scrollY;
   }
 
-  function layoutKey(width = readerWidth): string {
-    return `${reader.mode}:${reader.arabicSizePx}:${widthBucket(width)}`;
-  }
-
-  function defaultPageHeight(): number {
-    const fontScale = Number.parseFloat(reader.arabicSizePx) / 33;
-    const widthScale = Math.min(2.3, Math.max(0.85, Math.sqrt(1050 / widthBucket())));
-    return Math.round((reader.isReadingMode ? 720 : 1320) * fontScale * widthScale);
-  }
-
-  function pageHeight(localPage: number): number {
-    return pageHeights.get(layoutKey())?.get(localPage) ?? defaultPageHeight();
-  }
-
-  function stablePageHeight(node: HTMLElement): number {
-    let height = node.getBoundingClientRect().height;
-    for (const note of node.querySelectorAll<HTMLElement>(".verse-note")) {
-      const style = getComputedStyle(note);
-      height -=
-        note.getBoundingClientRect().height +
-        Number.parseFloat(style.marginTop || "0") +
-        Number.parseFloat(style.marginBottom || "0");
-    }
-    return height;
-  }
-
-  function savePageHeight(localPage: number, height: number, width: number): void {
-    if (!Number.isFinite(height) || height <= 0) return;
-    const key = layoutKey(width);
-    let heights = pageHeights.get(key);
-    if (!heights) {
-      heights = new SvelteMap<number, number>();
-      pageHeights.set(key, heights);
-    }
-    const rounded = Math.ceil(height);
-    if (heights.get(localPage) !== rounded) heights.set(localPage, rounded);
+  function markAnchorRead(anchor: ViewportAnchor | null | undefined): void {
+    if (!userScrolled || anchor?.kind !== "verse") return;
+    const { num, n } = parseKey(anchor.verseKey);
+    if (num === initial.surah.num) reader.markRead(num, n);
   }
 
   function measurePage(localPage: number): Attachment<HTMLElement> {
@@ -188,7 +119,7 @@
       let lastTotalHeight = 0;
       const measure = () => {
         const totalHeight = node.getBoundingClientRect().height;
-        savePageHeight(
+        heightCache.save(
           localPage,
           stablePageHeight(node),
           readerPages?.getBoundingClientRect().width ?? node.getBoundingClientRect().width,
@@ -217,109 +148,22 @@
     };
   }
 
-  function closestPage(marker: number): HTMLElement | null {
-    if (!readerPages) return null;
-    const sections = [...readerPages.querySelectorAll<HTMLElement>("[data-local-page]")];
-    let closest: HTMLElement | null = null;
-    let closestDistance = Number.POSITIVE_INFINITY;
-    for (const section of sections) {
-      const rect = section.getBoundingClientRect();
-      if (rect.top <= marker && rect.bottom > marker) return section;
-      const distance = Math.min(Math.abs(rect.top - marker), Math.abs(rect.bottom - marker));
-      if (distance < closestDistance) {
-        closest = section;
-        closestDistance = distance;
-      }
-    }
-    return closest;
-  }
-
-  function captureViewportAnchor(): ViewportAnchor | null {
-    const marker = viewportMarker();
-    const section = closestPage(marker);
-    if (!section) return null;
-    const localPage = Number(section.dataset.localPage);
-    if (!Number.isSafeInteger(localPage)) return null;
-    if (section.hasAttribute("data-page-rendered")) {
-      let closestVerse: HTMLElement | null = null;
-      let closestDistance = Number.POSITIVE_INFINITY;
-      for (const row of section.querySelectorAll<HTMLElement>("[data-verse-key]")) {
-        const text = row.querySelector<HTMLElement>(".verse-text");
-        if (!text) continue;
-        const rect = text.getBoundingClientRect();
-        if (rect.top <= marker && rect.bottom > marker) {
-          closestVerse = row;
-          break;
-        }
-        const distance = Math.min(Math.abs(rect.top - marker), Math.abs(rect.bottom - marker));
-        if (distance < closestDistance) {
-          closestVerse = row;
-          closestDistance = distance;
-        }
-      }
-      const text = closestVerse?.querySelector<HTMLElement>(".verse-text");
-      const verseKey = closestVerse?.dataset.verseKey;
-      if (text && verseKey) {
-        const rect = text.getBoundingClientRect();
-        return {
-          kind: "verse",
-          localPage,
-          verseKey,
-          viewportPoint: marker,
-          ratio: Math.min(1, Math.max(0, (marker - rect.top) / Math.max(rect.height, 1))),
-        };
-      }
-    }
-    const rect = section.getBoundingClientRect();
-    return {
-      kind: "page",
-      localPage,
-      viewportPoint: marker,
-      ratio: Math.min(1, Math.max(0, (marker - rect.top) / Math.max(rect.height, 1))),
-    };
-  }
-
-  function restoreViewportAnchor(anchor: ViewportAnchor): boolean {
-    if (!readerPages) return false;
-    let node: HTMLElement | null = null;
-    if (anchor.kind === "verse") {
-      node = readerPages.querySelector<HTMLElement>(
-        `[data-verse-key="${anchor.verseKey}"] .verse-text`,
-      );
-    }
-    node ??= readerPages.querySelector<HTMLElement>(
-      `[data-local-page="${anchor.localPage}"]`,
-    );
-    if (!node) return false;
-    const rect = node.getBoundingClientRect();
-    const targetPoint = rect.top + rect.height * anchor.ratio;
-    const delta = targetPoint - anchor.viewportPoint;
-    if (Math.abs(delta) > 0.5) window.scrollTo(0, window.scrollY + delta);
-    lastScrollY = window.scrollY;
-    return true;
-  }
-
-  function nextFrame(): Promise<void> {
-    return new Promise((resolveFrame) => requestAnimationFrame(() => resolveFrame()));
-  }
-
   function preserveViewportFrom(
     anchorSource: ViewportAnchor | null | (() => ViewportAnchor | null),
     change: () => void,
     waitForLayout = false,
   ): Promise<void> {
     const operation = async () => {
-      const anchor =
-        typeof anchorSource === "function" ? anchorSource() : anchorSource;
+      const anchor = typeof anchorSource === "function" ? anchorSource() : anchorSource;
       suppressScroll = true;
       try {
         change();
         await tick();
         if (waitForLayout) await nextFrame();
-        if (anchor) restoreViewportAnchor(anchor);
+        if (anchor) restoreAnchor(anchor);
         await nextFrame();
         updateVisiblePage();
-        stableAnchor = captureViewportAnchor();
+        stableAnchor = captureAnchor();
       } finally {
         suppressScroll = false;
       }
@@ -330,7 +174,7 @@
   }
 
   function preserveViewport(change: () => void, waitForLayout = false): Promise<void> {
-    return preserveViewportFrom(captureViewportAnchor, change, waitForLayout);
+    return preserveViewportFrom(captureAnchor, change, waitForLayout);
   }
 
   const captureReaderPages: Attachment<HTMLElement> = (node) => {
@@ -412,32 +256,23 @@
 
   function changeMode(mode: ReaderMode): void {
     if (reader.mode === mode) return;
-    void preserveViewport(
-      () => {
-        virtualCenterPage = visibleLocalPage;
-        reader.setMode(mode);
-      },
-      true,
-    );
+    void preserveViewport(() => {
+      virtualCenterPage = visibleLocalPage;
+      reader.setMode(mode);
+    }, true);
   }
 
   function changeFontSize(change: () => void): void {
-    void preserveViewport(
-      () => {
-        virtualCenterPage = visibleLocalPage;
-        change();
-      },
-      true,
-    );
+    void preserveViewport(() => {
+      virtualCenterPage = visibleLocalPage;
+      change();
+    }, true);
   }
 
   function toggleNote(verseKey: string): void {
-    void preserveViewport(
-      () => {
-        reader.toggleNote(verseKey);
-      },
-      true,
-    );
+    void preserveViewport(() => {
+      reader.toggleNote(verseKey);
+    }, true);
   }
 
   function cachePage(pageData: SurahLocalPageData): void {
@@ -447,11 +282,6 @@
         text: bodyText(ayah.text, ayah.ayah, pageData.normalization),
       })),
     );
-  }
-
-  function currentUrlLocalPage(): number {
-    const match = /\/page\/(\d+)\/?$/.exec(window.location.pathname);
-    return match ? Number(match[1]) : 1;
   }
 
   function historySnapshot(localPage = visibleLocalPage): SurahReaderHistoryState {
@@ -465,7 +295,7 @@
       surahNum: initial.surah.num,
       activeLocalPage: localPage,
       pages: pages.filter((pageData) => included.has(pageData.page.localPage)),
-      anchor: captureViewportAnchor(),
+      anchor: captureAnchor(),
     };
   }
 
@@ -478,21 +308,8 @@
       ...appPage.state,
       surahReader: snapshot,
     });
-    try {
-      sessionStorage.setItem(
-        readerPositionKey,
-        JSON.stringify({
-          version: snapshot.version,
-          surahNum: snapshot.surahNum,
-          activeLocalPage: snapshot.activeLocalPage,
-          anchor: snapshot.anchor,
-        }),
-      );
-    } catch {}
-    if (userScrolled && snapshot.anchor?.kind === "verse") {
-      const { num, n } = parseKey(snapshot.anchor.verseKey);
-      if (num === initial.surah.num) reader.markRead(num, n);
-    }
+    persistReaderPosition(snapshot);
+    markAnchorRead(snapshot.anchor);
   }
 
   function scheduleHistoryWrite(): void {
@@ -503,48 +320,10 @@
     }, 180);
   }
 
-  function restoredHistoryState(): SurahReaderHistoryState | null {
-    const value = appPage.state.surahReader;
-    if (value && typeof value === "object") {
-      const state = value as Partial<SurahReaderHistoryState>;
-      if (
-        state.version === 1 &&
-        state.surahNum === initial.surah.num &&
-        state.activeLocalPage === currentUrlLocalPage() &&
-        Array.isArray(state.pages) &&
-        state.pages.some((pageData) => pageData?.page?.localPage === state.activeLocalPage)
-      ) {
-        return state as SurahReaderHistoryState;
-      }
-    }
-    const navigation = performance.getEntriesByType("navigation")[0] as
-      | PerformanceNavigationTiming
-      | undefined;
-    if (navigation?.type !== "reload") return null;
-    try {
-      const state = JSON.parse(sessionStorage.getItem(readerPositionKey) ?? "null") as
-        | Partial<SurahReaderHistoryState>
-        | null;
-      if (
-        state?.version === 1 &&
-        state.surahNum === initial.surah.num &&
-        state.activeLocalPage === initial.page.localPage &&
-        state.anchor
-      ) {
-        return {
-          version: 1,
-          surahNum: initial.surah.num,
-          activeLocalPage: initial.page.localPage,
-          pages: [initial],
-          anchor: state.anchor,
-        };
-      }
-    } catch {}
-    return null;
-  }
-
   async function restoreHistory(): Promise<void> {
-    const saved = restoredHistoryState();
+    const saved =
+      parseHistoryState(appPage.state.surahReader, initial.surah.num) ??
+      reloadPositionState(initial);
     if (!saved) return;
     // Restoring scrolls the window, which must not be mistaken for the reader
     // having been scrolled by the user.
@@ -558,7 +337,7 @@
   }
 
   async function restoreHistoryFrom(saved: SurahReaderHistoryState): Promise<void> {
-    const byPage = new SvelteMap<number, SurahLocalPageData>();
+    const byPage = new Map<number, SurahLocalPageData>();
     for (const pageData of saved.pages) {
       if (
         pageData.surah?.num === initial.surah.num &&
@@ -580,11 +359,11 @@
     );
     await nextFrame();
     await nextFrame();
-    if (saved.anchor) restoreViewportAnchor(saved.anchor);
+    if (saved.anchor) restoreAnchor(saved.anchor);
     await document.fonts.ready;
     await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
-    if (saved.anchor) restoreViewportAnchor(saved.anchor);
-    stableAnchor = captureViewportAnchor();
+    if (saved.anchor) restoreAnchor(saved.anchor);
+    stableAnchor = captureAnchor();
     updateVisiblePage();
   }
 
@@ -617,8 +396,7 @@
       const range = await quranWorker.readRange(
         pageDataRange.startGlobal,
         pageDataRange.endGlobal,
-        (globalIndex, surah, ayah) =>
-          quranData.globalIndexOf(surah, ayah) === globalIndex,
+        (globalIndex, surah, ayah) => quranData.globalIndexOf(surah, ayah) === globalIndex,
       );
       const normalization = range.normalizations.find(
         (value) => value.surah === initial.surah.num,
@@ -666,22 +444,23 @@
     });
   }
 
-  function setVisiblePage(localPage: number): void {
+  function setVisiblePage(localPage: number, anchor?: ViewportAnchor | null): void {
     if (!renderedPageNumbers.has(localPage)) shiftVirtualWindow(localPage);
     if (localPage === visibleLocalPage) return;
     activeLocalPage = localPage;
     const pageData = pages.find((item) => item.page.localPage === localPage);
     if (pageData) onVisiblePage?.(pageData);
-    const anchor = captureViewportAnchor();
-    if (userScrolled && anchor?.kind === "verse") {
-      const { num, n } = parseKey(anchor.verseKey);
-      if (num === initial.surah.num) reader.markRead(num, n);
-    }
+    markAnchorRead(anchor !== undefined ? anchor : captureAnchor());
     writeHistoryState(resolve(surahLocalPagePath(initial.surah, localPage)), localPage);
   }
 
-  function updateVisiblePage(): void {
-    const section = closestPage(viewportMarker());
+  function updateVisiblePage(anchor: ViewportAnchor | null = null): void {
+    if (anchor) {
+      setVisiblePage(anchor.localPage, anchor);
+      return;
+    }
+    if (!readerPages) return;
+    const section = closestPage(readerPages, viewportMarker());
     const localPage = Number(section?.dataset.localPage);
     if (Number.isSafeInteger(localPage)) setVisiblePage(localPage);
   }
@@ -691,11 +470,13 @@
     // Anchoring and restores move the window themselves; they must not be
     // treated as reading progress, but load-ahead below still applies.
     if (suppressScroll || anchorScrolling) {
-      stableAnchor = captureViewportAnchor();
+      stableAnchor = captureAnchor();
     } else {
       if (sawUserInput) userScrolled = true;
-      updateVisiblePage();
-      stableAnchor = captureViewportAnchor();
+      warmVirtualWindow(direction);
+      const anchor = captureAnchor();
+      updateVisiblePage(anchor);
+      stableAnchor = anchor;
       scheduleHistoryWrite();
     }
     if (!readerPages) return;
@@ -708,7 +489,7 @@
     const currentY = window.scrollY;
     if (suppressScroll || anchorScrolling) {
       lastScrollY = currentY;
-      stableAnchor = captureViewportAnchor();
+      stableAnchor = captureAnchor();
       // An anchor scroll can land at the end of what is loaded, so keep filling
       // forward — otherwise the target cannot be centred until the user scrolls.
       scheduleForwardFill();
@@ -717,7 +498,6 @@
     const direction = Math.sign(currentY - lastScrollY);
     lastScrollY = currentY;
     if (direction !== 0 && sawUserInput) userScrolled = true;
-    warmVirtualWindow(direction);
     if (scrollFrame) cancelAnimationFrame(scrollFrame);
     scrollFrame = requestAnimationFrame(() => processScroll(direction));
   }
@@ -774,11 +554,7 @@
     sawUserInput = true;
     if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
       processScroll(-1);
-    } else if (
-      event.key === "ArrowDown" ||
-      event.key === "PageDown" ||
-      event.key === "End"
-    ) {
+    } else if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === "End") {
       processScroll(1);
     }
   }
@@ -814,7 +590,7 @@
     lastScrollY = window.scrollY;
     cachePage(initial);
     void restoreHistory().then(() => {
-      stableAnchor = captureViewportAnchor();
+      stableAnchor = captureAnchor();
       scheduleForwardFill();
       void nextFrame().then(() => writeHistoryState());
     });
@@ -865,91 +641,16 @@
   {/if}
 
   <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
-    <div
-      class="flex min-h-[229px] flex-wrap items-start justify-between gap-6 border-b border-line px-5 pb-[26px] pt-[30px] sm:min-h-0 sm:px-9"
-    >
-      <div class="flex items-start gap-4">
-        <div
-          aria-hidden="true"
-          class="flex h-16 w-16 flex-none items-center justify-center rounded-2xl border border-accent bg-accent-soft font-arabic text-lg text-accent"
-        >
-          {badge}
-        </div>
-        <div class="flex min-w-0 flex-col gap-1.5">
-          <span class="text-xs font-semibold uppercase tracking-[0.1em] text-accent">
-            Surah {initial.surah.num} · Page {visibleLocalPage} of {initial.pageCount}
-          </span>
-          <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
-            <h1 class="text-[32px] font-semibold tracking-[-0.025em]">
-              {initial.surah.num}. {initial.surah.name}
-            </h1>
-            <span dir="rtl" lang="ar" class="font-arabic text-[30px] leading-none text-fg-2">
-              {initial.surah.arabic}
-            </span>
-          </div>
-          <span class="text-sm text-fg-3">{surahMeta(initial.surah)}</span>
-        </div>
-      </div>
+    <ReaderHeader
+      {initial}
+      {visibleLocalPage}
+      {clientMounted}
+      onChangeMode={changeMode}
+      onSmaller={() => changeFontSize(() => reader.smaller())}
+      onBigger={() => changeFontSize(() => reader.bigger())}
+    />
 
-      {#if clientMounted}
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <div
-            class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
-            role="group"
-            aria-label="Arabic text size"
-          >
-            <button
-              type="button"
-              onclick={() => changeFontSize(() => reader.smaller())}
-              aria-label="Smaller Arabic text"
-              class="flex h-[26px] w-7 items-center justify-center rounded-md text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
-            >
-              A&minus;
-            </button>
-            <button
-              type="button"
-              onclick={() => changeFontSize(() => reader.bigger())}
-              aria-label="Larger Arabic text"
-              class="flex h-[26px] w-7 items-center justify-center rounded-md text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
-            >
-              A+
-            </button>
-          </div>
-
-          <div
-            class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
-            aria-label="Reading mode"
-          >
-            <button
-              type="button"
-              aria-pressed={reader.isVerseMode}
-              onclick={() => changeMode("verse")}
-              class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
-            >
-              <Icon name="rows" size={13} />
-              <span class="hidden sm:inline">Ayah-by-Ayah</span>
-              <span class="sm:hidden">Ayahs</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={reader.isReadingMode}
-              onclick={() => changeMode("reading")}
-              class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
-            >
-              <Icon name="continuous" size={13} />
-              <span>Reading</span>
-            </button>
-          </div>
-        </div>
-      {/if}
-    </div>
-
-    <div
-      {@attach captureReaderPages}
-      class="reader-pages"
-      data-reader-mode={reader.mode}
-      tabindex="-1"
-    >
+    <div {@attach captureReaderPages} class="reader-pages" data-reader-mode={reader.mode} tabindex="-1">
       <TooltipProvider delayDuration={300}>
         {#each pages as pageData (pageData.page.localPage)}
           {#if renderedPageNumbers.has(pageData.page.localPage)}
@@ -964,11 +665,7 @@
                 {initial.surah.name}, page {pageData.page.localPage} of {initial.pageCount}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-                <p
-                  dir="rtl"
-                  lang="ar"
-                  class="surah-opener py-3 text-center font-arabic text-fg-3"
-                >
+                <p dir="rtl" lang="ar" class="surah-opener py-3 text-center font-arabic text-fg-3">
                   {headerText(pageData.normalization)}
                 </p>
               {/if}
@@ -989,7 +686,7 @@
               data-local-page={pageData.page.localPage}
               data-page-spacer
               aria-hidden="true"
-              style:height={`${pageHeight(pageData.page.localPage)}px`}
+              style:height={`${heightCache.get(pageData.page.localPage, readerWidth)}px`}
             ></div>
           {/if}
         {/each}
@@ -1004,33 +701,14 @@
       </div>
     {/if}
 
-    <nav
-      aria-label="Surah pages"
-      class="flex items-center justify-between gap-4 border-t border-line px-5 py-[22px] sm:px-9"
-    >
-      {#if previousHref && previousLabel}
-        <a
-          href={resolve(previousHref)}
-          data-sveltekit-preload-data="hover"
-          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-        >
-          <span aria-hidden="true">←</span>
-          {previousLabel}
-        </a>
-      {:else}
-        <span></span>
-      {/if}
-      {#if nextHref && nextLabel}
-        <a
-          href={resolve(nextHref)}
-          data-sveltekit-preload-data="hover"
-          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-        >
-          {nextLabel}
-          <span aria-hidden="true">→</span>
-        </a>
-      {/if}
-    </nav>
+    <ReaderPageNav
+      {initial}
+      lastLoadedLocalPage={lastLoaded.page.localPage}
+      {previousPage}
+      {nextPage}
+      {previousSurah}
+      {nextSurah}
+    />
   </div>
 </div>
 
@@ -1051,42 +729,23 @@
     flex-direction: column;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-page {
-    border-bottom: 1px solid var(--line);
-    padding: 2rem 1.25rem;
-  }
-
-  .reader-pages[data-reader-mode="reading"] .surah-page:last-child {
-    border-bottom: 0;
-  }
-
-  .reader-pages[data-reader-mode="reading"] .surah-opener {
-    padding-top: 0;
-  }
-
-  .reader-pages[data-reader-mode="reading"] .ayah-list {
-    display: block;
-    direction: rtl;
-    text-align: justify;
-    text-align-last: center;
-    font-family: var(--font-arabic);
-    line-height: 2.35;
-    word-spacing: 0.14em;
-  }
-
+  .reader-pages[data-reader-mode="reading"] .surah-page,
   :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
     border-bottom: 1px solid var(--line);
     padding: 2rem 1.25rem;
   }
 
+  .reader-pages[data-reader-mode="reading"] .surah-page:last-child,
   :global(html[data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
     border-bottom: 0;
   }
 
+  .reader-pages[data-reader-mode="reading"] .surah-opener,
   :global(html[data-reader-mode="reading"]) .reader-pages .surah-opener {
     padding-top: 0;
   }
 
+  .reader-pages[data-reader-mode="reading"] .ayah-list,
   :global(html[data-reader-mode="reading"]) .reader-pages .ayah-list {
     display: block;
     direction: rtl;
@@ -1106,10 +765,7 @@
   }
 
   @media (min-width: 640px) {
-    .reader-pages[data-reader-mode="reading"] .surah-page {
-      padding-inline: 2.25rem;
-    }
-
+    .reader-pages[data-reader-mode="reading"] .surah-page,
     :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
       padding-inline: 2.25rem;
     }

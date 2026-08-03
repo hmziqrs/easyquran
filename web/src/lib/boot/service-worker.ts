@@ -19,6 +19,5 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
 
 export function startServiceWorker(): () => void {
   if (import.meta.env.PROD) void registerServiceWorker();
-  return () => {
-  };
+  return () => {};
 }

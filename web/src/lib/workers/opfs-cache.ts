@@ -42,8 +42,7 @@ export async function ensureArtifact(
         try {
           await verifyBytes(cached, dl);
           return { bytes: cached, store: "opfs" };
-        } catch {
-        }
+        } catch {}
       }
       const bytes = await downloadBytes(dl, progress);
       await opfs.put(contentVersion, opfsKey, bytes);

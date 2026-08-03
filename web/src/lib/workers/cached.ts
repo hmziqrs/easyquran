@@ -26,16 +26,14 @@ export async function ensureCached(spec: DownloadSpec, opts: EnsureOptions): Pro
         }
         return { bytes: cached, from: "store" };
       }
-    } catch {
-    }
+    } catch {}
   }
 
   const bytes = await downloadBytes(spec, onProgress);
   if (store && version && key) {
     try {
       await store.put(version, key, bytes);
-    } catch {
-    }
+    } catch {}
   }
   return { bytes, from: "download" };
 }
