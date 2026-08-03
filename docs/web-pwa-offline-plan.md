@@ -6,9 +6,18 @@
 > Goal: the whole web app installable and readable offline — every Surah, every
 > page — with a boring, atomic update path when a new build ships.
 >
+> Serving assumption: the static Caddy container is **interim**. Translated SEO
+> pages (deferred item 8 of the translations plan) will be rendered on demand
+> with a TTL — ISR — which requires a dynamic origin. Every rule in this plan
+> is therefore a **host-agnostic contract** (§6), not a Caddy config; §6.3
+> specifies the target origin and §4/§5 are written so ISR routes slot in
+> without changing the offline architecture.
+>
 > Companion docs: [`quran-web-delivery.md`](./quran-web-delivery.md) (how the
 > Quran databases reach the browser), [`quran-ssg-optimization-plan.md`](./quran-ssg-optimization-plan.md)
-> (page/data shape this plan builds on).
+> (page/data shape this plan builds on), [`quran-translations.md`](./quran-translations.md)
+> (translation packs; its deferred "translated SEO pages" item is the ISR
+> driver here).
 
 ---
 
@@ -26,16 +35,19 @@ Four independent outcomes:
 3. **An atomic update system.** A deploy is detected within minutes by open
    tabs, applied as one all-or-nothing cache swap, and surfaced to the user as
    a single unobtrusive prompt. Reading position survives the update reload.
-4. **Honest HTTP delivery.** The static server (Caddy) actually sends cache
-   headers and compression. Today it sends neither; every safety property
-   below assumes these headers exist.
+4. **Honest HTTP delivery.** Whatever serves responses — Caddy today, the
+   ISR-capable origin later — sends the cache headers and compression this
+   plan depends on. Today nothing is sent; §6 defines the contract once and
+   each host implements it.
 
 Non-goals:
 
 - Offline write features (bookmarks/notes sync, auth) — local-first storage of
   those is a separate effort.
-- Offline translations and audio — excluded until those features land; the SW
-  already bypasses `/translations/`.
+- Offline translations and audio — translation *text* offline is owned by the
+  pack/OPFS design in `quran-translations.md`; this plan only reserves how the
+  SW must treat translated (ISR) routes so the two don't collide (§4.2, §6.3).
+  The SW already bypasses `/translations/`.
 - Changing the Rust API, the R2 artifact layout, or the two Arabic databases.
 - Adopting Workbox or any SW framework (see decision log, §12).
 
@@ -55,7 +67,7 @@ Non-goals:
 | Quran databases | `web/src/lib/workers/opfs-cache.ts` | Downloaded from R2 (or `/_quran/` locally), sha256+size verified, stored in OPFS `easyquran/<contentVersion>/<id>.sqlite`, IDB fallback, in-memory last resort. `navigator.storage.persist()` requested. Old content-version directories are **never deleted**. |
 | Content versioning | `web/src/lib/quran/manifest.ts` | `contentVersion` / `searchVersion` from the API (`/version`, `/scripts`, 3 s timeout) with baked fallback — already offline-safe. |
 | App version file | `build/_app/version.json` | Emitted by SvelteKit (currently `{"version":"<build timestamp>"}`). **Unused**: no `kit.version` config, no polling, `updated` store never read. |
-| Deploy | `deploy/Dockerfile.web` | `caddy file-server` — **no Caddyfile, no Cache-Control on anything, no compression**. `static/_headers` / `_redirects` are Cloudflare Pages/Netlify conventions and are inert on Caddy. |
+| Deploy | `deploy/Dockerfile.web` | `caddy file-server` — **no Caddyfile, no Cache-Control on anything, no compression**. `static/_headers` / `_redirects` are Cloudflare Pages/Netlify conventions and are inert on Caddy. Interim by decision: replaced by an ISR-capable origin when translated SEO pages land (§6.3). |
 
 ### 2.2 Measured weight (production build of `fbb220e`)
 
@@ -108,10 +120,14 @@ Two conclusions fall out of the numbers:
 | **App build** | `kit.version.name` → `_app/version.json` and `$service-worker`'s `version` | every deploy | SW precache (`eq-app-*`), triggers page/data revalidation sweeps |
 | **Quran content** | `contentVersion` (API `/version` or baked constant) | ~never (corrected artifacts) | OPFS/IDB database entries |
 | **Search corpus** | `searchVersion` | search normalization changes | in-worker corpus rebuild |
+| **Translation content** *(future)* | per-translation pack version (translations catalog) + the origin's ISR TTL for rendered pages | a translation pack is corrected / catalog changes | that translation's OPFS pack; ISR entries simply expire by TTL |
 
 An app deploy must **not** touch OPFS databases, and a content-version bump
 must not require an app deploy (the API manifest already delivers it). This
-separation already exists — preserve it.
+separation already exists — preserve it. ISR extends the same principle:
+**freshness of translated pages is owned by the origin's TTL, not by the app
+version** — a deploy neither implies nor requires re-rendering them, and the
+SW never treats them as part of the app shell.
 
 ### 3.2 The proposed `version.json` — assessment
 
@@ -199,7 +215,7 @@ path, same push handlers) and changes its cache layout and routing.
 
 | Cache name | Keyed by version? | Contents | Why |
 |---|---|---|---|
-| `eq-app-${version}` | yes | `build` + `files` + shell routes: `/`, `/app`, `/404.html` + `/quran-meta/quran-data.json` + `/manifest.webmanifest` | The app shell. Version-keyed so a deploy is an atomic swap; immutable assets never revalidate. |
+| `eq-app-${version}` | yes | `build` + `files` + shell routes: `/`, `/app`, the SPA shell (§4.5) + `/quran-meta/quran-data.json` + `/manifest.webmanifest` | The app shell. Version-keyed so a deploy is an atomic swap; immutable assets never revalidate. |
 | `eq-pages-v1` | **no** | HTML of successfully fetched navigations | The "pages I visited stay readable" library. Survives deploys (fixes §2.3-3). |
 | `eq-data-v1` | **no** | `__data.json` responses (and the offline pack contents, §5) | Powers offline SPA navigation to any cached route. Survives deploys. |
 
@@ -214,16 +230,17 @@ existing users off `eq-precache-*` / `eq-runtime-v1`.
 | `/quran/v1/*`, `/_quran/*`, `*.r2.easyquran.fyi`, `/firebase-config.js`, `/translations/*` | pass through (unchanged; the worker layer owns DB caching) |
 | `/_app/version.json`, `/service-worker.js` | pass through — the update detectors must never be SW-cached |
 | `/_app/immutable/*` | cache-first in `eq-app-*` (content-hashed, safe forever) |
-| navigations (`request.mode === "navigate"`) | network-first **with a ~3.5 s timeout** → `eq-app-*` shell-route match → `eq-pages-v1` match → `/404.html` shell. Successful responses are written to `eq-pages-v1`. |
-| `*/__data.json` | stale-while-revalidate in `eq-data-v1`, **keys normalized by stripping the query string** (`x-sveltekit-invalidated=…` currently fragments the cache) |
+| navigations (`request.mode === "navigate"`) | network-first **with a ~3.5 s timeout** → `eq-app-*` shell-route match → `eq-pages-v1` match → the SPA shell (§4.5). Successful responses are written to `eq-pages-v1`. |
+| translated reader routes *(future ISR; URL scheme TBD in `quran-translations.md` deferred-8)* | same navigation strategy — network-first into `eq-pages-v1` — but **never precached, never in the tier-2 pack**. The origin's TTL is the freshness authority; the SW copy is only an offline last-known-good. **Hard requirement on the future URL scheme:** translated routes must be distinguished by *path* (e.g. `/app/<surah>/tr/<id>`), not by query string — the SW routes them differently and `eq-data-v1` strips query strings, so a `?tr=` scheme would collapse translated and Arabic data onto one cache key. |
+| `*/__data.json` | stale-while-revalidate in `eq-data-v1`, **keys normalized by stripping the query string** (`x-sveltekit-invalidated=…` currently fragments the cache). ISR routes' data responses follow the navigation rule above, not SWR. |
 | other same-origin GET | stale-while-revalidate in `eq-app-*`'s runtime section — practically: icons, favicons, og image; small and safe to re-fetch per version |
 
 Details that make this bulletproof rather than merely plausible:
 
-- **The shell fallback is the offline renderer.** `404.html` (adapter-static's
-  SPA fallback) + precached route chunks + a cached `__data.json` render any
-  route offline with full interactivity. This is what makes precaching 1,311
-  HTML files unnecessary.
+- **The shell fallback is the offline renderer.** An SPA shell + precached
+  route chunks + a cached `__data.json` render any route offline with full
+  interactivity. This is what makes precaching 1,311 HTML files unnecessary.
+  (§4.5 defines what "the shell" is on each origin.)
 - **Navigation timeout.** Today's network-first blocks on lie-fi until the
   browser gives up. 3.5 s then cache keeps repeat visits usable on bad
   connections without making fresh content unreachable (a later `activate`
@@ -258,6 +275,24 @@ After the worker reaches `ready` on `contentVersion` **V**:
 One-shot, fire-and-forget, logged on failure. This is the only cache the app
 deletes outside the SW lifecycle, and only *after* the replacement is proven
 to load.
+
+### 4.5 The SPA shell, on both origins
+
+The SW needs one precached HTML document that boots the router for any URL.
+Its identity changes with the origin migration; keep it behind a single
+constant in the SW so nothing else cares:
+
+- **Static origin (today):** `/404.html` — adapter-static's `fallback` page,
+  which already exists.
+- **ISR-capable origin (adapter-node):** adapter-node has no `fallback`
+  concept, so add a dedicated prerendered shell route (e.g. `/shell`):
+  `export const prerender = true; export const ssr = false; export const csr = true;`
+  — SvelteKit's documented SPA-shell recipe. It prerenders to a bare document
+  that client-renders whatever URL it is served under. Excluded from sitemap,
+  `noindex`, and precached in `eq-app-*`.
+
+Migration is a one-line SW change plus the new route; the offline behavior is
+identical.
 
 ---
 
@@ -309,9 +344,13 @@ Client flow (Settings → "Offline" section):
    clear the flag.
 
 The pack deliberately contains **data, not HTML**: offline hard navigations to
-never-visited routes land on the `404.html` shell, which client-renders from
+never-visited routes land on the SPA shell (§4.5), which client-renders from
 the pack. That asymmetry is fine — it is exactly how a SvelteKit soft
 navigation works anyway.
+
+Because the pack step walks `build/**/__data.json`, it inherently contains
+only prerendered (Arabic core) routes — future ISR translation routes never
+exist in `build/` and are excluded by construction.
 
 ### 5.3 Rejected alternative for tier 2 (recorded for later)
 
@@ -326,63 +365,80 @@ hurts. (§12-e)
 
 ---
 
-## 6. HTTP delivery (prerequisite for everything above)
+## 6. HTTP delivery contract (prerequisite for everything above)
 
-### 6.1 Caddy
+The origin **will change** — static Caddy now, an ISR-capable origin when
+translated SEO pages land. So the deliverable of this section is a *contract*,
+enforced by an assertion script (§11), that every origin must satisfy. Hosts
+come and go; the contract and the script stay.
 
-Replace `CMD ["caddy", "file-server", …]` with a checked-in
-`deploy/Caddyfile` (`COPY` it in `Dockerfile.web`):
+### 6.1 The contract
 
-```caddyfile
-:8080 {
-	root * /srv
-	encode zstd gzip
+| Path | Cache-Control | Notes |
+|---|---|---|
+| `/_app/immutable/*` | `public, max-age=31536000, immutable` | content-hashed |
+| `/_app/version.json`, `/offline/manifest.json` | `no-store` | the update detectors |
+| `/offline/pack.*.json` | `public, max-age=31536000, immutable` | content-hashed |
+| `/service-worker.js`, `/manifest.webmanifest`, `/quran-meta/*`, HTML pages, `*/__data.json` (prerendered) | `no-cache` | revalidate with ETag; cheap 304s |
+| translated (ISR) pages + their `__data.json` *(future)* | `public, max-age=0, s-maxage=<TTL>, stale-while-revalidate=<TTL>` | browsers revalidate every time (`max-age=0`), shared caches serve for the TTL (`s-maxage`); set by the route itself via `setHeaders`. The TTL *is* the "translation lives for some amount of time" rule, expressed in standard HTTP so any proxy/CDN can enforce it |
+| `*.md`, `*.txt` | — | `X-Robots-Tag: noindex, follow` (parity with `static/_headers`) |
+| everything | compressed | brotli/zstd/gzip; prerendered files via `precompress: true` siblings, dynamic responses via the proxy |
 
-	@immutable path /_app/immutable/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
+Also required of every origin: unknown URLs return the branded 404 page
+(§2.3-7), and correct `ETag`/`304` behavior on the `no-cache` class.
 
-	@nostore path /_app/version.json /offline/manifest.json
-	header @nostore Cache-Control "no-store"
+### 6.2 Interim implementation: Caddy (only if the ISR migration is not imminent)
 
-	@revalidate path /service-worker.js /manifest.webmanifest /quran-meta/* *.html /*/__data.json
-	header @revalidate Cache-Control "no-cache"
+A ~25-line checked-in `deploy/Caddyfile` (replacing the bare
+`caddy file-server` CMD) implements the static rows: `encode zstd gzip`,
+`file_server { precompressed br gzip }` (+ flip the adapter's
+`precompress: false → true`), one `header` matcher per contract row, and
+`handle_errors { rewrite * /404.html }`. Compression alone cuts the ~30 KB
+pages to single-digit KB on the wire and makes the tier-2 pack and §4.3
+sweeps cheap.
 
-	@pack path /offline/pack.*.json
-	header @pack Cache-Control "public, max-age=31536000, immutable"
+If the adapter-node migration is scheduled within the next couple of releases,
+skip this and land the contract there directly — do not build the same rules
+twice. (Open question §13-6.)
 
-	# parity with static/_headers (inert on Caddy today)
-	@textalt path *.md *.txt
-	header @textalt X-Robots-Tag "noindex, follow"
+### 6.3 Target implementation: the ISR-capable origin
 
-	handle_errors {
-		@404 expression {http.error.status_code} == 404
-		rewrite @404 /404.html
-		file_server
-	}
+Constraints it must satisfy, given the existing infra (Docker + external
+Traefik, Rust API alongside):
 
-	file_server {
-		precompressed br gzip
-	}
-}
-```
+- **Adapter:** `adapter-static → adapter-node`, hybrid rendering. Every
+  existing route keeps `prerender = true` (the Arabic core stays a build-time
+  artifact — nothing in §2–§5 changes). Translated reader routes are the only
+  non-prerendered ones: rendered on demand, with popularity-based exceptions
+  (top translations may be prerendered later) — thresholds belong to the
+  translations project, not this plan.
+- **ISR semantics, self-hosted:** on-demand render + TTL is expressed as the
+  `s-maxage`/`stale-while-revalidate` contract row, set per-route with
+  `setHeaders`. Enforcement starts as an **in-process LRU render cache** in
+  the node origin (URL → rendered response + expiry; modest cardinality:
+  115 translations × page space, evicted by size). Because freshness is in
+  standard headers, a real shared cache (Souin/Varnish/Cloudflare) can be
+  layered in front later *without touching the app*. Do not invent a bespoke
+  invalidation protocol; TTL expiry is the design.
+- **Header contract placement:** Traefik already routes this stack, so the
+  static rows of §6.1 live in Traefik middlewares (path-matched `headers`
+  + `compress` middleware for dynamic responses) — adapter-node's own static
+  serving handles `_app/immutable` correctly, and ISR rows come from the
+  routes themselves. The assertion script is the referee, wherever a rule
+  physically lives.
+- **SW interplay (already fixed above):** ISR routes are ordinary navigations
+  to the SW (§4.2) — cached as last-known-good in `eq-pages-v1`, never
+  precached, never packed, TTL owned by the origin. The SPA shell switches to
+  the dedicated `/shell` route (§4.5). No other SW change.
 
-- `no-cache` (revalidate with ETag, cheap 304s) for everything the SW treats
-  as mutable; `no-store` only for the two update detectors.
-- `handle_errors` finally serves the branded SPA 404 online (§2.3-7).
-- Flip `precompress: false → true` in the adapter config so `.br`/`.gz`
-  siblings exist; `precompressed` serves them. This alone cuts the ~30 KB
-  pages to single-digit KB on the wire — it also makes the tier-2 pack and
-  the §4.3 sweeps cheap.
+### 6.4 Other hosts
 
-### 6.2 Other hosts
+If the site also deploys to Cloudflare Pages/Netlify, mirror the static
+contract rows in `web/static/_headers` (the robots rules there today are the
+template). Rule of thumb anywhere: **`_app/immutable/*` immutable-forever,
+`version.json` no-store, everything else no-cache, ISR rows via `s-maxage`.**
 
-If the site also deploys to Cloudflare Pages/Netlify, mirror the cache rules
-in `web/static/_headers` (the robots rules there today are the template).
-Rule of thumb for any future host: **`_app/immutable/*` immutable-forever,
-`version.json` no-store, everything else no-cache.** Add a curl-based header
-assertion script (§11) so drift is caught, not assumed.
-
-### 6.3 Registration hardening
+### 6.5 Registration hardening
 
 - `navigator.serviceWorker.register(SW_URL, { …, updateViaCache: "none" })` —
   belt-and-braces against any intermediary caching the SW script.
@@ -449,11 +505,13 @@ same anchor. Add this to the acceptance checklist so it stays true.
 |---|---|
 | First visit ever, offline | Nothing we can do (no SW yet) — browser error. |
 | Installed app launched offline | `/app` served from `eq-app-*`; DB from OPFS; worker `resolveManifest` times out in 3 s → baked manifest → reader boots. |
-| Offline hard-nav to never-visited route, tier 2 on | `404.html` shell → route chunks from precache → pack data from `eq-data-v1` → full render. |
+| Offline hard-nav to never-visited route, tier 2 on | SPA shell (§4.5) → route chunks from precache → pack data from `eq-data-v1` → full render. |
 | Offline, tier 2 off, route never visited | Shell renders, data fetch fails → route-level error UI with the offline indicator explaining why. Acceptable; tier 2 is the fix. |
 | Deploy while N tabs open | New SW installs and waits; every tab gets the toast; acting tab reloads; others hard-navigate on next nav. Old precache serves old tabs until then. |
 | Deploy removes old immutable chunks, old tab lazy-imports one | Online: SvelteKit falls back to a full-page navigation on failed dynamic import — lands on new version. Offline: chunk is in the old precache (not yet deleted while SW waits) — still works. |
 | `__data.json` shape changes in a deploy | Sweep (§4.3) refreshes cached entries when online. Residual risk: offline across a shape-breaking deploy → shell render fails for stale entries → error UI. Rare and self-heals online. |
+| Translated (ISR) route, offline *(future)* | Visited: served stale from `eq-pages-v1`, offline indicator showing; TTL staleness offline is accepted — the alternative is nothing. Unvisited: shell + error UI pointing at the translation pack flow (`quran-translations.md`), which is the real offline path for translation text. |
+| ISR entry expires at the origin | Purely an origin/proxy concern: next request re-renders. The SW neither knows nor cares — it never caches by TTL, only replaces on successful fetch. |
 | Lie-fi (connected, 0 throughput) | 3.5 s navigation timeout → cached page/shell. |
 | Storage eviction (quota pressure, Safari) | `persist()` already requested (grants are near-automatic for installed PWAs). Everything is re-downloadable; sha256 verification catches truncated DBs; worst case is a re-download, never corruption. |
 | Safari/iOS specifics | SW + manifest install supported (16.4+ for push). OPFS `createWritable` missing on older Safari → existing IDB fallback already covers it. Test matrix in §11. |
@@ -465,14 +523,20 @@ same anchor. Add this to the acceptance checklist so it stays true.
 
 ## 10. Rollout phases
 
-Each phase ships independently and leaves the site strictly better.
+Each phase ships independently and leaves the site strictly better. The
+adapter-node/ISR migration is **its own project** (owned by the translations
+work); when it lands, this plan changes only in §6's implementation column
+and the one-line shell swap of §4.5 — phases 1–4 are origin-agnostic by
+construction.
 
-**Phase 0 — honest delivery (no app code).**
-`deploy/Caddyfile` + Dockerfile CMD change, `precompress: true`,
-`updateViaCache: "none"`, `_headers` parity note.
-*Accept:* curl assertions pass (§11); pages arrive brotli-compressed;
-`_app/immutable/*` shows `immutable`; `version.json` shows `no-store`;
-unknown URL returns branded 404.
+**Phase 0 — delivery contract (no app code).**
+Write `web/scripts/assert-headers.sh` from the §6.1 table, then implement the
+static rows on the current origin (interim Caddyfile, §6.2) **or**, if the
+node migration is imminent, defer implementation to it and keep only the
+script + `precompress: true` + `updateViaCache: "none"`.
+*Accept:* assertion script passes against the serving origin; pages arrive
+brotli-compressed; `_app/immutable/*` shows `immutable`; `version.json` shows
+`no-store`; unknown URL returns branded 404.
 
 **Phase 1 — version identity & update loop.**
 `kit.version { name, pollInterval }` from package.json + `BUILD_REF`;
@@ -483,7 +547,7 @@ visibility-triggered `updated.check()` + `registration.update()`.
 reader position; second tab full-navigates on its next click.
 
 **Phase 2 — cache architecture v2.**
-New cache trio, shell-route precache (`/`, `/app`, `404.html`,
+New cache trio, shell-route precache (`/`, `/app`, the SPA shell of §4.5,
 `quran-data.json`, manifest), navigation timeout, query-normalized
 `eq-data-v1`, activate sweeps + trim, OPFS/IDB old-version cleanup.
 *Accept:* DevTools-offline: installed app launches to `/app`; a visited Surah
@@ -544,6 +608,17 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
   revalidation sweeps** — chosen over version-keyed runtime caches, which
   silently delete the user's offline library at every deploy (today's
   behavior).
+- **(g) HTTP rules are a host-agnostic contract, not server config.** The
+  origin is scheduled to change (static Caddy → ISR-capable node origin for
+  on-demand translated pages); encoding the rules as a table + assertion
+  script means the migration re-implements, never re-designs. Caddy work is
+  explicitly throwaway-priced (§6.2) and skippable.
+- **(h) ISR pages live outside the app-version lifecycle.** Their freshness is
+  the origin's TTL (`s-maxage`/`stale-while-revalidate` set per route); the SW
+  treats them as ordinary network-first navigations — never precached, never
+  packed, cached only as an offline last-known-good. Offline translation
+  *text* remains the pack/OPFS design in `quran-translations.md`; this plan
+  does not duplicate it in Cache Storage.
 
 ---
 
@@ -558,3 +633,12 @@ manual pass, Lighthouse installability ≥ green, update this doc's status line.
 4. `eq-pages-v1` trim bound (proposed 300 entries ≈ ~9 MB worst case).
 5. Auto-enable tier 2 for installed apps on wifi without asking? (Default: no
    — keep it an explicit, labeled download.)
+6. Timing of the adapter-node/ISR migration relative to phase 0: if it lands
+   within a couple of releases, skip the interim Caddyfile entirely (§6.2).
+7. ISR TTL values and the popularity threshold for prerendering top
+   translations — owned by the translations project; this plan only requires
+   they be expressed as `s-maxage`/`stale-while-revalidate` and that the URL
+   scheme be path-distinguished (§4.2 hard requirement).
+8. ISR render-cache backend: in-process LRU (recommended start) vs Redis vs a
+   caching proxy (Souin/Varnish) — revisit only if hit rates or multi-replica
+   deployment demand it.
