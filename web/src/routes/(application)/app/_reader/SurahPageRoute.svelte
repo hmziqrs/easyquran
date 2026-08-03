@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { goto } from "$app/navigation";
+  import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { Seo } from "$lib/components";
@@ -56,29 +56,58 @@
     return new Promise((resolveFrame) => requestAnimationFrame(() => resolveFrame()));
   }
 
-  async function revealRequestedAyah(): Promise<void> {
-    const ayah = requestedAyah();
-    if (!ayah) return;
+  async function ayahRow(ayah: number): Promise<HTMLElement | null> {
+    const id = `ayah-${surah.num}-${ayah}`;
+    await tick();
+    await document.fonts.ready;
+    // The row can still be a virtual spacer for a frame or two after the page mounts.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await nextFrame();
+      const row = document.getElementById(id);
+      if (row) return row;
+    }
+    return null;
+  }
+
+  async function revealRequestedAyah(ayah: number): Promise<void> {
     anchorScrolling = true;
     try {
       const quranData = await loadQuranData();
       const targetPage = quranData.surahLocalPageForAyah(surah.num, ayah);
       if (!targetPage) return;
       const targetHref = resolve(surahAyahPath(surah, targetPage.localPage, ayah));
-      if (
-        targetPage.localPage !== data.pageData.page.localPage ||
-        page.url.searchParams.has("verse")
-      ) {
+      if (targetPage.localPage !== data.pageData.page.localPage) {
         await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
         return;
       }
-      await tick();
-      await document.fonts.ready;
-      await nextFrame();
-      await nextFrame();
-      const row = document.getElementById(`ayah-${surah.num}-${ayah}`);
-      const target = row?.querySelector<HTMLElement>("[data-verse-anchor]") ?? row;
-      target?.scrollIntoView({ behavior: "auto", block: "center" });
+      // Already on the right page: rewrite the URL in place (dropping any legacy
+      // ?verse) so the route key stays stable and this mount does the scrolling.
+      if (page.url.href !== new URL(targetHref, page.url).href) {
+        replaceState(targetHref, page.state);
+      }
+      const row = await ayahRow(ayah);
+      if (!row) {
+        await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
+        return;
+      }
+      const target = row.querySelector<HTMLElement>("[data-verse-anchor]") ?? row;
+      // Centering can be clamped by a document that is still growing (adjacent
+      // pages load lazily), so keep re-centering until the height settles.
+      const start = performance.now();
+      let lastHeight = -1;
+      let stableFrames = 0;
+      for (;;) {
+        target.scrollIntoView({ behavior: "auto", block: "center" });
+        const height = document.documentElement.scrollHeight;
+        stableFrames = height === lastHeight ? stableFrames + 1 : 0;
+        lastHeight = height;
+        const elapsed = performance.now() - start;
+        if (elapsed > 700) break;
+        // Adjacent pages arrive a few hundred ms in, so hold on past the first
+        // few stable frames before trusting the layout.
+        if (stableFrames >= 3 && elapsed >= 320) break;
+        await nextFrame();
+      }
       reader.markRead(surah.num, ayah);
       await nextFrame();
     } finally {
@@ -86,9 +115,23 @@
     }
   }
 
+  let revealedAyah: number | null = null;
+
   onMount(() => {
     reader.setCurrent(surah.num);
-    void revealRequestedAyah();
+  });
+
+  // Re-runs on every URL change, so hash navigation within the same surah page
+  // reveals too — onMount alone never fires again without a route-key change.
+  $effect(() => {
+    const ayah = requestedAyah();
+    if (ayah === null) {
+      revealedAyah = null;
+      return;
+    }
+    if (revealedAyah === ayah) return;
+    revealedAyah = ayah;
+    void revealRequestedAyah(ayah);
   });
 </script>
 

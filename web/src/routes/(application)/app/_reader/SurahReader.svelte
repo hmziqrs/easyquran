@@ -86,6 +86,8 @@
   let forwardFillFrame = 0;
   let historyWriteTimer: ReturnType<typeof setTimeout> | null = null;
   let suppressScroll = false;
+  let sawUserInput = false;
+  let userScrolled = false;
   let layoutRepairPending = false;
   let virtualShiftPage: number | null = null;
   let stableAnchor: ViewportAnchor | null = null;
@@ -487,7 +489,7 @@
         }),
       );
     } catch {}
-    if (snapshot.anchor?.kind === "verse") {
+    if (userScrolled && snapshot.anchor?.kind === "verse") {
       const { num, n } = parseKey(snapshot.anchor.verseKey);
       if (num === initial.surah.num) reader.markRead(num, n);
     }
@@ -544,6 +546,18 @@
   async function restoreHistory(): Promise<void> {
     const saved = restoredHistoryState();
     if (!saved) return;
+    // Restoring scrolls the window, which must not be mistaken for the reader
+    // having been scrolled by the user.
+    suppressScroll = true;
+    try {
+      await restoreHistoryFrom(saved);
+      await nextFrame();
+    } finally {
+      suppressScroll = false;
+    }
+  }
+
+  async function restoreHistoryFrom(saved: SurahReaderHistoryState): Promise<void> {
     const byPage = new SvelteMap<number, SurahLocalPageData>();
     for (const pageData of saved.pages) {
       if (
@@ -659,7 +673,7 @@
     const pageData = pages.find((item) => item.page.localPage === localPage);
     if (pageData) onVisiblePage?.(pageData);
     const anchor = captureViewportAnchor();
-    if (anchor?.kind === "verse") {
+    if (userScrolled && anchor?.kind === "verse") {
       const { num, n } = parseKey(anchor.verseKey);
       if (num === initial.surah.num) reader.markRead(num, n);
     }
@@ -674,9 +688,16 @@
 
   function processScroll(direction: number): void {
     scrollFrame = 0;
-    updateVisiblePage();
-    stableAnchor = captureViewportAnchor();
-    scheduleHistoryWrite();
+    // Anchoring and restores move the window themselves; they must not be
+    // treated as reading progress, but load-ahead below still applies.
+    if (suppressScroll || anchorScrolling) {
+      stableAnchor = captureViewportAnchor();
+    } else {
+      if (sawUserInput) userScrolled = true;
+      updateVisiblePage();
+      stableAnchor = captureViewportAnchor();
+      scheduleHistoryWrite();
+    }
     if (!readerPages) return;
     const rect = readerPages.getBoundingClientRect();
     if (direction < 0 && rect.top > -loadAheadPx) requestPreviousPage();
@@ -688,10 +709,14 @@
     if (suppressScroll || anchorScrolling) {
       lastScrollY = currentY;
       stableAnchor = captureViewportAnchor();
+      // An anchor scroll can land at the end of what is loaded, so keep filling
+      // forward — otherwise the target cannot be centred until the user scrolls.
+      scheduleForwardFill();
       return;
     }
     const direction = Math.sign(currentY - lastScrollY);
     lastScrollY = currentY;
+    if (direction !== 0 && sawUserInput) userScrolled = true;
     warmVirtualWindow(direction);
     if (scrollFrame) cancelAnimationFrame(scrollFrame);
     scrollFrame = requestAnimationFrame(() => processScroll(direction));
@@ -702,12 +727,21 @@
     return window.scrollY >= document.documentElement.scrollHeight - window.innerHeight - 1;
   }
 
+  // Scroll events alone cannot be trusted as "the user read this" — restores,
+  // anchoring and SvelteKit's own navigation scrolling all fire them. Marking a
+  // verse read requires a real input first.
+  function onUserInput(): void {
+    sawUserInput = true;
+  }
+
   function onWheel(event: WheelEvent): void {
+    sawUserInput = true;
     const direction = Math.sign(event.deltaY);
     if (direction !== 0 && atScrollBoundary(direction)) processScroll(direction);
   }
 
   function onTouchStart(event: TouchEvent): void {
+    sawUserInput = true;
     touchY = event.touches[0]?.clientY ?? null;
   }
 
@@ -737,6 +771,7 @@
     ) {
       return;
     }
+    sawUserInput = true;
     if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
       processScroll(-1);
     } else if (
@@ -812,6 +847,7 @@
   ontouchmove={onTouchMove}
   ontouchend={onTouchEnd}
   onkeydown={onKeyDown}
+  onpointerdown={onUserInput}
   onresize={onResize}
 />
 
