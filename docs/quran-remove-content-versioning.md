@@ -57,14 +57,18 @@ So this doc is self-contained, the full surface — every reference is listed in
 the investigation that produced this plan. Condensed by layer:
 
 **Rust backend (computes, asserts, serves, ETags):**
+- `Cargo.toml:156-157` — `blake3 = "1.5"` dependency + its `content-version digest` comment. loader.rs is the **only** user → dependency is removed with it.
 - `quran/loader.rs:96-103` — `blake3` aggregate → 16-hex `content_version`. The definition.
-- `quran/loader.rs:105-115` — boot-time assertion vs `QURAN_CONTENT_VERSION` env.
+- `quran/loader.rs:95,105-115` — boot-time assertion vs `QURAN_CONTENT_VERSION` env; the `:95` comment ("reordering changes contentVersion…") is stale after removal.
 - `quran/store.rs:275,296` — stored on `QuranStore`, exposed via `content_version()`.
-- `quran_v1/controller.rs:676` — `/version` emits it; `:692-694` folds it into the `/version` ETag.
-- `quran_v1/controller.rs:712` — `/health/ready` emits `content_version`.
-- `quran_v1/controller.rs:106,586,769,886` + `quran_v1/cache.rs:17` — **every** API response ETag is `W/"<contentVersion>:<key>"`.
-- `quran_v1/dto.rs:7-19` — the response `Envelope` carries `content_version` on **every** payload.
-- `config/settings.rs:146,160` — reads `QURAN_CONTENT_VERSION`; `main.rs:444` — logs it.
+- `quran_v1/controller.rs:676` — `/version` emits it (`VersionData` via `Envelope`); `:692-694` folds it into the `/version` ETag.
+- `quran_v1/controller.rs:712` — `/health/ready` emits `content_version` on the `HealthReady` struct (`dto.rs:194-201`).
+- `quran_v1/controller.rs:615-616` — **`/scripts`** also wraps `Envelope::new(ScriptsData{..}, &cv)`; the web client fetches `/scripts`, so this is a live, client-consumed field.
+- `quran_v1/controller.rs:106,586,769,886` — the remaining `Envelope::new(.., store.content_version())` sites (surah/page/juz/random-ayah routes).
+- `quran_v1/cache.rs:17,40-47` — **both** `weak_etag(content_version, key)` and `respond_cached(.., content_version, ..)` take it as a parameter; the `:70` doc-comment mentions it.
+- `quran_v1/dto.rs:7-19` — the response `Envelope<T>` carries `content_version` on **every** payload.
+- `quran_v1/dto.rs:176-179` — **`TranslationVersion`** struct: per-translation `content_version` carried in the `/version` `translations[]` array (the on-the-wire surface for translation versioning).
+- `config/settings.rs:145-146,160` — `expected_content_version` field + env read (the `:145` comment is stale); `main.rs:444` — logs it.
 
 **Wire / client decode:** `web/src/lib/quran/wire.ts:261-270` (`decodeVersionPayload`).
 
@@ -105,14 +109,18 @@ Note `searchVersion` is a **separate** concept and is **not** in scope (§7).
 
 ### 4.1 Rust backend
 
-- **`loader.rs`** — delete the `blake3` block (`:96-103`); delete `content_version` from the returned `QuranStore`. Keep the per-file `file_sha256` computation (`:121,126`) — that feeds `source_digests`, which stays.
+- **`Cargo.toml`** — remove the `blake3 = "1.5"` dependency (and its comment); loader.rs is its only user. `Cargo.lock` updates automatically.
+- **`loader.rs`** — delete the `blake3` block (`:96-103`); delete `content_version` from the returned `QuranStore`; delete the stale `:95` contract comment. Keep the per-file `file_sha256` computation (`:121,126,146`) — that feeds `source_digests`, which stays.
 - **`store.rs`** — drop the `content_version: Arc<str>` field and `content_version()` accessor.
-- **`settings.rs` / `loader.rs` boot assertion** — replace `QURAN_CONTENT_VERSION` with two pinned per-file sha256 values (uthmani + simple-clean), asserted against the computed `file_sha256` at boot. These are the same digests already pinned in `web/src/lib/quran/view/source-profiles.ts:80,96`; mirror them in Rust config so both sides assert the same bytes. (§6.)
-- **`dto.rs`** — remove `content_version` from `Envelope<T>` and drop the second argument of `Envelope::new`. Every call site (`controller.rs:106,586,769,886…`) becomes `Envelope::new(data)`.
-- **`controller.rs` `/version` (`:676`)** — emit `{ api_version, search_version, source_digests, translations }`; drop `content_version`. ETag becomes `weak_etag(quran::SEARCH_VERSION, "version")`.
-- **`controller.rs` `/health/ready` (`:712`)** — drop `content_version`, keep `search_version` + `source_digests`.
-- **`cache.rs` / `controller.rs` ETags** — `weak_etag(canonical_key)` for content routes (key-only is a valid ETag for immutable data); `/search` folds `search_version` as today.
+- **`settings.rs` / `loader.rs` boot assertion** — replace `QURAN_CONTENT_VERSION` with two pinned per-file sha256 values (uthmani + simple-clean), asserted against the computed `file_sha256` at boot; remove the stale `:145` comment. These are the same digests already pinned in `web/src/lib/quran/view/source-profiles.ts:80,96`; mirror them in Rust config so both sides assert the same bytes. (§6.)
+- **`dto.rs`** — remove `content_version` from `Envelope<T>` and drop the second argument of `Envelope::new`; remove the `content_version` field from `HealthReady` (`:196`) and `TranslationVersion` (`:178`). `VersionData` itself has no such field (it rides on the `Envelope`), so it is untouched.
+- **`controller.rs` `/version` (`:676`)** — emit `{ api_version, search_version, source_digests, translations }`; drop `content_version`. ETag becomes `weak_etag(quran::SEARCH_VERSION, "version")`. `TranslationVersion` entries in the `translations[]` array keep only `id` (+ any non-version fields).
+- **`controller.rs` `/scripts` (`:615-616`)** — `Envelope::new(ScriptsData{..})` drops the version arg; `respond_cached` call drops the `content_version` arg.
+- **`controller.rs` `/health/ready` (`:712`)** — drop `content_version` from `HealthReady`, keep `search_version` + `source_digests`.
+- **`controller.rs` remaining sites (`:106,586,769,886` + `:691` comment)** — all `Envelope::new(..)` / `respond_cached(..)` calls lose the version arg; reword the `:691` comment to reference `search_version` only.
+- **`cache.rs`** — `weak_etag(canonical_key)` for content routes (key-only is a valid ETag for immutable data); `/search` folds `search_version` as today. Both `respond_cached` and `respond_cached_with_etag` (`:40,71`) lose their `content_version` parameter; reword the `:70` comment.
 - **`main.rs:444`** — log `source_digests` instead of `content_version`.
+- **OpenAPI:** the schemas are utoipa-derived from the DTO structs, so removing the fields auto-updates the served spec — no separate spec file exists or needs editing.
 
 ### 4.2 Wire / API contract
 
@@ -127,7 +135,12 @@ Note `searchVersion` is a **separate** concept and is **not** in scope (§7).
 
 ### 4.4 OPFS / IDB storage (the "version became the path" fix)
 
-- `web/src/lib/workers/opfs-cache.ts` — `ensureArtifact(spec, …)` no longer takes a version. The store API (`createOpfsStore` / `get` / `put` in `web/src/lib/workers/storage.ts`, and `ensureCached` in `cached.ts`) drops the `version` axis: store each DB at a version-free path/key, e.g. OPFS `easyquran/<id>.sqlite` and IDB key `<id>`. sha256 verification on hit (`opfs-cache.ts:43`) and on download (`download.ts:30`) is unchanged and remains the integrity gate.
+This is an **interface-level** change, not a call-site tweak. `version` is the
+*first* parameter of the `ByteStore` interface today.
+
+- `web/src/lib/workers/storage.ts` — reshape `ByteStore` from `get(version, key)` / `put(version, key, bytes)` to `get(key)` / `put(key, bytes)`. Concretely: `createOpfsStore` drops the `versionDir(version)` directory layer (store files directly under the root dir, e.g. `easyquran/<id>.sqlite`); `createIdbStore` drops the `${version}:${key}` prefix (key by `<id>` only). `pruneOpfs(rootDir, keepVersion)` and `pruneIdb(dbName, storeName, keepVersion)` are removed — repurposed as the one-time legacy migration in §5, then deleted.
+- `web/src/lib/workers/cached.ts` — drop the `version?` option from `ensureCached`'s opts (the `store && version && key` gates collapse to `store && key`).
+- `web/src/lib/workers/opfs-cache.ts` — `ensureArtifact(spec)` no longer takes a version; `opfs.get/put` and `ensureCached` calls shed the version arg. sha256 verification on hit (`:43`) and on download (`download.ts:30`) is unchanged and remains the integrity gate.
 - `web/src/lib/workers/quran.worker.ts:121-137` — delete `pruneOldVersions()` and its call; with one version there is nothing to prune after the one-time migration (§5).
 
 ### 4.5 Translations (`quran-translations.md`)
@@ -208,10 +221,13 @@ separated only to make review and rollback boundaries clear.
 **Phase 1 — Rust backend.** Drop the blake3 `content_version` from
 `loader`/`store`; migrate the boot assertion to per-file sha256; remove
 `content_version` from `Envelope`, `/version`, `/health/ready`; simplify ETags.
-*Accept:* backend boots and asserts sha256; `/version` returns `search_version`
-+ `source_digests` and no `content_version`; lib tests + `quran_v1` integration
-tests pass (update the `:224` assertion that currently checks `contentVersion`
-is present).
+*Accept:* backend boots and asserts per-file sha256; `/version` and `/scripts`
+return no `content_version`; `cargo build` is warning-free with `blake3` gone.
+Tests updated: `loader.rs:538-540` (the `content_version().len() == 16` assertion
+is deleted), `loader.rs:507,646` + `quran_v1.rs:28` (`expected_content_version:
+None` fixtures leave the `Settings` struct as the field is removed),
+`quran_v1.rs:224` (`assert!(body.get("contentVersion").is_some())` → removed or
+flipped to `.is_none()`); all lib + `quran_v1` integration tests pass.
 
 **Phase 2 — web client + storage.** Remove `contentVersion` from `site.ts`,
 `manifest.ts`, `wire.ts`; flatten OPFS/IDB to version-free keys; replace
@@ -220,7 +236,10 @@ downloads, sha256-verifies, caches at the version-free path; a second launch is
 a cache hit; a client upgraded from the old build re-downloads once and the
 legacy version-keyed entries are cleaned up; `svelte-check` + `tsc` + vitest
 clean; the SW precache/offline behavior from `web-pwa-offline-plan.md` is
-unaffected (it never keyed on `contentVersion`).
+unaffected (it never keyed on `contentVersion`). Tests updated:
+`wire.test.ts:212-218` (`decodeVersionPayload` cases drop the `contentVersion`
+expectations), `worker-client.test.ts:46` (mock `ResolvedManifest` drops the
+`contentVersion: "v1"` field).
 
 **Phase 3 — translations doc + future pack handling.** Amend
 `quran-translations.md` so the pack design uses stable keys + catalog sha256,
@@ -267,3 +286,36 @@ historical decision-log lines that explicitly reference the removal.
 3. **`Envelope` field removal vs a deprecation cycle:** the public API is
    currently unused in production (compose has the API commented out) and is
    SSG-consumed, so a clean removal is safe. Default: remove cleanly, no cycle.
+
+---
+
+## 11. Audit notes (verified non-issues + out-of-scope)
+
+Surfaces checked during the completeness audit that are **not** part of this
+removal — recorded so the implementer doesn't re-investigate:
+
+- **No `content_version` SQLite column.** `quran-api.md:449`
+  (`content_version TEXT NOT NULL`) is doc-only; no such column exists in `db/`
+  or in any Rust schema. No hidden database surface to touch.
+- **No committed OpenAPI spec file.** Schemas are utoipa-derived from the DTO
+  structs (`dto.rs`, `controller.rs`, `docs.rs`, `router.rs`); removing fields
+  auto-updates the served document. There is no `openapi.json`/`swagger.json` to
+  edit by hand.
+- **`QURAN_CONTENT_VERSION` is code + docs only.** It is absent from
+  `.env.example`, both Dockerfiles, `docker-compose.yml`, and `deploy.sh` — no
+  deploy-config cleanup, only `settings.rs`.
+- **The web client consumes `content_version` only via `/version`**
+  (`manifest.ts`). No other wire decoder reads the envelope field, and the SSG
+  server code (`web/src/lib/server/`) never touches it. Shrinking the envelope
+  is therefore safe end-to-end.
+- **Service worker, offline pack, and build scripts are clean.**
+  `service-worker.ts`, `web/src/lib/offline/`, `web/scripts/` (incl.
+  `gen-offline-pack.ts`), and `quran-meta/` contain zero `contentVersion`
+  references — the PWA layer is fully decoupled and unaffected.
+
+**Out of scope, pre-existing — flag only:** `searchVersion` has a version skew
+in the tree right now — Rust pins `arabic-search-v1` (`quran/store.rs:8`) while
+the web search fixtures say `arabic-search-v2`
+(`web/src/lib/quran/search/__fixtures__/queries.json:2`). This predates and is
+unrelated to this removal; do not "fix" it here, and don't mistake it for a
+regression caused by this work. Reconciling `searchVersion` is its own task.
