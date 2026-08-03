@@ -1,7 +1,7 @@
 # EasyQuran — web PWA & offline plan
 
-> Status: **Planned — nothing below is implemented yet** (written 2026-08-03,
-> against `master` @ `fbb220e`).
+> Status: **Implemented — Phases 0–4 landed on `feat/web-pwa-offline`**
+> (written 2026-08-03, against `master` @ `fbb220e`).
 >
 > Goal: the whole web app installable and readable offline — every Surah, every
 > page — with a boring, atomic update path when a new build ships.

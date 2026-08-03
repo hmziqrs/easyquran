@@ -3,6 +3,33 @@
 # out of the search index (noindex) so the canonical HTML is what ranks.
 # Effective on Cloudflare Pages / Netlify (copied to build/_headers). For
 # Vercel, mirror these in vercel.json `headers`.
+/_app/immutable/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/_app/version.json
+  Cache-Control: no-cache
+
+/offline/manifest.json
+  Cache-Control: no-cache
+
+/offline/pack.*.json
+  Cache-Control: public, max-age=31536000, immutable
+
+/service-worker.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+/quran-meta/*
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache
+
+/*/__data.json
+  Cache-Control: no-cache
+
 /*.md
   X-Robots-Tag: noindex, follow
 

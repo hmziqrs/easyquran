@@ -2,12 +2,17 @@
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
   import { onMount } from "svelte";
-  import { afterNavigate } from "$app/navigation";
+  import { afterNavigate, beforeNavigate } from "$app/navigation";
+  import { updated } from "$app/state";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { update } from "$lib/offline/update.svelte";
+  import { online } from "$lib/offline/online.svelte";
+  import { offline } from "$lib/offline/offline-store.svelte";
+  import { APP_READY } from "$lib/offline/messages";
   import { NotificationToast } from "$lib/components/notifications";
-  import { DownloadBar } from "$lib/components/status";
+  import { DownloadBar, UpdateToast } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
   import { startServiceWorker } from "$lib/boot/service-worker";
   import { startAnalytics } from "$lib/boot/analytics";
@@ -31,8 +36,23 @@
     prefs.hydrate();
     prefs.apply();
     notifications.hydrate();
+    update.hydrate();
+    online.hydrate();
+    offline.hydrate();
 
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
+
+    const hadControllerAtBoot = Boolean(navigator.serviceWorker?.controller);
+    const postAppReady = (): void => {
+      const ctrl = navigator.serviceWorker?.controller;
+      if (ctrl) ctrl.postMessage({ type: APP_READY });
+    };
+    postAppReady();
+    const onControllerChange = (): void => {
+      if (!hadControllerAtBoot) postAppReady();
+    };
+    navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
+    cleanups.push(() => navigator.serviceWorker?.removeEventListener("controllerchange", onControllerChange));
 
     paintFrame = requestAnimationFrame(() => {
       postPaintFrame = requestAnimationFrame(() => {
@@ -45,9 +65,15 @@
       cancelAnimationFrame(paintFrame);
       cancelAnimationFrame(postPaintFrame);
       for (const teardown of cleanups) teardown();
+      update.dispose();
+      online.dispose();
       offlineTeardown?.();
       offlineTeardown = null;
     };
+  });
+
+  beforeNavigate(({ willUnload, to }) => {
+    if (updated.current && !willUnload && to?.url) location.href = to.url.href;
   });
 
   afterNavigate((navigation) => {
@@ -105,5 +131,6 @@
   >Skip to content</a
 >
 <NotificationToast />
+<UpdateToast />
 <DownloadBar />
 {@render children()}

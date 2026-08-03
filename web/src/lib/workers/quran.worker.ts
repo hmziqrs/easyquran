@@ -9,7 +9,8 @@ import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
-import { ensureArtifact } from "./opfs-cache";
+import { QURAN_DB, QURAN_STORE, ROOT_DIR, ensureArtifact } from "./opfs-cache";
+import { pruneIdb, pruneOpfs } from "./storage";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
@@ -45,6 +46,7 @@ interface WorkerSourceState {
 const sources = new Map<QuranSourceId, WorkerSourceState>();
 let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
+let prunedOldVersions = false;
 
 function emit(message: WorkerOutbound): void {
   ctx.postMessage(message);
@@ -116,6 +118,22 @@ async function initialize(
 
   ready = true;
   status("ready");
+  pruneOldVersions(manifest.contentVersion);
+}
+
+async function pruneOldVersions(contentVersion: string): Promise<void> {
+  if (prunedOldVersions) return;
+  prunedOldVersions = true;
+  try {
+    await pruneOpfs(ROOT_DIR, contentVersion);
+  } catch (err) {
+    console.warn("[quran.worker] OPFS prune failed", err);
+  }
+  try {
+    await pruneIdb(QURAN_DB, QURAN_STORE, contentVersion);
+  } catch (err) {
+    console.warn("[quran.worker] IDB prune failed", err);
+  }
 }
 
 function readSurah(num: number): QuranSurahText {

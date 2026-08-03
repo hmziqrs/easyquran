@@ -22,6 +22,8 @@
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
+  import { online } from "$lib/offline/online.svelte";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import {
     currentUrlLocalPage,
@@ -606,9 +608,20 @@
       }
       scheduleForwardFill();
     });
+    let updateChannel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      updateChannel = new BroadcastChannel(UPDATE_BROADCAST_CHANNEL);
+      updateChannel.addEventListener("message", (event) => {
+        if (event.data?.type === PREPARE_RELOAD) writeHistoryState();
+      });
+    }
+    const onPrepareReload = (): void => writeHistoryState();
+    window.addEventListener(PREPARE_RELOAD_EVENT, onPrepareReload);
     scheduleForwardFill();
     return () => {
       stop();
+      updateChannel?.close();
+      window.removeEventListener(PREPARE_RELOAD_EVENT, onPrepareReload);
       if (scrollFrame) cancelAnimationFrame(scrollFrame);
       if (forwardFillFrame) cancelAnimationFrame(forwardFillFrame);
       if (historyWriteTimer) clearTimeout(historyWriteTimer);
@@ -697,7 +710,12 @@
 
     {#if clientMounted && (loadFailed || quran.status === "error")}
       <div role="status" class="border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9">
-        More ayahs are unavailable right now. You can keep reading this page or use the page links.
+        {#if online.hydrated && !online.online}
+          You're offline — more ayahs will load when you reconnect. You can keep reading this page or use the
+          page links.
+        {:else}
+          More ayahs are unavailable right now. You can keep reading this page or use the page links.
+        {/if}
       </div>
     {/if}
 

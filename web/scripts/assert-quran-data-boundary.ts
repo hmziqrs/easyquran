@@ -88,8 +88,8 @@ const serviceWorker = path.join(BUILD, "service-worker.js");
 if (!existsSync(serviceWorker)) {
   fail("build/service-worker.js is missing; run the production build first");
 }
-if (readFileSync(serviceWorker, "utf8").includes(SNAPSHOT_NAME)) {
-  fail(`${SNAPSHOT_NAME} is service-worker precached`);
+if (readFileSync(serviceWorker, "utf8").includes(digest)) {
+  fail(`snapshot provenance digest leaked into service-worker.js`);
 }
 
 for (const routeFile of ["app/al-fatihah.html", "app/al-fatihah/__data.json"]) {
@@ -100,4 +100,4 @@ for (const routeFile of ["app/al-fatihah.html", "app/al-fatihah/__data.json"]) {
   }
 }
 
-console.log("Quran data boundary passed: one immutable snapshot, no build leak, no precache.");
+console.log("Quran data boundary passed: one immutable snapshot, no build leak, no data embed.");
