@@ -26,6 +26,7 @@ export interface ReaderApi {
   toggleNote(key: VerseKey): void;
   setCurrent(num: number): void;
   openVerse(num: number, n: number): void;
+  markRead(num: number, n: number): void;
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -41,10 +42,10 @@ export interface ReaderApi {
   readonly hasLastRead: boolean;
   readonly lastReadRef: string;
   versesFor(num: number): string[];
-  seedSurah(num: number, verses: string[]): void;
+  seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
   refreshFromWorker(num: number): Promise<void>;
-  copyVerse(key: VerseKey): Promise<boolean>;
-  shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed">;
+  copyVerse(key: VerseKey, text: string): Promise<boolean>;
+  shareVerse(key: VerseKey, text: string): Promise<"shared" | "copied" | "failed">;
 }
 
 export function createReader(): ReaderApi {
@@ -54,7 +55,7 @@ export function createReader(): ReaderApi {
   const settings = createReaderSettings(core, persistence);
   const annotations = createAnnotations(core, persistence);
   const verseCache = createVerseCache(core);
-  const share = createReaderShare(core);
+  const share = createReaderShare();
 
   return {
     hydrate: () => persistence.hydrate(),
@@ -93,6 +94,7 @@ export function createReader(): ReaderApi {
 
     setCurrent: (num: number) => session.setCurrent(num),
     openVerse: (num: number, n: number) => session.openVerse(num, n),
+    markRead: (num: number, n: number) => session.markRead(num, n),
 
     get arabicSizePx() {
       return settings.arabicSizePx;
@@ -125,11 +127,11 @@ export function createReader(): ReaderApi {
     },
 
     versesFor: (num: number) => verseCache.versesFor(num),
-    seedSurah: (num: number, verses: string[]) => verseCache.seedSurah(num, verses),
+    seedAyahs: (ayahs) => verseCache.seedAyahs(ayahs),
     refreshFromWorker: (num: number) => verseCache.refreshFromWorker(num),
 
-    copyVerse: (key: VerseKey) => share.copyVerse(key),
-    shareVerse: (key: VerseKey) => share.shareVerse(key),
+    copyVerse: (key: VerseKey, text: string) => share.copyVerse(key, text),
+    shareVerse: (key: VerseKey, text: string) => share.shareVerse(key, text),
   };
 }
 

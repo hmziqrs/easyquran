@@ -14,16 +14,14 @@ export function writeJSON(key: string, value: unknown): void {
   if (!browser) return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-  }
+  } catch {}
 }
 
 export function removeJSON(key: string): void {
   if (!browser) return;
   try {
     localStorage.removeItem(key);
-  } catch {
-  }
+  } catch {}
 }
 
 export function isFutureSchema(raw: unknown, current: number): boolean {

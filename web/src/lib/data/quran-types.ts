@@ -84,6 +84,8 @@ export interface CatalogEntry {
   slug: string;
   name: string;
   arabic: string;
+  transliteration: string;
+  meaning: string;
   place: Place;
   ayahCount: number;
   revelationOrder: number;
@@ -93,7 +95,25 @@ export interface CatalogEntry {
   startGlobal: number;
 }
 
-export interface LoadedSurah extends CatalogEntry, QuranSurahText {}
+export interface CanonicalSurahCoordinates {
+  readonly surah: number;
+  readonly startGlobal: number;
+  readonly ayahCount: number;
+}
+
+export interface CanonicalQuranCoordinates {
+  readonly rowCount: number;
+  readonly surahs: readonly CanonicalSurahCoordinates[];
+}
+
+export type SurahRenderMetadata = Pick<
+  CatalogEntry,
+  "num" | "slug" | "name" | "arabic" | "place" | "ayahCount"
+>;
+
+export type SurahLink = Pick<CatalogEntry, "num" | "slug" | "name" | "arabic">;
+
+export interface LoadedSurah extends SurahRenderMetadata, QuranSurahText {}
 
 export interface RangeEntry {
   index: number;
@@ -101,14 +121,6 @@ export interface RangeEntry {
   endGlobal: number;
   first: VerseKey;
   last: VerseKey;
-}
-
-export interface NavigationData {
-  juz: RangeEntry[];
-  page: RangeEntry[];
-  ruku: RangeEntry[];
-  hizbQuarter: RangeEntry[];
-  manzil: RangeEntry[];
 }
 
 export interface SajdaEntry {
@@ -140,6 +152,44 @@ export interface Ayah {
   text: string;
 }
 
+export interface QuranRangeText {
+  ayahs: Ayah[];
+  normalizations: SurahNormalization[];
+}
+
+export interface SurahLocalPage {
+  surah: number;
+  localPage: number;
+  globalPage: number;
+  startGlobal: number;
+  endGlobal: number;
+  startAyah: number;
+  endAyah: number;
+  first: VerseKey;
+  last: VerseKey;
+}
+
+export interface SurahLocalPageData {
+  surah: SurahRenderMetadata;
+  page: SurahLocalPage;
+  pageCount: number;
+  ayahs: Ayah[];
+  normalization: SurahNormalization;
+}
+
+export interface SurahLocalPageLink {
+  localPage: number;
+  href: `/app/${string}`;
+}
+
+export interface SurahRouteData {
+  pageData: SurahLocalPageData;
+  previousPage: SurahLocalPageLink | null;
+  nextPage: SurahLocalPageLink | null;
+  previousSurah: SurahLink | null;
+  nextSurah: SurahLink | null;
+}
+
 export interface RangePageData {
   kind: "juz" | "page";
   index: number;
@@ -150,4 +200,5 @@ export interface RangePageData {
   last: VerseKey;
   ayahs: Ayah[];
   normalizations: SurahNormalization[];
+  surahs: SurahLink[];
 }

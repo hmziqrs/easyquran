@@ -3,12 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  type Ayah,
   type QuranSourceId as QuranSourceIdValue,
+  type QuranRangeText,
   type QuranSurahText,
-  type SurahNormalization,
 } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
+import { QURAN_DATA } from "$lib/server/quran-data";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "$lib/quran/source-plan";
 import {
   loadQuranSource,
@@ -56,7 +56,7 @@ function openSource(sourceId: QuranSourceIdValue): SourceState {
 
   try {
     const runner = createNodeQueryRunner(database);
-    const source = loadQuranSource(runner, profile);
+    const source = loadQuranSource(runner, profile, QURAN_DATA.coordinates);
     const state = Object.freeze({ sha256, database, runner, source });
     sourceCache.set(sourceId, state);
     return state;
@@ -90,7 +90,7 @@ export function readRangeText(
   from: number,
   to: number,
   sourceId: QuranSourceIdValue = DEFAULT_QURAN_SOURCE_PLAN.reader,
-): { ayahs: Ayah[]; normalizations: SurahNormalization[] } {
+): QuranRangeText {
   const state = openSource(sourceId);
   const rows = readSourceRange(state.runner, state.source, from, to);
   const ayahs = rows.map((row) => ({

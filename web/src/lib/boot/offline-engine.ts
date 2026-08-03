@@ -10,5 +10,6 @@ export function startOfflineEngine(): () => void {
   return () => {
     teardown?.();
     teardown = null;
+    started = false;
   };
 }

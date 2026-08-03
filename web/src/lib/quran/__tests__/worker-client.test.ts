@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import { quranWorker } from "$lib/quran/worker-client";
+import { QURAN_DATA } from "$lib/server/quran-data";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 
@@ -43,8 +44,6 @@ class FakeWorker {
   }
 }
 
-const RealWorker = globalThis.Worker;
-
 const MANIFEST: ResolvedManifest = {
   scripts: [
     {
@@ -66,19 +65,17 @@ const MANIFEST: ResolvedManifest = {
 beforeEach(() => {
   vi.useFakeTimers();
   FakeWorker.last = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Worker = FakeWorker;
+  vi.stubGlobal("Worker", FakeWorker);
 });
 
 afterEach(() => {
   quranWorker.dispose();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Worker = RealWorker;
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 async function startReady(): Promise<FakeWorker> {
-  const started = quranWorker.start(MANIFEST);
+  const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
   const fake = FakeWorker.last!;
   const init = fake.posted.find(
     (m): m is Extract<WorkerRequest, { type: "init" }> => m.type === "init",
@@ -89,6 +86,20 @@ async function startReady(): Promise<FakeWorker> {
 }
 
 describe("quranWorker request settlement", () => {
+  it("notifies page loaders when the worker reports ready", async () => {
+    const ready = quranWorker.whenReady();
+    const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const fake = FakeWorker.last!;
+    fake.emit("message", { type: "status", status: "ready" });
+    await ready;
+    expect(quranWorker.ready).toBe(true);
+    const init = fake.posted.find(
+      (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
+    )!;
+    fake.emit("message", { id: init.id, ok: true, result: null });
+    await started;
+  });
+
   it("resolves readSurah with the worker's verses", async () => {
     const fake = await startReady();
     expect(quranWorker.ready).toBe(true);
@@ -123,6 +134,44 @@ describe("quranWorker request settlement", () => {
     const assertion = expect(p).rejects.toThrow("no such surah");
     fake.emit("message", { id: req.id, ok: false, error: "no such surah" });
     await assertion;
+  });
+
+  it("decodes a clipped coordinate-aware range", async () => {
+    const fake = await startReady();
+    const resultPromise = quranWorker.readRange(
+      8,
+      9,
+      (globalIndex, surah, ayah) => QURAN_DATA.globalIndexOf(surah, ayah) === globalIndex,
+    );
+    const req = fake.posted.at(-1)!;
+    expect(req).toMatchObject({ type: "readRange", from: 8, to: 9 });
+    const normalization = {
+      surah: 2,
+      sourceId: QuranSourceId.TanzilUthmani,
+      script: QuranScript.Uthmani,
+      sourceProfile: "tanzil-uthmani-581cc540",
+      packaging: OpenerPackaging.EmbeddedPrefix,
+      openerKind: OpenerKind.Header,
+      openerText: "opener",
+      openerEndScalar: 6,
+      bodyStartScalar: 7,
+    } as const;
+    fake.emit("message", {
+      id: req.id,
+      ok: true,
+      result: {
+        ayahs: [
+          { key: "2:1", surah: 2, ayah: 1, globalIndex: 8, text: "first" },
+          { key: "2:2", surah: 2, ayah: 2, globalIndex: 9, text: "second" },
+        ],
+        normalizations: [normalization],
+      },
+    });
+
+    expect(await resultPromise).toMatchObject({
+      ayahs: [{ key: "2:1" }, { key: "2:2" }],
+      normalizations: [{ surah: 2 }],
+    });
   });
 
   it("decodes the canonical tagged search response", async () => {
@@ -190,6 +239,8 @@ describe("quranWorker request settlement", () => {
 
   it("a post-init fatal rejects every in-flight request", async () => {
     const fake = await startReady();
+    const statuses: Array<[string, string | undefined]> = [];
+    const detach = quranWorker.onStatus((status, detail) => statuses.push([status, detail]));
     const p1 = quranWorker.readSurah(1);
     const p2 = quranWorker.readSurah(2);
     const a1 = expect(p1).rejects.toThrow("sqlite-wasm exploded");
@@ -197,6 +248,20 @@ describe("quranWorker request settlement", () => {
     fake.emit("message", { type: "fatal", error: "sqlite-wasm exploded" });
     await a1;
     await a2;
+    expect(fake.terminated).toBe(true);
+    expect(quranWorker.ready).toBe(false);
+    expect(statuses.at(-1)).toEqual(["error", "sqlite-wasm exploded"]);
+    detach();
+
+    const restarted = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const next = FakeWorker.last!;
+    const init = next.posted.find(
+      (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
+    )!;
+    next.emit("message", { id: init.id, ok: true, result: null });
+    await restarted;
+    expect(next).not.toBe(fake);
+    expect(quranWorker.ready).toBe(true);
   });
 
   it("dispose rejects in-flight requests and terminates the worker", async () => {

@@ -1,5 +1,5 @@
 import { QURAN } from "$lib/config/site";
-import { CATALOG } from "$lib/data/quran-meta";
+import { loadQuranData } from "$lib/data/quran-data-client";
 import { verseKey } from "$lib/data/quran";
 import { quranApi } from "./api-client";
 import { quranWorker } from "./worker-client";
@@ -12,14 +12,15 @@ import {
   type SearchResponse,
 } from "./search/types";
 
-function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
+async function nameNumberFallback(query: string, opts: SearchOpts): Promise<SearchResponse> {
+  const catalog = await loadQuranData();
   const q = query.trim();
   const qLower = q.toLowerCase();
   const norm = normalizeArabic(q);
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const offset = opts.offset ?? DEFAULT_OFFSET;
   const all: SearchHit[] = [];
-  for (const s of CATALOG) {
+  for (const s of catalog.surahs) {
     const hit =
       s.name.toLowerCase().includes(qLower) ||
       s.arabic.includes(q) ||
@@ -49,11 +50,13 @@ function nameNumberFallback(query: string, opts: SearchOpts): SearchResponse {
 }
 
 export async function quranSearch(query: string, opts: SearchOpts = {}): Promise<SearchResponse> {
+  const catalog = await loadQuranData();
+  const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
+    catalog.globalIndexOf(surah, ayah) === globalIndex;
   if (quranWorker.ready) {
     try {
-      return await quranWorker.search(query, opts);
-    } catch {
-    }
+      return await quranWorker.search(query, opts, validateCoordinate);
+    } catch {}
   }
 
   if (QURAN.apiBase) {

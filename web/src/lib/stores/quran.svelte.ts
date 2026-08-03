@@ -2,13 +2,7 @@ import { browser } from "$app/environment";
 import type { DownloadProgress } from "$lib/data/quran-types";
 import type { WorkerStatus } from "$lib/quran/protocol";
 
-export type QuranStatus =
-  | "idle"
-  | "resolving"
-  | "init"
-  | "downloading"
-  | "ready"
-  | "error";
+export type QuranStatus = "idle" | "resolving" | "init" | "downloading" | "ready" | "error";
 
 class QuranStore {
   status = $state<QuranStatus>("idle");

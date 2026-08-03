@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit";
-import { surahByNum } from "$lib/data/quran";
+import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { readSurahVerses } from "$lib/server/quran-sqlite";
 import { LANDING_VARIANTS, isVariantId } from "../../_variants/registry";
 import type { PageServerLoad } from "./$types";
@@ -16,9 +16,9 @@ export const load: PageServerLoad = ({ params }) => {
   if (!isVariantId(params.variant)) {
     throw error(404, `Unknown landing variant: ${params.variant}`);
   }
-  const cat = surahByNum(SPECIMEN_SURAH);
+  const cat = QURAN_DATA.surahByNum(SPECIMEN_SURAH)!;
   return {
     variant: params.variant,
-    surah: { ...cat, verses: readSurahVerses(cat.num) },
+    surah: { ...toSurahRenderMetadata(cat), verses: readSurahVerses(cat.num) },
   };
 };

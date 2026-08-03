@@ -1,5 +1,5 @@
-import { surahByNum } from "$lib/data/quran";
 import type { VerseKey } from "$lib/data/quran";
+import { peekQuranData } from "$lib/data/quran-data-client";
 import type { ReaderCore } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
 
@@ -31,7 +31,8 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
     get lastReadRef(): string {
       const lr = core.s.lastRead;
       if (!lr) return "";
-      return `${surahByNum(lr.num).name} ${lr.num}:${lr.n}`;
+      const name = peekQuranData()?.surahByNum(lr.num)?.name ?? `Surah ${lr.num}`;
+      return `${name} ${lr.num}:${lr.n}`;
     },
   };
 }

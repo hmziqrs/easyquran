@@ -1,34 +1,28 @@
-# syntax=docker/dockerfile:1.7
-# EasyQuran web — SvelteKit SSG (adapter-static). Build context = repo root
-# (needed for the pnpm catalog + the two build-time data files). Served by
-# Caddy's zero-config file-server — no nginx.conf, no Caddyfile.
-#   docker build -f deploy/Dockerfile.web -t easyquran/web .
 FROM node:24-slim AS build
 WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@11.15.1 --activate
 
-# Workspace manifests (the vite/vite-plus catalog lives here) + the web package.
 COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY web/ ./web/
-# Build-time data the web build reads from the repo root (NOT in web/):
-COPY db/quran/tanzil/quran-data.xml ./db/quran/tanzil/quran-data.xml
 COPY db/quran/tanzil/arabic/quran-uthmani.sqlite ./db/quran/tanzil/arabic/quran-uthmani.sqlite
-COPY db/quran/tanzil/arabic/quran-simple-clean.sqlite ./db/quran/tanzil/arabic/quran-simple-clean.sqlite
-# web doesn't depend on the sibling translations package (pulls heavy @aws-sdk).
 RUN sed -i '/db\/quran\/tanzil\/translations/d' pnpm-workspace.yaml
 
-# PUBLIC  → baked into the client bundle ($env/dynamic/public).
-# INTERNAL → build/prerender only ($env/dynamic/private), never shipped.
 ARG PUBLIC_API_BASE_URL=https://easyquran.fyi/api
 ARG INTERNAL_API_BASE_URL=http://api:8888
 ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
 ENV INTERNAL_API_BASE_URL=${INTERNAL_API_BASE_URL}
 
+ARG VERSION=dev
+ARG REVISION
+ENV BUILD_VERSION=${VERSION}
+ENV BUILD_REF=${REVISION}
+RUN test -n "$BUILD_REF" || { echo 'REVISION build-arg is required for container builds' >&2; exit 1; }
+
 RUN pnpm install && pnpm --filter web build
 
-# Zero-config static file server.
 FROM caddy:2-alpine
 COPY --from=build /repo/web/build /srv
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
 
 ARG VERSION=dev
 ARG REVISION=unknown
@@ -40,4 +34,4 @@ LABEL org.opencontainers.image.title="EasyQuran Web" \
       easyquran.component="web"
 
 EXPOSE 8080
-CMD ["caddy", "file-server", "--listen", ":8080", "--root", "/srv"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

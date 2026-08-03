@@ -96,9 +96,11 @@ describe("createReaderPersistence scheduling", () => {
   it("writeNow() persists the durable blob immediately", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
+    persistence.hydrate();
     core.s.current = 7;
     persistence.writeNow();
     expect(read()).toMatchObject({ v: READER_SCHEMA_VERSION, current: 7 });
+    persistence.dispose();
   });
 
   it("scheduleNoteWrite() only writes after the trailing debounce", () => {
@@ -117,6 +119,7 @@ describe("createReaderPersistence scheduling", () => {
   it("writeNow() cancels a pending debounced write (no redundant later write)", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
+    persistence.hydrate();
     core.s.notes["2:2"] = "a";
     persistence.scheduleNoteWrite();
     core.s.bookmarks["3:3"] = true;
@@ -131,6 +134,7 @@ describe("createReaderPersistence scheduling", () => {
   it("flushNoteWrite() writes immediately", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
+    persistence.hydrate();
     core.s.notes["4:4"] = "x";
     persistence.scheduleNoteWrite();
     persistence.flushNoteWrite();
@@ -149,6 +153,63 @@ describe("createReaderPersistence scheduling", () => {
     expect(core.s.current).toBe(5);
     expect(core.s.mode).toBe("reading");
     expect(core.s.fontSize).toBe(44);
+    persistence.dispose();
+  });
+});
+
+describe("createReaderPersistence hydration race", () => {
+  beforeEach(() => {
+    flag.value = true;
+    vi.useFakeTimers();
+    window.localStorage.clear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const read = (): unknown => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+
+  it("writeNow() before hydrate() defers and never wipes stored bookmarks/notes/lastRead", () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        v: 1,
+        current: 2,
+        bookmarks: { "2:255": true },
+        notes: { "2:255": "kursi" },
+        lastRead: { num: 2, n: 255 },
+      }),
+    );
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    core.s.current = 5;
+    persistence.writeNow();
+    expect(read()).toMatchObject({
+      current: 2,
+      bookmarks: { "2:255": true },
+      notes: { "2:255": "kursi" },
+      lastRead: { num: 2, n: 255 },
+    });
+    persistence.hydrate();
+    expect(core.s.bookmarks).toEqual({ "2:255": true });
+    expect(core.s.notes).toEqual({ "2:255": "kursi" });
+    expect(core.s.lastRead).toEqual({ num: 2, n: 255 });
+    expect(core.s.current).toBe(5);
+    expect(read()).toMatchObject({
+      current: 5,
+      bookmarks: { "2:255": true },
+      notes: { "2:255": "kursi" },
+    });
+    persistence.dispose();
+  });
+
+  it("writeNow() before hydrate() is a no-op when nothing is stored, then reconciles on hydrate", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    core.s.current = 9;
+    persistence.writeNow();
+    expect(read()).toBeNull();
+    persistence.hydrate();
+    expect(core.s.current).toBe(9);
+    expect(read()).toMatchObject({ current: 9 });
     persistence.dispose();
   });
 });

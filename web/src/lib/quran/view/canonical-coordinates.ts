@@ -1,35 +1,11 @@
-import coordinateData from "$lib/data/quran-coordinates.json";
+import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranCoordinateRow } from "$lib/quran/sql";
-
-export interface CanonicalSurahCoordinates {
-  readonly surah: number;
-  readonly startGlobal: number;
-  readonly ayahCount: number;
-}
-
-export interface CanonicalQuranCoordinates {
-  readonly rowCount: number;
-  readonly surahs: readonly CanonicalSurahCoordinates[];
-}
-
-export const CANONICAL_QURAN_COORDINATES: CanonicalQuranCoordinates = Object.freeze({
-  rowCount: coordinateData.rowCount,
-  surahs: Object.freeze(
-    coordinateData.surahs.map((surah) =>
-      Object.freeze({
-        surah: surah.surah,
-        startGlobal: surah.startGlobal,
-        ayahCount: surah.ayahCount,
-      }),
-    ),
-  ),
-});
 
 export function isCanonicalAyahCoordinate(
   globalIndex: number,
   surah: number,
   ayah: number,
-  expected: CanonicalQuranCoordinates = CANONICAL_QURAN_COORDINATES,
+  expected: CanonicalQuranCoordinates,
 ): boolean {
   const coordinates = expected.surahs[surah - 1];
   return (
@@ -43,7 +19,7 @@ export function isCanonicalAyahCoordinate(
 export function validateCanonicalCoordinates(
   sourceProfile: string,
   rows: readonly QuranCoordinateRow[],
-  expected: CanonicalQuranCoordinates = CANONICAL_QURAN_COORDINATES,
+  expected: CanonicalQuranCoordinates,
 ): void {
   if (expected.surahs.length !== 114) {
     throw new Error(

@@ -4,6 +4,7 @@
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
   import type { CustomSeeds } from "$lib/theme/derive";
   import { Notifications } from "$lib/components/notifications";
+  import { OfflinePack } from "$lib/components/status";
   import { cn } from "$lib/utils";
 
   let open = $state(false);
@@ -215,6 +216,10 @@
         <hr class="border-line" />
 
         <Notifications />
+
+        <hr class="border-line" />
+
+        <OfflinePack />
 
         <div>
           <div class="mb-1.5 text-xs text-fg-3">Data &amp; privacy</div>

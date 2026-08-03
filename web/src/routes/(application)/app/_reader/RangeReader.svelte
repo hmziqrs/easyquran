@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { surahByNum, surahPath } from "$lib/data/quran";
+  import { surahPath } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { RangePageData } from "$lib/data/quran-types";
@@ -12,8 +12,12 @@
 
   const groups = $derived(groupRangeAyahs(data.ayahs, data.normalizations));
 
+  function surahByNum(num: number) {
+    return data.surahs.find((surah) => surah.num === num)!;
+  }
+
   function openSurah(num: number): void {
-    void goto(resolve(surahPath(num)));
+    void goto(resolve(surahPath(surahByNum(num))));
   }
 
   const MAX = $derived(data.kind === "juz" ? 30 : 604);
@@ -50,11 +54,11 @@
         </p>
       {/if}
       <TooltipProvider delayDuration={300}>
-        <div class="flex flex-col">
+        <ol class="flex list-none flex-col p-0">
           {#each g.ayahs as a (a.key)}
             <VerseRow text={bodyText(a.text, a.ayah, g.normalization)} n={a.ayah} vKey={a.key} />
           {/each}
-        </div>
+        </ol>
       </TooltipProvider>
     </div>
   {/each}

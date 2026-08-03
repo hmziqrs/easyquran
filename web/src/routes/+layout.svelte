@@ -2,12 +2,17 @@
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
   import { onMount } from "svelte";
-  import { afterNavigate } from "$app/navigation";
+  import { afterNavigate, beforeNavigate } from "$app/navigation";
+  import { updated } from "$app/state";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import { update } from "$lib/offline/update.svelte";
+  import { online } from "$lib/offline/online.svelte";
+  import { offline } from "$lib/offline/offline-store.svelte";
+  import { APP_READY } from "$lib/offline/messages";
   import { NotificationToast } from "$lib/components/notifications";
-  import { DownloadBar } from "$lib/components/status";
+  import { DownloadBar, UpdateToast } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
   import { startServiceWorker } from "$lib/boot/service-worker";
   import { startAnalytics } from "$lib/boot/analytics";
@@ -17,6 +22,9 @@
   let { children } = $props();
 
   let offlineTeardown: (() => void) | null = null;
+  let firstPaintComplete = false;
+  let paintFrame = 0;
+  let postPaintFrame = 0;
   const ensureOfflineEngine = (pathname: string): void => {
     if (!pathname.startsWith("/app")) return;
     if (offlineTeardown) return;
@@ -28,16 +36,44 @@
     prefs.hydrate();
     prefs.apply();
     notifications.hydrate();
+    update.hydrate();
+    online.hydrate();
+    offline.hydrate();
 
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
-    ensureOfflineEngine(location.pathname);
+    const hadControllerAtBoot = Boolean(navigator.serviceWorker?.controller);
+    const postAppReady = (): void => {
+      const ctrl = navigator.serviceWorker?.controller;
+      if (ctrl) ctrl.postMessage({ type: APP_READY });
+    };
+    postAppReady();
+    const onControllerChange = (): void => {
+      if (!hadControllerAtBoot) postAppReady();
+    };
+    navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
+    cleanups.push(() => navigator.serviceWorker?.removeEventListener("controllerchange", onControllerChange));
+
+    paintFrame = requestAnimationFrame(() => {
+      postPaintFrame = requestAnimationFrame(() => {
+        firstPaintComplete = true;
+        ensureOfflineEngine(location.pathname);
+      });
+    });
 
     return () => {
+      cancelAnimationFrame(paintFrame);
+      cancelAnimationFrame(postPaintFrame);
       for (const teardown of cleanups) teardown();
+      update.dispose();
+      online.dispose();
       offlineTeardown?.();
       offlineTeardown = null;
     };
+  });
+
+  beforeNavigate(({ willUnload, to }) => {
+    if (updated.current && !willUnload && to?.url) location.href = to.url.href;
   });
 
   afterNavigate((navigation) => {
@@ -46,7 +82,7 @@
         .then(({ pageView }) => pageView(location.pathname))
         .catch(() => {});
     }
-    ensureOfflineEngine(location.pathname);
+    if (firstPaintComplete) ensureOfflineEngine(location.pathname);
   });
 
   const jsonLd = {
@@ -75,8 +111,7 @@
       },
     ],
   };
-  const jsonLdScript =
-    `<script type="application/ld+json">${JSON.stringify(jsonLd)}` + "<" + "/script>";
+  const jsonLdText = JSON.stringify(jsonLd);
 </script>
 
 <svelte:head>
@@ -87,8 +122,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content={SITE.name} />
-  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-  {@html jsonLdScript}
+  <svelte:element this={"script"} type="application/ld+json">{jsonLdText}</svelte:element>
 </svelte:head>
 
 <a
@@ -97,5 +131,6 @@
   >Skip to content</a
 >
 <NotificationToast />
+<UpdateToast />
 <DownloadBar />
 {@render children()}

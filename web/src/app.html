@@ -7,19 +7,11 @@
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
-    <!-- Figtree (UI) and Amiri (Arabic) are bundled (self-hosted) via @fontsource
-         in layout.css — no render-blocking external stylesheet, no third-party
-         request, fonts travel same-origin with the HTML. -->
     <script>
-      // Apply saved theme + surface + accent before first paint to avoid a
-      // flash. Custom seed colours are handled here too, but only the three
-      // that are cheap to set flat (--bg / --accent / --pop): the full derived
-      // ramp is written by prefs.apply() on mount a moment later, and these
-      // three are enough to stop the page flashing the preset background.
-      // Kept tiny and inline on purpose — it runs synchronously in <head>.
       (function () {
         try {
           var p = JSON.parse(localStorage.getItem("easyquran.prefs") || "{}");
+          var r = JSON.parse(localStorage.getItem("easyquran.reader") || "{}");
           var d = document.documentElement;
           if (p.theme) d.dataset.theme = p.theme;
           if (p.surface) d.dataset.surface = p.surface;
@@ -28,6 +20,13 @@
           if (c.bg) d.style.setProperty("--bg", c.bg);
           if (c.accent) d.style.setProperty("--accent", c.accent);
           if (c.pop) d.style.setProperty("--pop", c.pop);
+          if (r.mode === "verse" || r.mode === "reading") d.dataset.readerMode = r.mode;
+          if (typeof r.fontSize === "number" && r.fontSize >= 22 && r.fontSize <= 56) {
+            d.style.setProperty("--reader-arabic-size", r.fontSize + "px");
+          }
+          if (r.lastRead && typeof r.lastRead.num === "number") {
+            d.dataset.readerLastRead = "true";
+          }
         } catch (e) {}
       })();
     </script>

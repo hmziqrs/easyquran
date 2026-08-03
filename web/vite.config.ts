@@ -1,8 +1,13 @@
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
-import { quranData } from "./vite-plugin-quran";
+import { quranArtifacts } from "./vite-plugin-quran";
+
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+const release = process.env.BUILD_VERSION ?? pkg.version;
+const buildRef = process.env.BUILD_REF;
 
 export default defineConfig({
   fmt: {},
@@ -12,9 +17,13 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   plugins: lazyPlugins(() => [
-    quranData(),
+    quranArtifacts(),
     tailwindcss(),
     sveltekit({
+      version: {
+        ...(buildRef ? { name: `${release}+${buildRef}` } : {}),
+        pollInterval: 5 * 60_000,
+      },
       compilerOptions: {
         runes: ({ filename }) =>
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
@@ -23,13 +32,14 @@ export default defineConfig({
         register: false,
         files: (file) =>
           !/\.DS_Store/.test(file) &&
-          !/^(_headers|_redirects|robots\.txt|og\.png|sw\.js)$/.test(file),
+          !file.startsWith("quran-meta/") &&
+          !/^(_headers|_redirects|robots\.txt|og\.png)$/.test(file),
       },
       adapter: adapter({
         pages: "build",
         assets: "build",
         fallback: "404.html",
-        precompress: false,
+        precompress: true,
         strict: true,
       }),
     }),

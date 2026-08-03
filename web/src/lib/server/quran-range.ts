@@ -1,13 +1,15 @@
 import { error } from "@sveltejs/kit";
-import { NAVIGATION } from "$lib/data/quran-meta";
+import { RangeKind } from "$lib/data/quran-data";
+import { QURAN_DATA, toSurahLink } from "$lib/server/quran-data";
 import { readRangeText } from "./quran-sqlite";
 import type { RangePageData } from "$lib/data/quran-types";
 
 export function loadRangeData(kind: "juz" | "page", index: number): RangePageData {
-  const list = kind === "juz" ? NAVIGATION.juz : NAVIGATION.page;
-  const entry = list[index - 1];
+  const rangeKind = kind === "juz" ? RangeKind.Juz : RangeKind.Page;
+  const entry = QURAN_DATA.rangeByIndex(rangeKind, index);
   if (!entry) throw error(404, `Unknown ${kind}: ${index}`);
   const source = readRangeText(entry.startGlobal, entry.endGlobal);
+  const surahNums = new Set(source.ayahs.map((ayah) => ayah.surah));
   return {
     kind,
     index,
@@ -18,5 +20,6 @@ export function loadRangeData(kind: "juz" | "page", index: number): RangePageDat
     last: entry.last,
     ayahs: source.ayahs,
     normalizations: source.normalizations,
+    surahs: [...surahNums].map((num) => toSurahLink(QURAN_DATA.surahByNum(num)!)),
   };
 }

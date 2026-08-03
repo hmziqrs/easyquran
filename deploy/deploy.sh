@@ -49,12 +49,11 @@ git checkout --force "$LATEST_TAG"
 
 # Stamp the images (OCI label org.opencontainers.image.version) with the tag.
 export VERSION="$LATEST_TAG"
-$COMPOSE build web api || { log "ERROR: build failed for $LATEST_TAG; containers left as-is"; exit 1; }
-$COMPOSE up -d web api
+export REVISION="$(git rev-parse --short=12 HEAD)"
+$COMPOSE build web || { log "ERROR: build failed for $LATEST_TAG; containers left as-is"; exit 1; }
+$COMPOSE up -d web
 
 sleep 5
-curl -fsS --max-time 15 "https://${HEALTH_DOMAIN:-easyquran.fyi}/api/healthz" >/dev/null 2>&1 \
-  && log "healthcheck ok" || log "WARN: healthcheck not green — check 'docker compose logs api'"
 
 printf '%s\n' "$LATEST_TAG" >"$STATE_FILE"
 log "deployed $LATEST_TAG"

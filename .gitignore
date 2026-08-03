@@ -1,6 +1,5 @@
 node_modules
 
-# Output
 .output
 .vercel
 .netlify
@@ -8,28 +7,24 @@ node_modules
 .svelte-kit
 build
 
-# OS
 .DS_Store
 Thumbs.db
 
-# Env
 .env
 .env.*
 !.env.example
 !.env.test
 
-# Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 .playwright-mcp/
+.claude/worktrees/
 
-# Rust
 rust/target/
 rust/**/target/
 *.profraw
 
-# SQLite WAL sidecars (the app db runs journal_mode=WAL; the db itself is tracked)
 *.db-wal
 *.db-shm
 

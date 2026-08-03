@@ -6,12 +6,14 @@ import {
   OpenerKind,
   type Ayah,
   type ArtifactSpec,
+  type QuranRangeText,
   type QuranSurahText,
   type SurahNormalization,
 } from "$lib/data/quran-types";
 import { SearchHitKind, type SearchHit } from "./search/types";
-import { isCanonicalAyahCoordinate } from "./view/canonical-coordinates";
 import { sourceProfile } from "./view/source-profiles";
+
+export type AyahCoordinateValidator = (globalIndex: number, surah: number, ayah: number) => boolean;
 
 function asRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
@@ -23,7 +25,10 @@ export function unwrapEnvelope(raw: unknown): unknown {
   return rec.data ?? raw;
 }
 
-export function decodeSearchHit(raw: unknown): SearchHit | null {
+export function decodeSearchHit(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): SearchHit | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   if (rec.kind === SearchHitKind.Opener) {
@@ -43,7 +48,7 @@ export function decodeSearchHit(raw: unknown): SearchHit | null {
     };
   }
   if (rec.kind !== SearchHitKind.Ayah) return null;
-  const ayah = decodeAyah(rec.ayah);
+  const ayah = decodeAyah(rec.ayah, validateCoordinate);
   if (!ayah) return null;
   const highlights = decodeHighlights(rec.highlights, ayah.text.length);
   if (!highlights) return null;
@@ -64,7 +69,7 @@ function nonNegativeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function decodeAyah(raw: unknown): Ayah | null {
+function decodeAyah(raw: unknown, validateCoordinate?: AyahCoordinateValidator): Ayah | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   const surah = positiveInteger(rec.surah, 114);
@@ -77,11 +82,41 @@ function decodeAyah(raw: unknown): Ayah | null {
     globalIndex === null ||
     text === null ||
     rec.key !== `${surah}:${ayah}` ||
-    !isCanonicalAyahCoordinate(globalIndex, surah, ayah)
+    (validateCoordinate && !validateCoordinate(globalIndex, surah, ayah))
   ) {
     return null;
   }
   return { key: `${surah}:${ayah}`, surah, ayah, globalIndex, text };
+}
+
+export function decodeQuranRangeText(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): QuranRangeText | null {
+  const rec = asRecord(raw);
+  if (!rec || !Array.isArray(rec.ayahs) || !Array.isArray(rec.normalizations)) return null;
+  const ayahs: Ayah[] = [];
+  for (const item of rec.ayahs) {
+    const ayah = decodeAyah(item, validateCoordinate);
+    if (!ayah) return null;
+    const previous = ayahs.at(-1);
+    if (previous && ayah.globalIndex !== previous.globalIndex + 1) return null;
+    ayahs.push(ayah);
+  }
+  const normalizations: SurahNormalization[] = [];
+  for (const item of rec.normalizations) {
+    const normalization = decodeSurahNormalization(item);
+    if (!normalization) return null;
+    normalizations.push(normalization);
+  }
+  const represented = new Set(ayahs.map((ayah) => ayah.surah));
+  if (
+    represented.size !== normalizations.length ||
+    normalizations.some((normalization) => !represented.has(normalization.surah))
+  ) {
+    return null;
+  }
+  return { ayahs, normalizations };
 }
 
 function decodeHighlights(
@@ -168,13 +203,16 @@ export interface DecodedSearchPayload {
   results: SearchHit[];
 }
 
-export function decodeSearchResponse(raw: unknown): DecodedSearchPayload | null {
+export function decodeSearchResponse(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): DecodedSearchPayload | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   if (!Array.isArray(rec.results)) return null;
   const results: SearchHit[] = [];
   for (const item of rec.results) {
-    const hit = decodeSearchHit(item);
+    const hit = decodeSearchHit(item, validateCoordinate);
     if (!hit) return null;
     results.push(hit);
   }
@@ -192,10 +230,18 @@ export function decodeScript(raw: unknown): ArtifactSpec | null {
   if (!rec) return null;
   const id = rec.id;
   if (!isQuranSourceId(id)) return null;
-  const sizeBytes = Number(rec.sizeBytes);
+  const sizeBytes = positiveInteger(rec.sizeBytes);
   const sha256 = rec.sha256;
   const downloadUrl = rec.downloadUrl;
-  if (!sizeBytes || typeof sha256 !== "string" || typeof downloadUrl !== "string") return null;
+  if (
+    sizeBytes === null ||
+    typeof sha256 !== "string" ||
+    sha256.length === 0 ||
+    typeof downloadUrl !== "string" ||
+    downloadUrl.length === 0
+  ) {
+    return null;
+  }
   return { id, sizeBytes, sha256, downloadUrl };
 }
 

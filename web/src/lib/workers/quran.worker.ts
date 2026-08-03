@@ -1,5 +1,11 @@
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { type ArtifactSpec, type QuranSourceId, type QuranSurahText } from "$lib/data/quran-types";
+import {
+  type ArtifactSpec,
+  type QuranRangeText,
+  type QuranSourceId,
+  type QuranSurahText,
+} from "$lib/data/quran-types";
+import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
 import type { QuranQueryRunner } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
@@ -15,6 +21,7 @@ import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/s
 import {
   loadQuranSource,
   readAllSourceRows,
+  readSourceRange,
   readSourceSurah,
   type LoadedQuranSource,
 } from "../quran/view/source-runtime";
@@ -77,7 +84,10 @@ function openReadOnly(bytes: Uint8Array): Database {
   return database;
 }
 
-async function initialize(manifest: ResolvedManifest): Promise<void> {
+async function initialize(
+  manifest: ResolvedManifest,
+  coordinates: CanonicalQuranCoordinates,
+): Promise<void> {
   status("init");
   sqlite3 = await init();
 
@@ -93,7 +103,7 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
     const artifact = await ensureArtifact(spec, progressEmitter(spec));
     const database = openReadOnly(artifact.bytes);
     const runner = createWasmQueryRunner(database);
-    const source = loadQuranSource(runner, profile);
+    const source = loadQuranSource(runner, profile, coordinates);
     const persistent = persistentSources.has(sourceId);
     sources.set(sourceId, {
       bytes: artifact.bytes,
@@ -105,11 +115,6 @@ async function initialize(manifest: ResolvedManifest): Promise<void> {
   }
 
   ready = true;
-  const loaded = [...sources].map(([id, state]) => `${id}: ${state.store}`).join(", ");
-  console.info(
-    `[quran] offline engine ready (${loaded}); ` +
-      `surah 1 has ${readSurah(1).verses.length} verses`,
-  );
   status("ready");
 }
 
@@ -121,6 +126,24 @@ function readSurah(num: number): QuranSurahText {
     script: state.source.profile.script,
     verses: readSourceSurah(state.runner, state.source, num),
     normalization: state.source.view.normalization(num),
+  };
+}
+
+function readRange(from: number, to: number): QuranRangeText {
+  const state = sourceState(DEFAULT_QURAN_SOURCE_PLAN.reader);
+  if (!state.runner) throw new Error("reader source is not open");
+  const rows = readSourceRange(state.runner, state.source, from, to);
+  return {
+    ayahs: rows.map((row) => ({
+      key: `${row.surah}:${row.ayah}`,
+      surah: row.surah,
+      ayah: row.ayah,
+      globalIndex: row.globalIndex,
+      text: row.text,
+    })),
+    normalizations: [...new Set(rows.map((row) => row.surah))].map((surah) =>
+      state.source.view.normalization(surah),
+    ),
   };
 }
 
@@ -167,7 +190,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
   const type = (message as { type: string }).type;
   try {
     if (message.type === "init") {
-      await initialize(message.manifest);
+      await initialize(message.manifest, message.coordinates);
       emit({ id, ok: true, result: null });
       emit({ type: "ready" });
       return;
@@ -178,6 +201,8 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
     }
     if (message.type === "readSurah") {
       emit({ id, ok: true, result: readSurah(message.num) });
+    } else if (message.type === "readRange") {
+      emit({ id, ok: true, result: readRange(message.from, message.to) });
     } else if (message.type === "search") {
       emit({ id, ok: true, result: search(message.query, message.opts) });
     } else if (message.type === "ping") {

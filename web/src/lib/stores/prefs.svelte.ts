@@ -131,8 +131,7 @@ class PrefsStore {
     if (browser) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#prefs));
-      } catch {
-      }
+      } catch {}
       this.apply();
       window.dispatchEvent(new CustomEvent("easyquran:pref", { detail: patch }));
     }

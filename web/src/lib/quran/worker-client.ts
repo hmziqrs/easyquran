@@ -1,4 +1,9 @@
-import type { DownloadProgress, QuranSurahText } from "$lib/data/quran-types";
+import type {
+  CanonicalQuranCoordinates,
+  DownloadProgress,
+  QuranRangeText,
+  QuranSurahText,
+} from "$lib/data/quran-types";
 import { QURAN } from "$lib/config/site";
 import { quranApi } from "./api-client";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
@@ -6,7 +11,12 @@ import type { ResolvedManifest } from "./manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
-import { decodeQuranSurahText, decodeSearchResponse } from "./wire";
+import {
+  decodeQuranRangeText,
+  decodeQuranSurahText,
+  decodeSearchResponse,
+  type AyahCoordinateValidator,
+} from "./wire";
 
 interface Pending {
   resolve: (v: unknown) => void;
@@ -33,6 +43,19 @@ function failAll(err: Error): void {
   pending.clear();
 }
 
+function resetWorker(error?: Error): void {
+  if (error) failAll(error);
+  worker?.terminate();
+  worker = null;
+  isReady = false;
+  startPromise = null;
+}
+
+function reportWorkerFailure(error: Error): void {
+  resetWorker(error);
+  for (const listener of statusListeners) listener("error", error.message);
+}
+
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
     const p = pending.get(msg.id);
@@ -44,12 +67,13 @@ function handle(msg: WorkerOutbound): void {
     return;
   }
   if (msg.type === "status") {
+    if (msg.status === "ready") isReady = true;
     for (const cb of statusListeners) cb(msg.status, msg.detail);
   } else if (msg.type === "progress") {
     const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
     for (const cb of progressListeners) cb(p);
   } else if (msg.type === "fatal") {
-    failAll(new Error(msg.error));
+    reportWorkerFailure(new Error(msg.error));
   }
 }
 
@@ -81,41 +105,57 @@ export const quranWorker = {
     return () => progressListeners.delete(cb);
   },
 
-  start(manifest: ResolvedManifest): Promise<void> {
+  whenReady(): Promise<void> {
+    if (isReady) return Promise.resolve();
     if (startPromise) return startPromise;
-    startPromise = (async () => {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        statusListeners.delete(listener);
+        reject(new Error("quran worker did not become ready"));
+      }, DEFAULT_TIMEOUT_MS);
+      const listener = (status: WorkerStatus, detail?: string) => {
+        if (status !== "ready" && status !== "error") return;
+        clearTimeout(timer);
+        statusListeners.delete(listener);
+        if (status === "ready") resolve();
+        else reject(new Error(detail ?? "quran worker failed to start"));
+      };
+      statusListeners.add(listener);
+    });
+  },
+
+  start(manifest: ResolvedManifest, coordinates: CanonicalQuranCoordinates): Promise<void> {
+    if (startPromise) return startPromise;
+    const attempt = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
         type: "module",
         name: "quran-db",
       });
       worker.addEventListener("message", (e: MessageEvent<WorkerOutbound>) => handle(e.data));
       worker.addEventListener("error", (e: ErrorEvent) => {
-        failAll(
+        reportWorkerFailure(
           e.error instanceof Error
             ? e.error
             : new Error(`quran worker failed to load: ${e.message}`),
         );
       });
       worker.addEventListener("messageerror", () => {
-        failAll(new Error("quran worker message could not be deserialized"));
+        reportWorkerFailure(new Error("quran worker message could not be deserialized"));
       });
-      try {
-        await request<null>((id) => ({ id, type: "init", manifest }));
-        isReady = true;
-      } catch (err) {
-        throw err instanceof Error ? err : new Error(String(err));
-      }
+      await request<null>((id) => ({ id, type: "init", manifest, coordinates }));
+      isReady = true;
     })();
-    return startPromise;
+    startPromise = attempt;
+    void attempt.catch((error: unknown) => {
+      if (startPromise === attempt) {
+        resetWorker(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    return attempt;
   },
 
   dispose(): void {
-    if (!worker) return;
-    failAll(new Error("quran worker disposed"));
-    worker.terminate();
-    worker = null;
-    isReady = false;
-    startPromise = null;
+    resetWorker(new Error("quran worker disposed"));
   },
 
   readSurah(num: number): Promise<QuranSurahText> {
@@ -131,12 +171,30 @@ export const quranWorker = {
       });
   },
 
-  search(query: string, opts?: SearchOpts): Promise<SearchResponse> {
+  readRange(
+    from: number,
+    to: number,
+    validateCoordinate?: AyahCoordinateValidator,
+  ): Promise<QuranRangeText> {
+    return request<QuranRangeText>((id) => ({ id, type: "readRange", from, to })).then(
+      (raw: unknown) => {
+        const decoded = decodeQuranRangeText(raw, validateCoordinate);
+        if (!decoded) throw new Error("quran worker returned a malformed range");
+        return decoded;
+      },
+    );
+  },
+
+  search(
+    query: string,
+    opts?: SearchOpts,
+    validateCoordinate?: AyahCoordinateValidator,
+  ): Promise<SearchResponse> {
     return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
       (r: unknown) => {
         const limit = opts?.limit ?? DEFAULT_LIMIT;
         const offset = opts?.offset ?? DEFAULT_OFFSET;
-        const payload = decodeSearchResponse(r);
+        const payload = decodeSearchResponse(r, validateCoordinate);
         if (!payload) throw new Error("quran worker returned a malformed search response");
         return {
           query,

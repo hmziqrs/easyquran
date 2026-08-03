@@ -1,0 +1,81 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WEB = path.resolve(__dirname, "..");
+const BUILD = path.join(WEB, "build");
+const OFFLINE_DIR = path.join(BUILD, "offline");
+const MANIFEST_PATH = path.join(OFFLINE_DIR, "manifest.json");
+
+function listDataFiles(root: string): string[] {
+  const out: string[] = [];
+  if (!existsSync(root)) return out;
+  const stack: string[] = [root];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries: ReturnType<typeof readdirSync>;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name === "offline") continue;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (entry.name === "__data.json") out.push(full);
+    }
+  }
+  return out;
+}
+
+function routeKey(file: string): string {
+  const rel = path.relative(BUILD, file);
+  return "/" + rel.split(path.sep).join("/");
+}
+
+function readAppVersion(): string | null {
+  const versionFile = path.join(BUILD, "_app", "version.json");
+  if (!existsSync(versionFile)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(versionFile, "utf8")) as { version?: unknown };
+    return typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+}
+
+const pairs = listDataFiles(BUILD).map((file) => ({ file, key: routeKey(file) }));
+pairs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+const entries: Record<string, number> = {};
+const bodies: string[] = [];
+for (const { file, key } of pairs) {
+  if (key in entries) continue;
+  entries[key] = bodies.length;
+  bodies.push(readFileSync(file, "utf8"));
+}
+
+const serialized = JSON.stringify({ version: 1, entries, bodies });
+const hash = createHash("sha256").update(serialized).digest("hex").slice(0, 12);
+const packPath = path.join(OFFLINE_DIR, `pack.${hash}.json`);
+
+mkdirSync(OFFLINE_DIR, { recursive: true });
+
+if (!existsSync(packPath)) {
+  writeFileSync(packPath, serialized);
+}
+
+const manifest = {
+  pack: `/offline/pack.${hash}.json`,
+  bytes: Buffer.byteLength(serialized),
+  entries: bodies.length,
+  appVersion: readAppVersion(),
+};
+writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
+
+console.log(
+  `[offline] pack ${hash} · ${bodies.length} entries · ${manifest.bytes} bytes → ${path.relative(WEB, packPath)}`,
+);

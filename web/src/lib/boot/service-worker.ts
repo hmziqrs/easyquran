@@ -3,6 +3,7 @@ const SW_URL = "/service-worker.js";
 const SW_OPTIONS: RegistrationOptions = {
   scope: "/",
   type: import.meta.env.DEV ? "module" : "classic",
+  updateViaCache: "none",
 };
 
 let registration: Promise<ServiceWorkerRegistration | null> | null = null;
@@ -19,6 +20,5 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
 
 export function startServiceWorker(): () => void {
   if (import.meta.env.PROD) void registerServiceWorker();
-  return () => {
-  };
+  return () => {};
 }

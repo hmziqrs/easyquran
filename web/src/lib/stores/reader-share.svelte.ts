@@ -1,36 +1,32 @@
 import { browser } from "$app/environment";
-import { parseKey, surahByNum, type VerseKey } from "$lib/data/quran";
-import type { ReaderCore } from "./reader-core.svelte";
+import { parseKey, type VerseKey } from "$lib/data/quran";
+import { peekQuranData } from "$lib/data/quran-data-client";
 
 export function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);
-  return `${surahByNum(num).name} ${num}:${n}`;
+  const name = peekQuranData()?.surahByNum(num)?.name ?? `Surah ${num}`;
+  return `${name} ${num}:${n}`;
 }
 
 export function verseShareText(key: VerseKey, text: string): string {
   return `${text}\n${verseRef(key)}`;
 }
 
-export function createReaderShare(core: ReaderCore) {
-  const verseText = (key: VerseKey): string => {
-    const { num, n } = parseKey(key);
-    return (core.versesBySurah.get(num) ?? [])[n - 1] ?? "";
-  };
-
+export function createReaderShare() {
   return {
-    async copyVerse(key: VerseKey): Promise<boolean> {
+    async copyVerse(key: VerseKey, text: string): Promise<boolean> {
       if (!browser) return false;
       try {
-        await navigator.clipboard.writeText(verseShareText(key, verseText(key)));
+        await navigator.clipboard.writeText(verseShareText(key, text));
         return true;
       } catch {
         return false;
       }
     },
-    async shareVerse(key: VerseKey): Promise<"shared" | "copied" | "failed"> {
+    async shareVerse(key: VerseKey, verse: string): Promise<"shared" | "copied" | "failed"> {
       if (!browser) return "failed";
       const ref = verseRef(key);
-      const text = verseShareText(key, verseText(key));
+      const text = verseShareText(key, verse);
       try {
         if (navigator.share) {
           await navigator.share({ title: ref, text });
