@@ -2,7 +2,7 @@ import { browser } from "$app/environment";
 
 class OnlineStore {
   #online = $state(browser ? navigator.onLine : true);
-  #hydrated = false;
+  #hydrated = $state(false);
   #cleanup: (() => void) | null = null;
 
   get online(): boolean {

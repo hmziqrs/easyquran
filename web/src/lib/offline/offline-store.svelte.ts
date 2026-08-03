@@ -43,7 +43,7 @@ class OfflineStore {
   #usage = $state<number | null>(null);
   #quota = $state<number | null>(null);
   #activePack = $state<PackMirror | null>(null);
-  #busy = false;
+  #busy = $state(false);
   #hydrated = false;
 
   get status(): OfflineStatus {

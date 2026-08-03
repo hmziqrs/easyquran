@@ -95,6 +95,7 @@
           aria-label="Offline"
           title="You are offline"
         >
+          <span class="sr-only">Offline</span>
           <span class="inline-block size-1.5 rounded-full bg-pop" aria-hidden="true"></span>
           <span class="hidden sm:inline">Offline</span>
         </span>

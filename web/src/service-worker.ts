@@ -121,6 +121,33 @@ async function metaDel(key: string): Promise<void> {
   }
 }
 
+async function metaScan<T>(prefix: string): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  try {
+    const database = await db();
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(META_STORE, "readonly");
+      const request = tx.objectStore(META_STORE).openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        const key = cursor.key;
+        if (typeof key === "string" && key.startsWith(prefix)) {
+          out[key.slice(prefix.length)] = cursor.value as T;
+        }
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    dbAvailable = false;
+  }
+  return out;
+}
+
 let broadcastChannel: BroadcastChannel | null = null;
 function getBroadcast(): BroadcastChannel | null {
   if (broadcastChannel) return broadcastChannel;
@@ -219,9 +246,7 @@ sw.addEventListener("message", (event) => {
 
 async function onAppReady(source: Client | null): Promise<void> {
   if (source) {
-    const acks = (await metaGet<Record<string, string>>("acks")) || {};
-    acks[source.id] = version;
-    await metaSet("acks", acks);
+    await metaSet(`ack:${source.id}`, version);
   }
   await maybeFinalizeHandoff();
   void runMaintenance();
@@ -230,14 +255,14 @@ async function onAppReady(source: Client | null): Promise<void> {
 async function maybeFinalizeHandoff(): Promise<void> {
   const live = await sw.clients.matchAll({ includeUncontrolled: false });
   const liveIds = new Set(live.map((c) => c.id));
-  const acks = (await metaGet<Record<string, string>>("acks")) || {};
-  const pruned: Record<string, string> = {};
-  for (const [id, v] of Object.entries(acks)) {
-    if (liveIds.has(id)) pruned[id] = v;
-  }
-  await metaSet("acks", pruned);
+  const acks = await metaScan<string>("ack:");
+  await Promise.all(
+    Object.keys(acks)
+      .filter((id) => !liveIds.has(id))
+      .map((id) => metaDel(`ack:${id}`)),
+  );
   if (live.length === 0) return;
-  const allAcked = live.every((c) => pruned[c.id] === version);
+  const allAcked = live.every((c) => acks[c.id] === version);
   if (!allAcked) return;
   await migrateLegacyCaches();
 }
@@ -408,7 +433,7 @@ async function handleData(req: Request): Promise<Response> {
     if (await caches.has(packName)) {
       const packHit = await caches.match(new Request(key), {
         cacheName: packName,
-        ignoreSearch: false,
+        ignoreSearch: true,
       });
       if (packHit) return packHit;
     }
@@ -452,6 +477,8 @@ async function runMaintenance(): Promise<void> {
       cursor: null,
     };
     let cursor = meta.cursor;
+    let successes = 0;
+    let attempted = 0;
     for (;;) {
       if (cursor === "done") {
         await metaSet("maintenance", { cursor: "done" });
@@ -459,20 +486,28 @@ async function runMaintenance(): Promise<void> {
       }
       if (cursor == null || cursor.startsWith("pages:")) {
         const start = cursor ? Number(cursor.slice("pages:".length)) || 0 : 0;
-        await revalidateCache(PAGES_CACHE, start, "pages");
+        const r = await revalidateCache(PAGES_CACHE, start, "pages");
+        successes += r.successes;
+        attempted += r.attempted;
         cursor = "data:0";
         await metaSet("maintenance", { cursor: "data:0" });
         continue;
       }
       if (cursor.startsWith("data:")) {
         const start = Number(cursor.slice("data:".length)) || 0;
-        await revalidateCache(DATA_CACHE, start, "data");
+        const r = await revalidateCache(DATA_CACHE, start, "data");
+        successes += r.successes;
+        attempted += r.attempted;
         cursor = "trim:0";
         await metaSet("maintenance", { cursor: "trim:0" });
         continue;
       }
       if (cursor.startsWith("trim:")) {
         await trimPages();
+        if (attempted > 0 && successes === 0) {
+          await metaSet("maintenance", { cursor: null });
+          return;
+        }
         cursor = "done";
         await metaSet("maintenance", { cursor: "done" });
         continue;
@@ -486,25 +521,34 @@ async function runMaintenance(): Promise<void> {
   }
 }
 
-async function revalidateCache(cacheName: string, start: number, tag: string): Promise<void> {
+async function revalidateCache(
+  cacheName: string,
+  start: number,
+  tag: string,
+): Promise<{ successes: number; attempted: number }> {
   const cache = await caches.open(cacheName);
   const all = await cache.keys();
   const slice = all.slice(start).map((req, i) => ({ req, idx: start + i }));
   const done = new Set<number>();
   let contiguous = start;
+  let successes = 0;
   await pool(slice, MAINTENANCE_CONCURRENCY, async (item) => {
+    let ok = false;
     try {
       const res = await fetch(item.req, { cache: "no-store" });
       if (res && res.ok && isCacheable(res)) {
         await cache.put(item.req, res.clone());
+        ok = true;
       }
     } catch {
       // keep stale on failure
     }
+    if (ok) successes++;
     done.add(item.idx);
     while (done.has(contiguous)) contiguous++;
     await metaSet("maintenance", { cursor: `${tag}:${contiguous}` });
   });
+  return { successes, attempted: slice.length };
 }
 
 async function trimPages(): Promise<void> {
