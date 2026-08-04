@@ -69,7 +69,7 @@ The common Dokploy gotcha (404s) is just containers not being on
 The web image is served by Caddy from `deploy/Caddyfile` (compression +
 `Cache-Control`/`X-Robots-Tag` headers + the branded 404 page), not the bare
 `caddy file-server` CMD. That Caddyfile implements the static rows of the
-[HTTP delivery contract](../docs/web-pwa-offline-plan.md#6-http-delivery-contract-prerequisite-for-everything-above).
+[HTTP delivery contract](../docs/quran.md).
 
 ## Release
 

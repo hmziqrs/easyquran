@@ -78,7 +78,7 @@ update dates, verse counts — lives only in the full `index.json`.
 resolves on disk and in the bucket. It names the SQLite build, never the raw
 `.sql` dump — the dumps stay in the repo and are not published. Treat the path
 as a placeholder until the derived delivery databases in
-`docs/quran-web-delivery.md` land; `index.json` still records `file.sql` as the
+`docs/quran.md` land; `index.json` still records `file.sql` as the
 mirror's provenance.
 
 ### `index.json` — full (source of truth)

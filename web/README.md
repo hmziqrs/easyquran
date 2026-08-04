@@ -1,6 +1,6 @@
 # EasyQuran — web
 
-SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-static` now (prerendered); -> `adapter-node` SSR hybrid for ISR translated pages (see `docs/web-pwa-offline-plan.md` §6.3).
+SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-static` now (prerendered); -> `adapter-node` SSR + disk-TTL for translated pages (see `docs/quran.md`).
 
 ## Run
 

@@ -6,7 +6,7 @@
  *
  * Each output is a standalone `sqlite/<id>.sqlite` whose single table mirrors
  * the Arabic Tanzil convention and the canonical schema in
- * docs/quran-web-delivery.md:
+ * docs/quran.md:
  *
  *     CREATE TABLE quran_text ("index" INTEGER PRIMARY KEY, sura, aya, text);
  *     CREATE INDEX idx_quran_text_sura_aya ON quran_text (sura, aya);

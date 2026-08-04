@@ -76,7 +76,7 @@ export interface MinTranslation {
    * Artifact path, relative to the catalog's own location. Points at the
    * per-translation SQLite build (never the raw MySQL dump — those stay in the
    * repo and are not published). Placeholder until the derived delivery
-   * databases in docs/quran-web-delivery.md land.
+   * databases in docs/quran.md land.
    */
   file: string;
 }
