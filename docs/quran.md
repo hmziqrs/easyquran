@@ -57,9 +57,26 @@ One rule set, two implementations (Rust + web Worker) that must return identical
 - **Offline (OPFS):** Arabic eager on boot; translations lazy. Reads + search run local once cached; adaptive-TTL evicts the disused. The service worker precaches the shell + immutable assets only and passes `/quran/**` through.
 - **Service worker constraint:** SvelteKit forbids `$lib`/relative/npm imports in the SW, so the SW↔client contract is **duplicated** (SW-inline + `web/src/lib/offline/*`). Audit both sides on any contract change. Updates are an atomic SW-lifecycle cache swap — install verifies the complete new cache before activate; one accepted update reloads all open tabs.
 
+## Pagination & navigation
+
+**Page geometry — source-agnostic (identical for Arabic and every translation):**
+- Global Mushaf page `1..604`. Surah-local page = a global page clipped to one surah, renumbered from 1 within that surah (662 total). Juz `1..30`.
+- Routes: `/app/<surah>` (local page 1), `/app/<surah>/page/<localPage>` (>1), `/app/page/<globalPage>`, `/app/juz/<n>`. All SSG-prerendered.
+
+**Ayah → page — computed internally, never stored:** `surahLocalPageForAyah(surah, ayah)` returns `{ localPage, globalPage }` for any ayah. A deep link `/app/<surah>#ayah-<surah>-<ayah>` resolves to the containing local page; if it is not the prerendered one, the client redirects (`replaceState`, no scroll jump) to `/app/<surah>/page/<localPage>#ayah-…`, scrolls the ayah into view, and highlights it.
+
+**Word → page:** a word lives inside an ayah, so word navigation reuses ayah navigation (same page) with a finer in-ayah highlight. Page math is unchanged; a word-offset hash grammar is future work.
+
+**Reader loading:** each surah route reads **exactly one bounded local page** (cross-surah guarded), never the whole surah. Continuous scroll loads adjacent local pages on demand via Worker range reads; a ~5-page virtual window bounds the DOM.
+
+**Translation reuse:** `/app/<surah>/<lang>/<translator>` reuses the same geometry and accessors (they describe Mushaf geometry, not text). Only the path helpers, loader, and Worker protocol need a source-id parameter — the page math is shared.
+
 ## Open work
 
-- Translation delivery end-to-end: API (granular, disk-TTL + popularity) + R2 full-sqlite (OPFS adaptive-TTL, reusing Arabic machinery). Not wired yet.
+- Translation delivery end-to-end: API granular JSON (served from the in-memory translation pool) + R2 full-sqlite (OPFS adaptive-TTL, reusing Arabic machinery). Not wired yet.
+- Translation route wiring: parameterize the path helpers + `readSurahRouteData` loader + Worker protocol by source id. Page geometry + accessors are already source-agnostic.
+- Deep-link highlight: target ayah is scrolled into view but not visually marked — add a `revealed-ayah` / `:target` marker.
+- Link generators emit the page-aware path (`/app/<surah>/page/<n>#ayah-…`), not the legacy `?verse=N` — removes a redirect hop.
 - `adapter-static → adapter-node` + the disk-TTL SSR render cache for translated pages.
 - Per-id OPFS pruner that TTL-evicts disused databases (the backstop above).
 - Mobile (Flutter) parity.
