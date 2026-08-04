@@ -2,8 +2,42 @@ import { QURAN } from "$lib/config/site";
 import {
   type SourceCatalogueEntry,
   type TranslationCatalogueEntry,
+  type TranslationDirection,
 } from "$lib/data/quran-types";
+import rawTranslations from "../data/translations.json";
 import { decodeSourcesPayload } from "./wire";
+
+type RawTranslationFile = {
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+};
+type RawTranslation = {
+  id: string;
+  language: string;
+  languageCode: string;
+  direction: TranslationDirection;
+  name: string;
+  translator: string | null;
+  file: RawTranslationFile;
+};
+
+function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
+  return (rawTranslations as RawTranslation[]).map((r) => ({
+    kind: "translation" as const,
+    entry: {
+      id: r.id,
+      language: r.language,
+      languageCode: r.languageCode,
+      direction: r.direction,
+      name: r.name,
+      translator: r.translator,
+      sizeBytes: r.file.sizeBytes,
+      sha256: r.file.sha256,
+      downloadUrl: `${QURAN.artifactBase}/tanzil/translations/${r.file.path}`,
+    },
+  }));
+}
 
 const SOURCE_CATALOGUE_TTL_MS = 300_000;
 let catalogueCache: { entries: SourceCatalogueEntry[]; expiresAt: number } | null = null;
@@ -31,7 +65,7 @@ async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
 export async function resolveSourceCatalogue(
   signal?: AbortSignal,
 ): Promise<SourceCatalogueEntry[]> {
-  if (!QURAN.apiBase) return [];
+  if (!QURAN.apiBase) return bakedTranslationCatalogue();
   const cached = catalogueCache;
   if (cached && cached.expiresAt > Date.now()) {
     return cached.entries;
@@ -42,8 +76,9 @@ export async function resolveSourceCatalogue(
       .then((entries) => {
         if (entries.length > 0) {
           catalogueCache = { entries, expiresAt: Date.now() + SOURCE_CATALOGUE_TTL_MS };
+          return entries;
         }
-        return entries;
+        return bakedTranslationCatalogue();
       })
       .finally(() => {
         pendingCatalogue = null;

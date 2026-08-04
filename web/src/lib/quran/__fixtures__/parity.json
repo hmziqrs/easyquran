@@ -1,0 +1,10 @@
+{
+  "normalize": [
+    { "input": "بِسْمِ", "expected": "بسم", "rule": "harakat dropped" },
+    { "input": "ٱلْحَمْدُ لِلَّهِ", "expected": "الحمد لله", "rule": "alef-wasla folded + whitespace trimmed/collapsed" },
+    { "input": "مَرْحَبَة", "expected": "مرحبه", "rule": "ta-marbuta folded to ha" },
+    { "input": "إِنَّ آيَةً", "expected": "ان ايه", "rule": "hamza-alef + alef-madda folded (ة→ه)" },
+    { "input": "كَلِمَةٌ   جَمِيلَة", "expected": "كلمه جميله", "rule": "whitespace collapsed (ة→ه)" },
+    { "input": "ا۞ب", "expected": "اب", "rule": "U+06DE (rub el hizib) stripped — 199 occurrences in Uthmani" }
+  ]
+}

@@ -33,7 +33,7 @@ fn is_combining_mark(ch: char) -> bool {
         '\u{064B}'..='\u{0658}'
             | '\u{0670}' // SUPERSCRIPT ALEF (category Mn): drop to match the web's /\p{Mn}/u so online/offline agree (v2; was fold→alef).
             | '\u{0640}' // TATWEEL: drop so a Uthmani re-normalization still substring-matches the needle.
-            | '\u{06D6}'..='\u{06DC}'
+            | '\u{06D6}'..='\u{06DE}' // Quranic annotation signs: 06D6..06DC + 06DD (0 occ, no-op) + 06DE rub el hizib (199 occ in Uthmani — §9).
             | '\u{06DF}'..='\u{06E8}'
             | '\u{06E9}' // ARABIC PLACE OF SAJDA — lone Quranic sign between ranges; dropped here.
             | '\u{06EA}'..='\u{06ED}'
@@ -100,5 +100,30 @@ mod tests {
     fn map_length_matches_output() {
         let (s, map) = normalize_arabic("ٱلْحَمْدُ لِلَّهِ");
         assert_eq!(s.chars().count(), map.len());
+    }
+
+    #[derive(serde::Deserialize)]
+    struct ParityNormalizeCase {
+        input: String,
+        expected: String,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct ParityCorpus {
+        normalize: Vec<ParityNormalizeCase>,
+    }
+
+    #[test]
+    fn normalize_parity_corpus() {
+        let json = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../web/src/lib/quran/__fixtures__/parity.json"
+        ));
+        let corpus: ParityCorpus = serde_json::from_str(json).expect("parity.json must parse");
+        assert!(!corpus.normalize.is_empty(), "corpus must carry normalize cases");
+        for case in &corpus.normalize {
+            let (got, _) = normalize_arabic(&case.input);
+            assert_eq!(got, case.expected, "parity case input={:?}", case.input);
+        }
     }
 }
