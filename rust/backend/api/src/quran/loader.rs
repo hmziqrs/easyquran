@@ -2,19 +2,21 @@ use std::marker::PhantomData;
 
 use roxmltree::Node;
 use sha2::{Digest, Sha256};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::Connection;
 use sqlx::Row;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 
 use crate::config::QuranSettings;
 
 use super::store::{
-    ArtifactFile, Artifacts, Bismillah, Corpus, HizbQuarter, Juz, Manzil, Page, QuranMeta,
-    QuranStore, Range, Ruku, SURA_COUNT, Sajda, SajdaKind, Script, SourceDigests, VERSE_COUNT,
+    ArtifactFile, Artifacts, Bismillah, CatalogueEntry, Corpus, HizbQuarter, Juz, Manzil, Page,
+    QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script, SourceDigests, SURA_COUNT,
+    VERSE_COUNT,
 };
 
 const GOLDEN_UTHMANI: &str = "32cc746d817cad9fd4366c7597bfceb177e7649233616c0a80309074b2eb99ee";
-const GOLDEN_SIMPLE_CLEAN: &str = "375934722ccbfab0d97754df464deac0dcffe962dc0632cc1ce5c6ca25dcea67";
+const GOLDEN_SIMPLE_CLEAN: &str =
+    "375934722ccbfab0d97754df464deac0dcffe962dc0632cc1ce5c6ca25dcea67";
 
 struct CorpusRow {
     index: u32,
@@ -65,26 +67,31 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
 
     validate_rows("uthmani", &uthmani_rows)?;
     validate_rows("simple-clean", &simple_clean_rows)?;
-    let uthmani = Corpus::from_texts(&uthmani_rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>());
-    let simple_clean =
-        Corpus::from_texts(&simple_clean_rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>());
+    let uthmani = Corpus::from_texts(
+        &uthmani_rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>(),
+    );
+    let simple_clean = Corpus::from_texts(
+        &simple_clean_rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>(),
+    );
 
     // Golden digest is a literal, not recomputed: a normalizing loader would corrupt both sides identically and slip past a self-derived check.
     let dig_uthmani = corpus_digest(&uthmani);
     let dig_simple_clean = corpus_digest(&simple_clean);
-    invariant(
-        dig_uthmani == GOLDEN_UTHMANI,
-        || {
-            format!(
-                "uthmani golden digest mismatch: expected {GOLDEN_UTHMANI}, computed {dig_uthmani} \
+    invariant(dig_uthmani == GOLDEN_UTHMANI, || {
+        format!(
+            "uthmani golden digest mismatch: expected {GOLDEN_UTHMANI}, computed {dig_uthmani} \
                  — a normalizing loader or wrong source is corrupting ayah text (§3.3)"
-            )
-        },
-    )?;
-    invariant(
-        dig_simple_clean == GOLDEN_SIMPLE_CLEAN,
-        || format!("simple-clean golden digest mismatch: expected {GOLDEN_SIMPLE_CLEAN}, computed {dig_simple_clean} (§3.3)"),
-    )?;
+        )
+    })?;
+    invariant(dig_simple_clean == GOLDEN_SIMPLE_CLEAN, || {
+        format!("simple-clean golden digest mismatch: expected {GOLDEN_SIMPLE_CLEAN}, computed {dig_simple_clean} (§3.3)")
+    })?;
 
     let xml_str = std::str::from_utf8(&xml_bytes)
         .map_err(|e| inv(format!("metadata xml is not valid utf-8: {e}")))?;
@@ -106,6 +113,8 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
 
     let search = super::search::SearchIndex::build(&uthmani, &simple_clean);
 
+    let catalogue = load_catalogue(settings)?;
+
     Ok(QuranStore {
         uthmani,
         simple_clean,
@@ -116,6 +125,7 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         },
         artifacts,
         search,
+        catalogue,
     })
 }
 
@@ -147,10 +157,18 @@ async fn read_corpus(path: &str, what: &'static str) -> Result<Vec<CorpusRow>, Q
 
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
-        let index = r.try_get::<i64, _>("index").map_err(|source| QuranLoadError::Sqlite { what, source })?;
-        let sura = r.try_get::<i64, _>("sura").map_err(|source| QuranLoadError::Sqlite { what, source })?;
-        let aya = r.try_get::<i64, _>("aya").map_err(|source| QuranLoadError::Sqlite { what, source })?;
-        let text = r.try_get::<String, _>("text").map_err(|source| QuranLoadError::Sqlite { what, source })?;
+        let index = r
+            .try_get::<i64, _>("index")
+            .map_err(|source| QuranLoadError::Sqlite { what, source })?;
+        let sura = r
+            .try_get::<i64, _>("sura")
+            .map_err(|source| QuranLoadError::Sqlite { what, source })?;
+        let aya = r
+            .try_get::<i64, _>("aya")
+            .map_err(|source| QuranLoadError::Sqlite { what, source })?;
+        let text = r
+            .try_get::<String, _>("text")
+            .map_err(|source| QuranLoadError::Sqlite { what, source })?;
         out.push(CorpusRow {
             index: index as u32,
             sura: sura as u16,
@@ -162,16 +180,17 @@ async fn read_corpus(path: &str, what: &'static str) -> Result<Vec<CorpusRow>, Q
 }
 
 fn validate_rows(what: &'static str, rows: &[CorpusRow]) -> Result<(), QuranLoadError> {
-    invariant(
-        rows.len() == VERSE_COUNT as usize,
-        || format!("{what}: expected {VERSE_COUNT} rows, got {}", rows.len()),
-    )?;
+    invariant(rows.len() == VERSE_COUNT as usize, || {
+        format!("{what}: expected {VERSE_COUNT} rows, got {}", rows.len())
+    })?;
     for (i, r) in rows.iter().enumerate() {
         let expected = i as u32 + 1;
-        invariant(
-            r.index == expected,
-            || format!("{what}: row {i} has index {}, expected contiguous {expected}", r.index),
-        )?;
+        invariant(r.index == expected, || {
+            format!(
+                "{what}: row {i} has index {}, expected contiguous {expected}",
+                r.index
+            )
+        })?;
     }
     Ok(())
 }
@@ -181,6 +200,97 @@ fn corpus_digest(corpus: &Corpus) -> String {
     let mut h = Sha256::new();
     h.update(joined.as_bytes());
     hex::encode(h.finalize())
+}
+
+/// Build a translation corpus from a sqlite file. Reuses the same row schema +
+/// validation as the Arabic corpora (translation files share the quran_text
+/// table), but skips the golden-digest assert — translations have no per-file
+/// literal; integrity is fixed at build (§2) and verified on download (§3).
+pub async fn load_translation_corpus(path: &str) -> Result<Corpus, QuranLoadError> {
+    let rows = read_corpus(path, "translation").await?;
+    validate_rows("translation", &rows)?;
+    let texts: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
+    Ok(Corpus::from_texts(&texts))
+}
+
+/// Serde mirror of `index.min.json` — bare path string for `file`, no digest
+/// slot (the catalogue IS the digest authority, resolved at boot from disk).
+#[derive(serde::Deserialize)]
+struct RawCatalogueEntry {
+    id: String,
+    language: String,
+    #[serde(rename = "languageCode")]
+    language_code: String,
+    direction: String,
+    name: String,
+    #[serde(default)]
+    translator: Option<String>,
+    file: String,
+}
+
+/// Load + validate the translation catalogue. The index JSON is fail-fast
+/// (missing/unreadable/parse-error → boot exit); individual sqlite files that
+/// are absent on disk are skipped with a warning rather than killing boot —
+/// `parse_source` will 400 for their ids until they reappear (§3).
+pub fn load_catalogue(settings: &QuranSettings) -> Result<Box<[CatalogueEntry]>, QuranLoadError> {
+    let bytes = read_file(&settings.translations_index_path, "translations-index")?;
+    let raw: Vec<RawCatalogueEntry> = serde_json::from_slice(&bytes)
+        .map_err(|e| inv(format!("translations index parse: {e}")))?;
+
+    let sqlite_dir = std::path::Path::new(&settings.translations_sqlite_dir);
+    let base = sqlite_dir
+        .parent()
+        .ok_or_else(|| inv("translations_sqlite_dir has no parent"))?;
+
+    let mut out: Vec<CatalogueEntry> = Vec::with_capacity(raw.len());
+    for r in raw {
+        let rel = r.file.as_str();
+        invariant(!std::path::Path::new(rel).is_absolute(), || {
+            format!("catalogue entry {}: absolute file path '{rel}'", r.id)
+        })?;
+        invariant(!rel.split('/').any(|seg| seg == ".."), || {
+            format!("catalogue entry {}: file path '{rel}' contains '..'", r.id)
+        })?;
+        invariant(
+            rel.starts_with("sqlite/") && rel.ends_with(".sqlite"),
+            || {
+                format!(
+                    "catalogue entry {}: file path '{rel}' must be 'sqlite/<id>.sqlite'",
+                    r.id
+                )
+            },
+        )?;
+        let resolved = base.join(rel);
+        let file_bytes = match std::fs::read(&resolved) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(
+                    id = %r.id,
+                    path = %resolved.display(),
+                    error = %e,
+                    "translation sqlite missing at boot; skipping catalogue entry (§3)"
+                );
+                continue;
+            }
+        };
+        out.push(CatalogueEntry {
+            id: r.id.into_boxed_str(),
+            language: r.language.into_boxed_str(),
+            language_code: r.language_code.into_boxed_str(),
+            direction: r.direction.into_boxed_str(),
+            name: r.name.into_boxed_str(),
+            translator: r.translator.map(|s| s.into_boxed_str()),
+            path: r.file.into_boxed_str(),
+            size_bytes: file_bytes.len() as u64,
+            sha256: file_sha256(&file_bytes).into_boxed_str(),
+        });
+    }
+    if out.is_empty() {
+        tracing::warn!(
+            "translation catalogue resolved zero entries; translation reads will 400 (§3)"
+        );
+    }
+    Ok(out.into_boxed_slice())
 }
 
 struct Marker {
@@ -202,9 +312,12 @@ fn attr(node: Node<'_, '_>, name: &str) -> Result<String, QuranLoadError> {
 }
 
 fn attr_u16(node: Node<'_, '_>, name: &str) -> Result<u16, QuranLoadError> {
-    attr(node, name)?
-        .parse::<u16>()
-        .map_err(|e| inv(format!("@{name}={} not a u16: {e}", attr(node, name).unwrap_or_default())))
+    attr(node, name)?.parse::<u16>().map_err(|e| {
+        inv(format!(
+            "@{name}={} not a u16: {e}",
+            attr(node, name).unwrap_or_default()
+        ))
+    })
 }
 
 fn attr_u32(node: Node<'_, '_>, name: &str) -> Result<u32, QuranLoadError> {
@@ -226,7 +339,9 @@ fn sura_global_of(suras: &[crate::quran::store::SuraMeta], sura: u16, aya: u16) 
 }
 
 fn sura_locate(suras: &[crate::quran::store::SuraMeta], g: u32) -> Option<(u16, u16)> {
-    let s = suras.iter().find(|s| g >= s.start_global && g <= s.end_global)?;
+    let s = suras
+        .iter()
+        .find(|s| g >= s.start_global && g <= s.end_global)?;
     let aya = (g - (s.start_global - 1)) as u16;
     Some((s.index, aya))
 }
@@ -252,10 +367,9 @@ fn build_meta(
             .ok_or_else(|| inv(format!("sura {index}: unknown place type")))?;
         let order = attr_u16(n, "order")?;
         let rukus = attr_u16(n, "rukus")?;
-        invariant(
-            (1..=SURA_COUNT as u16).contains(&index),
-            || format!("sura index {index} out of 1..=114"),
-        )?;
+        invariant((1..=SURA_COUNT as u16).contains(&index), || {
+            format!("sura index {index} out of 1..=114")
+        })?;
         let start_global = start_zero + 1;
         let end_global = start_zero + ayas as u32;
         suras.push(crate::quran::store::SuraMeta {
@@ -272,28 +386,38 @@ fn build_meta(
             bismillah: Bismillah::EmbeddedPrefix,
         });
     }
-    invariant(
-        suras.len() == SURA_COUNT,
-        || format!("expected {SURA_COUNT} <sura> elements, got {}", suras.len()),
-    )?;
+    invariant(suras.len() == SURA_COUNT, || {
+        format!("expected {SURA_COUNT} <sura> elements, got {}", suras.len())
+    })?;
     suras.sort_by_key(|s| s.index);
     for (i, s) in suras.iter().enumerate() {
-        invariant(s.index == i as u16 + 1, || format!("sura index not contiguous at {i}"))?;
+        invariant(s.index == i as u16 + 1, || {
+            format!("sura index not contiguous at {i}")
+        })?;
     }
 
     let mut per_sura_count = vec![0u32; SURA_COUNT];
     for r in rows {
         let g = r.index;
-        let (s, a) = sura_locate(&suras, g).ok_or_else(|| inv(format!("row global {g} not in any surah")))?;
-        invariant(r.sura == s, || format!("row {g}: sura {} != expected {s} (§3.1)", r.sura))?;
-        invariant(r.aya == a, || format!("row {g}: aya {} != expected {a} (§3.1)", r.aya))?;
+        let (s, a) = sura_locate(&suras, g)
+            .ok_or_else(|| inv(format!("row global {g} not in any surah")))?;
+        invariant(r.sura == s, || {
+            format!("row {g}: sura {} != expected {s} (§3.1)", r.sura)
+        })?;
+        invariant(r.aya == a, || {
+            format!("row {g}: aya {} != expected {a} (§3.1)", r.aya)
+        })?;
         per_sura_count[(s - 1) as usize] += 1;
     }
     for (i, s) in suras.iter().enumerate() {
-        invariant(
-            per_sura_count[i] == s.ayas as u32,
-            || format!("sura {}: ayas={} but {rows} rows map to it (§3.1)", s.index, s.ayas, rows = per_sura_count[i]),
-        )?;
+        invariant(per_sura_count[i] == s.ayas as u32, || {
+            format!(
+                "sura {}: ayas={} but {rows} rows map to it (§3.1)",
+                s.index,
+                s.ayas,
+                rows = per_sura_count[i]
+            )
+        })?;
     }
 
     let basmala = uthmani
@@ -317,14 +441,11 @@ fn build_meta(
             Bismillah::EmbeddedPrefix
         };
     }
-    invariant(
-        first_ayah == 1 && none == 1 && embedded == 112,
-        || {
-            format!(
+    invariant(first_ayah == 1 && none == 1 && embedded == 112, || {
+        format!(
                 "bismillah split expected 1/112/1 (FirstAyah/Embedded/None), got {first_ayah}/{embedded}/{none} (§3.3)"
             )
-        },
-    )?;
+    })?;
 
     let juzs = collect_markers(root, "juzs", "juz");
     let pages = collect_markers(root, "pages", "page");
@@ -338,14 +459,21 @@ fn build_meta(
     let quarters_r = build_ranges::<HizbQuarter>(&suras, quarters, "hizb-quarter")?;
     let manzils_r = build_ranges::<Manzil>(&suras, manzils, "manzil")?;
 
-    invariant(juzs_r.len() == 30, || format!("expected 30 juzs, got {}", juzs_r.len()))?;
-    invariant(pages_r.len() == 604, || format!("expected 604 pages, got {}", pages_r.len()))?;
-    invariant(rukus_r.len() == 556, || format!("expected 556 rukus, got {}", rukus_r.len()))?;
-    invariant(
-        quarters_r.len() == 240,
-        || format!("expected 240 hizb-quarters, got {}", quarters_r.len()),
-    )?;
-    invariant(manzils_r.len() == 7, || format!("expected 7 manzils, got {}", manzils_r.len()))?;
+    invariant(juzs_r.len() == 30, || {
+        format!("expected 30 juzs, got {}", juzs_r.len())
+    })?;
+    invariant(pages_r.len() == 604, || {
+        format!("expected 604 pages, got {}", pages_r.len())
+    })?;
+    invariant(rukus_r.len() == 556, || {
+        format!("expected 556 rukus, got {}", rukus_r.len())
+    })?;
+    invariant(quarters_r.len() == 240, || {
+        format!("expected 240 hizb-quarters, got {}", quarters_r.len())
+    })?;
+    invariant(manzils_r.len() == 7, || {
+        format!("expected 7 manzils, got {}", manzils_r.len())
+    })?;
 
     let sajdas_node =
         find_child(root, "sajdas").ok_or_else(|| inv("metadata xml missing <sajdas> wrapper"))?;
@@ -366,18 +494,23 @@ fn build_meta(
             kind,
         });
     }
-    invariant(
-        sajdas.len() == 15,
-        || format!("expected 15 sajdas, got {}", sajdas.len()),
-    )?;
+    invariant(sajdas.len() == 15, || {
+        format!("expected 15 sajdas, got {}", sajdas.len())
+    })?;
     sajdas.sort_by_key(|s| s.index);
     for (i, s) in sajdas.iter().enumerate() {
-        invariant(s.index == i as u16 + 1, || format!("sajda index not contiguous at {i}"))?;
+        invariant(s.index == i as u16 + 1, || {
+            format!("sajda index not contiguous at {i}")
+        })?;
     }
 
-    let suras_arr: [crate::quran::store::SuraMeta; SURA_COUNT] = suras
-        .try_into()
-        .map_err(|v: Vec<_>| inv(format!("sura vec was not length {SURA_COUNT} (got {})", v.len())))?;
+    let suras_arr: [crate::quran::store::SuraMeta; SURA_COUNT] =
+        suras.try_into().map_err(|v: Vec<_>| {
+            inv(format!(
+                "sura vec was not length {SURA_COUNT} (got {})",
+                v.len()
+            ))
+        })?;
 
     Ok(QuranMeta {
         suras: suras_arr,
@@ -414,20 +547,28 @@ fn build_ranges<K>(
     invariant(n > 0, || format!("{what}: no markers"))?;
     markers.sort_by_key(|m| m.index);
     for (i, m) in markers.iter().enumerate() {
-        invariant(
-            m.index == i as u16 + 1,
-            || format!("{what}: marker index not contiguous at {i} (got {})", m.index),
-        )?;
+        invariant(m.index == i as u16 + 1, || {
+            format!(
+                "{what}: marker index not contiguous at {i} (got {})",
+                m.index
+            )
+        })?;
     }
     let starts: Vec<u32> = markers
         .iter()
         .map(|m| {
-            sura_global_of(suras, m.sura, m.aya)
-                .ok_or_else(|| inv(format!("{what}[{}]: marker ({},{}) out of range", m.index, m.sura, m.aya)))
+            sura_global_of(suras, m.sura, m.aya).ok_or_else(|| {
+                inv(format!(
+                    "{what}[{}]: marker ({},{}) out of range",
+                    m.index, m.sura, m.aya
+                ))
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     for w in starts.windows(2) {
-        invariant(w[0] < w[1], || format!("{what}: marker index order != global-index order"))?;
+        invariant(w[0] < w[1], || {
+            format!("{what}: marker index order != global-index order")
+        })?;
     }
 
     let mut out: Vec<Range<K>> = Vec::with_capacity(n);
@@ -438,8 +579,12 @@ fn build_ranges<K>(
             VERSE_COUNT
         };
         let (start_sura, start_aya) = (markers[i].sura, markers[i].aya);
-        let (end_sura, end_aya) = sura_locate(suras, end_global)
-            .ok_or_else(|| inv(format!("{what}[{}]: end_global {end_global} not locatable", markers[i].index)))?;
+        let (end_sura, end_aya) = sura_locate(suras, end_global).ok_or_else(|| {
+            inv(format!(
+                "{what}[{}]: end_global {end_global} not locatable",
+                markers[i].index
+            ))
+        })?;
         out.push(Range {
             index: markers[i].index,
             start_global,
@@ -457,14 +602,18 @@ fn build_ranges<K>(
         || format!("{what}: first range must start at global 1"),
     )?;
     invariant(
-        out.last().map(|r| r.end_global == VERSE_COUNT).unwrap_or(false),
+        out.last()
+            .map(|r| r.end_global == VERSE_COUNT)
+            .unwrap_or(false),
         || format!("{what}: last range must end at global {VERSE_COUNT}"),
     )?;
     for w in out.windows(2) {
-        invariant(
-            w[0].end_global + 1 == w[1].start_global,
-            || format!("{what}: tiling gap/overlap between ranges {} and {}", w[0].index, w[1].index),
-        )?;
+        invariant(w[0].end_global + 1 == w[1].start_global, || {
+            format!(
+                "{what}: tiling gap/overlap between ranges {} and {}",
+                w[0].index, w[1].index
+            )
+        })?;
     }
     Ok(out.into_boxed_slice())
 }
@@ -480,18 +629,28 @@ mod tests {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
+            translations_index_path: format!("{base}/translations/index.min.json"),
+            translations_sqlite_dir: format!("{base}/translations/sqlite"),
+            max_resident_translations: 8,
+            max_resident_bytes: 48 * 1024 * 1024,
+            translation_idle_ttl_secs: 1800,
         }
     }
 
     fn tiles<K>(r: &[Range<K>]) -> bool {
         r.first().map(|x| x.start_global == 1).unwrap_or(false)
-            && r.last().map(|x| x.end_global == VERSE_COUNT).unwrap_or(false)
-            && r.windows(2).all(|w| w[0].end_global + 1 == w[1].start_global)
+            && r.last()
+                .map(|x| x.end_global == VERSE_COUNT)
+                .unwrap_or(false)
+            && r.windows(2)
+                .all(|w| w[0].end_global + 1 == w[1].start_global)
     }
 
     #[tokio::test]
     async fn loads_and_validates_all_invariants() {
-        let store = load_quran_store(&settings()).await.expect("store must load");
+        let store = load_quran_store(&settings())
+            .await
+            .expect("store must load");
 
         assert_eq!(&*store.source_digests.uthmani, GOLDEN_UTHMANI);
         assert_eq!(&*store.source_digests.simple_clean, GOLDEN_SIMPLE_CLEAN);
@@ -556,7 +715,10 @@ mod tests {
         assert_eq!(store.sajda_at(3518), Some(SajdaKind::Obligatory));
 
         let nav = store.navigation(1).unwrap();
-        assert_eq!((nav.juz, nav.page, nav.ruku, nav.hizb_quarter, nav.manzil), (1, 1, 1, 1, 1));
+        assert_eq!(
+            (nav.juz, nav.page, nav.ruku, nav.hizb_quarter, nav.manzil),
+            (1, 1, 1, 1, 1)
+        );
 
         let u = store.verse(Script::Uthmani, 1).unwrap();
         let sc = store.verse(Script::SimpleClean, 1).unwrap();
@@ -564,7 +726,10 @@ mod tests {
         assert!(!sc.is_empty());
 
         for g in 1..=VERSE_COUNT {
-            assert!(store.ayah_view(Script::Uthmani, g).is_some(), "ayah_view g={g}");
+            assert!(
+                store.ayah_view(Script::Uthmani, g).is_some(),
+                "ayah_view g={g}"
+            );
         }
     }
 
@@ -583,14 +748,23 @@ mod tests {
 
         let g91 = store.meta().global_of(9, 1).unwrap();
         let v91_u = store.verse(Script::Uthmani, g91).unwrap();
-        assert!(!v91_u.starts_with(basmala_u), "9:1 must not carry the basmala");
+        assert!(
+            !v91_u.starts_with(basmala_u),
+            "9:1 must not carry the basmala"
+        );
 
         for sura in [95u16, 97u16] {
             let g = store.meta().global_of(sura, 1).unwrap();
             let t = store.verse(Script::Uthmani, g).unwrap();
-            assert!(t.contains('\u{0651}'), "uthmani {sura}:1 should carry a shadda");
+            assert!(
+                t.contains('\u{0651}'),
+                "uthmani {sura}:1 should carry a shadda"
+            );
             let t_sc = store.verse(Script::SimpleClean, g).unwrap();
-            assert!(!t_sc.contains('\u{0651}'), "simple-clean {sura}:1 has no harakat");
+            assert!(
+                !t_sc.contains('\u{0651}'),
+                "simple-clean {sura}:1 has no harakat"
+            );
         }
     }
 
@@ -612,6 +786,19 @@ mod tests {
             uthmani_path: tmp.join("u.sqlite").to_string_lossy().into_owned(),
             simple_clean_path: tmp.join("s.sqlite").to_string_lossy().into_owned(),
             metadata_xml_path: tmp.join("m.xml").to_string_lossy().into_owned(),
+            translations_index_path: concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../db/quran/tanzil/translations/index.min.json"
+            )
+            .to_string(),
+            translations_sqlite_dir: concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../db/quran/tanzil/translations/sqlite"
+            )
+            .to_string(),
+            max_resident_translations: 8,
+            max_resident_bytes: 48 * 1024 * 1024,
+            translation_idle_ttl_secs: 1800,
         };
         let store = load_quran_store(&temp_settings)
             .await
@@ -629,7 +816,8 @@ mod tests {
         assert_eq!(store.verse(Script::SimpleClean, 1160).unwrap(), sc_before);
 
         for name in ["u.sqlite", "s.sqlite", "m.xml"] {
-            let _ = std::fs::set_permissions(tmp.join(name), std::fs::Permissions::from_mode(0o644));
+            let _ =
+                std::fs::set_permissions(tmp.join(name), std::fs::Permissions::from_mode(0o644));
         }
         let _ = std::fs::remove_dir_all(&tmp);
     }

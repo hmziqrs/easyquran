@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 pub const VERSE_COUNT: u32 = 6236;
 pub const SURA_COUNT: usize = 114;
 pub const RESPONSE_CAP: u32 = 300;
@@ -106,8 +108,7 @@ impl Corpus {
     }
 
     pub fn joined_for_digest(&self) -> String {
-        let mut out =
-            String::with_capacity(self.arena.len() + VERSE_COUNT as usize);
+        let mut out = String::with_capacity(self.arena.len() + VERSE_COUNT as usize);
         for g in 1..=VERSE_COUNT {
             if g > 1 {
                 out.push('\n');
@@ -115,6 +116,12 @@ impl Corpus {
             out.push_str(self.verse(g).expect("verse in range"));
         }
         out
+    }
+
+    /// Arena bytes + offset table bytes — feeds the moka weigher so the pool
+    /// bounds resident memory, not just entry count (§3).
+    pub fn bytes(&self) -> usize {
+        self.arena.len() + self.offsets.len() * std::mem::size_of::<u32>()
     }
 }
 
@@ -210,6 +217,64 @@ pub struct Artifacts {
     pub simple_clean: ArtifactFile,
 }
 
+/// A translation catalogue row parsed from `index.min.json` with its backing
+/// sqlite file's size + sha256 resolved at boot (§3). The catalogue is the
+/// digest authority for translations — there is no per-translation golden
+/// literal; the sha here doubles as the stable ETag tag for translation reads.
+#[derive(Clone, Debug)]
+pub struct CatalogueEntry {
+    pub id: Box<str>,
+    pub language: Box<str>,
+    pub language_code: Box<str>,
+    pub direction: Box<str>,
+    pub name: Box<str>,
+    pub translator: Option<Box<str>>,
+    /// Relative path as published, e.g. `"sqlite/en.sahih.sqlite"`.
+    pub path: Box<str>,
+    pub size_bytes: u64,
+    pub sha256: Box<str>,
+}
+
+/// Validated translation identifier. Construction is gated by `parse` against
+/// the catalogue id set, so a path-traversal payload (`..`, `/`, `\`) can never
+/// materialize into a `TranslationId` — it cannot exact-match a real id (§3).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TranslationId(Box<str>);
+
+impl TranslationId {
+    /// The only public constructor: returns `Some` iff `s` exactly matches a
+    /// catalogue id. This membership check IS the path-traversal guard.
+    pub fn parse(s: &str, valid_ids: &HashSet<&str>) -> Option<Self> {
+        if valid_ids.contains(s) {
+            Some(Self(s.into()))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TranslationId {
+    /// Crate-internal fast path used by the pool AFTER it has performed its own
+    /// membership check against its owned id set — avoids rebuilding a
+    /// `HashSet<&str>` per request.
+    pub(super) fn from_validated(s: &str) -> Self {
+        Self(s.into())
+    }
+}
+
+/// Resolved source for `/quran/sources/{id}/...` — either an Arabic script
+/// (backed by the always-resident `QuranStore` corpora) or a translation id
+/// (backed by the on-demand pool). Resolved in `parse_source` (§3).
+#[derive(Clone, Debug)]
+pub enum SourceId {
+    Arabic(Script),
+    Translation(TranslationId),
+}
+
 pub struct QuranMeta {
     pub suras: [SuraMeta; SURA_COUNT],
     pub juzs: Box<[Range<Juz>]>,
@@ -270,6 +335,7 @@ pub struct QuranStore {
     pub source_digests: SourceDigests,
     pub artifacts: Artifacts,
     pub search: super::search::SearchIndex,
+    pub catalogue: Box<[CatalogueEntry]>,
 }
 
 impl QuranStore {
@@ -294,6 +360,13 @@ impl QuranStore {
     #[inline]
     pub fn source_digests(&self) -> &SourceDigests {
         &self.source_digests
+    }
+
+    /// O(1)-ish lookup of a catalogue entry by translation id. Used by
+    /// `/quran/sources/{id}/...` handlers to resolve the per-translation ETag
+    /// tag + source_profile without touching the pool (§3).
+    pub fn catalogue_entry(&self, id: &str) -> Option<&CatalogueEntry> {
+        self.catalogue.iter().find(|e| &*e.id == id)
     }
 
     pub fn sajda_at(&self, g: u32) -> Option<SajdaKind> {

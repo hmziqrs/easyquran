@@ -25,6 +25,11 @@ fn quran_settings() -> QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
         metadata_xml_path: format!("{base}/quran-data.xml"),
+        translations_index_path: format!("{base}/translations/index.min.json"),
+        translations_sqlite_dir: format!("{base}/translations/sqlite"),
+        max_resident_translations: 8,
+        max_resident_bytes: 48 * 1024 * 1024,
+        translation_idle_ttl_secs: 1800,
     }
 }
 
@@ -38,6 +43,13 @@ async fn state_with_public_url(public_url: &str) -> AppState {
             .await
             .expect("quran store loads"),
     );
+    let translation_pool = Arc::new(ruxlog::quran::TranslationPool::new(
+        std::path::PathBuf::from(&quran_settings().translations_sqlite_dir),
+        &quran.catalogue,
+        quran_settings().max_resident_translations,
+        quran_settings().max_resident_bytes,
+        quran_settings().translation_idle_ttl_secs,
+    ));
     let sea_db = sea_orm::Database::connect("sqlite::memory:")
         .await
         .expect("in-memory db");
@@ -90,7 +102,10 @@ async fn state_with_public_url(public_url: &str) -> AppState {
     };
     let billing_router = Arc::new(BillingRouter::new(
         HashMap::new(),
-        GeoRouter::new(GeoRulesConfig { default_provider: String::new(), rules: vec![] }),
+        GeoRouter::new(GeoRulesConfig {
+            default_provider: String::new(),
+            rules: vec![],
+        }),
     ));
     AppState {
         sea_db,
@@ -107,6 +122,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         webauthn: None,
         quran,
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
+        translation_pool,
     }
 }
 
@@ -116,12 +132,13 @@ async fn app() -> axum::Router {
 
 fn app_over(state: AppState) -> axum::Router {
     let ip_source = state.settings.http.ip_source.clone();
-    let quran = quran_v1::routes().merge(
-        quran_v1::search_route().layer(rate_limit::rate_limit_layer(&state, 1_000_000, 60)),
-    );
+    let quran = quran_v1::routes()
+        .merge(quran_v1::search_route().layer(rate_limit::rate_limit_layer(&state, 1_000_000, 60)));
     let public = with_observability(quran)
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(rate_limit::rate_limit_layer_branch(&state, 1_000_000, 60, "quran-v1"))
+        .layer(rate_limit::rate_limit_layer_branch(
+            &state, 1_000_000, 60, "quran-v1",
+        ))
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(state.clone()))
@@ -156,7 +173,9 @@ async fn full_app() -> axum::Router {
         .layer(axum::Extension(state.clone()))
         .layer(tower_http::compression::CompressionLayer::new())
         .layer(middleware::from_fn(ruxlog::middlewares::cors::origin_guard))
-        .layer(middleware::from_fn(ruxlog::middlewares::static_csrf::csrf_guard))
+        .layer(middleware::from_fn(
+            ruxlog::middlewares::static_csrf::csrf_guard,
+        ))
         .layer(session_layer)
         .layer(private_cors);
     let public = app_over_public(&state, ip_source);
@@ -166,14 +185,18 @@ async fn full_app() -> axum::Router {
         .with_state(state)
 }
 
-fn app_over_public(state: &AppState, ip_source: axum_client_ip::ClientIpSource) -> axum::Router<AppState> {
-    let quran = quran_v1::routes().merge(
-        quran_v1::search_route().layer(rate_limit::rate_limit_layer(state, 1_000_000, 60)),
-    )
-    .layer(middleware::from_fn(quran_v1::error::shape_routing_errors));
+fn app_over_public(
+    state: &AppState,
+    ip_source: axum_client_ip::ClientIpSource,
+) -> axum::Router<AppState> {
+    let quran = quran_v1::routes()
+        .merge(quran_v1::search_route().layer(rate_limit::rate_limit_layer(state, 1_000_000, 60)))
+        .layer(middleware::from_fn(quran_v1::error::shape_routing_errors));
     with_observability(quran)
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(rate_limit::rate_limit_layer_branch(state, 1_000_000, 60, "quran-v1"))
+        .layer(rate_limit::rate_limit_layer_branch(
+            state, 1_000_000, 60, "quran-v1",
+        ))
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(state.clone()))
@@ -260,11 +283,19 @@ async fn single_ayah_redirect_alias_and_400() {
 
     let resp = app()
         .await
-        .oneshot(Request::builder().uri("/quran/ayahs/2:255").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/quran/ayahs/2:255")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/quran/ayahs/2/255");
+    assert_eq!(
+        resp.headers().get(header::LOCATION).unwrap(),
+        "/quran/ayahs/2/255"
+    );
 
     assert_eq!(get("/quran/ayahs/abc").await.0, StatusCode::BAD_REQUEST);
 }
@@ -295,8 +326,14 @@ async fn ayahs_keys_and_global_range() {
 async fn script_param_default_and_validation() {
     let (_, _, h_uth) = get("/quran/ayahs/1/1").await;
     let (_, _, h_sc) = get("/quran/ayahs/1/1?script=simple-clean").await;
-    assert_ne!(h_uth.get(header::ETAG).unwrap(), h_sc.get(header::ETAG).unwrap());
-    assert_eq!(get("/quran/ayahs/1/1?script=bogus").await.0, StatusCode::BAD_REQUEST);
+    assert_ne!(
+        h_uth.get(header::ETAG).unwrap(),
+        h_sc.get(header::ETAG).unwrap()
+    );
+    assert_eq!(
+        get("/quran/ayahs/1/1?script=bogus").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -305,7 +342,10 @@ async fn unknown_query_param_rejected() {
         get("/quran/surahs/1/ayahs?bogus=1").await.0,
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(get("/quran/surahs/1?foo=1").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/surahs/1?foo=1").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -328,7 +368,12 @@ async fn method_not_allowed() {
 #[tokio::test]
 async fn conditional_get_returns_304() {
     let (_, _, headers) = get("/quran/surahs/1/ayahs").await;
-    let etag = headers.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+    let etag = headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let cc = headers
         .get(header::CACHE_CONTROL)
         .unwrap()
@@ -348,7 +393,10 @@ async fn conditional_get_returns_304() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
     assert_eq!(resp.headers().get(header::ETAG).unwrap(), etag.as_str());
-    assert_eq!(resp.headers().get(header::CACHE_CONTROL).unwrap(), cc.as_str());
+    assert_eq!(
+        resp.headers().get(header::CACHE_CONTROL).unwrap(),
+        cc.as_str()
+    );
     assert_eq!(resp.headers().get(header::VARY).unwrap(), "Accept-Encoding");
 }
 
@@ -371,7 +419,9 @@ async fn cors_preflight_wildcard_no_credentials() {
         .unwrap();
     assert!(resp.status().is_success());
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     assert!(resp
@@ -399,7 +449,9 @@ async fn cors_preflight_wildcard_no_credentials() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     let expose = resp
@@ -455,8 +507,14 @@ async fn random_date_is_immutable_cache() {
         .to_str()
         .unwrap()
         .contains("immutable"));
-    assert_eq!(get("/quran/random?date=2026-2-3").await.0, StatusCode::BAD_REQUEST);
-    assert_eq!(get("/quran/random?date=2026-02-30").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/random?date=2026-2-3").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        get("/quran/random?date=2026-02-30").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -471,7 +529,10 @@ async fn search_results_ordered_with_highlights_and_limits() {
     let mut prev: u64 = 0;
     for r in results {
         // Web decodeSearchHit rejects any hit whose kind is not "ayah" | "opener" and nulls the whole payload.
-        assert_eq!(r["kind"], "ayah", "every ayah hit carries the kind discriminator");
+        assert_eq!(
+            r["kind"], "ayah",
+            "every ayah hit carries the kind discriminator"
+        );
         let g = r["ayah"]["globalIndex"].as_u64().unwrap();
         assert!(g >= prev, "results not ascending by globalIndex");
         prev = g;
@@ -533,7 +594,9 @@ async fn cursor_pagination_page_two() {
     assert_eq!(ayahs[0]["globalIndex"], 301, "page 2 starts at global 301");
     assert_eq!(data(&body2)["range"]["nextCursor"], 601);
     assert_eq!(
-        get("/quran/ayahs?fromGlobal=1&toGlobal=7&cursor=999").await.0,
+        get("/quran/ayahs?fromGlobal=1&toGlobal=7&cursor=999")
+            .await
+            .0,
         StatusCode::BAD_REQUEST
     );
 }
@@ -542,7 +605,12 @@ async fn cursor_pagination_page_two() {
 async fn conditional_get_on_search_and_head_method() {
     let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF";
     let (_, _, headers) = get(&format!("/quran/search?q={q}")).await;
-    let etag = headers.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+    let etag = headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let resp = app()
         .await
         .oneshot(
@@ -611,7 +679,9 @@ async fn cors_no_cookies_on_every_public_route() {
         "/quran/openapi.json",
         "/quran/search?q=%D8%A7%D9%84%D8%AD%D9%85%D8%AF",
     ];
-    let route_count = include_str!("../src/modules/quran_v1/mod.rs").matches(".route(").count();
+    let route_count = include_str!("../src/modules/quran_v1/mod.rs")
+        .matches(".route(")
+        .count();
     assert_eq!(
         routes.len(),
         route_count,
@@ -636,12 +706,16 @@ async fn cors_no_cookies_on_every_public_route() {
             "{path} -> {status}"
         );
         assert_eq!(
-            resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
             "*",
             "{path} ACAO"
         );
         assert!(
-            resp.headers().get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS).is_none(),
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+                .is_none(),
             "{path} must not allow credentials"
         );
         assert!(
@@ -671,7 +745,10 @@ fn modules_quran_v1_has_no_sqlite_refs() {
     ];
     for (i, s) in srcs.iter().enumerate() {
         for b in banned {
-            assert!(!s.contains(b), "modules/quran_v1 file[{i}] references {b:?} (§10)");
+            assert!(
+                !s.contains(b),
+                "modules/quran_v1 file[{i}] references {b:?} (§10)"
+            );
         }
     }
 }
@@ -730,7 +807,9 @@ async fn phase_1a_auth_regression_on_merged_router() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     assert!(
@@ -776,9 +855,16 @@ async fn scripts_omits_failed_head_artifacts() {
     let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let scripts = body["data"]["scripts"].as_array().unwrap();
-    assert_eq!(scripts.len(), 1, "only the verified (uthmani) artifact remains");
+    assert_eq!(
+        scripts.len(),
+        1,
+        "only the verified (uthmani) artifact remains"
+    );
     assert_eq!(scripts[0]["id"], "uthmani");
-    assert!(scripts[0]["downloadUrl"].as_str().unwrap().ends_with(".sqlite"));
+    assert!(scripts[0]["downloadUrl"]
+        .as_str()
+        .unwrap()
+        .ends_with(".sqlite"));
 }
 
 #[tokio::test]
@@ -819,7 +905,11 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let scripts = body["data"]["scripts"].as_array().unwrap();
-    assert_eq!(scripts.len(), 2, "happy path advertises exactly both artifacts");
+    assert_eq!(
+        scripts.len(),
+        2,
+        "happy path advertises exactly both artifacts"
+    );
     let ids: Vec<&str> = scripts.iter().map(|s| s["id"].as_str().unwrap()).collect();
     assert!(ids.contains(&"uthmani"), "uthmani advertised");
     assert!(ids.contains(&"simple-clean"), "simple-clean advertised");
@@ -851,7 +941,10 @@ async fn range_out_of_bounds_is_400_not_clamped() {
         get("/quran/juzs/1/ayahs?from=1&to=9999").await.0,
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(get("/quran/surahs/2/ayahs?from=1&to=3").await.0, StatusCode::OK);
+    assert_eq!(
+        get("/quran/surahs/2/ayahs?from=1&to=3").await.0,
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -914,9 +1007,13 @@ async fn search_respects_limit_offset_and_is_stable() {
 
     if keys1.len() > 1 {
         let (_, bo, _) = get(&format!("/quran/search?q={q}&limit=5&offset=1")).await;
-        let first_at_offset =
-            data(&bo)["results"].as_array().unwrap()[0]["ayah"]["key"].as_str().unwrap();
-        assert_eq!(first_at_offset, keys1[1], "offset=1 begins at the 2nd base hit");
+        let first_at_offset = data(&bo)["results"].as_array().unwrap()[0]["ayah"]["key"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            first_at_offset, keys1[1],
+            "offset=1 begins at the 2nd base hit"
+        );
     }
 }
 
@@ -962,7 +1059,167 @@ async fn web_compatible_read_endpoints() {
     assert!(norms.iter().any(|n| n["surah"].as_u64() == Some(1)));
     assert!(norms.iter().any(|n| n["surah"].as_u64() == Some(2)));
 
-    assert_eq!(get("/quran/sources/bogus/surah/2").await.0, StatusCode::BAD_REQUEST);
-    assert_eq!(get("/quran/sources/uthmani/surah/115").await.0, StatusCode::NOT_FOUND);
-    assert_eq!(get("/quran/sources/uthmani/range?from=1&to=6236").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/sources/bogus/surah/2").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        get("/quran/sources/uthmani/surah/115").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get("/quran/sources/uthmani/range?from=1&to=6236").await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn translation_surah_serves_text_with_absent_packaging() {
+    let (st, body, headers) = get("/quran/sources/en.sahih/surah/2").await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    assert_eq!(d["sourceId"], "en.sahih");
+    assert_eq!(d["script"], "en.sahih");
+    let verses = d["verses"].as_array().unwrap();
+    assert_eq!(verses.len(), 286, "surah 2 has 286 ayahs");
+    assert!(
+        verses[0].as_str().is_some_and(|t| !t.is_empty()),
+        "first verse must be non-empty"
+    );
+    assert_eq!(verses[0].as_str().unwrap(), "Alif, Lam, Meem.");
+    let n = &d["normalization"];
+    assert_eq!(n["surah"], 2);
+    assert_eq!(n["sourceId"], "en.sahih");
+    assert_eq!(n["packaging"], "absent");
+    assert_eq!(n["openerKind"], "none");
+    assert!(n["openerText"].is_null());
+    assert_eq!(n["openerEndScalar"], 0);
+    assert_eq!(n["bodyStartScalar"], 0);
+    let profile = n["sourceProfile"].as_str().unwrap();
+    assert!(
+        profile.starts_with("tanzil-en.sahih-") && profile.len() == "tanzil-en.sahih-".len() + 8,
+        "sourceProfile must be tanzil-<id>-<sha8>: got {profile}"
+    );
+    // Translation ETag must NOT be the uthmani digest — keys on its own sha.
+    let etag = headers.get(header::ETAG).unwrap().to_str().unwrap();
+    assert!(
+        !etag.contains("32cc746d817cad9fd4366c7597bfceb177e7649233616c0a80309074b2eb99ee"),
+        "translation ETag must not carry the uthmani digest"
+    );
+    let _ = profile;
+}
+
+#[tokio::test]
+async fn translation_range_serves_lean_ayahs_and_absent_normalization() {
+    let (st, body, _) = get("/quran/sources/en.sahih/range?from=1&to=7").await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    let ayahs = d["ayahs"].as_array().unwrap();
+    assert_eq!(ayahs.len(), 7);
+    assert_eq!(ayahs[0]["key"], "1:1");
+    let norms = d["normalizations"].as_array().unwrap();
+    assert_eq!(norms.len(), 1, "1..=7 is all surah 1");
+    assert_eq!(norms[0]["packaging"], "absent");
+    assert_eq!(norms[0]["openerKind"], "none");
+    assert_eq!(norms[0]["bodyStartScalar"], 0);
+}
+
+#[tokio::test]
+async fn translation_source_400s_for_unknown_and_traversal_ids() {
+    // Unknown id reaches parse_source, which rejects it → 400.
+    assert_eq!(
+        get("/quran/sources/nope/surah/2").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        get("/quran/sources/bogus/surah/2").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    // Path-traversal payloads must NEVER reach the filesystem: the route either
+    // rejects them at the router (404 — reqwest normalizes `..` out of the path
+    // before the handler sees it) or at parse_source via TranslationId
+    // membership (400). The load-bearing guarantee is that no traversal returns
+    // 200 (served a file) or 5xx (server error) — a 4xx client error is the
+    // security property. The parse_source membership guard itself is covered by
+    // quran::translation_pool::tests::parse_id_rejects_non_catalogue_strings.
+    for uri in [
+        "/quran/sources/../foo/surah/1",
+        "/quran/sources/en.sahih/../x/surah/1",
+        "/quran/sources/..%2F..%2Ffoo/surah/1",
+        "/quran/sources/en.sahih%2F..%2Fx/surah/1",
+        "/quran/sources/%2e%2e%2f%2e%2e%2ffoo/surah/1",
+    ] {
+        let st = get(uri).await.0;
+        assert!(
+            st.is_client_error(),
+            "traversal payload {uri} must produce a 4xx client error, got {st}"
+        );
+        assert_ne!(
+            st,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "no 5xx leak for {uri}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn translation_arabic_share_path_keep_independent_etags() {
+    // Same canonical path under Arabic vs translation must yield distinct ETags
+    // (Arabic keys on uthmani digest; translation keys on its own sha).
+    let (_, _, h_ar) = get("/quran/sources/uthmani/surah/2").await;
+    let (_, _, h_tr) = get("/quran/sources/en.sahih/surah/2").await;
+    let e_ar = h_ar.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+    let e_tr = h_tr.get(header::ETAG).unwrap().to_str().unwrap();
+    assert_ne!(e_ar, e_tr, "Arabic and translation ETags must differ");
+}
+
+#[tokio::test]
+async fn translation_pool_metrics_after_mixed_workload() {
+    let state = state().await;
+    // Two distinct ids → two cold builds (misses), then a repeat (hit).
+    let _ = state
+        .translation_pool
+        .get_or_build(
+            &state
+                .translation_pool
+                .parse_id("en.sahih")
+                .expect("en.sahih"),
+        )
+        .await
+        .expect("build en.sahih");
+    let second_id = state
+        .translation_pool
+        .ids()
+        .iter()
+        .find(|s| s.as_str() != "en.sahih")
+        .cloned()
+        .expect("another translation id");
+    let _ = state
+        .translation_pool
+        .get_or_build(
+            &state
+                .translation_pool
+                .parse_id(&second_id)
+                .expect("id parses"),
+        )
+        .await
+        .expect("build second");
+    let _ = state
+        .translation_pool
+        .get_or_build(
+            &state
+                .translation_pool
+                .parse_id("en.sahih")
+                .expect("en.sahih"),
+        )
+        .await
+        .expect("repeat en.sahih");
+
+    let (resident_count, resident_bytes, hits, misses, evictions) =
+        state.translation_pool.metrics();
+    assert!(resident_count >= 1, "resident_count={resident_count}");
+    assert!(resident_bytes > 0, "resident_bytes={resident_bytes}");
+    assert_eq!(misses, 2, "two cold builds");
+    assert!(hits >= 1, "hits={hits}");
+    assert_eq!(evictions, 0, "no eviction under 48MiB: {evictions}");
 }

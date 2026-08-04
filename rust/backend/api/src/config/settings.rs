@@ -39,11 +39,8 @@ impl ObjectStorageConfig {
         let endpoint =
             env_with_fallback(&["S3_ENDPOINT", "AWS_ENDPOINT", "GARAGE_S3_ENDPOINT"], None)
                 .expect("S3_ENDPOINT, AWS_ENDPOINT, or GARAGE_S3_ENDPOINT must be set");
-        let public_url =
-            env_with_fallback(&["S3_PUBLIC_URL", "AWS_S3_PUBLIC_URL"], None)
-                .unwrap_or_else(|| {
-                    endpoint.clone()
-                });
+        let public_url = env_with_fallback(&["S3_PUBLIC_URL", "AWS_S3_PUBLIC_URL"], None)
+            .unwrap_or_else(|| endpoint.clone());
         let region = env_with_fallback(
             &[
                 "S3_REGION",
@@ -128,8 +125,7 @@ pub struct SiteSettings {
 impl SiteSettings {
     pub fn from_env() -> Self {
         Self {
-            url: std::env::var("SITE_URL")
-                .unwrap_or_else(|_| "http://localhost:8888".to_string()),
+            url: std::env::var("SITE_URL").unwrap_or_else(|_| "http://localhost:8888".to_string()),
             name: std::env::var("SITE_NAME").unwrap_or_else(|_| "Ruxlog".to_string()),
             consumer_site_url: std::env::var("CONSUMER_SITE_URL")
                 .unwrap_or_else(|_| "https://ruxlog.com".to_string()),
@@ -142,19 +138,29 @@ pub struct QuranSettings {
     pub uthmani_path: String,
     pub simple_clean_path: String,
     pub metadata_xml_path: String,
+    pub translations_index_path: String,
+    pub translations_sqlite_dir: String,
+    pub max_resident_translations: u64,
+    pub max_resident_bytes: u64,
+    pub translation_idle_ttl_secs: u64,
 }
 
 impl QuranSettings {
     pub fn from_env() -> Self {
         Self {
-            uthmani_path: std::env::var("QURAN_UTHMANI_PATH").unwrap_or_else(|_| {
-                "db/quran/tanzil/arabic/quran-uthmani.sqlite".to_string()
-            }),
-            simple_clean_path: std::env::var("QURAN_SIMPLE_CLEAN_PATH").unwrap_or_else(|_| {
-                "db/quran/tanzil/arabic/quran-simple-clean.sqlite".to_string()
-            }),
+            uthmani_path: std::env::var("QURAN_UTHMANI_PATH")
+                .unwrap_or_else(|_| "db/quran/tanzil/arabic/quran-uthmani.sqlite".to_string()),
+            simple_clean_path: std::env::var("QURAN_SIMPLE_CLEAN_PATH")
+                .unwrap_or_else(|_| "db/quran/tanzil/arabic/quran-simple-clean.sqlite".to_string()),
             metadata_xml_path: std::env::var("QURAN_METADATA_XML_PATH")
                 .unwrap_or_else(|_| "db/quran/tanzil/quran-data.xml".to_string()),
+            translations_index_path: std::env::var("QURAN_TRANSLATIONS_INDEX_PATH")
+                .unwrap_or_else(|_| "db/quran/tanzil/translations/index.min.json".to_string()),
+            translations_sqlite_dir: std::env::var("QURAN_TRANSLATIONS_SQLITE_DIR")
+                .unwrap_or_else(|_| "db/quran/tanzil/translations/sqlite".to_string()),
+            max_resident_translations: env_u64("QURAN_MAX_RESIDENT_TRANSLATIONS", 8),
+            max_resident_bytes: env_u64("QURAN_MAX_RESIDENT_BYTES", 48 * 1024 * 1024),
+            translation_idle_ttl_secs: env_u64("QURAN_TRANSLATION_IDLE_TTL_SECS", 1800),
         }
     }
 }

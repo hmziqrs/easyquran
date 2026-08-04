@@ -156,6 +156,8 @@ roxmltree = "0.20"
 # Declared explicitly (both resolve transitively today) so the Quran store and shared search normalization own a stable version floor (§8.3).
 memchr = "2"
 unicode-normalization = "0.1"
+# On-demand cached pool for translation corpora (§3). future feature = async try_get_with for single-flight cold builds.
+moka = { version = "0.12", features = ["future"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
