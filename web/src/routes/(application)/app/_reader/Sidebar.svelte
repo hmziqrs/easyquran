@@ -7,7 +7,6 @@
     surahMeta,
     surahPath,
     parseKey,
-    verseKey,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind } from "$lib/data/quran-data";
@@ -21,17 +20,18 @@
     SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
-    SidebarMenu,
     SidebarMenuItem,
     SidebarMenuButton,
     useSidebar,
   } from "$lib/components/ui/sidebar";
+  import SidebarVirtualList from "./SidebarVirtualList.svelte";
 
   const BROWSE = ["surah", "ayah", "juz", "page"] as const;
   const sidebar = useSidebar();
   const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
   let inputEl: HTMLInputElement | null = $state(null);
+  let contentEl: HTMLDivElement | null = $state(null);
 
   function oninput(e: Event) {
     reader.setQuery((e.currentTarget as HTMLInputElement).value);
@@ -104,7 +104,7 @@
     </div>
   </SidebarHeader>
 
-  <SidebarContent>
+  <SidebarContent bind:ref={contentEl}>
     {#if dataPromise}
       {#await dataPromise}
         <p class="px-4 py-3 text-sm text-fg-3">Loading Quran navigation…</p>
@@ -113,8 +113,13 @@
         {#if reader.browseSurah}
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu class="gap-1">
-                {#each quranData.surahs as s (s.num)}
+              <SidebarVirtualList
+                getScrollElement={() => contentEl}
+                count={quranData.surahs.length}
+                estimateSize={56}
+              >
+                {#snippet item(i)}
+                  {@const s = quranData.surahs[i]}
                   {@const active = page.params.surah === s.slug}
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -140,61 +145,76 @@
                       {/snippet}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                {/each}
-              </SidebarMenu>
+                {/snippet}
+              </SidebarVirtualList>
             </SidebarGroupContent>
           </SidebarGroup>
         {:else if reader.browseAyah}
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu class="gap-1">
-                {#if current}
-                  {#each reader.versesFor(current.num) as v, i (verseKey(current.num, i + 1))}
+          {#if current}
+            {@const cur = current}
+            {@const verses = reader.versesFor(cur.num)}
+            {#key verses.length}
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarVirtualList
+                  getScrollElement={() => contentEl}
+                  count={verses.length}
+                  estimateSize={44}
+                >
+                  {#snippet item(i)}
                     {@const n = i + 1}
-                    {@const localPage = quranData.surahLocalPageForAyah(current.num, n)}
+                    {@const v = verses[i]}
+                    {@const localPage = quranData.surahLocalPageForAyah(cur.num, n)}
                     {#if v}
                       <SidebarMenuItem>
-                      <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                        {#snippet child({ props })}
-                          <a
-                            {...props}
-                            href={resolve(
-                              localPage
-                                ? surahAyahPath(current, localPage.localPage, n)
-                                : surahPath(current, n),
-                            )}
-                            data-sveltekit-preload-data="hover"
-                            onclick={onItemClick}
-                          >
-                            <span
-                              class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                        <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
+                          {#snippet child({ props })}
+                            <a
+                              {...props}
+                              href={resolve(
+                                localPage
+                                  ? surahAyahPath(cur, localPage.localPage, n)
+                                  : surahPath(cur, n),
+                              )}
+                              data-sveltekit-preload-data="hover"
+                              onclick={onItemClick}
                             >
-                              {n}
-                            </span>
-                            <span
-                              dir="rtl"
-                              class="min-w-0 flex-1 truncate font-arabic text-[15px]"
-                            >
-                              {v}
-                            </span>
-                          </a>
-                        {/snippet}
-                      </SidebarMenuButton>
+                              <span
+                                class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                              >
+                                {n}
+                              </span>
+                              <span
+                                dir="rtl"
+                                class="min-w-0 flex-1 truncate font-arabic text-[15px]"
+                              >
+                                {v}
+                              </span>
+                            </a>
+                          {/snippet}
+                        </SidebarMenuButton>
                       </SidebarMenuItem>
                     {/if}
-                  {/each}
-                {/if}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                  {/snippet}
+                </SidebarVirtualList>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            {/key}
+          {/if}
         {:else}
           {@const ranges = quranData.ranges(
             reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
           )}
+          {#key reader.browseJuz ? "juz" : "page"}
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu class="gap-1">
-                {#each ranges as rg (rg.index)}
+              <SidebarVirtualList
+                getScrollElement={() => contentEl}
+                count={ranges.length}
+                estimateSize={44}
+              >
+                {#snippet item(i)}
+                  {@const rg = ranges[i]}
                   {@const { num, n } = parseKey(rg.first)}
                   {@const href = resolve(
                     `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`,
@@ -220,10 +240,11 @@
                       {/snippet}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                {/each}
-              </SidebarMenu>
+                {/snippet}
+              </SidebarVirtualList>
             </SidebarGroupContent>
           </SidebarGroup>
+          {/key}
         {/if}
       {:catch}
         <p class="px-4 py-3 text-sm text-fg-3">Quran navigation could not be loaded.</p>
