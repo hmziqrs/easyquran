@@ -14,7 +14,7 @@ use tower_sessions::Session;
 use tracing::{error, info, instrument, warn};
 
 use crate::{
-    db::sea_models::{user, user_session},
+    db::sea_models::user,
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
@@ -294,28 +294,7 @@ async fn finish_google_login(
     let user = find_or_create_user(state, user_info).await?;
     tracing::Span::current().record("user_id", user.id);
 
-    auth.login(&user).await.map_err(|e| {
-        error!(error = %e, user_id = user.id, "Failed to create session");
-        tracing::Span::current().record("result", "session_creation_failed");
-        ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to create session")
-    })?;
-
-    let session_row = user_session::Entity::create(
-        &state.sea_db,
-        user_session::NewUserSession::new(user.id, Some("Google OAuth".to_string()), None),
-    )
-    .await
-    .ok();
-
-    // Save tower-session first (auth.login cycled its id), then map row->session for sessions_terminate.
-    if (auth.session().save().await).is_ok() {
-        if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-            crate::modules::auth_v1::controller::record_session_mapping(
-                row.id,
-                &tower_sid.to_string(),
-            );
-        }
-    }
+    oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Google).await?;
 
     Ok(user)
 }

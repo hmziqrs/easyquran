@@ -793,12 +793,8 @@ async fn process_webhook_event(
                         subscription::model::SubscriptionStatus::Canceled
                     } else {
                         match canonical_subscription_status(event.subscription_status.as_deref()) {
-                            Some("active") => subscription::model::SubscriptionStatus::Active,
-                            Some("past_due") => subscription::model::SubscriptionStatus::PastDue,
-                            Some("canceled") => subscription::model::SubscriptionStatus::Canceled,
-                            Some("trialing") => subscription::model::SubscriptionStatus::Trialing,
-                            Some("expired") => subscription::model::SubscriptionStatus::Expired,
-                            _ => {
+                            Some(status) => status,
+                            None => {
                                 status_changed = false;
                                 // Placeholder; never written when status_changed=false.
                                 subscription::model::SubscriptionStatus::Active

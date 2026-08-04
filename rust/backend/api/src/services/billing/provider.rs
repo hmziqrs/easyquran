@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use ruxlog_types::enums::SubscriptionStatus;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckoutSession {
     pub session_id: String,
@@ -34,7 +36,7 @@ pub mod canonical {
     pub const PAYMENT_PENDING: &str = "payment.pending";
 }
 
-pub fn canonical_subscription_status(raw: Option<&str>) -> Option<&'static str> {
+pub fn canonical_subscription_status(raw: Option<&str>) -> Option<SubscriptionStatus> {
     let s = raw?.trim().to_ascii_lowercase();
     Some(match s.as_str() {
         "active"
@@ -42,14 +44,16 @@ pub fn canonical_subscription_status(raw: Option<&str>) -> Option<&'static str> 
         | "subscription_active"
         | "incomplete_active"
         | "running"
-        | "authorized" => "active",
+        | "authorized" => SubscriptionStatus::Active,
         "trialing" | "trialling" | "trial" | "in_trial" | "pending_trial" | "on_trial" => {
-            "trialing"
+            SubscriptionStatus::Trialing
         }
         "past_due" | "pastdue" | "unpaid" | "problem" | "suspended" | "paused" | "on_hold"
-        | "incomplete" => "past_due",
-        "canceled" | "cancelled" | "subscription_cancelled" | "revoked" => "canceled",
-        "expired" | "halted" | "failed" | "completed" | "ended" => "expired",
+        | "incomplete" => SubscriptionStatus::PastDue,
+        "canceled" | "cancelled" | "subscription_cancelled" | "revoked" => {
+            SubscriptionStatus::Canceled
+        }
+        "expired" | "halted" | "failed" | "completed" | "ended" => SubscriptionStatus::Expired,
         _ => return None,
     })
 }
@@ -177,7 +181,7 @@ impl From<rux_provider_core::FrameworkError> for BillingError {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_subscription_status, period_end_to_unix};
+    use super::{canonical_subscription_status, period_end_to_unix, SubscriptionStatus};
     use serde_json::json;
 
     #[test]
@@ -230,7 +234,7 @@ mod tests {
         ] {
             assert_eq!(
                 canonical_subscription_status(Some(raw)),
-                Some("active"),
+                Some(SubscriptionStatus::Active),
                 "raw={raw}"
             );
         }
@@ -248,7 +252,7 @@ mod tests {
         ] {
             assert_eq!(
                 canonical_subscription_status(Some(raw)),
-                Some("trialing"),
+                Some(SubscriptionStatus::Trialing),
                 "raw={raw}"
             );
         }
@@ -268,7 +272,7 @@ mod tests {
         ] {
             assert_eq!(
                 canonical_subscription_status(Some(raw)),
-                Some("past_due"),
+                Some(SubscriptionStatus::PastDue),
                 "raw={raw}"
             );
         }
@@ -279,7 +283,7 @@ mod tests {
         for raw in ["canceled", "cancelled", "subscription_cancelled", "revoked"] {
             assert_eq!(
                 canonical_subscription_status(Some(raw)),
-                Some("canceled"),
+                Some(SubscriptionStatus::Canceled),
                 "raw={raw}"
             );
         }
@@ -290,7 +294,7 @@ mod tests {
         for raw in ["expired", "halted", "failed", "completed", "ended"] {
             assert_eq!(
                 canonical_subscription_status(Some(raw)),
-                Some("expired"),
+                Some(SubscriptionStatus::Expired),
                 "raw={raw}"
             );
         }
