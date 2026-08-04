@@ -30,16 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && mkdir -p /app/data && chown -R appuser /app/data
 COPY --from=builder /tmp/ruxlog /app/ruxlog
 
-# OCI image metadata (name/version/revision). VERSION/REVISION come from
-# build-args; deploy.sh passes the git tag as VERSION so a deployed image is
-# labeled with the release it was built from.
+# OCI image metadata. VERSION is a build-arg (defaults to dev).
 ARG VERSION=dev
-ARG REVISION=unknown
 LABEL org.opencontainers.image.title="EasyQuran API" \
       org.opencontainers.image.description="EasyQuran Rust/Axum backend (Quran content, search, translations)" \
       org.opencontainers.image.source="https://github.com/hmziqrs/easyquran" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${REVISION}" \
       easyquran.component="api"
 
 USER appuser

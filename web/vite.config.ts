@@ -1,13 +1,8 @@
-import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { quranArtifacts } from "./vite-plugin-quran";
-
-const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const release = process.env.BUILD_VERSION ?? pkg.version;
-const buildRef = process.env.BUILD_REF;
 
 export default defineConfig({
   fmt: {},
@@ -21,7 +16,6 @@ export default defineConfig({
     tailwindcss(),
     sveltekit({
       version: {
-        ...(buildRef ? { name: `${release}+${buildRef}` } : {}),
         pollInterval: 5 * 60_000,
       },
       compilerOptions: {

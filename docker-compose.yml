@@ -31,7 +31,6 @@ services:
         PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
         INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
         VERSION: ${VERSION:-dev}
-        REVISION: ${REVISION:?REVISION must be set for a container build}
     image: ${PROJECT:-easyquran}/web:latest
     container_name: ${PROJECT:-easyquran}_web
     networks:

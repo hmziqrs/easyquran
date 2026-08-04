@@ -15,10 +15,9 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 - `Caddyfile` — Caddy config for the web image (compression + cache headers +
   branded 404). Replaces the bare `caddy file-server` CMD.
 - `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
-  external proxy network. The canonical compose; used by both the Dokploy flow
-  and the VPS cron flow below. It lives at the root because Dokploy writes/sources
-  the `.env` relative to the compose file.
-- `deploy.sh` — optional cron auto-deploy on a new `vX.Y.Z` tag.
+  external proxy network. The canonical compose; used by the Dokploy flow. It
+  lives at the root because Dokploy writes/sources the `.env` relative to the
+  compose file.
 - `../web/scripts/assert-headers.sh` — asserts the HTTP delivery contract
   against a running origin; run it before shipping (see checklist).
 - `.env.example` — config (copy to `.env`).
@@ -55,13 +54,6 @@ against your Dokploy instance if you customized Traefik).
 4. Prefer Dokploy's UI to manage routing instead? Delete the `traefik.*` labels
    and configure domains there: web → `easyquran.fyi`, api → `easyquran.fyi`
    with path `/api`.
-5. In the Dokploy **Environment** tab, set `REVISION` to the short sha of the
-   deployed commit (`git rev-parse --short=12 HEAD`). Dokploy runs
-   `docker compose up` from its own checkout and does **not** export `REVISION`,
-   so the compose `:?` guard intentionally fails the build until you set it —
-   this guarantees every container image carries a unique, traceable
-   `<tag>+<commit>` app version (see `web/vite.config.ts`). `VERSION` follows the
-   `vX.Y.Z` tag automatically.
 
 The common Dokploy gotcha (404s) is just containers not being on
 `dokploy-network` — our compose attaches them, so you're covered.
@@ -73,13 +65,12 @@ The web image is served by Caddy from `deploy/Caddyfile` (compression +
 
 ## Release
 
+Dokploy rebuilds automatically on every push to the tracked branch — just push.
+Tag releases for your own record:
+
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
 ```
-
-To auto-deploy, set up the cron (see `deploy.sh` header). It polls for a newer
-`vX.Y.Z` tag, rebuilds web + api, and recreates only those two containers. A
-failed build leaves the live site running. Without cron: `git pull && docker compose up -d --build`.
 
 ### Header checklist (before each release)
 

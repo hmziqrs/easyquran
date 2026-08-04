@@ -13,10 +13,7 @@ ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
 ENV INTERNAL_API_BASE_URL=${INTERNAL_API_BASE_URL}
 
 ARG VERSION=dev
-ARG REVISION
 ENV BUILD_VERSION=${VERSION}
-ENV BUILD_REF=${REVISION}
-RUN test -n "$BUILD_REF" || { echo 'REVISION build-arg is required for container builds' >&2; exit 1; }
 
 RUN pnpm install && pnpm --filter web build
 
@@ -25,12 +22,10 @@ COPY --from=build /repo/web/build /srv
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 
 ARG VERSION=dev
-ARG REVISION=unknown
 LABEL org.opencontainers.image.title="EasyQuran Web" \
       org.opencontainers.image.description="EasyQuran SvelteKit SSG frontend (Caddy static)" \
       org.opencontainers.image.source="https://github.com/hmziqrs/easyquran" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${REVISION}" \
       easyquran.component="web"
 
 EXPOSE 8080
