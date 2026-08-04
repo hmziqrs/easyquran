@@ -1010,8 +1010,8 @@ change which verses match.
 The Quran corpus is immutable, so it has no version. Its identity is the
 **pinned sha256 digest** of each source set — `sourceDigests.uthmani` and
 `sourceDigests.simpleClean` — surfaced on `/health/ready`. There is no
-`contentVersion`, `searchVersion`, `apiVersion`, `/version` endpoint, or
-version-derived URL segment anywhere in the API.
+`searchVersion`, `apiVersion`, `/version` endpoint, or version-derived URL
+segment anywhere in the API.
 
 | Identity | Covers | Source of truth |
 |---|---|---|

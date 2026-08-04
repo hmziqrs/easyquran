@@ -220,7 +220,6 @@ async fn surahs_list_shape_and_count() {
     assert!(arr[0].get("ayahCount").is_some());
     assert!(arr[0].get("ayas").is_none());
     assert_eq!(arr[0]["place"], "meccan");
-    assert!(body.get("contentVersion").is_none(), "no contentVersion: immutable corpus is not versioned");
     assert!(headers.contains_key(header::ETAG));
     assert_eq!(headers.get(header::VARY).unwrap(), "Accept-Encoding");
 }

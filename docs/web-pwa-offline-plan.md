@@ -127,8 +127,7 @@ An app deploy must **not** touch OPFS databases: each source is keyed by its
 immutable `sha256`, so a deploy shipping the same pinned digests re-uses the
 cached bytes verbatim. Arabic content identity *is* those pinned digests
 (`source-profiles.ts`), so a (theoretical) corrected artifact is an app-deploy
-event, not a runtime version bump — there is no `contentVersion` to deliver
-out-of-band. ISR extends the same principle: **freshness of translated pages
+event, not a runtime version bump. ISR extends the same principle: **freshness of translated pages
 is owned by the origin's TTL, not by the app version** — a deploy neither
 implies nor requires re-rendering them, and the SW never treats them as part
 of the app shell.
@@ -352,8 +351,7 @@ IDB key `<sha256>:<id>`), and the DBs are immutable, so the key never changes
 and there is normally nothing to prune — one stable entry per source. A
 corrected artifact (the ~never case) would strand its old digest-keyed entry;
 accepted, since corrections are exceptional and there is no production
-installed base to migrate. No `contentVersion` axis and no `pruneOldVersions()`
-step exist.
+installed base to migrate. There is no `pruneOldVersions()` step.
 
 ### 4.5 The SPA shell, on both origins
 

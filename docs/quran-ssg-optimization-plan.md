@@ -349,7 +349,7 @@ explicit data migration with a new snapshot/provenance—not a recurring command
 
 The Rust backend may continue hashing/parsing XML for its own integrity
 anchor, the pinned sha256 digest surfaced on `/health/ready` as
-`sourceDigests` (there is no corpus `contentVersion`). The client metadata
+`sourceDigests`. The client metadata
 cache has its own schema and does not assume a backend digest invalidates a
 web snapshot.
 
