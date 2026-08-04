@@ -46,4 +46,4 @@ Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`
 - shadcn names declared twice (`:root` + `@theme inline`); one half -> renders unstyled.
 - no FOUC: `app.html` inline script applies theme pre-paint.
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
-- no CI. no list virtualization.
+- no CI. sidebar lists virtualized (`@tanstack/svelte-virtual`); only visible rows render.

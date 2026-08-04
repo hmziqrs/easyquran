@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(__dirname, "..");
 const BUILD = path.join(WEB, "build");
-const OFFLINE_DIR = path.join(BUILD, "offline");
+const OFFLINE_DIR = path.join(BUILD, "client", "offline");
 const MANIFEST_PATH = path.join(OFFLINE_DIR, "manifest.json");
 
 function listDataFiles(root: string): string[] {
@@ -33,12 +33,15 @@ function listDataFiles(root: string): string[] {
 
 function routeKey(file: string): string {
   const rel = path.relative(BUILD, file);
-  return "/" + rel.split(path.sep).join("/");
+  const parts = rel.split(path.sep);
+  if (parts[0] === "prerendered") parts.shift();
+  return "/" + parts.join("/");
 }
 
 function readAppVersion(): string | null {
-  const versionFile = path.join(BUILD, "_app", "version.json");
-  if (!existsSync(versionFile)) return null;
+  const candidates = [path.join(BUILD, "client", "_app", "version.json")];
+  const versionFile = candidates.find((c) => existsSync(c));
+  if (!versionFile) return null;
   try {
     const parsed = JSON.parse(readFileSync(versionFile, "utf8")) as { version?: unknown };
     return typeof parsed.version === "string" ? parsed.version : null;

@@ -40,10 +40,10 @@ export const parseKey = (key: VerseKey): { num: number; n: number } => {
 
 export const surahPath = (
   surah: string | Pick<CatalogEntry, "slug">,
-  ayah?: number,
+  verse?: number,
 ): `/app/${string}` => {
   const slug = typeof surah === "string" ? surah : surah.slug;
-  return `/app/${slug}${ayah ? `?verse=${ayah}` : ""}`;
+  return verse === undefined ? `/app/${slug}` : `/app/${slug}?verse=${verse}`;
 };
 
 export const surahLocalPagePath = (
@@ -59,6 +59,37 @@ export const surahAyahPath = (
   localPage: number,
   ayah: number,
 ): `/app/${string}` => `${surahLocalPagePath(surah, localPage)}#ayah-${surah.num}-${ayah}`;
+
+export const translationIdFromSegments = (lang: string, translator: string): string =>
+  translator === "" ? lang : `${lang}.${translator}`;
+
+export const translationSegmentsFromId = (id: string): { lang: string; translator: string } => {
+  const dot = id.indexOf(".");
+  if (dot < 0) return { lang: id, translator: "" };
+  return { lang: id.slice(0, dot), translator: id.slice(dot + 1) };
+};
+
+export const translationSurahPath = (
+  slug: string,
+  lang: string,
+  translator: string,
+  localPage = 1,
+): `/app/${string}` =>
+  localPage > 1
+    ? `/app/${slug}/t/${lang}/${translator}/page/${localPage}`
+    : `/app/${slug}/t/${lang}/${translator}`;
+
+export const translationGlobalPagePath = (
+  lang: string,
+  translator: string,
+  globalPage: number,
+): `/app/${string}` => `/app/t/${lang}/${translator}/page/${globalPage}`;
+
+export const translationJuzPath = (
+  lang: string,
+  translator: string,
+  n: number,
+): `/app/${string}` => `/app/t/${lang}/${translator}/juz/${n}`;
 
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);

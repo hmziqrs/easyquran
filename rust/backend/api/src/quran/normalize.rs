@@ -71,7 +71,10 @@ mod tests {
     fn folds_alef_variants() {
         let (s, _) = normalize_arabic("إِنَّ آيَةً فِي سُورَة");
         assert!(!s.contains('\u{0622}'), "alef-madda folded: {s:?}");
-        assert!(!s.contains('\u{0623}') && !s.contains('\u{0625}'), "hamza-alefs folded");
+        assert!(
+            !s.contains('\u{0623}') && !s.contains('\u{0625}'),
+            "hamza-alefs folded"
+        );
         assert!(!s.contains('\u{0671}'), "alef-wasla folded");
     }
 
@@ -85,7 +88,9 @@ mod tests {
     fn drops_superscript_alef() {
         // U+0670 (superscript alef) is category Mn — dropped, not folded to bare alef, so Rust matches the web's /\p{Mn}/u.
         // Input: alef-wasla, lam, ra, shadda, fatha, ha, meem, sukun, superscript-alef, nun (ٱلرَّحْمَٰن).
-        let (s, _) = normalize_arabic("\u{0671}\u{0644}\u{0631}\u{0651}\u{0654}\u{062D}\u{0645}\u{0652}\u{0670}\u{0646}");
+        let (s, _) = normalize_arabic(
+            "\u{0671}\u{0644}\u{0631}\u{0651}\u{0654}\u{062D}\u{0645}\u{0652}\u{0670}\u{0646}",
+        );
         assert!(!s.contains('\u{0670}'), "U+0670 dropped: {s:?}");
         // Expected: bare-alef lam ra ha meem nun (الرحمن), identical to the web's normalizeArabic output.
         assert_eq!(s, "\u{0627}\u{0644}\u{0631}\u{062D}\u{0645}\u{0646}");

@@ -4,11 +4,15 @@ import {
   isQuranScript,
   isQuranSourceId,
   OpenerKind,
+  OpenerPackaging,
+  QuranScript,
   type Ayah,
   type ArtifactSpec,
   type QuranRangeText,
   type QuranSurahText,
+  type SourceCatalogueEntry,
   type SurahNormalization,
+  type TranslationCatalogueEntry,
 } from "$lib/data/quran-types";
 import { SearchHitKind, type SearchHit } from "./search/types";
 import { sourceProfile } from "./view/source-profiles";
@@ -255,4 +259,154 @@ export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
     if (spec) out.push(spec);
   }
   return out;
+}
+
+function decodeTranslationCatalogueEntry(
+  rec: Record<string, unknown>,
+): TranslationCatalogueEntry | null {
+  const id = typeof rec.id === "string" && rec.id.length > 0 ? rec.id : null;
+  const language = typeof rec.language === "string" && rec.language.length > 0 ? rec.language : null;
+  const languageCode =
+    typeof rec.languageCode === "string" && rec.languageCode.length > 0 ? rec.languageCode : null;
+  const direction = rec.direction === "rtl" || rec.direction === "ltr" ? rec.direction : null;
+  const name = typeof rec.name === "string" && rec.name.length > 0 ? rec.name : null;
+  const translatorValid = rec.translator === null || typeof rec.translator === "string";
+  const sizeBytes = positiveInteger(rec.sizeBytes);
+  const sha256 = typeof rec.sha256 === "string" && rec.sha256.length > 0 ? rec.sha256 : null;
+  const downloadUrl =
+    typeof rec.downloadUrl === "string" && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
+  if (
+    !id ||
+    !language ||
+    !languageCode ||
+    !direction ||
+    !name ||
+    !translatorValid ||
+    sizeBytes === null ||
+    !sha256 ||
+    !downloadUrl
+  ) {
+    return null;
+  }
+  return {
+    id,
+    language,
+    languageCode,
+    direction,
+    name,
+    translator: rec.translator as string | null,
+    sizeBytes,
+    sha256,
+    downloadUrl,
+  };
+}
+
+function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const kind = typeof rec.kind === "string" ? rec.kind : null;
+  if (kind === "translation") {
+    const entry = decodeTranslationCatalogueEntry(rec);
+    return entry ? { kind: "translation", entry } : null;
+  }
+  if (kind === "arabic") {
+    const spec = decodeScript(rec);
+    return spec ? { kind: "arabic", spec } : null;
+  }
+  const spec = decodeScript(rec);
+  if (spec) return { kind: "arabic", spec };
+  const entry = decodeTranslationCatalogueEntry(rec);
+  return entry ? { kind: "translation", entry } : null;
+}
+
+export function decodeSourcesPayload(rawBody: unknown): SourceCatalogueEntry[] | null {
+  const data = asRecord(unwrapEnvelope(rawBody));
+  if (!data) return null;
+  const list = Array.isArray(data.scripts)
+    ? data.scripts
+    : Array.isArray(data.sources)
+      ? data.sources
+      : null;
+  if (!list) return null;
+  const out: SourceCatalogueEntry[] = [];
+  for (const item of list) {
+    const entry = decodeSourceCatalogueEntry(item);
+    if (!entry) return null;
+    out.push(entry);
+  }
+  return out;
+}
+
+function decodeTranslationNormalization(raw: unknown): SurahNormalization | null {
+  const rec = asRecord(raw);
+  if (!rec || rec.script !== QuranScript.Translation) return null;
+  if (typeof rec.sourceId !== "string" || rec.sourceId.length === 0) return null;
+  if (typeof rec.sourceProfile !== "string") return null;
+  if (rec.packaging !== OpenerPackaging.Absent) return null;
+  if (rec.openerKind !== OpenerKind.None) return null;
+  if (rec.openerText !== null) return null;
+  const surah = positiveInteger(rec.surah, 114);
+  const openerEndScalar = nonNegativeInteger(rec.openerEndScalar);
+  const bodyStartScalar = nonNegativeInteger(rec.bodyStartScalar);
+  if (surah === null || openerEndScalar !== 0 || bodyStartScalar !== 0) return null;
+  return {
+    surah,
+    sourceId: rec.sourceId,
+    script: QuranScript.Translation,
+    sourceProfile: rec.sourceProfile,
+    packaging: OpenerPackaging.Absent,
+    openerKind: OpenerKind.None,
+    openerText: null,
+    openerEndScalar: 0,
+    bodyStartScalar: 0,
+  };
+}
+
+export function decodeTranslationSurahText(raw: unknown): QuranSurahText | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const sourceId =
+    typeof rec.sourceId === "string" && rec.sourceId.length > 0 ? rec.sourceId : null;
+  if (!sourceId || rec.script !== QuranScript.Translation) return null;
+  if (!Array.isArray(rec.verses) || !rec.verses.every((verse) => typeof verse === "string")) {
+    return null;
+  }
+  const normalization = decodeTranslationNormalization(rec.normalization);
+  if (!normalization || normalization.sourceId !== sourceId) return null;
+  return {
+    sourceId,
+    script: QuranScript.Translation,
+    verses: rec.verses.slice() as string[],
+    normalization,
+  };
+}
+
+export function decodeTranslationRangeText(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): QuranRangeText | null {
+  const rec = asRecord(raw);
+  if (!rec || !Array.isArray(rec.ayahs) || !Array.isArray(rec.normalizations)) return null;
+  const ayahs: Ayah[] = [];
+  for (const item of rec.ayahs) {
+    const ayah = decodeAyah(item, validateCoordinate);
+    if (!ayah) return null;
+    const previous = ayahs.at(-1);
+    if (previous && ayah.globalIndex !== previous.globalIndex + 1) return null;
+    ayahs.push(ayah);
+  }
+  const normalizations: SurahNormalization[] = [];
+  for (const item of rec.normalizations) {
+    const normalization = decodeTranslationNormalization(item);
+    if (!normalization) return null;
+    normalizations.push(normalization);
+  }
+  const represented = new Set(ayahs.map((ayah) => ayah.surah));
+  if (
+    represented.size !== normalizations.length ||
+    normalizations.some((normalization) => !represented.has(normalization.surah))
+  ) {
+    return null;
+  }
+  return { ayahs, normalizations };
 }

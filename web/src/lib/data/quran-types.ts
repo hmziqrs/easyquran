@@ -9,11 +9,17 @@ export const QURAN_SOURCE_IDS = Object.freeze(
 export const isQuranSourceId = (value: unknown): value is QuranSourceId =>
   typeof value === "string" && QURAN_SOURCE_IDS.includes(value as QuranSourceId);
 
+export type QuranReaderSource = string;
+
+export const isArabicSourceId = (v: string): v is QuranSourceId =>
+  typeof v === "string" && QURAN_SOURCE_IDS.includes(v as QuranSourceId);
+
 export const QuranScript = {
   Uthmani: "uthmani",
   SimpleClean: "simple-clean",
   IndoPak: "indopak",
   Tajweed: "tajweed",
+  Translation: "translation",
 } as const;
 export type QuranScript = (typeof QuranScript)[keyof typeof QuranScript];
 export const QURAN_SCRIPTS = Object.freeze(Object.values(QuranScript)) as readonly QuranScript[];
@@ -51,7 +57,7 @@ export interface PrefixCut {
 
 export interface SurahNormalization extends PrefixCut {
   surah: number;
-  sourceId: QuranSourceId;
+  sourceId: QuranReaderSource;
   script: QuranScript;
   sourceProfile: string;
   packaging: OpenerPackaging;
@@ -60,7 +66,7 @@ export interface SurahNormalization extends PrefixCut {
 }
 
 export interface QuranSurahText {
-  sourceId: QuranSourceId;
+  sourceId: QuranReaderSource;
   script: QuranScript;
   verses: string[];
   normalization: SurahNormalization;
@@ -137,6 +143,24 @@ export interface ArtifactSpec {
   sha256: string;
   downloadUrl: string;
 }
+
+export type TranslationDirection = "rtl" | "ltr";
+
+export interface TranslationCatalogueEntry {
+  id: string;
+  language: string;
+  languageCode: string;
+  direction: TranslationDirection;
+  name: string;
+  translator: string | null;
+  sizeBytes: number;
+  sha256: string;
+  downloadUrl: string;
+}
+
+export type SourceCatalogueEntry =
+  | { kind: "arabic"; spec: ArtifactSpec }
+  | { kind: "translation"; entry: TranslationCatalogueEntry };
 
 export interface DownloadProgress {
   script: QuranSourceId;

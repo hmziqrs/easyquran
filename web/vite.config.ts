@@ -1,5 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
-import adapter from "@sveltejs/adapter-static";
+import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { quranArtifacts } from "./vite-plugin-quran";
@@ -30,11 +30,7 @@ export default defineConfig({
           !/^(_headers|_redirects|robots\.txt|og\.png)$/.test(file),
       },
       adapter: adapter({
-        pages: "build",
-        assets: "build",
-        fallback: "404.html",
         precompress: true,
-        strict: true,
       }),
     }),
   ]),

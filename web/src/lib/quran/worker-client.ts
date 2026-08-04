@@ -1,8 +1,11 @@
+import { isArabicSourceId } from "$lib/data/quran-types";
 import type {
   CanonicalQuranCoordinates,
   DownloadProgress,
   QuranRangeText,
+  QuranReaderSource,
   QuranSurahText,
+  SourceCatalogueEntry,
 } from "$lib/data/quran-types";
 import { QURAN } from "$lib/config/site";
 import { quranApi } from "./api-client";
@@ -15,6 +18,8 @@ import {
   decodeQuranRangeText,
   decodeQuranSurahText,
   decodeSearchResponse,
+  decodeTranslationRangeText,
+  decodeTranslationSurahText,
   type AyahCoordinateValidator,
 } from "./wire";
 
@@ -30,6 +35,8 @@ let worker: Worker | null = null;
 let seq = 0;
 let isReady = false;
 let startPromise: Promise<void> | null = null;
+let stashedManifest: ResolvedManifest | null = null;
+let stashedCoordinates: CanonicalQuranCoordinates | null = null;
 
 const pending = new Map<number, Pending>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
@@ -49,6 +56,8 @@ function resetWorker(error?: Error): void {
   worker = null;
   isReady = false;
   startPromise = null;
+  stashedManifest = null;
+  stashedCoordinates = null;
 }
 
 function reportWorkerFailure(error: Error): void {
@@ -124,8 +133,14 @@ export const quranWorker = {
     });
   },
 
-  start(manifest: ResolvedManifest, coordinates: CanonicalQuranCoordinates): Promise<void> {
+  start(
+    manifest: ResolvedManifest,
+    coordinates: CanonicalQuranCoordinates,
+    catalogue?: readonly SourceCatalogueEntry[],
+  ): Promise<void> {
     if (startPromise) return startPromise;
+    stashedManifest = manifest;
+    stashedCoordinates = coordinates;
     const attempt = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
         type: "module",
@@ -142,7 +157,13 @@ export const quranWorker = {
       worker.addEventListener("messageerror", () => {
         reportWorkerFailure(new Error("quran worker message could not be deserialized"));
       });
-      await request<null>((id) => ({ id, type: "init", manifest, coordinates }));
+      await request<null>((id) => ({
+        id,
+        type: "init",
+        manifest,
+        coordinates,
+        catalogue: catalogue ? [...catalogue] : undefined,
+      }));
       isReady = true;
     })();
     startPromise = attempt;
@@ -154,19 +175,41 @@ export const quranWorker = {
     return attempt;
   },
 
+  provideCatalogue(catalogue: readonly SourceCatalogueEntry[]): Promise<void> {
+    return quranWorker
+      .whenReady()
+      .then(() => {
+        if (!stashedManifest || !stashedCoordinates) return null;
+        const manifest = stashedManifest;
+        const coordinates = stashedCoordinates;
+        return request<null>((id) => ({
+          id,
+          type: "init",
+          manifest,
+          coordinates,
+          catalogue: [...catalogue],
+        }));
+      })
+      .then(() => undefined)
+      .catch(() => undefined);
+  },
+
   dispose(): void {
     resetWorker(new Error("quran worker disposed"));
   },
 
-  readSurah(num: number): Promise<QuranSurahText> {
-    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num }))
+  readSurah(num: number, source?: QuranReaderSource): Promise<QuranSurahText> {
+    const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
+    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num, source }))
       .then((raw: unknown) => {
-        const decoded = decodeQuranSurahText(raw);
+        const decoded = isArabicSourceId(reader)
+          ? decodeQuranSurahText(raw)
+          : decodeTranslationSurahText(raw);
         if (!decoded) throw new Error("quran worker returned a malformed surah");
         return decoded;
       })
       .catch((err) => {
-        if (QURAN.apiBase) return quranApi.readSurah(DEFAULT_QURAN_SOURCE_PLAN.reader, num);
+        if (QURAN.apiBase) return quranApi.readSurah(reader, num);
         throw err;
       });
   },
@@ -175,14 +218,22 @@ export const quranWorker = {
     from: number,
     to: number,
     validateCoordinate?: AyahCoordinateValidator,
+    source?: QuranReaderSource,
   ): Promise<QuranRangeText> {
-    return request<QuranRangeText>((id) => ({ id, type: "readRange", from, to })).then(
+    const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
+    return request<QuranRangeText>((id) => ({ id, type: "readRange", from, to, source })).then(
       (raw: unknown) => {
-        const decoded = decodeQuranRangeText(raw, validateCoordinate);
+        const decoded = isArabicSourceId(reader)
+          ? decodeQuranRangeText(raw, validateCoordinate)
+          : decodeTranslationRangeText(raw, validateCoordinate);
         if (!decoded) throw new Error("quran worker returned a malformed range");
         return decoded;
       },
-    );
+    )
+      .catch((err) => {
+        if (QURAN.apiBase) return quranApi.readRange(reader, from, to);
+        throw err;
+      });
   },
 
   search(

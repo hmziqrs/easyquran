@@ -109,7 +109,10 @@ mod tests {
         let (nq, _) = normalize_arabic("بسم");
         let spans = highlight("بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ", &nq);
         assert!(!spans.is_empty(), "expected at least one highlight");
-        let len16 = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ".chars().map(|c| c.len_utf16() as u32).sum::<u32>();
+        let len16 = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"
+            .chars()
+            .map(|c| c.len_utf16() as u32)
+            .sum::<u32>();
         for s in &spans {
             assert!(s.start < s.end && s.end <= len16, "bad span {s:?}");
         }

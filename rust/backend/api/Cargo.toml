@@ -49,7 +49,6 @@ axum-valid = { version = "0.23.0", default-features = false, features = [
 ] }
 serde_json = "1.0.130"
 tokio = { version = "1.45", features = ["full"] }
-moka = { version = "0.12", features = ["future"] }
 serde = { version = "1.0.225", features = ["derive"] }
 # validator = { version = "0.16.1", features = ["derive"] }
 tower-http = { version = "0.6.2", features = [
@@ -157,6 +156,8 @@ roxmltree = "0.20"
 # Declared explicitly (both resolve transitively today) so the Quran store and shared search normalization own a stable version floor (§8.3).
 memchr = "2"
 unicode-normalization = "0.1"
+# On-demand cached pool for translation corpora (§3). future feature = async try_get_with for single-flight cold builds.
+moka = { version = "0.12", features = ["future"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
