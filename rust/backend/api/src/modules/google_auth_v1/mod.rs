@@ -14,5 +14,6 @@ pub fn routes() -> Router<AppState> {
             "/exchange",
             axum::routing::post(controller::google_exchange),
         )
+        .route("/token", axum::routing::post(controller::google_token))
         .route("/user", get(controller::google_user_info))
 }

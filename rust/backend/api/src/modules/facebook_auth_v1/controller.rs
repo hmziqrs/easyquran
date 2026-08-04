@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     service::get_facebook_oauth_client,
-    validator::{FacebookCallbackQuery, FacebookExchangeRequest, FacebookUserInfo},
+    validator::{FacebookCallbackQuery, FacebookExchangeRequest, FacebookTokenRequest, FacebookUserInfo},
 };
 
 #[debug_handler]
@@ -129,6 +129,33 @@ pub async fn facebook_exchange(
     ))
 }
 
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id, result))]
+pub async fn facebook_token(
+    State(state): State<AppState>,
+    mut auth: AuthSession,
+    ValidatedJson(payload): ValidatedJson<FacebookTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Facebook mobile token sign-in");
+
+    // The native Facebook Login SDK hands the app a user access_token; pull profile info straight
+    // from the Graph API with it — no web redirect/code exchange round-trip.
+    let user_info = fetch_facebook_user_info(&state.http_client, &payload.access_token).await?;
+    let user = finish_facebook_login(&state, &mut auth, user_info).await?;
+
+    info!(user_id = user.id, "Facebook mobile login successful");
+    tracing::Span::current().record("result", "success");
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "success": true,
+            "user": user,
+            "message": "Successfully authenticated with Facebook"
+        })),
+    ))
+}
+
 #[debug_handler(state = AppState)]
 pub async fn facebook_user_info(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
     match auth.user {
@@ -177,7 +204,7 @@ async fn finish_facebook_login(
         .unwrap_or_else(|| "Facebook User".to_string());
     let user = oauth::find_or_create_user_for_oauth(
         state,
-        "facebook",
+        oauth::OAuthProvider::Facebook,
         &user_info.id,
         email,
         name,
@@ -186,6 +213,6 @@ async fn finish_facebook_login(
     )
     .await?;
 
-    oauth::finish_oauth_login(state, auth, &user, "Facebook").await?;
+    oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Facebook).await?;
     Ok(user)
 }

@@ -56,7 +56,12 @@ pub(crate) fn compute_csrf_token(session_id: &str) -> String {
 fn is_csrf_exempt(path: &str) -> bool {
     if matches!(
         path,
-        "/auth/google/v1/callback" | "/auth/google/v1/login" | "/csrf/v1/generate"
+        "/auth/google/v1/callback"
+            | "/auth/google/v1/login"
+            | "/auth/google/v1/token"
+            | "/auth/apple/v1/token"
+            | "/auth/facebook/v1/token"
+            | "/csrf/v1/generate"
     ) {
         return true;
     }
@@ -176,6 +181,16 @@ mod tests {
         assert!(is_csrf_exempt("/auth/google/v1/callback"));
         assert!(is_csrf_exempt("/auth/google/v1/login"));
         assert!(is_csrf_exempt("/csrf/v1/generate"));
+
+        // Mobile token sign-in endpoints are exempt — native SDK flows can't carry the double-submit header.
+        assert!(is_csrf_exempt("/auth/google/v1/token"));
+        assert!(is_csrf_exempt("/auth/apple/v1/token"));
+        assert!(is_csrf_exempt("/auth/facebook/v1/token"));
+        assert!(!is_csrf_exempt("/auth/google/v1/token-evil"));
+        // Browser SPA code-exchange endpoints stay CSRF-gated.
+        assert!(!is_csrf_exempt("/auth/apple/v1/exchange"));
+        assert!(!is_csrf_exempt("/auth/facebook/v1/exchange"));
+
         assert!(!is_csrf_exempt("/auth/google/v1/callback-evil"));
         assert!(!is_csrf_exempt("/csrf/v1/generateX"));
     }

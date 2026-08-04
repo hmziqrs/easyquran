@@ -23,7 +23,7 @@ use super::{
         build_apple_authorize_url, exchange_apple_code, load_apple_config,
         mint_apple_client_secret, verify_apple_id_token,
     },
-    validator::{AppleCallbackQuery, AppleExchangeRequest},
+    validator::{AppleCallbackQuery, AppleExchangeRequest, AppleTokenRequest},
 };
 
 #[debug_handler]
@@ -100,6 +100,57 @@ pub async fn apple_exchange(
     ))
 }
 
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id, result))]
+pub async fn apple_token(
+    State(state): State<AppState>,
+    mut auth: AuthSession,
+    ValidatedJson(payload): ValidatedJson<AppleTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Apple mobile token sign-in");
+
+    let cfg = load_apple_config()?;
+
+    // No OIDC nonce: the native Sign in with Apple flow never bound one, unlike the web code flow.
+    let claims = verify_apple_id_token(&payload.identity_token, &cfg.client_id, None)
+        .await
+        .map_err(|e| {
+            warn!(error = ?e, "Apple mobile identity_token verification failed");
+            tracing::Span::current().record("result", "invalid_token");
+            e
+        })?;
+
+    let email = claims.email.clone().ok_or_else(|| {
+        warn!("Apple id_token carried no email; cannot create/link account");
+        ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Apple did not provide an email address")
+    })?;
+
+    let user = oauth::find_or_create_user_for_oauth(
+        &state,
+        oauth::OAuthProvider::Apple,
+        &claims.sub,
+        email,
+        "Apple User".to_string(),
+        claims.is_email_verified(),
+    )
+    .await?;
+
+    oauth::finish_oauth_login(&state, &mut auth, &user, oauth::OAuthProvider::Apple).await?;
+
+    info!(user_id = user.id, "Apple mobile login successful");
+    tracing::Span::current().record("result", "success");
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "success": true,
+            "user": user,
+            "message": "Successfully authenticated with Apple"
+        })),
+    ))
+}
+
 #[debug_handler(state = AppState)]
 pub async fn apple_user_info(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
     match auth.user {
@@ -148,7 +199,7 @@ async fn finish_apple_code(
 
     let user = oauth::find_or_create_user_for_oauth(
         state,
-        "apple",
+        oauth::OAuthProvider::Apple,
         &claims.sub,
         email,
         name,
@@ -156,6 +207,6 @@ async fn finish_apple_code(
     )
     .await?;
 
-    oauth::finish_oauth_login(state, auth, &user, "Apple").await?;
+    oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Apple).await?;
     Ok(user)
 }

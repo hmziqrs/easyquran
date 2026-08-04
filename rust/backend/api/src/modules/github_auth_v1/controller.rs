@@ -238,7 +238,7 @@ async fn finish_github_login(
 
     let user = oauth::find_or_create_user_for_oauth(
         state,
-        "github",
+        oauth::OAuthProvider::Github,
         &provider_user_id,
         email,
         name,
@@ -246,6 +246,6 @@ async fn finish_github_login(
     )
     .await?;
 
-    oauth::finish_oauth_login(state, auth, &user, "GitHub").await?;
+    oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Github).await?;
     Ok(user)
 }

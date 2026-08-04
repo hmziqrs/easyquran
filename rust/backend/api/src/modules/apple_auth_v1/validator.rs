@@ -17,6 +17,13 @@ pub struct AppleExchangeRequest {
     pub state: String,
 }
 
+// Mobile (native Sign in with Apple) flow: the app obtains an identity_token natively and posts it here — no web redirect/code/state round-trip.
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct AppleTokenRequest {
+    #[validate(length(min = 1))]
+    pub identity_token: String,
+}
+
 // Apple sends `email_verified` / `is_private_email` as the STRINGS "true"/"false", not booleans — keep them as Option<String> or deserialization/verification breaks.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppleIdTokenClaims {

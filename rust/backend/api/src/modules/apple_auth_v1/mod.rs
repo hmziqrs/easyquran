@@ -14,5 +14,6 @@ pub fn routes() -> Router<AppState> {
         .route("/login", get(controller::apple_login))
         .route("/callback", get(controller::apple_callback))
         .route("/exchange", post(controller::apple_exchange))
+        .route("/token", post(controller::apple_token))
         .route("/user", get(controller::apple_user_info))
 }

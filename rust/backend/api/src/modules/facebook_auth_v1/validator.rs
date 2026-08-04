@@ -17,6 +17,13 @@ pub struct FacebookExchangeRequest {
     pub state: String,
 }
 
+// Mobile (Facebook Login SDK) flow: the app obtains a user access_token natively and posts it here — no web redirect/code exchange round-trip.
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct FacebookTokenRequest {
+    #[validate(length(min = 1))]
+    pub access_token: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FacebookUserInfo {
     pub id: String,

@@ -14,5 +14,6 @@ pub fn routes() -> Router<AppState> {
         .route("/login", get(controller::facebook_login))
         .route("/callback", get(controller::facebook_callback))
         .route("/exchange", post(controller::facebook_exchange))
+        .route("/token", post(controller::facebook_token))
         .route("/user", get(controller::facebook_user_info))
 }

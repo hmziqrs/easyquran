@@ -17,6 +17,13 @@ pub struct GoogleExchangeRequest {
     pub state: String,
 }
 
+// Mobile (Google Sign-In SDK) flow: the app obtains a Google id_token natively and posts it here — no web redirect/code/state round-trip.
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct GoogleTokenRequest {
+    #[validate(length(min = 1))]
+    pub id_token: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoogleUserInfo {
     pub id: String,

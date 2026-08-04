@@ -24,7 +24,7 @@ use crate::{
 
 use super::{
     service::{get_google_oauth_client, verify_google_id_token, GoogleIdTokenClaims},
-    validator::{GoogleCallbackQuery, GoogleExchangeRequest, GoogleUserInfo},
+    validator::{GoogleCallbackQuery, GoogleExchangeRequest, GoogleTokenRequest, GoogleUserInfo},
 };
 
 #[debug_handler]
@@ -170,6 +170,76 @@ pub async fn google_exchange(
     ))
 }
 
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id, result))]
+pub async fn google_token(
+    State(state): State<AppState>,
+    mut auth: AuthSession,
+    ValidatedJson(payload): ValidatedJson<GoogleTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Google mobile token sign-in");
+
+    // Native Google SDKs mint id_tokens whose `aud` is the Android/iOS client ID, not the web
+    // client — accept every configured audience so a device-issued token verifies here too.
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").map_err(|_| {
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("GOOGLE_CLIENT_ID not configured")
+    })?;
+    let mut allowed_auds: Vec<String> = vec![client_id];
+    if let Ok(extra) = std::env::var("GOOGLE_MOBILE_CLIENT_IDS") {
+        allowed_auds.extend(
+            extra
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+        );
+    }
+    let allowed_auds: Vec<&str> = allowed_auds.iter().map(String::as_str).collect();
+
+    // No OIDC nonce: the mobile SDK flow never bound one, unlike the web code flow at /callback.
+    let claims = verify_google_id_token(&payload.id_token, &allowed_auds, None)
+        .await
+        .map_err(|e| {
+            warn!(error = ?e, "Google mobile id_token verification failed");
+            tracing::Span::current().record("result", "invalid_token");
+            e
+        })?;
+
+    // The id_token carries no display name (the web flow gets one from the userinfo endpoint, which
+    // needs an access_token we don't have); derive one from the email so the record isn't blank.
+    let local_part = claims.email.split('@').next().unwrap_or("");
+    let name = if local_part.is_empty() {
+        "Google User".to_string()
+    } else {
+        local_part.to_string()
+    };
+    let user_info = GoogleUserInfo {
+        id: claims.sub,
+        email: claims.email,
+        name,
+        picture: None,
+        verified_email: claims.email_verified.unwrap_or(false),
+    };
+
+    let user = find_or_create_user(&state, user_info).await?;
+    tracing::Span::current().record("user_id", user.id);
+
+    oauth::finish_oauth_login(&state, &mut auth, &user, oauth::OAuthProvider::Google).await?;
+
+    info!(user_id = user.id, "Google mobile login successful");
+    tracing::Span::current().record("result", "success");
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "success": true,
+            "user": user,
+            "message": "Successfully authenticated with Google"
+        })),
+    ))
+}
+
 async fn finish_google_login(
     state: &AppState,
     auth: &mut AuthSession,
@@ -198,7 +268,7 @@ async fn finish_google_login(
             .with_message("GOOGLE_CLIENT_ID not configured")
     })?;
     let id_claims: Option<GoogleIdTokenClaims> =
-        match verify_google_id_token(id_token, &client_id, expected_nonce).await {
+        match verify_google_id_token(id_token, &[client_id.as_str()], expected_nonce).await {
             Ok(claims) => Some(claims),
             Err(err) => {
                 warn!(error = ?err, "id_token verification failed; rejecting login");

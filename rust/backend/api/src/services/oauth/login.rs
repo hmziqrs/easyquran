@@ -10,19 +10,56 @@ use crate::{
 
 use user_oauth_identity::NewOauthIdentity;
 
+/// Supported OAuth identity providers. The DB key (`as_str`) must stay stable — it is stored in
+/// `user_oauth_identity.provider` and `users.oauth_provider`, so renaming it would orphan existing links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OAuthProvider {
+    Google,
+    Apple,
+    Facebook,
+    Github,
+}
+
+impl OAuthProvider {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OAuthProvider::Google => "google",
+            OAuthProvider::Apple => "apple",
+            OAuthProvider::Facebook => "facebook",
+            OAuthProvider::Github => "github",
+        }
+    }
+
+    /// Human-readable label for audit/session rows (e.g. "Google OAuth").
+    pub fn label(&self) -> &'static str {
+        match self {
+            OAuthProvider::Google => "Google",
+            OAuthProvider::Apple => "Apple",
+            OAuthProvider::Facebook => "Facebook",
+            OAuthProvider::Github => "GitHub",
+        }
+    }
+}
+
+impl std::fmt::Display for OAuthProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(state), fields(provider = %provider, provider_user_id = %provider_user_id, email = %email))]
 pub async fn find_or_create_user_for_oauth(
     state: &AppState,
-    provider: &str,
+    provider: OAuthProvider,
     provider_user_id: &str,
     email: String,
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
     if let Some(identity) =
-        user_oauth_identity::Entity::find_by_provider(&state.sea_db, provider, provider_user_id)
+        user_oauth_identity::Entity::find_by_provider(&state.sea_db, provider.as_str(), provider_user_id)
             .await?
     {
         let user = user::Entity::find_by_id_with_404(&state.sea_db, identity.user_id).await?;
@@ -43,7 +80,7 @@ pub async fn find_or_create_user_for_oauth(
             user_id = existing.id,
             "Linking OAuth account to existing user"
         );
-        link_identity(&state.sea_db, existing.id, provider, provider_user_id).await?;
+        link_identity(&state.sea_db, existing.id, provider.as_str(), provider_user_id).await?;
         return Ok(existing);
     }
 
@@ -72,7 +109,7 @@ pub async fn find_or_create_user_for_oauth(
             .with_message("Failed to create user account")
     })?;
 
-    link_identity(&state.sea_db, user.id, provider, provider_user_id).await?;
+    link_identity(&state.sea_db, user.id, provider.as_str(), provider_user_id).await?;
     tracing::Span::current().record("user_id", user.id);
     Ok(user)
 }
@@ -101,7 +138,7 @@ pub async fn finish_oauth_login(
     state: &AppState,
     auth: &mut AuthSession,
     user: &user::Model,
-    provider_label: &str,
+    provider: OAuthProvider,
 ) -> Result<(), ErrorResponse> {
     auth.login(user).await.map_err(|e| {
         error!(error = %e, user_id = user.id, "Failed to create OAuth session");
@@ -110,7 +147,7 @@ pub async fn finish_oauth_login(
 
     let session_row = user_session::Entity::create(
         &state.sea_db,
-        user_session::NewUserSession::new(user.id, Some(format!("{provider_label} OAuth")), None),
+        user_session::NewUserSession::new(user.id, Some(format!("{} OAuth", provider.label())), None),
     )
     .await
     .ok();

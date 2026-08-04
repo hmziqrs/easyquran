@@ -113,7 +113,7 @@ pub fn get_google_oauth_client() -> Result<GoogleClient, ErrorResponse> {
 
 pub async fn verify_google_id_token(
     id_token: &str,
-    expected_aud: &str,
+    expected_aud: &[&str],
     expected_nonce: Option<&str>,
 ) -> Result<GoogleIdTokenClaims, ErrorResponse> {
     let keys = fetch_google_jwks().await?;
@@ -148,7 +148,7 @@ pub async fn verify_google_id_token(
 fn verify_id_token_with_keys_core(
     id_token: &str,
     keys: &[GoogleJwkKey],
-    expected_aud: &str,
+    expected_aud: &[&str],
     expected_iss: &[&str],
     expected_nonce: Option<&str>,
 ) -> Result<GoogleIdTokenClaims, IdTokenError> {
@@ -181,7 +181,7 @@ fn verify_id_token_with_keys_core(
         })?;
 
     let mut validation = Validation::new(Algorithm::RS256);
-    validation.set_audience(&[expected_aud]);
+    validation.set_audience(expected_aud);
     validation.set_issuer(expected_iss);
 
     let token_data =
@@ -252,7 +252,7 @@ fn verify_id_token_with_keys(
     expected_iss: &[&str],
     expected_nonce: Option<&str>,
 ) -> Result<GoogleIdTokenClaims, ErrorResponse> {
-    verify_id_token_with_keys_core(id_token, keys, expected_aud, expected_iss, expected_nonce)
+    verify_id_token_with_keys_core(id_token, keys, &[expected_aud], expected_iss, expected_nonce)
         .map_err(|e| e.response)
 }
 
@@ -452,7 +452,7 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
     fn unknown_kid_is_the_only_retry_worthy_failure() {
         let token = sign_token(&valid_claims(), Some("not-a-known-kid"));
         let err =
-            verify_id_token_with_keys_core(&token, &test_keys(), TEST_AUD, &GOOGLE_ISSUERS, None)
+            verify_id_token_with_keys_core(&token, &test_keys(), &[TEST_AUD], &GOOGLE_ISSUERS, None)
                 .expect_err("unknown kid must error");
         assert!(
             err.unknown_signer,
@@ -469,7 +469,7 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
         let err = verify_id_token_with_keys_core(
             &tampered,
             &test_keys(),
-            TEST_AUD,
+            &[TEST_AUD],
             &GOOGLE_ISSUERS,
             None,
         )
@@ -483,7 +483,7 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
         let err = verify_id_token_with_keys_core(
             &token,
             &test_keys(),
-            "other-client-id",
+            &["other-client-id"],
             &GOOGLE_ISSUERS,
             None,
         )
@@ -500,7 +500,7 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
 
         let stale_keys: Vec<GoogleJwkKey> = vec![];
         let first =
-            verify_id_token_with_keys_core(&token, &stale_keys, TEST_AUD, &GOOGLE_ISSUERS, None);
+            verify_id_token_with_keys_core(&token, &stale_keys, &[TEST_AUD], &GOOGLE_ISSUERS, None);
         assert!(
             first
                 .as_ref()
@@ -514,7 +514,7 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
         let second = verify_id_token_with_keys_core(
             &token,
             &refreshed_keys,
-            TEST_AUD,
+            &[TEST_AUD],
             &GOOGLE_ISSUERS,
             None,
         )
