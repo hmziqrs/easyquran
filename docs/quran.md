@@ -27,7 +27,7 @@ Part 1 is settled ground: rules and contracts that constrain everything else, ve
 - **Global ayah index:** `quran_text."index"` is canonical — contiguous `1..6236`, unique, ordered by surah then ayah, `= sura.start + aya` (XML `start` zero-based, `aya` one-based). Asserted at boot; `/range` and its cap of 300 rest on it.
 - **Marker families tile `[1,6236]`** with no gap or overlap (page/juz/ruku/hizb-quarter/manzil), marker `index` order asserted to match global order. `<quarter>` carries no hizb attribute — derive: `hizb = ((i-1)/4)+1`, `quarterInHizb = ((i-1)%4)+1`.
 - **No FTS.** Search = normalize + substring-scan the 6236 simple-clean rows.
-- Translations: 115 dumps → one `<id>.sqlite` each, same schema, across 44 languages. 186 MB total: p50 1.19 MB, p95 3.07 MB, max 12.43 MB. **Non-commercial license** — revisit if the project monetizes.
+- Translations: 115 dumps → one `<id>.sqlite` each, same schema, across 44 languages. 186 MiB total: p50 1.25, p95 3.10, max 12.43 MiB. **Non-commercial license** — revisit if the project monetizes.
 
 ## API — Rust `/quran`
 
@@ -51,7 +51,8 @@ Auth lives outside `/quran`: web OAuth code flow (google/apple/facebook/github) 
 
 One rule set, two implementations (Rust + web Worker) returning identical ordered results:
 
-- **normalize** (`quran/normalize.rs` ↔ web): drop combining marks U+064B–U+0658, U+0670 (superscript alef — dropped, not folded, to match the web's `/\p{Mn}/u`), U+0640 (tatweel), Quranic signs U+06D6–U+06ED (incl. U+06E9 place-of-sajda). Fold `آ أ إ ٱ → ا`, `ى → ي`, `ة → ه`.
+- **normalize** (`quran/normalize.rs` ↔ web): drop combining marks U+064B–U+0658, U+0670 (superscript alef — dropped, not folded, to match the web's `/\p{Mn}/u`), U+0640 (tatweel), and Quranic signs **U+06D6–U+06DC, U+06DF–U+06E8, U+06E9, U+06EA–U+06ED**. Fold `آ أ إ ٱ → ا`, `ى → ي`, `ة → ه`.
+  That sign range reads continuous but is not: **U+06DD and U+06DE are excluded.** U+06DD never occurs in either corpus, so it is a no-op; U+06DE occurs **199 times in Uthmani** and is a live defect — see §9.
 - **offset map:** normalization emits a normalized-scalar → source-scalar map, so a hit found in normalized space highlights correctly in the rendered script (converted to UTF-16 for the web). Offsets crossing the boundary are **Unicode scalar** (Rust `char` = web `Array.from`).
 - **canonical view** splits each surah into **body + opener** units (opener = rank 0, ayah = rank 1).
 - **Opener classification is two orthogonal enums**, not one: `OpenerKind` = `Verse | Header | None` (what the opener *is*) × `OpenerPackaging` = `NumberedAyah | EmbeddedPrefix | ChapterFlag | SeparateRow | Absent` (how the source stores it). Split counts (1 / 112 / 1) asserted at boot. Surahs 95 & 97 carry a shadda variant (`بِّسْمِ`) — match the prefix diacritic-insensitively, never exactly.
@@ -72,7 +73,7 @@ Databases are immutable and read-only: no write handling anywhere.
 - **Service worker constraint:** SvelteKit forbids `$lib`/relative/npm imports in the SW, so the SW↔client contract is **duplicated** (SW-inline + `web/src/lib/offline/*`). Audit both sides on any contract change. Updates are an atomic SW-lifecycle cache swap — install verifies the complete new cache before activate; one accepted update reloads all open tabs.
 - **Page geometry is source-agnostic** — it describes Mushaf geometry, not text, so translations reuse it unchanged. Global Mushaf page `1..604`; surah-local page = a global page clipped to one surah, renumbered from 1 within it (662 total); juz `1..30`. Routes: `/app/<surah>` (local page 1), `/app/<surah>/page/<n>`, `/app/page/<globalPage>`, `/app/juz/<n>` — all prerendered.
 - **Ayah → page is computed, never stored.** `surahLocalPageForAyah(surah, ayah)` → `{ localPage, globalPage }`. A deep link `/app/<surah>#ayah-<surah>-<ayah>` resolves to its containing local page; if that is not the prerendered one the client redirects (`replaceState`, no scroll jump) to `/app/<surah>/page/<n>#ayah-…` and scrolls the ayah to a stable centered position (small-screen safe).
-- **Word → page** reuses ayah navigation (same page) with a finer in-ayah highlight. A word-offset hash grammar is future work.
+- **Word → page (planned, no code yet)** will reuse ayah navigation — a word lives inside an ayah, so the page math is unchanged — with a finer in-ayah highlight. The word-offset hash grammar is undecided.
 - **Reader loading:** each surah route reads **exactly one bounded local page** (cross-surah guarded), never a whole surah. Continuous scroll pulls adjacent local pages on demand via Worker range reads; a ~5-page virtual window bounds the DOM.
 
 ---
@@ -93,11 +94,17 @@ Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unb
 
 ## 2. Publish sqlite digests in the catalogue
 
-OPFS keys on `spec.sha256` of the **downloaded sqlite**. `index.json` only carries the sha256 and size of the **SQL dump** — a different file. Nothing today can name a translation artifact by its real digest, and `web/src/lib/data/translations.json` (which the README says `catalog` writes) does not exist.
+OPFS keys on `spec.sha256` of the **downloaded sqlite**. Nothing today can supply that digest:
+
+- `index.json` carries a `file.sha256`, but it hashes the **SQL dump** — a different file.
+- `index.min.json`, the one actually published and consumed, is sparser: `file` is a bare path string (`"sqlite/sq.nahi.sqlite"`), with **no digest or size slot at all**.
+- `web/src/lib/data/translations.json`, which the README says `catalog` writes, does not exist.
+
+So this adds a field that has never existed — it is not correcting a wrong value.
 
 **Decision:** the catalogue is the digest authority for translations. Static digest pinning stays **Arabic-only** — `resolveSourceProfile` pins two digests because they register a canonical-view profile; 115 translations cannot and should not be pinned in source.
 
-**Approach:** `build:sqlite` emits `sqlite/manifest.json` (`id`, `sizeBytes`, `sha256`) per artifact; `catalog` folds it into `index.min.json` under a `sqlite` field and copies the result to `web/src/lib/data/translations.json`; `verify` fails if any translation lacks a sqlite entry or its digest disagrees with the file on disk.
+**Approach:** `build:sqlite` emits `sqlite/manifest.json` (`id`, `sizeBytes`, `sha256`) per artifact; `catalog` widens `index.min.json`'s `file` from a bare path string to `{ path, sizeBytes, sha256 }` and copies the result to `web/src/lib/data/translations.json`; `verify` fails if any translation lacks a sqlite entry or its digest disagrees with the file on disk. Widening `file` is a breaking shape change to a published object — but it is the mutable catalogue (`max-age=300, must-revalidate`), and nothing consumes it yet.
 
 **Done when:** every catalogue entry carries a sqlite digest + size, `pnpm verify` fails on a missing or stale one, and the web can construct an `ArtifactSpec` for any translation without hardcoding.
 
@@ -111,8 +118,8 @@ OPFS keys on `spec.sha256` of the **downloaded sqlite**. `index.json` only carri
 
 | Bound | Value | Why |
 |---|---|---|
-| max resident translations | 8 | p95 artifact is 3.07 MB; 8 covers realistic concurrent distinct picks |
-| max resident bytes | 48 MB | binds first when large ones stack — max single artifact is 12.43 MB |
+| max resident translations | 8 | p95 artifact is 3.10 MiB; 8 covers realistic concurrent distinct picks |
+| max resident bytes | 48 MiB | binds first when large ones stack — max single artifact is 12.43 MiB |
 | idle TTL | 30 min | a translation unused for half an hour is not hot |
 | eviction | LRU, whichever bound trips first | |
 
@@ -153,11 +160,11 @@ No translation route exists — not even a page-1 form. Geometry and accessors a
 
 ## 6. OPFS retention
 
-No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a tester pulling ~100 (186 MB) and hitting the origin quota.
+No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a tester pulling ~100 (186 MiB) and hitting the origin quota.
 
 **Decision:** adaptive TTL — use renews, disuse expires. **Arabic is pinned and never evicted**; only translations are subject to it.
 
-**Approach:** per-id `lastUsed` alongside the cached bytes. Prune on worker boot and after each successful download, evicting LRU until within: ≤ 12 cached translations, ≤ 128 MB total, and nothing untouched for 30 days. A normal user (1–2 translations) never trips any bound, so the common path does no work.
+**Approach:** per-id `lastUsed` alongside the cached bytes. Prune on worker boot and after each successful download, evicting LRU until within: ≤ 12 cached translations, ≤ 128 MiB total, and nothing untouched for 30 days. A normal user (1–2 translations) never trips any bound, so the common path does no work.
 
 **Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the two Arabic artifacts survive every prune.
 
@@ -167,7 +174,7 @@ Arabic stays prerendered; translated pages cannot be — 115 sources × 662 loca
 
 **Decision:** SSR on demand, cached to disk with TTL. Not ISR: no build-time revalidation contract, no version handshake.
 
-**Approach:** migrate `adapter-static → adapter-node` (Arabic routes stay prerendered under it), then a disk cache keyed `(sourceId, surah, localPage)` — TTL 7 days, LRU inside a disk budget. Cache HTML only; JSON stays uncached (§Caching).
+**Approach:** migrate `adapter-static → adapter-node` (Arabic routes stay prerendered under it), then a disk cache keyed `(sourceId, surah, localPage)` — TTL 7 days, LRU inside a disk budget. **HTML only.** API JSON gets no server-side disk store; it stays edge-cacheable exactly as today (§Caching) — "uncached" here means no disk copy, not no caching.
 
 **Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic route output is byte-identical to the current static build, and the disk budget is enforced rather than assumed.
 
@@ -183,6 +190,7 @@ Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixt
 
 ## 9. Loose ends
 
+- **U+06DE is never stripped, and it is 199 ayahs of Uthmani.** Search *matches* against simple-clean (0 occurrences), so hits are correct — but `highlight()` re-normalizes the **display** text (`controller.rs:853` passes `view.text`, Uthmani by default), where the sign survives into the haystack and a needle spanning it yields no span. Web has the same hole (`/\p{Mn}/u` does not match U+06DE, category So), so parity holds while both are wrong. Fix in both, ship together, add the case to the §8 fixture corpus. U+06DD needs no fix — 0 occurrences in either corpus.
 - Deep-link highlight: the target ayah scrolls into view but is not visually marked — add a `revealed-ayah` / `:target` marker.
 - Link generators still emit legacy `?verse=N` (`quran.ts:46`) instead of the page-aware path — costs a redirect hop.
 - Surah-local page tiling (662) is asserted in `quran.test.ts` only. Server-side tiling is asserted at boot for the global families; add the local-page assert **only if** the server starts serving local pages.
