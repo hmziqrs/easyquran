@@ -177,6 +177,38 @@ pub struct ScriptsData {
     pub scripts: Vec<Artifact>,
 }
 
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum SourceKind {
+    Arabic,
+    Translation,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SourceDto {
+    pub id: String,
+    pub kind: SourceKind,
+    pub language: String,
+    pub language_code: String,
+    pub direction: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translator: Option<String>,
+    pub size_bytes: u64,
+    pub sha256: String,
+    pub download_url: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SourcesData {
+    pub sources: Vec<SourceDto>,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

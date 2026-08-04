@@ -20,6 +20,8 @@ export const REPO_ROOT = path.resolve(ROOT, "..", "..", "..", "..");
 export const SQLDIR = path.join(ROOT, "sql");
 /** derived SQLite artifacts — one `<id>.sqlite` per translation (see sql-to-sqlite.ts) */
 export const SQLITEDIR = path.join(ROOT, "sqlite");
+/** build-only manifest of per-translation sqlite digests (consumed by catalog + verify) */
+export const MANIFEST = path.join(SQLITEDIR, "manifest.json");
 export const INDEX = path.join(ROOT, "index.json");
 export const INDEX_MIN = path.join(ROOT, "index.min.json");
 export const PAGE_CACHE = path.join(ROOT, ".trans_page.html");
@@ -73,12 +75,20 @@ export interface MinTranslation {
   name: string;
   translator: string;
   /**
-   * Artifact path, relative to the catalog's own location. Points at the
-   * per-translation SQLite build (never the raw MySQL dump — those stay in the
-   * repo and are not published). Placeholder until the derived delivery
-   * databases in docs/quran.md land.
+   * Delivery artifact, catalogue-relative. Points at the per-translation
+   * SQLite build (never the raw MySQL dump — those stay in-repo, unpublished).
+   * `sha256` + `sizeBytes` are the authoritative digest of the file at `path`
+   * (sourced from sqlite/manifest.json, which sql-to-sqlite.ts writes); verify.ts
+   * fails on any on-disk mismatch.
    */
-  file: string;
+  file: { path: string; sizeBytes: number; sha256: string };
+}
+
+/** Per-translation sqlite digest, as written to sqlite/manifest.json. */
+export interface SqliteDigest {
+  id: string;
+  sizeBytes: number;
+  sha256: string;
 }
 
 // ── small utilities ───────────────────────────────────────────────────────
@@ -208,6 +218,11 @@ export function parseSql(buf: Buffer): ParsedSql {
   };
 }
 
+/** sha256 of a file on disk (hex). */
+export function fileSha256(p: string): string {
+  return createHash("sha256").update(readFileSync(p)).digest("hex");
+}
+
 // ── build the full + minimal indexes ───────────────────────────────────────
 export function buildIndex(items: PageItem[]): IndexFile {
   const translations: Translation[] = items.map((it) => {
@@ -255,16 +270,32 @@ export function buildIndex(items: PageItem[]): IndexFile {
   };
 }
 
-export function minFromIndex(index: IndexFile): MinTranslation[] {
-  return index.translations.map((t) => ({
-    id: t.id,
-    language: t.language,
-    languageCode: t.languageCode,
-    direction: t.direction,
-    name: t.name,
-    translator: t.translator,
-    file: `sqlite/${t.id}.sqlite`,
-  }));
+/**
+ * Build the minimal catalogue. Each entry's `file` is widened with the sqlite
+ * digest (sizeBytes + sha256) drawn from the manifest map (keyed by id); if an
+ * id is absent the caller hasn't run `pnpm build:sqlite` — fail hard.
+ */
+export function minFromIndex(
+  index: IndexFile,
+  sqlite: Map<string, SqliteDigest>,
+): MinTranslation[] {
+  return index.translations.map((t) => {
+    const d = sqlite.get(t.id);
+    if (!d) {
+      throw new Error(
+        `translation ${t.id} missing from sqlite/manifest.json — run \`pnpm build:sqlite\` first`,
+      );
+    }
+    return {
+      id: t.id,
+      language: t.language,
+      languageCode: t.languageCode,
+      direction: t.direction,
+      name: t.name,
+      translator: t.translator,
+      file: { path: `sqlite/${t.id}.sqlite`, sizeBytes: d.sizeBytes, sha256: d.sha256 },
+    };
+  });
 }
 
 /** Where the web app picks up the catalog. Override with WEB_TRANSLATIONS_PATH. */
@@ -274,9 +305,16 @@ function webTarget(): string {
   return DEFAULT_WEB_TARGET;
 }
 
-/** Write index.min.json and (unless web:false) copy it into the web app. */
-export async function writeCatalog(index: IndexFile, opts: { web?: boolean } = {}): Promise<void> {
-  await writeJson(INDEX_MIN, minFromIndex(index));
+/**
+ * Write index.min.json and (unless web:false) copy it into the web app.
+ * `sqlite` is the manifest map (id → digest) used to widen each `file` field.
+ */
+export async function writeCatalog(
+  index: IndexFile,
+  opts: { web?: boolean; sqlite?: Map<string, SqliteDigest> } = {},
+): Promise<void> {
+  const sqlite = opts.sqlite ?? new Map<string, SqliteDigest>();
+  await writeJson(INDEX_MIN, minFromIndex(index, sqlite));
   if (opts.web === false) return;
   const target = webTarget();
   await mkdir(path.dirname(target), { recursive: true });

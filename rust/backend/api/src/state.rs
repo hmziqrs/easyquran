@@ -47,6 +47,8 @@ pub struct AppState {
     pub quran_scripts:
         std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::Artifact>>>>,
     pub translation_pool: std::sync::Arc<crate::quran::TranslationPool>,
+    pub quran_sources:
+        std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::SourceDto>>>>,
 }
 
 impl FromRef<AppState> for AuthBackend {

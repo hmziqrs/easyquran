@@ -138,8 +138,7 @@ pub struct QuranSettings {
     pub uthmani_path: String,
     pub simple_clean_path: String,
     pub metadata_xml_path: String,
-    pub translations_index_path: String,
-    pub translations_sqlite_dir: String,
+    pub translations_dir: String,
     pub max_resident_translations: u64,
     pub max_resident_bytes: u64,
     pub translation_idle_ttl_secs: u64,
@@ -154,12 +153,10 @@ impl QuranSettings {
                 .unwrap_or_else(|_| "db/quran/tanzil/arabic/quran-simple-clean.sqlite".to_string()),
             metadata_xml_path: std::env::var("QURAN_METADATA_XML_PATH")
                 .unwrap_or_else(|_| "db/quran/tanzil/quran-data.xml".to_string()),
-            translations_index_path: std::env::var("QURAN_TRANSLATIONS_INDEX_PATH")
-                .unwrap_or_else(|_| "db/quran/tanzil/translations/index.min.json".to_string()),
-            translations_sqlite_dir: std::env::var("QURAN_TRANSLATIONS_SQLITE_DIR")
-                .unwrap_or_else(|_| "db/quran/tanzil/translations/sqlite".to_string()),
+            translations_dir: std::env::var("QURAN_TRANSLATIONS_DIR")
+                .unwrap_or_else(|_| "db/quran/tanzil/translations".to_string()),
             max_resident_translations: env_u64("QURAN_MAX_RESIDENT_TRANSLATIONS", 8),
-            max_resident_bytes: env_u64("QURAN_MAX_RESIDENT_BYTES", 48 * 1024 * 1024),
+            max_resident_bytes: env_u64("QURAN_MAX_RESIDENT_TRANSLATION_BYTES", 48 * 1024 * 1024),
             translation_idle_ttl_secs: env_u64("QURAN_TRANSLATION_IDLE_TTL_SECS", 1800),
         }
     }

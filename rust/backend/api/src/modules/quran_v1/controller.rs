@@ -5,9 +5,7 @@ use chrono::{NaiveDate, Timelike, Utc};
 use serde::Serialize;
 use sha2::Digest;
 
-use crate::quran::{
-    self, CatalogueEntry, QuranStore, Range, Script, SourceId, SuraMeta, RESPONSE_CAP, VERSE_COUNT,
-};
+use crate::quran::{self, QuranStore, Range, Script, SuraMeta, RESPONSE_CAP, VERSE_COUNT};
 
 use crate::AppState;
 
@@ -38,16 +36,31 @@ fn parse_script(opt: &Option<String>) -> Result<Script, QuranApiError> {
     }
 }
 
-fn parse_source(s: &str, pool: &crate::quran::TranslationPool) -> Result<SourceId, QuranApiError> {
+fn parse_source(
+    s: &str,
+    pool: &crate::quran::TranslationPool,
+) -> Result<crate::quran::SourceId, QuranApiError> {
     if let Some(script) = Script::parse(s) {
-        return Ok(SourceId::Arabic(script));
+        return Ok(crate::quran::SourceId::Arabic(script));
     }
     if let Some(id) = pool.parse_id(s) {
-        return Ok(SourceId::Translation(id));
+        return Ok(crate::quran::SourceId::Translation(id));
     }
     Err(invalid(format!(
-        "unknown source '{s}'; expected a script (uthmani, simple-clean) or a translation id"
+        "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean) or a catalogue translation id"
     )))
+}
+
+/// Stable, immutable identity string for a translation response (its ETag tag). Derived from
+/// the catalogue sha — translations carry no golden digest; integrity is fixed at §2 build.
+fn translation_profile(id: &str, pool: &crate::quran::TranslationPool) -> String {
+    let sha = pool
+        .catalogue()
+        .get(id)
+        .map(|e| e.sha256.as_ref())
+        .unwrap_or("");
+    let prefix8 = sha.get(..8).unwrap_or(sha);
+    format!("tanzil-{id}-{prefix8}")
 }
 
 impl From<quran::ViewError> for QuranApiError {
@@ -140,9 +153,8 @@ fn json_cached<T: Serialize>(
     )
 }
 
-/// Same as `json_cached` but with an explicit weak-ETag tag — translations key
-/// on their own catalogue sha256 (NOT the Arabic uthmani digest), so two reads
-/// of the same canonical path under different sources cannot share an ETag (§3).
+/// Same as [`json_cached`] but with an explicit ETag tag — translation responses key on the
+/// translation's catalogue sha, not the uthmani golden digest.
 fn json_cached_with_tag<T: Serialize>(
     tag: &str,
     headers: &HeaderMap,
@@ -157,15 +169,6 @@ fn json_cached_with_tag<T: Serialize>(
         cache::ARABIC_CACHE,
         cache::if_none_match(headers),
     )
-}
-
-/// `tanzil-<id>-<sha8>` profile for a translation, mirroring the Arabic
-/// `tanzil-<script>-<sha8>` shape (§3). The sha is the catalogue-resolved file
-/// digest, not a corpus digest.
-fn source_profile_for_entry(entry: &CatalogueEntry) -> String {
-    let sha: &str = &entry.sha256;
-    let prefix8 = sha.get(..8).unwrap_or(sha);
-    format!("tanzil-{}-{}", entry.id, prefix8)
 }
 
 struct Window {
@@ -814,7 +817,7 @@ async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
     let mut out = Vec::with_capacity(2);
     for (file, filename) in entries {
         let id = file.id.as_str().to_string();
-        let url = format!("{public_url}/quran/arabic/{id}/{filename}");
+        let url = format!("{public_url}/tanzil/arabic/{filename}");
         match verify_head(&state.http_client, &url, file.size_bytes).await {
             Ok(true) => out.push(Artifact {
                 id,
@@ -848,6 +851,139 @@ async fn verify_head(client: &reqwest::Client, url: &str, expected_size: u64) ->
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
     Ok(len == Some(expected_size))
+}
+
+pub async fn sources(
+    State(state): State<AppState>,
+    QQuery(_): QQuery<NoQuery>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, QuranApiError> {
+    let store = &state.quran;
+    let total = 2 + state.translation_pool.catalogue().len();
+    let sources = {
+        let mut guard = state.quran_sources.lock().await;
+        match guard.as_ref() {
+            Some(cached) => cached.to_vec(),
+            None => {
+                let public_url = state
+                    .settings
+                    .object_storage
+                    .public_url
+                    .trim_end_matches('/')
+                    .to_string();
+                let resolved = resolve_sources(&state, &public_url).await;
+                // Memoize only when fully verified — a transient HEAD failure self-heals rather
+                // than pinning a truncated list.
+                if resolved.len() == total {
+                    *guard = Some(resolved.clone());
+                }
+                resolved
+            }
+        }
+    };
+    let verified = sources.len();
+    let canonical = format!("sources?verified={verified}");
+    let cache_control = if verified == total {
+        cache::ARABIC_CACHE
+    } else {
+        cache::NO_STORE
+    };
+    // ETag folds the catalogue digest so a same-count rebuild (a translation sha changed) still
+    // invalidates the cached listing — not just the uthmani digest + verified count.
+    let tag = format!(
+        "{}:{}",
+        store.etag_tag(),
+        state.translation_pool.catalogue_digest()
+    );
+    let env = Envelope::new(SourcesData { sources });
+    Ok(cache::respond_cached(
+        &env,
+        &tag,
+        &canonical,
+        cache_control,
+        cache::if_none_match(&headers),
+    ))
+}
+
+/// Every readable source — 2 Arabic scripts + every catalogue translation — each HEAD-verified.
+/// A `JoinSet` fans the cold HEADs out concurrently so 117 checks do not serialize past the
+/// request budget. An unverified entry is omitted; the handler then stamps `no-store` so a CDN
+/// cannot pin a truncated half-list (same discipline as `/scripts`).
+async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
+    let store = &state.quran;
+    let mut candidates: Vec<(SourceDto, u64)> =
+        Vec::with_capacity(2 + state.translation_pool.catalogue().len());
+
+    for (file, filename, display) in [
+        (&store.artifacts.uthmani, "quran-uthmani.sqlite", "Uthmani"),
+        (
+            &store.artifacts.simple_clean,
+            "quran-simple-clean.sqlite",
+            "Simple Clean",
+        ),
+    ] {
+        let url = format!("{public_url}/tanzil/arabic/{filename}");
+        candidates.push((
+            SourceDto {
+                id: file.id.as_str().to_string(),
+                kind: SourceKind::Arabic,
+                language: "Arabic".to_string(),
+                language_code: "ar".to_string(),
+                direction: "rtl".to_string(),
+                name: display.to_string(),
+                translator: None,
+                size_bytes: file.size_bytes,
+                sha256: file.sha256.to_string(),
+                download_url: url,
+            },
+            file.size_bytes,
+        ));
+    }
+
+    for (_id, e) in state.translation_pool.catalogue() {
+        let url = format!("{public_url}/tanzil/translations/{}", e.path);
+        candidates.push((
+            SourceDto {
+                id: e.id.to_string(),
+                kind: SourceKind::Translation,
+                language: e.language.to_string(),
+                language_code: e.language_code.to_string(),
+                direction: e.direction.to_string(),
+                name: e.name.to_string(),
+                translator: e.translator.as_deref().map(String::from),
+                size_bytes: e.size_bytes,
+                sha256: e.sha256.to_string(),
+                download_url: url,
+            },
+            e.size_bytes,
+        ));
+    }
+
+    let client = state.http_client.clone();
+    // Bound concurrent HEADs so a cold /sources resolve cannot consume the shared http_client's
+    // whole connection pool (also used by mail/billing/FCM). 32 keeps 117 HEADs snappy on R2.
+    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(32));
+    let mut set = tokio::task::JoinSet::new();
+    for (idx, (dto, size)) in candidates.iter().enumerate() {
+        let client = client.clone();
+        let url = dto.download_url.clone();
+        let size = *size;
+        let sem = sem.clone();
+        set.spawn(async move {
+            let _permit = sem.acquire().await.expect("HEAD semaphore not closed");
+            (idx, verify_head(&client, &url, size).await.unwrap_or(false))
+        });
+    }
+    let mut ok = vec![false; candidates.len()];
+    while let Some(res) = set.join_next().await {
+        let (idx, verified) = res.expect("HEAD task must not panic");
+        ok[idx] = verified;
+    }
+    candidates
+        .into_iter()
+        .zip(ok)
+        .filter_map(|((dto, _), keep)| keep.then_some(dto))
+        .collect()
 }
 
 #[cfg(feature = "openapi")]
@@ -1082,7 +1218,7 @@ pub async fn source_surah(
         )));
     }
     match source_id {
-        SourceId::Arabic(script) => {
+        quran::SourceId::Arabic(script) => {
             let body = quran::surah_text_view(store, script, surah)?;
             Ok(json_cached(
                 store,
@@ -1091,11 +1227,8 @@ pub async fn source_surah(
                 body,
             ))
         }
-        SourceId::Translation(id) => {
-            let entry = store
-                .catalogue_entry(id.as_str())
-                .ok_or_else(|| QuranApiError::internal("translation not in catalogue"))?;
-            let profile = source_profile_for_entry(entry);
+        quran::SourceId::Translation(id) => {
+            let profile = translation_profile(id.as_str(), &state.translation_pool);
             let corpus = state
                 .translation_pool
                 .get_or_build(&id)
@@ -1104,7 +1237,7 @@ pub async fn source_surah(
             let body =
                 quran::surah_text_translation(store.meta(), &corpus, id.as_str(), &profile, surah)?;
             Ok(json_cached_with_tag(
-                &entry.sha256,
+                &profile,
                 &headers,
                 &format!("sources/{source}/surah/{surah}"),
                 body,
@@ -1130,94 +1263,81 @@ pub async fn source_range(
     if count > RESPONSE_CAP {
         return Err(range_too_large(count));
     }
-    let ck = canonical(
-        &format!("sources/{source}/range"),
-        vec![("from", from.to_string()), ("to", to.to_string())],
-    );
-    match source_id {
-        SourceId::Arabic(script) => {
-            let mut ayahs = Vec::with_capacity(count as usize);
-            let mut represented: Vec<u16> = Vec::new();
-            let mut prev_surah: Option<u16> = None;
-            for g in from..=to {
-                let (surah, ayah) = store
-                    .meta()
-                    .locate(g)
-                    .ok_or_else(|| QuranApiError::internal(format!("global {g} not locatable")))?;
-                let text = store
-                    .verse(script, g)
-                    .ok_or_else(|| QuranApiError::internal(format!("verse {g} missing")))?
-                    .to_string();
-                ayahs.push(LeanAyah {
-                    key: format!("{surah}:{ayah}"),
-                    surah,
-                    ayah,
-                    global_index: g,
-                    text,
-                });
-                if prev_surah != Some(surah) {
-                    represented.push(surah);
-                    prev_surah = Some(surah);
-                }
-            }
-            let mut normalizations = Vec::with_capacity(represented.len());
-            for surah in &represented {
-                normalizations.push(quran::surah_normalization(store, script, *surah)?);
-            }
-            let body = RangeText {
-                ayahs,
-                normalizations,
-            };
-            Ok(json_cached(store, &headers, &ck, body))
-        }
-        SourceId::Translation(id) => {
-            let entry = store
-                .catalogue_entry(id.as_str())
-                .ok_or_else(|| QuranApiError::internal("translation not in catalogue"))?;
-            let profile = source_profile_for_entry(entry);
-            let corpus = state
+
+    // Resolve the verse-text source once: Arabic reads the resident store; a translation
+    // cold-loads its corpus through the pool (single-flight). Both stay immutable reads.
+    let script = match &source_id {
+        quran::SourceId::Arabic(s) => Some(*s),
+        quran::SourceId::Translation(_) => None,
+    };
+    let corpus = match &source_id {
+        quran::SourceId::Translation(id) => Some(
+            state
                 .translation_pool
-                .get_or_build(&id)
+                .get_or_build(id)
                 .await
-                .map_err(|e| QuranApiError::internal(e.to_string()))?;
-            let mut ayahs = Vec::with_capacity(count as usize);
-            let mut represented: Vec<u16> = Vec::new();
-            let mut prev_surah: Option<u16> = None;
-            for g in from..=to {
-                let (surah, ayah) = store
-                    .meta()
-                    .locate(g)
-                    .ok_or_else(|| QuranApiError::internal(format!("global {g} not locatable")))?;
-                let text = corpus
-                    .verse(g)
-                    .ok_or_else(|| QuranApiError::internal(format!("verse {g} missing")))?
-                    .to_string();
-                ayahs.push(LeanAyah {
-                    key: format!("{surah}:{ayah}"),
-                    surah,
-                    ayah,
-                    global_index: g,
-                    text,
-                });
-                if prev_surah != Some(surah) {
-                    represented.push(surah);
-                    prev_surah = Some(surah);
-                }
-            }
-            let mut normalizations = Vec::with_capacity(represented.len());
-            for surah in &represented {
-                normalizations.push(quran::normalization_translation(
-                    store.meta(),
-                    id.as_str(),
-                    &profile,
-                    *surah,
-                )?);
-            }
-            let body = RangeText {
-                ayahs,
-                normalizations,
-            };
-            Ok(json_cached_with_tag(&entry.sha256, &headers, &ck, body))
+                .map_err(|e| QuranApiError::internal(e.to_string()))?,
+        ),
+        quran::SourceId::Arabic(_) => None,
+    };
+    let profile = match &source_id {
+        quran::SourceId::Translation(id) => {
+            translation_profile(id.as_str(), &state.translation_pool)
+        }
+        quran::SourceId::Arabic(_) => store.etag_tag().to_string(),
+    };
+
+    let mut ayahs = Vec::with_capacity(count as usize);
+    let mut represented: Vec<u16> = Vec::new();
+    let mut prev_surah: Option<u16> = None;
+    for g in from..=to {
+        let (surah, ayah) = store
+            .meta()
+            .locate(g)
+            .ok_or_else(|| QuranApiError::internal(format!("global {g} not locatable")))?;
+        let text = match script {
+            Some(sc) => store
+                .verse(sc, g)
+                .ok_or_else(|| QuranApiError::internal(format!("verse {g} missing")))?
+                .to_string(),
+            None => corpus
+                .as_ref()
+                .expect("translation corpus resolved above")
+                .verse(g)
+                .ok_or_else(|| QuranApiError::internal(format!("verse {g} missing")))?
+                .to_string(),
+        };
+        ayahs.push(LeanAyah {
+            key: format!("{surah}:{ayah}"),
+            surah,
+            ayah,
+            global_index: g,
+            text,
+        });
+        if prev_surah != Some(surah) {
+            represented.push(surah);
+            prev_surah = Some(surah);
         }
     }
+    let mut normalizations = Vec::with_capacity(represented.len());
+    for surah in &represented {
+        let norm = match script {
+            Some(sc) => quran::surah_normalization(store, sc, *surah)?,
+            None => quran::normalization_translation(source.as_str(), &profile, *surah)?,
+        };
+        normalizations.push(norm);
+    }
+    let body = RangeText {
+        ayahs,
+        normalizations,
+    };
+    Ok(json_cached_with_tag(
+        &profile,
+        &headers,
+        &canonical(
+            &format!("sources/{source}/range"),
+            vec![("from", from.to_string()), ("to", to.to_string())],
+        ),
+        body,
+    ))
 }

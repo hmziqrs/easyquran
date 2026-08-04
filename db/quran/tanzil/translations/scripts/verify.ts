@@ -9,10 +9,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-import { INDEX, ROOT, log, readJson, type IndexFile } from "./lib";
+import { INDEX, MANIFEST, ROOT, SQLITEDIR, fileSha256, log, readJson, type IndexFile, type SqliteDigest } from "./lib";
 
 const MIN_AYAS = 6000; // every full-Quran translation should be near 6236
 
@@ -25,11 +25,23 @@ async function main(): Promise<number> {
   log(`index.json: ${trans.length} translations (header count=${index.count})`);
   if (trans.length !== index.count) errors.push("index count field != actual entries");
 
+  // Load the sqlite manifest (build-only artifact). Missing here is a hard
+  // error: without digests there is nothing to check the on-disk files against.
+  let sqlite = new Map<string, SqliteDigest>();
+  if (!existsSync(MANIFEST)) {
+    errors.push("sqlite/manifest.json missing — run `pnpm build:sqlite`");
+  } else {
+    const manifest = await readJson<SqliteDigest[]>(MANIFEST);
+    for (const d of manifest) sqlite.set(d.id, d);
+  }
+
   const ayaDist = new Map<number | "none", number>();
   const missing: string[] = [];
   const badSha: string[] = [];
   const badEnc: string[] = [];
   const short: string[] = [];
+  const missingSqlite: string[] = [];
+  const staleSqlite: string[] = [];
 
   for (const tr of trans) {
     const p = path.join(ROOT, tr.file.sql);
@@ -49,6 +61,22 @@ async function main(): Promise<number> {
     ayaDist.set(ac, (ayaDist.get(ac) ?? 0) + 1);
     if (typeof ac === "number" && ac < MIN_AYAS) short.push(`${tr.id} (${ac})`);
 
+    // sqlite delivery artifact: existence + on-disk digest vs manifest.
+    const sqlitePath = path.join(SQLITEDIR, `${tr.id}.sqlite`);
+    const digest = sqlite.get(tr.id);
+    if (!existsSync(sqlitePath)) {
+      missingSqlite.push(tr.id);
+    } else if (!digest) {
+      staleSqlite.push(`${tr.id}: absent from manifest`);
+    } else {
+      if (statSync(sqlitePath).size !== digest.sizeBytes) {
+        staleSqlite.push(`${tr.id}: size ${statSync(sqlitePath).size} != ${digest.sizeBytes}`);
+      }
+      if (fileSha256(sqlitePath) !== digest.sha256) {
+        staleSqlite.push(`${tr.id}: sha256 mismatch`);
+      }
+    }
+
     for (const f of ["language", "name", "translator", "direction", "languageCode"] as const) {
       if (!tr[f]) warnings.push(`${tr.id}: missing ${f}`);
     }
@@ -64,7 +92,13 @@ async function main(): Promise<number> {
   log(`aya-count distribution: ${JSON.stringify(Object.fromEntries(dist))}`);
   if (short.length) warnings.push(`translations with < ${MIN_AYAS} ayas: ${short.join(", ")}`);
 
-  for (const [label, items] of [["MISSING", missing], ["BAD ENCODING", badEnc], ["BAD SHA256", badSha]] as const) {
+  for (const [label, items] of [
+    ["MISSING", missing],
+    ["BAD ENCODING", badEnc],
+    ["BAD SHA256", badSha],
+    ["MISSING SQLITE", missingSqlite],
+    ["STALE SQLITE", staleSqlite],
+  ] as const) {
     if (items.length) errors.push(`${label}: ${JSON.stringify(items)}`);
   }
 

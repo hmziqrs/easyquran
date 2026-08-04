@@ -438,7 +438,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::info!(
                 source_digest = %store.source_digests().uthmani,
                 verse_count = ruxlog::quran::VERSE_COUNT,
-                catalogue_entries = store.catalogue.len(),
                 "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
             );
             std::sync::Arc::new(store)
@@ -453,22 +452,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let translation_pool = {
-        let cfg = &settings.quran;
-        ruxlog::quran::TranslationPool::new(
-            std::path::PathBuf::from(&cfg.translations_sqlite_dir),
-            &quran_store.catalogue,
-            cfg.max_resident_translations,
-            cfg.max_resident_bytes,
-            cfg.translation_idle_ttl_secs,
-        )
+        let qset = &settings.quran;
+        let catalogue_path = format!("{}/index.min.json", qset.translations_dir);
+        match ruxlog::quran::load_catalogue(&catalogue_path).await {
+            Ok(cat) => {
+                let count = cat.len();
+                let pool = ruxlog::quran::TranslationPool::new(
+                    &cat,
+                    std::path::PathBuf::from(&qset.translations_dir),
+                    qset.max_resident_translations,
+                    qset.max_resident_bytes,
+                    std::time::Duration::from_secs(qset.translation_idle_ttl_secs),
+                );
+                tracing::info!(
+                    translations = count,
+                    "Translation catalogue loaded; pool ready for on-demand reads"
+                );
+                std::sync::Arc::new(pool)
+            }
+            Err(err) => {
+                tracing::error!(
+                    error = %err,
+                    "Translation catalogue failed to load — refusing to boot (§4 fail-fast)"
+                );
+                std::process::exit(1);
+            }
+        }
     };
-    tracing::info!(
-        entries = quran_store.catalogue.len(),
-        max_resident = settings.quran.max_resident_translations,
-        max_bytes = settings.quran.max_resident_bytes,
-        idle_ttl_secs = settings.quran.translation_idle_ttl_secs,
-        "translation pool built (§3); translations served on-demand"
-    );
 
     let state = AppState {
         sea_db,
@@ -490,7 +500,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         webauthn: webauthn_service,
         quran: quran_store,
         quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
-        translation_pool: std::sync::Arc::new(translation_pool),
+        translation_pool,
+        quran_sources: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     {

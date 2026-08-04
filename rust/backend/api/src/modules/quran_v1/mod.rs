@@ -13,8 +13,12 @@ pub fn routes() -> Router<AppState> {
         .route("/surahs", get(controller::list_surahs))
         .route("/surahs/{surah}", get(controller::get_surah))
         .route("/surahs/{surah}/ayahs", get(controller::surah_ayahs))
-        .route("/sources/{sourceId}/surah/{surah}", get(controller::source_surah))
+        .route(
+            "/sources/{sourceId}/surah/{surah}",
+            get(controller::source_surah),
+        )
         .route("/sources/{sourceId}/range", get(controller::source_range))
+        .route("/sources", get(controller::sources))
         .route("/ayahs", get(controller::ayahs_multi))
         .route("/ayahs/{verseKey}", get(controller::ayah_key_redirect))
         .route("/ayahs/{surah}/{ayah}", get(controller::get_ayah))
@@ -28,8 +32,14 @@ pub fn routes() -> Router<AppState> {
         .route("/rukus/{ruku}", get(controller::get_ruku))
         .route("/rukus/{ruku}/ayahs", get(controller::ruku_ayahs))
         .route("/hizb-quarters", get(controller::list_hizb_quarters))
-        .route("/hizb-quarters/{quarter}", get(controller::get_hizb_quarter))
-        .route("/hizb-quarters/{quarter}/ayahs", get(controller::hizb_quarter_ayahs))
+        .route(
+            "/hizb-quarters/{quarter}",
+            get(controller::get_hizb_quarter),
+        )
+        .route(
+            "/hizb-quarters/{quarter}/ayahs",
+            get(controller::hizb_quarter_ayahs),
+        )
         .route("/manzils", get(controller::list_manzils))
         .route("/manzils/{manzil}", get(controller::get_manzil))
         .route("/manzils/{manzil}/ayahs", get(controller::manzil_ayahs))

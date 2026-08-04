@@ -34,7 +34,7 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
-import { ROOT, SQLDIR, SQLITEDIR, INDEX, log, readJson, type IndexFile } from "./lib";
+import { ROOT, SQLDIR, SQLITEDIR, MANIFEST, INDEX, log, readJson, writeJson, fileSha256, type IndexFile, type SqliteDigest } from "./lib";
 
 const OUTDIR = SQLITEDIR;
 
@@ -178,9 +178,15 @@ interface BuildResult {
   ok: boolean;
   integrity: string;
   sizeBytes: number;
+  sha256: string;
   mode: "backslash" | "standard";
   notes: string[];
 }
+
+// Canonical full-Quran ayah count (Hafs) — matches store.rs VERSE_COUNT. A translation must tile
+// exactly this many rows; the runtime's validate_rows rejects anything else, so the build gate
+// enforces the same count and a partial dump fails here instead of at every read.
+const VERSE_COUNT = 6236;
 
 function buildOne(id: string, expected: number | undefined): BuildResult {
   const sqlPath = path.join(SQLDIR, `${id}.sql`);
@@ -219,6 +225,8 @@ function buildOne(id: string, expected: number | undefined): BuildResult {
 
   if (rows.length === 0) notes.push("parsed 0 rows");
   if (!isContiguous(rows)) notes.push(`index not contiguous 1..${rows.length}`);
+  if (rows.length !== VERSE_COUNT)
+    notes.push(`row count ${rows.length} != canonical ${VERSE_COUNT}`);
   // Under backslash mode a decoded `\` can only come from a deliberate `\\` in
   // the source — verse text shouldn't contain any, so flag it as a guardrail.
   // (Standard mode may legitimately keep a lone `\`, so don't check there.)
@@ -247,9 +255,10 @@ function buildOne(id: string, expected: number | undefined): BuildResult {
     db?.close();
   }
 
-  const countOk = expected === undefined || rows.length === expected;
+  const countOk = rows.length === VERSE_COUNT;
   const ok = rows.length > 0 && countOk && integrity === "ok" && notes.length === 0;
-  return { id, outPath, rows: rows.length, expected, ok, integrity, sizeBytes: existsSync(outPath) ? statSync(outPath).size : 0, mode, notes };
+  const sizeBytes = existsSync(outPath) ? statSync(outPath).size : 0;
+  return { id, outPath, rows: rows.length, expected, ok, integrity, sizeBytes, sha256: sizeBytes > 0 ? fileSha256(outPath) : "", mode, notes };
 }
 
 async function main(args: string[]): Promise<number> {
@@ -284,9 +293,19 @@ async function main(args: string[]): Promise<number> {
   const totalBytes = results.reduce((s, r) => s + r.sizeBytes, 0);
   const rowTotal = results.reduce((s, r) => s + r.rows, 0);
 
+  // Always write the digest manifest — even on partial failure — so catalog
+  // and verify can report coherently. Only successful builds contribute digests;
+  // a failed build means its id is absent and downstream gates fail loudly.
+  const manifest: SqliteDigest[] = results
+    .filter((r) => r.ok && r.sizeBytes > 0)
+    .map((r) => ({ id: r.id, sizeBytes: r.sizeBytes, sha256: r.sha256 }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  await writeJson(MANIFEST, manifest);
+
   log("");
   log(`built ${ok}/${results.length} clean in ${dt}s  (escaping: ${results.length - std} backslash, ${std} standard)`);
   log(`total: ${rowTotal.toLocaleString()} rows, ${(totalBytes / (1024 * 1024)).toFixed(1)} MB`);
+  log(`manifest → ${path.relative(ROOT, MANIFEST)} (${manifest.length} entries)`);
   if (bad.length) {
     log(`problems:`);
     for (const r of bad) log(`  ✗ ${r.id}: ${r.notes.join("; ") || `rows=${r.rows} expected=${r.expected} integrity=${r.integrity}`}`);

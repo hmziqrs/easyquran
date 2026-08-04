@@ -219,12 +219,10 @@ pub fn surah_text(
     })
 }
 
-/// Translation surface for a single surah. Translations carry no basmala
-/// opener: packaging is `Absent`, opener_kind is `None`, and verse 1 is body
-/// (opener/body scalars are 0). `source_id` and `script` both carry the
-/// translation id; `source_profile` is supplied by the caller from the
-/// catalogue entry sha (§3). Reads come from a pooled `Corpus`, not the
-/// always-resident Arabic corpora.
+/// Surah text for a translation source. Body-only: a translation has no basmala opener
+/// (verse 1 is content, not a prefix), so packaging is Absent and there is nothing to split.
+/// Reads from an arbitrary [`Corpus`] (translation pool) instead of the Arabic store; the
+/// Arabic [`surah_text`] above is untouched and its parity fixtures remain the guard.
 pub fn surah_text_translation(
     meta: &QuranMeta,
     corpus: &Corpus,
@@ -245,7 +243,7 @@ pub fn surah_text_translation(
                 .to_string(),
         );
     }
-    let normalization = normalization_translation(meta, source_id, source_profile, surah)?;
+    let normalization = normalization_translation(source_id, source_profile, surah)?;
     Ok(QuranSurahTextDto {
         source_id: normalization.source_id.clone(),
         script: normalization.script.clone(),
@@ -254,12 +252,10 @@ pub fn surah_text_translation(
     })
 }
 
-/// Translation normalization row — flat (no opener detection): translations
-/// have no basmala opener, so verse 1 is the body start and the opener is
-/// absent (§3). `meta` is consulted only to confirm the surah maps to globals
-/// (translations index identically to Arabic).
+/// Body-only normalization for a translation: no opener detection (no basmala), scalars zero,
+/// packaging Absent. Translations do not carry a canonical-view profile, so `source_profile`
+/// is informational only (passed through for response-shape parity with Arabic).
 pub fn normalization_translation(
-    meta: &QuranMeta,
     source_id: &str,
     source_profile: &str,
     surah: u16,
@@ -267,7 +263,6 @@ pub fn normalization_translation(
     if !(1..=114).contains(&surah) {
         return Err(ViewError::InvalidSurah(surah));
     }
-    let _ = meta.global_of(surah, 1).ok_or(ViewError::Locate(surah))?;
     Ok(SurahNormalizationDto {
         surah,
         source_id: source_id.to_string(),
@@ -293,8 +288,7 @@ mod tests {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
-            translations_index_path: format!("{base}/translations/index.min.json"),
-            translations_sqlite_dir: format!("{base}/translations/sqlite"),
+            translations_dir: format!("{base}/translations"),
             max_resident_translations: 8,
             max_resident_bytes: 48 * 1024 * 1024,
             translation_idle_ttl_secs: 1800,

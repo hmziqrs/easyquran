@@ -113,8 +113,6 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
 
     let search = super::search::SearchIndex::build(&uthmani, &simple_clean);
 
-    let catalogue = load_catalogue(settings)?;
-
     Ok(QuranStore {
         uthmani,
         simple_clean,
@@ -125,8 +123,80 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         },
         artifacts,
         search,
-        catalogue,
     })
+}
+
+/// Boot-load the translation catalogue (the §2-widened `index.min.json`). Fail-fast on a
+/// missing or malformed file per Part 1: a bad catalogue aborts boot rather than serving a
+/// half-state. No sqlite I/O here — files stay on-demand; this reads only the small JSON.
+pub async fn load_catalogue(path: &str) -> Result<Box<[CatalogueEntry]>, QuranLoadError> {
+    let bytes = read_file(path, "translations-catalogue")?;
+    let raw: Vec<RawCatalogueEntry> = serde_json::from_slice(&bytes)
+        .map_err(|e| inv(format!("translations catalogue parse ({path}): {e}")))?;
+    invariant(!raw.is_empty(), || {
+        format!("translations catalogue ({path}) is empty")
+    })?;
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out = Vec::with_capacity(raw.len());
+    for r in raw {
+        invariant(seen.insert(r.id.clone()), || {
+            format!("duplicate translation id {}", r.id)
+        })?;
+        let p = std::path::Path::new(&r.file.path);
+        invariant(p.is_relative(), || {
+            format!("translation {} file.path must be relative", r.id)
+        })?;
+        invariant(
+            !p.components()
+                .any(|c| matches!(c, std::path::Component::ParentDir)),
+            || format!("translation {} file.path must not contain '..'", r.id),
+        )?;
+        out.push(CatalogueEntry {
+            id: r.id.into_boxed_str(),
+            language: r.language.into_boxed_str(),
+            language_code: r.language_code.into_boxed_str(),
+            direction: r.direction.into_boxed_str(),
+            name: r.name.into_boxed_str(),
+            translator: r.translator.map(|s| s.into_boxed_str()),
+            path: r.file.path.into_boxed_str(),
+            size_bytes: r.file.size_bytes,
+            sha256: r.file.sha256.into_boxed_str(),
+        });
+    }
+    Ok(out.into_boxed_slice())
+}
+
+#[derive(serde::Deserialize)]
+struct RawCatalogueEntry {
+    id: String,
+    language: String,
+    #[serde(rename = "languageCode")]
+    language_code: String,
+    direction: String,
+    name: String,
+    #[serde(default)]
+    translator: Option<String>,
+    file: RawCatalogueFile,
+}
+
+#[derive(serde::Deserialize)]
+struct RawCatalogueFile {
+    path: String,
+    #[serde(rename = "sizeBytes")]
+    size_bytes: u64,
+    sha256: String,
+}
+
+/// Cold-read a translation sqlite into the same arena representation as Arabic. Translations
+/// share the `quran_text` schema, so rows must tile 1..=6236 (a row per ayah; a handful are
+/// intentionally empty — see docs/research/translation-empty-verses.md). No golden digest:
+/// translation integrity is fixed at §2 build and verified client-side on download.
+pub async fn load_translation_corpus(path: &str) -> Result<Corpus, QuranLoadError> {
+    let rows = read_corpus(path, "translation").await?;
+    validate_rows("translation", &rows)?;
+    Ok(Corpus::from_texts(
+        &rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(),
+    ))
 }
 
 fn file_sha256(bytes: &[u8]) -> String {
@@ -200,97 +270,6 @@ fn corpus_digest(corpus: &Corpus) -> String {
     let mut h = Sha256::new();
     h.update(joined.as_bytes());
     hex::encode(h.finalize())
-}
-
-/// Build a translation corpus from a sqlite file. Reuses the same row schema +
-/// validation as the Arabic corpora (translation files share the quran_text
-/// table), but skips the golden-digest assert — translations have no per-file
-/// literal; integrity is fixed at build (§2) and verified on download (§3).
-pub async fn load_translation_corpus(path: &str) -> Result<Corpus, QuranLoadError> {
-    let rows = read_corpus(path, "translation").await?;
-    validate_rows("translation", &rows)?;
-    let texts: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
-    Ok(Corpus::from_texts(&texts))
-}
-
-/// Serde mirror of `index.min.json` — bare path string for `file`, no digest
-/// slot (the catalogue IS the digest authority, resolved at boot from disk).
-#[derive(serde::Deserialize)]
-struct RawCatalogueEntry {
-    id: String,
-    language: String,
-    #[serde(rename = "languageCode")]
-    language_code: String,
-    direction: String,
-    name: String,
-    #[serde(default)]
-    translator: Option<String>,
-    file: String,
-}
-
-/// Load + validate the translation catalogue. The index JSON is fail-fast
-/// (missing/unreadable/parse-error → boot exit); individual sqlite files that
-/// are absent on disk are skipped with a warning rather than killing boot —
-/// `parse_source` will 400 for their ids until they reappear (§3).
-pub fn load_catalogue(settings: &QuranSettings) -> Result<Box<[CatalogueEntry]>, QuranLoadError> {
-    let bytes = read_file(&settings.translations_index_path, "translations-index")?;
-    let raw: Vec<RawCatalogueEntry> = serde_json::from_slice(&bytes)
-        .map_err(|e| inv(format!("translations index parse: {e}")))?;
-
-    let sqlite_dir = std::path::Path::new(&settings.translations_sqlite_dir);
-    let base = sqlite_dir
-        .parent()
-        .ok_or_else(|| inv("translations_sqlite_dir has no parent"))?;
-
-    let mut out: Vec<CatalogueEntry> = Vec::with_capacity(raw.len());
-    for r in raw {
-        let rel = r.file.as_str();
-        invariant(!std::path::Path::new(rel).is_absolute(), || {
-            format!("catalogue entry {}: absolute file path '{rel}'", r.id)
-        })?;
-        invariant(!rel.split('/').any(|seg| seg == ".."), || {
-            format!("catalogue entry {}: file path '{rel}' contains '..'", r.id)
-        })?;
-        invariant(
-            rel.starts_with("sqlite/") && rel.ends_with(".sqlite"),
-            || {
-                format!(
-                    "catalogue entry {}: file path '{rel}' must be 'sqlite/<id>.sqlite'",
-                    r.id
-                )
-            },
-        )?;
-        let resolved = base.join(rel);
-        let file_bytes = match std::fs::read(&resolved) {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::warn!(
-                    id = %r.id,
-                    path = %resolved.display(),
-                    error = %e,
-                    "translation sqlite missing at boot; skipping catalogue entry (§3)"
-                );
-                continue;
-            }
-        };
-        out.push(CatalogueEntry {
-            id: r.id.into_boxed_str(),
-            language: r.language.into_boxed_str(),
-            language_code: r.language_code.into_boxed_str(),
-            direction: r.direction.into_boxed_str(),
-            name: r.name.into_boxed_str(),
-            translator: r.translator.map(|s| s.into_boxed_str()),
-            path: r.file.into_boxed_str(),
-            size_bytes: file_bytes.len() as u64,
-            sha256: file_sha256(&file_bytes).into_boxed_str(),
-        });
-    }
-    if out.is_empty() {
-        tracing::warn!(
-            "translation catalogue resolved zero entries; translation reads will 400 (§3)"
-        );
-    }
-    Ok(out.into_boxed_slice())
 }
 
 struct Marker {
@@ -629,8 +608,7 @@ mod tests {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
-            translations_index_path: format!("{base}/translations/index.min.json"),
-            translations_sqlite_dir: format!("{base}/translations/sqlite"),
+            translations_dir: format!("{base}/translations"),
             max_resident_translations: 8,
             max_resident_bytes: 48 * 1024 * 1024,
             translation_idle_ttl_secs: 1800,
@@ -786,16 +764,7 @@ mod tests {
             uthmani_path: tmp.join("u.sqlite").to_string_lossy().into_owned(),
             simple_clean_path: tmp.join("s.sqlite").to_string_lossy().into_owned(),
             metadata_xml_path: tmp.join("m.xml").to_string_lossy().into_owned(),
-            translations_index_path: concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../../db/quran/tanzil/translations/index.min.json"
-            )
-            .to_string(),
-            translations_sqlite_dir: concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../../db/quran/tanzil/translations/sqlite"
-            )
-            .to_string(),
+            translations_dir: tmp.to_string_lossy().into_owned(),
             max_resident_translations: 8,
             max_resident_bytes: 48 * 1024 * 1024,
             translation_idle_ttl_secs: 1800,
