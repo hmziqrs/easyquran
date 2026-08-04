@@ -29,7 +29,6 @@ const PRECACHE = Array.from(
     ...files,
     "/",
     "/app",
-    SHELL_ROUTE,
     `${base}/quran-meta/quran-data.json`,
   ]),
 );
@@ -194,6 +193,8 @@ async function precache(): Promise<void> {
         await cache.put(url, res);
       }),
     );
+    const shell = await fetch(SHELL_ROUTE, { cache: "no-cache" }).catch(() => null);
+    if (shell && shell.ok) await cache.put(SHELL_ROUTE, shell);
   } catch (err) {
     await caches.delete(APP_CACHE).catch(() => {});
     throw err;
