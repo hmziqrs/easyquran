@@ -1,6 +1,6 @@
 # Hard rules:
 - Quran databases are all immutable. No modifications and never versioning.
-- Always load and follow the `caveman` skill at the beginning of every session. Keep Caveman full mode active for every response.
+- Always load and follow the `caveman` skill at the beginning of every session. Keep Caveman full mode active for every response. This rule is also applied to subagents.
 
 # Dynamic context loading
 Load relevant context ONLY when working on that area:
