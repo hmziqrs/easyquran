@@ -1,4 +1,4 @@
-use crate::quran::store::{QuranStore, Script};
+use crate::quran::store::{Corpus, QuranMeta, QuranStore, Script};
 
 #[derive(serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -219,6 +219,63 @@ pub fn surah_text(
     })
 }
 
+/// Surah text for a translation source. Body-only: a translation has no basmala opener
+/// (verse 1 is content, not a prefix), so packaging is Absent and there is nothing to split.
+/// Reads from an arbitrary [`Corpus`] (translation pool) instead of the Arabic store; the
+/// Arabic [`surah_text`] above is untouched and its parity fixtures remain the guard.
+pub fn surah_text_translation(
+    meta: &QuranMeta,
+    corpus: &Corpus,
+    source_id: &str,
+    source_profile: &str,
+    surah: u16,
+) -> Result<QuranSurahTextDto, ViewError> {
+    if !(1..=114).contains(&surah) {
+        return Err(ViewError::InvalidSurah(surah));
+    }
+    let sura = meta.sura(surah).ok_or(ViewError::Locate(surah))?;
+    let mut verses = Vec::with_capacity(sura.ayas as usize);
+    for g in sura.start_global..=sura.end_global {
+        verses.push(
+            corpus
+                .verse(g)
+                .ok_or(ViewError::VerseMissing(g))?
+                .to_string(),
+        );
+    }
+    let normalization = normalization_translation(source_id, source_profile, surah)?;
+    Ok(QuranSurahTextDto {
+        source_id: normalization.source_id.clone(),
+        script: normalization.script.clone(),
+        verses,
+        normalization,
+    })
+}
+
+/// Body-only normalization for a translation: no opener detection (no basmala), scalars zero,
+/// packaging Absent. Translations do not carry a canonical-view profile, so `source_profile`
+/// is informational only (passed through for response-shape parity with Arabic).
+pub fn normalization_translation(
+    source_id: &str,
+    source_profile: &str,
+    surah: u16,
+) -> Result<SurahNormalizationDto, ViewError> {
+    if !(1..=114).contains(&surah) {
+        return Err(ViewError::InvalidSurah(surah));
+    }
+    Ok(SurahNormalizationDto {
+        surah,
+        source_id: source_id.to_string(),
+        script: source_id.to_string(),
+        source_profile: source_profile.to_string(),
+        packaging: OpenerPackagingDto::Absent,
+        opener_kind: OpenerKindDto::None,
+        opener_text: None,
+        opener_end_scalar: 0,
+        body_start_scalar: 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +288,10 @@ mod tests {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
+            translations_dir: format!("{base}/translations"),
+            max_resident_translations: 8,
+            max_resident_bytes: 48 * 1024 * 1024,
+            translation_idle_ttl_secs: 1800,
         }
     }
 

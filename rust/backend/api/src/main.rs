@@ -60,43 +60,40 @@ async fn build_mail_router(
             "none"
         }
         "cloudflare" => {
-            {
-                use ruxlog::services::mail::cloudflare::CloudflareMailProvider;
-                use secrecy::SecretString;
+            use ruxlog::services::mail::cloudflare::CloudflareMailProvider;
+            use secrecy::SecretString;
 
-                let account_id = env::var("CLOUDFLARE_EMAIL_ACCOUNT_ID")
-                    .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_ACCOUNT_ID");
-                let api_token = SecretString::from(
-                    env::var("CLOUDFLARE_EMAIL_API_TOKEN")
-                        .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_API_TOKEN"),
-                );
-                let webhook_secret = SecretString::from(
-                    env::var("CLOUDFLARE_EMAIL_WEBHOOK_SECRET").unwrap_or_default(),
-                );
-                let base_url = env::var("CLOUDFLARE_EMAIL_API_BASE_URL")
-                    .unwrap_or_else(|_| "https://api.cloudflare.com/client/v4".to_string());
-                let allowed = env::var("CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .map(|s| {
-                        s.split(',')
-                            .map(|x| x.trim().to_string())
-                            .collect::<Vec<_>>()
-                    });
-                let cf = CloudflareMailProvider::new(
-                    account_id,
-                    api_token,
-                    webhook_secret,
-                    base_url,
-                    from_address,
-                    from_name,
-                    http_client,
-                    allowed,
-                )
-                .expect("failed to build Cloudflare mail provider");
-                providers.insert("cloudflare".to_string(), std::sync::Arc::new(cf));
-                "cloudflare"
-            }
+            let account_id = env::var("CLOUDFLARE_EMAIL_ACCOUNT_ID")
+                .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_ACCOUNT_ID");
+            let api_token = SecretString::from(
+                env::var("CLOUDFLARE_EMAIL_API_TOKEN")
+                    .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_API_TOKEN"),
+            );
+            let webhook_secret =
+                SecretString::from(env::var("CLOUDFLARE_EMAIL_WEBHOOK_SECRET").unwrap_or_default());
+            let base_url = env::var("CLOUDFLARE_EMAIL_API_BASE_URL")
+                .unwrap_or_else(|_| "https://api.cloudflare.com/client/v4".to_string());
+            let allowed = env::var("CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .collect::<Vec<_>>()
+                });
+            let cf = CloudflareMailProvider::new(
+                account_id,
+                api_token,
+                webhook_secret,
+                base_url,
+                from_address,
+                from_name,
+                http_client,
+                allowed,
+            )
+            .expect("failed to build Cloudflare mail provider");
+            providers.insert("cloudflare".to_string(), std::sync::Arc::new(cf));
+            "cloudflare"
         }
         _ => {
             let transport = ruxlog::services::mail::smtp::create_connection().await;
@@ -138,12 +135,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     gate_store.restore(ruxlog::services::rate_limit_store::load(&sea_db).await);
     ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
 
-    let session_store =
-        Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
+    let session_store = Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
 
-    let revoked_sessions: std::sync::Arc<
-        std::sync::Mutex<std::collections::HashSet<String>>,
-    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+    let revoked_sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
 
     let object_storage = settings.object_storage.clone();
 
@@ -170,7 +165,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     let s3_client = aws_sdk_s3::Client::new(&s3_config);
-
 
     let http_client = ruxlog::state::build_http_client();
 
@@ -457,6 +451,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    let translation_pool = {
+        let qset = &settings.quran;
+        let catalogue_path = format!("{}/index.min.json", qset.translations_dir);
+        match ruxlog::quran::load_catalogue(&catalogue_path).await {
+            Ok(cat) => {
+                let count = cat.len();
+                let pool = ruxlog::quran::TranslationPool::new(
+                    &cat,
+                    std::path::PathBuf::from(&qset.translations_dir),
+                    qset.max_resident_translations,
+                    qset.max_resident_bytes,
+                    std::time::Duration::from_secs(qset.translation_idle_ttl_secs),
+                );
+                tracing::info!(
+                    translations = count,
+                    "Translation catalogue loaded; pool ready for on-demand reads"
+                );
+                std::sync::Arc::new(pool)
+            }
+            Err(err) => {
+                tracing::error!(
+                    error = %err,
+                    "Translation catalogue failed to load — refusing to boot (§4 fail-fast)"
+                );
+                std::process::exit(1);
+            }
+        }
+    };
+
     let state = AppState {
         sea_db,
         gate_store,
@@ -477,6 +500,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         webauthn: webauthn_service,
         quran: quran_store,
         quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+        translation_pool,
+        quran_sources: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     {
@@ -540,9 +565,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 route_blocker_config::set_sync_running(true);
                 let sync_start = chrono::Utc::now();
 
-                if let Err(err) =
-                    RouteBlockerService::initialize_cache(&state_for_blocker).await
-                {
+                if let Err(err) = RouteBlockerService::initialize_cache(&state_for_blocker).await {
                     tracing::error!(
                         error = %err,
                         "Periodic route blocker cache sync failed"
@@ -615,7 +638,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ip_source = settings.http.ip_source.clone();
 
     let private = router::router(state.clone())
-        .layer(middleware::from_fn(middlewares::client_ip::resolve_client_ip))
+        .layer(middleware::from_fn(
+            middlewares::client_ip::resolve_client_ip,
+        ))
         .layer(ip_source.clone().into_extension())
         .layer(axum::Extension(state.clone()))
         .layer(compression.clone())
@@ -624,7 +649,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
         .layer(cors)
-        .layer(middlewares::route_blocker::RouteBlockerLayer::new(state.clone()));
+        .layer(middlewares::route_blocker::RouteBlockerLayer::new(
+            state.clone(),
+        ));
 
     let quran = ruxlog::modules::quran_v1::routes()
         .merge(
@@ -637,12 +664,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public = router::with_observability(quran)
         .layer(compression)
         .layer(middlewares::rate_limit::rate_limit_layer_branch(
-            &state,
-            600,
-            60,
-            "quran-v1",
+            &state, 600, 60, "quran-v1",
         ))
-        .layer(middleware::from_fn(middlewares::client_ip::resolve_client_ip))
+        .layer(middleware::from_fn(
+            middlewares::client_ip::resolve_client_ip,
+        ))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(state.clone()))
         .layer(ruxlog::modules::quran_v1::cors::public_cors_layer());

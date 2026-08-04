@@ -27,6 +27,33 @@ impl Script {
     }
 }
 
+/// A translation source id (e.g. "en.sahih"). Constructed ONLY via [`TranslationId::parse`],
+/// which whitelists against the boot-loaded catalogue — that membership check IS the
+/// path-traversal guard: a raw user string carrying '/' or '..' can never match a real id.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TranslationId(Box<str>);
+
+impl TranslationId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn parse(s: &str, valid_ids: &std::collections::HashSet<String>) -> Option<Self> {
+        if valid_ids.contains(s) {
+            Some(Self(Box::from(s)))
+        } else {
+            None
+        }
+    }
+}
+
+/// Resolved source: an Arabic script (resident at boot) or a translation (on-demand pool).
+#[derive(Clone, Debug)]
+pub enum SourceId {
+    Arabic(Script),
+    Translation(TranslationId),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -106,8 +133,7 @@ impl Corpus {
     }
 
     pub fn joined_for_digest(&self) -> String {
-        let mut out =
-            String::with_capacity(self.arena.len() + VERSE_COUNT as usize);
+        let mut out = String::with_capacity(self.arena.len() + VERSE_COUNT as usize);
         for g in 1..=VERSE_COUNT {
             if g > 1 {
                 out.push('\n');
@@ -115,6 +141,11 @@ impl Corpus {
             out.push_str(self.verse(g).expect("verse in range"));
         }
         out
+    }
+
+    /// Resident byte cost: arena + offset table. Used by the translation-pool weigher.
+    pub fn bytes(&self) -> usize {
+        self.arena.len() + self.offsets.len() * 4
     }
 }
 
@@ -208,6 +239,22 @@ pub struct ArtifactFile {
 pub struct Artifacts {
     pub uthmani: ArtifactFile,
     pub simple_clean: ArtifactFile,
+}
+
+/// One row of the boot-loaded translation catalogue (the widened §2 `index.min.json`).
+/// Carries the sqlite digest + size so the API and the client never re-hash on the hot path.
+#[derive(Clone, Debug)]
+pub struct CatalogueEntry {
+    pub id: Box<str>,
+    pub language: Box<str>,
+    pub language_code: Box<str>,
+    pub direction: Box<str>,
+    pub name: Box<str>,
+    pub translator: Option<Box<str>>,
+    /// Catalogue-relative path, e.g. "sqlite/en.sahih.sqlite".
+    pub path: Box<str>,
+    pub size_bytes: u64,
+    pub sha256: Box<str>,
 }
 
 pub struct QuranMeta {

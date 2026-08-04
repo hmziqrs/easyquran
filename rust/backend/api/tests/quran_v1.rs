@@ -25,6 +25,10 @@ fn quran_settings() -> QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
         metadata_xml_path: format!("{base}/quran-data.xml"),
+        translations_dir: format!("{base}/translations"),
+        max_resident_translations: 8,
+        max_resident_bytes: 48 * 1024 * 1024,
+        translation_idle_ttl_secs: 1800,
     }
 }
 
@@ -90,8 +94,26 @@ async fn state_with_public_url(public_url: &str) -> AppState {
     };
     let billing_router = Arc::new(BillingRouter::new(
         HashMap::new(),
-        GeoRouter::new(GeoRulesConfig { default_provider: String::new(), rules: vec![] }),
+        GeoRouter::new(GeoRulesConfig {
+            default_provider: String::new(),
+            rules: vec![],
+        }),
     ));
+    let translation_pool = {
+        let qs = quran_settings();
+        let catalogue_path = format!("{}/index.min.json", qs.translations_dir);
+        let cat = ruxlog::quran::load_catalogue(&catalogue_path)
+            .await
+            .expect("translation catalogue loads");
+        Arc::new(ruxlog::quran::TranslationPool::new(
+            &cat,
+            std::path::PathBuf::from(&qs.translations_dir),
+            qs.max_resident_translations,
+            qs.max_resident_bytes,
+            std::time::Duration::from_secs(qs.translation_idle_ttl_secs),
+        ))
+    };
+
     AppState {
         sea_db,
         gate_store,
@@ -107,6 +129,8 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         webauthn: None,
         quran,
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
+        translation_pool,
+        quran_sources: Arc::new(tokio::sync::Mutex::new(None)),
     }
 }
 
@@ -116,12 +140,13 @@ async fn app() -> axum::Router {
 
 fn app_over(state: AppState) -> axum::Router {
     let ip_source = state.settings.http.ip_source.clone();
-    let quran = quran_v1::routes().merge(
-        quran_v1::search_route().layer(rate_limit::rate_limit_layer(&state, 1_000_000, 60)),
-    );
+    let quran = quran_v1::routes()
+        .merge(quran_v1::search_route().layer(rate_limit::rate_limit_layer(&state, 1_000_000, 60)));
     let public = with_observability(quran)
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(rate_limit::rate_limit_layer_branch(&state, 1_000_000, 60, "quran-v1"))
+        .layer(rate_limit::rate_limit_layer_branch(
+            &state, 1_000_000, 60, "quran-v1",
+        ))
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(state.clone()))
@@ -156,7 +181,9 @@ async fn full_app() -> axum::Router {
         .layer(axum::Extension(state.clone()))
         .layer(tower_http::compression::CompressionLayer::new())
         .layer(middleware::from_fn(ruxlog::middlewares::cors::origin_guard))
-        .layer(middleware::from_fn(ruxlog::middlewares::static_csrf::csrf_guard))
+        .layer(middleware::from_fn(
+            ruxlog::middlewares::static_csrf::csrf_guard,
+        ))
         .layer(session_layer)
         .layer(private_cors);
     let public = app_over_public(&state, ip_source);
@@ -166,14 +193,18 @@ async fn full_app() -> axum::Router {
         .with_state(state)
 }
 
-fn app_over_public(state: &AppState, ip_source: axum_client_ip::ClientIpSource) -> axum::Router<AppState> {
-    let quran = quran_v1::routes().merge(
-        quran_v1::search_route().layer(rate_limit::rate_limit_layer(state, 1_000_000, 60)),
-    )
-    .layer(middleware::from_fn(quran_v1::error::shape_routing_errors));
+fn app_over_public(
+    state: &AppState,
+    ip_source: axum_client_ip::ClientIpSource,
+) -> axum::Router<AppState> {
+    let quran = quran_v1::routes()
+        .merge(quran_v1::search_route().layer(rate_limit::rate_limit_layer(state, 1_000_000, 60)))
+        .layer(middleware::from_fn(quran_v1::error::shape_routing_errors));
     with_observability(quran)
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(rate_limit::rate_limit_layer_branch(state, 1_000_000, 60, "quran-v1"))
+        .layer(rate_limit::rate_limit_layer_branch(
+            state, 1_000_000, 60, "quran-v1",
+        ))
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(state.clone()))
@@ -260,11 +291,19 @@ async fn single_ayah_redirect_alias_and_400() {
 
     let resp = app()
         .await
-        .oneshot(Request::builder().uri("/quran/ayahs/2:255").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/quran/ayahs/2:255")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/quran/ayahs/2/255");
+    assert_eq!(
+        resp.headers().get(header::LOCATION).unwrap(),
+        "/quran/ayahs/2/255"
+    );
 
     assert_eq!(get("/quran/ayahs/abc").await.0, StatusCode::BAD_REQUEST);
 }
@@ -295,8 +334,14 @@ async fn ayahs_keys_and_global_range() {
 async fn script_param_default_and_validation() {
     let (_, _, h_uth) = get("/quran/ayahs/1/1").await;
     let (_, _, h_sc) = get("/quran/ayahs/1/1?script=simple-clean").await;
-    assert_ne!(h_uth.get(header::ETAG).unwrap(), h_sc.get(header::ETAG).unwrap());
-    assert_eq!(get("/quran/ayahs/1/1?script=bogus").await.0, StatusCode::BAD_REQUEST);
+    assert_ne!(
+        h_uth.get(header::ETAG).unwrap(),
+        h_sc.get(header::ETAG).unwrap()
+    );
+    assert_eq!(
+        get("/quran/ayahs/1/1?script=bogus").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -305,7 +350,10 @@ async fn unknown_query_param_rejected() {
         get("/quran/surahs/1/ayahs?bogus=1").await.0,
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(get("/quran/surahs/1?foo=1").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/surahs/1?foo=1").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -328,7 +376,12 @@ async fn method_not_allowed() {
 #[tokio::test]
 async fn conditional_get_returns_304() {
     let (_, _, headers) = get("/quran/surahs/1/ayahs").await;
-    let etag = headers.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+    let etag = headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let cc = headers
         .get(header::CACHE_CONTROL)
         .unwrap()
@@ -348,7 +401,10 @@ async fn conditional_get_returns_304() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
     assert_eq!(resp.headers().get(header::ETAG).unwrap(), etag.as_str());
-    assert_eq!(resp.headers().get(header::CACHE_CONTROL).unwrap(), cc.as_str());
+    assert_eq!(
+        resp.headers().get(header::CACHE_CONTROL).unwrap(),
+        cc.as_str()
+    );
     assert_eq!(resp.headers().get(header::VARY).unwrap(), "Accept-Encoding");
 }
 
@@ -371,7 +427,9 @@ async fn cors_preflight_wildcard_no_credentials() {
         .unwrap();
     assert!(resp.status().is_success());
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     assert!(resp
@@ -399,7 +457,9 @@ async fn cors_preflight_wildcard_no_credentials() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     let expose = resp
@@ -455,8 +515,14 @@ async fn random_date_is_immutable_cache() {
         .to_str()
         .unwrap()
         .contains("immutable"));
-    assert_eq!(get("/quran/random?date=2026-2-3").await.0, StatusCode::BAD_REQUEST);
-    assert_eq!(get("/quran/random?date=2026-02-30").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/random?date=2026-2-3").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        get("/quran/random?date=2026-02-30").await.0,
+        StatusCode::BAD_REQUEST
+    );
 }
 
 #[tokio::test]
@@ -471,7 +537,10 @@ async fn search_results_ordered_with_highlights_and_limits() {
     let mut prev: u64 = 0;
     for r in results {
         // Web decodeSearchHit rejects any hit whose kind is not "ayah" | "opener" and nulls the whole payload.
-        assert_eq!(r["kind"], "ayah", "every ayah hit carries the kind discriminator");
+        assert_eq!(
+            r["kind"], "ayah",
+            "every ayah hit carries the kind discriminator"
+        );
         let g = r["ayah"]["globalIndex"].as_u64().unwrap();
         assert!(g >= prev, "results not ascending by globalIndex");
         prev = g;
@@ -533,7 +602,9 @@ async fn cursor_pagination_page_two() {
     assert_eq!(ayahs[0]["globalIndex"], 301, "page 2 starts at global 301");
     assert_eq!(data(&body2)["range"]["nextCursor"], 601);
     assert_eq!(
-        get("/quran/ayahs?fromGlobal=1&toGlobal=7&cursor=999").await.0,
+        get("/quran/ayahs?fromGlobal=1&toGlobal=7&cursor=999")
+            .await
+            .0,
         StatusCode::BAD_REQUEST
     );
 }
@@ -542,7 +613,12 @@ async fn cursor_pagination_page_two() {
 async fn conditional_get_on_search_and_head_method() {
     let q = "%D8%A7%D9%84%D8%AD%D9%85%D8%AF";
     let (_, _, headers) = get(&format!("/quran/search?q={q}")).await;
-    let etag = headers.get(header::ETAG).unwrap().to_str().unwrap().to_owned();
+    let etag = headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let resp = app()
         .await
         .oneshot(
@@ -585,12 +661,12 @@ async fn cors_no_cookies_on_every_public_route() {
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/uthmani/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/simple-clean/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -608,10 +684,13 @@ async fn cors_no_cookies_on_every_public_route() {
         "/quran/sajdas", "/quran/sajdas/1",
         "/quran/scripts", "/quran/random", "/quran/health/ready",
         "/quran/sources/uthmani/surah/2", "/quran/sources/uthmani/range?from=1&to=7",
+        "/quran/sources",
         "/quran/openapi.json",
         "/quran/search?q=%D8%A7%D9%84%D8%AD%D9%85%D8%AF",
     ];
-    let route_count = include_str!("../src/modules/quran_v1/mod.rs").matches(".route(").count();
+    let route_count = include_str!("../src/modules/quran_v1/mod.rs")
+        .matches(".route(")
+        .count();
     assert_eq!(
         routes.len(),
         route_count,
@@ -636,12 +715,16 @@ async fn cors_no_cookies_on_every_public_route() {
             "{path} -> {status}"
         );
         assert_eq!(
-            resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
             "*",
             "{path} ACAO"
         );
         assert!(
-            resp.headers().get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS).is_none(),
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+                .is_none(),
             "{path} must not allow credentials"
         );
         assert!(
@@ -671,7 +754,10 @@ fn modules_quran_v1_has_no_sqlite_refs() {
     ];
     for (i, s) in srcs.iter().enumerate() {
         for b in banned {
-            assert!(!s.contains(b), "modules/quran_v1 file[{i}] references {b:?} (§10)");
+            assert!(
+                !s.contains(b),
+                "modules/quran_v1 file[{i}] references {b:?} (§10)"
+            );
         }
     }
 }
@@ -730,7 +816,9 @@ async fn phase_1a_auth_regression_on_merged_router() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        resp.headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .unwrap(),
         "*"
     );
     assert!(
@@ -751,13 +839,13 @@ async fn scripts_omits_failed_head_artifacts() {
 
     let cl_u = uthmani_size.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/uthmani/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     let cl_sc = (sc_size + 1).to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/simple-clean/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -776,9 +864,16 @@ async fn scripts_omits_failed_head_artifacts() {
     let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let scripts = body["data"]["scripts"].as_array().unwrap();
-    assert_eq!(scripts.len(), 1, "only the verified (uthmani) artifact remains");
+    assert_eq!(
+        scripts.len(),
+        1,
+        "only the verified (uthmani) artifact remains"
+    );
     assert_eq!(scripts[0]["id"], "uthmani");
-    assert!(scripts[0]["downloadUrl"].as_str().unwrap().ends_with(".sqlite"));
+    assert!(scripts[0]["downloadUrl"]
+        .as_str()
+        .unwrap()
+        .ends_with(".sqlite"));
 }
 
 #[tokio::test]
@@ -791,12 +886,12 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/uthmani/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/simple-clean/.*"))
+        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -819,14 +914,25 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let scripts = body["data"]["scripts"].as_array().unwrap();
-    assert_eq!(scripts.len(), 2, "happy path advertises exactly both artifacts");
+    assert_eq!(
+        scripts.len(),
+        2,
+        "happy path advertises exactly both artifacts"
+    );
     let ids: Vec<&str> = scripts.iter().map(|s| s["id"].as_str().unwrap()).collect();
     assert!(ids.contains(&"uthmani"), "uthmani advertised");
     assert!(ids.contains(&"simple-clean"), "simple-clean advertised");
     for s in scripts {
-        assert!(
-            s["downloadUrl"].as_str().unwrap().ends_with(".sqlite"),
-            "download URL points at the artifact, not its bytes"
+        let id = s["id"].as_str().unwrap();
+        let filename = match id {
+            "uthmani" => "quran-uthmani.sqlite",
+            "simple-clean" => "quran-simple-clean.sqlite",
+            other => panic!("unexpected script id: {other}"),
+        };
+        assert_eq!(
+            s["downloadUrl"].as_str().unwrap(),
+            format!("{}/tanzil/arabic/{filename}", server.uri()),
+            "downloadUrl must match publisher R2 key tanzil/arabic/<file>.sqlite (upload-sqlite.ts PREFIX)"
         );
     }
     assert_eq!(
@@ -851,7 +957,10 @@ async fn range_out_of_bounds_is_400_not_clamped() {
         get("/quran/juzs/1/ayahs?from=1&to=9999").await.0,
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(get("/quran/surahs/2/ayahs?from=1&to=3").await.0, StatusCode::OK);
+    assert_eq!(
+        get("/quran/surahs/2/ayahs?from=1&to=3").await.0,
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -914,9 +1023,13 @@ async fn search_respects_limit_offset_and_is_stable() {
 
     if keys1.len() > 1 {
         let (_, bo, _) = get(&format!("/quran/search?q={q}&limit=5&offset=1")).await;
-        let first_at_offset =
-            data(&bo)["results"].as_array().unwrap()[0]["ayah"]["key"].as_str().unwrap();
-        assert_eq!(first_at_offset, keys1[1], "offset=1 begins at the 2nd base hit");
+        let first_at_offset = data(&bo)["results"].as_array().unwrap()[0]["ayah"]["key"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            first_at_offset, keys1[1],
+            "offset=1 begins at the 2nd base hit"
+        );
     }
 }
 
@@ -962,7 +1075,231 @@ async fn web_compatible_read_endpoints() {
     assert!(norms.iter().any(|n| n["surah"].as_u64() == Some(1)));
     assert!(norms.iter().any(|n| n["surah"].as_u64() == Some(2)));
 
-    assert_eq!(get("/quran/sources/bogus/surah/2").await.0, StatusCode::BAD_REQUEST);
-    assert_eq!(get("/quran/sources/uthmani/surah/115").await.0, StatusCode::NOT_FOUND);
-    assert_eq!(get("/quran/sources/uthmani/range?from=1&to=6236").await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        get("/quran/sources/bogus/surah/2").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        get("/quran/sources/uthmani/surah/115").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get("/quran/sources/uthmani/range?from=1&to=6236").await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn translation_surah_serves_text_with_absent_packaging() {
+    let (st, body, _) = get("/quran/sources/en.sahih/surah/2").await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    let verses = d["verses"].as_array().expect("verses");
+    assert!(!verses.is_empty(), "translation carries verses");
+    // Body-only: a translation verse 1 is content, not a basmala opener.
+    assert_eq!(d["normalization"]["packaging"], "absent");
+    assert_eq!(d["normalization"]["openerKind"], "none");
+    assert_eq!(d["normalization"]["openerEndScalar"], 0);
+    assert_eq!(d["normalization"]["bodyStartScalar"], 0);
+    assert_eq!(d["sourceId"], "en.sahih");
+}
+
+#[tokio::test]
+async fn translation_range_serves_lean_ayahs_and_absent_normalization() {
+    let (st, body, _) = get("/quran/sources/en.sahih/range?from=1&to=7").await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    assert_eq!(d["ayahs"].as_array().unwrap().len(), 7);
+    let norms = d["normalizations"].as_array().unwrap();
+    assert_eq!(norms.len(), 1);
+    assert_eq!(norms[0]["packaging"], "absent");
+}
+
+#[tokio::test]
+async fn translation_source_rejects_unknown_and_traversal() {
+    // Unknown id -> 400.
+    assert_eq!(
+        get("/quran/sources/nope/surah/2").await.0,
+        StatusCode::BAD_REQUEST
+    );
+    // Path-traversal payloads must never resolve to a real translation or a 200
+    // (the catalogue-whitelist membership check is the traversal guard).
+    let trav = get("/quran/sources/..%2Fquran-uthmani/surah/1").await.0;
+    assert!(
+        trav.is_client_error() || trav == StatusCode::NOT_FOUND,
+        "traversal not allowed: {trav}"
+    );
+    let trav2 = get("/quran/sources/en.sahih%2F..%2Ffoo/surah/1").await.0;
+    assert!(
+        trav2.is_client_error() || trav2 == StatusCode::NOT_FOUND,
+        "traversal not allowed: {trav2}"
+    );
+}
+
+#[tokio::test]
+async fn arabic_and_translation_sources_carry_distinct_etags() {
+    let (st_a, _, hdr_a) = get("/quran/sources/uthmani/surah/1").await;
+    assert_eq!(st_a, StatusCode::OK);
+    let (st_t, _, hdr_t) = get("/quran/sources/en.sahih/surah/1").await;
+    assert_eq!(st_t, StatusCode::OK);
+    let etag_a = hdr_a.get("etag").unwrap().to_str().unwrap();
+    let etag_t = hdr_t.get("etag").unwrap().to_str().unwrap();
+    assert_ne!(
+        etag_a, etag_t,
+        "translation must not share the uthmani ETag"
+    );
+    assert!(
+        etag_t.contains("tanzil-en.sahih-"),
+        "translation etag derived from catalogue sha: {etag_t}"
+    );
+}
+
+async fn mount_green_sources_heads(state: &AppState, server: &wiremock::MockServer) -> usize {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let mut n = 0usize;
+    for (file, filename) in [
+        (&state.quran.artifacts.uthmani, "quran-uthmani.sqlite"),
+        (
+            &state.quran.artifacts.simple_clean,
+            "quran-simple-clean.sqlite",
+        ),
+    ] {
+        let cl = file.size_bytes.to_string();
+        Mock::given(method("HEAD"))
+            .and(path(format!("/tanzil/arabic/{filename}")))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
+            .mount(server)
+            .await;
+        n += 1;
+    }
+    for (_id, e) in state.translation_pool.catalogue() {
+        let cl = e.size_bytes.to_string();
+        Mock::given(method("HEAD"))
+            .and(path(format!("/tanzil/translations/{}", e.path)))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
+            .mount(server)
+            .await;
+        n += 1;
+    }
+    n
+}
+
+#[tokio::test]
+async fn sources_lists_all_sources_with_verified_download_urls() {
+    use wiremock::MockServer;
+    let server = MockServer::start().await;
+    let state = state_with_public_url(&server.uri()).await;
+    let total = mount_green_sources_heads(&state, &server).await;
+
+    let app = app_over(state);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/quran/sources")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cc = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .map(|v| v.to_str().unwrap().to_string());
+    let bytes = to_bytes(resp.into_body(), 4 * 1024 * 1024).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let sources = body["data"]["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), total, "every source HEAD-verified");
+
+    let by_id: std::collections::HashMap<&str, &serde_json::Value> = sources
+        .iter()
+        .map(|s| (s["id"].as_str().unwrap(), s))
+        .collect();
+    // Arabic entry shape + URL (guards the §1 tanzil/arabic layout).
+    let u = by_id["uthmani"];
+    assert_eq!(u["kind"], "arabic");
+    assert_eq!(u["languageCode"], "ar");
+    assert_eq!(u["direction"], "rtl");
+    assert!(u["translator"].is_null(), "Arabic has no translator");
+    assert!(u["downloadUrl"]
+        .as_str()
+        .unwrap()
+        .ends_with("/tanzil/arabic/quran-uthmani.sqlite"));
+    // Translation entry shape + URL (R2 layout tanzil/translations/sqlite/<id>.sqlite).
+    let t = by_id["en.sahih"];
+    assert_eq!(t["kind"], "translation");
+    assert_eq!(t["languageCode"], "en");
+    assert!(t["translator"].as_str().is_some());
+    assert!(t["downloadUrl"]
+        .as_str()
+        .unwrap()
+        .ends_with("/tanzil/translations/sqlite/en.sahih.sqlite"));
+    assert_eq!(
+        cc.as_deref(),
+        Some(ruxlog::modules::quran_v1::cache::ARABIC_CACHE)
+    );
+}
+
+#[tokio::test]
+async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    let server = MockServer::start().await;
+    let state = state_with_public_url(&server.uri()).await;
+    // Green for Arabic + all translations EXCEPT one (wrong content-length).
+    for (file, filename) in [
+        (&state.quran.artifacts.uthmani, "quran-uthmani.sqlite"),
+        (
+            &state.quran.artifacts.simple_clean,
+            "quran-simple-clean.sqlite",
+        ),
+    ] {
+        let cl = file.size_bytes.to_string();
+        Mock::given(method("HEAD"))
+            .and(path(format!("/tanzil/arabic/{filename}")))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
+            .mount(&server)
+            .await;
+    }
+    let mut first = true;
+    for (_id, e) in state.translation_pool.catalogue() {
+        let size = if first {
+            first = false;
+            e.size_bytes + 1
+        } else {
+            e.size_bytes
+        };
+        let cl = size.to_string();
+        Mock::given(method("HEAD"))
+            .and(path(format!("/tanzil/translations/{}", e.path)))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
+            .mount(&server)
+            .await;
+    }
+
+    let app = app_over(state);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/quran/sources")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cc = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .map(|v| v.to_str().unwrap().to_string());
+    let bytes = to_bytes(resp.into_body(), 4 * 1024 * 1024).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let sources = body["data"]["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 116, "exactly one translation omitted");
+    assert_eq!(
+        cc.as_deref(),
+        Some(ruxlog::modules::quran_v1::cache::NO_STORE),
+        "partial upstream must be no-store, not a cached truncation"
+    );
 }

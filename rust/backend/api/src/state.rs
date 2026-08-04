@@ -34,8 +34,7 @@ pub struct AppState {
     pub sea_db: DatabaseConnection,
     pub gate_store: std::sync::Arc<rux_request_gate::InMemoryStore>,
     pub session_store: std::sync::Arc<SqliteSessionStore>,
-    pub revoked_sessions:
-        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+    pub revoked_sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     pub mailer: std::sync::Arc<crate::services::mail::MailRouter>,
     pub settings: std::sync::Arc<Settings>,
     pub storage: StorageState,
@@ -47,6 +46,9 @@ pub struct AppState {
     pub quran: std::sync::Arc<crate::quran::QuranStore>,
     pub quran_scripts:
         std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::Artifact>>>>,
+    pub translation_pool: std::sync::Arc<crate::quran::TranslationPool>,
+    pub quran_sources:
+        std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::SourceDto>>>>,
 }
 
 impl FromRef<AppState> for AuthBackend {
