@@ -63,7 +63,7 @@ One rule set, two implementations (Rust + web Worker) that must return identical
 - Global Mushaf page `1..604`. Surah-local page = a global page clipped to one surah, renumbered from 1 within that surah (662 total). Juz `1..30`.
 - Routes: `/app/<surah>` (local page 1), `/app/<surah>/page/<localPage>` (>1), `/app/page/<globalPage>`, `/app/juz/<n>`. All SSG-prerendered.
 
-**Ayah → page — computed internally, never stored:** `surahLocalPageForAyah(surah, ayah)` returns `{ localPage, globalPage }` for any ayah. A deep link `/app/<surah>#ayah-<surah>-<ayah>` resolves to the containing local page; if it is not the prerendered one, the client redirects (`replaceState`, no scroll jump) to `/app/<surah>/page/<localPage>#ayah-…`, scrolls the ayah into view, and highlights it.
+**Ayah → page — computed internally, never stored:** `surahLocalPageForAyah(surah, ayah)` returns `{ localPage, globalPage }` for any ayah. A deep link `/app/<surah>#ayah-<surah>-<ayah>` resolves to the containing local page; if it is not the prerendered one, the client redirects (`replaceState`, no scroll jump) to `/app/<surah>/page/<localPage>#ayah-…`, scrolls the exact ayah to a stable centered position (small-screen safe), and highlights it.
 
 **Word → page:** a word lives inside an ayah, so word navigation reuses ayah navigation (same page) with a finer in-ayah highlight. Page math is unchanged; a word-offset hash grammar is future work.
 
