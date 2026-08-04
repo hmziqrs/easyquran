@@ -9,10 +9,13 @@
     parseKey,
     surahAyahPath,
     surahLocalPagePath,
+    translationSegmentsFromId,
+    translationSurahPath,
     type SurahLocalPageData,
     type SurahLocalPageLink,
     type SurahLink,
   } from "$lib/data/quran";
+  import { isArabicSourceId } from "$lib/data/quran-types";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
@@ -92,6 +95,13 @@
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
+  const sourceId = $derived(initial.normalization.sourceId);
+  const isTranslationSource = $derived(!isArabicSourceId(sourceId));
+  function pagePathFor(localPage: number): `/app/${string}` {
+    if (!isTranslationSource) return surahLocalPagePath(initial.surah, localPage);
+    const { lang, translator } = translationSegmentsFromId(sourceId);
+    return translationSurahPath(initial.surah.slug, lang, translator, localPage);
+  }
   const renderedPageNumbers = $derived.by(
     () =>
       new Set(
@@ -327,8 +337,6 @@
       parseHistoryState(appPage.state.surahReader, initial.surah.num) ??
       reloadPositionState(initial);
     if (!saved) return;
-    // Restoring scrolls the window, which must not be mistaken for the reader
-    // having been scrolled by the user.
     suppressScroll = true;
     try {
       await restoreHistoryFrom(saved);
@@ -399,6 +407,7 @@
         pageDataRange.startGlobal,
         pageDataRange.endGlobal,
         (globalIndex, surah, ayah) => quranData.globalIndexOf(surah, ayah) === globalIndex,
+        isTranslationSource ? sourceId : undefined,
       );
       const normalization = range.normalizations.find(
         (value) => value.surah === initial.surah.num,
@@ -453,7 +462,7 @@
     const pageData = pages.find((item) => item.page.localPage === localPage);
     if (pageData) onVisiblePage?.(pageData);
     markAnchorRead(anchor !== undefined ? anchor : captureAnchor());
-    writeHistoryState(resolve(surahLocalPagePath(initial.surah, localPage)), localPage);
+    writeHistoryState(resolve(pagePathFor(localPage)), localPage);
   }
 
   function updateVisiblePage(anchor: ViewportAnchor | null = null): void {
@@ -469,8 +478,6 @@
 
   function processScroll(direction: number): void {
     scrollFrame = 0;
-    // Anchoring and restores move the window themselves; they must not be
-    // treated as reading progress, but load-ahead below still applies.
     if (suppressScroll || anchorScrolling) {
       stableAnchor = captureAnchor();
     } else {
@@ -492,8 +499,6 @@
     if (suppressScroll || anchorScrolling) {
       lastScrollY = currentY;
       stableAnchor = captureAnchor();
-      // An anchor scroll can land at the end of what is loaded, so keep filling
-      // forward — otherwise the target cannot be centred until the user scrolls.
       scheduleForwardFill();
       return;
     }
@@ -509,9 +514,6 @@
     return window.scrollY >= document.documentElement.scrollHeight - window.innerHeight - 1;
   }
 
-  // Scroll events alone cannot be trusted as "the user read this" — restores,
-  // anchoring and SvelteKit's own navigation scrolling all fire them. Marking a
-  // verse read requires a real input first.
   function onUserInput(): void {
     sawUserInput = true;
   }

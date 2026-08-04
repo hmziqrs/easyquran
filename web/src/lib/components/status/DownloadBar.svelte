@@ -1,7 +1,7 @@
 <script lang="ts">
   import { quran } from "$lib/stores/quran.svelte";
   import { QURAN } from "$lib/config/site";
-  import { QuranScript } from "$lib/data/quran-types";
+  import { isArabicSourceId, QuranScript } from "$lib/data/quran-types";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
 
   const SCRIPT_LABELS: Readonly<Record<QuranScript, string>> = {
@@ -9,6 +9,7 @@
     [QuranScript.SimpleClean]: "Simple-clean",
     [QuranScript.IndoPak]: "IndoPak",
     [QuranScript.Tajweed]: "Tajweed",
+    [QuranScript.Translation]: "Translation",
   };
 
   const sizeOf = new Map(QURAN.scripts.map((s) => [s.id, s.sizeBytes]));
@@ -17,6 +18,9 @@
   function overallFraction(): number | null {
     const d = quran.download;
     if (!d) return null;
+    if (!isArabicSourceId(d.script)) {
+      return d.total > 0 ? Math.min(1, d.loaded / d.total) : null;
+    }
     let acc = 0;
     for (const s of QURAN.scripts) {
       if (s.id === d.script) {
@@ -32,7 +36,11 @@
   const frac = $derived(overallFraction());
   const pct = $derived(frac == null ? 0 : Math.round(frac * 100));
   const label = $derived(
-    quran.download ? SCRIPT_LABELS[sourceProfile(quran.download.script).script] : "",
+    quran.download
+      ? isArabicSourceId(quran.download.script)
+        ? SCRIPT_LABELS[sourceProfile(quran.download.script).script]
+        : SCRIPT_LABELS[QuranScript.Translation]
+      : "",
   );
 </script>
 

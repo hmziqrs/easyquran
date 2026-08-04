@@ -1,4 +1,9 @@
-import type { CanonicalQuranCoordinates, DownloadProgress } from "$lib/data/quran-types";
+import type {
+  CanonicalQuranCoordinates,
+  DownloadProgress,
+  QuranReaderSource,
+  SourceCatalogueEntry,
+} from "$lib/data/quran-types";
 import type { ResolvedManifest } from "./manifest";
 import type { SearchOpts } from "./search/types";
 
@@ -10,9 +15,10 @@ export type WorkerRequest =
       type: "init";
       manifest: ResolvedManifest;
       coordinates: CanonicalQuranCoordinates;
+      catalogue?: SourceCatalogueEntry[];
     }
-  | { id: number; type: "readSurah"; num: number }
-  | { id: number; type: "readRange"; from: number; to: number }
+  | { id: number; type: "readSurah"; num: number; source?: QuranReaderSource }
+  | { id: number; type: "readRange"; from: number; to: number; source?: QuranReaderSource }
   | { id: number; type: "search"; query: string; opts?: SearchOpts }
   | { id: number; type: "ping" };
 

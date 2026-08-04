@@ -1,7 +1,13 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { surahPath } from "$lib/data/quran";
+  import { page } from "$app/state";
+  import {
+    surahPath,
+    translationGlobalPagePath,
+    translationJuzPath,
+    translationSurahPath,
+  } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { RangePageData } from "$lib/data/quran-types";
@@ -16,21 +22,32 @@
     return data.surahs.find((surah) => surah.num === num)!;
   }
 
+  const translation = $derived.by<{ lang: string; translator: string } | null>(() => {
+    const m = /^\/app\/t\/([^/]+)\/([^/]+)\/(?:page|juz)\//.exec(page.url.pathname);
+    return m ? { lang: m[1]!, translator: m[2]! } : null;
+  });
+
   function openSurah(num: number): void {
-    void goto(resolve(surahPath(surahByNum(num))));
+    const surah = surahByNum(num);
+    const target = translation
+      ? translationSurahPath(surah.slug, translation.lang, translation.translator)
+      : surahPath(surah);
+    void goto(resolve(target));
   }
 
   const MAX = $derived(data.kind === "juz" ? 30 : 604);
   const kindLabel = $derived(data.kind === "juz" ? "Juz" : "Page");
-  function rangePath(
-    kind: RangePageData["kind"],
-    index: number,
-  ): `/app/${RangePageData["kind"]}/${number}` {
+  function rangeHref(kind: RangePageData["kind"], index: number): `/app/${string}` {
+    if (translation) {
+      return kind === "juz"
+        ? translationJuzPath(translation.lang, translation.translator, index)
+        : translationGlobalPagePath(translation.lang, translation.translator, index);
+    }
     return `/app/${kind}/${index}`;
   }
 
-  const prevHref = $derived(data.index > 1 ? rangePath(data.kind, data.index - 1) : null);
-  const nextHref = $derived(data.index < MAX ? rangePath(data.kind, data.index + 1) : null);
+  const prevHref = $derived(data.index > 1 ? rangeHref(data.kind, data.index - 1) : null);
+  const nextHref = $derived(data.index < MAX ? rangeHref(data.kind, data.index + 1) : null);
 </script>
 
 <div class="flex flex-col gap-4">

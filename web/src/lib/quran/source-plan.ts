@@ -1,14 +1,26 @@
-import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "../data/quran-types.ts";
+import {
+  QuranSourceId,
+  type QuranReaderSource,
+  type QuranSourceId as QuranSourceIdValue,
+} from "../data/quran-types.ts";
 
 export interface QuranSourcePlan {
-  readonly reader: QuranSourceIdValue;
+  readonly reader: QuranReaderSource;
   readonly search: {
     readonly match: QuranSourceIdValue;
     readonly display: QuranSourceIdValue;
   };
 }
 
-export const DEFAULT_QURAN_SOURCE_PLAN: QuranSourcePlan = Object.freeze({
+type ArabicQuranSourcePlan = {
+  readonly reader: QuranSourceIdValue;
+  readonly search: {
+    readonly match: QuranSourceIdValue;
+    readonly display: QuranSourceIdValue;
+  };
+};
+
+export const DEFAULT_QURAN_SOURCE_PLAN: ArabicQuranSourcePlan = Object.freeze({
   reader: QuranSourceId.TanzilUthmani,
   search: Object.freeze({
     match: QuranSourceId.TanzilSimpleClean,
@@ -16,6 +28,8 @@ export const DEFAULT_QURAN_SOURCE_PLAN: QuranSourcePlan = Object.freeze({
   }),
 });
 
-export function plannedSourceIds(plan: QuranSourcePlan): QuranSourceIdValue[] {
+export function plannedSourceIds<P extends QuranSourcePlan>(
+  plan: P,
+): (P["reader"] | P["search"]["match"] | P["search"]["display"])[] {
   return [...new Set([plan.reader, plan.search.match, plan.search.display])];
 }

@@ -7,6 +7,9 @@
     surahMeta,
     surahPath,
     parseKey,
+    translationSurahPath,
+    translationJuzPath,
+    translationGlobalPagePath,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind } from "$lib/data/quran-data";
@@ -25,6 +28,7 @@
     useSidebar,
   } from "$lib/components/ui/sidebar";
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
+  import TranslationPicker from "./TranslationPicker.svelte";
 
   const BROWSE = ["surah", "ayah", "juz", "page"] as const;
   const sidebar = useSidebar();
@@ -55,6 +59,26 @@
       const current = quranData.surahBySlug(page.params.surah as string);
       if (current) void reader.refreshFromWorker(current.num);
     });
+  }
+
+  const translation = $derived.by<{ lang: string; translator: string } | null>(() => {
+    const m = /^\/app\/(?:[^/]+\/t\/|t\/)([^/]+)\/([^/]+)(?:\/|$)/.exec(page.url.pathname);
+    return m ? { lang: m[1]!, translator: m[2]! } : null;
+  });
+
+  function surahHref(slug: string): `/app/${string}` {
+    return translation
+      ? translationSurahPath(slug, translation.lang, translation.translator)
+      : surahPath(slug);
+  }
+
+  function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
+    if (translation) {
+      return useJuz
+        ? translationJuzPath(translation.lang, translation.translator, index)
+        : translationGlobalPagePath(translation.lang, translation.translator, index);
+    }
+    return `/app/${useJuz ? "juz" : "page"}/${index}`;
   }
 </script>
 
@@ -130,7 +154,7 @@
                       {#snippet child({ props })}
                         <a
                           {...props}
-                          href={resolve(surahPath(s))}
+                          href={resolve(surahHref(s.slug))}
                           data-sveltekit-preload-data="hover"
                           onclick={onItemClick}
                         >
@@ -171,11 +195,7 @@
                           {#snippet child({ props })}
                             <a
                               {...props}
-                              href={resolve(
-                                localPage
-                                  ? surahAyahPath(cur, localPage.localPage, n)
-                                  : surahPath(cur, n),
-                              )}
+                              href={resolve(surahAyahPath(cur, localPage?.localPage ?? 1, n))}
                               data-sveltekit-preload-data="hover"
                               onclick={onItemClick}
                             >
@@ -216,9 +236,7 @@
                 {#snippet item(i)}
                   {@const rg = ranges[i]}
                   {@const { num, n } = parseKey(rg.first)}
-                  {@const href = resolve(
-                    `/app/${reader.browseJuz ? "juz" : "page"}/${rg.index}`,
-                  )}
+                  {@const href = resolve(rangeHref(reader.browseJuz, rg.index))}
                   <SidebarMenuItem>
                     <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
                       {#snippet child({ props })}
@@ -253,6 +271,7 @@
   </SidebarContent>
 
   <SidebarFooter>
+    <TranslationPicker />
     <span class="px-1 text-[11px] text-fg-3">Tip: press Ctrl+K to search</span>
   </SidebarFooter>
 </Sidebar>

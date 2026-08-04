@@ -5,8 +5,10 @@
   import { page } from "$app/state";
   import { Seo } from "$lib/components";
   import {
+    QuranScript,
     surahAyahPath,
     surahLocalPagePath,
+    translationSegmentsFromId,
     type SurahRouteData,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
@@ -30,8 +32,15 @@
   const seoTitle = $derived(
     `Surah ${surah.num}, ${surah.name}${pageSuffix} · EasyQuran`,
   );
+  const normalization = $derived(data.pageData.normalization);
+  const isTranslation = $derived(normalization.script === QuranScript.Translation);
+  const contentLanguage = $derived(
+    isTranslation ? translationSegmentsFromId(normalization.sourceId).lang : "ar",
+  );
   const seoDescription = $derived(
-    `Read Surah ${surah.name} (${surah.arabic}), page ${activeLocalPage} of ${data.pageData.pageCount}, ayahs ${activePage.page.startAyah}–${activePage.page.endAyah}, in the Uthmani script.`,
+    `Read Surah ${surah.name} (${surah.arabic}), page ${activeLocalPage} of ${data.pageData.pageCount}, ayahs ${activePage.page.startAyah}–${activePage.page.endAyah}${
+      isTranslation ? "" : ", in the Uthmani script."
+    }.`,
   );
   const chapterLd = $derived([
     {
@@ -40,8 +49,8 @@
       name: `Surah ${surah.name}`,
       alternateName: surah.arabic,
       position: surah.num,
-      inLanguage: "ar",
-      isPartOf: { "@type": "Book", name: "The Quran", inLanguage: "ar" },
+      inLanguage: contentLanguage,
+      isPartOf: { "@type": "Book", name: "The Quran", inLanguage: contentLanguage },
     },
   ]);
 
@@ -60,7 +69,6 @@
     const id = `ayah-${surah.num}-${ayah}`;
     await tick();
     await document.fonts.ready;
-    // The row can still be a virtual spacer for a frame or two after the page mounts.
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await nextFrame();
       const row = document.getElementById(id);
@@ -80,8 +88,6 @@
         await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
         return;
       }
-      // Already on the right page: rewrite the URL in place (dropping any legacy
-      // ?verse) so the route key stays stable and this mount does the scrolling.
       if (page.url.href !== new URL(targetHref, page.url).href) {
         replaceState(targetHref, page.state);
       }
@@ -91,8 +97,6 @@
         return;
       }
       const target = row.querySelector<HTMLElement>("[data-verse-anchor]") ?? row;
-      // Centering can be clamped by a document that is still growing (adjacent
-      // pages load lazily), so keep re-centering until the height settles.
       const start = performance.now();
       let lastHeight = -1;
       let stableFrames = 0;
@@ -103,8 +107,6 @@
         lastHeight = height;
         const elapsed = performance.now() - start;
         if (elapsed > 700) break;
-        // Adjacent pages arrive a few hundred ms in, so hold on past the first
-        // few stable frames before trusting the layout.
         if (stableFrames >= 3 && elapsed >= 320) break;
         await nextFrame();
       }
@@ -121,8 +123,6 @@
     reader.setCurrent(surah.num);
   });
 
-  // Re-runs on every URL change, so hash navigation within the same surah page
-  // reveals too — onMount alone never fires again without a route-key change.
   $effect(() => {
     const ayah = requestedAyah();
     if (ayah === null) {
