@@ -298,6 +298,16 @@ function decodeTranslationCatalogueEntry(
   };
 }
 
+function decodeArabicCatalogueSpec(rec: Record<string, unknown>): ArtifactSpec | null {
+  const id = rec.id;
+  if (!isQuranSourceId(id)) return null;
+  const sizeBytes = positiveInteger(rec.sizeBytes);
+  const downloadUrl =
+    typeof rec.downloadUrl === "string" && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
+  if (sizeBytes === null || downloadUrl === null) return null;
+  return { id, sizeBytes, downloadUrl };
+}
+
 function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
   const rec = asRecord(raw);
   if (!rec) return null;
@@ -307,10 +317,10 @@ function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
     return entry ? { kind: "translation", entry } : null;
   }
   if (kind === "arabic") {
-    const spec = decodeScript(rec);
+    const spec = decodeArabicCatalogueSpec(rec);
     return spec ? { kind: "arabic", spec } : null;
   }
-  const spec = decodeScript(rec);
+  const spec = decodeArabicCatalogueSpec(rec);
   if (spec) return { kind: "arabic", spec };
   const entry = decodeTranslationCatalogueEntry(rec);
   return entry ? { kind: "translation", entry } : null;

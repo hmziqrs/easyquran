@@ -66,7 +66,6 @@ export interface IndexFile {
   translations: Translation[];
 }
 
-/** minimal entry — what index.min.json (and the web's positional catalogue) holds */
 export interface MinTranslation {
   id: string;
   language: string;
@@ -74,13 +73,6 @@ export interface MinTranslation {
   direction: "rtl" | "ltr";
   name: string;
   translator: string;
-  /**
-   * Delivery artifact, catalogue-relative: the per-translation SQLite build (never the raw
-   * MySQL dump). `sizeBytes` is sourced from sqlite/manifest.json (sql-to-sqlite.ts writes
-   * it). No digest here — a db's identity is its id (DBs are immutable); the sha256 that
-   * verify.ts checks lives in index.json + sqlite/manifest.json (build/repo-only), not in
-   * this published catalogue.
-   */
   file: { path: string; sizeBytes: number };
 }
 
@@ -270,12 +262,6 @@ export function buildIndex(items: PageItem[]): IndexFile {
   };
 }
 
-/**
- * Build the minimal catalogue. Each entry's `file` is widened with the sqlite
- * sizeBytes drawn from the manifest map (keyed by id); if an id is absent the
- * caller hasn't run `pnpm build:sqlite` — fail hard. No sha256: a db's identity
- * is its id; the build-time digest stays in index.json + sqlite/manifest.json.
- */
 export function minFromIndex(
   index: IndexFile,
   sqlite: Map<string, SqliteDigest>,
@@ -299,19 +285,6 @@ export function minFromIndex(
   });
 }
 
-/**
- * Positional encoding for the web's baked catalogue
- * (web/src/lib/data/translations.json). Mirrors the flat-row layout of
- * web/static/quran-meta/quran-data.json: object keys become array indices.
- * sha256 is deliberately omitted — the web cache is id-keyed (DBs are
- * immutable), so the digest has no business in the baked catalogue.
- *
- * Field order is the contract with the web decoder (TranslationField in
- * web/src/lib/quran/catalogue.ts); changing it here is a breaking change that
- * must ship with a matching decoder edit.
- *
- *   [id, language, languageCode, direction, name, translator, filePath, sizeBytes]
- */
 export function minToPositional(min: readonly MinTranslation[]): unknown[][] {
   return min.map((t) => [
     t.id,
@@ -332,12 +305,6 @@ function webTarget(): string {
   return DEFAULT_WEB_TARGET;
 }
 
-/**
- * Write index.min.json (object form — Rust's load_catalogue reads it at boot)
- * and, unless web:false, the web's baked catalogue at the web target. Both are
- * sha256-free (a db's identity is its id); they differ only in shape — object
- * for Rust, positional (minToPositional) for the web decoder.
- */
 export async function writeCatalog(
   index: IndexFile,
   opts: { web?: boolean; sqlite?: Map<string, SqliteDigest> } = {},
@@ -348,9 +315,6 @@ export async function writeCatalog(
   if (opts.web === false) return;
   const target = webTarget();
   await mkdir(path.dirname(target), { recursive: true });
-  // Compact one-row-per-line serialization (matches the approved quran-data.json
-  // flat-row style and keeps the bundled catalogue small); writeJson's 2-space
-  // expand would bloat every row across multiple lines.
   const rows = minToPositional(min).map((r) => `  ${JSON.stringify(r)}`).join(",\n");
   await writeFile(target, `[\n${rows}\n]\n`, "utf-8");
   log(`  catalog → ${path.relative(REPO_ROOT, target)}`);

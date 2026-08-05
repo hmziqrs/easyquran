@@ -96,7 +96,7 @@ Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unb
 
 The first pass of this section widened `file` to `{ path, sizeBytes, sha256 }` and keyed the OPFS cache on `spec.sha256`, on the theory that a content hash was the right cache identity. That was wrong: it violated the §Hard-rules ban on hash-keyed cache dirs, and it shipped 115 digests that only duplicated the id.
 
-**Decision (reversal): never SHA-256 as a Quran catalogue/identity key.** A database's identity is its **id** (`uthmani`, `en.sahih`, …). Quran DBs are immutable, so id is a complete, stable identity; a sha256 key only renames it. The translation sha256 is purged from every place it was used as identity or cache key — the baked catalogue, the OPFS+IDB cache key, the worker spec, the Rust `CatalogueEntry`, the `/sources` translation rows, and the translation ETag (now `tanzil-{id}`, no `sha8`). The catalogue is now a **flat positional array** mirroring `quran-data.json`'s surah rows (`TranslationField` in `quran/catalogue.ts`), emitted sha-free by `db/.../scripts/lib.ts`.
+**Decision (reversal): never SHA-256 as a Quran catalogue/identity key.** A database's identity is its **id** (`uthmani`, `en.sahih`, …). Quran DBs are immutable, so id is a complete, stable identity; a sha256 key only renames it. The translation sha256 is purged from every place it was used as identity or cache key — the baked catalogue, the OPFS+IDB cache key, the worker spec, the Rust `CatalogueEntry`, the `/sources` `SourceDto` (the field is gone entirely — no `Option`), and the translation ETag (now `tanzil-{id}`, no `sha8`). The catalogue is now a **flat positional array** mirroring `quran-data.json`'s surah rows (`TranslationField` in `quran/catalogue.ts`), emitted sha-free by `db/.../scripts/lib.ts`.
 
 **What stays sha256** (the principled split — not a contradiction):
 - *Arabic integrity* — the two golden corpus digests + the `/scripts` Arabic artifact sha verify the immutable Arabic text at boot and on download (`source-profiles`, `quran-sqlite`, `resolveSourceProfile`). Script accuracy is the project's highest priority; tamper detection on the Word stays.
@@ -105,7 +105,7 @@ The first pass of this section widened `file` to `{ path, sizeBytes, sha256 }` a
 
 A deep audit (7 agents, repo-wide) confirmed no translation/catalogue sha256 survives as identity or cache key; every remaining `sha256` in the project is one of the three categories above.
 
-**Done when:** `web/.../translations.json` + `db/.../index.min.json` are sha-free; the OPFS/IDB cache keys by id; Rust `/sources` omits translation sha and the translation ETag is id-only; the byte-verify primitive remains for Arabic; `cargo test`, `pnpm check/test/build`, and `db verify` all pass.
+**Done when:** `web/.../translations.json` + `db/.../index.min.json` are sha-free; the OPFS/IDB cache keys by id; Rust `/sources` `SourceDto` has no sha field at all (Arabic sha is `/scripts`-only) and the translation ETag is id-only; the byte-verify primitive remains for Arabic; `cargo test`, `pnpm check/test/build`, and `db verify` all pass.
 
 ## 3. Translation sources in Rust
 
@@ -132,7 +132,7 @@ The golden-digest rule does **not** extend to translations: there is no per-tran
 
 The reader's translation picker needs the list; `/scripts` is the SSG bootstrap for the two Arabic artifacts and should stay that narrow.
 
-**Decision:** add `GET /quran/sources` returning every readable source — Arabic and translations — as `{ id, kind, language, languageCode, direction, name, translator, sizeBytes, sha256, downloadUrl }`. `/scripts` is untouched.
+**Decision:** add `GET /quran/sources` returning every readable source — Arabic and translations — as `{ id, kind, language, languageCode, direction, name, translator, sizeBytes, downloadUrl }` (no sha256 — a source's identity is its id; Arabic integrity ships via `/scripts`). `/scripts` is untouched.
 
 **Approach:** back it with the catalogue from §2 (read at boot, same fail-fast policy). Reuse the `/scripts` HEAD-verify + partial-response discipline: an unverified entry is omitted and the response is `no-store`, never a half-list pinned by a CDN.
 

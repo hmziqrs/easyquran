@@ -9,7 +9,7 @@ import rawTranslations from "./src/lib/data/translations.json";
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";
 const LOCAL_TRANSLATION_DIR = "db/quran/tanzil/translations";
-const TRANSLATION_FILE_PATH = 6; // TranslationField.FilePath — web/src/lib/quran/catalogue.ts
+const TRANSLATION_FILE_PATH = 6;
 
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
   ...registeredSourceProfiles().map(

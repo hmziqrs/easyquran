@@ -198,8 +198,6 @@ pub struct SourceDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub translator: Option<String>,
     pub size_bytes: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
     pub download_url: String,
 }
 

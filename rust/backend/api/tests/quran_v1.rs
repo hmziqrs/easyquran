@@ -1242,6 +1242,36 @@ async fn sources_lists_all_sources_with_verified_download_urls() {
 }
 
 #[tokio::test]
+async fn sources_rows_never_carry_sha256() {
+    use wiremock::MockServer;
+    let server = MockServer::start().await;
+    let state = state_with_public_url(&server.uri()).await;
+    let _ = mount_green_sources_heads(&state, &server).await;
+    let app = app_over(state);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/quran/sources")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = to_bytes(resp.into_body(), 4 * 1024 * 1024).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let sources = body["data"]["sources"].as_array().unwrap();
+    assert!(!sources.is_empty());
+    for row in sources {
+        assert!(
+            row.get("sha256").is_none(),
+            "sources row must not carry sha256 — a source's identity is its id, never a hash \
+             (docs/quran.md §2); got {row}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};

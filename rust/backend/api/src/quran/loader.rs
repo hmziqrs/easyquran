@@ -185,10 +185,6 @@ struct RawCatalogueFile {
     size_bytes: u64,
 }
 
-/// Cold-read a translation sqlite into the same arena representation as Arabic. Translations
-/// share the `quran_text` schema, so rows must tile 1..=6236 (a row per ayah; a handful are
-/// intentionally empty — see docs/research/translation-empty-verses.md). No golden digest:
-/// translation integrity is fixed at §2 build and verified client-side on download.
 pub async fn load_translation_corpus(path: &str) -> Result<Corpus, QuranLoadError> {
     let rows = read_corpus(path, "translation").await?;
     validate_rows("translation", &rows)?;

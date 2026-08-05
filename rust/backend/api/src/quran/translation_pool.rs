@@ -70,14 +70,10 @@ impl TranslationPool {
             .map(|e| (e.id.to_string(), e.clone()))
             .collect();
         let id_whitelist: HashSet<String> = entries.keys().cloned().collect();
-        // Stable identity over the whole catalogue: any field change flips it, so the /sources
-        // listing ETag invalidates on a same-count rebuild (not just a count change).
         let mut sorted: Vec<&CatalogueEntry> = catalogue.iter().collect();
         sorted.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         let mut hasher = Sha256::new();
         for e in &sorted {
-            // Length-prefix every field so the digest is a true function of the entry — no
-            // concatenation collision even for a pathological inter-field value swap.
             digest_field(&mut hasher, e.id.as_bytes());
             digest_field(&mut hasher, e.language.as_bytes());
             digest_field(&mut hasher, e.language_code.as_bytes());
@@ -128,8 +124,6 @@ impl TranslationPool {
         &self.entries
     }
 
-    /// Boot-stable digest over all catalogue entries (id + metadata) — changes iff any field
-    /// changes. Used to invalidate the `/sources` listing ETag on a same-count rebuild.
     pub fn catalogue_digest(&self) -> &str {
         &self.catalogue_digest
     }

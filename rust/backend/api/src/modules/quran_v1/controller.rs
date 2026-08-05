@@ -51,8 +51,6 @@ fn parse_source(
     )))
 }
 
-/// Stable, immutable identity string for a translation response (its ETag tag). Translations
-/// carry no digest — identity is the id (DBs are immutable); integrity is fixed at build.
 fn translation_profile(id: &str) -> String {
     format!("tanzil-{id}")
 }
@@ -882,8 +880,6 @@ pub async fn sources(
     } else {
         cache::NO_STORE
     };
-    // ETag folds the catalogue digest so a same-count rebuild (any field changed) still
-    // invalidates the cached listing — not just the uthmani digest + verified count.
     let tag = format!(
         "{}:{}",
         store.etag_tag(),
@@ -927,7 +923,6 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
                 name: display.to_string(),
                 translator: None,
                 size_bytes: file.size_bytes,
-                sha256: Some(file.sha256.to_string()),
                 download_url: url,
             },
             file.size_bytes,
@@ -946,7 +941,6 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
                 name: e.name.to_string(),
                 translator: e.translator.as_deref().map(String::from),
                 size_bytes: e.size_bytes,
-                sha256: None,
                 download_url: url,
             },
             e.size_bytes,

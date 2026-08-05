@@ -343,7 +343,6 @@ describe("translation sources manifest wire", () => {
   const arabic = {
     id: QuranSourceId.TanzilUthmani,
     sizeBytes: 1,
-    sha256: "a",
     downloadUrl: "https://x/u",
   };
   const translation = {
