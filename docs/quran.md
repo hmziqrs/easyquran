@@ -75,11 +75,14 @@ Databases are immutable and read-only: no write handling anywhere.
 
 ---
 
-# Part 2 — the plan
+# Part 2 — status
 
-Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unblocks §6–§7. §8–§9 are independent.
+**Done (shipped):** §1 artifact URL · §2 no-sha identity · §3 translation pool · §4 `/sources` · §5 `/t` reader routes · §6 OPFS retention · §8 parity fixtures.
+**Remaining:** §7 — SSR runs in dev (`adapter-node` + `quran-disk-cache.ts`), but **prod still serves SSG** (cutover pending); §9 — U+06DE done, a few loose ends left.
 
-## 1. Fix the artifact URL contract — *defect, blocks everything downstream*
+Original dependency order + decisions preserved below.
+
+## 1. Fix the artifact URL contract — *done*
 
 `/scripts` builds `{public_url}/quran/arabic/{id}/{filename}` (`quran_v1/controller.rs:649`), but the publisher writes `tanzil/arabic/<file>.sqlite` and the web bakes the same `r2Path`. The HEAD verify therefore always fails, `/scripts` never returns 2 artifacts, the response is stamped `no-store` and never cached, and `resolveManifest` silently falls back to the baked manifest forever. The endpoint is effectively dead.
 
@@ -97,7 +100,7 @@ A Quran DB's identity is its **id** (`uthmani`, `en.sahih`, …); DBs are immuta
 
 Guards: `tests/quran_v1.rs` (`sources_rows_never_carry_sha256`, `scripts_endpoint_carries_no_sha256`) + `web catalogue-sha-guard.test.ts`. Runtime protection is content asserts, not sha.
 
-## 3. Translation sources in Rust
+## 3. Translation sources in Rust — *done*
 
 `Script::parse` accepts Arabic only, so `/quran/sources/{id}/…` 400s for every translation. No pool exists.
 
@@ -114,11 +117,11 @@ Guards: `tests/quran_v1.rs` (`sources_rows_never_carry_sha256`, `scripts_endpoin
 
 Single-flight is mandatory: two concurrent cold requests for the same id must build once — `moka::future::Cache::try_get_with` or equivalent. **No `std::sync` guard may be held across an `.await`** (`MutexGuard` is `!Send`, axum handler futures must be `Send`).
 
-The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert, and none is wanted — a translation's identity is its id. Integrity is fixed at build (repo-only `index.json` + `manifest.json` digests, checked by `verify.ts`); on download the client size-checks translation bytes only (Arabic is the one it sha-verifies). See §2.
+The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert, and none is wanted — a translation's identity is its id. Integrity is fixed at build (repo-only `index.json` + `manifest.json` digests, checked by `pnpm verify`); on download the client size-checks bytes only — no sha-verify for any source, Arabic included. The digest audit is manual (`just quran-audit` / `pnpm audit:arabic`). See §2.
 
 **Done when:** `/quran/sources/en.sahih/surah/2` returns text; a cold-start concurrency test proves one build for N simultaneous requests; the pool exports resident-count, resident-bytes, hit-rate, and evictions/min so the bounds above are tuned on evidence rather than reset by guess.
 
-## 4. `/quran/sources` catalogue endpoint
+## 4. `/quran/sources` catalogue endpoint — *done*
 
 The reader's translation picker needs the list; `/scripts` is the SSG bootstrap for the two Arabic artifacts and should stay that narrow.
 
@@ -128,7 +131,7 @@ The reader's translation picker needs the list; `/scripts` is the SSG bootstrap 
 
 **Done when:** the endpoint lists 117 sources with working download URLs, and a partial upstream produces `no-store` rather than a cached truncation.
 
-## 5. Translation reader routes
+## 5. Translation reader routes — *done*
 
 No translation route exists — not even a page-1 form. Geometry and accessors are already source-agnostic, so this is wiring, not new page math.
 
@@ -147,7 +150,7 @@ No translation route exists — not even a page-1 form. Geometry and accessors a
 
 **Done when:** a translated deep link past local page 1 has a real URL; `/app/<surah>/page/<n>` and `/app/<surah>/t/<lang>/<translator>` cannot shadow each other (route test); the picker switches source without losing reading position.
 
-## 6. OPFS retention
+## 6. OPFS retention — *done*
 
 No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a tester pulling ~100 (186 MiB) and hitting the origin quota.
 
@@ -157,7 +160,7 @@ No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a t
 
 **Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the two Arabic artifacts survive every prune.
 
-## 7. `adapter-node` + SSR disk-TTL for translated pages
+## 7. `adapter-node` + SSR disk-TTL for translated pages — *code-complete; prod cutover remaining*
 
 Arabic stays prerendered; translated pages cannot be — 115 sources × 662 local pages is not a build.
 
@@ -167,7 +170,7 @@ Arabic stays prerendered; translated pages cannot be — 115 sources × 662 loca
 
 **Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic route output is byte-identical to the current static build, and the disk budget is enforced rather than assumed.
 
-## 8. Shared parity fixtures
+## 8. Shared parity fixtures — *done*
 
 Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixtures__/`) live in separate trees under different names with no cross-check. They agree because they were written to agree; a one-sided rule change is not caught.
 
@@ -177,7 +180,7 @@ Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixt
 
 **Done when:** deleting a fold rule from `normalize.rs` alone fails the Rust suite, and deleting it from the web alone fails the web suite.
 
-## 9. Loose ends
+## 9. Loose ends — *U+06DE done; rest open*
 
 - **U+06DE (`۞`, rub-el-hizb / ruku marker) — resolved.** 199 ayahs of Uthmani, 0 in simple-clean. The **display layer renders it verbatim** (the reader never normalizes → matches quran.com / myislam.org); the **search-highlight layer** now strips it in both Rust (`normalize.rs`; the highlight call at `controller.rs:1168` passes `view.text`) and web (`normalize.ts` — `/\p{Mn}/u` missed it, category `So`, so the codepoint is now listed explicitly), and a case was added to the §8 parity corpus. U+06DD needs no handling — 0 occurrences in either corpus.
 - Deep-link highlight: the target ayah scrolls into view but is not visually marked — add a `revealed-ayah` / `:target` marker.
