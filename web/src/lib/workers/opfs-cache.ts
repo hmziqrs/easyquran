@@ -129,7 +129,7 @@ async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
-        const compound = String(cur.key);
+        const compound = typeof cur.key === "string" ? cur.key : "";
         const sep = compound.indexOf(":");
         if (sep > 0) {
           const tag = compound.slice(0, sep);

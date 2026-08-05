@@ -29,6 +29,13 @@ pub struct StorageState {
     pub image_moderator: Option<std::sync::Arc<dyn ImageModerator + Send + Sync>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct QuranRuntimeMetrics {
+    pub arabic_load_duration_ms: u64,
+    pub translation_catalogue_load_duration_ms: u64,
+    pub translation_catalogue_entries: u64,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub sea_db: DatabaseConnection,
@@ -44,6 +51,7 @@ pub struct AppState {
     pub fcm: Option<std::sync::Arc<FcmClient>>,
     pub webauthn: Option<std::sync::Arc<crate::services::webauthn::WebauthnService>>,
     pub quran: std::sync::Arc<crate::quran::QuranStore>,
+    pub quran_runtime_metrics: QuranRuntimeMetrics,
     pub quran_scripts:
         std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::Artifact>>>>,
     pub translation_pool: std::sync::Arc<crate::quran::TranslationPool>,

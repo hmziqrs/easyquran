@@ -37,6 +37,8 @@ describe("sha256 regression guard (docs/quran.md §2)", () => {
     "src/lib/config/site.ts",
     "src/lib/data/quran-types.ts",
     "src/lib/quran/catalogue.ts",
+    "src/lib/offline/pack.ts",
+    "scripts/gen-offline-pack.ts",
   ];
   it("automated Quran path source is sha-free (boot loaders, cache, wire, DTOs)", () => {
     for (const rel of SHA_FREE) {
@@ -76,4 +78,3 @@ describe("sha256 regression guard (docs/quran.md §2)", () => {
     expect(stray).not.toHaveProperty("sha256");
   });
 });
-

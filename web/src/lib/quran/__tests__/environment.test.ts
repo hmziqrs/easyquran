@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  DEFAULT_QURAN_R2_BASE,
   LOCAL_QURAN_ARTIFACT_BASE,
+  QURAN_ARTIFACT_DELIVERY_BASE,
   QuranDataEnvironment,
   resolveQuranArtifactBase,
   resolveQuranDataEnvironment,
@@ -25,6 +25,8 @@ describe("Quran data environment", () => {
 
   it("uses local files or R2", () => {
     expect(resolveQuranArtifactBase(QuranDataEnvironment.Local)).toBe(LOCAL_QURAN_ARTIFACT_BASE);
-    expect(resolveQuranArtifactBase(QuranDataEnvironment.Production)).toBe(DEFAULT_QURAN_R2_BASE);
+    expect(resolveQuranArtifactBase(QuranDataEnvironment.Production)).toBe(
+      QURAN_ARTIFACT_DELIVERY_BASE,
+    );
   });
 });

@@ -70,11 +70,17 @@ impl InMemoryStore {
         map.iter()
             .filter_map(|(key, b)| {
                 let fixed_expires_at = match b.fixed_expires {
-                    Some(t) => t.duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0),
+                    Some(t) => t
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0),
                     None => 0,
                 };
                 let block_until_at = match b.block_until {
-                    Some(t) => t.duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0),
+                    Some(t) => t
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0),
                     None => 0,
                 };
                 if fixed_expires_at <= now && block_until_at <= now {
@@ -122,7 +128,7 @@ impl RateLimitStore for InMemoryStore {
         let now = SystemTime::now();
         let mut map = self.limits.lock().expect("rate-limit map poisoned");
         let b = map.entry(key.to_string()).or_default();
-        if b.fixed_expires.map_or(true, |t| t <= now) {
+        if b.fixed_expires.is_none_or(|t| t <= now) {
             b.fixed_count = 0;
             b.fixed_expires = Some(now + window);
         }
@@ -143,7 +149,7 @@ impl RateLimitStore for InMemoryStore {
         let b = map.entry(key.to_string()).or_default();
 
         let long_cutoff = now_e.saturating_sub(cfg.block_range as i64);
-        while b.attempts.front().map_or(false, |&t| t < long_cutoff) {
+        while b.attempts.front().is_some_and(|&t| t < long_cutoff) {
             b.attempts.pop_front();
         }
 
@@ -199,7 +205,7 @@ impl RateLimitStore for InMemoryStore {
     async fn set_nx_ex(&self, key: &str, ttl: Duration) -> Result<bool, GateError> {
         let now = SystemTime::now();
         let mut claims = self.claims.lock().expect("claims map poisoned");
-        let claimable = claims.get(key).map_or(true, |&expires| expires <= now);
+        let claimable = claims.get(key).is_none_or(|&expires| expires <= now);
         if claimable {
             claims.insert(key.to_string(), now + ttl);
             Ok(true)
@@ -286,7 +292,10 @@ mod tests {
         }
         assert!(matches!(
             s.abuse_check("ip", CFG).await.unwrap(),
-            LimiterDecision::Blocked { scope: BlockScope::Temp, .. }
+            LimiterDecision::Blocked {
+                scope: BlockScope::Temp,
+                ..
+            }
         ));
         assert!(matches!(
             s.abuse_check("ip", CFG).await.unwrap(),

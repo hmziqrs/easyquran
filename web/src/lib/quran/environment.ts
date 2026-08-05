@@ -6,7 +6,8 @@ export const QuranDataEnvironment = {
 export type QuranDataEnvironment = (typeof QuranDataEnvironment)[keyof typeof QuranDataEnvironment];
 
 export const LOCAL_QURAN_ARTIFACT_BASE = "/_quran";
-export const DEFAULT_QURAN_R2_BASE = "https://r2.easyquran.fyi";
+export const QURAN_ARTIFACT_DELIVERY_BASE = "/_quran";
+export const QURAN_R2_UPSTREAM_BASE = "https://r2.easyquran.fyi";
 
 export function resolveQuranDataEnvironment(
   value: string | undefined,
@@ -27,5 +28,5 @@ export function resolveQuranDataEnvironment(
 export function resolveQuranArtifactBase(environment: QuranDataEnvironment): string {
   return environment === QuranDataEnvironment.Local
     ? LOCAL_QURAN_ARTIFACT_BASE
-    : DEFAULT_QURAN_R2_BASE;
+    : QURAN_ARTIFACT_DELIVERY_BASE;
 }

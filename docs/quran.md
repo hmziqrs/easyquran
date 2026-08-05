@@ -36,7 +36,7 @@ One shape per navigation family — `/{family}` list, `/{family}/{n}` detail, `/
 - `GET /quran/sources/{id}/surah/{n}` → `Envelope<QuranSurahTextDto>`; `GET /quran/sources/{id}/range?from=&to=` → `Envelope<RangeText>` (cap 300). **This pair is also the translation read API** — it is already source-parameterized, so translations need no new routes, only a resolver (§3).
 - `GET /quran/search?q=…` — substring scan over normalized simple-clean. `kind` is an **output** discriminator; only `ayah` is produced today (`opener` reserved, never emitted).
 - `GET /quran/random` — deterministic ayah-of-the-day (date-seeded LCG, not RNG).
-- `GET /quran/scripts` (R2 artifacts: id, sizeBytes, sha256, downloadUrl), `GET /quran/health/ready`, `/quran/openapi.json` under the `openapi` feature.
+- `GET /quran/scripts` (R2 artifacts: id, sizeBytes, downloadUrl), `GET /quran/health/ready`, `/quran/openapi.json` under the `openapi` feature.
 - **Rate limits, per IP:** 600/60s general, 30/60s on search — `/search` mounts on a separate router so the CPU-heavy scan does not inherit the coarse limit.
 - `Envelope<T> = { data: T }`. Closed error shape (400 / 404 / 429 / 5xx) — a failed read never becomes an empty surah.
 
@@ -53,7 +53,7 @@ One rule set, two implementations (Rust + web Worker) returning identical ordere
 - **offset map:** normalization emits a normalized-scalar → source-scalar map, so a hit found in normalized space highlights correctly in the rendered script (converted to UTF-16 for the web). Offsets crossing the boundary are **Unicode scalar** (Rust `char` = web `Array.from`).
 - **canonical view** splits each surah into **body + opener** units (opener = rank 0, ayah = rank 1).
 - **Opener classification is two orthogonal enums**, not one: `OpenerKind` = `Verse | Header | None` (what the opener *is*) × `OpenerPackaging` = `NumberedAyah | EmbeddedPrefix | ChapterFlag | SeparateRow | Absent` (how the source stores it). Split counts (1 / 112 / 1) asserted at boot. Surahs 95 & 97 carry a shadda variant (`بِّسْمِ`) — match the prefix diacritic-insensitively, never exactly.
-- A rule change ships new Rust + web together; it never mutates a sqlite. Parity is currently **by construction, not enforced** — see §8.
+- A rule change ships new Rust + web together; it never mutates a sqlite. Shared neutral fixtures enforce Rust/web parity — see §8.
 
 ## Caching — as built
 
@@ -62,6 +62,8 @@ Databases are immutable and read-only: no write handling anywhere.
 - **Rust, in memory:** both Arabic corpora load at boot and stay resident. `Script` accepts `uthmani` | `simple-clean` only.
 - **Rust, responses:** no server-side store. Reads come straight from the resident corpus, but every response is edge-cacheable — weak `ETag` = `quran-corpus : canonical key` (a static id-based tag; the corpus is immutable so a constant ETag is correct — never a digest), `If-None-Match` → 304, `Cache-Control` per family: Arabic `max-age=300, s-maxage=86400, swr=604800, sie=604800`; search `max-age=60, s-maxage=300`; artifacts `immutable`; 5xx `no-store`, so a CDN cannot pin a transient failure.
 - **Web, OPFS:** Arabic eager on boot. **Key = `spec.id`** (a db's identity is its id; the prior `spec.sha256` key was a cache-dir violation). Downloaded bytes (Arabic + translation) are size-checked only on read/download — no digest ships in any catalogue, spec, or ETag; sha verification is the manual `pnpm audit:arabic`. Older sha256-keyed caches orphan on upgrade (one-time re-download). Retention/eviction: §6.
+- **Web artifact delivery:** browser downloads use the same-origin streaming `/_quran/<R2 key>` gateway. It accepts only baked Arabic/translation keys and forwards range requests to R2 with immutable caching. This keeps OPFS independent of bucket/custom-domain CORS while preserving the publisher's exact `tanzil/…` layout; no bytes are rewritten or hashed.
+- **Offline route pack:** its immutable filename uses SvelteKit's build-version id, not a content digest. Download validation is byte-count + closed-schema validation; the build and browser never hash serialized Quran routes.
 - **R2 layout** (publisher `translations/scripts/upload-sqlite.ts`, bucket prefix `tanzil/`): `tanzil/arabic/<file>.sqlite`, `tanzil/translations/sqlite/<id>.sqlite`, `tanzil/translations/index.min.json` (mutable, `max-age=300, must-revalidate`), `tanzil/quran-data.xml`. Everything except the catalogue is `immutable`. Raw `sql/` dumps are never published.
 
 ## Web delivery + pagination — as built
@@ -77,8 +79,8 @@ Databases are immutable and read-only: no write handling anywhere.
 
 # Part 2 — status
 
-**Done (shipped):** §1 artifact URL · §2 no-sha identity · §3 translation pool · §4 `/sources` · §5 `/t` reader routes · §6 OPFS retention · §8 parity fixtures.
-**Remaining:** §7 — SSR runs in dev (`adapter-node` + `quran-disk-cache.ts`), but **prod still serves SSG** (cutover pending); §9 — U+06DE done, a few loose ends left.
+**Done (shipped):** §1 artifact URL · §2 no-sha identity · §3 translation pool + metrics · §4 `/sources` · §5 `/t` reader routes · §6 OPFS retention · §7 production Node SSR + disk TTL · §8 parity fixtures · §9 loose ends.
+**Remaining:** none in this plan. Word-level navigation and a future mobile client remain separate, unscheduled product work; neither has a data model or client in this repository today.
 
 Original dependency order + decisions preserved below.
 
@@ -160,15 +162,15 @@ No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a t
 
 **Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the two Arabic artifacts survive every prune.
 
-## 7. `adapter-node` + SSR disk-TTL for translated pages — *code-complete; prod cutover remaining*
+## 7. `adapter-node` + SSR disk-TTL for translated pages — *done*
 
 Arabic stays prerendered; translated pages cannot be — 115 sources × 662 local pages is not a build.
 
 **Decision:** SSR on demand, cached to disk with TTL. Not ISR: no build-time revalidation contract, no version handshake.
 
-**Approach:** migrate `adapter-static → adapter-node` (Arabic routes stay prerendered under it), then a disk cache keyed `(sourceId, surah, localPage)` — TTL 7 days, LRU inside a disk budget. **HTML only.** API JSON gets no server-side disk store; it stays edge-cacheable exactly as today (§Caching) — "uncached" here means no disk copy, not no caching.
+**Approach:** `adapter-node` keeps Arabic routes prerendered and renders translations at runtime. Production runs the Node server (not the former Caddy static image), enables the Axum API, and persists a disposable `web_quran_cache` volume. The HTML cache uses canonical `(sourceId, kind, index[, localPage])` keys inside a SvelteKit build-id namespace — the namespace invalidates derived markup when immutable JS/CSS filenames change and is not Quran data versioning. TTL is 7 days with a 256 MiB LRU budget. It never intercepts SvelteKit `__data.json`. API JSON gets no server-side disk store; it stays edge-cacheable exactly as today (§Caching) — "uncached" here means no disk copy, not no caching. `Server-Timing` plus `X-EasyQuran-Quran-Cache: hit|miss` make cold/warm delivery directly verifiable; `/health/quran` exposes disk entries, bytes, hits, misses, writes, evictions, and errors for runtime monitoring.
 
-**Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic route output is byte-identical to the current static build, and the disk budget is enforced rather than assumed.
+**Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic routes remain build-time prerendered, and TTL/LRU/budget behavior is covered by tests. Production Docker packages the immutable Quran sources read-only for Axum, uses the private container API for SSR, and keeps the public API base for browsers.
 
 ## 8. Shared parity fixtures — *done*
 
@@ -180,13 +182,13 @@ Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixt
 
 **Done when:** deleting a fold rule from `normalize.rs` alone fails the Rust suite, and deleting it from the web alone fails the web suite.
 
-## 9. Loose ends — *U+06DE done; rest open*
+## 9. Loose ends — *done*
 
 - **U+06DE (`۞`, rub-el-hizb / ruku marker) — resolved.** 199 ayahs of Uthmani, 0 in simple-clean. The **display layer renders it verbatim** (the reader never normalizes → matches quran.com / myislam.org); the **search-highlight layer** now strips it in both Rust (`normalize.rs`; the highlight call at `controller.rs:1168` passes `view.text`) and web (`normalize.ts` — `/\p{Mn}/u` missed it, category `So`, so the codepoint is now listed explicitly), and a case was added to the §8 parity corpus. U+06DD needs no handling — 0 occurrences in either corpus.
-- Deep-link highlight: the target ayah scrolls into view but is not visually marked — add a `revealed-ayah` / `:target` marker.
-- Link generators still emit legacy `?verse=N` (`quran.ts:46`) instead of the page-aware path — costs a redirect hop.
-- Surah-local page tiling (662) is asserted in `quran.test.ts` only. Server-side tiling is asserted at boot for the global families; add the local-page assert **only if** the server starts serving local pages.
-- Mobile (Flutter) parity — not scheduled.
+- **Deep-link highlight — resolved.** `VerseRow.svelte` reacts to the canonical ayah hash and applies the reduced-motion-safe `revealed-ayah` marker.
+- **Legacy link generation — resolved.** `surahPath` emits route-only links; all ayah links use `surahAyahPath`, which computes the containing local page and canonical `#ayah-S-A` target. The reader still accepts old inbound `?verse=N` URLs as a compatibility redirect, but no generator emits them.
+- **Surah-local page tiling — resolved at its owner.** The web metadata owner asserts all 662 clipped pages. Axum serves global navigation families and source text ranges, not local web pages, so duplicating web-local tiling at server boot would create a second owner.
+- **Mobile parity — explicit non-goal.** No Flutter/mobile client exists in this repository. When one is scheduled, it must consume the shared normalization/parity contract rather than fork it.
 
 ---
 

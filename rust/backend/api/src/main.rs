@@ -14,7 +14,7 @@ use ruxlog::{
     config::Settings,
     db, middlewares, router,
     services::session_store::SqliteSessionStore,
-    state::{AppState, StorageState},
+    state::{AppState, QuranRuntimeMetrics, StorageState},
     utils::telemetry,
 };
 
@@ -433,29 +433,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let quran_store = match ruxlog::quran::load_quran_store(&settings.quran).await {
-        Ok(store) => {
-            tracing::info!(
-                verse_count = ruxlog::quran::VERSE_COUNT,
-                "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
-            );
-            std::sync::Arc::new(store)
-        }
-        Err(err) => {
-            tracing::error!(
-                error = %err,
-                "Quran store failed to load — refusing to boot (§4.1 fail-fast)"
-            );
-            std::process::exit(1);
-        }
-    };
+    let quran_load_started = std::time::Instant::now();
+    let (quran_store, quran_load_duration_ms) =
+        match ruxlog::quran::load_quran_store(&settings.quran).await {
+            Ok(store) => {
+                let resident_bytes = store.uthmani.bytes() + store.simple_clean.bytes();
+                let load_duration_ms = quran_load_started.elapsed().as_millis() as u64;
+                tracing::info!(
+                    verse_count = ruxlog::quran::VERSE_COUNT,
+                    resident_bytes,
+                    load_duration_ms,
+                    "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
+                );
+                (std::sync::Arc::new(store), load_duration_ms)
+            }
+            Err(err) => {
+                tracing::error!(
+                    error = %err,
+                    "Quran store failed to load — refusing to boot (§4.1 fail-fast)"
+                );
+                std::process::exit(1);
+            }
+        };
 
-    let translation_pool = {
+    let (translation_pool, translation_catalogue_entries, translation_catalogue_load_duration_ms) = {
+        let catalogue_load_started = std::time::Instant::now();
         let qset = &settings.quran;
         let catalogue_path = format!("{}/index.min.json", qset.translations_dir);
         match ruxlog::quran::load_catalogue(&catalogue_path).await {
             Ok(cat) => {
                 let count = cat.len();
+                let load_duration_ms = catalogue_load_started.elapsed().as_millis() as u64;
                 let pool = ruxlog::quran::TranslationPool::new(
                     &cat,
                     std::path::PathBuf::from(&qset.translations_dir),
@@ -465,9 +473,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 tracing::info!(
                     translations = count,
+                    load_duration_ms,
+                    max_resident_translations = qset.max_resident_translations,
+                    max_resident_bytes = qset.max_resident_bytes,
+                    idle_ttl_seconds = qset.translation_idle_ttl_secs,
                     "Translation catalogue loaded; pool ready for on-demand reads"
                 );
-                std::sync::Arc::new(pool)
+                (std::sync::Arc::new(pool), count as u64, load_duration_ms)
             }
             Err(err) => {
                 tracing::error!(
@@ -498,6 +510,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         fcm,
         webauthn: webauthn_service,
         quran: quran_store,
+        quran_runtime_metrics: QuranRuntimeMetrics {
+            arabic_load_duration_ms: quran_load_duration_ms,
+            translation_catalogue_load_duration_ms,
+            translation_catalogue_entries,
+        },
         quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
         quran_sources: std::sync::Arc::new(tokio::sync::Mutex::new(None)),

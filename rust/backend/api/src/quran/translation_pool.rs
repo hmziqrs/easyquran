@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use moka::future::Cache;
 use moka::notification::RemovalCause;
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 
 use crate::quran::loader::{load_translation_corpus, QuranLoadError};
 use crate::quran::store::{CatalogueEntry, Corpus, TranslationId};
@@ -22,6 +22,9 @@ struct PoolMetrics {
     evictions: AtomicU64,
     resident_bytes: AtomicU64,
     lookups: AtomicU64,
+    access_clock: AtomicU64,
+    residents: Mutex<HashMap<TranslationId, u64>>,
+    eviction_times: Mutex<VecDeque<Instant>>,
 }
 
 /// Observable pool state for tuning the §3 bounds on evidence.
@@ -31,6 +34,7 @@ pub struct PoolStats {
     pub resident_bytes: u64,
     pub builds: u64,
     pub evictions: u64,
+    pub evictions_per_minute: u64,
     pub lookups: u64,
     pub hit_rate: f64,
 }
@@ -42,13 +46,14 @@ pub struct TranslationPool {
     id_whitelist: HashSet<String>,
     metrics: Arc<PoolMetrics>,
     build_sem: Arc<Semaphore>,
+    prune_sem: Arc<Semaphore>,
+    max_resident_bytes: u64,
 }
 
 impl TranslationPool {
     /// Bounds come from settings (not constants) so they tune without recompiling the rules.
-    /// moka enforces a single capacity dimension: with a weigher set, `max_resident_bytes` is
-    /// the hard RAM ceiling and `max_resident_translations` is an advisory count target
-    /// (observable via [`PoolStats::resident_count`]); one moka cache cannot bind both at once.
+    /// Moka enforces the exact LRU count ceiling; a serialized second pass invalidates LRU entries
+    /// until the independently tracked resident-byte ceiling also holds.
     pub fn new(
         catalogue: &[CatalogueEntry],
         translations_dir: PathBuf,
@@ -62,26 +67,32 @@ impl TranslationPool {
             .collect();
         let id_whitelist: HashSet<String> = entries.keys().cloned().collect();
         let build_sem = Arc::new(Semaphore::new(BUILD_CONCURRENCY));
+        let prune_sem = Arc::new(Semaphore::new(1));
         let metrics = Arc::new(PoolMetrics::default());
         let metrics_for_listener = metrics.clone();
 
         let cache = Cache::builder()
-            .max_capacity(max_resident_bytes)
-            .weigher(|_k: &TranslationId, v: &Arc<Corpus>| -> u32 {
-                u32::try_from(v.bytes()).unwrap_or(u32::MAX)
-            })
+            .max_capacity(max_resident_translations.max(1))
             .time_to_idle(idle_ttl)
-            .async_eviction_listener(move |_key, v: Arc<Corpus>, _cause: RemovalCause| {
-                let m = metrics_for_listener.clone();
-                Box::pin(async move {
-                    m.evictions.fetch_add(1, Ordering::Relaxed);
-                    m.resident_bytes
-                        .fetch_sub(v.bytes() as u64, Ordering::Relaxed);
-                })
-            })
+            .async_eviction_listener(
+                move |key: Arc<TranslationId>, v: Arc<Corpus>, cause: RemovalCause| {
+                    let m = metrics_for_listener.clone();
+                    Box::pin(async move {
+                        let bytes = v.bytes() as u64;
+                        let _ = m.resident_bytes.fetch_update(
+                            Ordering::Relaxed,
+                            Ordering::Relaxed,
+                            |resident| Some(resident.saturating_sub(bytes)),
+                        );
+                        if cause != RemovalCause::Replaced {
+                            m.residents.lock().await.remove(key.as_ref());
+                            m.evictions.fetch_add(1, Ordering::Relaxed);
+                            m.eviction_times.lock().await.push_back(Instant::now());
+                        }
+                    })
+                },
+            )
             .build();
-
-        let _ = max_resident_translations;
 
         Self {
             cache,
@@ -90,6 +101,8 @@ impl TranslationPool {
             id_whitelist,
             metrics,
             build_sem,
+            prune_sem,
+            max_resident_bytes,
         }
     }
 
@@ -142,18 +155,61 @@ impl TranslationPool {
             metrics.builds.fetch_add(1, Ordering::Relaxed);
             Ok(Arc::new(corpus))
         };
-        self.cache.try_get_with(id.clone(), init).await
+        let corpus = self.cache.try_get_with(id.clone(), init).await?;
+        let tick = self.metrics.access_clock.fetch_add(1, Ordering::Relaxed) + 1;
+        self.metrics.residents.lock().await.insert(id.clone(), tick);
+        self.enforce_byte_bound().await;
+        Ok(corpus)
+    }
+
+    async fn enforce_byte_bound(&self) {
+        let _permit = self
+            .prune_sem
+            .acquire()
+            .await
+            .expect("prune semaphore is never closed");
+        loop {
+            self.cache.run_pending_tasks().await;
+            if self.metrics.resident_bytes.load(Ordering::Relaxed) <= self.max_resident_bytes {
+                break;
+            }
+            let victim = self
+                .metrics
+                .residents
+                .lock()
+                .await
+                .iter()
+                .min_by_key(|(_id, last_used)| **last_used)
+                .map(|(id, _last_used)| id.clone());
+            let Some(victim) = victim else {
+                break;
+            };
+            self.cache.invalidate(&victim).await;
+        }
+        self.cache.run_pending_tasks().await;
     }
 
     pub async fn stats(&self) -> PoolStats {
         self.cache.run_pending_tasks().await;
         let lookups = self.metrics.lookups.load(Ordering::Relaxed);
         let builds = self.metrics.builds.load(Ordering::Relaxed);
+        let evictions_per_minute = {
+            let now = Instant::now();
+            let mut times = self.metrics.eviction_times.lock().await;
+            while times
+                .front()
+                .is_some_and(|at| now.saturating_duration_since(*at) > Duration::from_secs(60))
+            {
+                times.pop_front();
+            }
+            times.len() as u64
+        };
         PoolStats {
             resident_count: self.cache.entry_count(),
             resident_bytes: self.metrics.resident_bytes.load(Ordering::Relaxed),
             builds,
             evictions: self.metrics.evictions.load(Ordering::Relaxed),
+            evictions_per_minute,
             lookups,
             hit_rate: if lookups == 0 {
                 1.0
@@ -268,5 +324,38 @@ mod tests {
         }
         let stats = p.stats().await;
         assert!(stats.evictions >= 1, "byte bound must evict: {stats:?}");
+    }
+
+    #[tokio::test]
+    async fn count_bound_evicts_lru_translations() {
+        let s = settings();
+        let cat = load_catalogue(&format!("{}/index.min.json", s.translations_dir))
+            .await
+            .unwrap();
+        let p = TranslationPool::new(
+            &cat,
+            PathBuf::from(&s.translations_dir),
+            2,
+            u64::MAX,
+            Duration::from_secs(1800),
+        );
+        let ids: Vec<String> = p.catalogue().keys().take(5).cloned().collect();
+        for id in &ids {
+            let tid = p.parse_id(id).unwrap();
+            p.get_or_build(&tid).await.expect("loads");
+        }
+        let stats = p.stats().await;
+        assert!(
+            stats.resident_count <= 2,
+            "count bound must hold: {stats:?}"
+        );
+        assert!(
+            stats.evictions >= 3,
+            "LRU count evictions observed: {stats:?}"
+        );
+        assert!(
+            stats.evictions_per_minute >= 3,
+            "recent eviction rate exported: {stats:?}"
+        );
     }
 }

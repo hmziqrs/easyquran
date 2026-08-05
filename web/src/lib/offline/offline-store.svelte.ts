@@ -8,7 +8,7 @@ const MIRROR_KEY = "easyquran.offline.pack";
 export type OfflineStatus = "idle" | "downloading" | "staging" | "active" | "error";
 
 interface PackMirror {
-  hash: string;
+  packId: string;
   entries: number;
   bytes: number;
   savedAt: number;
@@ -21,20 +21,20 @@ interface OfflineManifest {
   appVersion?: string;
 }
 
-function extractHash(packPath: unknown): string | null {
+function extractPackId(packPath: unknown): string | null {
   if (typeof packPath !== "string") return null;
-  const match = /pack\.([0-9a-f]+)\.json$/i.exec(packPath);
+  const match = /pack\.([A-Za-z0-9_-]+)\.json$/u.exec(packPath);
   return match ? match[1] : null;
 }
 
 function decodeMirror(raw: unknown): PackMirror | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  if (typeof obj.hash !== "string") return null;
+  if (typeof obj.packId !== "string") return null;
   if (typeof obj.entries !== "number") return null;
   if (typeof obj.bytes !== "number") return null;
   if (typeof obj.savedAt !== "number") return null;
-  return { hash: obj.hash, entries: obj.entries, bytes: obj.bytes, savedAt: obj.savedAt };
+  return { packId: obj.packId, entries: obj.entries, bytes: obj.bytes, savedAt: obj.savedAt };
 }
 
 class OfflineStore {
@@ -70,9 +70,7 @@ class OfflineStore {
   get statusText(): string {
     switch (this.#status) {
       case "active":
-        return this.#activePack
-          ? `On — ${this.#activePack.entries} routes stored.`
-          : "On.";
+        return this.#activePack ? `On — ${this.#activePack.entries} routes stored.` : "On.";
       case "downloading":
         return "Downloading offline pack…";
       case "staging":
@@ -122,7 +120,7 @@ class OfflineStore {
       }
       return;
     }
-    const cacheName = `eq-pack-${active.hash}`;
+    const cacheName = `eq-pack-${active.packId}`;
     let intact = false;
     try {
       if (await caches.has(cacheName)) {
@@ -138,7 +136,7 @@ class OfflineStore {
       this.#status = "idle";
       return;
     }
-    if (!this.#activePack || this.#activePack.hash !== active.hash) {
+    if (!this.#activePack || this.#activePack.packId !== active.packId) {
       this.#activePack = active;
       this.#mirror();
     }
@@ -151,26 +149,26 @@ class OfflineStore {
       const response = await fetch("/offline/manifest.json", { cache: "no-store" });
       if (!response.ok) return;
       const manifest = (await response.json()) as OfflineManifest;
-      const hash = extractHash(manifest.pack);
-      if (hash && this.#activePack && hash !== this.#activePack.hash) void this.enable();
+      const packId = extractPackId(manifest.pack);
+      if (packId && this.#activePack && packId !== this.#activePack.packId) void this.enable();
     } catch {}
   }
 
   async enable(): Promise<void> {
     if (!browser || this.#busy) return;
     this.#busy = true;
-    const prevHash = this.#activePack?.hash ?? null;
-    let targetHash: string | null = null;
+    const previousPackId = this.#activePack?.packId ?? null;
+    let targetPackId: string | null = null;
     try {
       const manifestResponse = await fetch("/offline/manifest.json", { cache: "no-store" });
       if (!manifestResponse.ok) throw new Error(`manifest ${manifestResponse.status}`);
       const manifest = (await manifestResponse.json()) as OfflineManifest;
-      targetHash = extractHash(manifest.pack);
-      if (!targetHash) throw new Error("manifest missing pack hash");
+      targetPackId = extractPackId(manifest.pack);
+      if (!targetPackId) throw new Error("manifest missing pack id");
       const totalBytes = manifest.bytes;
       const totalEntries = manifest.entries;
 
-      if (prevHash === targetHash) {
+      if (previousPackId === targetPackId) {
         this.#status = "active";
         this.#progress = 1;
         return;
@@ -178,8 +176,9 @@ class OfflineStore {
 
       this.#status = "downloading";
       this.#progress = 0;
-      const packResponse = await fetch(`/offline/pack.${targetHash}.json`, { cache: "no-store" });
-      if (!packResponse.ok || !packResponse.body) throw new Error(`pack fetch ${packResponse.status}`);
+      const packResponse = await fetch(`/offline/pack.${targetPackId}.json`, { cache: "no-store" });
+      if (!packResponse.ok || !packResponse.body)
+        throw new Error(`pack fetch ${packResponse.status}`);
 
       const received = await this.#streamAccumulate(packResponse.body, totalBytes);
       if (received.byteLength !== totalBytes) {
@@ -188,9 +187,9 @@ class OfflineStore {
       const text = new TextDecoder().decode(received);
 
       this.#status = "staging";
-      const { entries, bodies } = await decodePack(text, targetHash);
+      const { entries, bodies } = decodePack(text);
 
-      const cache = await caches.open(`eq-pack-${targetHash}`);
+      const cache = await caches.open(`eq-pack-${targetPackId}`);
       const keys = Object.keys(entries);
       let staged = 0;
       for (const key of keys) {
@@ -203,17 +202,18 @@ class OfflineStore {
         this.#progress = 0.9 + 0.1 * (staged / keys.length);
       }
       if (staged !== keys.length) throw new Error(`staged ${staged} != ${keys.length}`);
-      if (staged !== totalEntries) throw new Error(`staged count ${staged} != manifest ${totalEntries}`);
+      if (staged !== totalEntries)
+        throw new Error(`staged count ${staged} != manifest ${totalEntries}`);
 
       const record: PackMirror = {
-        hash: targetHash,
+        packId: targetPackId,
         entries: totalEntries,
         bytes: totalBytes,
         savedAt: Date.now(),
       };
       await setActivePack(record);
-      if (prevHash && prevHash !== targetHash) {
-        await caches.delete(`eq-pack-${prevHash}`).catch(() => {});
+      if (previousPackId && previousPackId !== targetPackId) {
+        await caches.delete(`eq-pack-${previousPackId}`).catch(() => {});
       }
       this.#activePack = record;
       this.#mirror();
@@ -222,14 +222,17 @@ class OfflineStore {
       void this.#refreshEstimate();
     } catch (err) {
       console.warn("[offline] enable failed:", err);
-      if (targetHash) await caches.delete(`eq-pack-${targetHash}`).catch(() => {});
-      this.#status = prevHash ? "active" : "error";
+      if (targetPackId) await caches.delete(`eq-pack-${targetPackId}`).catch(() => {});
+      this.#status = previousPackId ? "active" : "error";
     } finally {
       this.#busy = false;
     }
   }
 
-  async #streamAccumulate(body: ReadableStream<Uint8Array>, totalBytes: number): Promise<Uint8Array> {
+  async #streamAccumulate(
+    body: ReadableStream<Uint8Array>,
+    totalBytes: number,
+  ): Promise<Uint8Array> {
     const reader = body.getReader();
     const chunks: Uint8Array[] = [];
     let received = 0;
@@ -253,11 +256,11 @@ class OfflineStore {
 
   async disable(): Promise<void> {
     if (!browser || this.#busy) return;
-    const hash = this.#activePack?.hash ?? null;
+    const packId = this.#activePack?.packId ?? null;
     this.#busy = true;
     try {
       await clearActivePack();
-      if (hash) await caches.delete(`eq-pack-${hash}`).catch(() => {});
+      if (packId) await caches.delete(`eq-pack-${packId}`).catch(() => {});
       this.#activePack = null;
       this.#mirror();
       this.#status = "idle";

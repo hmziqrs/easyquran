@@ -55,8 +55,8 @@ impl Entity {
                 up.source.into(),
                 up.diagnostic.into(),
                 perm.into(),
-                now.clone().into(),
-                now.clone().into(),
+                now.into(),
+                now.into(),
                 now.into(),
             ],
         ))

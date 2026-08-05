@@ -264,7 +264,7 @@ pub fn normalization_translation(
     Ok(SurahNormalizationDto {
         surah,
         source_id: source_id.to_string(),
-        script: source_id.to_string(),
+        script: "translation".to_string(),
         source_profile: source_profile.to_string(),
         packaging: OpenerPackagingDto::Absent,
         opener_kind: OpenerKindDto::None,

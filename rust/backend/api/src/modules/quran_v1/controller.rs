@@ -922,7 +922,7 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
         ));
     }
 
-    for (_id, e) in state.translation_pool.catalogue() {
+    for e in state.translation_pool.catalogue().values() {
         let url = format!("{public_url}/tanzil/translations/{}", e.path);
         candidates.push((
             SourceDto {
@@ -983,13 +983,37 @@ pub async fn openapi_json() -> axum::Json<utoipa::openapi::OpenApi> {
     )
 )]
 pub async fn health_ready(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     QQuery(_unused): QQuery<NoQuery>,
 ) -> Result<Response<Body>, QuranApiError> {
+    let pool = state.translation_pool.stats().await;
     let body = HealthReady {
         ready: true,
         verse_count: VERSE_COUNT,
         surah_count: quran::SURA_COUNT as u16,
+        arabic_resident_bytes: (state.quran.uthmani.bytes() + state.quran.simple_clean.bytes())
+            as u64,
+        loading: QuranLoadingHealth {
+            arabic_load_duration_ms: state.quran_runtime_metrics.arabic_load_duration_ms,
+            translation_catalogue_load_duration_ms: state
+                .quran_runtime_metrics
+                .translation_catalogue_load_duration_ms,
+            translation_catalogue_entries: state
+                .quran_runtime_metrics
+                .translation_catalogue_entries,
+        },
+        translation_pool: TranslationPoolHealth {
+            resident_count: pool.resident_count,
+            resident_bytes: pool.resident_bytes,
+            max_resident_count: state.settings.quran.max_resident_translations,
+            max_resident_bytes: state.settings.quran.max_resident_bytes,
+            idle_ttl_seconds: state.settings.quran.translation_idle_ttl_secs,
+            builds: pool.builds,
+            lookups: pool.lookups,
+            hit_rate: pool.hit_rate,
+            evictions: pool.evictions,
+            evictions_per_minute: pool.evictions_per_minute,
+        },
     };
     let bytes = serde_json::to_vec(&body).expect("health serializes");
     Ok(Response::builder()
@@ -1049,33 +1073,6 @@ fn random_global(date: NaiveDate) -> u32 {
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).expect("epoch");
     let days = date.signed_duration_since(epoch).num_days();
     (((days * RANDOM_K + RANDOM_C).rem_euclid(VERSE_COUNT as i64)) as u32) + 1
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn random_is_full_permutation_no_consecutive_diff_one() {
-        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-        let mut seen = vec![false; VERSE_COUNT as usize + 1];
-        let mut prev: Option<u32> = None;
-        for d in 0..VERSE_COUNT {
-            let date = epoch + chrono::Duration::days(d as i64);
-            let g = random_global(date);
-            assert!((1..=VERSE_COUNT).contains(&g), "day {d} → out of range {g}");
-            assert!(!seen[g as usize], "duplicate {g} → not a permutation");
-            seen[g as usize] = true;
-            if let Some(p) = prev {
-                assert!(
-                    (g as i32 - p as i32).abs() != 1,
-                    "consecutive dates {p} → {g} differ by 1 (predictable march)"
-                );
-            }
-            prev = Some(g);
-        }
-        assert!(seen[1..=VERSE_COUNT as usize].iter().all(|x| *x));
-    }
 }
 
 fn parse_strict_date(s: &str) -> Result<NaiveDate, QuranApiError> {
@@ -1257,9 +1254,7 @@ pub async fn source_range(
         quran::SourceId::Arabic(_) => None,
     };
     let profile = match &source_id {
-        quran::SourceId::Translation(id) => {
-            translation_profile(id.as_str())
-        }
+        quran::SourceId::Translation(id) => translation_profile(id.as_str()),
         quran::SourceId::Arabic(_) => store.etag_tag().to_string(),
     };
 
@@ -1316,4 +1311,31 @@ pub async fn source_range(
         ),
         body,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn random_is_full_permutation_no_consecutive_diff_one() {
+        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+        let mut seen = vec![false; VERSE_COUNT as usize + 1];
+        let mut prev: Option<u32> = None;
+        for d in 0..VERSE_COUNT {
+            let date = epoch + chrono::Duration::days(d as i64);
+            let g = random_global(date);
+            assert!((1..=VERSE_COUNT).contains(&g), "day {d} → out of range {g}");
+            assert!(!seen[g as usize], "duplicate {g} → not a permutation");
+            seen[g as usize] = true;
+            if let Some(p) = prev {
+                assert!(
+                    (g as i32 - p as i32).abs() != 1,
+                    "consecutive dates {p} → {g} differ by 1 (predictable march)"
+                );
+            }
+            prev = Some(g);
+        }
+        assert!(seen[1..=VERSE_COUNT as usize].iter().all(|x| *x));
+    }
 }

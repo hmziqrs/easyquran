@@ -33,6 +33,13 @@ function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
   }
 }
 
+function localizeDeliveryUrls(scripts: readonly ArtifactSpec[]): ArtifactSpec[] {
+  return scripts.map((script) => {
+    const local = QURAN.scripts.find((candidate) => candidate.id === script.id);
+    return local ? { ...script, downloadUrl: local.downloadUrl } : script;
+  });
+}
+
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
   if (!QURAN.apiBase) return baked;
   const ctrl = new AbortController();
@@ -47,7 +54,7 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     if (!res.ok) return baked;
     const scripts = decodeScriptsPayload(await res.json());
     if (!scripts || !hasRegisteredPlan(scripts)) return baked;
-    return { scripts, source: ManifestSource.Api };
+    return { scripts: localizeDeliveryUrls(scripts), source: ManifestSource.Api };
   } catch {
     return baked;
   } finally {

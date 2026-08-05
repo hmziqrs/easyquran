@@ -4,7 +4,7 @@ const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";
 
 export interface ActivePack {
-  hash: string;
+  packId: string;
   entries: number;
   bytes: number;
   savedAt: number;
@@ -88,7 +88,7 @@ export async function metaDel(key: string): Promise<void> {
 
 export async function getActivePack(): Promise<ActivePack | null> {
   const value = await metaGet<ActivePack>("activePack");
-  return value && typeof value.hash === "string" ? value : null;
+  return value && typeof value.packId === "string" ? value : null;
 }
 
 export async function setActivePack(pack: ActivePack): Promise<void> {

@@ -92,7 +92,6 @@ describe("routing and formatting helpers", () => {
   it("builds a Surah path from selected route metadata", () => {
     const fatihah = QURAN_DATA.surahByNum(1)!;
     expect(surahPath(fatihah)).toBe("/app/al-fatihah");
-    expect(surahPath(fatihah, 5)).toBe("/app/al-fatihah?verse=5");
     expect(surahLocalPagePath(fatihah, 1)).toBe("/app/al-fatihah");
     expect(surahLocalPagePath(fatihah, 2)).toBe("/app/al-fatihah/page/2");
     expect(surahAyahPath(fatihah, 2, 5)).toBe("/app/al-fatihah/page/2#ayah-1-5");

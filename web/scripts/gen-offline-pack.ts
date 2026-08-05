@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +15,7 @@ function listDataFiles(root: string): string[] {
   const stack: string[] = [root];
   while (stack.length > 0) {
     const current = stack.pop()!;
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: Dirent<string>[];
     try {
       entries = readdirSync(current, { withFileTypes: true });
     } catch {
@@ -62,8 +62,11 @@ for (const { file, key } of pairs) {
 }
 
 const serialized = JSON.stringify({ version: 1, entries, bodies });
-const hash = createHash("sha256").update(serialized).digest("hex").slice(0, 12);
-const packPath = path.join(OFFLINE_DIR, `pack.${hash}.json`);
+const packId = readAppVersion();
+if (!packId || !/^[A-Za-z0-9_-]+$/u.test(packId)) {
+  throw new Error("[offline] SvelteKit build version is missing or unsafe");
+}
+const packPath = path.join(OFFLINE_DIR, `pack.${packId}.json`);
 
 mkdirSync(OFFLINE_DIR, { recursive: true });
 
@@ -72,13 +75,13 @@ if (!existsSync(packPath)) {
 }
 
 const manifest = {
-  pack: `/offline/pack.${hash}.json`,
+  pack: `/offline/pack.${packId}.json`,
   bytes: Buffer.byteLength(serialized),
   entries: bodies.length,
-  appVersion: readAppVersion(),
+  appVersion: packId,
 };
 writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
 
 console.log(
-  `[offline] pack ${hash} · ${bodies.length} entries · ${manifest.bytes} bytes → ${path.relative(WEB, packPath)}`,
+  `[offline] pack ${packId} · ${bodies.length} entries · ${manifest.bytes} bytes → ${path.relative(WEB, packPath)}`,
 );

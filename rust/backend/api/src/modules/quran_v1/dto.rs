@@ -214,6 +214,34 @@ pub struct HealthReady {
     pub ready: bool,
     pub verse_count: u32,
     pub surah_count: u16,
+    pub arabic_resident_bytes: u64,
+    pub loading: QuranLoadingHealth,
+    pub translation_pool: TranslationPoolHealth,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct QuranLoadingHealth {
+    pub arabic_load_duration_ms: u64,
+    pub translation_catalogue_load_duration_ms: u64,
+    pub translation_catalogue_entries: u64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TranslationPoolHealth {
+    pub resident_count: u64,
+    pub resident_bytes: u64,
+    pub max_resident_count: u64,
+    pub max_resident_bytes: u64,
+    pub idle_ttl_seconds: u64,
+    pub builds: u64,
+    pub lookups: u64,
+    pub hit_rate: f64,
+    pub evictions: u64,
+    pub evictions_per_minute: u64,
 }
 
 #[derive(Serialize, Debug)]

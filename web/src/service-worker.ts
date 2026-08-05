@@ -24,13 +24,7 @@ const PAGES_MAX = 300;
 const MAINTENANCE_CONCURRENCY = 6;
 
 const PRECACHE = Array.from(
-  new Set([
-    ...build,
-    ...files,
-    "/",
-    "/app",
-    `${base}/quran-meta/quran-data.json`,
-  ]),
+  new Set([...build, ...files, "/", "/app", `${base}/quran-meta/quran-data.json`]),
 );
 
 function normalizeDataKey(url: string | URL): string {
@@ -276,7 +270,7 @@ async function maybeFinalizeHandoff(): Promise<void> {
 
 async function migrateLegacyCaches(): Promise<void> {
   const before = await caches.keys();
-  const legacy = before.filter((k) => /^eq-precache-/.test(k) || k === LEGACY_RUNTIME);
+  const legacy = before.filter((k) => k.startsWith("eq-precache-") || k === LEGACY_RUNTIME);
   if (legacy.length > 0) {
     const pages = await caches.open(PAGES_CACHE);
     const data = await caches.open(DATA_CACHE);
@@ -307,9 +301,9 @@ async function migrateLegacyCaches(): Promise<void> {
     after
       .filter(
         (k) =>
-          /^eq-precache-/.test(k) ||
+          k.startsWith("eq-precache-") ||
           k === LEGACY_RUNTIME ||
-          (/^eq-app-/.test(k) && k !== APP_CACHE),
+          (k.startsWith("eq-app-") && k !== APP_CACHE),
       )
       .map((k) => caches.delete(k)),
   );
@@ -433,10 +427,10 @@ async function handleData(req: Request): Promise<Response> {
   const fresh = await revalidate;
   if (fresh && fresh.ok) return fresh;
 
-  const activePack = await metaGet<{ hash?: string } | null>("activePack");
-  const hash = activePack?.hash;
-  if (hash) {
-    const packName = `eq-pack-${hash}`;
+  const activePack = await metaGet<{ packId?: string } | null>("activePack");
+  const packId = activePack?.packId;
+  if (packId) {
+    const packName = `eq-pack-${packId}`;
     if (await caches.has(packName)) {
       const packHit = await caches.match(new Request(key), {
         cacheName: packName,
