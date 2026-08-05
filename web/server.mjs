@@ -30,12 +30,11 @@ function applyHeaders(response, pathname, statusCode) {
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
   const writeHead = response.writeHead.bind(response);
-  response.writeHead = function headerAwareWriteHead(statusCode, reasonPhrase, headers) {
-    applyHeaders(this, pathname, statusCode);
-    if (typeof reasonPhrase === "string") {
-      return writeHead(statusCode, reasonPhrase, headers);
-    }
-    return writeHead(statusCode, reasonPhrase);
+  // Forward args verbatim — writeHead's middle arg (statusMessage) is optional,
+  // so reshaping the call risks dropping the headers object.
+  response.writeHead = function headerAwareWriteHead(...args) {
+    applyHeaders(this, pathname, args[0]);
+    return writeHead(...args);
   };
 
   Promise.resolve(handler(request, response)).catch((cause) => {
