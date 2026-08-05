@@ -70,8 +70,8 @@ impl TranslationPool {
             .map(|e| (e.id.to_string(), e.clone()))
             .collect();
         let id_whitelist: HashSet<String> = entries.keys().cloned().collect();
-        // Stable identity over the whole catalogue: any translation sha change flips it, so the
-        // /sources listing ETag invalidates on a same-count rebuild (not just a count change).
+        // Stable identity over the whole catalogue: any field change flips it, so the /sources
+        // listing ETag invalidates on a same-count rebuild (not just a count change).
         let mut sorted: Vec<&CatalogueEntry> = catalogue.iter().collect();
         sorted.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         let mut hasher = Sha256::new();
@@ -89,7 +89,6 @@ impl TranslationPool {
             }
             digest_field(&mut hasher, e.path.as_bytes());
             digest_field(&mut hasher, &e.size_bytes.to_le_bytes());
-            digest_field(&mut hasher, e.sha256.as_bytes());
         }
         let catalogue_digest: Box<str> = hex::encode(&hasher.finalize()[..8]).into_boxed_str();
         let build_sem = Arc::new(Semaphore::new(BUILD_CONCURRENCY));
@@ -129,8 +128,8 @@ impl TranslationPool {
         &self.entries
     }
 
-    /// Boot-stable digest over all catalogue (id, sha256) pairs — changes iff any translation
-    /// content changes. Used to invalidate the `/sources` listing ETag on a same-count rebuild.
+    /// Boot-stable digest over all catalogue entries (id + metadata) — changes iff any field
+    /// changes. Used to invalidate the `/sources` listing ETag on a same-count rebuild.
     pub fn catalogue_digest(&self) -> &str {
         &self.catalogue_digest
     }

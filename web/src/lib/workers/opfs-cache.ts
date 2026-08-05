@@ -17,7 +17,7 @@ export interface CachedArtifact {
 export interface CachedArtifactInfo {
   readonly id: string;
   readonly store: CacheStore;
-  readonly sha256: string;
+  readonly tag: string;
   readonly sizeBytes: number;
 }
 
@@ -60,7 +60,7 @@ export async function ensureArtifact(
   if (hasOpfs()) {
     try {
       const opfs = createOpfsStore(ROOT_DIR);
-      const cached = await opfs.get(spec.sha256, opfsKey);
+      const cached = await opfs.get(spec.id, opfsKey);
       if (cached) {
         try {
           await verifyBytes(cached, dl);
@@ -69,7 +69,7 @@ export async function ensureArtifact(
         } catch {}
       }
       const bytes = await downloadBytes(dl, progress);
-      await opfs.put(spec.sha256, opfsKey, bytes);
+      await opfs.put(spec.id, opfsKey, bytes);
       await stampLastUsed(spec.id);
       return { bytes, store: "opfs", downloaded: true };
     } catch (err) {
@@ -78,7 +78,7 @@ export async function ensureArtifact(
   }
 
   const idb = createIdbStore(QURAN_DB, QURAN_STORE);
-  const r = await ensureCached(dl, { store: idb, tag: spec.sha256, key: idbKey });
+  const r = await ensureCached(dl, { store: idb, tag: spec.id, key: idbKey });
   const downloaded = r.from === "download";
   if (downloaded) await stampLastUsed(spec.id);
   else void stampLastUsed(spec.id);
@@ -111,7 +111,7 @@ async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
           const fh = await tagDir.getFileHandle(fileName);
           sizeBytes = (await fh.getFile()).size;
         } catch {}
-        out.push({ id, store: "opfs", sha256: tagName, sizeBytes });
+        out.push({ id, store: "opfs", tag: tagName, sizeBytes });
       }
     }
   } catch (err) {
@@ -133,11 +133,11 @@ async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
         const compound = String(cur.key);
         const sep = compound.indexOf(":");
         if (sep > 0) {
-          const sha256 = compound.slice(0, sep);
+          const tag = compound.slice(0, sep);
           const id = compound.slice(sep + 1);
           const v = cur.value;
           const sizeBytes = v instanceof ArrayBuffer ? v.byteLength : 0;
-          out.push({ id, store: "idb", sha256, sizeBytes });
+          out.push({ id, store: "idb", tag, sizeBytes });
         }
         cur.continue();
       };
@@ -158,12 +158,12 @@ export async function listCachedArtifacts(): Promise<CachedArtifactInfo[]> {
   return [...byId.values()];
 }
 
-export async function deleteCachedArtifact(id: string, sha256: string): Promise<void> {
+export async function deleteCachedArtifact(id: string, tag: string): Promise<void> {
   if (hasOpfs()) {
     try {
       const root = await navigator.storage.getDirectory();
       const top = await root.getDirectoryHandle(ROOT_DIR, { create: false });
-      const tagDir = await top.getDirectoryHandle(sha256, { create: false });
+      const tagDir = await top.getDirectoryHandle(tag, { create: false });
       await tagDir.removeEntry(`${id}.sqlite`);
     } catch {}
   }
@@ -171,7 +171,7 @@ export async function deleteCachedArtifact(id: string, sha256: string): Promise<
     const db = await openArtifactsIdb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(QURAN_STORE, "readwrite");
-      tx.objectStore(QURAN_STORE).delete(`${sha256}:${id}`);
+      tx.objectStore(QURAN_STORE).delete(`${tag}:${id}`);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

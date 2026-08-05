@@ -354,7 +354,6 @@ describe("translation sources manifest wire", () => {
     name: "Sahih International",
     translator: null,
     sizeBytes: 2,
-    sha256: "b",
     downloadUrl: "https://x/t",
   };
 

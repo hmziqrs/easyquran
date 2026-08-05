@@ -51,16 +51,10 @@ fn parse_source(
     )))
 }
 
-/// Stable, immutable identity string for a translation response (its ETag tag). Derived from
-/// the catalogue sha — translations carry no golden digest; integrity is fixed at §2 build.
-fn translation_profile(id: &str, pool: &crate::quran::TranslationPool) -> String {
-    let sha = pool
-        .catalogue()
-        .get(id)
-        .map(|e| e.sha256.as_ref())
-        .unwrap_or("");
-    let prefix8 = sha.get(..8).unwrap_or(sha);
-    format!("tanzil-{id}-{prefix8}")
+/// Stable, immutable identity string for a translation response (its ETag tag). Translations
+/// carry no digest — identity is the id (DBs are immutable); integrity is fixed at build.
+fn translation_profile(id: &str) -> String {
+    format!("tanzil-{id}")
 }
 
 impl From<quran::ViewError> for QuranApiError {
@@ -888,7 +882,7 @@ pub async fn sources(
     } else {
         cache::NO_STORE
     };
-    // ETag folds the catalogue digest so a same-count rebuild (a translation sha changed) still
+    // ETag folds the catalogue digest so a same-count rebuild (any field changed) still
     // invalidates the cached listing — not just the uthmani digest + verified count.
     let tag = format!(
         "{}:{}",
@@ -933,7 +927,7 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
                 name: display.to_string(),
                 translator: None,
                 size_bytes: file.size_bytes,
-                sha256: file.sha256.to_string(),
+                sha256: Some(file.sha256.to_string()),
                 download_url: url,
             },
             file.size_bytes,
@@ -952,7 +946,7 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
                 name: e.name.to_string(),
                 translator: e.translator.as_deref().map(String::from),
                 size_bytes: e.size_bytes,
-                sha256: e.sha256.to_string(),
+                sha256: None,
                 download_url: url,
             },
             e.size_bytes,
@@ -1228,7 +1222,7 @@ pub async fn source_surah(
             ))
         }
         quran::SourceId::Translation(id) => {
-            let profile = translation_profile(id.as_str(), &state.translation_pool);
+            let profile = translation_profile(id.as_str());
             let corpus = state
                 .translation_pool
                 .get_or_build(&id)
@@ -1282,7 +1276,7 @@ pub async fn source_range(
     };
     let profile = match &source_id {
         quran::SourceId::Translation(id) => {
-            translation_profile(id.as_str(), &state.translation_pool)
+            translation_profile(id.as_str())
         }
         quran::SourceId::Arabic(_) => store.etag_tag().to_string(),
     };

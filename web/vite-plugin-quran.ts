@@ -9,6 +9,7 @@ import rawTranslations from "./src/lib/data/translations.json";
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";
 const LOCAL_TRANSLATION_DIR = "db/quran/tanzil/translations";
+const TRANSLATION_FILE_PATH = 6; // TranslationField.FilePath — web/src/lib/quran/catalogue.ts
 
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
   ...registeredSourceProfiles().map(
@@ -18,13 +19,13 @@ const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
         path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
       ] as [string, string],
   ),
-  ...(rawTranslations as readonly { file: { path: string } }[]).map(
-    (t) =>
-      [
-        `tanzil/translations/${t.file.path}`,
-        path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, t.file.path),
-      ] as [string, string],
-  ),
+  ...(rawTranslations as readonly unknown[]).map((row) => {
+    const filePath = (row as readonly unknown[])[TRANSLATION_FILE_PATH] as string;
+    return [
+      `tanzil/translations/${filePath}`,
+      path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, filePath),
+    ] as [string, string];
+  }),
 ];
 
 const LOCAL_ARTIFACTS = new Map<string, string>(LOCAL_ARTIFACT_ENTRIES);

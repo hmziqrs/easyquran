@@ -7,36 +7,89 @@ import {
 import rawTranslations from "../data/translations.json";
 import { decodeSourcesPayload } from "./wire";
 
-type RawTranslationFile = {
-  path: string;
-  sizeBytes: number;
-  sha256: string;
-};
-type RawTranslation = {
-  id: string;
-  language: string;
-  languageCode: string;
-  direction: TranslationDirection;
-  name: string;
-  translator: string | null;
-  file: RawTranslationFile;
-};
+export const TranslationField = {
+  Id: 0,
+  Language: 1,
+  LanguageCode: 2,
+  Direction: 3,
+  Name: 4,
+  Translator: 5,
+  FilePath: 6,
+  FileSize: 7,
+} as const;
+
+const TRANSLATION_FIELD_COUNT = 8;
+
+type TranslationRow = readonly [
+  id: string,
+  language: string,
+  languageCode: string,
+  direction: TranslationDirection,
+  name: string,
+  translator: string | null,
+  filePath: string,
+  sizeBytes: number,
+];
+
+function isTranslationDirection(value: unknown): value is TranslationDirection {
+  return value === "rtl" || value === "ltr";
+}
+
+function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
+  if (!Array.isArray(raw) || raw.length !== TRANSLATION_FIELD_COUNT) {
+    throw new Error(
+      `[catalogue] invalid translation row ${index + 1}: expected ${TRANSLATION_FIELD_COUNT} fields`,
+    );
+  }
+  const id = raw[TranslationField.Id];
+  const language = raw[TranslationField.Language];
+  const languageCode = raw[TranslationField.LanguageCode];
+  const direction = raw[TranslationField.Direction];
+  const name = raw[TranslationField.Name];
+  const translator = raw[TranslationField.Translator];
+  const filePath = raw[TranslationField.FilePath];
+  const sizeBytes = raw[TranslationField.FileSize];
+  if (typeof id !== "string" || !id) throw new Error(`[catalogue] row ${index + 1}: bad id`);
+  if (typeof language !== "string" || !language)
+    throw new Error(`[catalogue] row ${index + 1}: bad language`);
+  if (typeof languageCode !== "string" || !languageCode)
+    throw new Error(`[catalogue] row ${index + 1}: bad languageCode`);
+  if (!isTranslationDirection(direction))
+    throw new Error(`[catalogue] row ${index + 1}: bad direction`);
+  if (typeof name !== "string" || !name) throw new Error(`[catalogue] row ${index + 1}: bad name`);
+  if (translator !== null && typeof translator !== "string")
+    throw new Error(`[catalogue] row ${index + 1}: bad translator`);
+  if (typeof filePath !== "string" || !filePath)
+    throw new Error(`[catalogue] row ${index + 1}: bad filePath`);
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0)
+    throw new Error(`[catalogue] row ${index + 1}: bad sizeBytes`);
+  return [
+    id,
+    language,
+    languageCode,
+    direction,
+    name,
+    translator,
+    filePath,
+    sizeBytes,
+  ] as TranslationRow;
+}
 
 function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
-  return (rawTranslations as RawTranslation[]).map((r) => ({
-    kind: "translation" as const,
-    entry: {
-      id: r.id,
-      language: r.language,
-      languageCode: r.languageCode,
-      direction: r.direction,
-      name: r.name,
-      translator: r.translator,
-      sizeBytes: r.file.sizeBytes,
-      sha256: r.file.sha256,
-      downloadUrl: `${QURAN.artifactBase}/tanzil/translations/${r.file.path}`,
-    },
-  }));
+  return (rawTranslations as readonly unknown[]).map((raw, index) => {
+    const row = decodeTranslationRow(raw, index);
+    const entry: TranslationCatalogueEntry = {
+      id: row[TranslationField.Id],
+      language: row[TranslationField.Language],
+      languageCode: row[TranslationField.LanguageCode],
+      direction: row[TranslationField.Direction],
+      name: row[TranslationField.Name],
+      translator: row[TranslationField.Translator],
+      sizeBytes: row[TranslationField.FileSize],
+      downloadUrl: `${QURAN.artifactBase}/tanzil/translations/${row[TranslationField.FilePath]}`,
+    };
+    return { kind: "translation" as const, entry };
+  });
 }
 
 const SOURCE_CATALOGUE_TTL_MS = 300_000;

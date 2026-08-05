@@ -151,10 +151,10 @@ async function runPrune(opts: PruneOptions): Promise<PruneResult> {
   const evictIds = computeEvictions(candidates, lastUsed, sizeFor, Date.now());
   if (evictIds.length === 0) return { evicted: Object.freeze([]) };
 
-  const shaById = new Map(artifacts.map((a) => [a.id, a.sha256]));
+  const tagById = new Map(artifacts.map((a) => [a.id, a.tag]));
   const evicted: string[] = [];
   for (const id of evictIds) {
-    await deleteCachedArtifact(id, shaById.get(id) ?? "");
+    await deleteCachedArtifact(id, tagById.get(id) ?? "");
     await clearLastUsed(id);
     evicted.push(id);
   }

@@ -272,7 +272,6 @@ function decodeTranslationCatalogueEntry(
   const name = typeof rec.name === "string" && rec.name.length > 0 ? rec.name : null;
   const translatorValid = rec.translator === null || typeof rec.translator === "string";
   const sizeBytes = positiveInteger(rec.sizeBytes);
-  const sha256 = typeof rec.sha256 === "string" && rec.sha256.length > 0 ? rec.sha256 : null;
   const downloadUrl =
     typeof rec.downloadUrl === "string" && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
   if (
@@ -283,7 +282,6 @@ function decodeTranslationCatalogueEntry(
     !name ||
     !translatorValid ||
     sizeBytes === null ||
-    !sha256 ||
     !downloadUrl
   ) {
     return null;
@@ -296,7 +294,6 @@ function decodeTranslationCatalogueEntry(
     name,
     translator: rec.translator as string | null,
     sizeBytes,
-    sha256,
     downloadUrl,
   };
 }

@@ -1149,8 +1149,8 @@ async fn arabic_and_translation_sources_carry_distinct_etags() {
         "translation must not share the uthmani ETag"
     );
     assert!(
-        etag_t.contains("tanzil-en.sahih-"),
-        "translation etag derived from catalogue sha: {etag_t}"
+        etag_t.contains("tanzil-en.sahih"),
+        "translation etag keyed by its id (no digest — identity is the id): {etag_t}"
     );
 }
 

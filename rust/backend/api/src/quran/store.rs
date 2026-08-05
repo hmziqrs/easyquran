@@ -241,8 +241,8 @@ pub struct Artifacts {
     pub simple_clean: ArtifactFile,
 }
 
-/// One row of the boot-loaded translation catalogue (the widened §2 `index.min.json`).
-/// Carries the sqlite digest + size so the API and the client never re-hash on the hot path.
+/// One row of the boot-loaded translation catalogue (`index.min.json`). Carries size so the API
+/// and client never re-stat on the hot path; no digest — identity is the id (DBs are immutable).
 #[derive(Clone, Debug)]
 pub struct CatalogueEntry {
     pub id: Box<str>,
@@ -254,7 +254,6 @@ pub struct CatalogueEntry {
     /// Catalogue-relative path, e.g. "sqlite/en.sahih.sqlite".
     pub path: Box<str>,
     pub size_bytes: u64,
-    pub sha256: Box<str>,
 }
 
 pub struct QuranMeta {

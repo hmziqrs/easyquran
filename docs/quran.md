@@ -15,7 +15,7 @@ Part 1 is settled ground: rules and contracts that constrain everything else, ve
 - **Ayah text is verbatim.** The source `text` is never normalized, split, trimmed, or reordered — SQLite read → in-memory store → JSON → SSG HTML. `9:1` has no basmala, `1:1` *is* the basmala, `27:30` carries one mid-ayah, `95:1`/`97:1` carry a shadda spelling: all correct source state, none of it a cleanup target.
 - **Integrity: two layers, both deliberate.**
   - *Corpus text* — golden sha256 over the joined corpus, asserted at boot as a **literal**, never self-derived (`quran/loader.rs`): a normalizing loader corrupts both sides of a self-derived check identically and slips past. 5,782 of 6,236 Uthmani rows are non-NFC — NFC composes ALEF + MADDAH into U+0622 (2,945 of each, across 2,044 rows; zero pre-existing U+0622), so a driver or encoder upgrade rewrites thousands of ayahs while every page still looks correct. Simple-clean is NFC/NFKC-stable.
-  - *Downloaded db bytes* — the client re-hashes cached OPFS bytes against `spec.sha256` on read (`workers/opfs-cache.ts`); the SSG build verifies the digest it reads.
+  - *Downloaded Arabic db bytes* — the client re-hashes cached OPFS bytes against the Arabic `spec.sha256` on read (`workers/opfs-cache.ts`); the SSG build verifies the digest it reads. **Arabic only.** Translations ship no digest (identity is the id); their download integrity is size-only, and their build-time sha256 stays in the repo-only `index.json` + `sqlite/manifest.json` that `db/.../verify.ts` checks — never published, never a cache key.
   - What is banned is **runtime identity by hash**: no sha256/blake3 in an R2 key, cache dir, or version handshake. Hash verifies bytes; it never names them.
 - **Boot is fail-fast.** Missing/corrupt source, XML failure, tiling failure, digest mismatch, or a wrong bismillah split count → log the specific invariant, exit non-zero. No "Arabic not ready" served state.
 - **Arabic renders SSG.** Translated pages render SSR + disk-TTL (Part 2 §7). Never ISR.
@@ -27,7 +27,7 @@ Part 1 is settled ground: rules and contracts that constrain everything else, ve
 - **Global ayah index:** `quran_text."index"` is canonical — contiguous `1..6236`, unique, ordered by surah then ayah, `= sura.start + aya` (XML `start` zero-based, `aya` one-based). Asserted at boot; `/range` and its cap of 300 rest on it.
 - **Marker families tile `[1,6236]`** with no gap or overlap (page/juz/ruku/hizb-quarter/manzil), marker `index` order asserted to match global order. `<quarter>` carries no hizb attribute — derive: `hizb = ((i-1)/4)+1`, `quarterInHizb = ((i-1)%4)+1`.
 - **No FTS.** Search = normalize + substring-scan the 6236 simple-clean rows.
-- Translations: 115 dumps → one `<id>.sqlite` each, same schema, across 44 languages. 186 MiB total: p50 1.25, p95 3.10, max 12.43 MiB. **Non-commercial license** — revisit if the project monetizes.
+- Translations: 115 dumps → one `<id>.sqlite` each, same schema, across 44 languages. 186 MiB total: p50 1.25, p95 3.10, max 12.43 MiB. **Non-commercial license** — revisit if the project monetizes. The web's baked catalogue (`web/src/lib/data/translations.json`) is a flat positional array mirroring `quran-data.json`'s surah rows — `[id, language, languageCode, direction, name, translator, filePath, sizeBytes]`, decoded by `TranslationField` in `quran/catalogue.ts`; no sha256 (id-keyed). `db/.../index.min.json` is the object-form twin Rust loads at boot; both are sha-free.
 
 ## API — Rust `/quran`
 
@@ -64,7 +64,7 @@ Databases are immutable and read-only: no write handling anywhere.
 
 - **Rust, in memory:** both Arabic corpora load at boot and stay resident. `Script` accepts `uthmani` | `simple-clean` only.
 - **Rust, responses:** no server-side store. Reads come straight from the resident corpus, but every response is edge-cacheable — weak `ETag` = `store tag : canonical key`, `If-None-Match` → 304, `Cache-Control` per family: Arabic `max-age=300, s-maxage=86400, swr=604800, sie=604800`; search `max-age=60, s-maxage=300`; artifacts `immutable`; 5xx `no-store`, so a CDN cannot pin a transient failure.
-- **Web, OPFS:** Arabic eager on boot. **Key = `spec.sha256`**; the id is only a filename, and bytes are re-verified against that hash on every read. No eviction exists yet (§6). The only LRU today is the service worker's route cache, cap 300.
+- **Web, OPFS:** Arabic eager on boot. **Key = `spec.id`** (a db's identity is its id; the prior `spec.sha256` key was a cache-dir violation of the no-hash-identity rule). Arabic bytes are still re-verified against their pinned sha256 on every read; translation bytes are size-checked only — no digest ships in the baked catalogue. Older sha256-keyed caches orphan on upgrade (one-time re-download). Retention/eviction: §6.
 - **R2 layout** (publisher `translations/scripts/upload-sqlite.ts`, bucket prefix `tanzil/`): `tanzil/arabic/<file>.sqlite`, `tanzil/translations/sqlite/<id>.sqlite`, `tanzil/translations/index.min.json` (mutable, `max-age=300, must-revalidate`), `tanzil/quran-data.xml`. Everything except the catalogue is `immutable`. Raw `sql/` dumps are never published.
 
 ## Web delivery + pagination — as built
@@ -92,21 +92,20 @@ Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unb
 
 **Done when:** `/scripts` returns 2 verified artifacts with `ARABIC_CACHE`; the web's `ResolvedManifest.source` flips from `baked` to `api`; a test asserts the emitted URL against the publisher's key constant so the two cannot drift again.
 
-## 2. Publish sqlite digests in the catalogue
+## 2. Translation catalogue — positional, id-keyed, no SHA-256 — *done, then reversed*
 
-OPFS keys on `spec.sha256` of the **downloaded sqlite**. Nothing today can supply that digest:
+The first pass of this section widened `file` to `{ path, sizeBytes, sha256 }` and keyed the OPFS cache on `spec.sha256`, on the theory that a content hash was the right cache identity. That was wrong: it violated the §Hard-rules ban on hash-keyed cache dirs, and it shipped 115 digests that only duplicated the id.
 
-- `index.json` carries a `file.sha256`, but it hashes the **SQL dump** — a different file.
-- `index.min.json`, the one actually published and consumed, is sparser: `file` is a bare path string (`"sqlite/sq.nahi.sqlite"`), with **no digest or size slot at all**.
-- `web/src/lib/data/translations.json`, which the README says `catalog` writes, does not exist.
+**Decision (reversal): never SHA-256 as a Quran catalogue/identity key.** A database's identity is its **id** (`uthmani`, `en.sahih`, …). Quran DBs are immutable, so id is a complete, stable identity; a sha256 key only renames it. The translation sha256 is purged from every place it was used as identity or cache key — the baked catalogue, the OPFS+IDB cache key, the worker spec, the Rust `CatalogueEntry`, the `/sources` translation rows, and the translation ETag (now `tanzil-{id}`, no `sha8`). The catalogue is now a **flat positional array** mirroring `quran-data.json`'s surah rows (`TranslationField` in `quran/catalogue.ts`), emitted sha-free by `db/.../scripts/lib.ts`.
 
-So this adds a field that has never existed — it is not correcting a wrong value.
+**What stays sha256** (the principled split — not a contradiction):
+- *Arabic integrity* — the two golden corpus digests + the `/scripts` Arabic artifact sha verify the immutable Arabic text at boot and on download (`source-profiles`, `quran-sqlite`, `resolveSourceProfile`). Script accuracy is the project's highest priority; tamper detection on the Word stays.
+- *Translation build-time integrity* — `db/.../verify.ts` still re-hashes each SQL dump and sqlite against `index.json` + `sqlite/manifest.json`. Those digests are **repo/build-only, never published** — they guard the build, not the runtime, and never name a cache dir.
+- *Crypto primitives* — CSRF `hkdf_sha256`, webhook HMACs, Argon2id, PKCE S256, AES-GCM-SIV field encryption. Unrelated to Quran data; untouched.
 
-**Decision:** the catalogue is the digest authority for translations. Static digest pinning stays **Arabic-only** — `resolveSourceProfile` pins two digests because they register a canonical-view profile; 115 translations cannot and should not be pinned in source.
+A deep audit (7 agents, repo-wide) confirmed no translation/catalogue sha256 survives as identity or cache key; every remaining `sha256` in the project is one of the three categories above.
 
-**Approach:** `build:sqlite` emits `sqlite/manifest.json` (`id`, `sizeBytes`, `sha256`) per artifact; `catalog` widens `index.min.json`'s `file` from a bare path string to `{ path, sizeBytes, sha256 }` and copies the result to `web/src/lib/data/translations.json`; `verify` fails if any translation lacks a sqlite entry or its digest disagrees with the file on disk. Widening `file` is a breaking shape change to a published object — but it is the mutable catalogue (`max-age=300, must-revalidate`), and nothing consumes it yet.
-
-**Done when:** every catalogue entry carries a sqlite digest + size, `pnpm verify` fails on a missing or stale one, and the web can construct an `ArtifactSpec` for any translation without hardcoding.
+**Done when:** `web/.../translations.json` + `db/.../index.min.json` are sha-free; the OPFS/IDB cache keys by id; Rust `/sources` omits translation sha and the translation ETag is id-only; the byte-verify primitive remains for Arabic; `cargo test`, `pnpm check/test/build`, and `db verify` all pass.
 
 ## 3. Translation sources in Rust
 
@@ -125,7 +124,7 @@ So this adds a field that has never existed — it is not correcting a wrong val
 
 Single-flight is mandatory: two concurrent cold requests for the same id must build once — `moka::future::Cache::try_get_with` or equivalent. **No `std::sync` guard may be held across an `.await`** (`MutexGuard` is `!Send`, axum handler futures must be `Send`).
 
-The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert. Their integrity is fixed at build (§2) and verified on download.
+The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert, and none is wanted — a translation's identity is its id. Integrity is fixed at build (repo-only `index.json` + `manifest.json` digests, checked by `verify.ts`); on download the client size-checks translation bytes only (Arabic is the one it sha-verifies). See §2.
 
 **Done when:** `/quran/sources/en.sahih/surah/2` returns text; a cold-start concurrency test proves one build for N simultaneous requests; the pool exports resident-count, resident-bytes, hit-rate, and evictions/min so the bounds above are tuned on evidence rather than reset by guess.
 

@@ -140,7 +140,7 @@ export interface SajdaEntry {
 export interface ArtifactSpec {
   id: QuranSourceId;
   sizeBytes: number;
-  sha256: string;
+  sha256?: string;
   downloadUrl: string;
 }
 
@@ -154,7 +154,6 @@ export interface TranslationCatalogueEntry {
   name: string;
   translator: string | null;
   sizeBytes: number;
-  sha256: string;
   downloadUrl: string;
 }
 

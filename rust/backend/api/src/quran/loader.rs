@@ -160,7 +160,6 @@ pub async fn load_catalogue(path: &str) -> Result<Box<[CatalogueEntry]>, QuranLo
             translator: r.translator.map(|s| s.into_boxed_str()),
             path: r.file.path.into_boxed_str(),
             size_bytes: r.file.size_bytes,
-            sha256: r.file.sha256.into_boxed_str(),
         });
     }
     Ok(out.into_boxed_slice())
@@ -184,7 +183,6 @@ struct RawCatalogueFile {
     path: String,
     #[serde(rename = "sizeBytes")]
     size_bytes: u64,
-    sha256: String,
 }
 
 /// Cold-read a translation sqlite into the same arena representation as Arabic. Translations
