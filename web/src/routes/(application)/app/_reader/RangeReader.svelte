@@ -80,6 +80,14 @@
     </div>
   {/each}
 
+  {#if data.ayahs.length === 0}
+    <div
+      class="rounded-2xl border border-line bg-bg-1 px-5 py-10 text-center text-sm text-fg-2 sm:px-9"
+    >
+      This translation couldn't be loaded right now.
+    </div>
+  {/if}
+
   {#if prevHref || nextHref}
     <div
       class="flex items-center justify-between gap-4 rounded-2xl border border-line bg-bg-1 px-5 py-[22px] sm:px-9"

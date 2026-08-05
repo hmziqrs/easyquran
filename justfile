@@ -1,13 +1,17 @@
+set dotenv-load := true
+
 default:
     @just --list
 
 _env:
-    @if [ ! -f rust/.env ]; then \
-        cp rust/.env.example rust/.env; \
+    @if [ ! -f .env ]; then \
+        cp .env.example .env; \
         KEY=$(openssl rand -hex 32); \
-        perl -pi -e "s/^COOKIE_KEY=.*/COOKIE_KEY=$KEY/" rust/.env; \
-        echo "Created rust/.env (COOKIE_KEY generated). Edit S3_/SMTP_* before running the api."; \
+        perl -pi -e "s/^COOKIE_KEY=.*/COOKIE_KEY=$KEY/" .env; \
+        echo "Created .env (COOKIE_KEY generated). Edit S3_/SMTP_* before running."; \
     fi
+    @ln -sf ../.env web/.env
+    @ln -sf ../.env rust/.env
 
 setup: _env
     cd web && pnpm install

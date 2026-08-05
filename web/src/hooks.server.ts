@@ -37,7 +37,11 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     const response = await resolve(event);
     const contentType = response.headers.get("content-type") ?? "";
-    if (response.status === 200 && contentType.includes("text/html")) {
+    if (
+      response.status === 200 &&
+      contentType.includes("text/html") &&
+      !response.headers.get("x-eq-translation-pending")
+    ) {
       const clone = response.clone();
       void clone
         .text()

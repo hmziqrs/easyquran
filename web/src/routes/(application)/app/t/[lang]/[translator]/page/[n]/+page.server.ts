@@ -6,7 +6,7 @@ import type { PageServerLoad } from "./$types";
 
 export const prerender = false;
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const index = Number(params.n);
   if (!Number.isInteger(index) || index < 1 || index > 604) {
     throw error(404, `Unknown page: ${params.n}`);
@@ -16,5 +16,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
   if (catalogue.length > 0 && !findCatalogueEntry(catalogue, sourceId)) {
     throw error(404, `Unknown translation: ${params.lang}.${params.translator}`);
   }
-  return loadTranslationRangeData("page", index, params.lang, params.translator, fetch);
+  const data = await loadTranslationRangeData("page", index, params.lang, params.translator, fetch);
+  if (data.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  return data;
 };

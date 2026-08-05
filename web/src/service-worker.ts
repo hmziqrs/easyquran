@@ -193,7 +193,13 @@ async function precache(): Promise<void> {
         await cache.put(url, res);
       }),
     );
-    const shell = await fetch(SHELL_ROUTE, { cache: "no-cache" }).catch(() => null);
+    const shellCtrl = new AbortController();
+    const shellTimer = setTimeout(() => shellCtrl.abort(), 4000);
+    const shell = await fetch(SHELL_ROUTE, {
+      cache: "no-cache",
+      signal: shellCtrl.signal,
+    }).catch(() => null);
+    clearTimeout(shellTimer);
     if (shell && shell.ok) await cache.put(SHELL_ROUTE, shell);
   } catch (err) {
     await caches.delete(APP_CACHE).catch(() => {});

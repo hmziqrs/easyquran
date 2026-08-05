@@ -4,16 +4,30 @@ import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment";
 import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
+import rawTranslations from "./src/lib/data/translations.json";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";
+const LOCAL_TRANSLATION_DIR = "db/quran/tanzil/translations";
 
-const LOCAL_ARTIFACTS = new Map(
-  registeredSourceProfiles().map((profile) => [
-    profile.artifact.r2Path,
-    path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
-  ]),
-);
+const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
+  ...registeredSourceProfiles().map(
+    (profile) =>
+      [
+        profile.artifact.r2Path,
+        path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
+      ] as [string, string],
+  ),
+  ...(rawTranslations as readonly { file: { path: string } }[]).map(
+    (t) =>
+      [
+        `tanzil/translations/${t.file.path}`,
+        path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, t.file.path),
+      ] as [string, string],
+  ),
+];
+
+const LOCAL_ARTIFACTS = new Map<string, string>(LOCAL_ARTIFACT_ENTRIES);
 
 function localArtifactPath(rawUrl: string): string | undefined {
   try {
@@ -53,6 +67,7 @@ export function quranArtifacts(): Plugin {
     generateBundle() {
       if (dataEnvironment !== QuranDataEnvironment.Local) return;
       for (const [artifactPath, localPath] of LOCAL_ARTIFACTS) {
+        if (!artifactPath.startsWith("tanzil/arabic/")) continue;
         this.emitFile({
           type: "asset",
           fileName: `${LOCAL_ARTIFACT_PREFIX.slice(1)}${artifactPath}`,

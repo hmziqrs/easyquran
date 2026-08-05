@@ -66,9 +66,14 @@
   } = $props();
 
   let loadedPages = $state.raw<SurahLocalPageData[]>([]);
-  const pages = $derived.by(() =>
-    [initial, ...loadedPages].sort((a, b) => a.page.localPage - b.page.localPage),
-  );
+  const pages = $derived.by(() => {
+    const byPage = new Map<number, SurahLocalPageData>();
+    for (const pageData of [initial, ...loadedPages]) {
+      const existing = byPage.get(pageData.page.localPage);
+      if (!existing || pageData.ayahs.length > 0) byPage.set(pageData.page.localPage, pageData);
+    }
+    return [...byPage.values()].sort((a, b) => a.page.localPage - b.page.localPage);
+  });
   let readerPages: HTMLElement | null = $state(null);
   const pendingPages = new SvelteSet<number>();
   const loadingPages = new SvelteSet<number>();
@@ -381,7 +386,7 @@
     if (
       localPage < 1 ||
       localPage > initial.pageCount ||
-      pages.some((item) => item.page.localPage === localPage) ||
+      pages.some((item) => item.page.localPage === localPage && item.ayahs.length > 0) ||
       loadingPages.has(localPage)
     ) {
       return;
@@ -593,6 +598,7 @@
     clientMounted = true;
     lastScrollY = window.scrollY;
     cachePage(initial);
+    if (initial.ayahs.length === 0) void loadPage(initial.page.localPage);
     void restoreHistory().then(() => {
       stableAnchor = captureAnchor();
       scheduleForwardFill();
@@ -711,12 +717,31 @@
     <span class="sr-only" aria-live="polite">Page {visibleLocalPage} of {initial.pageCount}</span>
 
     {#if clientMounted && (loadFailed || quran.status === "error")}
-      <div role="status" class="border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9">
-        {#if online.hydrated && !online.online}
-          You're offline — more ayahs will load when you reconnect. You can keep reading this page or use the
-          page links.
-        {:else}
-          More ayahs are unavailable right now. You can keep reading this page or use the page links.
+      <div
+        role="status"
+        class="flex items-center justify-between gap-3 border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9"
+      >
+        <span>
+          {#if initial.ayahs.length === 0}
+            This translation couldn't be loaded right now.
+          {:else if online.hydrated && !online.online}
+            You're offline — more ayahs will load when you reconnect. You can keep reading this page or
+            use the page links.
+          {:else}
+            More ayahs are unavailable right now. You can keep reading this page or use the page links.
+          {/if}
+        </span>
+        {#if initial.ayahs.length === 0}
+          <button
+            type="button"
+            onclick={() => {
+              loadFailed = false;
+              void loadPage(initial.page.localPage);
+            }}
+            class="shrink-0 rounded-full border border-line px-3 py-1 text-xs text-fg transition-colors hover:bg-bg-1"
+          >
+            Retry
+          </button>
         {/if}
       </div>
     {/if}

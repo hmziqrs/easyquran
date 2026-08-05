@@ -21,7 +21,7 @@ function resolveLocalPageAction(
   return { kind: "proceed", localPage };
 }
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const surah = QURAN_DATA.surahBySlug(params.surah);
   if (!surah) throw error(404, `Unknown surah: ${params.surah}`);
   const action = resolveLocalPageAction(
@@ -38,5 +38,6 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
     fetch,
   );
   if (!data) throw error(404, `Unknown Surah page: ${params.localPage}`);
+  if (data.pageData.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
   return data;
 };

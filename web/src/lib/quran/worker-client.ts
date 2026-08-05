@@ -114,6 +114,15 @@ export const quranWorker = {
     return () => progressListeners.delete(cb);
   },
 
+  hasTranslation(source: QuranReaderSource): Promise<boolean> {
+    return request<boolean>((id) => ({ id, type: "hasTranslation", source }));
+  },
+  ensureTranslation(source: QuranReaderSource): Promise<void> {
+    return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(
+      () => undefined,
+    );
+  },
+
   whenReady(): Promise<void> {
     if (isReady) return Promise.resolve();
     if (startPromise) return startPromise;
@@ -198,42 +207,79 @@ export const quranWorker = {
     resetWorker(new Error("quran worker disposed"));
   },
 
-  readSurah(num: number, source?: QuranReaderSource): Promise<QuranSurahText> {
+  async readSurah(num: number, source?: QuranReaderSource): Promise<QuranSurahText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
-    return request<QuranSurahText>((id) => ({ id, type: "readSurah", num, source }))
-      .then((raw: unknown) => {
-        const decoded = isArabicSourceId(reader)
-          ? decodeQuranSurahText(raw)
-          : decodeTranslationSurahText(raw);
-        if (!decoded) throw new Error("quran worker returned a malformed surah");
-        return decoded;
-      })
-      .catch((err) => {
-        if (QURAN.apiBase) return quranApi.readSurah(reader, num);
-        throw err;
-      });
+    if (isArabicSourceId(reader)) {
+      const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source }));
+      const decoded = decodeQuranSurahText(raw);
+      if (!decoded) throw new Error("quran worker returned a malformed surah");
+      return decoded;
+    }
+    if (await quranWorker.hasTranslation(reader)) {
+      try {
+        const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source: reader }));
+        const decoded = decodeTranslationSurahText(raw);
+        if (decoded) return decoded;
+      } catch {}
+    }
+    void quranWorker.ensureTranslation(reader);
+    if (QURAN.apiBase) {
+      try {
+        return await quranApi.readSurah(reader, num);
+      } catch {}
+    }
+    if (await quranWorker.hasTranslation(reader)) {
+      const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source: reader }));
+      const decoded = decodeTranslationSurahText(raw);
+      if (decoded) return decoded;
+    }
+    throw new Error(`translation surah unavailable: ${reader}/${num}`);
   },
 
-  readRange(
+  async readRange(
     from: number,
     to: number,
     validateCoordinate?: AyahCoordinateValidator,
     source?: QuranReaderSource,
   ): Promise<QuranRangeText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
-    return request<QuranRangeText>((id) => ({ id, type: "readRange", from, to, source })).then(
-      (raw: unknown) => {
-        const decoded = isArabicSourceId(reader)
-          ? decodeQuranRangeText(raw, validateCoordinate)
-          : decodeTranslationRangeText(raw, validateCoordinate);
-        if (!decoded) throw new Error("quran worker returned a malformed range");
-        return decoded;
-      },
-    )
-      .catch((err) => {
-        if (QURAN.apiBase) return quranApi.readRange(reader, from, to);
-        throw err;
-      });
+    if (isArabicSourceId(reader)) {
+      const raw = await request<unknown>((id) => ({ id, type: "readRange", from, to, source }));
+      const decoded = decodeQuranRangeText(raw, validateCoordinate);
+      if (!decoded) throw new Error("quran worker returned a malformed range");
+      return decoded;
+    }
+    if (await quranWorker.hasTranslation(reader)) {
+      try {
+        const raw = await request<unknown>((id) => ({
+          id,
+          type: "readRange",
+          from,
+          to,
+          source: reader,
+        }));
+        const decoded = decodeTranslationRangeText(raw, validateCoordinate);
+        if (decoded) return decoded;
+      } catch {}
+    }
+    void quranWorker.ensureTranslation(reader);
+    if (QURAN.apiBase) {
+      try {
+        return await quranApi.readRange(reader, from, to);
+      } catch {}
+    }
+    if (await quranWorker.hasTranslation(reader)) {
+      const raw = await request<unknown>((id) => ({
+        id,
+        type: "readRange",
+        from,
+        to,
+        source: reader,
+      }));
+      const decoded = decodeTranslationRangeText(raw, validateCoordinate);
+      if (decoded) return decoded;
+    }
+    throw new Error(`translation range unavailable: ${reader} ${from}-${to}`);
   },
 
   search(

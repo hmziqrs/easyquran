@@ -3,6 +3,7 @@ import { QURAN } from "$lib/config/site";
 import { RangeKind } from "$lib/data/quran-data";
 import { translationIdFromSegments, translationSurahPath } from "$lib/data/quran";
 import type {
+  Ayah,
   CatalogEntry,
   QuranRangeText,
   RangePageData,
@@ -10,6 +11,7 @@ import type {
   SurahRouteData,
   SurahNormalization,
 } from "$lib/data/quran-types";
+import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
 import { findCatalogueEntry, resolveSourceCatalogue } from "$lib/quran/catalogue";
 import { decodeTranslationRangeText, unwrapEnvelope } from "$lib/quran/wire";
 import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
@@ -85,6 +87,20 @@ function normalizeForSurah(
   return normalization;
 }
 
+function degradedTranslationNormalization(surahNum: number, sourceId: string): SurahNormalization {
+  return {
+    openerEndScalar: 0,
+    bodyStartScalar: 0,
+    surah: surahNum,
+    sourceId,
+    script: QuranScript.Translation,
+    sourceProfile: "",
+    packaging: OpenerPackaging.Absent,
+    openerKind: OpenerKind.None,
+    openerText: null,
+  };
+}
+
 export async function loadTranslationSurahRouteData(
   surah: CatalogEntry,
   localPage: number,
@@ -96,14 +112,22 @@ export async function loadTranslationSurahRouteData(
   if (!page) return undefined;
   const sourceId = translationIdFromSegments(lang, translator);
   await requireTranslationSource(sourceId, lang, translator);
-  const range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
-  const normalization = normalizeForSurah(range, surah);
+  let ayahs: Ayah[];
+  let normalization: SurahNormalization;
+  try {
+    const range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
+    normalization = normalizeForSurah(range, surah);
+    ayahs = range.ayahs;
+  } catch {
+    normalization = degradedTranslationNormalization(surah.num, sourceId);
+    ayahs = [];
+  }
   const pageCount = QURAN_DATA.surahLocalPageCount(surah.num);
   const pageData: SurahLocalPageData = {
     surah: toSurahRenderMetadata(surah),
     page,
     pageCount,
-    ayahs: range.ayahs,
+    ayahs,
     normalization,
   };
   return {
@@ -139,8 +163,22 @@ export async function loadTranslationRangeData(
   if (!entry) throw error(404, `Unknown ${kind}: ${index}`);
   const sourceId = translationIdFromSegments(lang, translator);
   await requireTranslationSource(sourceId, lang, translator);
-  const source = await fetchTranslationRange(sourceId, entry.startGlobal, entry.endGlobal, fetcher);
-  const surahNums = new Set(source.ayahs.map((ayah) => ayah.surah));
+  let ayahs: Ayah[];
+  let normalizations: SurahNormalization[];
+  try {
+    const source = await fetchTranslationRange(
+      sourceId,
+      entry.startGlobal,
+      entry.endGlobal,
+      fetcher,
+    );
+    ayahs = source.ayahs;
+    normalizations = source.normalizations;
+  } catch {
+    ayahs = [];
+    normalizations = [];
+  }
+  const surahNums = new Set(ayahs.map((ayah) => ayah.surah));
   return {
     kind,
     index,
@@ -149,8 +187,8 @@ export async function loadTranslationRangeData(
     endGlobal: entry.endGlobal,
     first: entry.first,
     last: entry.last,
-    ayahs: source.ayahs,
-    normalizations: source.normalizations,
+    ayahs,
+    normalizations,
     surahs: [...surahNums].map((num) => toSurahLink(QURAN_DATA.surahByNum(num)!)),
   };
 }
