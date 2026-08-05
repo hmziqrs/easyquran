@@ -206,8 +206,8 @@ describe("coordinate-aware range Worker wire", () => {
 
 describe("manifest wire", () => {
   const scripts = [
-    { id: QuranSourceId.TanzilUthmani, sizeBytes: 1, sha256: "a", downloadUrl: "https://x/u" },
-    { id: QuranSourceId.TanzilSimpleClean, sizeBytes: 2, sha256: "b", downloadUrl: "https://x/s" },
+    { id: QuranSourceId.TanzilUthmani, sizeBytes: 1, downloadUrl: "https://x/u" },
+    { id: QuranSourceId.TanzilSimpleClean, sizeBytes: 2, downloadUrl: "https://x/s" },
   ];
 
   it("decodes registered script ids and script envelopes", () => {
@@ -396,7 +396,6 @@ describe("translation route loaders", () => {
           name: "Saheeh International",
           translator: "Saheeh International",
           sizeBytes: 1048576,
-          sha256: "a".repeat(64),
           downloadUrl: "https://cdn.test/en.sahih.bin",
         },
       ],

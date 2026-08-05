@@ -11,7 +11,7 @@ pub use search::highlight;
 pub use store::{
     range_containing, AyahView, Bismillah, CatalogueEntry, Corpus, HizbQuarter, Juz, Manzil,
     Navigation, Page, Place, QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script,
-    SourceDigests, SourceId, SuraMeta, TranslationId, RESPONSE_CAP, SURA_COUNT, VERSE_COUNT,
+    SourceId, SuraMeta, TranslationId, RESPONSE_CAP, SURA_COUNT, VERSE_COUNT,
 };
 pub use translation_pool::{PoolStats, TranslationPool};
 pub use view::{

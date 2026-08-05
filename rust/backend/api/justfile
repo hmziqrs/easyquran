@@ -28,6 +28,9 @@ dev:
 dev-tui *args:
     cargo run --bin ruxlog_tui -- {{args}}
 
+quran-audit:
+    cargo run --bin quran_digest_audit --features seed-system
+
 watch:
     cargo watch -x run
 

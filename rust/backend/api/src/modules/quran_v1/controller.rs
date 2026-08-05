@@ -145,8 +145,6 @@ fn json_cached<T: Serialize>(
     )
 }
 
-/// Same as [`json_cached`] but with an explicit ETag tag — translation responses key on the
-/// translation's catalogue sha, not the uthmani golden digest.
 fn json_cached_with_tag<T: Serialize>(
     tag: &str,
     headers: &HeaderMap,
@@ -814,7 +812,6 @@ async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
             Ok(true) => out.push(Artifact {
                 id,
                 size_bytes: file.size_bytes,
-                sha256: file.sha256.to_string(),
                 download_url: url,
             }),
             _ => tracing::warn!(
@@ -880,11 +877,7 @@ pub async fn sources(
     } else {
         cache::NO_STORE
     };
-    let tag = format!(
-        "{}:{}",
-        store.etag_tag(),
-        state.translation_pool.catalogue_digest()
-    );
+    let tag = store.etag_tag().to_string();
     let env = Envelope::new(SourcesData { sources });
     Ok(cache::respond_cached(
         &env,
@@ -990,16 +983,11 @@ pub async fn openapi_json() -> axum::Json<utoipa::openapi::OpenApi> {
     )
 )]
 pub async fn health_ready(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     QQuery(_unused): QQuery<NoQuery>,
 ) -> Result<Response<Body>, QuranApiError> {
-    let store = &state.quran;
     let body = HealthReady {
         ready: true,
-        source_digests: SourceDigestsDto {
-            uthmani: store.source_digests().uthmani.to_string(),
-            simple_clean: store.source_digests().simple_clean.to_string(),
-        },
         verse_count: VERSE_COUNT,
         surah_count: quran::SURA_COUNT as u16,
     };

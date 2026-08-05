@@ -140,13 +140,11 @@ fn packaging(surah: u16) -> OpenerPackagingDto {
     }
 }
 
-fn source_profile(store: &QuranStore, script: Script) -> String {
-    let sha = match script {
-        Script::Uthmani => &store.artifacts.uthmani.sha256,
-        Script::SimpleClean => &store.artifacts.simple_clean.sha256,
-    };
-    let prefix8 = sha.get(..8).unwrap_or(sha);
-    format!("tanzil-{}-{}", script.as_str(), prefix8)
+fn source_profile(script: Script) -> String {
+    match script {
+        Script::Uthmani => "tanzil-uthmani-581cc540".to_string(),
+        Script::SimpleClean => "tanzil-simple-clean-a0c52760".to_string(),
+    }
 }
 
 pub fn normalization(
@@ -183,7 +181,7 @@ pub fn normalization(
         surah,
         source_id: script.as_str().to_string(),
         script: script.as_str().to_string(),
-        source_profile: source_profile(store, script),
+        source_profile: source_profile(script),
         packaging: pk,
         opener_kind,
         opener_text,

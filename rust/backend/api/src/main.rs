@@ -436,7 +436,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let quran_store = match ruxlog::quran::load_quran_store(&settings.quran).await {
         Ok(store) => {
             tracing::info!(
-                source_digest = %store.source_digests().uthmani,
                 verse_count = ruxlog::quran::VERSE_COUNT,
                 "Quran store loaded (uthmani + simple-clean); ready to serve Arabic reads"
             );

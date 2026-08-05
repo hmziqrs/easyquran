@@ -166,7 +166,6 @@ pub struct SajdaDto {
 pub struct Artifact {
     pub id: String,
     pub size_bytes: u64,
-    pub sha256: String,
     pub download_url: String,
 }
 
@@ -211,17 +210,8 @@ pub struct SourcesData {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct SourceDigestsDto {
-    pub uthmani: String,
-    pub simple_clean: String,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct HealthReady {
     pub ready: bool,
-    pub source_digests: SourceDigestsDto,
     pub verse_count: u32,
     pub surah_count: u16,
 }

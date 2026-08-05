@@ -31,7 +31,6 @@ const QURAN_ARTIFACTS = Object.freeze(
   registeredSourceProfiles().map((profile) => ({
     id: profile.sourceId,
     sizeBytes: profile.artifact.sizeBytes,
-    sha256: profile.artifact.sha256,
     downloadUrl: `${QURAN_ARTIFACT_BASE}/${profile.artifact.r2Path}`,
   })),
 );

@@ -223,16 +223,9 @@ pub struct Sajda {
 }
 
 #[derive(Clone, Debug)]
-pub struct SourceDigests {
-    pub uthmani: Box<str>,
-    pub simple_clean: Box<str>,
-}
-
-#[derive(Clone, Debug)]
 pub struct ArtifactFile {
     pub id: Script,
     pub size_bytes: u64,
-    pub sha256: Box<str>,
 }
 
 #[derive(Clone, Debug)]
@@ -310,7 +303,6 @@ pub struct QuranStore {
     pub uthmani: Corpus,
     pub simple_clean: Corpus,
     pub meta: QuranMeta,
-    pub source_digests: SourceDigests,
     pub artifacts: Artifacts,
     pub search: super::search::SearchIndex,
 }
@@ -330,13 +322,8 @@ impl QuranStore {
     }
 
     #[inline]
-    pub fn etag_tag(&self) -> &str {
-        &self.source_digests.uthmani
-    }
-
-    #[inline]
-    pub fn source_digests(&self) -> &SourceDigests {
-        &self.source_digests
+    pub fn etag_tag(&self) -> &'static str {
+        "quran-corpus"
     }
 
     pub fn sajda_at(&self, g: u32) -> Option<SajdaKind> {

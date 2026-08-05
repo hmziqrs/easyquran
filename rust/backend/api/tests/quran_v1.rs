@@ -479,7 +479,10 @@ async fn health_ready_endpoint() {
     assert_eq!(st, StatusCode::OK);
     assert_eq!(body["ready"], true);
     assert_eq!(body["verseCount"], 6236);
-    assert!(body["sourceDigests"]["uthmani"].is_string());
+    assert!(
+        body.get("sourceDigests").is_none(),
+        "health must not expose source digests — manual audit only (docs/quran.md §2)"
+    );
     assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "no-store");
 }
 
@@ -939,6 +942,43 @@ async fn scripts_happy_path_advertises_both_artifacts() {
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::ARABIC_CACHE)
     );
+}
+
+#[tokio::test]
+async fn scripts_endpoint_carries_no_sha256() {
+    use wiremock::matchers::{method, path_regex};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    let server = MockServer::start().await;
+    let state = state_with_public_url(&server.uri()).await;
+    let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
+    let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
+    Mock::given(method("HEAD"))
+        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
+        .mount(&server)
+        .await;
+    Mock::given(method("HEAD"))
+        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
+        .mount(&server)
+        .await;
+    let app = app_over(state);
+    let resp = app
+        .oneshot(Request::builder().uri("/quran/scripts").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let scripts = body["data"]["scripts"].as_array().unwrap();
+    assert!(!scripts.is_empty());
+    for row in scripts {
+        assert!(
+            row.get("sha256").is_none(),
+            "scripts artifact must not carry sha256 — a source's identity is its id, never a hash \
+             (docs/quran.md §2); got {row}"
+        );
+    }
 }
 
 #[tokio::test]

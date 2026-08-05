@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -32,7 +31,6 @@ function findSourcePath(profile: QuranSourceProfile): string {
 }
 
 interface SourceState {
-  readonly sha256: string;
   readonly database: DatabaseSync;
   readonly runner: QuranQueryRunner;
   readonly source: LoadedQuranSource;
@@ -49,15 +47,14 @@ function openSource(sourceId: QuranSourceIdValue): SourceState {
   if (!existsSync(sourcePath)) {
     throw new Error(`[quran-sqlite] missing ${sourceId} DB at ${sourcePath}`);
   }
-  const sha256 = createHash("sha256").update(readFileSync(sourcePath)).digest("hex");
-  const profile = resolveSourceProfile(sourceId, sha256);
+  const profile = resolveSourceProfile(sourceId);
   const database = new DatabaseSync(sourcePath);
   database.exec("PRAGMA query_only = ON");
 
   try {
     const runner = createNodeQueryRunner(database);
     const source = loadQuranSource(runner, profile, QURAN_DATA.coordinates);
-    const state = Object.freeze({ sha256, database, runner, source });
+    const state = Object.freeze({ database, runner, source });
     sourceCache.set(sourceId, state);
     return state;
   } catch (error) {
@@ -103,22 +100,4 @@ export function readRangeText(
   const represented = new Set(rows.map((row) => row.surah));
   const normalizations = [...represented].map((surah) => state.source.view.normalization(surah));
   return { ayahs, normalizations };
-}
-
-export function validateSource(sourceId: QuranSourceIdValue): {
-  rows: number;
-  sha256: string;
-  ok: boolean;
-} {
-  const state = openSource(sourceId);
-  const profile = state.source.profile;
-  return {
-    rows: profile.canonicalRowCount,
-    sha256: state.sha256,
-    ok: state.sha256 === profile.artifact.sha256,
-  };
-}
-
-export function validateReaderSource(): { rows: number; sha256: string; ok: boolean } {
-  return validateSource(DEFAULT_QURAN_SOURCE_PLAN.reader);
 }

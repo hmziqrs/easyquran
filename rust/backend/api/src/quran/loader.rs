@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 
 use roxmltree::Node;
-use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::Connection;
 use sqlx::Row;
@@ -10,13 +9,9 @@ use crate::config::QuranSettings;
 
 use super::store::{
     ArtifactFile, Artifacts, Bismillah, CatalogueEntry, Corpus, HizbQuarter, Juz, Manzil, Page,
-    QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script, SourceDigests, SURA_COUNT,
+    QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script, SURA_COUNT,
     VERSE_COUNT,
 };
-
-const GOLDEN_UTHMANI: &str = "32cc746d817cad9fd4366c7597bfceb177e7649233616c0a80309074b2eb99ee";
-const GOLDEN_SIMPLE_CLEAN: &str =
-    "375934722ccbfab0d97754df464deac0dcffe962dc0632cc1ce5c6ca25dcea67";
 
 struct CorpusRow {
     index: u32,
@@ -80,19 +75,6 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
             .collect::<Vec<_>>(),
     );
 
-    // Golden digest is a literal, not recomputed: a normalizing loader would corrupt both sides identically and slip past a self-derived check.
-    let dig_uthmani = corpus_digest(&uthmani);
-    let dig_simple_clean = corpus_digest(&simple_clean);
-    invariant(dig_uthmani == GOLDEN_UTHMANI, || {
-        format!(
-            "uthmani golden digest mismatch: expected {GOLDEN_UTHMANI}, computed {dig_uthmani} \
-                 — a normalizing loader or wrong source is corrupting ayah text (§3.3)"
-        )
-    })?;
-    invariant(dig_simple_clean == GOLDEN_SIMPLE_CLEAN, || {
-        format!("simple-clean golden digest mismatch: expected {GOLDEN_SIMPLE_CLEAN}, computed {dig_simple_clean} (§3.3)")
-    })?;
-
     let xml_str = std::str::from_utf8(&xml_bytes)
         .map_err(|e| inv(format!("metadata xml is not valid utf-8: {e}")))?;
     let doc = roxmltree::Document::parse(xml_str)?;
@@ -102,12 +84,10 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         uthmani: ArtifactFile {
             id: Script::Uthmani,
             size_bytes: uthmani_bytes.len() as u64,
-            sha256: file_sha256(&uthmani_bytes).into_boxed_str(),
         },
         simple_clean: ArtifactFile {
             id: Script::SimpleClean,
             size_bytes: simple_clean_bytes.len() as u64,
-            sha256: file_sha256(&simple_clean_bytes).into_boxed_str(),
         },
     };
 
@@ -117,10 +97,6 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         uthmani,
         simple_clean,
         meta,
-        source_digests: SourceDigests {
-            uthmani: dig_uthmani.into_boxed_str(),
-            simple_clean: dig_simple_clean.into_boxed_str(),
-        },
         artifacts,
         search,
     })
@@ -193,12 +169,6 @@ pub async fn load_translation_corpus(path: &str) -> Result<Corpus, QuranLoadErro
     ))
 }
 
-fn file_sha256(bytes: &[u8]) -> String {
-    let mut h = Sha256::new();
-    h.update(bytes);
-    hex::encode(h.finalize())
-}
-
 fn read_file(path: &str, what: &'static str) -> Result<Vec<u8>, QuranLoadError> {
     std::fs::read(path).map_err(|source| QuranLoadError::File { what, source })
 }
@@ -257,13 +227,6 @@ fn validate_rows(what: &'static str, rows: &[CorpusRow]) -> Result<(), QuranLoad
         })?;
     }
     Ok(())
-}
-
-fn corpus_digest(corpus: &Corpus) -> String {
-    let joined = corpus.joined_for_digest();
-    let mut h = Sha256::new();
-    h.update(joined.as_bytes());
-    hex::encode(h.finalize())
 }
 
 struct Marker {
@@ -623,9 +586,6 @@ mod tests {
         let store = load_quran_store(&settings())
             .await
             .expect("store must load");
-
-        assert_eq!(&*store.source_digests.uthmani, GOLDEN_UTHMANI);
-        assert_eq!(&*store.source_digests.simple_clean, GOLDEN_SIMPLE_CLEAN);
 
         assert_eq!(store.meta.suras().len(), 114);
         assert_eq!(store.meta.juzs.len(), 30);

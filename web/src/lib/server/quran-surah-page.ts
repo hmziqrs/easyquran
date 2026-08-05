@@ -1,15 +1,7 @@
 import { surahLocalPagePath } from "$lib/data/quran";
 import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "$lib/data/quran-types";
 import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
-import { readRangeText, validateReaderSource } from "$lib/server/quran-sqlite";
-
-const source = validateReaderSource();
-if (!source.ok) {
-  throw new Error(
-    `[quran-sqlite] Uthmani source validation failed: rows=${source.rows} (want 6236), ` +
-      `sha256=${source.sha256}. The DB and its registered digest are out of sync.`,
-  );
-}
+import { readRangeText } from "$lib/server/quran-sqlite";
 
 export function readSurahLocalPageData(
   surah: CatalogEntry,

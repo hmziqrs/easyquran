@@ -113,8 +113,7 @@ async function bootArabic(
   for (const sourceId of plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN)) {
     const spec = manifest.scripts.find((artifact) => artifact.id === sourceId);
     if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
-    if (!spec.sha256) throw new Error(`manifest arabic source ${sourceId} missing sha256`);
-    const profile = resolveSourceProfile(spec.id, spec.sha256);
+    const profile = resolveSourceProfile(spec.id);
     status("downloading", sourceId);
     const artifact = await ensureArtifact(spec, progressEmitter(spec));
     const database = openReadOnly(artifact.bytes);

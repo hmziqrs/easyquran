@@ -49,13 +49,11 @@ const MANIFEST: ResolvedManifest = {
     {
       id: QuranSourceId.TanzilUthmani,
       sizeBytes: 1,
-      sha256: "a",
       downloadUrl: "https://x/uthmani",
     },
     {
       id: QuranSourceId.TanzilSimpleClean,
       sizeBytes: 1,
-      sha256: "b",
       downloadUrl: "https://x/simple-clean",
     },
   ],

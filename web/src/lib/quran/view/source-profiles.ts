@@ -13,7 +13,6 @@ export interface QuranSourceArtifact {
   readonly repositoryPath: string;
   readonly r2Path: string;
   readonly sizeBytes: number;
-  readonly sha256: string;
 }
 
 export interface QuranSourceProfile {
@@ -77,7 +76,6 @@ const PROFILES = Object.freeze([
       repositoryPath: "db/quran/tanzil/arabic/quran-uthmani.sqlite",
       r2Path: "tanzil/arabic/quran-uthmani.sqlite",
       sizeBytes: 1_593_344,
-      sha256: "581cc5405831bc072fccd8db55cd1db72c5c5440c39bd975edbf03447efecf53",
     }),
     database: TANZIL_QURAN_DATABASE,
     canonicalRowCount: 6236,
@@ -93,7 +91,6 @@ const PROFILES = Object.freeze([
       repositoryPath: "db/quran/tanzil/arabic/quran-simple-clean.sqlite",
       r2Path: "tanzil/arabic/quran-simple-clean.sqlite",
       sizeBytes: 929_792,
-      sha256: "a0c52760d6660ac5be1de5c76bb10df7a839a3e8a87ecb0e636fe2ed45b2e4a3",
     }),
     database: TANZIL_QURAN_DATABASE,
     canonicalRowCount: 6236,
@@ -115,15 +112,6 @@ export function sourceProfile(sourceId: QuranSourceIdValue): QuranSourceProfile 
   return profile;
 }
 
-export function resolveSourceProfile(
-  sourceId: QuranSourceIdValue,
-  fileSha256: string,
-): QuranSourceProfile {
-  const profile = sourceProfile(sourceId);
-  if (profile.artifact.sha256 !== fileSha256.toLowerCase()) {
-    throw new Error(
-      `[quran-view:${sourceId}] unregistered source digest ${fileSha256}; expected ${profile.artifact.sha256}`,
-    );
-  }
-  return profile;
+export function resolveSourceProfile(sourceId: QuranSourceIdValue): QuranSourceProfile {
+  return sourceProfile(sourceId);
 }

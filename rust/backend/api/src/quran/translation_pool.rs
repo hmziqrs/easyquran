@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use moka::future::Cache;
 use moka::notification::RemovalCause;
-use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 
 use crate::quran::loader::{load_translation_corpus, QuranLoadError};
@@ -16,13 +15,6 @@ use crate::quran::store::{CatalogueEntry, Corpus, TranslationId};
 /// weigher caps resident entries, not in-flight builds, so unbounded parallel distinct-id loads
 /// could transiently allocate far past `max_resident_bytes`. Near-serial (2) closes that gap.
 const BUILD_CONCURRENCY: usize = 2;
-
-/// Length-prefix a byte field into the digest so streamed fields cannot collide across
-/// variable-length boundaries (a true function of the bytes, not their concatenation).
-fn digest_field(hasher: &mut Sha256, b: &[u8]) {
-    hasher.update((b.len() as u64).to_le_bytes());
-    hasher.update(b);
-}
 
 #[derive(Default)]
 struct PoolMetrics {
@@ -50,7 +42,6 @@ pub struct TranslationPool {
     id_whitelist: HashSet<String>,
     metrics: Arc<PoolMetrics>,
     build_sem: Arc<Semaphore>,
-    catalogue_digest: Box<str>,
 }
 
 impl TranslationPool {
@@ -70,23 +61,6 @@ impl TranslationPool {
             .map(|e| (e.id.to_string(), e.clone()))
             .collect();
         let id_whitelist: HashSet<String> = entries.keys().cloned().collect();
-        let mut sorted: Vec<&CatalogueEntry> = catalogue.iter().collect();
-        sorted.sort_unstable_by(|a, b| a.id.cmp(&b.id));
-        let mut hasher = Sha256::new();
-        for e in &sorted {
-            digest_field(&mut hasher, e.id.as_bytes());
-            digest_field(&mut hasher, e.language.as_bytes());
-            digest_field(&mut hasher, e.language_code.as_bytes());
-            digest_field(&mut hasher, e.direction.as_bytes());
-            digest_field(&mut hasher, e.name.as_bytes());
-            match e.translator.as_deref() {
-                Some(t) => digest_field(&mut hasher, t.as_bytes()),
-                None => digest_field(&mut hasher, &[]), // length-0 marks absence distinctly
-            }
-            digest_field(&mut hasher, e.path.as_bytes());
-            digest_field(&mut hasher, &e.size_bytes.to_le_bytes());
-        }
-        let catalogue_digest: Box<str> = hex::encode(&hasher.finalize()[..8]).into_boxed_str();
         let build_sem = Arc::new(Semaphore::new(BUILD_CONCURRENCY));
         let metrics = Arc::new(PoolMetrics::default());
         let metrics_for_listener = metrics.clone();
@@ -116,16 +90,11 @@ impl TranslationPool {
             id_whitelist,
             metrics,
             build_sem,
-            catalogue_digest,
         }
     }
 
     pub fn catalogue(&self) -> &HashMap<String, CatalogueEntry> {
         &self.entries
-    }
-
-    pub fn catalogue_digest(&self) -> &str {
-        &self.catalogue_digest
     }
 
     /// Whitelist parse — the membership check IS the path-traversal guard.

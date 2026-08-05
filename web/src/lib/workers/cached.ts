@@ -21,7 +21,7 @@ export async function ensureCached(spec: DownloadSpec, opts: EnsureOptions): Pro
     try {
       const cached = await store.get(tag, key);
       if (cached) {
-        if (spec.sizeBytes !== undefined || spec.sha256 !== undefined) {
+        if (spec.sizeBytes !== undefined) {
           await verifyBytes(cached, spec);
         }
         return { bytes: cached, from: "store" };

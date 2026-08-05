@@ -5,7 +5,6 @@ use utoipa::OpenApi;
     paths(crate::modules::quran_v1::controller::health_ready),
     components(schemas(
         crate::modules::quran_v1::dto::HealthReady,
-        crate::modules::quran_v1::dto::SourceDigestsDto,
         crate::modules::quran_v1::dto::Ayah,
         crate::modules::quran_v1::dto::AyahRange,
         crate::modules::quran_v1::dto::AyahsList,

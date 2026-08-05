@@ -24,8 +24,8 @@ function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
   try {
     return plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN).every((sourceId) => {
       const artifact = scripts.find((candidate) => candidate.id === sourceId);
-      if (!artifact || !artifact.sha256) return false;
-      resolveSourceProfile(artifact.id, artifact.sha256);
+      if (!artifact) return false;
+      resolveSourceProfile(artifact.id);
       return true;
     });
   } catch {

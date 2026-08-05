@@ -41,7 +41,6 @@ function toDownloadSpec(spec: ArtifactSpec): DownloadSpec {
   return {
     url: spec.downloadUrl,
     sizeBytes: spec.sizeBytes,
-    sha256: spec.sha256,
     label: spec.id,
   };
 }

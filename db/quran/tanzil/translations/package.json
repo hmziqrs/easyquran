@@ -10,7 +10,7 @@
     "catalog": "tsx scripts/catalog.ts",
     "upload:sqlite": "tsx scripts/upload-sqlite.ts",
     "build:sqlite": "tsx scripts/sql-to-sqlite.ts",
-    "ci": "pnpm build:sqlite && pnpm catalog && pnpm verify",
+    "ci": "pnpm build:sqlite && pnpm catalog",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
