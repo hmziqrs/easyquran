@@ -114,11 +114,16 @@ export async function loadTranslationSurahRouteData(
   await requireTranslationSource(sourceId, lang, translator);
   let ayahs: Ayah[];
   let normalization: SurahNormalization;
+  let range: QuranRangeText | null;
   try {
-    const range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
+    range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
+  } catch {
+    range = null;
+  }
+  if (range) {
     normalization = normalizeForSurah(range, surah);
     ayahs = range.ayahs;
-  } catch {
+  } else {
     normalization = degradedTranslationNormalization(surah.num, sourceId);
     ayahs = [];
   }
