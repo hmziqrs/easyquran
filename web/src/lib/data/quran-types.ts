@@ -218,6 +218,10 @@ export interface SurahRouteData {
   nextSurah: SurahLink | null;
 }
 
+export type SurahRouteContext =
+  | { readonly kind: "arabic" }
+  | { readonly kind: "translation"; readonly lang: string; readonly translator: string };
+
 export interface RangePageData {
   kind: "juz" | "page";
   index: number;

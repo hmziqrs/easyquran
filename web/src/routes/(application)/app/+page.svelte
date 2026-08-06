@@ -4,15 +4,20 @@
   import { resolve } from "$app/paths";
   import { Seo } from "$lib/components";
   import { reader } from "$lib/stores/reader.svelte";
+  import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { loadQuranData } from "$lib/data/quran-data-client";
-  import { surahPath } from "$lib/data/quran";
+  import { surahPathFor, surahRouteContext } from "$lib/data/quran";
 
   onMount(() => {
     reader.hydrate();
     const num = reader.lastRead?.num ?? 1;
     void loadQuranData().then((quranData) => {
       const surah = quranData.surahByNum(num) ?? quranData.surahs[0]!;
-      return goto(resolve(surahPath(surah)), { replaceState: true });
+      const sourceId = readerSource.sourceId;
+      const ctx = sourceId
+        ? surahRouteContext(sourceId)
+        : { kind: "arabic" as const };
+      return goto(resolve(surahPathFor(ctx, surah)), { replaceState: true });
     });
   });
 </script>

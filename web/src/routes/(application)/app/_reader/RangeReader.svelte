@@ -3,10 +3,10 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import {
-    surahPath,
-    translationGlobalPagePath,
-    translationJuzPath,
-    translationSurahPath,
+    globalPagePathFor,
+    juzPathFor,
+    routeContextFromParams,
+    surahPathFor,
   } from "$lib/data/quran";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
@@ -22,28 +22,16 @@
     return data.surahs.find((surah) => surah.num === num)!;
   }
 
-  const translation = $derived.by<{ lang: string; translator: string } | null>(() => {
-    const m = /^\/app\/t\/([^/]+)\/([^/]+)\/(?:page|juz)\//.exec(page.url.pathname);
-    return m ? { lang: m[1]!, translator: m[2]! } : null;
-  });
+  const ctx = $derived(routeContextFromParams(page.params));
 
   function openSurah(num: number): void {
-    const surah = surahByNum(num);
-    const target = translation
-      ? translationSurahPath(surah.slug, translation.lang, translation.translator)
-      : surahPath(surah);
-    void goto(resolve(target));
+    void goto(resolve(surahPathFor(ctx, surahByNum(num))));
   }
 
   const MAX = $derived(data.kind === "juz" ? 30 : 604);
   const kindLabel = $derived(data.kind === "juz" ? "Juz" : "Page");
   function rangeHref(kind: RangePageData["kind"], index: number): `/app/${string}` {
-    if (translation) {
-      return kind === "juz"
-        ? translationJuzPath(translation.lang, translation.translator, index)
-        : translationGlobalPagePath(translation.lang, translation.translator, index);
-    }
-    return `/app/${kind}/${index}`;
+    return kind === "juz" ? juzPathFor(ctx, index) : globalPagePathFor(ctx, index);
   }
 
   const prevHref = $derived(data.index > 1 ? rangeHref(data.kind, data.index - 1) : null);

@@ -4,12 +4,12 @@
   import { resolve } from "$app/paths";
   import {
     SourceKind,
-    surahLocalPagePath,
-    translationSurahPath,
+    surahLocalPagePathFor,
     translationGlobalPagePath,
     translationJuzPath,
     translationIdFromSegments,
     translationSegmentsFromId,
+    type SurahRouteContext,
   } from "$lib/data/quran";
   import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
@@ -35,8 +35,8 @@
     if (segs.length === 0) return null;
     const tIdx = segs.indexOf("t");
     if (tIdx === -1) {
-      if (segs[0] === "page" && segs[1]) return { kind: "globalPage", n: toNum(segs[1]) };
-      if (segs[0] === "juz" && segs[1]) return { kind: "juz", n: toNum(segs[1]) };
+      if (segs[0] === "page") return segs[1] ? { kind: "globalPage", n: toNum(segs[1]) } : null;
+      if (segs[0] === "juz") return segs[1] ? { kind: "juz", n: toNum(segs[1]) } : null;
       const slug = segs[0];
       if (segs[1] === "page" && segs[2]) return { kind: "surah", slug, localPage: toNum(segs[2]) };
       return { kind: "surah", slug, localPage: 1 };
@@ -57,15 +57,20 @@
     return null;
   }
 
+  function ctxFor(target: Target): SurahRouteContext {
+    return target === "arabic"
+      ? { kind: "arabic" }
+      : { kind: "translation", lang: target.lang, translator: target.translator };
+  }
+
   function hrefFor(pos: Position, target: Target): `/app/${string}` | null {
     if (!pos) return null;
+    if (pos.kind === "surah")
+      return surahLocalPagePathFor(ctxFor(target), pos.slug, pos.localPage);
     if (target === SourceKind.Arabic) {
-      if (pos.kind === "surah") return surahLocalPagePath(pos.slug, pos.localPage);
       if (pos.kind === "globalPage") return `/app/page/${pos.n}`;
       return `/app/juz/${pos.n}`;
     }
-    if (pos.kind === "surah")
-      return translationSurahPath(pos.slug, target.lang, target.translator, pos.localPage);
     if (pos.kind === "globalPage")
       return translationGlobalPagePath(target.lang, target.translator, pos.n);
     return translationJuzPath(target.lang, target.translator, pos.n);

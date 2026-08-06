@@ -3,13 +3,14 @@
   import { resolve } from "$app/paths";
   import { BrowseMode, reader } from "$lib/stores/reader.svelte";
   import {
-    surahAyahPath,
+    globalPagePathFor,
+    juzPathFor,
+    routeContextFromParams,
+    surahAyahPathFor,
     surahMeta,
-    surahPath,
+    surahPathFor,
     parseKey,
-    translationSurahPath,
-    translationJuzPath,
-    translationGlobalPagePath,
+    type SurahRouteContext,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind } from "$lib/data/quran-data";
@@ -61,24 +62,14 @@
     });
   }
 
-  const translation = $derived.by<{ lang: string; translator: string } | null>(() => {
-    const m = /^\/app\/(?:[^/]+\/t\/|t\/)([^/]+)\/([^/]+)(?:\/|$)/.exec(page.url.pathname);
-    return m ? { lang: m[1]!, translator: m[2]! } : null;
-  });
+  const routeCtx = $derived<SurahRouteContext>(routeContextFromParams(page.params));
 
   function surahHref(slug: string): `/app/${string}` {
-    return translation
-      ? translationSurahPath(slug, translation.lang, translation.translator)
-      : surahPath(slug);
+    return surahPathFor(routeCtx, slug);
   }
 
   function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
-    if (translation) {
-      return useJuz
-        ? translationJuzPath(translation.lang, translation.translator, index)
-        : translationGlobalPagePath(translation.lang, translation.translator, index);
-    }
-    return `/app/${useJuz ? "juz" : "page"}/${index}`;
+    return useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
   }
 </script>
 
@@ -195,7 +186,9 @@
                           {#snippet child({ props })}
                             <a
                               {...props}
-                              href={resolve(surahAyahPath(cur, localPage?.localPage ?? 1, n))}
+                              href={resolve(
+                                surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n),
+                              )}
                               data-sveltekit-preload-data="hover"
                               onclick={onItemClick}
                             >

@@ -56,7 +56,9 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
     const lr = asObject(stored.lastRead)!;
     const num = asNumber(lr.num, -Infinity, Infinity);
     const n = asNumber(lr.n, -Infinity, Infinity);
-    if (num !== undefined && n !== undefined) out.lastRead = { num, n };
+    const sourceId = typeof lr.sourceId === "string" ? lr.sourceId : undefined;
+    if (num !== undefined && n !== undefined)
+      out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
   }
 
   return out;

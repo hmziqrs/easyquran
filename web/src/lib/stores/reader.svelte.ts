@@ -26,8 +26,8 @@ export interface ReaderApi {
   readonly openNote: VerseKey | null;
   toggleNote(key: VerseKey): void;
   setCurrent(num: number): void;
-  openVerse(num: number, n: number): void;
-  markRead(num: number, n: number): void;
+  openVerse(num: number, n: number, sourceId?: string): void;
+  markRead(num: number, n: number, sourceId?: string): void;
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -39,7 +39,7 @@ export interface ReaderApi {
   toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
   setNote(key: VerseKey, v: string): void;
-  readonly lastRead: { num: number; n: number } | null;
+  readonly lastRead: { num: number; n: number; sourceId?: string } | null;
   readonly hasLastRead: boolean;
   readonly lastReadRef: string;
   versesFor(num: number): string[];
@@ -94,8 +94,8 @@ export function createReader(): ReaderApi {
     toggleNote: (key: VerseKey) => session.toggleNote(key),
 
     setCurrent: (num: number) => session.setCurrent(num),
-    openVerse: (num: number, n: number) => session.openVerse(num, n),
-    markRead: (num: number, n: number) => session.markRead(num, n),
+    openVerse: (num: number, n: number, sourceId?: string) => session.openVerse(num, n, sourceId),
+    markRead: (num: number, n: number, sourceId?: string) => session.markRead(num, n, sourceId),
 
     get arabicSizePx() {
       return settings.arabicSizePx;

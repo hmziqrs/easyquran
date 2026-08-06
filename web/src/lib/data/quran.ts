@@ -1,4 +1,10 @@
-import type { CatalogEntry, LoadedSurah, VerseKey } from "$lib/data/quran-types";
+import {
+  isArabicSourceId,
+  type CatalogEntry,
+  type LoadedSurah,
+  type SurahRouteContext,
+  type VerseKey,
+} from "$lib/data/quran-types";
 
 export type {
   CatalogEntry,
@@ -8,6 +14,7 @@ export type {
   PrefixCut,
   SurahNormalization,
   SurahLink,
+  SurahRouteContext,
   SurahRenderMetadata,
   QuranSurahText,
   SajdaKind,
@@ -85,6 +92,59 @@ export const translationGlobalPagePath = (
 
 export const translationJuzPath = (lang: string, translator: string, n: number): `/app/${string}` =>
   `/app/t/${lang}/${translator}/juz/${n}`;
+
+export const surahRouteContext = (sourceId: string): SurahRouteContext => {
+  if (isArabicSourceId(sourceId)) return { kind: "arabic" };
+  const { lang, translator } = translationSegmentsFromId(sourceId);
+  return { kind: "translation", lang, translator };
+};
+
+export const routeContextFromParams = (
+  params: Record<string, string | undefined>,
+): SurahRouteContext => {
+  const lang = params.lang;
+  const translator = params.translator;
+  return lang && translator ? { kind: "translation", lang, translator } : { kind: "arabic" };
+};
+
+export const surahPathFor = (
+  ctx: SurahRouteContext,
+  surah: string | Pick<CatalogEntry, "slug">,
+): `/app/${string}` => {
+  const slug = typeof surah === "string" ? surah : surah.slug;
+  return ctx.kind === "arabic"
+    ? surahPath(slug)
+    : translationSurahPath(slug, ctx.lang, ctx.translator, 1);
+};
+
+export const surahLocalPagePathFor = (
+  ctx: SurahRouteContext,
+  surah: string | Pick<CatalogEntry, "slug">,
+  localPage: number,
+): `/app/${string}` => {
+  const slug = typeof surah === "string" ? surah : surah.slug;
+  return ctx.kind === "arabic"
+    ? surahLocalPagePath(slug, localPage)
+    : translationSurahPath(slug, ctx.lang, ctx.translator, localPage);
+};
+
+export const surahAyahPathFor = (
+  ctx: SurahRouteContext,
+  surah: Pick<CatalogEntry, "slug" | "num">,
+  localPage: number,
+  ayah: number,
+): `/app/${string}` => `${surahLocalPagePathFor(ctx, surah, localPage)}#ayah-${surah.num}-${ayah}`;
+
+export const globalPagePathFor = (
+  ctx: SurahRouteContext,
+  globalPage: number,
+): `/app/${string}` =>
+  ctx.kind === "arabic"
+    ? `/app/page/${globalPage}`
+    : translationGlobalPagePath(ctx.lang, ctx.translator, globalPage);
+
+export const juzPathFor = (ctx: SurahRouteContext, n: number): `/app/${string}` =>
+  ctx.kind === "arabic" ? `/app/juz/${n}` : translationJuzPath(ctx.lang, ctx.translator, n);
 
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
