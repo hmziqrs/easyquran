@@ -99,6 +99,14 @@ export const surahRouteContext = (sourceId: string): SurahRouteContext => {
   return { kind: "translation", lang, translator };
 };
 
+export const routeContextFromParams = (
+  params: Record<string, string | undefined>,
+): SurahRouteContext => {
+  const lang = params.lang;
+  const translator = params.translator;
+  return lang && translator ? { kind: "translation", lang, translator } : { kind: "arabic" };
+};
+
 export const surahPathFor = (
   ctx: SurahRouteContext,
   surah: string | Pick<CatalogEntry, "slug">,

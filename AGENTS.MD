@@ -2,6 +2,7 @@
 - Quran databases are all immutable. No modifications and never versioning.
 - No SHA-256 over Quran data in any automated path (build, boot, runtime, ETag, cache, catalogue). A DB's identity is its **id**, never a hash. SHA-256 is manual audit only — three commands a human runs: `just quran-audit`, `pnpm audit:arabic`, `pnpm verify` (in `db/quran/tanzil/translations`). Crypto sha (CSRF, HMAC, Argon2, PKCE) is unrelated and stays. Don't re-add Quran sha — guards in `tests/quran_v1.rs` + `web catalogue-sha-guard.test.ts` fail the build (see docs/quran.md §2).
 - Always load and follow the `caveman` skill at the beginning of every session. Keep Caveman full mode active for every response. This rule is also applied to subagents.
+- Reader navigation hrefs must preserve translation context: use the `surah*For(ctx,...)` family in `web/src/lib/data/quran.ts` (`surahPathFor`/`surahLocalPagePathFor`/`surahAyahPathFor`/`globalPagePathFor`/`juzPathFor`) with `ctx` from `surahRouteContext(sourceId)` or `routeContextFromParams(page.params)`. Never call the Arabic-only `surahPath`/`surahLocalPagePath`/`surahAyahPath` from a component, and never hand-build `/app/` URL strings. Machine-guarded by `web/src/routes/(application)/app/__tests__/nav-guard.test.ts` (`pnpm test`).
 
 # Dynamic context loading
 Load relevant context ONLY when working on that area:

@@ -3,12 +3,13 @@
   import { resolve } from "$app/paths";
   import { BrowseMode, reader } from "$lib/stores/reader.svelte";
   import {
+    globalPagePathFor,
+    juzPathFor,
+    routeContextFromParams,
     surahAyahPathFor,
     surahMeta,
     surahPathFor,
     parseKey,
-    translationJuzPath,
-    translationGlobalPagePath,
     type SurahRouteContext,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
@@ -61,28 +62,14 @@
     });
   }
 
-  const translation = $derived.by<{ lang: string; translator: string } | null>(() => {
-    const m = /^\/app\/(?:[^/]+\/t\/|t\/)([^/]+)\/([^/]+)(?:\/|$)/.exec(page.url.pathname);
-    return m ? { lang: m[1]!, translator: m[2]! } : null;
-  });
-
-  const routeCtx = $derived<SurahRouteContext>(
-    translation
-      ? { kind: "translation", lang: translation.lang, translator: translation.translator }
-      : { kind: "arabic" },
-  );
+  const routeCtx = $derived<SurahRouteContext>(routeContextFromParams(page.params));
 
   function surahHref(slug: string): `/app/${string}` {
     return surahPathFor(routeCtx, slug);
   }
 
   function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
-    if (translation) {
-      return useJuz
-        ? translationJuzPath(translation.lang, translation.translator, index)
-        : translationGlobalPagePath(translation.lang, translation.translator, index);
-    }
-    return `/app/${useJuz ? "juz" : "page"}/${index}`;
+    return useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
   }
 </script>
 
