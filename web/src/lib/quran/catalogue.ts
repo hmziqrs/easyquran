@@ -116,7 +116,7 @@ const SOURCE_CATALOGUE_TTL_MS = 300_000;
 let catalogueCache: { entries: SourceCatalogueEntry[]; expiresAt: number } | null = null;
 let pendingCatalogue: Promise<SourceCatalogueEntry[]> | null = null;
 
-async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
+export async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 3000);
   try {
