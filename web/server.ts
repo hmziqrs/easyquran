@@ -1,8 +1,21 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type OutgoingHttpHeader,
+  type OutgoingHttpHeaders,
+  type ServerResponse,
+} from "node:http";
 // Emitted by adapter-node at build time, so it carries no types of its own.
 import { handler } from "./build/handler.js";
 
 type RequestHandler = (request: IncomingMessage, response: ServerResponse) => unknown;
+
+/** Both `writeHead` overloads as one tuple: the optional middle arg is a status message or headers. */
+type WriteHeadArgs = [
+  statusCode: number,
+  statusMessageOrHeaders?: string | OutgoingHttpHeaders | OutgoingHttpHeader[],
+  headers?: OutgoingHttpHeaders | OutgoingHttpHeader[],
+];
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
@@ -35,13 +48,17 @@ const server = createServer((request: IncomingMessage, response: ServerResponse)
   const writeHead = response.writeHead.bind(response);
   // Forward args verbatim — writeHead's middle arg (statusMessage) is optional,
   // so reshaping the call risks dropping the headers object.
+  //
+  // `writeHead` is overloaded, and `Parameters<>` collapses to the last overload
+  // `(statusCode, headers?)`. Spelling both shapes as one rest tuple keeps every real call
+  // forwarding untouched; the assertion re-attaches the overloaded type on the way out.
   response.writeHead = function headerAwareWriteHead(
     this: ServerResponse,
-    ...args: Parameters<ServerResponse["writeHead"]>
+    ...args: WriteHeadArgs
   ): ServerResponse {
     applyHeaders(this, pathname, args[0]);
-    return writeHead(...args);
-  };
+    return (writeHead as (...forwarded: WriteHeadArgs) => ServerResponse)(...args);
+  } as ServerResponse["writeHead"];
 
   Promise.resolve((handler as RequestHandler)(request, response)).catch((cause: unknown) => {
     console.error("[server] unhandled request error", cause);
