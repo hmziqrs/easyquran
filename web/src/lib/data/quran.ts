@@ -27,6 +27,7 @@ export {
   OpenerPackaging,
   QuranScript,
   QuranSourceId,
+  SourceKind,
 } from "$lib/data/quran-types";
 
 export type Surah = LoadedSurah;

@@ -2,7 +2,7 @@ import { resolveManifest } from "./manifest";
 import { quranWorker } from "./worker-client";
 import { quran } from "$lib/stores/quran.svelte";
 import { loadQuranData } from "$lib/data/quran-data-client";
-import { resolveSourceCatalogue } from "./catalogue";
+import { catalogueStore } from "./catalogue-store.svelte";
 
 export function bootOfflineEngine(): () => void {
   quran.status = "resolving";
@@ -19,7 +19,7 @@ export function bootOfflineEngine(): () => void {
       const [manifest, quranData, catalogue] = await Promise.all([
         resolveManifest(),
         loadQuranData(),
-        resolveSourceCatalogue(),
+        catalogueStore.ensure(),
       ]);
       if (!active) return;
       quran.source = manifest.source;

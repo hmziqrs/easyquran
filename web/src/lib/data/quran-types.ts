@@ -156,6 +156,12 @@ export interface TranslationCatalogueEntry {
   downloadUrl: string;
 }
 
+export const SourceKind = {
+  Arabic: "arabic",
+  Translation: "translation",
+} as const;
+export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
+
 export type SourceCatalogueEntry =
   | { kind: "arabic"; spec: ArtifactSpec }
   | { kind: "translation"; entry: TranslationCatalogueEntry };

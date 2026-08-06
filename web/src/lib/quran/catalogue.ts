@@ -75,7 +75,7 @@ function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
   ] as TranslationRow;
 }
 
-function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
+export function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
   return (rawTranslations as readonly unknown[]).map((raw, index) => {
     const row = decodeTranslationRow(raw, index);
     const entry: TranslationCatalogueEntry = {

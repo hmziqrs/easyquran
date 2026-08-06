@@ -7,7 +7,8 @@ import { createReaderSettings } from "./reader-settings.svelte";
 import { createReaderShare } from "./reader-share.svelte";
 import { createVerseCache } from "./verse-cache.svelte";
 
-export type { BrowseMode, ReaderMode } from "./reader-core.svelte";
+export { BrowseMode } from "./reader-core.svelte";
+export type { ReaderMode } from "./reader-core.svelte";
 
 export interface ReaderApi {
   hydrate(): void;

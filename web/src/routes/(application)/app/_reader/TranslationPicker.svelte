@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import {
+    SourceKind,
     surahLocalPagePath,
     translationSurahPath,
     translationGlobalPagePath,
@@ -9,7 +11,7 @@
     translationIdFromSegments,
     translationSegmentsFromId,
   } from "$lib/data/quran";
-  import { resolveSourceCatalogue, translationCatalogue } from "$lib/quran/catalogue";
+  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { useSidebar } from "$lib/components/ui/sidebar";
   import { Icon } from "$lib/components/icon";
@@ -57,7 +59,7 @@
 
   function hrefFor(pos: Position, target: Target): `/app/${string}` | null {
     if (!pos) return null;
-    if (target === "arabic") {
+    if (target === SourceKind.Arabic) {
       if (pos.kind === "surah") return surahLocalPagePath(pos.slug, pos.localPage);
       if (pos.kind === "globalPage") return `/app/page/${pos.n}`;
       return `/app/juz/${pos.n}`;
@@ -78,7 +80,11 @@
   );
   const isArabicActive = $derived(activeTranslationId === null);
   const summary = $derived(activeTranslationId ?? "Arabic");
-  const cataloguePromise = resolveSourceCatalogue();
+  const arabicHref = $derived(hrefFor(position, SourceKind.Arabic));
+
+  onMount(() => {
+    void catalogueStore.ensure();
+  });
 
   function rowClass(active: boolean, disabled = false): string {
     return cn(
@@ -90,7 +96,7 @@
   }
 
   function onSelect(target: Target): void {
-    readerSource.setSourceId(target === "arabic" ? null : target.id);
+    readerSource.setSourceId(target === SourceKind.Arabic ? null : target.id);
     sidebar.setOpenMobile(false);
   }
 </script>
@@ -111,60 +117,53 @@
   </summary>
 
   <ul class="mt-1 flex max-h-[220px] flex-col gap-0.5 overflow-y-auto py-0.5">
-    {#await cataloguePromise}
-      <li class="px-3 py-2 text-[12px] text-fg-3">Loading sources…</li>
-    {:then entries}
-      {@const arabicHref = hrefFor(position, "arabic")}
+    <li>
+      {#if arabicHref}
+        <a
+          href={resolve(arabicHref)}
+          data-sveltekit-preload-data="hover"
+          aria-current={isArabicActive ? "page" : undefined}
+          onclick={() => onSelect(SourceKind.Arabic)}
+          class={rowClass(isArabicActive)}
+        >
+          <span class="truncate">Arabic</span>
+          <span class="ml-auto text-[10.5px] text-fg-4">Original</span>
+        </a>
+      {:else}
+        <span class={rowClass(false, true)}>
+          <span class="truncate">Arabic</span>
+        </span>
+      {/if}
+    </li>
+    {#each catalogueStore.translations as t (t.id)}
+      {@const seg = translationSegmentsFromId(t.id)}
+      {@const target = { id: t.id, lang: seg.lang, translator: seg.translator }}
+      {@const href = hrefFor(position, target)}
+      {@const active = activeTranslationId === t.id}
+      {@const preferred = readerSource.sourceId === t.id}
       <li>
-        {#if arabicHref}
+        {#if href}
           <a
-            href={resolve(arabicHref)}
+            href={resolve(href)}
             data-sveltekit-preload-data="hover"
-            aria-current={isArabicActive ? "page" : undefined}
-            onclick={() => onSelect("arabic")}
-            class={rowClass(isArabicActive)}
+            aria-current={active ? "page" : undefined}
+            onclick={() => onSelect(target)}
+            class={rowClass(active)}
           >
-            <span class="truncate">Arabic</span>
-            <span class="ml-auto text-[10.5px] text-fg-4">Original</span>
+            <span class="truncate">{t.language}{t.translator ? ` · ${t.translator}` : ""}</span>
+            {#if preferred && !active}
+              <span class="ml-auto text-[10.5px] text-fg-4">default</span>
+            {/if}
           </a>
         {:else}
           <span class={rowClass(false, true)}>
-            <span class="truncate">Arabic</span>
+            <span class="truncate">{t.language}</span>
           </span>
         {/if}
       </li>
-      {#each translationCatalogue(entries) as t (t.id)}
-        {@const seg = translationSegmentsFromId(t.id)}
-        {@const target = { id: t.id, lang: seg.lang, translator: seg.translator }}
-        {@const href = hrefFor(position, target)}
-        {@const active = activeTranslationId === t.id}
-        {@const preferred = readerSource.sourceId === t.id}
-        <li>
-          {#if href}
-            <a
-              href={resolve(href)}
-              data-sveltekit-preload-data="hover"
-              aria-current={active ? "page" : undefined}
-              onclick={() => onSelect(target)}
-              class={rowClass(active)}
-            >
-              <span class="truncate">{t.language}{t.translator ? ` · ${t.translator}` : ""}</span>
-              {#if preferred && !active}
-                <span class="ml-auto text-[10.5px] text-fg-4">default</span>
-              {/if}
-            </a>
-          {:else}
-            <span class={rowClass(false, true)}>
-              <span class="truncate">{t.language}</span>
-            </span>
-          {/if}
-        </li>
-      {:else}
-        <li class="px-3 py-2 text-[12px] text-fg-3">No translations available yet.</li>
-      {/each}
-    {:catch}
-      <li class="px-3 py-2 text-[12px] text-fg-3">Sources could not be loaded.</li>
-    {/await}
+    {:else}
+      <li class="px-3 py-2 text-[12px] text-fg-3">No translations available yet.</li>
+    {/each}
   </ul>
 </details>
 

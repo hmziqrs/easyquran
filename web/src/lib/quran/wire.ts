@@ -6,6 +6,7 @@ import {
   OpenerKind,
   OpenerPackaging,
   QuranScript,
+  SourceKind,
   type Ayah,
   type ArtifactSpec,
   type QuranRangeText,
@@ -309,18 +310,18 @@ function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   const kind = typeof rec.kind === "string" ? rec.kind : null;
-  if (kind === "translation") {
+  if (kind === SourceKind.Translation) {
     const entry = decodeTranslationCatalogueEntry(rec);
-    return entry ? { kind: "translation", entry } : null;
+    return entry ? { kind: SourceKind.Translation, entry } : null;
   }
-  if (kind === "arabic") {
+  if (kind === SourceKind.Arabic) {
     const spec = decodeArabicCatalogueSpec(rec);
-    return spec ? { kind: "arabic", spec } : null;
+    return spec ? { kind: SourceKind.Arabic, spec } : null;
   }
   const spec = decodeArabicCatalogueSpec(rec);
-  if (spec) return { kind: "arabic", spec };
+  if (spec) return { kind: SourceKind.Arabic, spec };
   const entry = decodeTranslationCatalogueEntry(rec);
-  return entry ? { kind: "translation", entry } : null;
+  return entry ? { kind: SourceKind.Translation, entry } : null;
 }
 
 export function decodeSourcesPayload(rawBody: unknown): SourceCatalogueEntry[] | null {

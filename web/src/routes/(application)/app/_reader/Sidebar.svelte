@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
-  import { reader } from "$lib/stores/reader.svelte";
+  import { BrowseMode, reader } from "$lib/stores/reader.svelte";
   import {
     surahAyahPath,
     surahMeta,
@@ -30,7 +30,7 @@
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
   import TranslationPicker from "./TranslationPicker.svelte";
 
-  const BROWSE = ["surah", "ayah", "juz", "page"] as const;
+  const BROWSE = [BrowseMode.Surah, BrowseMode.Ayah, BrowseMode.Juz, BrowseMode.Page] as const;
   const sidebar = useSidebar();
   const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
@@ -52,9 +52,9 @@
     sidebar.setOpenMobile(false);
   }
 
-  function selectBrowse(browse: (typeof BROWSE)[number]) {
+  function selectBrowse(browse: BrowseMode) {
     reader.setBrowse(browse);
-    if (browse !== "ayah") return;
+    if (browse !== BrowseMode.Ayah) return;
     void loadQuranData().then((quranData) => {
       const current = quranData.surahBySlug(page.params.surah as string);
       if (current) void reader.refreshFromWorker(current.num);

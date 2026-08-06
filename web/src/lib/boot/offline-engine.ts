@@ -1,6 +1,6 @@
 import { bootOfflineEngine } from "$lib/quran/offline";
 import { quranWorker } from "$lib/quran/worker-client";
-import { resolveSourceCatalogue } from "$lib/quran/catalogue";
+import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
 
 let started = false;
 let teardown: (() => void) | null = null;
@@ -9,7 +9,7 @@ export function startOfflineEngine(): () => void {
   if (started) return () => {};
   started = true;
   teardown = bootOfflineEngine();
-  void resolveSourceCatalogue()
+  void catalogueStore.ensure()
     .then((entries) => {
       void quranWorker.provideCatalogue(entries);
     })

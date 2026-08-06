@@ -1,7 +1,13 @@
 import { SvelteMap } from "svelte/reactivity";
 import type { VerseKey } from "$lib/data/quran";
 
-export type BrowseMode = "surah" | "ayah" | "juz" | "page";
+export const BrowseMode = {
+  Surah: "surah",
+  Ayah: "ayah",
+  Juz: "juz",
+  Page: "page",
+} as const;
+export type BrowseMode = (typeof BrowseMode)[keyof typeof BrowseMode];
 export type ReaderMode = "verse" | "reading";
 
 export interface Persisted {
@@ -39,7 +45,7 @@ export const READER_DEFAULTS: ReaderState = {
   notes: {},
   lastRead: null,
   query: "",
-  browse: "surah",
+  browse: BrowseMode.Surah,
   openNote: null,
 };
 
