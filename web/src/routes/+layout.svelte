@@ -119,7 +119,6 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
   <link rel="icon" type="image/svg+xml" href={favicon} />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content={SITE.name} />
   <svelte:element this={"script"} type="application/ld+json">{jsonLdText}</svelte:element>

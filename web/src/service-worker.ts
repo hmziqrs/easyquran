@@ -27,6 +27,8 @@ const PRECACHE = Array.from(
   new Set([...build, ...files, "/", "/app", `${base}/quran-meta/quran-data.json`]),
 );
 
+const IMMUTABLE = new Set([...build, ...files]);
+
 function normalizeDataKey(url: string | URL): string {
   const u = typeof url === "string" ? new URL(url, sw.location.origin) : url;
   const params = new URLSearchParams();
@@ -341,6 +343,11 @@ sw.addEventListener("fetch", (event) => {
 
   if (url.origin === sw.location.origin && url.pathname.endsWith("/__data.json")) {
     event.respondWith(handleData(req));
+    return;
+  }
+
+  if (url.origin === sw.location.origin && IMMUTABLE.has(url.pathname)) {
+    event.respondWith(cacheFirstApp(req));
     return;
   }
 
