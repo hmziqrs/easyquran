@@ -7,15 +7,13 @@
   import { page as appPage } from "$app/state";
   import {
     parseKey,
-    surahAyahPath,
-    surahLocalPagePath,
-    translationSegmentsFromId,
-    translationSurahPath,
+    surahAyahPathFor,
+    surahLocalPagePathFor,
+    surahRouteContext,
     type SurahLocalPageData,
     type SurahLocalPageLink,
     type SurahLink,
   } from "$lib/data/quran";
-  import { isArabicSourceId } from "$lib/data/quran-types";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
@@ -101,11 +99,10 @@
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
   const sourceId = $derived(initial.normalization.sourceId);
-  const isTranslationSource = $derived(!isArabicSourceId(sourceId));
+  const routeContext = $derived(surahRouteContext(sourceId));
+  const isTranslationSource = $derived(routeContext.kind !== "arabic");
   function pagePathFor(localPage: number): `/app/${string}` {
-    if (!isTranslationSource) return surahLocalPagePath(initial.surah, localPage);
-    const { lang, translator } = translationSegmentsFromId(sourceId);
-    return translationSurahPath(initial.surah.slug, lang, translator, localPage);
+    return surahLocalPagePathFor(routeContext, initial.surah, localPage);
   }
   const renderedPageNumbers = $derived.by(
     () =>
@@ -128,7 +125,7 @@
   function markAnchorRead(anchor: ViewportAnchor | null | undefined): void {
     if (!userScrolled || anchor?.kind !== "verse") return;
     const { num, n } = parseKey(anchor.verseKey);
-    if (num === initial.surah.num) reader.markRead(num, n);
+    if (num === initial.surah.num) reader.markRead(num, n, sourceId);
   }
 
   function measurePage(localPage: number): Attachment<HTMLElement> {
@@ -576,8 +573,9 @@
       const surah = quranData.surahByNum(lastRead.num);
       const targetPage = quranData.surahLocalPageForAyah(lastRead.num, lastRead.n);
       if (!surah || !targetPage) return;
-      reader.openVerse(lastRead.num, lastRead.n);
-      await goto(resolve(surahAyahPath(surah, targetPage.localPage, lastRead.n)), {
+      const resumeCtx = lastRead.sourceId ? surahRouteContext(lastRead.sourceId) : routeContext;
+      reader.openVerse(lastRead.num, lastRead.n, lastRead.sourceId);
+      await goto(resolve(surahAyahPathFor(resumeCtx, surah, targetPage.localPage, lastRead.n)), {
         keepFocus: true,
       });
     } catch {

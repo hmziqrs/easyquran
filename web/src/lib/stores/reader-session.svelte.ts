@@ -53,19 +53,20 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.openNote = null;
       persistence.writeNow();
     },
-    openVerse(num: number, n: number): void {
+    openVerse(num: number, n: number, sourceId?: string): void {
       core.s.current = num;
       core.nav.bump();
       core.s.query = "";
       core.s.browse = "surah";
       core.s.openNote = null;
-      core.s.lastRead = { num, n };
+      core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       persistence.writeNow();
       if (browser) window.scrollTo(0, 0);
     },
-    markRead(num: number, n: number): void {
-      if (core.s.lastRead?.num === num && core.s.lastRead.n === n) return;
-      core.s.lastRead = { num, n };
+    markRead(num: number, n: number, sourceId?: string): void {
+      const current = core.s.lastRead;
+      if (current?.num === num && current.n === n && current.sourceId === sourceId) return;
+      core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       persistence.writeNow();
     },
   };

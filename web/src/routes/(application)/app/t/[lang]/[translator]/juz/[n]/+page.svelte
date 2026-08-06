@@ -1,10 +1,20 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Seo } from "$lib/components";
+  import { juzPathFor, type SurahRouteContext } from "$lib/data/quran";
   import ReaderShell from "../../../../../_reader/ReaderShell.svelte";
   import RangeReader from "../../../../../_reader/RangeReader.svelte";
 
   let { data } = $props();
+  const ctx = $derived.by<SurahRouteContext>(() => {
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    if (typeof lang === "string" && typeof translator === "string") {
+      return { kind: "translation", lang, translator };
+    }
+    return { kind: "arabic" };
+  });
+  const canonicalPath = $derived(juzPathFor(ctx, data.index));
   const extent = $derived(`${data.first} – ${data.last}`);
   const seoTitle = $derived(`${data.label} (${extent}) — Qur'an · EasyQuran`);
   const seoDescription = $derived(
@@ -13,7 +23,7 @@
 </script>
 
 <Seo
-  path={page.url.pathname}
+  path={canonicalPath}
   title={seoTitle}
   description={seoDescription}
   includeTextVariants={false}

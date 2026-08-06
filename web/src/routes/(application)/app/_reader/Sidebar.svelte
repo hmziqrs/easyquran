@@ -3,13 +3,13 @@
   import { resolve } from "$app/paths";
   import { BrowseMode, reader } from "$lib/stores/reader.svelte";
   import {
-    surahAyahPath,
+    surahAyahPathFor,
     surahMeta,
-    surahPath,
+    surahPathFor,
     parseKey,
-    translationSurahPath,
     translationJuzPath,
     translationGlobalPagePath,
+    type SurahRouteContext,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind } from "$lib/data/quran-data";
@@ -66,10 +66,14 @@
     return m ? { lang: m[1]!, translator: m[2]! } : null;
   });
 
+  const routeCtx = $derived<SurahRouteContext>(
+    translation
+      ? { kind: "translation", lang: translation.lang, translator: translation.translator }
+      : { kind: "arabic" },
+  );
+
   function surahHref(slug: string): `/app/${string}` {
-    return translation
-      ? translationSurahPath(slug, translation.lang, translation.translator)
-      : surahPath(slug);
+    return surahPathFor(routeCtx, slug);
   }
 
   function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
@@ -195,7 +199,9 @@
                           {#snippet child({ props })}
                             <a
                               {...props}
-                              href={resolve(surahAyahPath(cur, localPage?.localPage ?? 1, n))}
+                              href={resolve(
+                                surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n),
+                              )}
                               data-sveltekit-preload-data="hover"
                               onclick={onItemClick}
                             >

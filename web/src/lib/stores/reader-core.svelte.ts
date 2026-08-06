@@ -17,7 +17,7 @@ export interface Persisted {
   mode: ReaderMode;
   bookmarks: Record<VerseKey, boolean>;
   notes: Record<VerseKey, string>;
-  lastRead: { num: number; n: number } | null;
+  lastRead: { num: number; n: number; sourceId?: string } | null;
 }
 
 export interface ReaderState extends Persisted {

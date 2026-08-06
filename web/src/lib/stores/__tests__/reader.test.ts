@@ -138,6 +138,16 @@ describe("createReader — behaviour", () => {
     expect(r.lastRead).toEqual({ num: 2, n: 256 });
   });
 
+  it("markRead / openVerse thread sourceId for cross-surface resume", () => {
+    const r = createReader();
+    r.markRead(31, 5, "ms.basmeih");
+    expect(r.lastRead).toEqual({ num: 31, n: 5, sourceId: "ms.basmeih" });
+    r.openVerse(31, 5, "ms.basmeih");
+    expect(r.lastRead).toEqual({ num: 31, n: 5, sourceId: "ms.basmeih" });
+    r.markRead(31, 5);
+    expect(r.lastRead).toEqual({ num: 31, n: 5 });
+  });
+
   it("two createReader() instances are isolated", () => {
     const a = createReader();
     const b = createReader();

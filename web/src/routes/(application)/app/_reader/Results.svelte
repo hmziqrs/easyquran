@@ -1,8 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahAyahPath } from "$lib/data/quran";
+  import { surahAyahPathFor, type SurahRouteContext } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import type { QuranData } from "$lib/data/quran-data";
   import { quranSearch } from "$lib/quran/search";
@@ -22,6 +23,15 @@
     result: SearchResponse;
     quranData: QuranData;
   }
+
+  const routeContext = $derived.by<SurahRouteContext>(() => {
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    if (typeof lang === "string" && typeof translator === "string") {
+      return { kind: "translation", lang, translator };
+    }
+    return { kind: "arabic" };
+  });
 
   const searchPromise = $derived.by((): Promise<SearchState | null> => {
     const query = reader.query.trim();
@@ -49,7 +59,7 @@
     const localPage = quranData.surahLocalPageForAyah(surah, ayah);
     if (!localPage) return;
     reader.openVerse(surah, ayah);
-    void goto(resolve(surahAyahPath(entry, localPage.localPage, ayah)));
+    void goto(resolve(surahAyahPathFor(routeContext, entry, localPage.localPage, ayah)));
   }
 </script>
 

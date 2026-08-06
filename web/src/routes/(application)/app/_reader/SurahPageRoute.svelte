@@ -6,8 +6,9 @@
   import { Seo } from "$lib/components";
   import {
     QuranScript,
-    surahAyahPath,
-    surahLocalPagePath,
+    surahAyahPathFor,
+    surahLocalPagePathFor,
+    surahRouteContext,
     translationSegmentsFromId,
     type SurahRouteData,
   } from "$lib/data/quran";
@@ -23,7 +24,9 @@
   let anchorScrolling = $state(false);
   const activePage = $derived(scrolledPage ?? data.pageData);
   const activeLocalPage = $derived(activePage.page.localPage);
-  const canonicalPath = $derived(surahLocalPagePath(surah, activeLocalPage));
+  const normalization = $derived(data.pageData.normalization);
+  const routeContext = $derived(surahRouteContext(normalization.sourceId));
+  const canonicalPath = $derived(surahLocalPagePathFor(routeContext, surah, activeLocalPage));
   const pageSuffix = $derived(
     data.pageData.pageCount > 1
       ? ` — Page ${activeLocalPage} of ${data.pageData.pageCount}`
@@ -32,7 +35,6 @@
   const seoTitle = $derived(
     `Surah ${surah.num}, ${surah.name}${pageSuffix} · EasyQuran`,
   );
-  const normalization = $derived(data.pageData.normalization);
   const isTranslation = $derived(normalization.script === QuranScript.Translation);
   const contentLanguage = $derived(
     isTranslation ? translationSegmentsFromId(normalization.sourceId).lang : "ar",
@@ -83,7 +85,7 @@
       const quranData = await loadQuranData();
       const targetPage = quranData.surahLocalPageForAyah(surah.num, ayah);
       if (!targetPage) return;
-      const targetHref = resolve(surahAyahPath(surah, targetPage.localPage, ayah));
+      const targetHref = resolve(surahAyahPathFor(routeContext, surah, targetPage.localPage, ayah));
       if (targetPage.localPage !== data.pageData.page.localPage) {
         await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
         return;
@@ -110,7 +112,7 @@
         if (stableFrames >= 3 && elapsed >= 320) break;
         await nextFrame();
       }
-      reader.markRead(surah.num, ayah);
+      reader.markRead(surah.num, ayah, normalization.sourceId);
       await nextFrame();
     } finally {
       anchorScrolling = false;
