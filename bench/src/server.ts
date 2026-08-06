@@ -106,7 +106,7 @@ export async function startWeb(
   if (!(await portFree(WEB_PORT))) {
     throw new Error(`[server] port ${WEB_PORT} busy`);
   }
-  const child = spawn(runtime.bin, [...runtime.args, "server.mjs"], {
+  const child = spawn(runtime.bin, [...runtime.args, "server.ts"], {
     cwd: path.join(REPO, "web"),
     env: {
       ...process.env,

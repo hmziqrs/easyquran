@@ -9,7 +9,7 @@
     "postbuild": "node scripts/gen-offline-pack.ts",
     "audit:arabic": "node scripts/audit-arabic-digest.ts",
     "preview": "vp preview",
-    "start": "node server.mjs",
+    "start": "bun server.ts",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.worker.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

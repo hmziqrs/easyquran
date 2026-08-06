@@ -31,8 +31,8 @@ render, Rust API benchmarking (Axum is a fixed dependency here, kept out of satu
 │                                                                          │
 │  vegeta  ──HTTP/1.1 keep-alive──▶  web server (one runtime at a time)     │
 │  (targets streamed from a                 :3100                          │
-│   pre-generated Zipf list)          node ./web/server.mjs                │
-│                                     bun  ./web/server.mjs                │
+│   pre-generated Zipf list)          node ./web/server.ts                 │
+│                                     bun  ./web/server.ts                 │
 │                                          │                               │
 │                                          │ INTERNAL_QURAN_API_BASE       │
 │                                          ▼                               │

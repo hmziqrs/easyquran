@@ -1,5 +1,8 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+// Emitted by adapter-node at build time, so it carries no types of its own.
 import { handler } from "./build/handler.js";
+
+type RequestHandler = (request: IncomingMessage, response: ServerResponse) => unknown;
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
@@ -10,7 +13,7 @@ if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
   throw new Error(`[server] invalid PORT: ${process.env.PORT ?? ""}`);
 }
 
-function applyHeaders(response, pathname, statusCode) {
+function applyHeaders(response: ServerResponse, pathname: string, statusCode: number): void {
   if (statusCode >= 500) {
     response.setHeader("Cache-Control", "no-store");
   } else if (
@@ -27,17 +30,20 @@ function applyHeaders(response, pathname, statusCode) {
   }
 }
 
-const server = createServer((request, response) => {
+const server = createServer((request: IncomingMessage, response: ServerResponse) => {
   const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
   const writeHead = response.writeHead.bind(response);
   // Forward args verbatim — writeHead's middle arg (statusMessage) is optional,
   // so reshaping the call risks dropping the headers object.
-  response.writeHead = function headerAwareWriteHead(...args) {
+  response.writeHead = function headerAwareWriteHead(
+    this: ServerResponse,
+    ...args: Parameters<ServerResponse["writeHead"]>
+  ): ServerResponse {
     applyHeaders(this, pathname, args[0]);
     return writeHead(...args);
   };
 
-  Promise.resolve(handler(request, response)).catch((cause) => {
+  Promise.resolve((handler as RequestHandler)(request, response)).catch((cause: unknown) => {
     console.error("[server] unhandled request error", cause);
     if (response.headersSent) {
       response.destroy();

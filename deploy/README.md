@@ -17,7 +17,11 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 ## Files
 
 - `Dockerfile.web` / `Dockerfile.api` — the two images.
-- `Dockerfile.web` runs the standalone adapter-node server. Its persistent
+- `Dockerfile.web` runs the standalone adapter-node server **on the bun runtime**
+  (`oven/bun:1.3.14-slim`), built on Node. The split is deliberate: prerendering reads the
+  sqlite corpus via `node:sqlite`, which bun does not implement, and every sqlite route is
+  `prerender = true` — so it is a build-time dependency the runtime never loads. bun holds
+  roughly half Node's resident memory under translation SSR (see `bench/`). Its persistent
   `web_quran_cache` volume stores only translated-page HTML (7-day TTL, 256 MiB LRU budget).
 - `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
   external proxy network. The canonical compose; used by the Dokploy flow. It
@@ -63,8 +67,8 @@ against your Dokploy instance if you customized Traefik).
 The common Dokploy gotcha (404s) is just containers not being on
 `dokploy-network` — our compose attaches them, so you're covered.
 
-The web image runs SvelteKit's standalone Node server. `hooks.server.ts` owns
-translated-page disk caching and dynamic response headers; `server.mjs` applies
+The web image runs SvelteKit's standalone adapter-node server on bun. `hooks.server.ts` owns
+translated-page disk caching and dynamic response headers; `server.ts` applies
 the same `Cache-Control`/`X-Robots-Tag` contract to adapter-node's static bypass. Traefik's
 compression middleware handles dynamic SSR while adapter-node serves precompressed
 Arabic output and immutable assets.

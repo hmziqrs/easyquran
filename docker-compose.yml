@@ -39,10 +39,12 @@ services:
       api:
         condition: service_healthy
     healthcheck:
+      # `bun`, not `node`: the web image runs the adapter-node server on the bun runtime and
+      # carries no node binary.
       test:
         [
           "CMD",
-          "node",
+          "bun",
           "-e",
           "fetch('http://localhost:8080/health/quran').then(r=>{if(!r.ok)process.exit(1)})",
         ]

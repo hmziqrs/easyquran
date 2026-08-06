@@ -1,3 +1,7 @@
+# Build stays on Node: prerendering the Arabic routes reads the sqlite corpus through
+# `node:sqlite`, which bun does not implement ("No such built-in module"). Every route that
+# touches sqlite is `prerender = true`, so the dependency is build-time only — the runtime
+# below never loads it.
 FROM node:24-slim AS build
 WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@11.15.1 --activate
@@ -20,15 +24,18 @@ ENV BUILD_VERSION=${VERSION}
 
 RUN pnpm install && pnpm --filter web build
 
-FROM node:24-slim
+# Runtime on bun: same adapter-node server, roughly half the resident memory of Node under
+# translation SSR (bench/ measured 211 MB vs 375 MB at 1k req/s), and it holds throughput where
+# Node folds. Pinned deliberately — bump to 1.4 once it has a stable tag.
+FROM oven/bun:1.3.14-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8080 \
     QURAN_SSR_CACHE_DIR=/app/cache/quran-ssr
-RUN mkdir -p /app/cache/quran-ssr && chown -R node:node /app
-COPY --from=build --chown=node:node /repo/web/build /app/build
-COPY --from=build --chown=node:node /repo/web/server.mjs /app/server.mjs
+RUN mkdir -p /app/cache/quran-ssr && chown -R bun:bun /app
+COPY --from=build --chown=bun:bun /repo/web/build /app/build
+COPY --from=build --chown=bun:bun /repo/web/server.ts /app/server.ts
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="EasyQuran Web" \
@@ -38,5 +45,5 @@ LABEL org.opencontainers.image.title="EasyQuran Web" \
       easyquran.component="web"
 
 EXPOSE 8080
-USER node
-CMD ["node", "server.mjs"]
+USER bun
+CMD ["bun", "server.ts"]
