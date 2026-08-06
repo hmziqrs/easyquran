@@ -210,6 +210,11 @@ export const quranWorker = {
   async readSurah(num: number, source?: QuranReaderSource): Promise<QuranSurahText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
     if (isArabicSourceId(reader)) {
+      if (!worker && QURAN.apiBase) {
+        try {
+          return await quranApi.readSurah(reader, num);
+        } catch {}
+      }
       const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source }));
       const decoded = decodeQuranSurahText(raw);
       if (!decoded) throw new Error("quran worker returned a malformed surah");

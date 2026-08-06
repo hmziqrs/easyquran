@@ -38,12 +38,9 @@ export const parseKey = (key: VerseKey): { num: number; n: number } => {
   return { num: +m[1]!, n: +m[2]! };
 };
 
-export const surahPath = (
-  surah: string | Pick<CatalogEntry, "slug">,
-  verse?: number,
-): `/app/${string}` => {
+export const surahPath = (surah: string | Pick<CatalogEntry, "slug">): `/app/${string}` => {
   const slug = typeof surah === "string" ? surah : surah.slug;
-  return verse === undefined ? `/app/${slug}` : `/app/${slug}?verse=${verse}`;
+  return `/app/${slug}`;
 };
 
 export const surahLocalPagePath = (
@@ -85,11 +82,8 @@ export const translationGlobalPagePath = (
   globalPage: number,
 ): `/app/${string}` => `/app/t/${lang}/${translator}/page/${globalPage}`;
 
-export const translationJuzPath = (
-  lang: string,
-  translator: string,
-  n: number,
-): `/app/${string}` => `/app/t/${lang}/${translator}/juz/${n}`;
+export const translationJuzPath = (lang: string, translator: string, n: number): `/app/${string}` =>
+  `/app/t/${lang}/${translator}/juz/${n}`;
 
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);

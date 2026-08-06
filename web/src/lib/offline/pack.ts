@@ -3,27 +3,11 @@ export interface Pack {
   bodies: string[];
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
-}
-
 function fail(msg: string): never {
   throw new Error(`[offline] ${msg}`);
 }
 
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return bytesToHex(new Uint8Array(digest));
-}
-
-export async function decodePack(text: string, expectedHash: string): Promise<Pack> {
-  const full = await sha256Hex(text);
-  if (full.slice(0, 12) !== expectedHash) {
-    fail(`pack hash mismatch: ${full.slice(0, 12)} != ${expectedHash}`);
-  }
-
+export function decodePack(text: string): Pack {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -31,7 +15,8 @@ export async function decodePack(text: string, expectedHash: string): Promise<Pa
     fail("pack is not valid JSON");
   }
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) fail("pack root is not an object");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    fail("pack root is not an object");
   const root = parsed as Record<string, unknown>;
 
   if (root.version !== 1) fail(`pack version unsupported: ${String(root.version)}`);

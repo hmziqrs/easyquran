@@ -15,12 +15,22 @@ const sized = (entries: [string, number][]): Map<string, number> => new Map(entr
 
 describe("computeEvictions", () => {
   it("evicts a stale item even when under both caps", () => {
-    const evicted = computeEvictions([cand("stale", 1024)], used([["stale", CUTOFF - 1]]), sized([]), NOW);
+    const evicted = computeEvictions(
+      [cand("stale", 1024)],
+      used([["stale", CUTOFF - 1]]),
+      sized([]),
+      NOW,
+    );
     expect(evicted).toEqual(["stale"]);
   });
 
   it("keeps a fresh item sitting exactly on the cutoff when under both caps", () => {
-    const evicted = computeEvictions([cand("fresh", 1024)], used([["fresh", CUTOFF]]), sized([]), NOW);
+    const evicted = computeEvictions(
+      [cand("fresh", 1024)],
+      used([["fresh", CUTOFF]]),
+      sized([]),
+      NOW,
+    );
     expect(evicted).toEqual([]);
   });
 
@@ -89,12 +99,7 @@ describe("computeEvictions", () => {
   });
 
   it("treats a zero-size candidate with no sizeFor entry as zero bytes", () => {
-    const evicted = computeEvictions(
-      [cand("zero", 0)],
-      used([["zero", CUTOFF]]),
-      sized([]),
-      NOW,
-    );
+    const evicted = computeEvictions([cand("zero", 0)], used([["zero", CUTOFF]]), sized([]), NOW);
     expect(evicted).toEqual([]);
   });
 
@@ -126,13 +131,32 @@ describe("computeEvictions", () => {
     expect(evicted).toEqual(["unknown"]);
   });
 
-  it("does not pin-filter itself, so a stale pinned-style id is still evicted", () => {
+  it("keeps pinned Arabic artifacts even when stale", () => {
     const evicted = computeEvictions(
       [cand("arabic:2", 1024)],
       used([["arabic:2", CUTOFF - 1]]),
       sized([]),
       NOW,
+      ["arabic:2"],
     );
-    expect(evicted).toEqual(["arabic:2"]);
+    expect(evicted).toEqual([]);
+  });
+
+  it("bounds a synthetic 100-translation cache while preserving both Arabic artifacts", () => {
+    const arabicIds = ["uthmani", "simple-clean"];
+    const candidates = [
+      ...arabicIds.map((id) => cand(id, 2 * MB)),
+      ...Array.from({ length: 100 }, (_, index) => cand(`translation-${index}`, MB)),
+    ];
+    const lastUsed = new Map(
+      candidates.map((candidate, index) => [candidate.id, CUTOFF + index] as const),
+    );
+
+    const evicted = computeEvictions(candidates, lastUsed, sized([]), NOW, arabicIds);
+    const retainedTranslations = 100 - evicted.length;
+    expect(retainedTranslations).toBeLessThanOrEqual(CAP_COUNT);
+    expect(retainedTranslations * MB).toBeLessThanOrEqual(CAP_BYTES);
+    expect(evicted).not.toContain("uthmani");
+    expect(evicted).not.toContain("simple-clean");
   });
 });

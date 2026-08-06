@@ -1,21 +1,24 @@
 # EasyQuran — web
 
-SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-static` now (prerendered); -> `adapter-node` SSR + disk-TTL for translated pages (see `docs/quran.md`).
+SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-node`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran.md`).
 
 ## Run
 
 Repo root (`just` picks DB source):
 
     just web-dev local     # dev, tracked SQLite at /_quran
-    just web-dev prod      # dev, R2 files
-    just web-build prod    # static build (default)
-    just docker-up local   # Caddy build, localhost:8080, always prod
+    just web-dev prod      # dev, same-origin gateway to R2
+    just web-build prod    # adapter-node build + Arabic prerender output
+    just docker-up local   # Node web + Axum API, localhost:8080 / :8888
 
 `PUBLIC_ENV` = `local|prod`. Selects DB origin only. `pnpm dev`->local, `pnpm build`->prod, Docker always prod.
+Local development serves tracked artifacts at `/_quran`; production uses the same URL space as an
+allowlisted streaming gateway to R2, so OPFS downloads never depend on cross-origin bucket CORS.
 
 In `web/`:
 
     pnpm dev | build | preview
+    pnpm start      # run the production build + static/dynamic header policy
     pnpm check      # svelte-check + worker tsconfig
     vp lint | fmt | check
 

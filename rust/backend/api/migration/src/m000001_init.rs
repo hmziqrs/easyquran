@@ -309,10 +309,7 @@ impl MigrationTrait for Migration {
         ];
 
         for stmt in stmts {
-            manager
-                .get_connection()
-                .execute_unprepared(*stmt)
-                .await?;
+            manager.get_connection().execute_unprepared(stmt).await?;
         }
 
         Ok(())
@@ -346,10 +343,7 @@ impl MigrationTrait for Migration {
             r#"DROP TABLE IF EXISTS "users""#,
         ];
         for stmt in drops {
-            manager
-                .get_connection()
-                .execute_unprepared(*stmt)
-                .await?;
+            manager.get_connection().execute_unprepared(stmt).await?;
         }
         Ok(())
     }

@@ -13,11 +13,8 @@ Part 1 is settled ground: rules and contracts that constrain everything else, ve
 - Quran databases (Arabic + every translation) are **immutable**. Sourced from Tanzil.net. No modifications, no versioning.
 - **No content versioning.** No `contentVersion`/`searchVersion`, no version segment in R2 keys, no hash-keyed cache dirs. A database's identity is its **id** (`uthmani`, `simple-clean`, `en.sahih`, …).
 - **Ayah text is verbatim.** The source `text` is never normalized, split, trimmed, or reordered — SQLite read → in-memory store → JSON → SSG HTML. `9:1` has no basmala, `1:1` *is* the basmala, `27:30` carries one mid-ayah, `95:1`/`97:1` carry a shadda spelling: all correct source state, none of it a cleanup target.
-- **Integrity: manual audit only — never automated.** SHA-256 verifies bytes; it never names a cache key, ETag, source-profile, or catalogue row at runtime (a db's identity is its id). The checks that used to run in the automated path are now **manual human-audit tools**:
-  - *Corpus text* — golden sha256 over the joined corpus vs a **literal** (never self-derived: a normalizing loader corrupts both sides identically and slips past). 5,782 of 6,236 Uthmani rows are non-NFC — NFC composes ALEF + MADDAH into U+0622, so a driver/encoder upgrade rewrites thousands of ayahs while every page still looks correct; simple-clean is NFC/NFKC-stable. Verified by `just quran-audit`, **not at boot**.
-  - *Arabic + translation db bytes* — the on-disk/delivery sqlite sha. Verified by `pnpm audit:arabic` (web) / `just quran-audit` (Rust) / `pnpm verify` in `db/quran/tanzil/translations`, **not on read/download**. At runtime, downloaded bytes are **size-checked** only (`workers/download.ts verifyBytes`).
-  - **Banned:** runtime identity by hash — no sha256/blake3 in an R2 key, cache dir, ETag, version handshake, or catalogue field. Machine-guarded by `rust tests/quran_v1.rs` (`sources_rows_never_carry_sha256`, `scripts_endpoint_carries_no_sha256`) + `web catalogue-sha-guard.test.ts`.
-- **Boot is fail-fast.** Missing/corrupt source, XML failure, tiling failure, or a wrong bismillah split count → log the specific invariant, exit non-zero. No "Arabic not ready" served state. (Digest verification is **not** boot — it's the manual `just quran-audit`; boot fail-fasts on shape, not sha.)
+- **Integrity: SHA-256 is manual audit, never automated.** A DB's identity is its id; sha never names a cache key, ETag, profile, or catalogue row at runtime. The corpus + sqlite digests are checked by hand (`just quran-audit`, `pnpm audit:arabic`, `pnpm verify`) — not at boot, not on download (those size-check only, `verifyBytes`). Runtime protection is **content asserts** (6236 rows, tiling, ayah keys, packaging). The golden corpus digest is a literal, never self-derived — a normalizing loader corrupts both sides of a self-derived check identically; 5,782 Uthmani rows are non-NFC, so a driver/encoder upgrade can rewrite thousands of ayahs while pages still look right, which is why the audit exists. Crypto sha (CSRF/HMAC/Argon2/PKCE) is unrelated and stays.
+- **Boot is fail-fast.** Missing/corrupt source, XML failure, tiling failure, or wrong bismillah split count → exit non-zero. (Digest audit is not boot — it's manual `just quran-audit`; boot fail-fasts on shape, not sha.)
 - **Arabic renders SSG.** Translated pages render SSR + disk-TTL (Part 2 §7). Never ISR.
 
 ## Data
@@ -39,7 +36,7 @@ One shape per navigation family — `/{family}` list, `/{family}/{n}` detail, `/
 - `GET /quran/sources/{id}/surah/{n}` → `Envelope<QuranSurahTextDto>`; `GET /quran/sources/{id}/range?from=&to=` → `Envelope<RangeText>` (cap 300). **This pair is also the translation read API** — it is already source-parameterized, so translations need no new routes, only a resolver (§3).
 - `GET /quran/search?q=…` — substring scan over normalized simple-clean. `kind` is an **output** discriminator; only `ayah` is produced today (`opener` reserved, never emitted).
 - `GET /quran/random` — deterministic ayah-of-the-day (date-seeded LCG, not RNG).
-- `GET /quran/scripts` (R2 artifacts: id, sizeBytes, sha256, downloadUrl), `GET /quran/health/ready`, `/quran/openapi.json` under the `openapi` feature.
+- `GET /quran/scripts` (R2 artifacts: id, sizeBytes, downloadUrl), `GET /quran/health/ready`, `/quran/openapi.json` under the `openapi` feature.
 - **Rate limits, per IP:** 600/60s general, 30/60s on search — `/search` mounts on a separate router so the CPU-heavy scan does not inherit the coarse limit.
 - `Envelope<T> = { data: T }`. Closed error shape (400 / 404 / 429 / 5xx) — a failed read never becomes an empty surah.
 
@@ -56,7 +53,7 @@ One rule set, two implementations (Rust + web Worker) returning identical ordere
 - **offset map:** normalization emits a normalized-scalar → source-scalar map, so a hit found in normalized space highlights correctly in the rendered script (converted to UTF-16 for the web). Offsets crossing the boundary are **Unicode scalar** (Rust `char` = web `Array.from`).
 - **canonical view** splits each surah into **body + opener** units (opener = rank 0, ayah = rank 1).
 - **Opener classification is two orthogonal enums**, not one: `OpenerKind` = `Verse | Header | None` (what the opener *is*) × `OpenerPackaging` = `NumberedAyah | EmbeddedPrefix | ChapterFlag | SeparateRow | Absent` (how the source stores it). Split counts (1 / 112 / 1) asserted at boot. Surahs 95 & 97 carry a shadda variant (`بِّسْمِ`) — match the prefix diacritic-insensitively, never exactly.
-- A rule change ships new Rust + web together; it never mutates a sqlite. Parity is currently **by construction, not enforced** — see §8.
+- A rule change ships new Rust + web together; it never mutates a sqlite. Shared neutral fixtures enforce Rust/web parity — see §8.
 
 ## Caching — as built
 
@@ -65,6 +62,8 @@ Databases are immutable and read-only: no write handling anywhere.
 - **Rust, in memory:** both Arabic corpora load at boot and stay resident. `Script` accepts `uthmani` | `simple-clean` only.
 - **Rust, responses:** no server-side store. Reads come straight from the resident corpus, but every response is edge-cacheable — weak `ETag` = `quran-corpus : canonical key` (a static id-based tag; the corpus is immutable so a constant ETag is correct — never a digest), `If-None-Match` → 304, `Cache-Control` per family: Arabic `max-age=300, s-maxage=86400, swr=604800, sie=604800`; search `max-age=60, s-maxage=300`; artifacts `immutable`; 5xx `no-store`, so a CDN cannot pin a transient failure.
 - **Web, OPFS:** Arabic eager on boot. **Key = `spec.id`** (a db's identity is its id; the prior `spec.sha256` key was a cache-dir violation). Downloaded bytes (Arabic + translation) are size-checked only on read/download — no digest ships in any catalogue, spec, or ETag; sha verification is the manual `pnpm audit:arabic`. Older sha256-keyed caches orphan on upgrade (one-time re-download). Retention/eviction: §6.
+- **Web artifact delivery:** browser downloads use the same-origin streaming `/_quran/<R2 key>` gateway. It accepts only baked Arabic/translation keys and forwards range requests to R2 with immutable caching. This keeps OPFS independent of bucket/custom-domain CORS while preserving the publisher's exact `tanzil/…` layout; no bytes are rewritten or hashed.
+- **Offline route pack:** its immutable filename uses SvelteKit's build-version id, not a content digest. Download validation is byte-count + closed-schema validation; the build and browser never hash serialized Quran routes.
 - **R2 layout** (publisher `translations/scripts/upload-sqlite.ts`, bucket prefix `tanzil/`): `tanzil/arabic/<file>.sqlite`, `tanzil/translations/sqlite/<id>.sqlite`, `tanzil/translations/index.min.json` (mutable, `max-age=300, must-revalidate`), `tanzil/quran-data.xml`. Everything except the catalogue is `immutable`. Raw `sql/` dumps are never published.
 
 ## Web delivery + pagination — as built
@@ -78,11 +77,14 @@ Databases are immutable and read-only: no write handling anywhere.
 
 ---
 
-# Part 2 — the plan
+# Part 2 — status
 
-Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unblocks §6–§7. §8–§9 are independent.
+**Done (shipped):** §1 artifact URL · §2 no-sha identity · §3 translation pool + metrics · §4 `/sources` · §5 `/t` reader routes · §6 OPFS retention · §7 production Node SSR + disk TTL · §8 parity fixtures · §9 loose ends.
+**Remaining:** none in this plan. Word-level navigation and a future mobile client remain separate, unscheduled product work; neither has a data model or client in this repository today.
 
-## 1. Fix the artifact URL contract — *defect, blocks everything downstream*
+Original dependency order + decisions preserved below.
+
+## 1. Fix the artifact URL contract — *done*
 
 `/scripts` builds `{public_url}/quran/arabic/{id}/{filename}` (`quran_v1/controller.rs:649`), but the publisher writes `tanzil/arabic/<file>.sqlite` and the web bakes the same `r2Path`. The HEAD verify therefore always fails, `/scripts` never returns 2 artifacts, the response is stamped `no-store` and never cached, and `resolveManifest` silently falls back to the baked manifest forever. The endpoint is effectively dead.
 
@@ -92,22 +94,15 @@ Ordered by dependency. §1–§2 unblock §3–§4, which unblock §5, which unb
 
 **Done when:** `/scripts` returns 2 verified artifacts with `ARABIC_CACHE`; the web's `ResolvedManifest.source` flips from `baked` to `api`; a test asserts the emitted URL against the publisher's key constant so the two cannot drift again.
 
-## 2. Translation catalogue — positional, id-keyed, no SHA-256 — *done, then reversed*
+## 2. No SHA-256 as a Quran identity key — *done*
 
-The first pass of this section widened `file` to `{ path, sizeBytes, sha256 }` and keyed the OPFS cache on `spec.sha256`, on the theory that a content hash was the right cache identity. That was wrong: it violated the §Hard-rules ban on hash-keyed cache dirs, and it shipped 115 digests that only duplicated the id.
+A Quran DB's identity is its **id** (`uthmani`, `en.sahih`, …); DBs are immutable, so id is complete and a sha key only renames it. SHA-256 was removed from every place it named or keyed Quran data — the translation catalogue, the OPFS/IDB cache (now keyed by `spec.id`), the worker spec, Rust `CatalogueEntry` + `/sources` `SourceDto` + `/scripts` `Artifact` + `/health` (fields gone, no `Option`), the Arabic boot golden assert, `resolveSourceProfile`'s compare, the SSG boot validate, client download sha-verify, and the Arabic ETag (now a static `quran-corpus` tag). The catalogue is a flat positional array (`TranslationField` in `quran/catalogue.ts`), like `quran-data.json`'s surah rows.
 
-**Decision (reversal): never SHA-256 as a Quran catalogue/identity key.** A database's identity is its **id** (`uthmani`, `en.sahih`, …). Quran DBs are immutable, so id is a complete, stable identity; a sha256 key only renames it. This was applied first to translations (catalogue, OPFS+IDB cache key, worker spec, Rust `CatalogueEntry`, `/sources` `SourceDto` — the field gone entirely, no `Option`, translation ETag now `tanzil-{id}`), then to the **Arabic path**: the boot golden-digest assert, the `resolveSourceProfile` sha compare, the SSR boot validate, the `/scripts` Arabic sha, the `/health` source digests, and the corpus-digest ETag are all removed from build/boot/runtime. The catalogue is a **flat positional array** mirroring `quran-data.json`'s surah rows (`TranslationField` in `quran/catalogue.ts`), emitted sha-free by `db/.../scripts/lib.ts`.
+**What stays sha — manual audit only** (a human runs these; never automated): `just quran-audit` + `pnpm audit:arabic` (Arabic corpus + sqlite digests), `pnpm verify` in `db/quran/tanzil/translations` (translation build digests vs repo-only `index.json` + `manifest.json`). Plus crypto primitives (CSRF/HMAC/Argon2/PKCE) — unrelated to Quran data.
 
-**What stays sha256 — manual audit only** (never automated; a human runs these intentionally):
-- *Arabic corpus + file digests* — `just quran-audit` (Rust) + `pnpm audit:arabic` (web) compare the golden corpus digest + sqlite file sha to literals. Script accuracy is the highest priority; the check stays — just not at boot/download.
-- *Translation build digests* — `pnpm verify` in `db/quran/tanzil/translations` re-hashes SQL dumps + sqlite vs repo-only `index.json` + `sqlite/manifest.json` (never published, never a runtime key).
-- *Crypto primitives* — CSRF `hkdf_sha256`, webhook HMACs, Argon2id, PKCE S256, AES-GCM-SIV field encryption. Unrelated to Quran data; untouched.
+Guards: `tests/quran_v1.rs` (`sources_rows_never_carry_sha256`, `scripts_endpoint_carries_no_sha256`) + `web catalogue-sha-guard.test.ts`. Runtime protection is content asserts, not sha.
 
-The real runtime protection is **content asserts** (6236 rows, tiling, ayah keys, packaging counts) in boot + tests — independent of any sha. Two deep audits (7 agents each, repo-wide) confirmed no Quran-data sha256 survives in any automated path; every remaining `sha256` is one of the three manual/crypto categories above.
-
-**Done when:** `translations.json` + `index.min.json` are sha-free; OPFS/IDB cache keys by `spec.id`; Rust `SourceDto` + `Artifact` (`/scripts`) + `HealthReady` carry no sha + the Arabic ETag is a static id tag; the boot golden assert + `resolveSourceProfile` compare + SSR validate + client download sha-verify are gone (moved to `just quran-audit` / `pnpm audit:arabic`); machine guards (`sources_rows_never_carry_sha256`, `scripts_endpoint_carries_no_sha256`, `catalogue-sha-guard.test.ts`) enforce it; `cargo test`, `pnpm check/test/build` all pass.
-
-## 3. Translation sources in Rust
+## 3. Translation sources in Rust — *done*
 
 `Script::parse` accepts Arabic only, so `/quran/sources/{id}/…` 400s for every translation. No pool exists.
 
@@ -124,11 +119,11 @@ The real runtime protection is **content asserts** (6236 rows, tiling, ayah keys
 
 Single-flight is mandatory: two concurrent cold requests for the same id must build once — `moka::future::Cache::try_get_with` or equivalent. **No `std::sync` guard may be held across an `.await`** (`MutexGuard` is `!Send`, axum handler futures must be `Send`).
 
-The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert, and none is wanted — a translation's identity is its id. Integrity is fixed at build (repo-only `index.json` + `manifest.json` digests, checked by `verify.ts`); on download the client size-checks translation bytes only (Arabic is the one it sha-verifies). See §2.
+The golden-digest rule does **not** extend to translations: there is no per-translation literal to assert, and none is wanted — a translation's identity is its id. Integrity is fixed at build (repo-only `index.json` + `manifest.json` digests, checked by `pnpm verify`); on download the client size-checks bytes only — no sha-verify for any source, Arabic included. The digest audit is manual (`just quran-audit` / `pnpm audit:arabic`). See §2.
 
 **Done when:** `/quran/sources/en.sahih/surah/2` returns text; a cold-start concurrency test proves one build for N simultaneous requests; the pool exports resident-count, resident-bytes, hit-rate, and evictions/min so the bounds above are tuned on evidence rather than reset by guess.
 
-## 4. `/quran/sources` catalogue endpoint
+## 4. `/quran/sources` catalogue endpoint — *done*
 
 The reader's translation picker needs the list; `/scripts` is the SSG bootstrap for the two Arabic artifacts and should stay that narrow.
 
@@ -138,7 +133,7 @@ The reader's translation picker needs the list; `/scripts` is the SSG bootstrap 
 
 **Done when:** the endpoint lists 117 sources with working download URLs, and a partial upstream produces `no-store` rather than a cached truncation.
 
-## 5. Translation reader routes
+## 5. Translation reader routes — *done*
 
 No translation route exists — not even a page-1 form. Geometry and accessors are already source-agnostic, so this is wiring, not new page math.
 
@@ -157,7 +152,7 @@ No translation route exists — not even a page-1 form. Geometry and accessors a
 
 **Done when:** a translated deep link past local page 1 has a real URL; `/app/<surah>/page/<n>` and `/app/<surah>/t/<lang>/<translator>` cannot shadow each other (route test); the picker switches source without losing reading position.
 
-## 6. OPFS retention
+## 6. OPFS retention — *done*
 
 No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a tester pulling ~100 (186 MiB) and hitting the origin quota.
 
@@ -167,17 +162,17 @@ No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a t
 
 **Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the two Arabic artifacts survive every prune.
 
-## 7. `adapter-node` + SSR disk-TTL for translated pages
+## 7. `adapter-node` + SSR disk-TTL for translated pages — *done*
 
 Arabic stays prerendered; translated pages cannot be — 115 sources × 662 local pages is not a build.
 
 **Decision:** SSR on demand, cached to disk with TTL. Not ISR: no build-time revalidation contract, no version handshake.
 
-**Approach:** migrate `adapter-static → adapter-node` (Arabic routes stay prerendered under it), then a disk cache keyed `(sourceId, surah, localPage)` — TTL 7 days, LRU inside a disk budget. **HTML only.** API JSON gets no server-side disk store; it stays edge-cacheable exactly as today (§Caching) — "uncached" here means no disk copy, not no caching.
+**Approach:** `adapter-node` keeps Arabic routes prerendered and renders translations at runtime. Production runs the Node server (not the former Caddy static image), enables the Axum API, and persists a disposable `web_quran_cache` volume. The HTML cache uses canonical `(sourceId, kind, index[, localPage])` keys inside a SvelteKit build-id namespace — the namespace invalidates derived markup when immutable JS/CSS filenames change and is not Quran data versioning. TTL is 7 days with a 256 MiB LRU budget. It never intercepts SvelteKit `__data.json`. API JSON gets no server-side disk store; it stays edge-cacheable exactly as today (§Caching) — "uncached" here means no disk copy, not no caching. `Server-Timing` plus `X-EasyQuran-Quran-Cache: hit|miss` make cold/warm delivery directly verifiable; `/health/quran` exposes disk entries, bytes, hits, misses, writes, evictions, and errors for runtime monitoring.
 
-**Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic route output is byte-identical to the current static build, and the disk budget is enforced rather than assumed.
+**Done when:** a cold translated page renders and lands on disk, a warm one is served from disk, Arabic routes remain build-time prerendered, and TTL/LRU/budget behavior is covered by tests. Production Docker packages the immutable Quran sources read-only for Axum, uses the private container API for SSR, and keeps the public API base for browsers.
 
-## 8. Shared parity fixtures
+## 8. Shared parity fixtures — *done*
 
 Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixtures__/`) live in separate trees under different names with no cross-check. They agree because they were written to agree; a one-sided rule change is not caught.
 
@@ -187,13 +182,13 @@ Rust fixtures (`quran/view.rs`) and web fixtures (`web/src/lib/quran/view/__fixt
 
 **Done when:** deleting a fold rule from `normalize.rs` alone fails the Rust suite, and deleting it from the web alone fails the web suite.
 
-## 9. Loose ends
+## 9. Loose ends — *done*
 
 - **U+06DE (`۞`, rub-el-hizb / ruku marker) — resolved.** 199 ayahs of Uthmani, 0 in simple-clean. The **display layer renders it verbatim** (the reader never normalizes → matches quran.com / myislam.org); the **search-highlight layer** now strips it in both Rust (`normalize.rs`; the highlight call at `controller.rs:1168` passes `view.text`) and web (`normalize.ts` — `/\p{Mn}/u` missed it, category `So`, so the codepoint is now listed explicitly), and a case was added to the §8 parity corpus. U+06DD needs no handling — 0 occurrences in either corpus.
-- Deep-link highlight: the target ayah scrolls into view but is not visually marked — add a `revealed-ayah` / `:target` marker.
-- Link generators still emit legacy `?verse=N` (`quran.ts:46`) instead of the page-aware path — costs a redirect hop.
-- Surah-local page tiling (662) is asserted in `quran.test.ts` only. Server-side tiling is asserted at boot for the global families; add the local-page assert **only if** the server starts serving local pages.
-- Mobile (Flutter) parity — not scheduled.
+- **Deep-link highlight — resolved.** `VerseRow.svelte` reacts to the canonical ayah hash and applies the reduced-motion-safe `revealed-ayah` marker.
+- **Legacy link generation — resolved.** `surahPath` emits route-only links; all ayah links use `surahAyahPath`, which computes the containing local page and canonical `#ayah-S-A` target. The reader still accepts old inbound `?verse=N` URLs as a compatibility redirect, but no generator emits them.
+- **Surah-local page tiling — resolved at its owner.** The web metadata owner asserts all 662 clipped pages. Axum serves global navigation families and source text ranges, not local web pages, so duplicating web-local tiling at server boot would create a second owner.
+- **Mobile parity — explicit non-goal.** No Flutter/mobile client exists in this repository. When one is scheduled, it must consume the shared normalization/parity contract rather than fork it.
 
 ---
 

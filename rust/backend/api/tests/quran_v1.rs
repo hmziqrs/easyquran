@@ -17,7 +17,7 @@ use ruxlog::router::with_observability;
 use ruxlog::services::billing::router::{BillingRouter, GeoRouter, GeoRulesConfig};
 use ruxlog::services::mail::{router::MailRouterLimits, MailRouter};
 use ruxlog::services::session_store::SqliteSessionStore;
-use ruxlog::state::{build_http_client, AppState, StorageState};
+use ruxlog::state::{build_http_client, AppState, QuranRuntimeMetrics, StorageState};
 
 fn quran_settings() -> QuranSettings {
     let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
@@ -128,6 +128,11 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         fcm: None,
         webauthn: None,
         quran,
+        quran_runtime_metrics: QuranRuntimeMetrics {
+            arabic_load_duration_ms: 7,
+            translation_catalogue_load_duration_ms: 3,
+            translation_catalogue_entries: 115,
+        },
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
         quran_sources: Arc::new(tokio::sync::Mutex::new(None)),
@@ -479,6 +484,23 @@ async fn health_ready_endpoint() {
     assert_eq!(st, StatusCode::OK);
     assert_eq!(body["ready"], true);
     assert_eq!(body["verseCount"], 6236);
+    assert!(body["arabicResidentBytes"].as_u64().unwrap() > 0);
+    assert_eq!(body["translationPool"]["residentCount"], 0);
+    assert_eq!(body["translationPool"]["residentBytes"], 0);
+    assert_eq!(body["translationPool"]["maxResidentCount"], 8);
+    assert_eq!(
+        body["translationPool"]["maxResidentBytes"],
+        48 * 1024 * 1024
+    );
+    assert_eq!(body["translationPool"]["idleTtlSeconds"], 1800);
+    assert_eq!(body["translationPool"]["builds"], 0);
+    assert_eq!(body["translationPool"]["lookups"], 0);
+    assert_eq!(body["translationPool"]["hitRate"], 1.0);
+    assert_eq!(body["translationPool"]["evictions"], 0);
+    assert_eq!(body["translationPool"]["evictionsPerMinute"], 0);
+    assert_eq!(body["loading"]["arabicLoadDurationMs"], 7);
+    assert_eq!(body["loading"]["translationCatalogueLoadDurationMs"], 3);
+    assert_eq!(body["loading"]["translationCatalogueEntries"], 115);
     assert!(
         body.get("sourceDigests").is_none(),
         "health must not expose source digests — manual audit only (docs/quran.md §2)"
@@ -964,7 +986,12 @@ async fn scripts_endpoint_carries_no_sha256() {
         .await;
     let app = app_over(state);
     let resp = app
-        .oneshot(Request::builder().uri("/quran/scripts").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/quran/scripts")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -1142,6 +1169,8 @@ async fn translation_surah_serves_text_with_absent_packaging() {
     assert_eq!(d["normalization"]["openerEndScalar"], 0);
     assert_eq!(d["normalization"]["bodyStartScalar"], 0);
     assert_eq!(d["sourceId"], "en.sahih");
+    assert_eq!(d["script"], "translation");
+    assert_eq!(d["normalization"]["script"], "translation");
 }
 
 #[tokio::test]
@@ -1153,6 +1182,7 @@ async fn translation_range_serves_lean_ayahs_and_absent_normalization() {
     let norms = d["normalizations"].as_array().unwrap();
     assert_eq!(norms.len(), 1);
     assert_eq!(norms[0]["packaging"], "absent");
+    assert_eq!(norms[0]["script"], "translation");
 }
 
 #[tokio::test]
@@ -1213,7 +1243,7 @@ async fn mount_green_sources_heads(state: &AppState, server: &wiremock::MockServ
             .await;
         n += 1;
     }
-    for (_id, e) in state.translation_pool.catalogue() {
+    for e in state.translation_pool.catalogue().values() {
         let cl = e.size_bytes.to_string();
         Mock::given(method("HEAD"))
             .and(path(format!("/tanzil/translations/{}", e.path)))
@@ -1333,7 +1363,7 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
             .await;
     }
     let mut first = true;
-    for (_id, e) in state.translation_pool.catalogue() {
+    for e in state.translation_pool.catalogue().values() {
         let size = if first {
             first = false;
             e.size_bytes + 1

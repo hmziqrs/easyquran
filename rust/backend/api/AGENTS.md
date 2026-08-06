@@ -4,6 +4,7 @@ EasyQuran Axum API (ruxlog clone). SQLite only — no Postgres, no Redis. sea-or
 
 ## Hard rule
 Quran databases immutable. No modifications, no versioning. (See repo-root `AGENTS.MD`.)
+No SHA-256 over Quran data in any automated path — a DB's identity is its id, never a hash. The golden-digest check is manual only: `just quran-audit` (`scripts/quran_digest_audit.rs`, `seed-system`-gated). Never wire sha into boot, the ETag, `/scripts`, `/health`, or a cache key — `tests/quran_v1.rs` guards fail the build.
 
 ## Commands
     just dev          # run  (from repo root: just api-dev env=dev)

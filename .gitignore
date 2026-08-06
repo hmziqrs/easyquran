@@ -29,3 +29,4 @@ rust/**/target/
 *.db-shm
 
 .commandcode
+.cache

@@ -12,5 +12,10 @@
 # Then visit http://localhost:8080  (stop with: docker compose down)
 services:
   web:
+    environment:
+      ORIGIN: http://localhost:8080
     ports:
       - "127.0.0.1:8080:8080"
+  api:
+    ports:
+      - "127.0.0.1:8888:8888"

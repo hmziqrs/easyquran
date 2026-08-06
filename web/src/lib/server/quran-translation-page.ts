@@ -1,4 +1,5 @@
 import { error } from "@sveltejs/kit";
+import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
 import { RangeKind } from "$lib/data/quran-data";
 import { translationIdFromSegments, translationSurahPath } from "$lib/data/quran";
@@ -15,24 +16,17 @@ import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types"
 import { findCatalogueEntry, resolveSourceCatalogue } from "$lib/quran/catalogue";
 import { decodeTranslationRangeText, unwrapEnvelope } from "$lib/quran/wire";
 import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
-import { diskCacheKey, type DiskCacheKind } from "$lib/server/quran-disk-cache";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
-export function translationCacheKey(
-  sourceId: string,
-  kind: DiskCacheKind,
-  a: number,
-  b?: number,
-): string {
-  return diskCacheKey(sourceId, kind, a, b);
-}
-
 function requireApiBase(): string {
-  if (!QURAN.apiBase) {
-    throw new Error("[quran-translation] PUBLIC_QURAN_API_BASE not configured");
+  const base = (env.INTERNAL_QURAN_API_BASE || QURAN.apiBase).replace(/\/+$/, "");
+  if (!base) {
+    throw new Error(
+      "[quran-translation] INTERNAL_QURAN_API_BASE or PUBLIC_QURAN_API_BASE not configured",
+    );
   }
-  return QURAN.apiBase;
+  return base;
 }
 
 async function fetchTranslationRange(
@@ -46,15 +40,11 @@ async function fetchTranslationRange(
     headers: { accept: "application/json" },
   });
   if (!res.ok) {
-    throw new Error(
-      `[quran-translation] api ${res.status} for ${sourceId}/range ${from}-${to}`,
-    );
+    throw new Error(`[quran-translation] api ${res.status} for ${sourceId}/range ${from}-${to}`);
   }
   const decoded = decodeTranslationRangeText(unwrapEnvelope(await res.json()));
   if (!decoded) {
-    throw new Error(
-      `[quran-translation] malformed range for ${sourceId}/range ${from}-${to}`,
-    );
+    throw new Error(`[quran-translation] malformed range for ${sourceId}/range ${from}-${to}`);
   }
   return decoded;
 }
@@ -70,19 +60,14 @@ async function requireTranslationSource(
   }
 }
 
-function normalizeForSurah(
-  range: QuranRangeText,
-  surah: CatalogEntry,
-): SurahNormalization {
+function normalizeForSurah(range: QuranRangeText, surah: CatalogEntry): SurahNormalization {
   const normalization = range.normalizations.find((value) => value.surah === surah.num);
   if (
     !normalization ||
     range.ayahs.length === 0 ||
     range.ayahs.some((ayah) => ayah.surah !== surah.num)
   ) {
-    throw new Error(
-      `[quran-translation] range does not cover Surah ${surah.num} contiguously`,
-    );
+    throw new Error(`[quran-translation] range does not cover Surah ${surah.num} contiguously`);
   }
   return normalization;
 }
@@ -114,11 +99,16 @@ export async function loadTranslationSurahRouteData(
   await requireTranslationSource(sourceId, lang, translator);
   let ayahs: Ayah[];
   let normalization: SurahNormalization;
+  let range: QuranRangeText | null;
   try {
-    const range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
+    range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
+  } catch {
+    range = null;
+  }
+  if (range) {
     normalization = normalizeForSurah(range, surah);
     ayahs = range.ayahs;
-  } catch {
+  } else {
     normalization = degradedTranslationNormalization(surah.num, sourceId);
     ayahs = [];
   }

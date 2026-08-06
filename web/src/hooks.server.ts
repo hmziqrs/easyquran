@@ -1,16 +1,38 @@
-import type { Handle } from "@sveltejs/kit";
-import { getCachedHtml, htmlCacheKey, setCachedHtml } from "$lib/server/quran-disk-cache";
+import type { Handle, RequestEvent } from "@sveltejs/kit";
+import { translationIdFromSegments } from "$lib/data/quran";
+import { QURAN_DATA } from "$lib/server/quran-data";
+import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
-const packPattern = /^\/offline\/pack\.[0-9a-f]+\.json$/u;
+const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
 
-function isTranslationRoute(id: string | null): boolean {
-  return id !== null && id.includes("/t/[lang]/[translator]");
+function translationRouteCacheKey(event: RequestEvent): string | null {
+  const id = event.route.id;
+  if (id === null || !id.includes("/t/[lang]/[translator]")) return null;
+  const { lang, translator } = event.params;
+  if (!lang || translator === undefined) return null;
+  const sourceId = translationIdFromSegments(lang, translator);
+  if (event.params.surah) {
+    const surah = QURAN_DATA.surahBySlug(event.params.surah);
+    if (!surah) return null;
+    const localPage = event.params.localPage ? Number(event.params.localPage) : 1;
+    if (!Number.isSafeInteger(localPage) || localPage < 1) return null;
+    return diskCacheKey(sourceId, "surah", surah.num, localPage);
+  }
+  const index = Number(event.params.n);
+  if (!Number.isSafeInteger(index) || index < 1) return null;
+  return diskCacheKey(sourceId, id.includes("/juz/") ? "juz" : "page", index);
 }
 
 function applyHeaders(response: Response, pathname: string): void {
-  if (pathname.startsWith("/_app/immutable/") || packPattern.test(pathname)) {
+  if (response.status >= 500) {
+    response.headers.set("Cache-Control", "no-store");
+  } else if (
+    pathname.startsWith("/_app/immutable/") ||
+    pathname.startsWith("/_quran/tanzil/") ||
+    packPattern.test(pathname)
+  ) {
     response.headers.set("Cache-Control", IMMUTABLE);
   } else {
     response.headers.set("Cache-Control", "no-cache");
@@ -22,15 +44,18 @@ function applyHeaders(response: Response, pathname: string): void {
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
-  const cacheable =
-    event.request.method === "GET" && isTranslationRoute(event.route.id);
+  const key = translationRouteCacheKey(event);
+  const cacheable = event.request.method === "GET" && !event.isDataRequest && key !== null;
 
   if (cacheable) {
-    const key = htmlCacheKey(pathname);
     const hit = await getCachedHtml(key);
     if (hit !== null) {
       const response = new Response(hit, {
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "server-timing": 'quran_ssr_cache;desc="hit"',
+          "x-easyquran-quran-cache": "hit",
+        },
       });
       applyHeaders(response, pathname);
       return response;
@@ -43,11 +68,13 @@ export const handle: Handle = async ({ event, resolve }) => {
       !response.headers.get("x-eq-translation-pending")
     ) {
       const clone = response.clone();
-      void clone
+      await clone
         .text()
         .then((html) => setCachedHtml(key, html))
         .catch(() => {});
     }
+    response.headers.set("server-timing", 'quran_ssr_cache;desc="miss"');
+    response.headers.set("x-easyquran-quran-cache", "miss");
     applyHeaders(response, pathname);
     return response;
   }

@@ -1,7 +1,4 @@
-import type {
-  SourceCatalogueEntry,
-  TranslationCatalogueEntry,
-} from "$lib/data/quran-types";
+import type { SourceCatalogueEntry, TranslationCatalogueEntry } from "$lib/data/quran-types";
 import { deleteCachedArtifact, listCachedArtifacts } from "./opfs-cache";
 
 const META_DB = "easyquran-meta";
@@ -62,7 +59,9 @@ async function readLastUsedMap(): Promise<Map<string, number>> {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
-        if (typeof cur.value === "number") out.set(String(cur.key), cur.value);
+        if (typeof cur.key === "string" && typeof cur.value === "number") {
+          out.set(cur.key, cur.value);
+        }
         cur.continue();
       };
       tx.oncomplete = () => resolve();
@@ -117,9 +116,12 @@ export function computeEvictions(
   lastUsed: ReadonlyMap<string, number>,
   sizeFor: ReadonlyMap<string, number>,
   now: number,
+  pinnedIds: readonly string[] = [],
 ): string[] {
   const cutoff = now - TTL_MS;
+  const pinned = new Set(pinnedIds);
   const ranked = candidates
+    .filter((artifact) => !pinned.has(artifact.id))
     .map((a) => ({
       id: a.id,
       size: a.sizeBytes > 0 ? a.sizeBytes : (sizeFor.get(a.id) ?? 0),
@@ -141,14 +143,12 @@ export function computeEvictions(
 }
 
 async function runPrune(opts: PruneOptions): Promise<PruneResult> {
-  const pinned = new Set(opts.pinnedArabicIds);
   const artifacts = await listCachedArtifacts();
-  const candidates = artifacts.filter((a) => !pinned.has(a.id));
-  if (candidates.length === 0) return { evicted: [] };
+  if (artifacts.length === 0) return { evicted: [] };
 
   const lastUsed = await readLastUsedMap();
   const sizeFor = buildSizeLookup(opts.catalogue);
-  const evictIds = computeEvictions(candidates, lastUsed, sizeFor, Date.now());
+  const evictIds = computeEvictions(artifacts, lastUsed, sizeFor, Date.now(), opts.pinnedArabicIds);
   if (evictIds.length === 0) return { evicted: Object.freeze([]) };
 
   const tagById = new Map(artifacts.map((a) => [a.id, a.tag]));

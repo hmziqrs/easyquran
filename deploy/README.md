@@ -1,8 +1,13 @@
 # EasyQuran — deploy
 
-Two images — **web** (SvelteKit SSG, served by Caddy) + **api** (Rust/Axum) — that
+Two images — **web** (SvelteKit adapter-node: Arabic SSG + translation SSR) + **api** (Rust/Axum) — that
 sit behind your **external Traefik** reverse proxy. No Traefik config lives here;
 the containers carry the labels your proxy auto-discovers.
+
+Both containers have health checks. Web `/health/quran` reports translated-page
+disk-cache entries/bytes and hit/miss/write/eviction/error counters; API
+`/quran/health/ready` reports corpus loading, resident database bytes, and the
+bounded translation-pool metrics.
 
 ```
 easyquran.fyi → [external Traefik] → web:8080   (Host)
@@ -12,8 +17,8 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 ## Files
 
 - `Dockerfile.web` / `Dockerfile.api` — the two images.
-- `Caddyfile` — Caddy config for the web image (compression + cache headers +
-  branded 404). Replaces the bare `caddy file-server` CMD.
+- `Dockerfile.web` runs the standalone adapter-node server. Its persistent
+  `web_quran_cache` volume stores only translated-page HTML (7-day TTL, 256 MiB LRU budget).
 - `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
@@ -58,10 +63,11 @@ against your Dokploy instance if you customized Traefik).
 The common Dokploy gotcha (404s) is just containers not being on
 `dokploy-network` — our compose attaches them, so you're covered.
 
-The web image is served by Caddy from `deploy/Caddyfile` (compression +
-`Cache-Control`/`X-Robots-Tag` headers + the branded 404 page), not the bare
-`caddy file-server` CMD. That Caddyfile implements the static rows of the
-[HTTP delivery contract](../docs/quran.md).
+The web image runs SvelteKit's standalone Node server. `hooks.server.ts` owns
+translated-page disk caching and dynamic response headers; `server.mjs` applies
+the same `Cache-Control`/`X-Robots-Tag` contract to adapter-node's static bypass. Traefik's
+compression middleware handles dynamic SSR while adapter-node serves precompressed
+Arabic output and immutable assets.
 
 ## Release
 
@@ -77,29 +83,35 @@ git tag v1.0.0 && git push origin v1.0.0
 Run against the running web origin to confirm the delivery contract holds:
 
 ```bash
-docker compose up -d --build web
-web/scripts/assert-headers.sh http://localhost:8080
+docker compose up -d --build
+web/scripts/assert-headers.sh http://localhost:8080 http://localhost:8888
 ```
 
-It verifies: `/_app/immutable/*` is `immutable`; `_app/version.json`, HTML
+It verifies: `/_app/immutable/*` and allowlisted `/_quran/*` artifacts are `immutable`; `_app/version.json`, HTML
 pages, and `__data.json` are `no-cache`; `*.md`/`*.txt` carry `X-Robots-Tag`;
-brotli/gzip is offered; an unknown URL returns the branded 404; and (when Phase
-3 lands) the offline pack + manifest are served correctly. Exits non-zero on any
-hard failure.
+brotli/gzip is offered; translated SSR goes cold → warm through the disk cache;
+the API exposes Quran pool metrics; an unknown URL returns the branded 404; and
+the offline pack + manifest are served correctly. Exits non-zero on any hard failure.
 
 ## The dual API URL
 
 | Surface | Var | Value |
 |---|---|---|
 | Browser | `PUBLIC_API_BASE_URL` | `https://easyquran.fyi/api` (baked into the bundle) |
-| SSG build | `INTERNAL_API_BASE_URL` | `http://api:8888` (build-only, not shipped) |
+| Browser Quran | `PUBLIC_QURAN_API_BASE` | `https://easyquran.fyi/api/quran` (baked into the bundle) |
+| Node Quran SSR | `INTERNAL_QURAN_API_BASE` | `http://api:8888/quran` (runtime-private) |
+| Other server work | `INTERNAL_API_BASE_URL` | `http://api:8888` (runtime-private) |
 
-The web build reads local SQLite only for SSG. Runtime artifact delivery always
-uses R2 here — Docker images are production builds. The `/_quran` local artifact
-source is a dev-server-only mode, selected with `PUBLIC_ENV=local`.
+The web build reads local Uthmani SQLite only for Arabic SSG. Translation SSR
+reads the internal Axum API. Browser OPFS downloads use the web origin's strict
+`/_quran/tanzil/*` gateway, which streams only baked artifact keys from R2 and
+forwards range requests. Docker images are production builds. In local mode,
+Vite serves those same URLs directly from tracked immutable artifacts.
 
 ## Notes
 
 - `/api` is stripped at the edge (`easyquran.fyi/api/healthz` → `/healthz`).
+- API image contains root-owned, filesystem-read-only Quran source files; databases are never written.
+- `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
 - VPS needs ≥2 GB RAM for the Rust build (add swap on smaller boxes).

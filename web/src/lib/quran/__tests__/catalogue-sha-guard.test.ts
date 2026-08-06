@@ -18,6 +18,36 @@ describe("sha256 regression guard (docs/quran.md §2)", () => {
     }
   });
 
+  const SHA_FREE = [
+    "../rust/backend/api/src/quran/loader.rs",
+    "../rust/backend/api/src/quran/store.rs",
+    "../rust/backend/api/src/quran/view.rs",
+    "../rust/backend/api/src/quran/translation_pool.rs",
+    "../rust/backend/api/src/quran/mod.rs",
+    "../rust/backend/api/src/modules/quran_v1/dto.rs",
+    "src/lib/server/quran-sqlite.ts",
+    "src/lib/server/quran-surah-page.ts",
+    "src/lib/quran/view/source-profiles.ts",
+    "src/lib/workers/download.ts",
+    "src/lib/workers/opfs-cache.ts",
+    "src/lib/workers/cached.ts",
+    "src/lib/workers/quran.worker.ts",
+    "src/lib/quran/manifest.ts",
+    "src/lib/quran/wire.ts",
+    "src/lib/config/site.ts",
+    "src/lib/data/quran-types.ts",
+    "src/lib/quran/catalogue.ts",
+    "src/lib/offline/pack.ts",
+    "scripts/gen-offline-pack.ts",
+  ];
+  it("automated Quran path source is sha-free (boot loaders, cache, wire, DTOs)", () => {
+    for (const rel of SHA_FREE) {
+      expect(read(rel), `${rel} must not compute/compare sha`).not.toMatch(
+        /sha256|sha2|createHash|crypto\.subtle\.digest/i,
+      );
+    }
+  });
+
   it("arabic registry + download path carry no sha256", () => {
     expect(read("src/lib/quran/view/source-profiles.ts")).not.toMatch(/sha256/i);
     expect(read("src/lib/workers/download.ts")).not.toMatch(/sha256/i);
@@ -48,4 +78,3 @@ describe("sha256 regression guard (docs/quran.md §2)", () => {
     expect(stray).not.toHaveProperty("sha256");
   });
 });
-

@@ -92,6 +92,26 @@ function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
   });
 }
 
+function localizeDeliveryUrls(entries: readonly SourceCatalogueEntry[]): SourceCatalogueEntry[] {
+  const translations = new Map(
+    bakedTranslationCatalogue().map((item) => [
+      item.kind === "translation" ? item.entry.id : "",
+      item,
+    ]),
+  );
+  const arabic = new Map(QURAN.scripts.map((spec) => [spec.id, spec]));
+  return entries.map((item) => {
+    if (item.kind === "translation") {
+      const local = translations.get(item.entry.id);
+      return local?.kind === "translation"
+        ? { ...item, entry: { ...item.entry, downloadUrl: local.entry.downloadUrl } }
+        : item;
+    }
+    const local = arabic.get(item.spec.id);
+    return local ? { ...item, spec: { ...item.spec, downloadUrl: local.downloadUrl } } : item;
+  });
+}
+
 const SOURCE_CATALOGUE_TTL_MS = 300_000;
 let catalogueCache: { entries: SourceCatalogueEntry[]; expiresAt: number } | null = null;
 let pendingCatalogue: Promise<SourceCatalogueEntry[]> | null = null;
@@ -107,7 +127,7 @@ async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
     if (!res.ok) return [];
     const entries = decodeSourcesPayload(await res.json());
     if (!entries) return [];
-    return entries;
+    return localizeDeliveryUrls(entries);
   } catch {
     return [];
   } finally {
