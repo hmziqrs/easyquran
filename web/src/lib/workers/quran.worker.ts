@@ -410,7 +410,6 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
     if (message.type === "init") {
       await handlers.init(message);
       emit({ id, ok: true, result: null });
-      emit({ type: "ready" });
       void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
       return;
     }

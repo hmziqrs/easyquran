@@ -36,7 +36,6 @@ export type WorkerResponse =
 
 export type WorkerEvent =
   | { type: "status"; status: WorkerStatus; detail?: string }
-  | { type: "ready" }
   | { type: "fatal"; error: string }
   | ({ type: "progress" } & DownloadProgress);
 

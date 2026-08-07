@@ -42,17 +42,23 @@
       return;
     }
     let timer: ReturnType<typeof setTimeout> | null = null;
-    searchPromise = new Promise<SearchState | null>((resolve, reject) => {
+    let cancelled = false;
+    searchPromise = new Promise<SearchState | null>((resolve) => {
       timer = setTimeout(async () => {
         try {
           const [result, quranData] = await Promise.all([quranSearch(query), loadQuranData()]);
+          if (cancelled) {
+            resolve(null);
+            return;
+          }
           resolve({ result, quranData });
-        } catch (error) {
-          reject(error);
+        } catch {
+          resolve(null);
         }
       }, 140);
     });
     return () => {
+      cancelled = true;
       if (timer) clearTimeout(timer);
     };
   });

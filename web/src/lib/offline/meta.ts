@@ -51,34 +51,3 @@ export async function setActivePack(pack: ActivePack): Promise<void> {
 export async function clearActivePack(): Promise<void> {
   await metaDel("activePack");
 }
-
-export async function recordAck(clientId: string, version: string): Promise<void> {
-  const acks = (await metaGet<Record<string, string>>("acks")) ?? {};
-  acks[clientId] = version;
-  await metaSet("acks", acks);
-}
-
-export async function cleanAcks(live: string[]): Promise<void> {
-  const acks = (await metaGet<Record<string, string>>("acks")) ?? {};
-  const liveSet = new Set(live);
-  const next: Record<string, string> = {};
-  for (const [id, version] of Object.entries(acks)) if (liveSet.has(id)) next[id] = version;
-  await metaSet("acks", next);
-}
-
-export async function getMaintenanceCursor(): Promise<string | null> {
-  const meta = (await metaGet<{ cursor: string | null }>("maintenance")) ?? { cursor: null };
-  return meta.cursor ?? null;
-}
-
-export async function setMaintenanceCursor(cursor: string | null): Promise<void> {
-  await metaSet("maintenance", { cursor });
-}
-
-export async function getRecency(): Promise<Record<string, number>> {
-  return (await metaGet<Record<string, number>>("recency")) ?? {};
-}
-
-export async function setRecency(recency: Record<string, number>): Promise<void> {
-  await metaSet("recency", recency);
-}

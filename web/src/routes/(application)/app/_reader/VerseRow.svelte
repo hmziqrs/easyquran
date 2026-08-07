@@ -34,9 +34,11 @@
   const showTools = $derived(!isDesktop || hovered || focused || noteOpen);
 
   onMount(() => {
-    void import("./VerseTools.svelte").then((module) => {
-      Tools = module.default;
-    });
+    void import("./VerseTools.svelte")
+      .then((module) => {
+        Tools = module.default;
+      })
+      .catch(() => {});
     if (!browser) return;
     const mq = matchMedia("(min-width: 768px)");
     isDesktop = mq.matches;

@@ -68,7 +68,6 @@ const eventHandlers: {
     if (m.status === "ready") isReady = true;
     for (const cb of statusListeners) cb(m.status, m.detail);
   },
-  ready: () => {},
   progress: (m) => {
     const p: DownloadProgress = { script: m.script, loaded: m.loaded, total: m.total };
     for (const cb of progressListeners) cb(p);
