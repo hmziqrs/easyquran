@@ -38,7 +38,13 @@
     style="transform:translateY({$virtualizer.getVirtualItems()[0]?.start ?? 0}px)"
   >
     {#each $virtualizer.getVirtualItems() as row, i (row.index)}
-      <div use:measure data-index={row.index} class="w-full pb-1">
+      <div
+        use:measure
+        data-index={row.index}
+        aria-setsize={count}
+        aria-posinset={row.index + 1}
+        class="w-full pb-1"
+      >
         {@render item(row.index)}
       </div>
     {/each}

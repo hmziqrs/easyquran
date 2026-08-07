@@ -135,7 +135,7 @@
         const rect = node.getBoundingClientRect();
         const parentWidth = readerPages?.getBoundingClientRect().width ?? rect.width;
         const totalHeight = rect.height;
-        heightCache.save(localPage, stablePageHeight(node), parentWidth);
+        heightCache.save(localPage, stablePageHeight(node, rect), parentWidth);
         if (
           lastTotalHeight > 0 &&
           Math.abs(totalHeight - lastTotalHeight) > 1 &&

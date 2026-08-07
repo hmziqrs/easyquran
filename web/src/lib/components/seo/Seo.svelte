@@ -116,7 +116,14 @@
     }` + "<" + "/script>";
 
   const ldNodes = $derived(
-    [webpageLd, breadcrumbLd, faqLd, ...(extraLd ?? [])].filter(Boolean) as Record<string, unknown>[],
+    [
+      webpageLd,
+      breadcrumbLd,
+      faqLd,
+      ...(extraLd ?? []).filter(
+        (n) => n["@type"] !== "WebSite" && n["@type"] !== "Organization",
+      ),
+    ].filter(Boolean) as Record<string, unknown>[],
   );
 </script>
 

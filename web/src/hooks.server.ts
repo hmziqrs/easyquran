@@ -26,6 +26,25 @@ function translationRouteCacheKey(event: RequestEvent): string | null {
   return diskCacheKey(sourceId, id.includes("/juz/") ? "juz" : "page", index);
 }
 
+function htmlLangForRoute(
+  id: string | null,
+  params: Record<string, string | undefined>,
+): string | null {
+  if (!id) return null;
+  if (id.includes("/t/[lang]/[translator]")) {
+    const lang = params.lang;
+    return lang && /^[a-zA-Z-]+$/.test(lang) ? lang : null;
+  }
+  if (
+    id.includes("/app/[surah]") ||
+    id.includes("/app/juz/") ||
+    id.includes("/app/page/")
+  ) {
+    return "ar";
+  }
+  return null;
+}
+
 function buildCsp(): string {
   const api = QURAN.apiBase
     ? QURAN.apiBase.endsWith("/")
@@ -84,6 +103,13 @@ export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
   const key = translationRouteCacheKey(event);
   const cacheable = event.request.method === "GET" && !event.isDataRequest && key !== null;
+  const langOverride = htmlLangForRoute(event.route.id, event.params);
+  const resolveOpts = langOverride
+    ? {
+        transformPageChunk: ({ html }: { html: string }) =>
+          html.replace(/<html([^>]*) lang="en"/, `<html$1 lang="${langOverride}"`),
+      }
+    : undefined;
 
   if (cacheable) {
     const hit = await getCachedHtml(key);
@@ -98,7 +124,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       applyHeaders(response, pathname);
       return response;
     }
-    const response = await resolve(event);
+    const response = await resolve(event, resolveOpts);
     const contentType = response.headers.get("content-type") ?? "";
     if (
       response.status === 200 &&
@@ -117,7 +143,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     return response;
   }
 
-  const response = await resolve(event);
+  const response = await resolve(event, resolveOpts);
   applyHeaders(response, pathname);
   return response;
 };

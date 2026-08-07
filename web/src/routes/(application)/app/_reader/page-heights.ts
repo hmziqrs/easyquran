@@ -44,8 +44,9 @@ export class PageHeightCache {
  * Page height without expandable verse notes, so toggling a note does not
  * poison the cached height used for that page's spacer.
  */
-export function stablePageHeight(node: HTMLElement): number {
-  let height = node.getBoundingClientRect().height;
+export function stablePageHeight(node: HTMLElement, rect?: DOMRect): number {
+  const nodeRect = rect ?? node.getBoundingClientRect();
+  let height = nodeRect.height;
   for (const note of node.querySelectorAll<HTMLElement>(".verse-note")) {
     const style = getComputedStyle(note);
     height -=

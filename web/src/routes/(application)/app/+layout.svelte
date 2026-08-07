@@ -6,10 +6,20 @@
   import { reader } from "$lib/stores/reader.svelte";
 
   let { children } = $props();
+  let menuOpen = $state(false);
 
   onMount(() => {
     reader.hydrate();
     document.documentElement.dataset.readerHydrated = "true";
+
+    const syncMenu = (): void => {
+      menuOpen = document.getElementById("mobile-menu") !== null;
+    };
+    syncMenu();
+    const observer = new MutationObserver(syncMenu);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
   });
 </script>
 
@@ -19,6 +29,12 @@
 
 <div class="flex min-h-screen flex-col">
   <Nav />
-  <main id="main" tabindex="-1" class="flex-1 pb-28">{@render children()}</main>
+  <main
+    id="main"
+    tabindex="-1"
+    inert={menuOpen || undefined}
+    aria-hidden={menuOpen || undefined}
+    class="flex-1 pb-28"
+  >{@render children()}</main>
 </div>
 <Tweaks />
