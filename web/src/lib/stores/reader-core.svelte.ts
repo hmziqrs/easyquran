@@ -56,13 +56,15 @@ export interface NavToken {
 
 export interface ReaderCore {
   readonly s: ReaderState;
-  readonly verseTextByKey: SvelteMap<VerseKey, string>;
+  readonly verseTextBySurah: Map<number, Map<number, string>>;
+  readonly verseVersionBySurah: SvelteMap<number, number>;
   readonly nav: NavToken;
 }
 
 export function createReaderCore(): ReaderCore {
   const s = $state<ReaderState>({ ...READER_DEFAULTS });
-  const verseTextByKey = new SvelteMap<VerseKey, string>();
+  const verseTextBySurah = new Map<number, Map<number, string>>();
+  const verseVersionBySurah = new SvelteMap<number, number>();
   let navToken = 0;
   const nav: NavToken = {
     get token() {
@@ -72,7 +74,7 @@ export function createReaderCore(): ReaderCore {
       navToken += 1;
     },
   };
-  return { s, verseTextByKey, nav };
+  return { s, verseTextBySurah, verseVersionBySurah, nav };
 }
 
 export const SURAH_COUNT = 114;

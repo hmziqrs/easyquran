@@ -132,12 +132,10 @@
     return (node) => {
       let lastTotalHeight = 0;
       const measure = () => {
-        const totalHeight = node.getBoundingClientRect().height;
-        heightCache.save(
-          localPage,
-          stablePageHeight(node),
-          readerPages?.getBoundingClientRect().width ?? node.getBoundingClientRect().width,
-        );
+        const rect = node.getBoundingClientRect();
+        const parentWidth = readerPages?.getBoundingClientRect().width ?? rect.width;
+        const totalHeight = rect.height;
+        heightCache.save(localPage, stablePageHeight(node), parentWidth);
         if (
           lastTotalHeight > 0 &&
           Math.abs(totalHeight - lastTotalHeight) > 1 &&
@@ -145,8 +143,8 @@
           !suppressScroll &&
           !layoutRepairPending &&
           stableAnchor &&
-          node.getBoundingClientRect().bottom > 0 &&
-          node.getBoundingClientRect().top < window.innerHeight
+          rect.bottom > 0 &&
+          rect.top < window.innerHeight
         ) {
           layoutRepairPending = true;
           void preserveViewportFrom(stableAnchor, () => undefined, true).finally(() => {

@@ -29,15 +29,7 @@
     },
   });
 
-  let els: HTMLElement[] = [];
-  $effect(() => {
-    const inst = $virtualizer;
-    const rows = inst.getVirtualItems();
-    for (const [i] of rows.entries()) {
-      const el = els[i];
-      if (el?.isConnected) inst.measureElement(el);
-    }
-  });
+  const measure = (el: HTMLElement) => $virtualizer.measureElement(el);
 </script>
 
 <div class="relative w-full" style="height:{$virtualizer.getTotalSize()}px">
@@ -46,7 +38,7 @@
     style="transform:translateY({$virtualizer.getVirtualItems()[0]?.start ?? 0}px)"
   >
     {#each $virtualizer.getVirtualItems() as row, i (row.index)}
-      <div bind:this={els[i]} data-index={row.index} class="w-full pb-1">
+      <div use:measure data-index={row.index} class="w-full pb-1">
         {@render item(row.index)}
       </div>
     {/each}
