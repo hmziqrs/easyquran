@@ -313,15 +313,23 @@
     };
   }
 
+  let lastWrittenUrl: string | null = null;
+  let lastWrittenPage: number | null = null;
+
   function writeHistoryState(
     url: string | URL = window.location.href,
     localPage = visibleLocalPage,
   ): void {
     const snapshot = historySnapshot(localPage);
-    replaceState(url, {
-      ...appPage.state,
-      surahReader: snapshot,
-    });
+    const target = typeof url === "string" ? url : url.href;
+    if (target !== lastWrittenUrl || localPage !== lastWrittenPage) {
+      replaceState(url, {
+        ...appPage.state,
+        surahReader: snapshot,
+      });
+      lastWrittenUrl = target;
+      lastWrittenPage = localPage;
+    }
     persistReaderPosition(snapshot);
     markAnchorRead(snapshot.anchor);
   }

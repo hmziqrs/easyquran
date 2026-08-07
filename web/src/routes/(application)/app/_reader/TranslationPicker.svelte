@@ -12,6 +12,7 @@
     type SurahRouteContext,
   } from "$lib/data/quran";
   import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { noteTranslationChosen } from "$lib/quran/engagement";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { useSidebar } from "$lib/components/ui/sidebar";
   import { Icon } from "$lib/components/icon";
@@ -102,6 +103,7 @@
 
   function onSelect(target: Target): void {
     readerSource.setSourceId(target === SourceKind.Arabic ? null : target.id);
+    if (target !== SourceKind.Arabic) void noteTranslationChosen(target.id);
     sidebar.setOpenMobile(false);
   }
 </script>

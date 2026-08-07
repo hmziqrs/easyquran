@@ -13,6 +13,7 @@
     type SurahRouteData,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
+  import { noteReaderView } from "$lib/quran/engagement";
   import { reader } from "$lib/stores/reader.svelte";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
@@ -123,6 +124,13 @@
 
   onMount(() => {
     reader.setCurrent(surah.num);
+  });
+
+  // One count per surah view, including client-side navigation (no remount here).
+  const viewKey = $derived(`${normalization.sourceId}:${surah.num}`);
+  $effect(() => {
+    void viewKey;
+    void noteReaderView(normalization.sourceId);
   });
 
   $effect(() => {

@@ -12,6 +12,7 @@ import {
   onPageHide,
   onStorageKey,
   readJSON,
+  readRaw,
   removeJSON,
   writeJSON,
 } from "../safe-storage";
@@ -101,5 +102,45 @@ describe("onPageHide", () => {
     teardown();
     window.dispatchEvent(new PageTransitionEvent("pagehide"));
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readRaw", () => {
+  beforeEach(() => {
+    flag.value = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("reads a raw value from each area", () => {
+    window.localStorage.setItem("k", "1");
+    window.sessionStorage.setItem("k", "2");
+    expect(readRaw("local", "k")).toBe("1");
+    expect(readRaw("session", "k")).toBe("2");
+  });
+
+  it("returns null for a missing key", () => {
+    expect(readRaw("local", "nope")).toBeNull();
+  });
+
+  it("returns null on the server", () => {
+    flag.value = false;
+    expect(readRaw("local", "k")).toBeNull();
+  });
+
+  it("returns null instead of throwing when the browser blocks site data", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Storage.prototype, "getItem");
+    Object.defineProperty(Storage.prototype, "getItem", {
+      configurable: true,
+      value: () => {
+        throw new DOMException("The operation is insecure.", "SecurityError");
+      },
+    });
+    try {
+      expect(() => readRaw("local", "k")).not.toThrow();
+      expect(readRaw("session", "k")).toBeNull();
+    } finally {
+      if (descriptor) Object.defineProperty(Storage.prototype, "getItem", descriptor);
+    }
   });
 });
