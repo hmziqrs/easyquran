@@ -89,20 +89,39 @@ impl IntoResponse for QuranApiError {
 
 pub async fn shape_routing_errors(req: Request, next: Next) -> Response {
     let resp = next.run(req).await;
-    match resp.status() {
-        StatusCode::NOT_FOUND => {
-            QuranApiError::not_found("no such route under /quran").into_response()
-        }
-        StatusCode::METHOD_NOT_ALLOWED => {
+    let status = resp.status();
+    match status {
+        StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED => {
             let allow = resp.headers().get(header::ALLOW).cloned();
-            let mut shaped = QuranApiError::method_not_allowed(
-                "method not allowed; accepted methods: GET, HEAD, OPTIONS",
-            )
-            .into_response();
-            if let Some(allow) = allow {
-                shaped.headers_mut().insert(header::ALLOW, allow);
+            let bytes = axum::body::to_bytes(resp.into_body(), 65_536)
+                .await
+                .unwrap_or_default();
+            if !bytes.is_empty() {
+                let mut passthrough = Response::builder()
+                    .status(status)
+                    .body(Body::from(bytes))
+                    .expect("quran passthrough response builds");
+                if let Some(allow) = allow {
+                    passthrough.headers_mut().insert(header::ALLOW, allow);
+                }
+                return passthrough;
             }
-            shaped
+            match status {
+                StatusCode::NOT_FOUND => {
+                    QuranApiError::not_found("no such route under /quran").into_response()
+                }
+                StatusCode::METHOD_NOT_ALLOWED => {
+                    let mut shaped = QuranApiError::method_not_allowed(
+                        "method not allowed; accepted methods: GET, HEAD, OPTIONS",
+                    )
+                    .into_response();
+                    if let Some(allow) = allow {
+                        shaped.headers_mut().insert(header::ALLOW, allow);
+                    }
+                    shaped
+                }
+                _ => unreachable!(),
+            }
         }
         _ => resp,
     }

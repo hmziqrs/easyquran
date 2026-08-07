@@ -369,7 +369,7 @@ pub async fn twofa_setup(
     State(state): State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
     info!(user_id = user.id, "2FA setup initiated");
@@ -424,10 +424,7 @@ pub async fn twofa_verify(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFAVerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth
-        .user
-        .as_ref()
-        .expect("authenticated guard ensures user");
+    let user = auth.user_required()?;
     let payload = payload.0;
 
     // Fail-closed per-account TOTP brute-force throttle.
@@ -524,10 +521,7 @@ pub async fn twofa_disable(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFADisablePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth
-        .user
-        .as_ref()
-        .expect("authenticated guard ensures user");
+    let user = auth.user_required()?;
     let payload = payload.0;
 
     // Fail-closed per-account TOTP brute-force throttle.
@@ -628,7 +622,7 @@ pub async fn sessions_list(
     State(state): State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     let page = 1;
 
     match user_session::Entity::list_by_user(&state.sea_db, user.id, Some(page)).await {

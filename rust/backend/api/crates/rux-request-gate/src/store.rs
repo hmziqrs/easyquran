@@ -115,6 +115,14 @@ impl InMemoryStore {
             }
         }
     }
+
+    pub fn prune(&self) {
+        let now = SystemTime::now();
+        let mut map = self.limits.lock().expect("rate-limit map poisoned");
+        map.retain(|_, b| {
+            b.fixed_expires.is_some_and(|t| t > now) || b.block_until.is_some_and(|t| t > now)
+        });
+    }
 }
 
 fn count_since(attempts: &VecDeque<Epoch>, now: Epoch, window: Duration) -> u64 {
