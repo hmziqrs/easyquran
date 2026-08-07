@@ -93,6 +93,7 @@ pub async fn shape_routing_errors(req: Request, next: Next) -> Response {
     match status {
         StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED => {
             let allow = resp.headers().get(header::ALLOW).cloned();
+            let hdrs = resp.headers().clone();
             let bytes = axum::body::to_bytes(resp.into_body(), 65_536)
                 .await
                 .unwrap_or_default();
@@ -101,6 +102,7 @@ pub async fn shape_routing_errors(req: Request, next: Next) -> Response {
                     .status(status)
                     .body(Body::from(bytes))
                     .expect("quran passthrough response builds");
+                *passthrough.headers_mut() = hdrs;
                 if let Some(allow) = allow {
                     passthrough.headers_mut().insert(header::ALLOW, allow);
                 }
