@@ -35,6 +35,8 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     fetch,
   );
   if (!data) throw error(404, `Unknown Surah page: ${params.localPage}`);
-  if (data.pageData.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  if (data.pageData.ayahs.length === 0) {
+    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
+  }
   return data;
 };

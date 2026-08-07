@@ -10,6 +10,8 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   if (!surah) throw error(404, `Unknown surah: ${params.surah}`);
   const data = await loadTranslationSurahRouteData(surah, 1, params.lang, params.translator, fetch);
   if (!data) throw error(404, `Unknown Surah page: 1`);
-  if (data.pageData.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  if (data.pageData.ayahs.length === 0) {
+    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
+  }
   return data;
 };
