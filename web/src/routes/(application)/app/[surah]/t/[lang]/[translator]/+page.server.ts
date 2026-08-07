@@ -8,13 +8,7 @@ export const prerender = false;
 export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const surah = QURAN_DATA.surahBySlug(params.surah);
   if (!surah) throw error(404, `Unknown surah: ${params.surah}`);
-  const data = await loadTranslationSurahRouteData(
-    surah,
-    1,
-    params.lang,
-    params.translator,
-    fetch,
-  );
+  const data = await loadTranslationSurahRouteData(surah, 1, params.lang, params.translator, fetch);
   if (!data) throw error(404, `Unknown Surah page: 1`);
   if (data.pageData.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
   return data;

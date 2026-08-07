@@ -677,7 +677,7 @@
       onBigger={() => changeFontSize(() => reader.bigger())}
     />
 
-    <div {@attach captureReaderPages} class="reader-pages" data-reader-mode={reader.mode} tabindex="-1">
+    <div {@attach captureReaderPages} class="reader-pages" tabindex="-1">
       <TooltipProvider delayDuration={300}>
         {#each pages as pageData (pageData.page.localPage)}
           {#if renderedPageNumbers.has(pageData.page.localPage)}
@@ -780,24 +780,20 @@
     flex-direction: column;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-page,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-page {
     border-bottom: 1px solid var(--line);
     padding: 2rem 1.25rem;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-page:last-child,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
     border-bottom: 0;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-opener,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-opener {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-opener {
     padding-top: 0;
   }
 
-  .reader-pages[data-reader-mode="reading"] .ayah-list,
-  :global(html[data-reader-mode="reading"]) .reader-pages .ayah-list {
+  :global([data-reader-mode="reading"]) .reader-pages .ayah-list {
     display: block;
     direction: rtl;
     text-align: justify;
@@ -816,8 +812,7 @@
   }
 
   @media (min-width: 640px) {
-    .reader-pages[data-reader-mode="reading"] .surah-page,
-    :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
+    :global([data-reader-mode="reading"]) .reader-pages .surah-page {
       padding-inline: 2.25rem;
     }
   }

@@ -88,14 +88,4 @@
   :global([data-reader-mode="reading"]) .verse-text {
     display: inline;
   }
-
-  :global(html[data-reader-mode="reading"]) .verse-row {
-    display: inline;
-    padding: 0;
-    border: 0;
-  }
-
-  :global(html[data-reader-mode="reading"]) .verse-text {
-    display: inline;
-  }
 </style>

@@ -9,7 +9,8 @@ export function startOfflineEngine(): () => void {
   if (started) return () => {};
   started = true;
   teardown = bootOfflineEngine();
-  void catalogueStore.ensure()
+  void catalogueStore
+    .ensure()
     .then((entries) => {
       void quranWorker.provideCatalogue(entries);
     })

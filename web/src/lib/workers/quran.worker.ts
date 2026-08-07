@@ -4,15 +4,21 @@ import {
   OpenerKind,
   OpenerPackaging,
   QuranScript,
-  type ArtifactSpec,
   type CanonicalQuranCoordinates,
+  type DownloadableSpec,
   type QuranRangeText,
+  type QuranReaderSource,
   type QuranSourceId,
   type QuranSurahText,
   type SourceCatalogueEntry,
   type SurahNormalization,
 } from "$lib/data/quran-types";
-import { runQuery, TANZIL_QURAN_DATABASE, type QuranQueryRunner } from "$lib/quran/sql";
+import {
+  runQuery,
+  TANZIL_QURAN_DATABASE,
+  type CanonicalQuranRow,
+  type QuranQueryRunner,
+} from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
 import { ensureArtifact, listCachedArtifacts } from "./opfs-cache";
@@ -69,7 +75,7 @@ function status(value: WorkerStatus, detail?: string): void {
   emit({ type: "status", status: value, detail });
 }
 
-function progressEmitter(spec: ArtifactSpec): (loaded: number, total: number) => void {
+function progressEmitter(spec: DownloadableSpec): (loaded: number, total: number) => void {
   let lastPct = -1;
   return (loaded, total) => {
     const pct = total > 0 ? Math.floor((loaded / total) * 100) : 0;
@@ -164,10 +170,10 @@ function readSurah(num: number, sourceId?: QuranSourceId): QuranSurahText {
   };
 }
 
-function readRange(from: number, to: number, sourceId?: QuranSourceId): QuranRangeText {
-  const state = sourceState(sourceId ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
-  if (!state.runner) throw new Error("reader source is not open");
-  const rows = readSourceRange(state.runner, state.source, from, to);
+function rowsToRangeText(
+  rows: ReadonlyArray<CanonicalQuranRow>,
+  normalize: (surah: number) => SurahNormalization,
+): QuranRangeText {
   return {
     ayahs: rows.map((row) => ({
       key: `${row.surah}:${row.ayah}`,
@@ -176,13 +182,19 @@ function readRange(from: number, to: number, sourceId?: QuranSourceId): QuranRan
       globalIndex: row.globalIndex,
       text: row.text,
     })),
-    normalizations: [...new Set(rows.map((row) => row.surah))].map((surah) =>
-      state.source.view.normalization(surah),
-    ),
+    normalizations: [...new Set(rows.map((row) => row.surah))].map(normalize),
   };
 }
 
-function translationSpec(sourceId: string): ArtifactSpec {
+function readRange(from: number, to: number, sourceId?: QuranSourceId): QuranRangeText {
+  const state = sourceState(sourceId ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
+  if (!state.runner) throw new Error("reader source is not open");
+  return rowsToRangeText(readSourceRange(state.runner, state.source, from, to), (surah) =>
+    state.source.view.normalization(surah),
+  );
+}
+
+function translationSpec(sourceId: string): DownloadableSpec {
   if (storedCatalogue.length === 0) {
     throw new Error("translation catalogue unavailable");
   }
@@ -196,7 +208,7 @@ function translationSpec(sourceId: string): ArtifactSpec {
   }
   const t = entry.entry;
   return Object.freeze({
-    id: t.id as QuranSourceId,
+    id: t.id,
     sizeBytes: t.sizeBytes,
     downloadUrl: t.downloadUrl,
   });
@@ -238,14 +250,19 @@ async function fetchTranslationRunner(sourceId: string): Promise<QuranQueryRunne
   const spec = translationSpec(sourceId);
   if (activeTranslationFetches++ === 0) status("downloading", sourceId);
   try {
-    const artifact = await ensureArtifact(spec, progressEmitter(spec));
-    if (artifact.downloaded) {
-      void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
+    try {
+      const artifact = await ensureArtifact(spec, progressEmitter(spec));
+      if (artifact.downloaded) {
+        void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
+      }
+      evictTranslationDbs();
+      const database = openReadOnly(artifact.bytes);
+      translationDbs.set(sourceId, database);
+      return createWasmQueryRunner(database);
+    } catch (error) {
+      status("translation-fetch-failed", sourceId);
+      throw error;
     }
-    evictTranslationDbs();
-    const database = openReadOnly(artifact.bytes);
-    translationDbs.set(sourceId, database);
-    return createWasmQueryRunner(database);
   } finally {
     if (--activeTranslationFetches === 0) status("ready");
   }
@@ -285,10 +302,7 @@ function translationNormalization(sourceId: string, surah: number): SurahNormali
   });
 }
 
-async function readTranslationSurah(
-  sourceId: string,
-  num: number,
-): Promise<QuranSurahText> {
+async function readTranslationSurah(sourceId: string, num: number): Promise<QuranSurahText> {
   const runner = await translationRunner(sourceId);
   const verses = runQuery(runner, TANZIL_QURAN_DATABASE.queries.surah, [num]);
   return {
@@ -305,19 +319,10 @@ async function readTranslationRange(
   to: number,
 ): Promise<QuranRangeText> {
   const runner = await translationRunner(sourceId);
-  const rows = runQuery(runner, TANZIL_QURAN_DATABASE.queries.range, [from, to]);
-  return {
-    ayahs: rows.map((row) => ({
-      key: `${row.surah}:${row.ayah}`,
-      surah: row.surah,
-      ayah: row.ayah,
-      globalIndex: row.globalIndex,
-      text: row.text,
-    })),
-    normalizations: [...new Set(rows.map((row) => row.surah))].map((surah) =>
-      translationNormalization(sourceId, surah),
-    ),
-  };
+  return rowsToRangeText(
+    runQuery(runner, TANZIL_QURAN_DATABASE.queries.range, [from, to]),
+    (surah) => translationNormalization(sourceId, surah),
+  );
 }
 
 function sourceState(sourceId: QuranSourceId): WorkerSourceState {
@@ -357,13 +362,53 @@ function search(query: string, opts: SearchOpts = {}): SearchResponse {
   };
 }
 
+function runReaderOp<T>(
+  source: QuranReaderSource | undefined,
+  arabic: () => T,
+  translation: (src: QuranReaderSource) => Promise<T> | T,
+): Promise<T> | T {
+  return source !== undefined && !isArabicSourceId(source) ? translation(source) : arabic();
+}
+
+type Handler<K extends WorkerRequest["type"]> = (
+  msg: Extract<WorkerRequest, { type: K }>,
+) => unknown;
+
+const handlers: { [K in WorkerRequest["type"]]: Handler<K> } = {
+  init: async (m) => {
+    await initialize(m.manifest, m.coordinates, m.catalogue);
+    return null;
+  },
+  refreshCatalogue: (m) => {
+    if (m.catalogue !== undefined) storedCatalogue = m.catalogue;
+    return null;
+  },
+  hasTranslation: (m) => hasTranslationCached(m.source),
+  ensureTranslation: (m) => {
+    void ensureTranslation(m.source);
+    return null;
+  },
+  readSurah: (m) =>
+    runReaderOp(
+      m.source,
+      () => readSurah(m.num, isArabicSourceId(m.source) ? m.source : undefined),
+      (src) => readTranslationSurah(src, m.num),
+    ),
+  readRange: (m) =>
+    runReaderOp(
+      m.source,
+      () => readRange(m.from, m.to, isArabicSourceId(m.source) ? m.source : undefined),
+      (src) => readTranslationRange(src, m.from, m.to),
+    ),
+  search: (m) => search(m.query, m.opts),
+};
+
 ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
   const message = event.data;
   const id = message.id;
-  const type = (message as { type: string }).type;
   try {
     if (message.type === "init") {
-      await initialize(message.manifest, message.coordinates, message.catalogue);
+      await handlers.init(message);
       emit({ id, ok: true, result: null });
       emit({ type: "ready" });
       void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
@@ -373,39 +418,11 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
       emit({ id, ok: false, error: "engine not ready" });
       return;
     }
-    if (message.type === "hasTranslation") {
-      emit({ id, ok: true, result: hasTranslationCached(message.source) });
-      return;
-    }
-    if (message.type === "ensureTranslation") {
-      void ensureTranslation(message.source);
-      emit({ id, ok: true, result: null });
-      return;
-    }
-    if (message.type === "readSurah") {
-      const source = message.source;
-      if (source !== undefined && !isArabicSourceId(source)) {
-        emit({ id, ok: true, result: await readTranslationSurah(source, message.num) });
-      } else {
-        emit({ id, ok: true, result: readSurah(message.num, source) });
-      }
-    } else if (message.type === "readRange") {
-      const source = message.source;
-      if (source !== undefined && !isArabicSourceId(source)) {
-        emit({ id, ok: true, result: await readTranslationRange(source, message.from, message.to) });
-      } else {
-        emit({ id, ok: true, result: readRange(message.from, message.to, source) });
-      }
-    } else if (message.type === "search") {
-      emit({ id, ok: true, result: search(message.query, message.opts) });
-    } else if (message.type === "ping") {
-      emit({ id, ok: true, result: "pong" });
-    } else {
-      emit({ id, ok: false, error: `unknown request ${type}` });
-    }
+    const handler = handlers[message.type] as (m: WorkerRequest) => unknown;
+    emit({ id, ok: true, result: await handler(message) });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (type === "init") {
+    if (message.type === "init") {
       status("error", errorMessage);
       emit({ type: "fatal", error: errorMessage });
     }

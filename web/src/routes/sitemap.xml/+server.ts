@@ -32,7 +32,8 @@ export function GET() {
     .join("\n");
   const globalPages = Array.from(
     { length: 604 },
-    (_, i) => `  <url>\n    <loc>${escape(SITE.url + globalPagePathFor(ARABIC, i + 1))}</loc>\n  </url>`,
+    (_, i) =>
+      `  <url>\n    <loc>${escape(SITE.url + globalPagePathFor(ARABIC, i + 1))}</loc>\n  </url>`,
   ).join("\n");
   const juz = Array.from(
     { length: 30 },

@@ -33,14 +33,28 @@
     return { kind: "arabic" };
   });
 
-  const searchPromise = $derived.by((): Promise<SearchState | null> => {
+  let searchPromise = $state<Promise<SearchState | null> | null>(null);
+
+  $effect(() => {
     const query = reader.query.trim();
-    if (!query) return Promise.resolve(null);
-    return new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 140)).then(async () => {
-      if (reader.query.trim() !== query) return null;
-      const [result, quranData] = await Promise.all([quranSearch(query), loadQuranData()]);
-      return { result, quranData };
+    if (!query) {
+      searchPromise = null;
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    searchPromise = new Promise<SearchState | null>((resolve, reject) => {
+      timer = setTimeout(async () => {
+        try {
+          const [result, quranData] = await Promise.all([quranSearch(query), loadQuranData()]);
+          resolve({ result, quranData });
+        } catch (error) {
+          reject(error);
+        }
+      }, 140);
     });
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   });
 
   function resultLabel(result: SearchResponse): string {

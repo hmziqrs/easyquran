@@ -1,3 +1,7 @@
+import { idbGet, idbPut, openIdb } from "./idb";
+
+export { openIdb };
+
 export interface ByteStore {
   get(tag: string, key: string): Promise<Uint8Array<ArrayBuffer> | null>;
   put(tag: string, key: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean>;
@@ -39,40 +43,14 @@ export function createOpfsStore(rootDir: string): ByteStore {
   };
 }
 
-const idbConnections = new Map<string, Promise<IDBDatabase>>();
-
-function openIdb(dbName: string, storeName: string): Promise<IDBDatabase> {
-  const cacheKey = `${dbName} ${storeName}`;
-  let p = idbConnections.get(cacheKey);
-  if (!p) {
-    p = new Promise((resolve, reject) => {
-      const req = indexedDB.open(dbName, 1);
-      req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(storeName)) {
-          req.result.createObjectStore(storeName);
-        }
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    idbConnections.set(cacheKey, p);
-  }
-  return p;
-}
-
 export function createIdbStore(dbName: string, storeName: string): ByteStore {
   const idbKey = (tag: string, key: string): string => `${tag}:${key}`;
   return {
     async get(tag, key) {
       try {
         const db = await openIdb(dbName, storeName);
-        return await new Promise((resolve, reject) => {
-          const tx = db.transaction(storeName, "readonly");
-          const req = tx.objectStore(storeName).get(idbKey(tag, key));
-          req.onsuccess = () =>
-            resolve(req.result instanceof ArrayBuffer ? new Uint8Array(req.result) : null);
-          req.onerror = () => reject(req.error);
-        });
+        const buf = await idbGet<ArrayBuffer>(db, storeName, idbKey(tag, key));
+        return buf instanceof ArrayBuffer ? new Uint8Array(buf) : null;
       } catch {
         return null;
       }
@@ -80,12 +58,7 @@ export function createIdbStore(dbName: string, storeName: string): ByteStore {
     async put(tag, key, bytes) {
       try {
         const db = await openIdb(dbName, storeName);
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(storeName, "readwrite");
-          tx.objectStore(storeName).put(bytes.buffer, idbKey(tag, key));
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
+        await idbPut(db, storeName, bytes.buffer, idbKey(tag, key));
         return true;
       } catch {
         return false;

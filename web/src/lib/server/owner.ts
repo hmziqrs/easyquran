@@ -1,4 +1,5 @@
 import { env } from "$env/dynamic/private";
+import { fetchWithTimeout } from "$lib/quran/fetch";
 import type { OwnerPublic } from "$lib/types/owner";
 
 const DEFAULT_SOURCE_URL = "https://hmziq.rs/me.json";
@@ -31,11 +32,10 @@ const FALLBACK_PROFILE: OwnerProfile = {
 let cached: { profile: OwnerProfile; expires: number } | null = null;
 let inflight: Promise<OwnerProfile> | null = null;
 
-function isOwnerProfile(d: unknown): d is OwnerProfile {
+function isOwnerProfile(d: unknown): d is Pick<OwnerProfile, "email" | "social"> {
   return (
     !!d &&
     typeof (d as OwnerProfile).email === "string" &&
-    !!d &&
     typeof (d as OwnerProfile).social?.twitter === "string"
   );
 }
@@ -45,21 +45,25 @@ export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<Own
 
   if (!inflight || opts?.force) {
     inflight = (async () => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
       try {
-        const res = await fetch(OWNER_SOURCE_URL, { signal: ctrl.signal });
+        const res = await fetchWithTimeout(OWNER_SOURCE_URL, { timeout: FETCH_TIMEOUT_MS });
         if (!res.ok) throw new Error(`owner fetch HTTP ${res.status}`);
         const data: unknown = await res.json();
         if (!isOwnerProfile(data)) throw new Error("owner payload shape invalid");
-        cached = { profile: data, expires: Date.now() + CACHE_TTL_MS };
+        const partial = data as Partial<OwnerProfile>;
+        const profile: OwnerProfile = {
+          ...FALLBACK_PROFILE,
+          ...partial,
+          websites: { ...FALLBACK_PROFILE.websites, ...partial.websites },
+          social: { ...FALLBACK_PROFILE.social, ...partial.social },
+        };
+        cached = { profile, expires: Date.now() + CACHE_TTL_MS };
         return cached.profile;
       } catch (err) {
         console.warn("[owner] fetch failed, using fallback profile:", err);
         cached = { profile: FALLBACK_PROFILE, expires: Date.now() + CACHE_TTL_MS };
         return FALLBACK_PROFILE;
       } finally {
-        clearTimeout(timer);
         inflight = null;
       }
     })();

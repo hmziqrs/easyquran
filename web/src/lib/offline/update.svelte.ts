@@ -1,7 +1,7 @@
 import { browser } from "$app/environment";
 import { updated } from "$app/state";
 import { registerServiceWorker } from "$lib/boot/service-worker";
-import { readRaw } from "$lib/storage";
+import { readRaw, removeRaw, writeRaw } from "$lib/storage";
 import {
   PREPARE_RELOAD,
   PREPARE_RELOAD_EVENT,
@@ -128,10 +128,8 @@ class UpdateStore {
 
   #mirrorWaiting(): void {
     if (!browser) return;
-    try {
-      if (this.#waiting) window.localStorage.setItem(PAINT_KEY, "1");
-      else window.localStorage.removeItem(PAINT_KEY);
-    } catch {}
+    if (this.#waiting) writeRaw("local", PAINT_KEY, "1");
+    else removeRaw("local", PAINT_KEY);
   }
 
   async #getRegistration(): Promise<ServiceWorkerRegistration | null> {
@@ -143,17 +141,13 @@ class UpdateStore {
 
   #armReloadGuard(): void {
     this.#reloadArmed = true;
-    try {
-      window.sessionStorage.setItem(RELOAD_GUARD, "1");
-    } catch {}
+    writeRaw("session", RELOAD_GUARD, "1");
   }
 
   #evaluateReload(): void {
     if (!this.#reloadArmed) return;
     this.#reloadArmed = false;
-    try {
-      window.sessionStorage.removeItem(RELOAD_GUARD);
-    } catch {}
+    removeRaw("session", RELOAD_GUARD);
     this.#waiting = false;
     this.#mirrorWaiting();
     window.location.reload();

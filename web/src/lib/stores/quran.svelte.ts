@@ -21,6 +21,8 @@ class QuranStore {
       this.status = "error";
       this.error = detail ?? "offline data error";
       this.download = null;
+    } else if (s === "translation-fetch-failed") {
+      return;
     } else {
       this.status = s;
       if (detail) this.detail = detail;

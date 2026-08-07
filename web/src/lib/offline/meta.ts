@@ -1,4 +1,5 @@
 import { browser } from "$app/environment";
+import { idbDelete, idbGet, idbPut, openIdb } from "$lib/workers/idb";
 
 const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";
@@ -10,46 +11,10 @@ export interface ActivePack {
   savedAt: number;
 }
 
-let dbPromise: Promise<IDBDatabase> | null = null;
-let dbAvailable = true;
-
-function openMetaDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(META_DB, 1);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(META_STORE)) {
-        database.createObjectStore(META_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function db(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  if (!browser || typeof indexedDB === "undefined" || !dbAvailable) {
-    return Promise.reject(new Error("idb unavailable"));
-  }
-  dbPromise = openMetaDB().catch((err) => {
-    dbAvailable = false;
-    dbPromise = null;
-    throw err;
-  });
-  return dbPromise;
-}
-
 export async function metaGet<T>(key: string): Promise<T | undefined> {
   if (!browser) return undefined;
   try {
-    const database = await db();
-    return await new Promise<T | undefined>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readonly");
-      const request = tx.objectStore(META_STORE).get(key);
-      request.onsuccess = () => resolve(request.result as T | undefined);
-      request.onerror = () => reject(request.error);
-    });
+    return await idbGet<T>(await openIdb(META_DB, META_STORE), META_STORE, key);
   } catch (err) {
     console.warn("[offline] metaGet failed:", err);
     return undefined;
@@ -59,13 +24,7 @@ export async function metaGet<T>(key: string): Promise<T | undefined> {
 export async function metaSet(key: string, value: unknown): Promise<void> {
   if (!browser) return;
   try {
-    const database = await db();
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbPut(await openIdb(META_DB, META_STORE), META_STORE, value, key);
   } catch (err) {
     console.warn("[offline] metaSet failed:", err);
   }
@@ -74,13 +33,7 @@ export async function metaSet(key: string, value: unknown): Promise<void> {
 export async function metaDel(key: string): Promise<void> {
   if (!browser) return;
   try {
-    const database = await db();
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbDelete(await openIdb(META_DB, META_STORE), META_STORE, key);
   } catch (err) {
     console.warn("[offline] metaDel failed:", err);
   }

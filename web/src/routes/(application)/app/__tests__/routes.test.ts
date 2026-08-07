@@ -118,7 +118,6 @@ describe("route-aware path builders preserve translation across surah boundaries
   const ctx = surahRouteContext("ms.basmeih");
   const nextSurah = "luqman";
   const prevSurah = "al-ankabut";
-  const surah = "ar-rum";
 
   it("cross-surah Next on a translated surah's last local page keeps t/<lang>/<translator> (ar-rum -> luqman)", () => {
     const next = surahLocalPagePathFor(ctx, nextSurah, 1);
@@ -215,9 +214,7 @@ describe("legacy Arabic-only helpers drop the translation segment (regression gu
   });
 
   it("surahAyahPath never emits a /t/ segment", () => {
-    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 7, 12)).toBe(
-      "/app/ar-rum/page/7#ayah-30-12",
-    );
+    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 7, 12)).toBe("/app/ar-rum/page/7#ayah-30-12");
     expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 7, 12).includes("/t/")).toBe(false);
   });
 
@@ -293,7 +290,12 @@ describe("continueReading resume uses the last-read verse's own source, not the 
   it("resume into a translation source keeps /t/<lang>/<translator> even when the current route is arabic", () => {
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
-    const resume = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, 1, lastRead.n);
+    const resume = surahAyahPathFor(
+      resumeCtxFor(lastRead, currentRouteArabic),
+      surah,
+      1,
+      lastRead.n,
+    );
     expect(resume).toBe("/app/luqman/t/ms/basmeih#ayah-31-4");
     expect(resume.includes("/t/ms/basmeih")).toBe(true);
   });
@@ -315,7 +317,12 @@ describe("continueReading resume uses the last-read verse's own source, not the 
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
     const buggy = surahAyahPathFor(currentRouteArabic, surah, 1, lastRead.n);
-    const fixed = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, 1, lastRead.n);
+    const fixed = surahAyahPathFor(
+      resumeCtxFor(lastRead, currentRouteArabic),
+      surah,
+      1,
+      lastRead.n,
+    );
     expect(fixed).not.toBe(buggy);
     expect(buggy.includes("/t/")).toBe(false);
     expect(fixed.includes("/t/ms/basmeih")).toBe(true);
@@ -324,7 +331,12 @@ describe("continueReading resume uses the last-read verse's own source, not the 
   it("cross-surah resume preserves translation across a surah boundary (ar-rum -> luqman, page 1 collapses)", () => {
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
-    const resume = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, 1, lastRead.n);
+    const resume = surahAyahPathFor(
+      resumeCtxFor(lastRead, currentRouteArabic),
+      surah,
+      1,
+      lastRead.n,
+    );
     expect(resume).toBe("/app/luqman/t/ms/basmeih#ayah-31-4");
     expect(resume.endsWith("/page/1")).toBe(false);
   });
@@ -332,7 +344,12 @@ describe("continueReading resume uses the last-read verse's own source, not the 
   it("within-surah resume preserves translation on a deeper local page", () => {
     const lastRead: LastRead = { num: 30, n: 12, sourceId: "ms.basmeih" };
     const surah = { slug: "ar-rum", num: 30 };
-    const resume = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, 7, lastRead.n);
+    const resume = surahAyahPathFor(
+      resumeCtxFor(lastRead, currentRouteArabic),
+      surah,
+      7,
+      lastRead.n,
+    );
     expect(resume).toBe("/app/ar-rum/t/ms/basmeih/page/7#ayah-30-12");
     expect(resume).not.toBe(surahAyahPath(surah, 7, lastRead.n));
   });

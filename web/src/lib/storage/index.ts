@@ -3,6 +3,8 @@ export {
   writeJSON,
   removeJSON,
   readRaw,
+  writeRaw,
+  removeRaw,
   isFutureSchema,
   onStorageKey,
   onPageHide,

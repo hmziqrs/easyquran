@@ -76,6 +76,10 @@
 
   const ld = (obj: Record<string, unknown>) =>
     `<script type="application/ld+json">${JSON.stringify(obj)}` + "<" + "/script>";
+
+  const ldNodes = $derived(
+    [webpageLd, breadcrumbLd, faqLd, ...(extraLd ?? [])].filter(Boolean) as Record<string, unknown>[],
+  );
 </script>
 
 <svelte:head>
@@ -115,21 +119,9 @@
       <link rel="alternate" type="text/plain" href={txtHref} />
     {/if}
 
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html ld(webpageLd)}
-    {#if breadcrumbLd}
+    {#each ldNodes as node, idx (idx)}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      {@html ld(breadcrumbLd)}
-    {/if}
-    {#if faqLd}
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      {@html ld(faqLd)}
-    {/if}
-    {#if extraLd}
-      {#each extraLd as node, idx (idx)}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        {@html ld(node)}
-      {/each}
-    {/if}
+      {@html ld(node)}
+    {/each}
   {/if}
 </svelte:head>

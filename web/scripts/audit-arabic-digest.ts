@@ -10,7 +10,9 @@ const GOLDEN: Record<string, string> = {
 const dir = path.resolve(process.cwd(), "..", "db", "quran", "tanzil", "arabic");
 let ok = true;
 for (const [file, want] of Object.entries(GOLDEN)) {
-  const got = createHash("sha256").update(readFileSync(path.join(dir, file))).digest("hex");
+  const got = createHash("sha256")
+    .update(readFileSync(path.join(dir, file)))
+    .digest("hex");
   if (got === want) {
     console.log(`PASS  ${file}`);
   } else {

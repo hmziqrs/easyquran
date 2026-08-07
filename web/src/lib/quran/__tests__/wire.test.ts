@@ -243,9 +243,7 @@ describe("translation surah Worker wire", () => {
   });
 
   it("rejects arabic script, non-zero scalars, and any opener-shaped descriptor", () => {
-    expect(
-      decodeTranslationSurahText({ ...payload, script: QuranScript.Uthmani }),
-    ).toBeNull();
+    expect(decodeTranslationSurahText({ ...payload, script: QuranScript.Uthmani })).toBeNull();
     expect(
       decodeTranslationSurahText({
         ...payload,
@@ -362,7 +360,9 @@ describe("translation sources manifest wire", () => {
       { kind: "translation", entry: translation },
     ];
     expect(
-      decodeSourcesPayload({ data: { scripts: [arabic, { ...translation, kind: "translation" }] } }),
+      decodeSourcesPayload({
+        data: { scripts: [arabic, { ...translation, kind: "translation" }] },
+      }),
     ).toEqual(expected);
     expect(
       decodeSourcesPayload({ data: { sources: [{ ...arabic, kind: "arabic" }, translation] } }),
@@ -404,7 +404,8 @@ describe("translation route loaders", () => {
 
   beforeAll(() => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
-      const url = input instanceof URL ? input.toString() : typeof input === "string" ? input : input.url;
+      const url =
+        input instanceof URL ? input.toString() : typeof input === "string" ? input : input.url;
       return url.endsWith("/sources")
         ? new Response(JSON.stringify(SOURCES_PAYLOAD), {
             status: 200,

@@ -37,7 +37,8 @@ class NotificationsStore {
   #supported = $state<boolean | null>(null);
   #subscribed = $state(false);
   #token = $state<string | null>(null);
-  #lastMessage = $state<MessagePayload | null>(null);
+  #lastMessage = $state.raw<MessagePayload | null>(null);
+  #messageSeq = $state(0);
   #busy = $state(false);
   #hydrated = false;
   #generation = 0;
@@ -57,6 +58,9 @@ class NotificationsStore {
   }
   get lastMessage(): MessagePayload | null {
     return this.#lastMessage;
+  }
+  get messageSeq(): number {
+    return this.#messageSeq;
   }
   get canSubscribe(): boolean {
     return this.#supported === true && this.#permission !== "denied";
@@ -96,6 +100,7 @@ class NotificationsStore {
     if (!browser) return;
     await onForegroundMessage((payload) => {
       this.#lastMessage = payload;
+      this.#messageSeq += 1;
       void track("notification_received_foreground", { message_id: payload.messageId });
     });
     document.addEventListener("visibilitychange", () => {

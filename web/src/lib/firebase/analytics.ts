@@ -29,20 +29,28 @@ async function ready(): Promise<Analytics | null> {
   return analytics;
 }
 
-export async function track(
-  name: string,
-  params?: Record<string, unknown>,
-  options?: AnalyticsCallOptions,
+async function withAnalytics(
+  fn: (a: Analytics, mod: typeof import("firebase/analytics")) => void,
 ): Promise<void> {
   const a = await ready();
   if (!a) return;
   try {
-    const { logEvent } = await import("firebase/analytics");
-    logEvent(a, name, params, options);
-    if (ANALYTICS_DEBUG) console.debug("[firebase] event:", name, params ?? {});
+    const mod = await import("firebase/analytics");
+    fn(a, mod);
   } catch (err) {
-    console.warn("[firebase] logEvent failed:", err);
+    console.warn("[firebase] analytics call failed:", err);
   }
+}
+
+export function track(
+  name: string,
+  params?: Record<string, unknown>,
+  options?: AnalyticsCallOptions,
+): Promise<void> {
+  return withAnalytics((a, m) => {
+    m.logEvent(a, name, params, options);
+    if (ANALYTICS_DEBUG) console.debug("[firebase] event:", name, params ?? {});
+  });
 }
 
 export function pageView(path: string, title?: string): Promise<void> {
@@ -55,29 +63,15 @@ export function pageView(path: string, title?: string): Promise<void> {
   });
 }
 
-export async function setCurrentScreen(name: string): Promise<void> {
-  const a = await ready();
-  if (!a) return;
-  try {
-    const { setCurrentScreen } = await import("firebase/analytics");
-    setCurrentScreen(a, name);
-  } catch (err) {
-    console.warn("[firebase] setCurrentScreen failed:", err);
-  }
+export function setCurrentScreen(name: string): Promise<void> {
+  return withAnalytics((a, m) => m.setCurrentScreen(a, name));
 }
 
-export async function setUserProperties(
+export function setUserProperties(
   properties: Record<string, unknown>,
   options?: AnalyticsCallOptions,
 ): Promise<void> {
-  const a = await ready();
-  if (!a) return;
-  try {
-    const { setUserProperties } = await import("firebase/analytics");
-    setUserProperties(a, properties, options);
-  } catch (err) {
-    console.warn("[firebase] setUserProperties failed:", err);
-  }
+  return withAnalytics((a, m) => m.setUserProperties(a, properties, options));
 }
 
 export async function setConsentState(settings: ConsentSettings): Promise<void> {
@@ -90,15 +84,8 @@ export async function setConsentState(settings: ConsentSettings): Promise<void> 
   }
 }
 
-export async function setAnalyticsCollectionEnabled(enabled: boolean): Promise<void> {
-  const a = await ready();
-  if (!a) return;
-  try {
-    const { setAnalyticsCollectionEnabled } = await import("firebase/analytics");
-    setAnalyticsCollectionEnabled(a, enabled);
-  } catch (err) {
-    console.warn("[firebase] setAnalyticsCollectionEnabled failed:", err);
-  }
+export function setAnalyticsCollectionEnabled(enabled: boolean): Promise<void> {
+  return withAnalytics((a, m) => m.setAnalyticsCollectionEnabled(a, enabled));
 }
 
 export async function logException(description: string, fatal = false): Promise<void> {

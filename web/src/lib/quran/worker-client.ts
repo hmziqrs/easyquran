@@ -11,7 +11,7 @@ import { QURAN } from "$lib/config/site";
 import { quranApi } from "./api-client";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
 import type { ResolvedManifest } from "./manifest";
-import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
+import type { WorkerEvent, WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
 import {
@@ -35,8 +35,6 @@ let worker: Worker | null = null;
 let seq = 0;
 let isReady = false;
 let startPromise: Promise<void> | null = null;
-let stashedManifest: ResolvedManifest | null = null;
-let stashedCoordinates: CanonicalQuranCoordinates | null = null;
 
 const pending = new Map<number, Pending>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
@@ -56,14 +54,29 @@ function resetWorker(error?: Error): void {
   worker = null;
   isReady = false;
   startPromise = null;
-  stashedManifest = null;
-  stashedCoordinates = null;
 }
 
 function reportWorkerFailure(error: Error): void {
   resetWorker(error);
   for (const listener of statusListeners) listener("error", error.message);
 }
+
+const eventHandlers: {
+  [K in WorkerEvent["type"]]: (msg: Extract<WorkerEvent, { type: K }>) => void;
+} = {
+  status: (m) => {
+    if (m.status === "ready") isReady = true;
+    for (const cb of statusListeners) cb(m.status, m.detail);
+  },
+  ready: () => {},
+  progress: (m) => {
+    const p: DownloadProgress = { script: m.script, loaded: m.loaded, total: m.total };
+    for (const cb of progressListeners) cb(p);
+  },
+  fatal: (m) => {
+    reportWorkerFailure(new Error(m.error));
+  },
+};
 
 function handle(msg: WorkerOutbound): void {
   if ("id" in msg) {
@@ -75,15 +88,7 @@ function handle(msg: WorkerOutbound): void {
     else p.reject(new Error(msg.error));
     return;
   }
-  if (msg.type === "status") {
-    if (msg.status === "ready") isReady = true;
-    for (const cb of statusListeners) cb(msg.status, msg.detail);
-  } else if (msg.type === "progress") {
-    const p: DownloadProgress = { script: msg.script, loaded: msg.loaded, total: msg.total };
-    for (const cb of progressListeners) cb(p);
-  } else if (msg.type === "fatal") {
-    reportWorkerFailure(new Error(msg.error));
-  }
+  (eventHandlers[msg.type] as (m: WorkerEvent) => void)(msg);
 }
 
 function request<T>(
@@ -99,6 +104,56 @@ function request<T>(
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
     worker!.postMessage(build(id));
   });
+}
+
+async function withTranslationFallback<T>(args: {
+  reader: QuranReaderSource;
+  workerReq: (id: number) => WorkerRequest;
+  decode: (raw: unknown) => T | null;
+  apiFetch: () => Promise<T>;
+  errorMessage: string;
+}): Promise<T> {
+  let lastErr: unknown = undefined;
+  const cached = async (): Promise<boolean> => {
+    try {
+      return await quranWorker.hasTranslation(args.reader);
+    } catch (e) {
+      lastErr = e;
+      return false;
+    }
+  };
+  if (!worker && QURAN.apiBase) {
+    try {
+      return await args.apiFetch();
+    } catch (e) {
+      throw new Error(args.errorMessage, { cause: e });
+    }
+  }
+  if (await cached()) {
+    try {
+      const decoded = args.decode(await request<unknown>(args.workerReq));
+      if (decoded) return decoded;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (worker) void quranWorker.ensureTranslation(args.reader);
+  if (QURAN.apiBase) {
+    try {
+      return await args.apiFetch();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  try {
+    if (await cached()) {
+      const decoded = args.decode(await request<unknown>(args.workerReq));
+      if (decoded) return decoded;
+    }
+  } catch (e) {
+    lastErr = e;
+  }
+  throw new Error(args.errorMessage, lastErr !== undefined ? { cause: lastErr } : undefined);
 }
 
 export const quranWorker = {
@@ -118,9 +173,7 @@ export const quranWorker = {
     return request<boolean>((id) => ({ id, type: "hasTranslation", source }));
   },
   ensureTranslation(source: QuranReaderSource): Promise<void> {
-    return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(
-      () => undefined,
-    );
+    return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(() => undefined);
   },
 
   whenReady(): Promise<void> {
@@ -148,8 +201,6 @@ export const quranWorker = {
     catalogue?: readonly SourceCatalogueEntry[],
   ): Promise<void> {
     if (startPromise) return startPromise;
-    stashedManifest = manifest;
-    stashedCoordinates = coordinates;
     const attempt = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
         type: "module",
@@ -187,20 +238,17 @@ export const quranWorker = {
   provideCatalogue(catalogue: readonly SourceCatalogueEntry[]): Promise<void> {
     return quranWorker
       .whenReady()
-      .then(() => {
-        if (!stashedManifest || !stashedCoordinates) return null;
-        const manifest = stashedManifest;
-        const coordinates = stashedCoordinates;
-        return request<null>((id) => ({
+      .then(() =>
+        request<null>((id) => ({
           id,
-          type: "init",
-          manifest,
-          coordinates,
+          type: "refreshCatalogue",
           catalogue: [...catalogue],
-        }));
-      })
+        })),
+      )
       .then(() => undefined)
-      .catch(() => undefined);
+      .catch((err: unknown) =>
+        reportWorkerFailure(err instanceof Error ? err : new Error(String(err))),
+      );
   },
 
   dispose(): void {
@@ -220,25 +268,13 @@ export const quranWorker = {
       if (!decoded) throw new Error("quran worker returned a malformed surah");
       return decoded;
     }
-    if (await quranWorker.hasTranslation(reader)) {
-      try {
-        const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source: reader }));
-        const decoded = decodeTranslationSurahText(raw);
-        if (decoded) return decoded;
-      } catch {}
-    }
-    void quranWorker.ensureTranslation(reader);
-    if (QURAN.apiBase) {
-      try {
-        return await quranApi.readSurah(reader, num);
-      } catch {}
-    }
-    if (await quranWorker.hasTranslation(reader)) {
-      const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source: reader }));
-      const decoded = decodeTranslationSurahText(raw);
-      if (decoded) return decoded;
-    }
-    throw new Error(`translation surah unavailable: ${reader}/${num}`);
+    return withTranslationFallback({
+      reader,
+      workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
+      decode: decodeTranslationSurahText,
+      apiFetch: () => quranApi.readSurah(reader, num),
+      errorMessage: `translation surah unavailable: ${reader}/${num}`,
+    });
   },
 
   async readRange(
@@ -254,37 +290,13 @@ export const quranWorker = {
       if (!decoded) throw new Error("quran worker returned a malformed range");
       return decoded;
     }
-    if (await quranWorker.hasTranslation(reader)) {
-      try {
-        const raw = await request<unknown>((id) => ({
-          id,
-          type: "readRange",
-          from,
-          to,
-          source: reader,
-        }));
-        const decoded = decodeTranslationRangeText(raw, validateCoordinate);
-        if (decoded) return decoded;
-      } catch {}
-    }
-    void quranWorker.ensureTranslation(reader);
-    if (QURAN.apiBase) {
-      try {
-        return await quranApi.readRange(reader, from, to);
-      } catch {}
-    }
-    if (await quranWorker.hasTranslation(reader)) {
-      const raw = await request<unknown>((id) => ({
-        id,
-        type: "readRange",
-        from,
-        to,
-        source: reader,
-      }));
-      const decoded = decodeTranslationRangeText(raw, validateCoordinate);
-      if (decoded) return decoded;
-    }
-    throw new Error(`translation range unavailable: ${reader} ${from}-${to}`);
+    return withTranslationFallback({
+      reader,
+      workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
+      decode: (raw) => decodeTranslationRangeText(raw, validateCoordinate),
+      apiFetch: () => quranApi.readRange(reader, from, to),
+      errorMessage: `translation range unavailable: ${reader} ${from}-${to}`,
+    });
   },
 
   search(

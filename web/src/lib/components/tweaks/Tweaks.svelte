@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
@@ -25,8 +26,8 @@
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
 
-  function consentPill(value: boolean): string {
-    return cn(pill, value ? on : off);
+  function pillClass(active: boolean): string {
+    return cn(pill, active ? on : off);
   }
 
   function resolveHex(varName: string): string {
@@ -76,7 +77,7 @@
     }
   });
 
-  $effect(() => () => {
+  onMount(() => () => {
     if (copyTimer) clearTimeout(copyTimer);
   });
 </script>
@@ -109,7 +110,7 @@
             {#each themes as t (t)}
               <button
                 type="button"
-                class={cn(pill, prefs.theme === t ? on : off)}
+                class={pillClass(prefs.theme === t)}
                 onclick={() => prefs.setTheme(t)}>{t}</button
               >
             {/each}
@@ -228,7 +229,7 @@
               type="button"
               aria-pressed={consent.analytics}
               onclick={() => consent.setAnalytics(!consent.analytics)}
-              class={consentPill(consent.analytics)}
+              class={pillClass(consent.analytics)}
             >
               Analytics {consent.analytics ? "on" : "off"}
             </button>
@@ -240,7 +241,7 @@
                 consent.setPerformance(!consent.performance);
                 location.reload();
               }}
-              class={consentPill(consent.performance)}
+              class={pillClass(consent.performance)}
             >
               Performance {consent.performance ? "on" : "off"}
             </button>

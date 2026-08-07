@@ -1,5 +1,6 @@
 import { QURAN } from "$lib/config/site";
 import type { ArtifactSpec } from "$lib/data/quran-types";
+import { FETCH_TIMEOUT_MS, fetchWithTimeout } from "./fetch";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "./source-plan";
 import { resolveSourceProfile } from "./view/source-profiles";
 import { decodeScriptsPayload } from "./wire";
@@ -42,13 +43,10 @@ function localizeDeliveryUrls(scripts: readonly ArtifactSpec[]): ArtifactSpec[] 
 
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
   if (!QURAN.apiBase) return baked;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 3000);
-  const onAbort = () => ctrl.abort();
-  signal?.addEventListener("abort", onAbort);
   try {
-    const res = await fetch(`${QURAN.apiBase}/scripts`, {
-      signal: ctrl.signal,
+    const res = await fetchWithTimeout(`${QURAN.apiBase}/scripts`, {
+      signal,
+      timeout: FETCH_TIMEOUT_MS,
       headers: { accept: "application/json" },
     });
     if (!res.ok) return baked;
@@ -57,8 +55,5 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     return { scripts: localizeDeliveryUrls(scripts), source: ManifestSource.Api };
   } catch {
     return baked;
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
   }
 }
