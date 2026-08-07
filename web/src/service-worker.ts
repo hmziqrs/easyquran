@@ -13,7 +13,6 @@ const SW_BROADCAST_CHANNEL = "easyquran-sw";
 const APP_CACHE = `eq-app-${version}`;
 const PAGES_CACHE = "eq-pages-v1";
 const DATA_CACHE = "eq-data-v1";
-const LEGACY_RUNTIME = "eq-runtime-v1";
 
 const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";
@@ -44,11 +43,6 @@ function isCacheable(res: Response): boolean {
   const cc = res.headers.get("cache-control");
   if (cc && /no-store/i.test(cc)) return false;
   return true;
-}
-
-function isHtmlResponse(res: Response): boolean {
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("text/html");
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -210,7 +204,7 @@ sw.addEventListener("activate", (event) => {
 async function activate(): Promise<void> {
   await sw.clients.claim();
   const keys = await caches.keys();
-  const priorExisted = keys.some((k) => /^eq-(app|precache)-/.test(k) && k !== APP_CACHE);
+  const priorExisted = keys.some((k) => k.startsWith("eq-app-") && k !== APP_CACHE);
   const prev = await metaGet<string>("installedVersion");
   if (prev && prev !== version) {
     await metaSet("maintenance", { cursor: null });
@@ -267,46 +261,14 @@ async function maybeFinalizeHandoff(): Promise<void> {
   if (live.length === 0) return;
   const allAcked = live.every((c) => acks[c.id] === version);
   if (!allAcked) return;
-  await migrateLegacyCaches();
+  await pruneOldAppCaches();
 }
 
-async function migrateLegacyCaches(): Promise<void> {
-  const before = await caches.keys();
-  const legacy = before.filter((k) => k.startsWith("eq-precache-") || k === LEGACY_RUNTIME);
-  if (legacy.length > 0) {
-    const pages = await caches.open(PAGES_CACHE);
-    const data = await caches.open(DATA_CACHE);
-    for (const name of legacy) {
-      const cache = await caches.open(name);
-      const requests = await cache.keys();
-      for (const req of requests) {
-        const res = await cache.match(req);
-        if (!res || !res.ok) continue;
-        const url = new URL(req.url);
-        if (url.origin !== sw.location.origin) continue;
-        if (url.pathname.endsWith("/__data.json")) {
-          const key = normalizeDataKey(req.url);
-          if (!(await data.match(key))) {
-            await data.put(new Request(key), res.clone()).catch(() => {});
-          }
-        } else if (isHtmlResponse(res) && !url.pathname.startsWith("/_app/")) {
-          const key = normalizeDataKey(req.url);
-          if (!(await pages.match(key))) {
-            await pages.put(new Request(key), res.clone()).catch(() => {});
-          }
-        }
-      }
-    }
-  }
-  const after = await caches.keys();
+async function pruneOldAppCaches(): Promise<void> {
+  const keys = await caches.keys();
   await Promise.all(
-    after
-      .filter(
-        (k) =>
-          k.startsWith("eq-precache-") ||
-          k === LEGACY_RUNTIME ||
-          (k.startsWith("eq-app-") && k !== APP_CACHE),
-      )
+    keys
+      .filter((k) => k.startsWith("eq-app-") && k !== APP_CACHE)
       .map((k) => caches.delete(k)),
   );
 }

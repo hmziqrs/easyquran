@@ -2,10 +2,12 @@ export {
   readJSON,
   writeJSON,
   removeJSON,
+  readRaw,
   isFutureSchema,
   onStorageKey,
   onPageHide,
 } from "./safe-storage";
+export type { StorageArea } from "./safe-storage";
 export {
   asObject,
   asNumber,

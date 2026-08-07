@@ -24,6 +24,21 @@ export function removeJSON(key: string): void {
   } catch {}
 }
 
+export type StorageArea = "local" | "session";
+
+/**
+ * Reads a raw (non-JSON) value. Reaching for `localStorage` at all throws when
+ * the browser blocks site data, so the access itself has to sit inside the try.
+ */
+export function readRaw(area: StorageArea, key: string): string | null {
+  if (!browser) return null;
+  try {
+    return (area === "local" ? localStorage : sessionStorage).getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function isFutureSchema(raw: unknown, current: number): boolean {
   if (typeof raw !== "object" || raw === null || !("v" in raw)) return false;
   return (raw as { v: unknown }).v !== current;

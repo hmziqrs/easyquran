@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
 import { updated } from "$app/state";
 import { registerServiceWorker } from "$lib/boot/service-worker";
+import { readRaw } from "$lib/storage";
 import {
   PREPARE_RELOAD,
   PREPARE_RELOAD_EVENT,
@@ -36,7 +37,7 @@ class UpdateStore {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
 
-    if (window.sessionStorage.getItem(RELOAD_GUARD) === "1") this.#reloadArmed = true;
+    if (readRaw("session", RELOAD_GUARD) === "1") this.#reloadArmed = true;
 
     if (typeof BroadcastChannel !== "undefined") {
       this.#channel = new BroadcastChannel(UPDATE_BROADCAST_CHANNEL);
@@ -52,7 +53,7 @@ class UpdateStore {
       this.#cleanups.push(() => swChannel.close());
     }
 
-    const painted = window.localStorage.getItem(PAINT_KEY) === "1";
+    const painted = readRaw("local", PAINT_KEY) === "1";
     if (painted) this.#waiting = true;
 
     const stopEffect = $effect.root(() => {
