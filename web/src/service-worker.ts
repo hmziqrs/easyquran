@@ -542,6 +542,17 @@ async function trimPages(): Promise<void> {
   await metaSet("recency", nextRecency);
 }
 
+function safeTarget(raw: unknown): string {
+  if (typeof raw !== "string" || raw.length === 0) return "/";
+  try {
+    const u = new URL(raw, sw.location.origin);
+    if (u.origin !== sw.location.origin) return "/";
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
 interface PushPayload {
   notification?: { title?: string; body?: string };
   data?: Record<string, string>;
@@ -558,7 +569,7 @@ sw.addEventListener("push", (event) => {
   const data = payload.data || {};
   const title = n.title || data.title || "EasyQuran";
   const body = n.body || data.body || "";
-  const url = data.url || "/";
+  const url = safeTarget(data.url);
   event.waitUntil(
     sw.registration.showNotification(title, {
       body,
@@ -572,7 +583,7 @@ sw.addEventListener("push", (event) => {
 
 sw.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target: string = event.notification?.data?.url || "/";
+  const target: string = safeTarget(event.notification?.data?.url);
   event.waitUntil(
     (async () => {
       const all = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
