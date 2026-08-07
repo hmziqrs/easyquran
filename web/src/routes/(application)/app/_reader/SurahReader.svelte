@@ -661,7 +661,7 @@
     >
       <Icon name="play" size={15} class="flex-none text-accent" />
       <span class="text-sm text-accent">Continue reading — {reader.lastReadRef}</span>
-      <span class="ml-auto text-[13px] text-accent/75">Jump →</span>
+      <span class="ml-auto text-[13px] text-accent/75">Jump <span aria-hidden="true">→</span></span>
     </button>
   {/if}
 

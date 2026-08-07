@@ -11,6 +11,7 @@
   let open = $state(false);
   let triggerButton = $state<HTMLButtonElement>();
   let firstControl = $state<HTMLButtonElement>();
+  let panelEl = $state<HTMLDivElement>();
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -71,6 +72,15 @@
     }
   }
 
+  function onPointerDown(event: PointerEvent) {
+    if (!open) return;
+    const target = event.target as Node | null;
+    if (!target) return;
+    if (panelEl?.contains(target)) return;
+    if (triggerButton?.contains(target)) return;
+    open = false;
+  }
+
   $effect(() => {
     if (open && firstControl) {
       firstControl.focus();
@@ -82,13 +92,15 @@
   });
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
 <div class="fixed bottom-5 right-5 z-[1000] flex flex-col items-end gap-3">
   {#if open}
     <div
       id="tweaks-panel"
-      role="group"
+      bind:this={panelEl}
+      role="dialog"
+      aria-modal="false"
       aria-label="Settings"
       class="max-h-[min(80vh,640px)] w-[288px] overflow-y-auto rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >

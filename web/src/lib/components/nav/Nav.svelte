@@ -81,7 +81,9 @@
   class="sticky top-0 z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150"
 >
   <div class="mx-auto flex h-[60px] max-w-[1180px] items-center gap-6 px-6 sm:px-7">
-    <Brand class="mr-auto" />
+    <span class="mr-auto" inert={open || undefined} aria-hidden={open || undefined}>
+      <Brand />
+    </span>
 
     <div class="hidden items-center gap-0.5 md:flex">
       {#each NAV_LINKS as p (p.href)}
@@ -106,11 +108,20 @@
         type="button"
         onclick={() => prefs.toggleTheme()}
         aria-label="Toggle theme"
+        inert={open || undefined}
+        aria-hidden={open || undefined}
         class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg"
       >
         <Icon name={prefs.theme === "dark" ? "sun" : "moon"} size={16} />
       </button>
-      <Button variant="accent" size="sm" href="/app" class="hidden sm:inline-flex">
+      <Button
+        variant="accent"
+        size="sm"
+        href="/app"
+        class="hidden sm:inline-flex"
+        inert={open || undefined}
+        aria-hidden={open || undefined}
+      >
         Open the app
       </Button>
       <button

@@ -6,9 +6,25 @@
     notifications.clearMessage();
   }
 
-  const autoDismiss: Attachment<HTMLElement> = () => {
-    const timer = setTimeout(dismiss, 7000);
-    return () => clearTimeout(timer);
+  const autoDismiss: Attachment<HTMLElement> = (node) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const arm = () => {
+      timer = setTimeout(dismiss, 7000);
+    };
+    const pause = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    node.addEventListener("focusin", pause);
+    node.addEventListener("focusout", arm);
+    arm();
+    return () => {
+      pause();
+      node.removeEventListener("focusin", pause);
+      node.removeEventListener("focusout", arm);
+    };
   };
 </script>
 
