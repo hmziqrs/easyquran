@@ -29,11 +29,11 @@ pub async fn register_begin(
     State(state): State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
     let svc = webauthn_service(&state)?;
-    let (challenge, registration_state) = svc.start_registration(&user)?;
+    let (challenge, registration_state) = svc.start_registration(user)?;
 
     info!(user_id = user.id, "passkey registration begun");
     Ok((
@@ -52,7 +52,7 @@ pub async fn register_finish(
     auth: AuthSession,
     payload: ValidatedJson<V1RegisterFinishPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     let payload = payload.0;
 
@@ -82,7 +82,7 @@ pub async fn list(
     State(state): State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
     let rows = passkey_credential::Entity::list_by_user(&state.sea_db, user.id).await?;
@@ -100,7 +100,7 @@ pub async fn remove(
     auth: AuthSession,
     payload: ValidatedJson<V1RemovePasskeyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     let payload = payload.0;
 

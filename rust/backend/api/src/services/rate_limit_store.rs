@@ -72,6 +72,7 @@ pub fn spawn_flush_task(db: DatabaseConnection, store: Arc<InMemoryStore>) {
             if let Err(e) = flush(&db, &store.snapshot()).await {
                 warn!(error = %e, "rate-limit L2 flush failed (non-fatal)");
             }
+            store.prune();
         }
     });
 }
