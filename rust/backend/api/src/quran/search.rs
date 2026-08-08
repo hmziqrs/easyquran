@@ -15,12 +15,12 @@ pub struct SearchIndex {
 }
 
 impl SearchIndex {
-    pub fn build(_uthmani: &Corpus, simple_clean: &Corpus) -> Self {
+    pub fn build(uthmani: &Corpus) -> Self {
         let mut arena = String::new();
         let mut byte_off: Vec<u32> = Vec::with_capacity(VERSE_COUNT as usize + 1);
         byte_off.push(0);
         for g in 1..=VERSE_COUNT {
-            let (norm, _map) = normalize_arabic(simple_clean.verse(g).expect("simple-clean verse"));
+            let (norm, _map) = normalize_arabic(uthmani.verse(g).expect("uthmani verse"));
             arena.push_str(&norm);
             byte_off.push(arena.len() as u32);
         }
@@ -116,5 +116,17 @@ mod tests {
         for s in &spans {
             assert!(s.start < s.end && s.end <= len16, "bad span {s:?}");
         }
+    }
+
+    #[test]
+    fn highlight_covers_kept_ornament() {
+        // Kept ornaments (here U+06DE rub-el-hizb) must ride through vmap 1:1 so a query
+        // containing the ornament highlights the ornament span in the source.
+        let src = "قول۞";
+        let (nq, _) = normalize_arabic(src);
+        assert!(nq.contains('۞'), "ornament retained in normalized form");
+        let spans = highlight(src, &nq);
+        assert_eq!(spans.len(), 1, "one highlight span: {spans:?}");
+        assert!(spans[0].start < spans[0].end, "non-empty span");
     }
 }

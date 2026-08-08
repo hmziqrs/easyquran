@@ -91,7 +91,7 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
         },
     };
 
-    let search = super::search::SearchIndex::build(&uthmani, &simple_clean);
+    let search = super::search::SearchIndex::build(&uthmani);
 
     Ok(QuranStore {
         uthmani,

@@ -586,6 +586,51 @@ async fn search_results_ordered_with_highlights_and_limits() {
 }
 
 #[tokio::test]
+async fn search_finds_ornament_bearing_query() {
+    // The Uthmani index retains Quranic ornaments (quran.com parity). A query carrying
+    // U+06E5 (small waw ۥ) — absent from simple-clean and stripped by the old normalizer —
+    // now matches. 2:17 holds "حَوْلَهُۥ"; both sides normalize to "حولهۥ".
+    let q = "%D8%AD%D9%88%D9%84%D9%87%DB%A5"; // حولهۥ
+    let (st, body, _headers) = get(&format!("/quran/search?q={q}")).await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    assert!(
+        d["total"].as_u64().unwrap() > 0,
+        "ornament-bearing query must match on the Uthmani index"
+    );
+    assert_eq!(d["query"], "حولهۥ");
+    let hits: Vec<u64> = d["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["ayah"]["globalIndex"].as_u64().unwrap())
+        .collect();
+    assert!(hits.contains(&24), "2:17 (globalIndex 24) should match: {hits:?}");
+}
+
+#[tokio::test]
+async fn search_allows_lone_ornament_query() {
+    // A lone Quranic ornament (rub-el-hizb ۞ U+06DE) is below the 3-char floor but is allowed
+    // (quran.com parity: ۞→199). A lone base letter is still rejected.
+    let ornament = "%DB%9E"; // ۞
+    let (st, body, _h) = get(&format!("/quran/search?q={ornament}")).await;
+    assert_eq!(st, StatusCode::OK, "lone ornament query allowed");
+    let d = data(&body);
+    assert_eq!(
+        d["total"].as_u64().unwrap(),
+        199,
+        "۞ matches the 199 Uthmani hizb verses (quran.com parity)"
+    );
+
+    let letter = "%D8%A7"; // ا
+    assert_eq!(
+        get(&format!("/quran/search?q={letter}")).await.0,
+        StatusCode::BAD_REQUEST,
+        "lone base letter still rejected (< 3 chars, no ornament)"
+    );
+}
+
+#[tokio::test]
 async fn error_envelope_matches_section_6_4() {
     let (st, body, _) = get("/quran/surahs/115").await;
     assert_eq!(st, StatusCode::NOT_FOUND);

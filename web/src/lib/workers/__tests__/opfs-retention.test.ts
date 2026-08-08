@@ -142,8 +142,8 @@ describe("computeEvictions", () => {
     expect(evicted).toEqual([]);
   });
 
-  it("bounds a synthetic 100-translation cache while preserving both Arabic artifacts", () => {
-    const arabicIds = ["uthmani", "simple-clean"];
+  it("bounds a synthetic 100-translation cache while preserving the pinned Arabic artifact", () => {
+    const arabicIds = ["uthmani"];
     const candidates = [
       ...arabicIds.map((id) => cand(id, 2 * MB)),
       ...Array.from({ length: 100 }, (_, index) => cand(`translation-${index}`, MB)),
@@ -157,6 +157,5 @@ describe("computeEvictions", () => {
     expect(retainedTranslations).toBeLessThanOrEqual(CAP_COUNT);
     expect(retainedTranslations * MB).toBeLessThanOrEqual(CAP_BYTES);
     expect(evicted).not.toContain("uthmani");
-    expect(evicted).not.toContain("simple-clean");
   });
 });

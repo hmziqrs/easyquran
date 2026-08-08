@@ -5,7 +5,9 @@
     { "input": "مَرْحَبَة", "expected": "مرحبه", "rule": "ta-marbuta folded to ha" },
     { "input": "إِنَّ آيَةً", "expected": "ان ايه", "rule": "hamza-alef + alef-madda folded (ة→ه)" },
     { "input": "كَلِمَةٌ   جَمِيلَة", "expected": "كلمه جميله", "rule": "whitespace collapsed (ة→ه)" },
-    { "input": "ا۞ب", "expected": "اب", "rule": "U+06DE (rub el hizib) stripped — 199 occurrences in Uthmani" },
-    { "input": "اۥۦ۩", "expected": "ا", "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda (categories Lm/So, outside \\p{Mn}) stripped — in 990+806+15 verses in Uthmani; mirror Rust's 06D6-06ED range" }
+    { "input": "ا۞ب", "expected": "ا۞ب", "rule": "U+06DE rub-el-hizb KEPT — quran.com indexes ornaments as searchable tokens (199 verses in Uthmani)" },
+    { "input": "اۥۦ۩", "expected": "اۥۦ۩", "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda KEPT (quran.com parity — searchable)" },
+    { "input": "بۗر", "expected": "بۗر", "rule": "U+06D7 stop mark KEPT (quran.com parity — searchable)" },
+    { "input": "الضآلين", "expected": "الضالين", "rule": "U+0653 maddah STRIPPED (intra-cluster) so a bare query matches Uthmani's decomposed alef-madda — matches quran.com index behavior" }
   ]
 }

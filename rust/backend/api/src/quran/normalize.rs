@@ -27,16 +27,26 @@ pub fn normalize_arabic(input: &str) -> (String, Vec<u32>) {
     (out, map)
 }
 
+pub fn contains_searchable_ornament(s: &str) -> bool {
+    // The standalone Quranic ornaments kept by the normalizer (06D6–06DC, 06DE–06ED; 06DD is
+    // stripped). A query built around one of these is eligible below MIN_QUERY_LEN so a lone
+    // mark search works like quran.com (۞→199, ۩→15) without relaxing the 3-char floor for text.
+    s.chars()
+        .any(|c| matches!(c, '\u{06D6}'..='\u{06DC}' | '\u{06DE}'..='\u{06ED}'))
+}
+
 fn is_combining_mark(ch: char) -> bool {
+    // quran.com parity: the index strips intra-cluster combining marks (harakat, maddah
+    // U+0653/U+0654, tatweel, superscript alef) so a bare query still matches Uthmani's
+    // decomposed alef-madda. Standalone Quranic ornaments (U+06D6–U+06DC rub-el-hizb U+06DE,
+    // small waw/yeh U+06E5/U+06E6, sajda U+06E9, signs U+06EA–U+06ED) are KEPT — they are
+    // searchable tokens, matching quran.com (۞→199, ۩→15). See docs/quran-normalization-reasoning.md.
     matches!(
         ch,
-        '\u{064B}'..='\u{0658}'
-            | '\u{0670}' // SUPERSCRIPT ALEF (category Mn): drop to match the web's /\p{Mn}/u so online/offline agree (v2; was fold→alef).
-            | '\u{0640}' // TATWEEL: drop so a Uthmani re-normalization still substring-matches the needle.
-            | '\u{06D6}'..='\u{06DE}' // Quranic annotation signs: 06D6..06DC + 06DD (0 occ, no-op) + 06DE rub el hizib (199 occ in Uthmani — §9).
-            | '\u{06DF}'..='\u{06E8}'
-            | '\u{06E9}' // ARABIC PLACE OF SAJDA — lone Quranic sign between ranges; dropped here.
-            | '\u{06EA}'..='\u{06ED}'
+        '\u{064B}'..='\u{0658}' // harakat + maddah U+0653 / hamza-above U+0654 (intra-cluster).
+            | '\u{0670}' // SUPERSCRIPT ALEF (consonant-chair role).
+            | '\u{0640}' // TATWEEL.
+            | '\u{06DD}' // END OF AYAH (0 occurrences in our corpora; stripped for quran.com parity).
     )
 }
 
@@ -86,13 +96,13 @@ mod tests {
 
     #[test]
     fn drops_superscript_alef() {
-        // U+0670 (superscript alef) is category Mn — dropped, not folded to bare alef, so Rust matches the web's /\p{Mn}/u.
-        // Input: alef-wasla, lam, ra, shadda, fatha, ha, meem, sukun, superscript-alef, nun (ٱلرَّحْمَٰن).
+        // U+0670 (superscript alef, consonant-chair role) is stripped, not folded to bare alef.
+        // Input: alef-wasla, lam, ra, shadda, hamza-above, ha, meem, sukun, superscript-alef, nun (ٱلرَّحْمَٰن).
         let (s, _) = normalize_arabic(
             "\u{0671}\u{0644}\u{0631}\u{0651}\u{0654}\u{062D}\u{0645}\u{0652}\u{0670}\u{0646}",
         );
         assert!(!s.contains('\u{0670}'), "U+0670 dropped: {s:?}");
-        // Expected: bare-alef lam ra ha meem nun (الرحمن), identical to the web's normalizeArabic output.
+        // Expected: bare-alef lam ra ha meem nun (الرحمن) — shadda/hamza-above/sukun/superscript-alef all stripped; wasla folded.
         assert_eq!(s, "\u{0627}\u{0644}\u{0631}\u{062D}\u{0645}\u{0646}");
     }
 

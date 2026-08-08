@@ -1119,9 +1119,10 @@ pub async fn search(
     }
     let (norm_q, _q_map) = quran::normalize_arabic(&q.q);
     let scalar_len = norm_q.chars().count();
-    if !(3..=64).contains(&scalar_len) {
+    let has_ornament = quran::contains_searchable_ornament(&norm_q);
+    if scalar_len == 0 || scalar_len > 64 || (scalar_len < 3 && !has_ornament) {
         return Err(invalid(format!(
-            "query must be 3..=64 Unicode scalar values after normalization; got {scalar_len}"
+            "query must be 3..=64 Unicode scalar values after normalization (or contain a Quranic ornament mark below 3); got {scalar_len}"
         )));
     }
     let limit = q.limit.unwrap_or(20);

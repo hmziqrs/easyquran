@@ -345,9 +345,11 @@ function ensureSearchCorpus(): void {
   if (corpus) return;
   const match = sourceState(DEFAULT_QURAN_SOURCE_PLAN.search.match);
   const display = sourceState(DEFAULT_QURAN_SOURCE_PLAN.search.display);
+  const matchRows = readAllRows(match);
+  const displayRows = match === display ? matchRows : readAllRows(display);
   corpus = buildCanonicalSearchCorpus({
-    matchRows: readAllRows(match),
-    displayRows: readAllRows(display),
+    matchRows,
+    displayRows,
     matchView: match.source.view,
     displayView: display.source.view,
   });

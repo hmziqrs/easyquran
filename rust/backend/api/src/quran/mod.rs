@@ -6,7 +6,7 @@ pub mod translation_pool;
 pub mod view;
 
 pub use loader::{load_catalogue, load_quran_store, load_translation_corpus, QuranLoadError};
-pub use normalize::normalize_arabic;
+pub use normalize::{contains_searchable_ornament, normalize_arabic};
 pub use search::highlight;
 pub use store::{
     range_containing, AyahView, Bismillah, CatalogueEntry, Corpus, HizbQuarter, Juz, Manzil,

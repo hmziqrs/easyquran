@@ -8,7 +8,7 @@ export const MAX_OFFSET = 500;
 const BARE_ALEF = "ا";
 const YA = "ي";
 const HA = "ه";
-const REMOVED = /[\p{Mn}\p{Me}\p{Cf}\u0640\u06de\u06e5\u06e6\u06e9]/u;
+const REMOVED = /[\u064b-\u0658\u0640\u0670\u06dd]/u;
 
 export interface NormalizedArabicMap {
   normalized: string;
@@ -69,7 +69,10 @@ export function scalarLength(s: string): number {
   return n;
 }
 
+const ORNAMENT = /[ۖ-ۜ۞-ۭ]/u;
+
 export function isEligibleQuery(norm: string): boolean {
   const len = scalarLength(norm);
-  return len >= MIN_QUERY_LEN && len <= MAX_QUERY_LEN;
+  if (len < 1 || len > MAX_QUERY_LEN) return false;
+  return len >= MIN_QUERY_LEN || ORNAMENT.test(norm);
 }

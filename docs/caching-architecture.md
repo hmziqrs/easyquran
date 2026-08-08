@@ -118,7 +118,7 @@ BYPASS → network: /quran/, /_quran/, r2.easyquran.fyi,
 | IDB bytes (fallback) | IndexedDB | db `easyquran-quran`/`artifacts`, key `${spec.id}:${spec.id}` | immutable | same prune pass |
 | lastUsed meta | IndexedDB | db `easyquran-meta`/`lastUsed`, key `spec.id`, value `Date.now()` ms | — | cleared on eviction |
 | in-mem open-DB LRU | `Map<sourceId,Database>` | sourceId | session | evict past `TRANSLATION_DB_CAP=4` (RAM only; does **not** touch OPFS) |
-| in-mem Arabic | `Map<QuranSourceId,WorkerSourceState>` | uthmani / simple-clean | session | **never** (pinned) |
+| in-mem Arabic | `Map<QuranSourceId,WorkerSourceState>` | uthmani | session | **never** (pinned) |
 
 **Retention (`opfs-retention.ts`):** `pruneTranslations` runs single-flight on (a) worker init completion and (b) each successful translation download. `computeEvictions` drops pinned Arabic, sorts candidates by `lastUsed` asc, evicts until: remaining ≤ `CAP_COUNT=12` **and** total bytes ≤ `CAP_BYTES=128 MiB` **and** oldest is fresher than `TTL_MS=30d`. Caps count non-pinned candidates only; Arabic bytes sit outside both. No `navigator.storage.estimate()` awareness — caps are fixed regardless of actual quota.
 
@@ -126,7 +126,7 @@ BYPASS → network: /quran/, /_quran/, r2.easyquran.fyi,
 
 **Single-flight throughout:** `bootPromise` (init), `pruneInFlight` (prune), `pendingTranslationRunners` (per-id fetch), `idbConnections` (one IDBDatabase per `${dbName} ${storeName}`). Main-thread client: per-request `pending Map<seq>` with `DEFAULT_TIMEOUT_MS=30000`.
 
-**Constants:** `TTL_MS=30d`, `CAP_COUNT=12`, `CAP_BYTES=128 MiB`, `TRANSLATION_DB_CAP=4`, `ROOT_DIR=easyquran`, `PINNED_ARABIC=[uthmani,simple-clean]`, `DEFAULT_TIMEOUT_MS=30000`, `IDB_VERSION=1`.
+**Constants:** `TTL_MS=30d`, `CAP_COUNT=12`, `CAP_BYTES=128 MiB`, `TRANSLATION_DB_CAP=4`, `ROOT_DIR=easyquran`, `PINNED_ARABIC=[uthmani]` (simple-clean is no longer downloaded by the worker — search now uses the Uthmani index), `DEFAULT_TIMEOUT_MS=30000`, `IDB_VERSION=1`.
 
 ### A3. Catalogue + manifest + source-plan resolution
 
@@ -206,7 +206,7 @@ Four subsystems. Arabic is always resident; translations are on-demand; HTTP res
 
 `quran/loader.rs` + `quran/store.rs` + boot in `main.rs` (load call `:438`, `Arc` wrap `:448`, `AppState` field `:512`; `exit(1)` on failure `:455`).
 
-Both Arabic scripts (`quran-uthmani.sqlite` = display, `quran-simple-clean.sqlite` = search corpus) load **once at boot** into a packed in-memory `Corpus { arena: Box<str>, offsets: Box<[u32]> }` — all verse text contiguous, O(1) `verse(g)` slice via `arena[offsets[g-1]..offsets[g]]`. Wrapped in `Arc<QuranStore>` in `AppState`, held for process lifetime.
+Both Arabic scripts load **once at boot** into a packed in-memory `Corpus { arena: Box<str>, offsets: Box<[u32]> }` — all verse text contiguous, O(1) `verse(g)` slice via `arena[offsets[g-1]..offsets[g]]`. Wrapped in `Arc<QuranStore>` in `AppState`, held for process lifetime. `quran-uthmani.sqlite` is the display **and search** corpus (the `SearchIndex` is built from normalized Uthmani so Quranic ornaments are searchable — quran.com parity); `quran-simple-clean.sqlite` remains resident as a readable API/canonical-view script + audit artifact, but is no longer the search corpus.
 
 **Boot is fail-fast.** `validate_rows` asserts `rows.len()==6236` and contiguous `1..=6236`; `build_meta` asserts 114 suras, ayah-key cross-check, per-sura row count, bismillah split `1/112/1`, range counts (juzs=30/pages=604/rukus=556/quarters=240/manzils=7), 15 contiguous sajdas, and full tiling (first `start_global==1`, last `end_global==6236`, no gap/overlap). Any violation → `Err` → `main.rs:455 std::process::exit(1)`.
 

@@ -139,6 +139,13 @@ function alignMatchToDisplay(
 
 export function alignSearchText(matchText: string, displayText: string): SearchTextAlignment {
   const match = normalizeArabicWithMap(matchText);
+  if (matchText === displayText) {
+    return {
+      matchNorm: match.normalized,
+      matchDisplayStarts: match.starts,
+      matchDisplayEnds: match.ends,
+    };
+  }
   const display = normalizeArabicWithMap(displayText);
   const aligned = alignMatchToDisplay(match, display);
   return {
