@@ -16,8 +16,8 @@ Reasoning + validation log for the **search-normalize layer**. Every fold/strip 
 
 One rule set, two implementations:
 
-- **Web** — `web/src/lib/quran/search/normalize.ts`. `REMOVED = /[\p{Mn}\p{Me}\p{Cf}ـ۞ۥۦ۩]/u` (line 11); folds `آ أ إ ٱ → ا` (line 32), `ى → ي` (line 33), `ة → ه` (line 34).
-- **Rust** — `rust/backend/api/src/quran/normalize.rs`. `is_combining_mark` drops `\u{064B}..\u{0658}`, `\u{0670}`, `\u{0640}`, `\u{06D6}..\u{06DE}`, `\u{06DF}..\u{06E8}`, `\u{06E9}`, `\u{06EA}..\u{06ED}` (lines 30–41); `fold` matches `\u{0622} | \u{0623} | \u{0625} | \u{0671} => \u{0627}`, `\u{0649} => \u{064A}`, `\u{0629} => \u{0647}` (lines 43–50).
+- **Web** — `web/src/lib/quran/search/normalize.ts`. `REMOVED = /[ً-٘ـٰ۝]/u` (line 11) (strips harakat `U+064B–0658`, tatweel `U+0640`, superscript alef `U+0670`, end-of-ayah `U+06DD`; **keeps** standalone ornaments `U+06D6–06DC`, `U+06DE`, `U+06DF–06ED`); folds `آ أ إ ٱ → ا` (line 32), `ى → ي` (line 33), `ة → ه` (line 34).
+- **Rust** — `rust/backend/api/src/quran/normalize.rs`. `is_combining_mark` drops only `\u{064B}..\u{0658}`, `\u{0670}`, `\u{0640}`, `\u{06DD}` (lines 38–51) — **keeps** ornaments `\u{06D6}..\u{06DC}`, `\u{06DE}`, `\u{06DF}..\u{06ED}`. A `contains_searchable_ornament` helper (lines 30–36) matches `\u{06D6}..\u{06DC} | \u{06DE}..\u{06ED}` for the <3-char ornament eligibility exception. `fold` matches `\u{0622} | \u{0623} | \u{0625} | \u{0671} => \u{0627}`, `\u{0649} => \u{064A}`, `\u{0629} => \u{0647}`.
 
 Both return **identical ordered results**, enforced by a shared neutral parity corpus: `web/src/lib/quran/__fixtures__/parity.json`, consumed by Rust via `include_str!` (test `normalize_parity_corpus`) and imported by the web suite. A rule change ships new Rust + web together; it never mutates a sqlite. The Quran DBs are immutable (AGENTS.md hard rule) — the fold/strip produces the normalized **needle/haystack**, never a display transform. See `docs/quran.md` §"Normalization + canonical view".
 
@@ -55,22 +55,22 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 | **F4** alef wasla | `U+0671` ٱ | fold → ا | quran.com **erratic**: folds for some words, returns 0 for others (its inconsistency, not ours) | verbatim | **DISPUTED** |
 | **F5** alef maqsura | `U+0649` ى | fold → ي | fold | verbatim | **MATCH** |
 | **F6** ta marbuta | `U+0629` ة | fold → ه | fold | verbatim | **MATCH** |
-| **R1** harakat | `U+064B–U+0658` | strip (whole range) | strip core `064B–0652`; keeps `0653`/`0654` (0× in our search corpus) | verbatim | **MATCH†** |
+| **R1** harakat | `U+064B–U+0658` | strip (whole range) | strip `064B–0658` incl. `0653`/`0654` (our index = Uthmani; matches quran.com index behavior) | verbatim | **MATCH** |
 | **R2** superscript alef | `U+0670` ٰ | strip (always) | strip in chair role (dominant); keeps after alef-maqsura `ىٰ` | verbatim | **MATCH†** |
 | **R3** tatweel | `U+0640` ـ | strip | strip | verbatim | **MATCH** |
-| **R4** stop marks | `U+06D6–U+06DC` ۖ–ۜ | strip | **keep** (literal, indexed) | verbatim | **DIVERGE** |
-| **R5** rub el hizb | `U+06DE` ۞ | strip | **keep** (indexed; 199 results) | verbatim | **DIVERGE** |
-| **R6** small waw/yeh | `U+06E5`/`U+06E6` ۥۦ | strip | **keep** (search-narrowing) | verbatim | **DIVERGE** |
-| **R7** sajda | `U+06E9` ۩ | strip | **keep** (literal; 15 sajda verses) | verbatim | **DIVERGE** |
-| **R8** signs/end-of-ayah | `U+06DD`/`U+06EA`–`U+06ED` | strip | **keep** `U+06ED`/`06EA`/`06EC` (narrowing); `06DD` 0-occ no-op | verbatim | **DIVERGE** |
+| **R4** stop marks | `U+06D6–U+06DC` ۖ–ۜ | keep (searchable) | **keep** (literal, indexed) | verbatim | **MATCH** |
+| **R5** rub el hizb | `U+06DE` ۞ | keep (searchable) | **keep** (indexed; 199 results) | verbatim | **MATCH** |
+| **R6** small waw/yeh | `U+06E5`/`U+06E6` ۥۦ | keep (searchable) | **keep** (search-narrowing) | verbatim | **MATCH** |
+| **R7** sajda | `U+06E9` ۩ | keep (searchable) | **keep** (literal; 15 sajda verses) | verbatim | **MATCH** |
+| **R8** signs/end-of-ayah | `U+06DD`/`U+06EA`–`U+06ED` | keep `06EA–06ED`; strip `06DD` | **keep** `U+06ED`/`06EA`/`06EC` (narrowing); `06DD` 0-occ no-op | verbatim | **MATCH** |
 
-**Tally: 8 MATCH (6 clean + 2 †caveated), 5 DIVERGE, 1 DISPUTED (F4).** All divergences/disputes are on the **search** layer only; **display matches verbatim on all 14 rules** (neither platform normalizes the rendered Uthmani string). † = matches for the search that actually happens, with a documented rare-edge/positional caveat (R1: over-strips `0653`/`0654` which are 0× in the simple-clean corpus; R2: positional divergence only after alef-maqsura). F4 stays DISPUTED because **quran.com's wasla handling is itself erratic** — no clean verdict exists; our uniform fold is the correct/forgiving choice.
+**Tally: 13 MATCH (12 clean + 1 †caveated), 1 DISPUTED (F4).** All disputes are on the **search** layer only; **display matches verbatim on all 14 rules** (neither platform normalizes the rendered Uthmani string). † = matches for the search that actually happens, with a documented positional caveat (R2: divergence only after alef-maqsura). F4 stays DISPUTED because **quran.com's wasla handling is itself erratic** — no clean verdict exists; our uniform fold is the correct/forgiving choice.
 
 ---
 
 ## F1 — alef madda `U+0622` (آ)
 
-- **Our behavior:** fold → bare alef ا (`U+0627`). Rust `normalize.rs` line 45.
+- **Our behavior:** fold → bare alef ا (`U+0627`). Rust `normalize.rs` line 55.
 - **Findings corpus:** 14 distinct verses, 16 probes. Carrying words: `2:8 ءَامَنَّا`; `3:7 ءَايَـٰتٌ`; `4:19 ءَامَنُوا۟`; `6:4 ءَايَةٍ`; `7:26 ءَادَمَ`; `8:2 ءَايَـٰتُهُۥ`; `9:18 ءَامَنَ`; `17:70 آدم`; `20:121 آدم`; `24:31 آية`; `24:55 آمنا`; `26:47 آمنا`; `3:72 آخرة`; `5:1 ءَامَنُوٓا۟`.
 - **quran.com search:** fold. Probes (`response.search.total_results`):
 
@@ -91,7 +91,7 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 
 ## F2 — alef hamza above `U+0623` (أ)
 
-- **Our behavior:** fold → bare alef ا (`U+0627`). Rust `normalize.rs` line 45. Tested by `folds_alef_variants`.
+- **Our behavior:** fold → bare alef ا (`U+0627`). Rust `normalize.rs` line 55. Tested by `folds_alef_variants`.
 - **Findings corpus:** 24 distinct verses, 34 probes. Carrying words: `3:8 أَنتَ`; `3:130 يَـٰٓأَيُّهَا`; `5:4 أُحِلَّ`; `6:8 أَنزِلْنَا`; `6:104 أَبْصَرَ`; `18:32 أَعْنَـٰبٍ`; `26:201 ٱلْأَلِيمَ`; `38:86 أَنَا۠`; `53:26 أَن`; `66:9 مَأْوَىٰ`; `67:7 أُلْقُوا۟`; `71:4 أَجَلٍ`; `77:20 أَلَمْ`; `3:121 أَهْلِكَ`.
 - **quran.com search:** fold. Probes:
 
@@ -115,7 +115,7 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 
 ## F3 — alef hamza below `U+0625` (إ)
 
-- **Our behavior:** fold → bare alef ا (`U+0627`). Web `normalize.ts` line 32; Rust `normalize.rs` line 45.
+- **Our behavior:** fold → bare alef ا (`U+0627`). Web `normalize.ts` line 32; Rust `normalize.rs` line 55.
 - **Findings corpus:** 26 distinct verses, 25 probes. Carrying words: `1:5 إِيَّاكَ`; `2:34 إِبْلِيسَ`; `5:32 إِسْرَٰٓءِيلَ`; `7:69 إِذْ`; `10:90 إِسْرَٰٓئِيلَ`; `13:1 إِلَيْكَ`; `17:61 إِبْلِيسَ`; `22:35 إِذَا`; `26:69 إِبْرَٰهِيمَ`; `28:7 إِنَّا`; `38:81 إِلَىٰ`; `89:7 إِرَمَ`; `3:48 وَٱلْإِنجِيلَ`; `5:34 إِلَّا`.
 - **quran.com search:** fold. Probes:
 
@@ -182,7 +182,7 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 
 ## F6 — ta marbuta `U+0629` (ة)
 
-- **Our behavior:** fold → ha ه (`U+0647`). Rust `normalize.rs` line 47; web `normalize.ts` line 34.
+- **Our behavior:** fold → ha ه (`U+0647`). Rust `normalize.rs` line 57; web `normalize.ts` line 34.
 - **Findings corpus:** 22 distinct verses, 34 probes. Carrying words: `3:110 أُمَّةٍ`; `6:157 بَيِّنَةٌ`; `9:18 ٱلصَّلَوٰةَ`; `17:100 رَحْمَةِ`; `18:10 ٱلْفِتْيَةُ`; `18:55 سُنَّةُ`; `25:75 ٱلْغُرْفَةَ`; `27:18 نَمْلَةٌ`; `41:34 ٱلْحَسَنَةُ`; `52:22 فَـٰكِهَةٍ`; `53:16 ٱلسِّدْرَةَ`; `67:2 ٱلْحَيَوٰةَ`; `75:22 نَّاضِرَةٌ`; `82:8 صُورَةٍ`.
 - **quran.com search:** fold. Probes:
 
@@ -202,9 +202,9 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 - **quran.com display:** verbatim. `by_key/24:1` returns `سُورَةٌ` (`U+0629` preserved).
 - **Verdict: MATCH.** Identical totals across the whole noun class ⇒ `ة→ه`. Textbook canonical Arabic-search normalization (PyArabic, Elasticsearch `arabic_normalization`, quran.com's own open `quran-mcp`).
 
-## R1 — harakat `U+064B–U+0658` — **MATCH† (core) / range-edge caveat**
+## R1 — harakat `U+064B–U+0658` — **MATCH**
 
-- **Our behavior:** strip the **whole** range `U+064B–U+0658` (Rust `normalize.rs` line 33, test `drops_harakat`). Search/index-only; Uthmani display stores harakat verbatim.
+- **Our behavior:** strip the **whole** range `U+064B–U+0658` (Rust `normalize.rs` line 46, test `drops_harakat`). Search/index-only; Uthmani display stores harakat verbatim.
 - **Findings corpus:** 57 distinct verses, 96 probes. Carrying words: `1:1 بِسْمِ`; `1:2 ٱلْحَمْدُ`; `1:3 ٱلرَّحْمَٰنِ`; `1:6 ٱلصِّرَاطَ`; `1:7 ٱلضَّآلِّينَ`; `2:38 هُدًى`; `2:255 ٱلْقَيُّومُ`; `4:77 عَظِيمًا`; `6:152 نَفْسًا`; `87:14 قَدْ`; `93:6 يَتِيمًا`; `112:1 أَحَدٌ`; `111:1 تَبَّتْ`; `38:64 إِنَّ`.
 - **quran.com search:** strips the core harakat `064B–0652` cleanly, but **keeps** `U+0653` (combining maddah) and is **mixed** on `U+0654` (combining hamza above) — both inside our stripped range. Probes:
 
@@ -223,11 +223,11 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `شَيْـًٔا` (0654) | 76 | `شَيْـًا` | 76 | strip (0654 on tatweel) |
 
 - **quran.com display:** verbatim. `by_key/1:1?fields=text_uthmani` preserves `U+0650`/`U+0652`/`U+0651`/`U+064E`.
-- **Verdict: MATCH† (core) with a range-edge caveat.** Core harakat (`064B` fathatan, `064C` dammatan, `064D` kasratan, `064E` fatha, `064F` damma, `0650` kasra, `0651` shadda, `0652` sukun) strip identically on both sides (dozens of equal-total probes ⇒ MATCH). Our range extends one block further to `0658`; quran.com **keeps** `U+0653` maddah (confirmed live: `الضآلين`=0 vs `الضالين`=6) and is mixed on `U+0654`. **But `0653`/`0654` occur 0× in simple-clean (our search corpus)** — verified: `0653`=3051×, `0654`=712× in Uthmani *display* only, `0×` in simple-clean; `0655`–`0658` = 0× everywhere — so the over-strip is **unobservable in production search** and only a theoretical query-edge (where we are more forgiving). Recommendation: **keep our range** — carving out `0653`/`0654` would only matter if we ever searched Uthmani directly. † = matches for the search that actually happens.
+- **Verdict: MATCH.** Core harakat (`064B` fathatan, `064C` dammatan, `064D` kasratan, `064E` fatha, `064F` damma, `0650` kasra, `0651` shadda, `0652` sukun) strip identically on both sides (dozens of equal-total probes ⇒ MATCH). Our range extends one block further to `0658`, covering maddah `U+0653` and combining hamza `U+0654`. The search index now scans normalized **Uthmani** (where `0653`=3051×, `0654`=712×), and we strip both — matching quran.com's index behavior (its index strips these intra-cluster marks, so bare queries match without a stemmer). quran.com's query side keeps `0653`/`0654` (see probes), but that is a query-only narrowing layered on an index that has already stripped them; our uniform strip on both index and query is the forgiving choice and lands on the same index parity. Recommendation: **keep our range.**
 
 ## R2 — superscript alef `U+0670` (ٰ) — **MATCH† (dominant) / positional caveat**
 
-- **Our behavior:** strip always (never folded). Web `normalize.ts` line 11 (`U+0670` is category Mn, matched by `\p{Mn}`); Rust `normalize.rs` line 34, test `drops_superscript_alef`.
+- **Our behavior:** strip always (never folded). Stripped explicitly on both sides — web `normalize.ts` `REMOVED` (line 11) lists `ٰ` (`U+0670`); Rust `normalize.rs` `is_combining_mark` lists `\u{0670}` (line 47, test `drops_superscript_alef`).
 - **Findings corpus:** 75 distinct verses, 76 probes. Carrying words: `1:1 ٱلرَّحْمَـٰنِ`; `1:2 ٱلْعَـٰلَمِينَ`; `2:2 ذَٰلِكَ`; `2:7 عَلَىٰ`; `2:51 مُوسَىٰٓ`; `2:124 إِبْرَٰهِيمَ`; `7:30 هَدَىٰ`; `9:28 هَـٰذَا`; `20:62 ٱلنَّجْوَىٰ`; `26:65 مُوسَىٰ`; `41:6 إِلَـٰهُكُمْ`; `93:2 سَجَىٰ`.
 - **quran.com search:** strips `U+0670` in its **consonant-chair** role (superscript-alef between consonants), but **keeps** it after alef-maqsura (the `ىٰ` ending). Probes:
 
@@ -269,9 +269,9 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
 - **quran.com display:** verbatim. `by_key/1:1?words=true&word_fields=text_uthmani` cps include `U+0640` in the Rahman cluster.
 - **Verdict: MATCH.** Canonical-equivalence holds (query⊕tatweel ≡ query) on every token; lone tatweel is not an indexed letter (3 = noise floor, same as lone fatha). Both strip in search; both keep verbatim in display.
 
-## R4 — Quranic stop marks `U+06D6–U+06DC` (ۖ–ۜ) — **DIVERGE**
+## R4 — Quranic stop marks `U+06D6–U+06DC` (ۖ–ۜ) — **MATCH**
 
-- **Our behavior:** strip. Rust `normalize.rs` line 36 (`'\u{06D6}'..='\u{06DE}'`); web covered by `\p{Mn}`. Search-only.
+- **Our behavior:** keep (searchable token). Ornaments are now KEPT — Rust `is_combining_mark` no longer lists `06D6–06DC`; web `REMOVED` doesn't match them (they survive normalization as indexed content). Search-only; Uthmani display verbatim.
 - **Findings corpus:** 20 distinct verses, 19 probes. Carrying words: `2:5 ۖ`; `2:2 ۥۛ`; `2:91 ۗ`; `2:184 ۖ/ۚ`; `4:118 ۘ`; `5:9 ۙ`; `5:26 ۨ`; `7:69 بَصْۜطَةً`; `10:60 ۗ`; `11:108 ۖ`; `27:1 ۚ`; `83:14 ۜ`; `2:245 وَيَبْصُۜطُ`; `2:212 ۘ`.
 - **quran.com search:** **keep** (matched literally, indexed tokens). Probes:
 
@@ -288,11 +288,11 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `بصۜطة` | 1 | `بصطة` | 0 | keep |
 
 - **quran.com display:** verbatim. `by_key/2:5?fields=text_uthmani` carries `ۖ`.
-- **Verdict: DIVERGE (search).** quran.com treats `06D6–06DC` as literal indexed content (lone `ۖ`=1322 ≈ our 1294 occurrences); we strip them. Display matches (both verbatim). *Important:* quran.com **does** strip true harakat (`هدى` matches stored `هُدًى`); the divergence is specific to the Quranic annotation/stop marks. *Implication:* `هدىۖ` finds nothing on quran.com (literal) but matches the base word on EasyQuran (stripped) — our strip is more forgiving but is not what the reference does.
+- **Verdict: MATCH.** quran.com treats `06D6–06DC` as literal indexed content (lone `ۖ`=1322 ≈ our 1294 occurrences); we now keep them too, so a stop-mark query lands on the same verses on both platforms. Display matches (both verbatim). *Important:* quran.com **does** strip true harakat (`هدى` matches stored `هُدًى`); the literal-kept behavior is specific to the Quranic annotation/stop marks, which we now also keep. *(Formerly DIVERGE — changed to match quran.com: ornaments are now KEPT.)*
 
-## R5 — rub el hizb `U+06DE` (۞) — **DIVERGE**
+## R5 — rub el hizb `U+06DE` (۞) — **MATCH**
 
-- **Our behavior:** strip (search/normalize only); display verbatim. Web `normalize.ts` line 11 lists `۞` explicitly (category `So`, `\p{Mn}` alone misses it); Rust `normalize.rs` line 36. A lone `۞` normalizes to empty → below `MIN_QUERY_LEN=3` → ineligible. See `docs/quran.md` §9.
+- **Our behavior:** keep (searchable token); display verbatim. Ornaments are now KEPT — web `REMOVED` no longer matches `۞` (category `So`); Rust `is_combining_mark` no longer drops `\u{06DE}`. A lone `۞` is now eligible below `MIN_QUERY_LEN=3` via the `contains_searchable_ornament` exception (so `۞`→199 matches quran.com). See `docs/quran.md` §9.
 - **Findings corpus:** 21 distinct verses, 17 probes. Carrying words: `2:177 ۞`; `2:263 ۞`; `3:133 ۞`; `4:100 ۞`; `5:109 ۞`; `6:36 ۞`; `7:31 ۞`; `10:90 ۞`; `16:30 ۞`; `21:29 ۞`; `29:26 ۞`; `37:22 ۞`; `43:57 ۞`; `63:4 ۞`; `7:171 ۞`.
 - **quran.com search:** **keep** (indexed, searchable). Probes:
 
@@ -307,11 +307,11 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `قول۞` (trailing) | 12 | `قول` | 12 | strip (mark appended to word token) |
 
 - **quran.com display:** verbatim. Search-result text for hizb verses begins `۞ …`.
-- **Verdict: DIVERGE (search).** quran.com indexes `U+06DE` as searchable content (`۞` alone = 199, exact match for the 199 Uthmani occurrences; leading `۞ word` OR-expands). EasyQuran strips it. Display matches (both verbatim). *Intentional/benign* — `۞` is a ruku/hizb structural divider, not lexical content; we strip it to keep the highlight offset-map aligned (`docs/quran.md` §9). The trailing-`قول۞`≡`قول` row shows quran.com strips a mark glued to a word tail but indexes a standalone/leading mark — a tokenization quirk, not a search-normalize rule we share.
+- **Verdict: MATCH.** quran.com indexes `U+06DE` as searchable content (`۞` alone = 199, exact match for the 199 Uthmani occurrences; leading `۞ word` OR-expands); EasyQuran now keeps it, so the same 199 results land on both platforms. Display matches (both verbatim). The trailing-`قول۞`≡`قول` row shows quran.com strips a mark glued to a word tail but indexes a standalone/leading mark — a tokenization quirk, mirrored by our `contains_searchable_ornament` eligibility exception for lone-mark queries. *(Formerly DIVERGE — changed to match quran.com: ornaments are now KEPT.)*
 
-## R6 — small waw/yeh `U+06E5`/`U+06E6` (ۥ/ۦ) — **DIVERGE**
+## R6 — small waw/yeh `U+06E5`/`U+06E6` (ۥ/ۦ) — **MATCH**
 
-- **Our behavior:** strip both. Web `normalize.ts` line 11 lists `ۥ`/`ۦ` explicitly (category `Lm`); Rust `normalize.rs` line 37 (`'\u{06DF}'..='\u{06E8}'`). `U+06E5`/`U+06E6`: 0 in simple-clean.
+- **Our behavior:** keep both (searchable token). Web `REMOVED` no longer matches `ۥ`/`ۦ` (category `Lm`); Rust `is_combining_mark` no longer drops the `06DF–06E8` range (the whole ornament range is KEPT). Search-only; Uthmani display verbatim.
 - **Findings corpus:** 23 distinct verses, 26 probes. Carrying words: `5:75 وَأُمَّهُۥ`; `6:59 وَعِندَهُۥ`; `7:87 بِهِۦ`; `15:33 خَلَقْتَهُۥ`; `17:26 حَقَّهُۥ`; `19:2 عَبْدَهُۥ`; `23:109 إِنَّهُۥ`; `28:81 لَهُۥ`; `30:48 عِبَادِهِۦ`; `3:179 رُسُلِهِۦ`; `9:97 رَسُولِهِۦ`; `32:8 نَسْلَهُۥ`; `35:32 لِّنَفْسِهِۦ`; `25:58 بِحَمْدِهِۦ`.
 - **quran.com search:** **keep** (search-narrowing, treated as significant letters). Probes:
 
@@ -329,11 +329,11 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `مَعَهُۥ` | 23 | `مَعَهُ` | 34 | keep |
 
 - **quran.com display:** verbatim. `by_key/2:17` returns `حَوْلَهُۥ` — cps `…U+064F U+06E5…`.
-- **Verdict: DIVERGE (search).** Every with-mark query is a strict subset of the without-mark query (245<304, 199<253, …) ⇒ matched literally, not stripped. quran.com treats `U+06E5`/`U+06E6` as significant narrowing letters; EasyQuran erases them. Display matches (both verbatim). *Implication:* on quran.com typing the mark narrows search; on EasyQuran with-mark ≡ without-mark (more forgiving).
+- **Verdict: MATCH.** Every with-mark query is a strict subset of the without-mark query (245<304, 199<253, …) ⇒ matched literally, not stripped. quran.com treats `U+06E5`/`U+06E6` as significant narrowing letters; EasyQuran now keeps them too, so the same narrowing behavior holds on both platforms. Display matches (both verbatim). *(Formerly DIVERGE — changed to match quran.com: ornaments are now KEPT.)*
 
-## R7 — place of sajda `U+06E9` (۩) — **DIVERGE**
+## R7 — place of sajda `U+06E9` (۩) — **MATCH**
 
-- **Our behavior:** strip (search/normalize only); display verbatim. Rust `normalize.rs` line 38; web `normalize.ts` line 11 lists `۩` explicitly (category `So`).
+- **Our behavior:** keep (searchable token); display verbatim. Ornaments are now KEPT — Rust `is_combining_mark` no longer drops `\u{06E9}`; web `REMOVED` no longer matches `۩` (category `So`). A lone `۩` is eligible via the `contains_searchable_ornament` exception to `MIN_QUERY_LEN=3`.
 - **Findings corpus:** 15 distinct verses, 17 probes. Carrying words: `7:206 ۩`; `13:15 ۩`; `16:50 ۩`; `17:109 ۩`; `19:58 وَبُكِيًّا ۩`; `22:18 ۩`; `22:77 ۩`; `25:60 ۩`; `27:26 ۩`; `32:15 ۩`; `38:24 ۩`; `41:38 لَا يَسْـَٔمُونَ ۩`; `53:62 ۩`; `84:21 ۩`; `96:19 ۩`.
 - **quran.com search:** **keep** (matched literally; indexed token). `۩` is its own distinct literal token — it is **not** folded to digit 9. Probes:
 
@@ -349,12 +349,12 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `يسجدون ۩` | 17 | `يسجدون` | 4 | keep |
 
 - **quran.com display:** verbatim. Search `text` for `7:206`/`84:21` retains `۩` (`يَسْجُدُونَ ۩`); `7:206` tagged `sajdah_number:1`.
-- **Verdict: DIVERGE (search).** quran.com indexes `۩` as literal searchable content (`q=۩` = 15, exactly the 15 sajda verses). The `٩` probe is the **distinct-token control**: `۩`→15 vs `٩`→96 (ayah-9 verses) proves `۩` is its own literal token, never folded to digit 9. EasyQuran strips it. Display matches (both verbatim). *Intentional/benign* — `۩` is a sajda structural marker, not lexical content; stripping keeps the offset-map aligned (`docs/quran.md` §9), consistent with R5 (`۞`). *(An earlier draft claimed a ۩→٩ fold / "quran.com bug"; the live `۩`=15 / `٩`=96 control disproves it.)*
+- **Verdict: MATCH.** quran.com indexes `۩` as literal searchable content (`q=۩` = 15, exactly the 15 sajda verses); EasyQuran now keeps it, so the same 15 sajda verses match on both platforms. The `٩` probe is the **distinct-token control**: `۩`→15 vs `٩`→96 (ayah-9 verses) proves `۩` is its own literal token, never folded to digit 9. Display matches (both verbatim). *(Formerly DIVERGE — changed to match quran.com: ornaments are now KEPT. The earlier "۩ folds to digit 9" claim remains false; the live `۩`=15 / `٩`=96 control disproves it.)*
 
-## R8 — end-of-ayah + stop signs `U+06DD`, `U+06EA`–`U+06ED` — **DIVERGE**
+## R8 — end-of-ayah + stop signs `U+06DD`, `U+06EA`–`U+06ED` — **MATCH**
 
 - **Codepoints:** `U+06DD` (end of ayah, Me), `U+06EA` (empty centre low stop), `U+06EB` (empty centre high stop), `U+06EC` (rounded high stop), `U+06ED` (small low meem) — `06EA–06ED` all Mn.
-- **Our behavior:** strip. Web `normalize.ts` line 11 `[\p{Mn}\p{Me}…]` — `\p{Mn}` covers `06EA–06ED`, `\p{Me}` covers `06DD`. Search-only. `U+06DD` has 0 occurrences in both our corpora.
+- **Our behavior:** keep `06EA–06ED` (searchable); strip only `06DD`. Web `REMOVED` no longer matches `06EA–06ED` (ornaments KEPT); Rust `is_combining_mark` drops only `\u{06DD}` from this range, leaving `06EA–06ED` as indexed content. Search-only; Uthmani display verbatim. `U+06DD` has 0 occurrences in both our corpora.
 - **Findings corpus:** 22 distinct verses, 29 probes. Carrying words: `2:41 كَافِرٍۭ`; `2:99 ءَايَـٰتٍۭ`; `2:176 شِقَاقٍۭ`; `4:41 أُمَّةٍۭ`; `7:165 بِعَذَابٍۭ`; `11:41 مَجْر۪ىٰهَا`; `12:11 تَأْمَ۫نَّا`; `20:15 نَفْسٍۭ`; `27:22 سَبَإٍۭ`; `34:53 مَّكَانٍۭ`; `37:36 مَّجْنُونٍۭ`; `41:44 ءَا۬عْجَمِىٌّ`; `70:11 يَوْمِئِذٍۭ`; `106:4 خَوْفٍۭ`.
 - **quran.com search:** **keep** `U+06ED`/`U+06EA`/`U+06EC` (with-mark narrows search); `U+06EB` inconclusive; `U+06DD` 0-occurrence no-op on both sides. Probes:
 
@@ -372,39 +372,38 @@ Both return **identical ordered results**, enforced by a shared neutral parity c
   | `۪` (06EA) alone | 0 | `ۭ` (06ED) alone | 3 | keep (06ED indexed) |
 
 - **quran.com display:** verbatim. `by_key/11:41?fields=text_uthmani` returns `U+06EA` + `U+06DE`; `U+06DD` absent (quran.com uses `U+06DE` + numeric ayah markers, never `U+06DD`).
-- **Verdict: DIVERGE (search).** `U+06ED` (small low meem, the bulk of occurrences) is a kept narrowing mark on quran.com (25<50, 5<64, 14<91, …) and `U+06EA`/`U+06EC` are kept (1 vs 0). We strip the whole range. Display matches (both verbatim). `U+06DD` is a 0-occurrence no-op on both sides. The earlier "MATCH" reading rested on the without-mark query still matching the with-mark verse (true but incomplete — the with-mark query *also* matches, and narrows); the with<without totals prove the mark carries search weight.
+- **Verdict: MATCH.** `U+06ED` (small low meem, the bulk of occurrences) is a kept narrowing mark on quran.com (25<50, 5<64, 14<91, …) and `U+06EA`/`U+06EC` are kept (1 vs 0); EasyQuran now keeps them too, so the same narrowing behavior holds on both platforms. Display matches (both verbatim). `U+06DD` is a 0-occurrence no-op on both sides (stripped on ours, absent on quran.com). The earlier "MATCH" reading rested on the without-mark query still matching the with-mark verse (true but incomplete — the with-mark query *also* matches, and narrows); the with<without totals prove the mark carries search weight — which both platforms now honor. *(Formerly DIVERGE — changed to match quran.com: ornaments `06EA–06ED` are now KEPT.)*
 
 ---
 
 ## Summary
 
-Of **14** normalize rules (6 folds `F1–F6`, 8 strips `R1–R8`): **8 MATCH** (6 clean: `F1, F2, F3, F5, F6, R3`; 2 with a documented rare-edge/positional caveat†: `R1, R2`), **5 DIVERGE** (`R4, R5, R6, R7, R8`), and **1 DISPUTED** (`F4`). **All 14 match on display** — neither platform normalizes the rendered Uthmani string; every divergence/dispute is confined to the search/matching layer.
+Of **14** normalize rules (6 folds `F1–F6`, 8 strips `R1–R8`): **13 MATCH** (12 clean: `F1, F2, F3, F5, F6, R1, R3, R4, R5, R6, R7, R8`; 1 with a documented positional caveat†: `R2`), and **1 DISPUTED** (`F4`). **All 14 match on display** — neither platform normalizes the rendered Uthmani string; every dispute is confined to the search/matching layer.
 
 - The clean **MATCH** rules are byte-for-byte the textbook canonical Arabic-search normalization — identical to quran.com, to Elasticsearch's `arabic_normalization` filter, and to quran.com's own open `quran-mcp` `arabic_normalize.py`. The shared `parity.json` corpus enforces Rust/web identity on our side.
-- The **DIVERGE** rules share one root: quran.com indexes Quranic ornament/annotation marks (stop marks `06D6–06DC`, rub-el-hizb `۞`, small waw/yeh `ۥۦ`, sajda `۩`, and the rare pause signs `06EA–06ED`) as literal searchable tokens, while EasyQuran strips them for a more forgiving search + a clean highlight offset-map (`docs/quran.md` §9).
-- The **MATCH†** rules (`R1`, `R2`) match quran.com in the common/dominant case; the caveat is a rare edge that is either 0-occurrence in our search corpus (`R1`: `0653`/`0654`) or a minor positional subset where our strip is the forgiving choice (`R2`: after alef-maqsura). See per-section detail.
+- **Former divergences R4–R8 RESOLVED:** EasyQuran now KEEPS the standalone ornaments (the search index scans normalized Uthmani), so they are searchable tokens on both platforms — R4, R5, R6, R7, R8 are MATCH. The rare pause signs `06EA–06ED` and small waw/yeh `ۥۦ` are kept; rub-el-hizb `۞` and sajda `۩` are kept; stop marks `06D6–06DC` are kept. (`U+06DD` end-of-ayah is still stripped — 0 occurrences in our corpora, matching quran.com which also doesn't carry it.)
+- The one **MATCH†** rule (`R2`) matches quran.com in the dominant consonant-chair role; the caveat is a minor positional subset where our uniform strip is the forgiving choice (`R2`: after alef-maqsura). (`R1` is now a clean MATCH — `0653`/`0654` are stripped matching quran.com's index behavior on our Uthmani search corpus.) See per-section detail.
 - The one **DISPUTED** rule (`F4` alef wasla) is quran.com's own inconsistency (folds on its index, not uniformly on the query), not ours — our uniform `ٱ→ا` fold is correct and more forgiving.
 
 ### Verdict tally
 
 | Verdict | Rules | Count |
 |---|---|---|
-| MATCH (clean) | F1, F2, F3, F5, F6, R3 | 6 |
-| MATCH† (caveated) | R1 (range edge, 0× in search corpus), R2 (positional, maqsura subset) | 2 |
-| DIVERGE | R4, R5, R6, R7, R8 | 5 |
+| MATCH (clean) | F1, F2, F3, F5, F6, R1, R3, R4, R5, R6, R7, R8 | 12 |
+| MATCH† (caveated) | R2 (positional, maqsura subset) | 1 |
 | DISPUTED | F4 (quran.com erratic — index folds, query doesn't) | 1 |
 
-### DIVERGE rules (5) — recommendations
+### Former DIVERGE rules (5) — resolution
 
-| Rule | Divergence | Recommendation |
+| Rule | Former divergence | Resolution |
 |---|---|---|
-| **R4** stop marks `06D6–06DC` | quran.com keeps (literal, indexed); we strip | **Keep ours.** More forgiving (`هدىۖ` matches the base word; returns 0 on quran.com). Aligns with simple-clean (0 occurrences). Document; do not chase parity. |
-| **R5** rub el hizb `۞` | quran.com indexes/searches (199 results); we strip | **Keep ours.** Structural divider, not lexical content; stripping keeps the offset-map aligned (`docs/quran.md` §9). |
-| **R6** small waw/yeh `ۥۦ` | quran.com keeps (search-narrowing); we strip | **Keep ours, with a note.** More forgiving; only loss is the user cannot narrow by these pronunciation marks. Low value. |
-| **R7** sajda `۩` | quran.com keeps (literal; 15 sajda verses); we strip | **Keep ours.** Sajda structural marker, not lexical content; stripping keeps the offset-map aligned, consistent with R5. |
-| **R8** end-of-ayah + signs `06DD`/`06EA–06ED` | quran.com keeps `06ED`/`06EA`/`06EC` (narrowing); we strip; `06DD` 0-occ no-op both sides | **Keep ours.** Rare pause/variant signs (06ED small low meem is the bulk); stripping is more forgiving and keeps the offset-map aligned. |
+| **R4** stop marks `06D6–06DC` | quran.com kept (literal, indexed); we stripped | **Changed to match quran.com (ornaments now KEPT).** `06D6–06DC` survive normalization as indexed content; stop-mark queries now land on the same verses on both platforms. |
+| **R5** rub el hizb `۞` | quran.com indexed/searched (199 results); we stripped | **Changed to match quran.com (ornaments now KEPT).** `۞` survives normalization; lone `۞` is eligible via `contains_searchable_ornament` below `MIN_QUERY_LEN=3` (`۞`→199). |
+| **R6** small waw/yeh `ۥۦ` | quran.com kept (search-narrowing); we stripped | **Changed to match quran.com (ornaments now KEPT).** `U+06E5`/`U+06E6` survive normalization, so with-mark queries narrow search on both platforms. |
+| **R7** sajda `۩` | quran.com kept (literal; 15 sajda verses); we stripped | **Changed to match quran.com (ornaments now KEPT).** `۩` survives normalization; lone `۩` is eligible via `contains_searchable_ornament` (`۩`→15). |
+| **R8** end-of-ayah + signs `06DD`/`06EA–06ED` | quran.com kept `06ED`/`06EA`/`06EC` (narrowing); we stripped; `06DD` 0-occ no-op both sides | **Changed to match quran.com (ornaments `06EA–06ED` now KEPT).** Only `06DD` (0 occurrences) is still stripped; the kept narrowing marks now behave identically on both platforms. |
 
-Net: **all five divergences are intentional or benign; none warrant a rule change.**
+Net: **all five were resolved by changing our rules to match quran.com.**
 
 ### DISPUTED rule (1) — flagged honestly
 
@@ -412,7 +411,7 @@ Net: **all five divergences are intentional or benign; none warrant a rule chang
 |---|---|---|---|
 | **F4** alef wasla `ٱ` | Folds cleanly on source-wasla words (الناس, الذين, الأرض, …) but bare-wasla on regular-alef-stored words (ٱلكتاب=0/151, ٱبراهيم=0/228, ٱنزلنا=0/25, ٱلقيامة=0/70, ٱلسماء=1/107) returns 0 — quran.com normalizes wasla→alef on its index but not uniformly on the query side | Uniform `ٱ→ا` (handles both directions; more forgiving). No user-facing harm. | **Keep ours.** No rule change can match a reference platform that is itself inconsistent here; our uniform fold is correct. |
 
-`R1` and `R2` were initially flagged disputed but are **resolved to MATCH†** (see their sections): the core/dominant behavior matches quran.com, and the residual edge (`R1`: `0653`/`0654`, which are 0× in the simple-clean search corpus; `R2`: the alef-maqsura subset) is a documented rare/positional case where our uniform strip is the forgiving choice — no rule change recommended.
+`R1` and `R2` were initially flagged disputed but are **resolved** (see their sections): `R1` is a clean **MATCH** (we now search normalized Uthmani and strip `0653`/`0654`, matching quran.com's index behavior); `R2` is **MATCH†** — the dominant consonant-chair behavior matches quran.com, and the residual positional edge (the alef-maqsura subset) is a documented case where our uniform strip is the forgiving choice. No rule change recommended for either.
 
 ### Open caveats (methodological, not pending rule research)
 

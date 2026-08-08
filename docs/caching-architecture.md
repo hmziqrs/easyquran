@@ -4,7 +4,7 @@
 
 **Snapshot date:** 2026-08-08
 **Commit:** `b17324d` (`master`)
-**Method:** 10 parallel code-readers (one per subsystem) + a drift/gap critic cross-checked against `docs/quran.md`. Two load-bearing claims (the `/scripts` URL contract and the search-ETag digest) were re-verified by hand against `controller.rs:810` and `controller.rs:1163`.
+**Method:** 10 parallel code-readers (one per subsystem) + a drift/gap critic cross-checked against `docs/quran.md`. Two load-bearing claims (the `/scripts` URL contract and the search-ETag digest) were re-verified by hand against `controller.rs:810` and `controller.rs:1164`.
 
 > This doc is descriptive, not prescriptive. It mirrors `docs/quran.md` (the plan) where they agree and explicitly flags where the code differs from the plan. For the plan and its rationale, read `docs/quran.md`; for *what is running right now*, read this.
 
@@ -328,7 +328,7 @@ Items where the code disagrees with the plan doc. Severity in parens.
 
 2. **(med) "Install verifies the complete new cache" is false for the shell route.** `docs/quran.md:72` claims atomic all-or-nothing install. `SHELL_ROUTE` (`${base}/404.html`) precache is `.catch(()=>null)` (service-worker.ts:159) — a missing/failing shell is silently skipped and the terminal navigation fallback (service-worker.ts:341-342) then returns `Response.error()` instead of an offline page.
 
-3. **(resolved) The search ETag embeds a SHA-256 digest — now carved out in `docs/quran.md`.** `controller.rs:1163` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data, so it honors the no-sha-on-Quran-*data* intent. `docs/quran.md:16` and `:63` now state this exception explicitly (`:63`: "`/search` is the exception: its canonical key folds in a sha-256 digest of the normalized query string (user input, not Quran data)"), so the prior doc-vs-code contradiction is closed — retained here as the historical flag that surfaced the carve-out. *(Verified by hand, `controller.rs:1163-1170`; carve-out re-verified against `docs/quran.md:16,63`.)*
+3. **(resolved) The search ETag embeds a SHA-256 digest — now carved out in `docs/quran.md`.** `controller.rs:1164` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data, so it honors the no-sha-on-Quran-*data* intent. `docs/quran.md:16` and `:63` now state this exception explicitly (`:63`: "`/search` is the exception: its canonical key folds in a sha-256 digest of the normalized query string (user input, not Quran data)"), so the prior doc-vs-code contradiction is closed — retained here as the historical flag that surfaced the carve-out. *(Verified by hand, `controller.rs:1164-1171`; carve-out re-verified against `docs/quran.md:16,63`.)*
 
 4. **(low) Translation byte-bound is a separate prune pass, not a unified LRU.** `§3` table says "eviction: LRU, whichever bound trips first" as if both are inside moka. Moka enforces only the count ceiling (`max_capacity`); the byte ceiling is enforced by a serialized post-build `enforce_byte_bound` loop, with transient overshoot bounded by `BUILD_CONCURRENCY=2`.
 
@@ -376,5 +376,5 @@ Curated from the readers + critic, all code-grounded. Listed so a future diff ca
 ## 5. How to use this doc later
 
 - **To see what changed:** `git diff b17324d..HEAD -- docs/caching-architecture.md` shows doc edits; re-run the same audit (10 readers + critic) and diff the constants tables (§2) and the drift/gap lists (§3, §4) to see what shifted in code.
-- **To verify a claim:** every constant carries a `file:line`; every subsystem section names its files. The two highest-stakes claims (`/scripts` URL, search-ETag digest) were hand-verified at `controller.rs:810` and `controller.rs:1163` against this commit.
+- **To verify a claim:** every constant carries a `file:line`; every subsystem section names its files. The two highest-stakes claims (`/scripts` URL, search-ETag digest) were hand-verified at `controller.rs:810` and `controller.rs:1164` against this commit.
 - **What is explicitly NOT here:** the auth/session cache (SQLite sessions, outside `/quran`), FCM push delivery mechanics, and mobile clients (none in this repo). Those are adjacent but out of the two-domain scope. (The owner-profile *data* cache is covered — see A4, `owner.ts`.)

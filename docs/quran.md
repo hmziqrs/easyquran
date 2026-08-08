@@ -148,7 +148,7 @@ No translation route exists — not even a page-1 form. Geometry and accessors a
 /app/t/en/sahih/juz/30                translation, juz 30
 ```
 
-**Approach:** parameterize by source id — path helpers in `lib/data/quran.ts`, the `readSurahRouteData` loader, `QuranSourceId` + `QuranSourcePlan` (today frozen to two Arabic ids), and the Worker protocol (`init` takes a manifest; `readSurah`/`readRange` need the source). Page geometry, accessors, and the virtual window stay untouched.
+**Approach:** parameterize by source id — path helpers in `lib/data/quran.ts`, the `readSurahRouteData` loader, `QuranSourceId` + `QuranSourcePlan` (the web worker plan is frozen to the single `uthmani` Arabic id for reader + search.match + search.display; Rust still loads + serves both Arabic scripts), and the Worker protocol (`init` takes a manifest; `readSurah`/`readRange` need the source). Page geometry, accessors, and the virtual window stay untouched.
 
 **Done when:** a translated deep link past local page 1 has a real URL; `/app/<surah>/page/<n>` and `/app/<surah>/t/<lang>/<translator>` cannot shadow each other (route test); the picker switches source without losing reading position.
 
@@ -160,7 +160,7 @@ No TTL, no pruner, no size cap. Fine at 1–2 databases; the failure case is a t
 
 **Approach:** per-id `lastUsed` alongside the cached bytes. Prune on worker boot and after each successful download, evicting LRU until within: ≤ 12 cached translations, ≤ 128 MiB total, and nothing untouched for 30 days. A normal user (1–2 translations) never trips any bound, so the common path does no work.
 
-**Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the two Arabic artifacts survive every prune.
+**Done when:** a synthetic 100-database run stays inside the caps, an evicted database re-downloads transparently, and the pinned `uthmani` Arabic artifact survives every prune (simple-clean is no longer worker-downloaded or pinned — search uses the Uthmani index).
 
 ## 7. `adapter-node` + SSR disk-TTL for translated pages — *done*
 
