@@ -77,7 +77,9 @@ navigate (HTML) ................. network-first, 3500ms abort
                                   miss → eq-pack-${activePack} fallback → error
 IMMUTABLE build/files ........... cache-first
 other same-origin ............... SWR
-/_quran/, /quran/, R2, /translations/, /offline/* .... BYPASS (straight to network)
+BYPASS → network: /quran/, /_quran/, r2.easyquran.fyi,
+       /translations/, /firebase-config.js, /_app/version.json,
+       /service-worker.js, /offline/manifest.json, /offline/pack.*.json
 ```
 
 **Lifecycle (atomic update):**
@@ -142,7 +144,7 @@ MANIFEST (Arabic, 2 frozen ids):
     pass ─────────────────────────────────► localize URLs → {scripts, source:'api'}
 
 CATALOGUE (115 translations, 44 langs):
-  SSR (resolveSourceCatalogue):  fresh cache? ►cached · !apiBase ►baked · empty/failed ►baked (uncached)
+  SSR (resolveSourceCatalogue):  !apiBase ►baked · fresh cache? ►cached · empty/failed ►baked (uncached)
                                   module cache TTL 300s, single-flight pendingCatalogue
   Client (catalogueStore):       ready ►live · degraded(+30s backoff) ►stale baked · else fetch
                                   status machine idle→loading→ready|degraded
@@ -158,12 +160,12 @@ CATALOGUE (115 translations, 44 langs):
 
 ### A4. Network resilience + engagement prefetch
 
-`fetch.ts`, `api-client.ts`, `engagement.ts`, `track-view.svelte.ts`, `lib/server/owner.ts`.
+`fetch.ts`, `api-client.ts`, `engagement.ts`, `track-view.svelte.ts`, `quran/worker-client.ts`, `workers/download.ts`, `lib/server/owner.ts`.
 
 - **`fetchWithTimeout`** (`FETCH_TIMEOUT_MS=3000`): wraps `fetch` in an `AbortController`, composes the caller's external signal onto the inner controller. No retry, no backoff.
 - **`quranApi`** (`api-client.ts`): `readSurah` → `GET /sources/{id}/surah/{n}`, `readRange` → `GET /sources/{id}/range?from=&to=`, `search` → `GET /search?q=&limit=&offset=`. Throws on `!res.ok`. No `Retry-After` honoring.
 - **`withTranslationFallback`** (`worker-client.ts:108`): tier chain — `[no-worker & apiBase → api] → [cached → worker] → fire bg ensureTranslation → [apiBase → api] → [re-check cache → worker] → throw`. The API call is the network fallback when the worker DB is absent.
-- **Engagement prefetch** (`engagement.ts`): after `VIEWS_BEFORE_PREFETCH=2` reader views of a translation source, `whenIdle` (`requestIdleCallback`, 5s cap) triggers `ensureTranslation`. Gated by `navigator.connection.saveData` / `effectiveType 2g|slow-2g`. **One retry max** per source per tab (`retried` Set; cleared only by test-only `__resetEngagementState`).
+- **Engagement prefetch** (`engagement.ts`): after `VIEWS_BEFORE_PREFETCH=2` reader views of **any** source (Arabic views count toward the total — `bumpViews` runs before the Arabic early-return), `whenIdle` (`requestIdleCallback`, 5s cap) triggers `ensureTranslation` (translation sources only). Gated by `navigator.connection.saveData` / `effectiveType 2g|slow-2g`. **One retry max** per source per tab (`retried` Set; cleared only by test-only `__resetEngagementState`).
 - **`downloadBytes`** (`workers/download.ts`): bare `fetch`, `Accept-Encoding: identity`. **No timeout, no AbortController, no retry** — the one fetch in the subsystem not wrapped by `fetchWithTimeout`; a hung CDN connection can block a fire-and-forget `ensureTranslation` indefinitely.
 
 **Constants:** `FETCH_TIMEOUT_MS=3000`, `VIEWS_BEFORE_PREFETCH=2`, `whenIdle` cap 5000, `DEFAULT_TIMEOUT_MS=30000`, owner cache `CACHE_TTL_MS=3600000` (1h, caches fallback on failure too).
@@ -172,7 +174,7 @@ CATALOGUE (115 translations, 44 langs):
 
 `web/src/lib/server/quran-disk-cache.ts` + `web/src/hooks.server.ts:102` + `web/src/routes/health/quran/+server.ts`.
 
-`adapter-node` SSR HTML disk cache for **`/t/[lang]/[translator]/*` routes only**. Arabic `/app/*` stays prerendered/SSG and is never intercepted. `__data.json` is excluded (`isDataRequest`).
+`adapter-node` SSR HTML disk cache for **translated reader routes only** — the four route IDs whose `id` includes `/t/[lang]/[translator]`: `/app/[surah]/t/[lang]/[translator]`, `/app/[surah]/t/[lang]/[translator]/page/[localPage]`, `/app/t/[lang]/[translator]/page/[n]`, `/app/t/[lang]/[translator]/juz/[n]` (URLs like `/app/al-baqarah/t/en/sahih`, `/app/t/en/sahih/page/2`). The matcher is a route-id *substring* check (`id.includes("/t/[lang]/[translator]")`, `hooks.server.ts:13`), not a URL prefix, which is why the `/app/`-nested translation routes are caught. Arabic `/app/[surah]`, `/app/juz/[n]`, `/app/page/[n]` stay prerendered/SSG and produce a null cache key (never intercepted). `__data.json` is excluded (`isDataRequest`).
 
 **Key:** filename `<sanitized(diskCacheKey)>.html`, where `diskCacheKey = [build-${appBuildId}, sourceId, kind, String(a)[, String(b)]]` joined `__`, sanitized `/[^a-z0-9.-]+/gi → '_'`. `KINDS=['surah','page','juz']`. Example: `build-<id>__en.sahih__surah__2__1`. The `build-<appBuildId>` prefix namespaces disposable HTML per web build (so cached markup never points at removed assets) — **not** Quran versioning; `sourceId` carries Quran identity.
 
@@ -180,7 +182,7 @@ CATALOGUE (115 translations, 44 langs):
 
 **Eviction:** `#prune()` runs only on `set()` — reaps expired + orphan `.tmp` + oldest-survivors-by-mtime until ≤ budget. No background TTL sweeper. Atomic write via tmp+`fs.rename`. `get()` `fs.utimes`-touches hits (LRU recency).
 
-**Observability:** `Server-Timing: quran_ssr_cache;desc=hit|miss` + `X-EasyQuran-Quran-Cache: hit|miss` on every cacheable translated GET (hit and miss). `GET /health/quran` (web route) returns `{ready, appBuildId, translatedPageCache: {entries, bytes, hits, misses, writes, evictions, errors}}`, `no-store`.
+**Observability:** `Server-Timing: quran_ssr_cache;desc="hit"|desc="miss"` (quoted `desc` token) + `X-EasyQuran-Quran-Cache: hit|miss` on every cacheable translated GET (hit and miss). `GET /health/quran` (web route) returns `{ready, appBuildId, translatedPageCache: {entries, bytes, hits, misses, writes, evictions, errors}}`, `no-store`.
 
 **Medium:** Docker named volume `web_quran_cache` at `/app/cache/quran-ssr` (prod); `process.cwd()/.cache/quran-ssr` (dev). Single web container in compose → single writer.
 
@@ -200,7 +202,7 @@ Four subsystems. Arabic is always resident; translations are on-demand; HTTP res
 
 ### B1. Arabic boot-resident corpus (never evicted)
 
-`quran/loader.rs` + `quran/store.rs` + boot in `main.rs:436`.
+`quran/loader.rs` + `quran/store.rs` + boot in `main.rs` (load call `:438`, `Arc` wrap `:448`, `AppState` field `:512`; `exit(1)` on failure `:455`).
 
 Both Arabic scripts (`quran-uthmani.sqlite` = display, `quran-simple-clean.sqlite` = search corpus) load **once at boot** into a packed in-memory `Corpus { arena: Box<str>, offsets: Box<[u32]> }` — all verse text contiguous, O(1) `verse(g)` slice via `arena[offsets[g-1]..offsets[g]]`. Wrapped in `Arc<QuranStore>` in `AppState`, held for process lifetime.
 
@@ -216,12 +218,12 @@ Both Arabic scripts (`quran-uthmani.sqlite` = display, `quran-simple-clean.sqlit
 
 `quran/translation_pool.rs` + wiring in `state.rs:57`, `main.rs:459-492`, bounds in `config/settings.rs:136-165`.
 
-On-demand in-memory cache of translation `Corpus` (one per source id), served by `controller::source_surah` (`GET /sources/{id}/surah/{n}`) and `source_range` (`GET /sources/{id}/range`). Completely separate from the Arabic resident store.
+On-demand in-memory cache of translation `Corpus` (one per source id), served by `controller::source_surah` (`GET /quran/sources/{sourceId}/surah/{surah}`, handler `:1180`) and `source_range` (`GET /quran/sources/{sourceId}/range`, handler `:1222`) — the quran_v1 router is nested at `/quran` (`main.rs:694`). Completely separate from the Arabic resident store.
 
 **Cold build:** `get_or_build(id)` → `moka::future::Cache::try_get_with(id, init)` — **single-flight**: N concurrent cold requests for the same id coalesce into one build (test: 16 concurrent → `builds==1`). The `init` closure acquires a `BUILD_CONCURRENCY=2` semaphore permit (gates cold builds only; cached hits skip it), then `load_translation_corpus` (sqlite `read_only+immutable`, open→scan→close per cold build — no connection pooling). **No `std::sync` guard held across `.await`** (tokio `Semaphore` permit is `Send`), so handler futures stay `Send`.
 
 **Two-stage eviction (whichever trips first):**
-1. **moka count ceiling** — `max_capacity = max_resident_translations` (default 8), `time_to_idle = idle_ttl` (default 1800s).
+1. **moka count ceiling** — `max_capacity = max_resident_translations.max(1)` (default 8; the `.max(1)` floor guards a misconfigured 0), `time_to_idle = idle_ttl` (default 1800s).
 2. **byte ceiling** — enforced by a *separate serialized prune pass* (`enforce_byte_bound`, `prune_sem=1`): after each `get_or_build`, loop `run_pending_tasks → if resident_bytes > max → invalidate min-access-tick resident` until under bound. **There is no moka weigher** — the byte bound is after-the-fact, with transient overshoot bounded to ~2 concurrent builds.
 
 The async eviction listener decrements `resident_bytes`, and for `cause != Replaced` drops the `residents`-map entry + bumps `evictions` + records a timestamp (60s rolling window → `evictions_per_minute`).
@@ -244,7 +246,7 @@ The async eviction listener decrements `resident_bytes`, and for `cause != Repla
 
 `modules/quran_v1/cache.rs` + `controller.rs` + `cors.rs`.
 
-Stateless header-emission layer (no server-side response store). Every handler picks a `Cache-Control` family and stamps a weak ETag:
+Stateless header-emission layer (no server-side response store). Every content handler picks a `Cache-Control` family and stamps a weak ETag via `cache::respond_cached[_with_etag]` — the sole exception is `/health/ready`, which builds its response manually with `NO_STORE` and **no** ETag (`controller.rs:1019-1024`).
 
 ```
 weak_etag(tag, canonical_key) = W/"{tag}:{canonical_key}"
