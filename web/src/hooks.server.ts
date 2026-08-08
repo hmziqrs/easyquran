@@ -1,5 +1,6 @@
 import type { Handle, RequestEvent } from "@sveltejs/kit";
 import { translationIdFromSegments } from "$lib/data/quran";
+import { QURAN } from "$lib/config/site";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
 
@@ -25,7 +26,63 @@ function translationRouteCacheKey(event: RequestEvent): string | null {
   return diskCacheKey(sourceId, id.includes("/juz/") ? "juz" : "page", index);
 }
 
+function htmlLangForRoute(
+  id: string | null,
+  params: Record<string, string | undefined>,
+): string | null {
+  if (!id) return null;
+  if (id.includes("/t/[lang]/[translator]")) {
+    const lang = params.lang;
+    return lang && /^[a-zA-Z-]+$/.test(lang) ? lang : null;
+  }
+  if (
+    id.includes("/app/[surah]") ||
+    id.includes("/app/juz/") ||
+    id.includes("/app/page/")
+  ) {
+    return "ar";
+  }
+  return null;
+}
+
+function buildCsp(): string {
+  const api = QURAN.apiBase
+    ? QURAN.apiBase.endsWith("/")
+      ? QURAN.apiBase
+      : QURAN.apiBase + "/"
+    : "";
+  const connectSrc = [
+    "'self'",
+    "https://*.firebaseio.com",
+    "wss://*.firebaseio.com",
+    "https://firestore.googleapis.com",
+    "https://firebase.googleapis.com",
+    "https://firebaselogging-pa.googleapis.com",
+    "https://www.google-analytics.com",
+    "https://www.google.com",
+  ];
+  if (api) connectSrc.push(api);
+  if (import.meta.env.DEV) {
+    connectSrc.push("http://localhost:*", "ws://localhost:*", "wss://localhost:*");
+  }
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googletagmanager.com",
+    `connect-src ${connectSrc.join(" ")}`,
+    "worker-src 'self' blob:",
+    "img-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
 function applyHeaders(response: Response, pathname: string): void {
+  response.headers.set("Content-Security-Policy", buildCsp());
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   if (response.status >= 500) {
     response.headers.set("Cache-Control", "no-store");
   } else if (
@@ -46,6 +103,13 @@ export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
   const key = translationRouteCacheKey(event);
   const cacheable = event.request.method === "GET" && !event.isDataRequest && key !== null;
+  const langOverride = htmlLangForRoute(event.route.id, event.params);
+  const resolveOpts = langOverride
+    ? {
+        transformPageChunk: ({ html }: { html: string }) =>
+          html.replace(/<html([^>]*) lang="en"/, `<html$1 lang="${langOverride}"`),
+      }
+    : undefined;
 
   if (cacheable) {
     const hit = await getCachedHtml(key);
@@ -60,7 +124,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       applyHeaders(response, pathname);
       return response;
     }
-    const response = await resolve(event);
+    const response = await resolve(event, resolveOpts);
     const contentType = response.headers.get("content-type") ?? "";
     if (
       response.status === 200 &&
@@ -79,7 +143,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     return response;
   }
 
-  const response = await resolve(event);
+  const response = await resolve(event, resolveOpts);
   applyHeaders(response, pathname);
   return response;
 };

@@ -1,0 +1,209 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { MessagePayload } from "firebase/messaging";
+
+const { messaging, firebaseCore, analytics } = vi.hoisted(() => ({
+  messaging: {
+    getPermissionState: vi.fn<() => string>(),
+    isMessagingSupported: vi.fn<() => Promise<boolean>>(),
+    initMessaging: vi.fn<() => Promise<unknown>>(),
+    requestPermission: vi.fn<() => Promise<string>>(),
+    getFcmToken: vi.fn<() => Promise<string | null>>(),
+    registerTokenWithServer: vi.fn<() => Promise<boolean>>(),
+    unregisterTokenFromServer: vi.fn<() => Promise<boolean>>(),
+    deleteFcmToken: vi.fn<() => Promise<void>>(),
+    onForegroundMessage: vi.fn<(cb: (p: MessagePayload) => void) => Promise<unknown>>(),
+  },
+  firebaseCore: { isConfigured: true },
+  analytics: { track: vi.fn<() => void>() },
+}));
+
+vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$lib/firebase", () => firebaseCore);
+vi.mock("$lib/firebase/messaging", () => messaging);
+vi.mock("$lib/firebase/analytics", () => analytics);
+
+import { createNotifications } from "$lib/stores/notifications.svelte";
+
+const STORAGE_KEY = "easyquran.fcm";
+let foregroundCb: ((p: MessagePayload) => void) | undefined;
+
+function resetMocks(): void {
+  messaging.getPermissionState.mockReset();
+  messaging.isMessagingSupported.mockReset();
+  messaging.initMessaging.mockReset();
+  messaging.requestPermission.mockReset();
+  messaging.getFcmToken.mockReset();
+  messaging.registerTokenWithServer.mockReset();
+  messaging.unregisterTokenFromServer.mockReset();
+  messaging.deleteFcmToken.mockReset();
+  messaging.onForegroundMessage.mockReset();
+  analytics.track.mockReset();
+  messaging.getPermissionState.mockReturnValue("granted");
+  messaging.isMessagingSupported.mockResolvedValue(true);
+  messaging.initMessaging.mockResolvedValue(null);
+  messaging.requestPermission.mockResolvedValue("granted");
+  messaging.getFcmToken.mockResolvedValue("token-xyz");
+  messaging.registerTokenWithServer.mockResolvedValue(true);
+  messaging.unregisterTokenFromServer.mockResolvedValue(true);
+  messaging.deleteFcmToken.mockResolvedValue(undefined);
+  messaging.onForegroundMessage.mockImplementation((cb) => {
+    foregroundCb = cb;
+    return Promise.resolve(() => {});
+  });
+  foregroundCb = undefined;
+}
+
+async function flush(count = 10): Promise<void> {
+  for (let i = 0; i < count; i++) await Promise.resolve();
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+  resetMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("NotificationsStore.subscribe guards", () => {
+  it("returns false and skips getFcmToken when subscribe is already busy", async () => {
+    const store = createNotifications();
+    let releasePermission: (value: string) => void = () => {};
+    messaging.requestPermission.mockReturnValue(
+      new Promise<string>((resolve) => {
+        releasePermission = resolve;
+      }),
+    );
+    const first = store.subscribe();
+    await flush();
+    const second = await store.subscribe();
+    expect(second).toBe(false);
+    expect(messaging.getFcmToken).not.toHaveBeenCalled();
+    releasePermission("granted");
+    await first;
+  });
+
+  it("returns false without registering when permission is denied", async () => {
+    messaging.requestPermission.mockResolvedValue("denied");
+    const store = createNotifications();
+    const result = await store.subscribe();
+    expect(result).toBe(false);
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+    expect(store.subscribed).toBe(false);
+  });
+});
+
+describe("NotificationsStore.subscribe happy path", () => {
+  it("registers the token, flips subscribed, and persists the record", async () => {
+    messaging.getFcmToken.mockResolvedValue("abc-123");
+    const store = createNotifications();
+    const result = await store.subscribe();
+    expect(result).toBe(true);
+    expect(messaging.registerTokenWithServer).toHaveBeenCalledWith("abc-123");
+    expect(store.subscribed).toBe(true);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    expect(stored).toEqual({ token: "abc-123", subscribed: true });
+  });
+});
+
+describe("NotificationsStore #refreshToken dedup", () => {
+  it("shares a single getFcmToken call across concurrent refresh triggers", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true }),
+    );
+    let release: (value: string | null) => void = () => {};
+    messaging.getFcmToken.mockReturnValue(
+      new Promise<string | null>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+    expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
+    release("new-token");
+    await flush();
+  });
+});
+
+describe("NotificationsStore generation race-guard", () => {
+  it("does not register the stale token after unsubscribe bumps the generation", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true }),
+    );
+    let release: (value: string | null) => void = () => {};
+    messaging.getFcmToken.mockReturnValue(
+      new Promise<string | null>((resolve) => {
+        release = resolve;
+      }),
+    );
+    messaging.unregisterTokenFromServer.mockResolvedValue(true);
+    messaging.deleteFcmToken.mockResolvedValue(undefined);
+
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+
+    expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
+    const unsub = store.unsubscribe();
+    await flush();
+    release("new-token");
+    await unsub;
+    await flush();
+
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+    expect(store.subscribed).toBe(false);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    expect(stored).toEqual({ token: null, subscribed: false });
+  });
+});
+
+describe("NotificationsStore foreground message", () => {
+  it("exposes the foreground payload and bumps the sequence counter", async () => {
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+    expect(foregroundCb).toBeTypeOf("function");
+    const before = store.messageSeq;
+    foregroundCb?.({ messageId: "msg-1" } as unknown as MessagePayload);
+    expect(store.lastMessage).toMatchObject({ messageId: "msg-1" });
+    expect(store.messageSeq).toBe(before + 1);
+  });
+
+  it("clearMessage nulls the last message", async () => {
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+    foregroundCb?.({ messageId: "msg-2" } as unknown as MessagePayload);
+    expect(store.lastMessage).not.toBeNull();
+    store.clearMessage();
+    expect(store.lastMessage).toBeNull();
+  });
+});
+
+describe("NotificationsStore.syncPermission", () => {
+  it("revokes subscription when permission has flipped to denied", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "tok", subscribed: true }),
+    );
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+    expect(store.subscribed).toBe(true);
+
+    messaging.getPermissionState.mockReturnValue("denied");
+    store.syncPermission();
+
+    expect(store.subscribed).toBe(false);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    expect(stored).toEqual({ token: null, subscribed: false });
+  });
+});

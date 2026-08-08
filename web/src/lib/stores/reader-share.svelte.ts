@@ -2,13 +2,13 @@ import { browser } from "$app/environment";
 import { parseKey, type VerseKey } from "$lib/data/quran";
 import { peekQuranData } from "$lib/data/quran-data-client";
 
-export function verseRef(key: VerseKey): string {
+function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);
   const name = peekQuranData()?.surahByNum(num)?.name ?? `Surah ${num}`;
   return `${name} ${num}:${n}`;
 }
 
-export function verseShareText(key: VerseKey, text: string): string {
+function verseShareText(key: VerseKey, text: string): string {
   return `${text}\n${verseRef(key)}`;
 }
 

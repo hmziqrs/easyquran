@@ -37,14 +37,29 @@ function decodeMirror(raw: unknown): PackMirror | null {
   return { packId: obj.packId, entries: obj.entries, bytes: obj.bytes, savedAt: obj.savedAt };
 }
 
+function decodeOfflineManifest(raw: unknown): OfflineManifest | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.pack !== "string") return null;
+  if (typeof o.bytes !== "number" || !Number.isFinite(o.bytes as number)) return null;
+  if (typeof o.entries !== "number" || !Number.isFinite(o.entries as number)) return null;
+  return {
+    pack: o.pack,
+    bytes: o.bytes as number,
+    entries: o.entries as number,
+    ...(typeof o.appVersion === "string" ? { appVersion: o.appVersion } : {}),
+  };
+}
+
 class OfflineStore {
   #status = $state<OfflineStatus>("idle");
   #progress = $state(0);
   #usage = $state<number | null>(null);
   #quota = $state<number | null>(null);
-  #activePack = $state<PackMirror | null>(null);
+  #activePack = $state.raw<PackMirror | null>(null);
   #busy = $state(false);
   #hydrated = false;
+  #reconcilePending = false;
 
   get status(): OfflineStatus {
     return this.#status;
@@ -121,14 +136,25 @@ class OfflineStore {
       return;
     }
     const cacheName = `eq-pack-${active.packId}`;
-    let intact = false;
+    let state: "unknown" | "intact" | "incomplete" = "unknown";
     try {
-      if (await caches.has(cacheName)) {
+      state = (await caches.has(cacheName)) ? "intact" : "incomplete";
+      if (state === "intact") {
         const staged = await caches.open(cacheName);
-        intact = (await staged.keys()).length === active.entries;
+        if ((await staged.keys()).length !== active.entries) state = "incomplete";
       }
     } catch {}
-    if (!intact) {
+    if (state === "unknown") {
+      if (!this.#reconcilePending) {
+        this.#reconcilePending = true;
+        setTimeout(() => {
+          this.#reconcilePending = false;
+          void this.#reconcile();
+        }, 30_000);
+      }
+      return;
+    }
+    if (state === "incomplete") {
       await clearActivePack().catch(() => {});
       await caches.delete(cacheName).catch(() => {});
       this.#activePack = null;
@@ -148,7 +174,8 @@ class OfflineStore {
     try {
       const response = await fetch("/offline/manifest.json", { cache: "no-store" });
       if (!response.ok) return;
-      const manifest = (await response.json()) as OfflineManifest;
+      const manifest = decodeOfflineManifest(await response.json());
+      if (!manifest) return;
       const packId = extractPackId(manifest.pack);
       if (packId && this.#activePack && packId !== this.#activePack.packId) void this.enable();
     } catch {}
@@ -162,7 +189,8 @@ class OfflineStore {
     try {
       const manifestResponse = await fetch("/offline/manifest.json", { cache: "no-store" });
       if (!manifestResponse.ok) throw new Error(`manifest ${manifestResponse.status}`);
-      const manifest = (await manifestResponse.json()) as OfflineManifest;
+      const manifest = decodeOfflineManifest(await manifestResponse.json());
+      if (!manifest) throw new Error("manifest malformed");
       targetPackId = extractPackId(manifest.pack);
       if (!targetPackId) throw new Error("manifest missing pack id");
       const totalBytes = manifest.bytes;

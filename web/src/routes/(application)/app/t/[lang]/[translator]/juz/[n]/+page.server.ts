@@ -10,6 +10,8 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     throw error(404, `Unknown juz: ${params.n}`);
   }
   const data = await loadTranslationRangeData("juz", index, params.lang, params.translator, fetch);
-  if (data.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  if (data.ayahs.length === 0) {
+    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
+  }
   return data;
 };

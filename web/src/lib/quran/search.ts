@@ -56,13 +56,16 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
   if (quranWorker.ready) {
     try {
       return await quranWorker.search(query, opts, validateCoordinate);
-    } catch {}
+    } catch (e) {
+      console.warn("[quran-search] worker failed, degrading:", e);
+    }
   }
 
   if (QURAN.apiBase) {
     try {
       return await quranApi.search(query, opts);
-    } catch {
+    } catch (e) {
+      console.warn("[quran-search] api failed, degrading:", e);
     }
   }
 

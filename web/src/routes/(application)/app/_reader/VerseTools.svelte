@@ -7,6 +7,8 @@
   import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
 
+  const COPY_FEEDBACK_MS = 1500;
+
   let {
     text,
     vKey,
@@ -29,7 +31,7 @@
     if (!ok || !mounted) return;
     copied = true;
     if (copyTimer) clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => (copied = false), 1500);
+    copyTimer = setTimeout(() => (copied = false), COPY_FEEDBACK_MS);
   }
 
   async function onShare() {
@@ -37,7 +39,7 @@
     if (result !== "copied" || !mounted) return;
     sharedCopied = true;
     if (shareTimer) clearTimeout(shareTimer);
-    shareTimer = setTimeout(() => (sharedCopied = false), 1500);
+    shareTimer = setTimeout(() => (sharedCopied = false), COPY_FEEDBACK_MS);
   }
 
   function onNote(event: Event) {

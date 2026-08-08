@@ -127,33 +127,26 @@ export async function onForegroundMessage(
   };
 }
 
-export async function registerTokenWithServer(token: string): Promise<boolean> {
+async function postDeviceEndpoint(path: string, body: Record<string, unknown>): Promise<boolean> {
   if (!API_BASE_URL) return false;
   try {
-    const res = await fetch(`${API_BASE_URL}/device/v1/register`, {
+    const res = await fetch(`${API_BASE_URL}/device/v1/${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ token, platform: "web" }),
+      body: JSON.stringify(body),
     });
     return res.ok;
   } catch (err) {
-    console.warn("[firebase] device register failed:", err);
+    console.warn(`[firebase] device ${path} failed:`, err);
     return false;
   }
 }
 
-export async function unregisterTokenFromServer(token: string): Promise<boolean> {
-  if (!API_BASE_URL) return false;
-  try {
-    const res = await fetch(`${API_BASE_URL}/device/v1/delete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ token }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+export function registerTokenWithServer(token: string): Promise<boolean> {
+  return postDeviceEndpoint("register", { token, platform: "web" });
+}
+
+export function unregisterTokenFromServer(token: string): Promise<boolean> {
+  return postDeviceEndpoint("delete", { token });
 }

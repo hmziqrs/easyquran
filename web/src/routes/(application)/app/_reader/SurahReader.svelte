@@ -132,12 +132,10 @@
     return (node) => {
       let lastTotalHeight = 0;
       const measure = () => {
-        const totalHeight = node.getBoundingClientRect().height;
-        heightCache.save(
-          localPage,
-          stablePageHeight(node),
-          readerPages?.getBoundingClientRect().width ?? node.getBoundingClientRect().width,
-        );
+        const rect = node.getBoundingClientRect();
+        const parentWidth = readerPages?.getBoundingClientRect().width ?? rect.width;
+        const totalHeight = rect.height;
+        heightCache.save(localPage, stablePageHeight(node, rect), parentWidth);
         if (
           lastTotalHeight > 0 &&
           Math.abs(totalHeight - lastTotalHeight) > 1 &&
@@ -145,8 +143,8 @@
           !suppressScroll &&
           !layoutRepairPending &&
           stableAnchor &&
-          node.getBoundingClientRect().bottom > 0 &&
-          node.getBoundingClientRect().top < window.innerHeight
+          rect.bottom > 0 &&
+          rect.top < window.innerHeight
         ) {
           layoutRepairPending = true;
           void preserveViewportFrom(stableAnchor, () => undefined, true).finally(() => {
@@ -663,7 +661,7 @@
     >
       <Icon name="play" size={15} class="flex-none text-accent" />
       <span class="text-sm text-accent">Continue reading — {reader.lastReadRef}</span>
-      <span class="ml-auto text-[13px] text-accent/75">Jump →</span>
+      <span class="ml-auto text-[13px] text-accent/75">Jump <span aria-hidden="true">→</span></span>
     </button>
   {/if}
 
@@ -677,7 +675,7 @@
       onBigger={() => changeFontSize(() => reader.bigger())}
     />
 
-    <div {@attach captureReaderPages} class="reader-pages" data-reader-mode={reader.mode} tabindex="-1">
+    <div {@attach captureReaderPages} class="reader-pages" tabindex="-1">
       <TooltipProvider delayDuration={300}>
         {#each pages as pageData (pageData.page.localPage)}
           {#if renderedPageNumbers.has(pageData.page.localPage)}
@@ -780,24 +778,20 @@
     flex-direction: column;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-page,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-page {
     border-bottom: 1px solid var(--line);
     padding: 2rem 1.25rem;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-page:last-child,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
     border-bottom: 0;
   }
 
-  .reader-pages[data-reader-mode="reading"] .surah-opener,
-  :global(html[data-reader-mode="reading"]) .reader-pages .surah-opener {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-opener {
     padding-top: 0;
   }
 
-  .reader-pages[data-reader-mode="reading"] .ayah-list,
-  :global(html[data-reader-mode="reading"]) .reader-pages .ayah-list {
+  :global([data-reader-mode="reading"]) .reader-pages .ayah-list {
     display: block;
     direction: rtl;
     text-align: justify;
@@ -816,8 +810,7 @@
   }
 
   @media (min-width: 640px) {
-    .reader-pages[data-reader-mode="reading"] .surah-page,
-    :global(html[data-reader-mode="reading"]) .reader-pages .surah-page {
+    :global([data-reader-mode="reading"]) .reader-pages .surah-page {
       padding-inline: 2.25rem;
     }
   }

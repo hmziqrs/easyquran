@@ -77,8 +77,6 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/contact", label: "Contact" },
 ];
 
-export const APP_PAGES: SitePage<AppPageId>[] = [{ id: "app", href: "/app", label: "Read" }];
-
 export const PAGE_META: Record<PageId, { title: string; description: string; path: string }> = {
   home: {
     title: "EasyQuran · the Quran, made easy to read",

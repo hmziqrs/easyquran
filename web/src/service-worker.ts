@@ -2,13 +2,17 @@
 /// <reference lib="webworker" />
 
 import { base, build, files, version } from "$service-worker";
+import {
+  SKIP_WAITING,
+  APP_READY,
+  UPDATE_TAKEOVER,
+  SW_BROADCAST_CHANNEL,
+  type ClientToSwMessage,
+  type SwToClientMessage,
+} from "./lib/offline/messages";
+import { openIdb, idbGet, idbPut, idbDelete } from "./lib/workers/idb";
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
-
-const SKIP_WAITING = "SKIP_WAITING";
-const APP_READY = "APP_READY";
-const UPDATE_TAKEOVER = "UPDATE_TAKEOVER";
-const SW_BROADCAST_CHANNEL = "easyquran-sw";
 
 const APP_CACHE = `eq-app-${version}`;
 const PAGES_CACHE = "eq-pages-v1";
@@ -45,38 +49,16 @@ function isCacheable(res: Response): boolean {
   return true;
 }
 
-let dbPromise: Promise<IDBDatabase> | null = null;
 let dbAvailable = true;
-
-function openMetaDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(META_DB, 1);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(META_STORE)) {
-        database.createObjectStore(META_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
 
 function db(): Promise<IDBDatabase> {
   if (!dbAvailable) return Promise.reject(new Error("idb unavailable"));
-  dbPromise ??= openMetaDB();
-  return dbPromise;
+  return openIdb(META_DB, META_STORE);
 }
 
 async function metaGet<T>(key: string): Promise<T | undefined> {
   try {
-    const database = await db();
-    return await new Promise<T | undefined>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readonly");
-      const request = tx.objectStore(META_STORE).get(key);
-      request.onsuccess = () => resolve(request.result as T | undefined);
-      request.onerror = () => reject(request.error);
-    });
+    return await idbGet<T>(await db(), META_STORE, key);
   } catch {
     return undefined;
   }
@@ -84,13 +66,7 @@ async function metaGet<T>(key: string): Promise<T | undefined> {
 
 async function metaSet(key: string, value: unknown): Promise<void> {
   try {
-    const database = await db();
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbPut(await db(), META_STORE, value, key);
   } catch {
     dbAvailable = false;
   }
@@ -98,13 +74,7 @@ async function metaSet(key: string, value: unknown): Promise<void> {
 
 async function metaDel(key: string): Promise<void> {
   try {
-    const database = await db();
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbDelete(await db(), META_STORE, key);
   } catch {
     dbAvailable = false;
   }
@@ -131,9 +101,7 @@ async function metaScan<T>(prefix: string): Promise<Record<string, T>> {
       };
       request.onerror = () => reject(request.error);
     });
-  } catch {
-    dbAvailable = false;
-  }
+  } catch {}
   return out;
 }
 
@@ -207,14 +175,14 @@ async function activate(): Promise<void> {
   const priorExisted = keys.some((k) => k.startsWith("eq-app-") && k !== APP_CACHE);
   const prev = await metaGet<string>("installedVersion");
   if (prev && prev !== version) {
-    await metaSet("maintenance", { cursor: null });
+    await setCursor(null);
   }
   await metaSet("installedVersion", version);
   if (priorExisted) announceTakeover();
 }
 
 function announceTakeover(): void {
-  const message = { type: UPDATE_TAKEOVER, version };
+  const message: SwToClientMessage = { type: UPDATE_TAKEOVER, version };
   void sw.clients
     .matchAll({ includeUncontrolled: true })
     .then((clients) => {
@@ -229,15 +197,20 @@ function announceTakeover(): void {
   }
 }
 
+function isClientToSw(m: unknown): m is ClientToSwMessage {
+  return !!m && typeof m === "object" && typeof (m as { type?: unknown }).type === "string";
+}
+
 sw.addEventListener("message", (event) => {
+  if (!isClientToSw(event.data)) return;
   const data = event.data;
-  if (!data || typeof data.type !== "string") return;
-  if (data.type === SKIP_WAITING) {
-    void sw.skipWaiting();
-    return;
-  }
-  if (data.type === APP_READY) {
-    void onAppReady(event.source as Client | null);
+  switch (data.type) {
+    case SKIP_WAITING:
+      void sw.skipWaiting();
+      return;
+    case APP_READY:
+      void onAppReady(event.source as Client | null);
+      return;
   }
 });
 
@@ -267,9 +240,7 @@ async function maybeFinalizeHandoff(): Promise<void> {
 async function pruneOldAppCaches(): Promise<void> {
   const keys = await caches.keys();
   await Promise.all(
-    keys
-      .filter((k) => k.startsWith("eq-app-") && k !== APP_CACHE)
-      .map((k) => caches.delete(k)),
+    keys.filter((k) => k.startsWith("eq-app-") && k !== APP_CACHE).map((k) => caches.delete(k)),
   );
 }
 
@@ -439,52 +410,82 @@ async function touchRecency(rawUrl: string): Promise<void> {
 
 let maintenanceInFlight = false;
 
+type MaintenanceCursor =
+  | { stage: "pages"; offset: number }
+  | { stage: "data"; offset: number }
+  | { stage: "trim" }
+  | { stage: "done" }
+  | null;
+
+async function setCursor(cursor: MaintenanceCursor): Promise<void> {
+  await metaSet("maintenance", { cursor });
+}
+
+function normalizeCursor(raw: unknown): MaintenanceCursor {
+  if (raw && typeof raw === "object") {
+    const c = raw as { stage?: unknown; offset?: unknown };
+    if (c.stage === "trim") return { stage: "trim" };
+    if (c.stage === "done") return { stage: "done" };
+    if ((c.stage === "pages" || c.stage === "data") && typeof c.offset === "number") {
+      return { stage: c.stage, offset: c.offset };
+    }
+  }
+  return null;
+}
+
 async function runMaintenance(): Promise<void> {
   if (maintenanceInFlight) return;
   maintenanceInFlight = true;
   try {
-    const meta = (await metaGet<{ cursor: string | null }>("maintenance")) || {
-      cursor: null,
-    };
-    let cursor = meta.cursor;
+    const meta = await metaGet<{ cursor: unknown }>("maintenance");
+    let cursor: MaintenanceCursor = normalizeCursor(meta?.cursor);
     let successes = 0;
     let attempted = 0;
     for (;;) {
-      if (cursor === "done") {
-        await metaSet("maintenance", { cursor: "done" });
-        return;
-      }
-      if (cursor == null || cursor.startsWith("pages:")) {
-        const start = cursor ? Number(cursor.slice("pages:".length)) || 0 : 0;
-        const r = await revalidateCache(PAGES_CACHE, start, "pages");
+      if (cursor === null) {
+        const r = await revalidateCache(PAGES_CACHE, 0, "pages");
         successes += r.successes;
         attempted += r.attempted;
-        cursor = "data:0";
-        await metaSet("maintenance", { cursor: "data:0" });
+        cursor = { stage: "data", offset: 0 };
+        await setCursor(cursor);
         continue;
       }
-      if (cursor.startsWith("data:")) {
-        const start = Number(cursor.slice("data:".length)) || 0;
-        const r = await revalidateCache(DATA_CACHE, start, "data");
-        successes += r.successes;
-        attempted += r.attempted;
-        cursor = "trim:0";
-        await metaSet("maintenance", { cursor: "trim:0" });
-        continue;
-      }
-      if (cursor.startsWith("trim:")) {
-        await trimPages();
-        if (attempted > 0 && successes === 0) {
-          await metaSet("maintenance", { cursor: null });
+      switch (cursor.stage) {
+        case "pages": {
+          const r = await revalidateCache(PAGES_CACHE, cursor.offset, "pages");
+          successes += r.successes;
+          attempted += r.attempted;
+          cursor = { stage: "data", offset: 0 };
+          await setCursor(cursor);
+          continue;
+        }
+        case "data": {
+          const r = await revalidateCache(DATA_CACHE, cursor.offset, "data");
+          successes += r.successes;
+          attempted += r.attempted;
+          cursor = { stage: "trim" };
+          await setCursor(cursor);
+          continue;
+        }
+        case "trim": {
+          await trimPages();
+          if (attempted > 0 && successes === 0) {
+            await setCursor(null);
+            return;
+          }
+          cursor = { stage: "done" };
+          await setCursor(cursor);
+          continue;
+        }
+        case "done": {
           return;
         }
-        cursor = "done";
-        await metaSet("maintenance", { cursor: "done" });
-        continue;
+        default: {
+          const _: never = cursor;
+          void _;
+          return;
+        }
       }
-      cursor = "done";
-      await metaSet("maintenance", { cursor: "done" });
-      return;
     }
   } finally {
     maintenanceInFlight = false;
@@ -494,7 +495,7 @@ async function runMaintenance(): Promise<void> {
 async function revalidateCache(
   cacheName: string,
   start: number,
-  tag: string,
+  stage: "pages" | "data",
 ): Promise<{ successes: number; attempted: number }> {
   const cache = await caches.open(cacheName);
   const all = await cache.keys();
@@ -516,7 +517,7 @@ async function revalidateCache(
     if (ok) successes++;
     done.add(item.idx);
     while (done.has(contiguous)) contiguous++;
-    await metaSet("maintenance", { cursor: `${tag}:${contiguous}` });
+    await setCursor({ stage, offset: contiguous });
   });
   return { successes, attempted: slice.length };
 }
@@ -541,6 +542,17 @@ async function trimPages(): Promise<void> {
   await metaSet("recency", nextRecency);
 }
 
+function safeTarget(raw: unknown): string {
+  if (typeof raw !== "string" || raw.length === 0) return "/";
+  try {
+    const u = new URL(raw, sw.location.origin);
+    if (u.origin !== sw.location.origin) return "/";
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
 interface PushPayload {
   notification?: { title?: string; body?: string };
   data?: Record<string, string>;
@@ -557,7 +569,7 @@ sw.addEventListener("push", (event) => {
   const data = payload.data || {};
   const title = n.title || data.title || "EasyQuran";
   const body = n.body || data.body || "";
-  const url = data.url || "/";
+  const url = safeTarget(data.url);
   event.waitUntil(
     sw.registration.showNotification(title, {
       body,
@@ -571,7 +583,7 @@ sw.addEventListener("push", (event) => {
 
 sw.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target: string = event.notification?.data?.url || "/";
+  const target: string = safeTarget(event.notification?.data?.url);
   event.waitUntil(
     (async () => {
       const all = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });

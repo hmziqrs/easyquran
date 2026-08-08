@@ -9,11 +9,7 @@ import {
   buildCanonicalSearchCorpus,
   searchCanonicalCorpus,
 } from "../src/lib/quran/search/corpus.ts";
-import {
-  DEFAULT_LIMIT,
-  normalizeArabic,
-  scalarLength,
-} from "../src/lib/quran/search/normalize.ts";
+import { DEFAULT_LIMIT, normalizeArabic, scalarLength } from "../src/lib/quran/search/normalize.ts";
 import { SearchHitKind } from "../src/lib/quran/search/types.ts";
 import { registeredSourceProfiles, sourceProfile } from "../src/lib/quran/view/source-profiles.ts";
 import { scalarSlice } from "../src/lib/quran/view/source-view.ts";
@@ -104,10 +100,7 @@ const sourceViews = [...loadedSources.values()].map((source) => {
 
 mkdirSync(path.dirname(SEARCH_OUT), { recursive: true });
 mkdirSync(path.dirname(VIEW_OUT), { recursive: true });
-writeFileSync(
-  SEARCH_OUT,
-  JSON.stringify({ fixtures }, null, 2) + "\n",
-);
+writeFileSync(SEARCH_OUT, JSON.stringify({ fixtures }, null, 2) + "\n");
 writeFileSync(VIEW_OUT, JSON.stringify({ sources: sourceViews }, null, 2) + "\n");
 console.log(
   `wrote ${SEARCH_OUT}\nwrote ${VIEW_OUT}\n  ` +

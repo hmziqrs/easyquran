@@ -1,5 +1,6 @@
 import type { SourceCatalogueEntry, TranslationCatalogueEntry } from "$lib/data/quran-types";
 import { deleteCachedArtifact, listCachedArtifacts } from "./opfs-cache";
+import { idbDelete, idbPut, openIdb } from "./idb";
 
 const META_DB = "easyquran-meta";
 const META_STORE = "lastUsed";
@@ -8,51 +9,22 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CAP_COUNT = 12;
 const CAP_BYTES = 128 * 1024 * 1024;
 
-let metaDbPromise: Promise<IDBDatabase> | null = null;
-
-function openMeta(): Promise<IDBDatabase> {
-  if (!metaDbPromise) {
-    metaDbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(META_DB, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE);
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  return metaDbPromise;
-}
-
 export async function stampLastUsed(id: string, when: number = Date.now()): Promise<void> {
   try {
-    const db = await openMeta();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).put(when, id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbPut(await openIdb(META_DB, META_STORE), META_STORE, when, id);
   } catch {}
 }
 
 async function clearLastUsed(id: string): Promise<void> {
   try {
-    const db = await openMeta();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(META_STORE, "readwrite");
-      tx.objectStore(META_STORE).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await idbDelete(await openIdb(META_DB, META_STORE), META_STORE, id);
   } catch {}
 }
 
 async function readLastUsedMap(): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   try {
-    const db = await openMeta();
+    const db = await openIdb(META_DB, META_STORE);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(META_STORE, "readonly");
       const req = tx.objectStore(META_STORE).openCursor();

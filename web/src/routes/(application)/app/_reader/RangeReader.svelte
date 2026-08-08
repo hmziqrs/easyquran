@@ -10,7 +10,7 @@
     surahPathFor,
     translationIdFromSegments,
   } from "$lib/data/quran";
-  import { noteReaderView } from "$lib/quran/engagement";
+  import { trackReaderView } from "$lib/quran/track-view.svelte";
   import VerseRow from "./VerseRow.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { RangePageData } from "$lib/data/quran-types";
@@ -27,16 +27,11 @@
 
   const ctx = $derived(routeContextFromParams(page.params));
 
-  // From route params, not the payload: a failed translation fetch ships an
-  // empty `normalizations`, and that is exactly when the local DB matters.
   const rangeSourceId = $derived(
     ctx.kind === SourceKind.Arabic ? null : translationIdFromSegments(ctx.lang, ctx.translator),
   );
   const viewKey = $derived(`${rangeSourceId}:${data.kind}:${data.index}`);
-  $effect(() => {
-    void viewKey;
-    void noteReaderView(rangeSourceId);
-  });
+  trackReaderView({ key: () => viewKey, sourceId: () => rangeSourceId });
 
   function openSurah(num: number): void {
     void goto(resolve(surahPathFor(ctx, surahByNum(num))));

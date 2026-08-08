@@ -5,8 +5,8 @@
   import {
     SourceKind,
     surahLocalPagePathFor,
-    translationGlobalPagePath,
-    translationJuzPath,
+    globalPagePathFor,
+    juzPathFor,
     translationIdFromSegments,
     translationSegmentsFromId,
     type SurahRouteContext,
@@ -66,15 +66,10 @@
 
   function hrefFor(pos: Position, target: Target): `/app/${string}` | null {
     if (!pos) return null;
-    if (pos.kind === "surah")
-      return surahLocalPagePathFor(ctxFor(target), pos.slug, pos.localPage);
-    if (target === SourceKind.Arabic) {
-      if (pos.kind === "globalPage") return `/app/page/${pos.n}`;
-      return `/app/juz/${pos.n}`;
-    }
-    if (pos.kind === "globalPage")
-      return translationGlobalPagePath(target.lang, target.translator, pos.n);
-    return translationJuzPath(target.lang, target.translator, pos.n);
+    const ctx = ctxFor(target);
+    if (pos.kind === "surah") return surahLocalPagePathFor(ctx, pos.slug, pos.localPage);
+    if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
+    return juzPathFor(ctx, pos.n);
   }
 
   const sidebar = useSidebar();

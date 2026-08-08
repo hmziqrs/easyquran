@@ -73,7 +73,7 @@
         </button>
       </div>
 
-      <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" aria-label="Reading mode">
+      <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" role="group" aria-label="Reading mode">
         <button
           type="button"
           aria-pressed={reader.isVerseMode}

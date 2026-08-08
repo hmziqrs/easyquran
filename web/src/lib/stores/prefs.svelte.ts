@@ -8,6 +8,7 @@ import {
   type ThemeMode,
 } from "$lib/config/site";
 import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
+import { asLiteral, asObject, readJSON, writeJSON } from "$lib/storage";
 
 const STORAGE_KEY = "easyquran.prefs";
 
@@ -46,8 +47,8 @@ const isHex = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{
 
 function cleanCustom(raw: unknown): CustomSeeds {
   const out: CustomSeeds = {};
-  if (!raw || typeof raw !== "object") return out;
-  const c = raw as Record<string, unknown>;
+  const c = asObject(raw);
+  if (!c) return out;
   if (isHex(c.bg)) out.bg = c.bg;
   if (isHex(c.accent)) out.accent = c.accent;
   if (isHex(c.pop)) out.pop = c.pop;
@@ -57,17 +58,15 @@ function cleanCustom(raw: unknown): CustomSeeds {
 function load(): Prefs {
   const base: Prefs = { ...DEFAULTS, custom: {} };
   if (!browser) return base;
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return {
-      theme: stored?.theme === "dark" || stored?.theme === "light" ? stored.theme : base.theme,
-      surface: SURFACES.some((s) => s.id === stored?.surface) ? stored.surface : base.surface,
-      accent: ACCENTS.some((a) => a.id === stored?.accent) ? stored.accent : base.accent,
-      custom: cleanCustom(stored?.custom),
-    };
-  } catch {
-    return base;
-  }
+  const stored = asObject(readJSON(STORAGE_KEY));
+  const surface = stored?.surface;
+  const accent = stored?.accent;
+  return {
+    theme: asLiteral(stored?.theme, ["dark", "light"] as const) ?? base.theme,
+    surface: SURFACES.some((s) => s.id === surface) ? (surface as SurfaceId) : base.surface,
+    accent: ACCENTS.some((a) => a.id === accent) ? (accent as AccentId) : base.accent,
+    custom: cleanCustom(stored?.custom),
+  };
 }
 
 class PrefsStore {
@@ -129,9 +128,7 @@ class PrefsStore {
   set(patch: PrefPatch): void {
     this.#prefs = { ...this.#prefs, ...patch };
     if (browser) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#prefs));
-      } catch {}
+      writeJSON(STORAGE_KEY, this.#prefs);
       this.apply();
       window.dispatchEvent(new CustomEvent("easyquran:pref", { detail: patch }));
     }

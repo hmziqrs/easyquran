@@ -1,4 +1,5 @@
 import type { SurahLocalPageData } from "$lib/data/quran";
+import { asObject, readRaw, writeRaw } from "$lib/storage";
 import type { ViewportAnchor } from "./viewport-anchor";
 
 export interface SurahReaderHistoryState {
@@ -17,33 +18,68 @@ export function currentUrlLocalPage(): number {
 }
 
 export function persistReaderPosition(snapshot: SurahReaderHistoryState): void {
-  try {
-    sessionStorage.setItem(
-      readerPositionKey,
-      JSON.stringify({
-        version: snapshot.version,
-        surahNum: snapshot.surahNum,
-        activeLocalPage: snapshot.activeLocalPage,
-        anchor: snapshot.anchor,
-      }),
-    );
-  } catch {}
+  writeRaw(
+    "session",
+    readerPositionKey,
+    JSON.stringify({
+      version: snapshot.version,
+      surahNum: snapshot.surahNum,
+      activeLocalPage: snapshot.activeLocalPage,
+      anchor: snapshot.anchor,
+    }),
+  );
+}
+
+function validateAnchor(raw: unknown): ViewportAnchor | null {
+  const obj = asObject(raw);
+  if (!obj) return null;
+  const { localPage, ratio, viewportPoint } = obj;
+  if (
+    typeof localPage !== "number" ||
+    !Number.isSafeInteger(localPage) ||
+    typeof ratio !== "number" ||
+    !Number.isFinite(ratio) ||
+    typeof viewportPoint !== "number" ||
+    !Number.isFinite(viewportPoint)
+  ) {
+    return null;
+  }
+  if (obj.kind === "verse") {
+    if (typeof obj.verseKey !== "string") return null;
+    return { kind: "verse", localPage, verseKey: obj.verseKey, viewportPoint, ratio };
+  }
+  if (obj.kind === "page") {
+    return { kind: "page", localPage, viewportPoint, ratio };
+  }
+  return null;
 }
 
 export function parseHistoryState(
   value: unknown,
   surahNum: number,
 ): SurahReaderHistoryState | null {
-  if (!value || typeof value !== "object") return null;
-  const state = value as Partial<SurahReaderHistoryState>;
+  const state = asObject(value);
+  if (!state) return null;
+  const activeLocalPage = currentUrlLocalPage();
   if (
     state.version === 1 &&
     state.surahNum === surahNum &&
-    state.activeLocalPage === currentUrlLocalPage() &&
-    Array.isArray(state.pages) &&
-    state.pages.some((pageData) => pageData?.page?.localPage === state.activeLocalPage)
+    state.activeLocalPage === activeLocalPage &&
+    Array.isArray(state.pages)
   ) {
-    return state as SurahReaderHistoryState;
+    const pages = state.pages.filter(
+      (p): p is SurahLocalPageData =>
+        p != null && typeof p === "object" && Number.isSafeInteger(p.page?.localPage),
+    );
+    if (pages.some((pageData) => pageData.page.localPage === activeLocalPage)) {
+      return {
+        version: 1,
+        surahNum,
+        activeLocalPage,
+        pages,
+        anchor: validateAnchor(state.anchor),
+      };
+    }
   }
   return null;
 }
@@ -57,24 +93,28 @@ export function reloadPositionState(initial: SurahLocalPageData): SurahReaderHis
     | PerformanceNavigationTiming
     | undefined;
   if (navigation?.type !== "reload") return null;
+  let state: Partial<SurahReaderHistoryState> | null = null;
   try {
-    const state = JSON.parse(
-      sessionStorage.getItem(readerPositionKey) ?? "null",
+    state = JSON.parse(
+      readRaw("session", readerPositionKey) ?? "null",
     ) as Partial<SurahReaderHistoryState> | null;
-    if (
-      state?.version === 1 &&
-      state.surahNum === initial.surah.num &&
-      state.activeLocalPage === initial.page.localPage &&
-      state.anchor
-    ) {
-      return {
-        version: 1,
-        surahNum: initial.surah.num,
-        activeLocalPage: initial.page.localPage,
-        pages: [initial],
-        anchor: state.anchor,
-      };
-    }
-  } catch {}
+  } catch {
+    return null;
+  }
+  const anchor = validateAnchor(state?.anchor);
+  if (
+    state?.version === 1 &&
+    state.surahNum === initial.surah.num &&
+    state.activeLocalPage === initial.page.localPage &&
+    anchor
+  ) {
+    return {
+      version: 1,
+      surahNum: initial.surah.num,
+      activeLocalPage: initial.page.localPage,
+      pages: [initial],
+      anchor,
+    };
+  }
   return null;
 }

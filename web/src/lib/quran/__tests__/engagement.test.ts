@@ -3,6 +3,9 @@ import { QuranSourceId } from "$lib/data/quran-types";
 
 const hasTranslation = vi.fn<(source: string) => Promise<boolean>>();
 const ensureTranslation = vi.fn<(source: string) => Promise<void>>();
+const onStatusDetachers: Array<() => void> = [];
+type StatusCallback = (status: string, detail?: string) => void;
+let statusCb: StatusCallback | undefined;
 
 vi.mock("$app/environment", () => ({ browser: true }));
 vi.mock("$lib/quran/worker-client", () => ({
@@ -10,6 +13,14 @@ vi.mock("$lib/quran/worker-client", () => ({
     whenReady: () => Promise.resolve(),
     hasTranslation: (source: string) => hasTranslation(source),
     ensureTranslation: (source: string) => ensureTranslation(source),
+    onStatus: (cb: StatusCallback): (() => void) => {
+      statusCb = cb;
+      const detach = (): void => {
+        if (statusCb === cb) statusCb = undefined;
+      };
+      onStatusDetachers.push(detach);
+      return detach;
+    },
   },
 }));
 
@@ -40,9 +51,12 @@ describe("reader engagement prefetch", () => {
     ensureTranslation.mockReset();
     hasTranslation.mockResolvedValue(false);
     ensureTranslation.mockResolvedValue(undefined);
+    for (const detach of onStatusDetachers.splice(0)) detach();
+    statusCb = undefined;
     stubIdle();
-    const { __resetEngagementState } = await importEngagement();
-    __resetEngagementState();
+    const mod = await importEngagement();
+    mod.__resetEngagementState();
+    await flush();
   });
 
   afterEach(() => {
@@ -84,7 +98,7 @@ describe("reader engagement prefetch", () => {
     expect(ensureTranslation).toHaveBeenCalledTimes(1);
   });
 
-  it("retries a rejected request at most once per tab", async () => {
+  it("retries a worker-infra-failed ensureTranslation at most once per tab", async () => {
     ensureTranslation.mockRejectedValue(new Error("worker down"));
     const { noteReaderView } = await importEngagement();
     for (let i = 0; i < 6; i++) {
@@ -92,6 +106,67 @@ describe("reader engagement prefetch", () => {
       await flush();
     }
     expect(ensureTranslation).toHaveBeenCalledTimes(2);
+  });
+
+  it("registers the onStatus listener on module load", async () => {
+    await importEngagement();
+    await flush();
+    expect(statusCb).toBeTypeOf("function");
+  });
+
+  it("translation-fetch-failed status clears the settled flag so the next view retries", async () => {
+    const { noteReaderView } = await importEngagement();
+    await noteReaderView(TRANSLATION);
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem(`eq:tprefetch:${TRANSLATION}`)).toBe("1");
+
+    statusCb?.("translation-fetch-failed", TRANSLATION);
+    await flush();
+
+    expect(sessionStorage.getItem(`eq:tprefetch:${TRANSLATION}`)).toBeNull();
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps retries at one extra fetch on the status-driven path", async () => {
+    const { noteReaderView } = await importEngagement();
+    await noteReaderView(TRANSLATION);
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation).toHaveBeenCalledTimes(1);
+
+    statusCb?.("translation-fetch-failed", TRANSLATION);
+    await flush();
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation).toHaveBeenCalledTimes(2);
+
+    statusCb?.("translation-fetch-failed", TRANSLATION);
+    await flush();
+    await noteReaderView(TRANSLATION);
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores unrelated statuses and detail-less translation-fetch-failed", async () => {
+    const { noteReaderView } = await importEngagement();
+    await noteReaderView(TRANSLATION);
+    await noteReaderView(TRANSLATION);
+    await flush();
+    const callsBefore = ensureTranslation.mock.calls.length;
+
+    statusCb?.("ready");
+    statusCb?.("translation-fetch-failed");
+    statusCb?.("translation-fetch-failed", "");
+    await flush();
+
+    await noteReaderView(TRANSLATION);
+    await flush();
+    expect(ensureTranslation.mock.calls.length).toBe(callsBefore);
   });
 
   it("never downloads a translation that is already cached", async () => {

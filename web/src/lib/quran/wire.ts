@@ -94,9 +94,10 @@ function decodeAyah(raw: unknown, validateCoordinate?: AyahCoordinateValidator):
   return { key: `${surah}:${ayah}`, surah, ayah, globalIndex, text };
 }
 
-export function decodeQuranRangeText(
+function decodeRangeText(
   raw: unknown,
-  validateCoordinate?: AyahCoordinateValidator,
+  validateCoordinate: AyahCoordinateValidator | undefined,
+  decodeNorm: (raw: unknown) => SurahNormalization | null,
 ): QuranRangeText | null {
   const rec = asRecord(raw);
   if (!rec || !Array.isArray(rec.ayahs) || !Array.isArray(rec.normalizations)) return null;
@@ -110,7 +111,7 @@ export function decodeQuranRangeText(
   }
   const normalizations: SurahNormalization[] = [];
   for (const item of rec.normalizations) {
-    const normalization = decodeSurahNormalization(item);
+    const normalization = decodeNorm(item);
     if (!normalization) return null;
     normalizations.push(normalization);
   }
@@ -122,6 +123,13 @@ export function decodeQuranRangeText(
     return null;
   }
   return { ayahs, normalizations };
+}
+
+export function decodeQuranRangeText(
+  raw: unknown,
+  validateCoordinate?: AyahCoordinateValidator,
+): QuranRangeText | null {
+  return decodeRangeText(raw, validateCoordinate, decodeSurahNormalization);
 }
 
 function decodeHighlights(
@@ -141,7 +149,7 @@ function decodeHighlights(
   return out;
 }
 
-export function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
+function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
   const rec = asRecord(raw);
   if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
   if (typeof rec.sourceProfile !== "string" || !isOpenerPackaging(rec.packaging)) {
@@ -237,11 +245,7 @@ export function decodeScript(raw: unknown): ArtifactSpec | null {
   if (!isQuranSourceId(id)) return null;
   const sizeBytes = positiveInteger(rec.sizeBytes);
   const downloadUrl = rec.downloadUrl;
-  if (
-    sizeBytes === null ||
-    typeof downloadUrl !== "string" ||
-    downloadUrl.length === 0
-  ) {
+  if (sizeBytes === null || typeof downloadUrl !== "string" || downloadUrl.length === 0) {
     return null;
   }
   return { id, sizeBytes, downloadUrl };
@@ -263,7 +267,8 @@ function decodeTranslationCatalogueEntry(
   rec: Record<string, unknown>,
 ): TranslationCatalogueEntry | null {
   const id = typeof rec.id === "string" && rec.id.length > 0 ? rec.id : null;
-  const language = typeof rec.language === "string" && rec.language.length > 0 ? rec.language : null;
+  const language =
+    typeof rec.language === "string" && rec.language.length > 0 ? rec.language : null;
   const languageCode =
     typeof rec.languageCode === "string" && rec.languageCode.length > 0 ? rec.languageCode : null;
   const direction = rec.direction === "rtl" || rec.direction === "ltr" ? rec.direction : null;
@@ -390,28 +395,5 @@ export function decodeTranslationRangeText(
   raw: unknown,
   validateCoordinate?: AyahCoordinateValidator,
 ): QuranRangeText | null {
-  const rec = asRecord(raw);
-  if (!rec || !Array.isArray(rec.ayahs) || !Array.isArray(rec.normalizations)) return null;
-  const ayahs: Ayah[] = [];
-  for (const item of rec.ayahs) {
-    const ayah = decodeAyah(item, validateCoordinate);
-    if (!ayah) return null;
-    const previous = ayahs.at(-1);
-    if (previous && ayah.globalIndex !== previous.globalIndex + 1) return null;
-    ayahs.push(ayah);
-  }
-  const normalizations: SurahNormalization[] = [];
-  for (const item of rec.normalizations) {
-    const normalization = decodeTranslationNormalization(item);
-    if (!normalization) return null;
-    normalizations.push(normalization);
-  }
-  const represented = new Set(ayahs.map((ayah) => ayah.surah));
-  if (
-    represented.size !== normalizations.length ||
-    normalizations.some((normalization) => !represented.has(normalization.surah))
-  ) {
-    return null;
-  }
-  return { ayahs, normalizations };
+  return decodeRangeText(raw, validateCoordinate, decodeTranslationNormalization);
 }

@@ -17,6 +17,8 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     throw error(404, `Unknown translation: ${params.lang}.${params.translator}`);
   }
   const data = await loadTranslationRangeData("page", index, params.lang, params.translator, fetch);
-  if (data.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  if (data.ayahs.length === 0) {
+    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
+  }
   return data;
 };

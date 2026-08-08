@@ -139,7 +139,7 @@ pub async fn create(
     auth: AuthSession,
     payload: ValidatedJson<V1CreatePostPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
     info!(user_id = user.id, "Creating post");
@@ -384,7 +384,7 @@ pub async fn query(
     auth: AuthSession,
     payload: ValidatedJson<V1PostQueryParams>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     let mut query_params = payload.0.clone();
 
     match user.role {
@@ -413,7 +413,7 @@ pub async fn query(
         Ok(result) => {
             let mut posts = result.data;
             let total = result.total;
-            apply_paywall_list(&state, &mut posts, Some(&user)).await?;
+            apply_paywall_list(&state, &mut posts, Some(user)).await?;
             Ok((
                 StatusCode::OK,
                 Json(json!({
@@ -685,7 +685,7 @@ pub async fn series_list(
     auth: AuthSession,
     payload: ValidatedJson<V1SeriesListQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let _user = auth.user.unwrap();
+    let _user = auth.user_required()?;
     let page = payload.page.unwrap_or(1);
 
     match post_series::Entity::list(&state.sea_db, payload.page, None, payload.search.clone()).await
@@ -777,7 +777,7 @@ pub async fn like_post(
     auth: AuthSession,
     Path(post_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     tracing::Span::current().record("post_id", post_id);
 
@@ -820,7 +820,7 @@ pub async fn unlike_post(
     auth: AuthSession,
     Path(post_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     tracing::Span::current().record("post_id", post_id);
 
@@ -863,7 +863,7 @@ pub async fn like_status(
     auth: AuthSession,
     Path(post_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     tracing::Span::current().record("post_id", post_id);
 
@@ -886,7 +886,7 @@ pub async fn like_status_batch(
     auth: AuthSession,
     payload: ValidatedJson<post_like::LikeStatusBatchRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
     tracing::Span::current().record("post_count", payload.post_ids.len());
 

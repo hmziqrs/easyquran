@@ -17,6 +17,7 @@
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
+  import type { Snippet } from "svelte";
   import {
     Sidebar,
     SidebarHeader,
@@ -74,6 +75,18 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
+
+{#snippet navRow(href: string, isActive: boolean | undefined, ariaCurrent: "page" | undefined, cls: string, body: Snippet<[]>)}
+  <SidebarMenuItem>
+    <SidebarMenuButton isActive={isActive} aria-current={ariaCurrent} class={cls}>
+      {#snippet child({ props })}
+        <a {...props} {href} data-sveltekit-preload-data="hover" onclick={onItemClick}>
+          {@render body()}
+        </a>
+      {/snippet}
+    </SidebarMenuButton>
+  </SidebarMenuItem>
+{/snippet}
 
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
@@ -136,30 +149,22 @@
                 {#snippet item(i)}
                   {@const s = quranData.surahs[i]}
                   {@const active = page.params.surah === s.slug}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={active}
-                      aria-current={active ? "page" : undefined}
-                      class="h-auto items-start gap-3 px-3.5 py-3"
-                    >
-                      {#snippet child({ props })}
-                        <a
-                          {...props}
-                          href={resolve(surahHref(s.slug))}
-                          data-sveltekit-preload-data="hover"
-                          onclick={onItemClick}
-                        >
-                          <span class="flex min-w-0 flex-1 flex-col gap-1">
-                            <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
-                            <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
-                          </span>
-                          <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
-                            {s.arabic}
-                          </span>
-                        </a>
-                      {/snippet}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  {#snippet body()}
+                    <span class="flex min-w-0 flex-1 flex-col gap-1">
+                      <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
+                      <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
+                    </span>
+                    <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
+                      {s.arabic}
+                    </span>
+                  {/snippet}
+                  {@render navRow(
+                    resolve(surahHref(s.slug)),
+                    active,
+                    active ? "page" : undefined,
+                    "h-auto items-start gap-3 px-3.5 py-3",
+                    body,
+                  )}
                 {/snippet}
               </SidebarVirtualList>
             </SidebarGroupContent>
@@ -181,32 +186,23 @@
                     {@const v = verses[i]}
                     {@const localPage = quranData.surahLocalPageForAyah(cur.num, n)}
                     {#if v}
-                      <SidebarMenuItem>
-                        <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                          {#snippet child({ props })}
-                            <a
-                              {...props}
-                              href={resolve(
-                                surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n),
-                              )}
-                              data-sveltekit-preload-data="hover"
-                              onclick={onItemClick}
-                            >
-                              <span
-                                class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
-                              >
-                                {n}
-                              </span>
-                              <span
-                                dir="rtl"
-                                class="min-w-0 flex-1 truncate font-arabic text-[15px]"
-                              >
-                                {v}
-                              </span>
-                            </a>
-                          {/snippet}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
+                      {#snippet body()}
+                        <span
+                          class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                        >
+                          {n}
+                        </span>
+                        <span dir="rtl" class="min-w-0 flex-1 truncate font-arabic text-[15px]">
+                          {v}
+                        </span>
+                      {/snippet}
+                      {@render navRow(
+                        resolve(surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n)),
+                        undefined,
+                        undefined,
+                        "h-auto gap-3 px-3.5 py-2.5",
+                        body,
+                      )}
                     {/if}
                   {/snippet}
                 </SidebarVirtualList>
@@ -230,27 +226,17 @@
                   {@const rg = ranges[i]}
                   {@const { num, n } = parseKey(rg.first)}
                   {@const href = resolve(rangeHref(reader.browseJuz, rg.index))}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton class="h-auto gap-3 px-3.5 py-2.5">
-                      {#snippet child({ props })}
-                        <a
-                          {...props}
-                          {href}
-                          data-sveltekit-preload-data="hover"
-                          onclick={onItemClick}
-                        >
-                          <span
-                            class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
-                          >
-                            {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
-                          </span>
-                          <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-                            {quranData.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
-                          </span>
-                        </a>
-                      {/snippet}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  {#snippet body()}
+                    <span
+                      class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
+                    >
+                      {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+                      {quranData.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
+                    </span>
+                  {/snippet}
+                  {@render navRow(href, undefined, undefined, "h-auto gap-3 px-3.5 py-2.5", body)}
                 {/snippet}
               </SidebarVirtualList>
             </SidebarGroupContent>

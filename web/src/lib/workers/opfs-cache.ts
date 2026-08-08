@@ -1,6 +1,7 @@
-import type { ArtifactSpec } from "$lib/data/quran-types";
+import type { DownloadableSpec } from "$lib/data/quran-types";
 import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "./download";
-import { createIdbStore, createOpfsStore, hasOpfs } from "./storage";
+import { createIdbStore, createOpfsStore, hasOpfs, openIdb } from "./storage";
+import { runTxVoid } from "./idb";
 import { ensureCached } from "./cached";
 import { stampLastUsed } from "./opfs-retention";
 
@@ -21,23 +22,7 @@ export interface CachedArtifactInfo {
   readonly sizeBytes: number;
 }
 
-let artifactsDbPromise: Promise<IDBDatabase> | null = null;
-function openArtifactsIdb(): Promise<IDBDatabase> {
-  if (!artifactsDbPromise) {
-    artifactsDbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(QURAN_DB, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(QURAN_STORE)) db.createObjectStore(QURAN_STORE);
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  return artifactsDbPromise;
-}
-
-function toDownloadSpec(spec: ArtifactSpec): DownloadSpec {
+function toDownloadSpec(spec: DownloadableSpec): DownloadSpec {
   return {
     url: spec.downloadUrl,
     sizeBytes: spec.sizeBytes,
@@ -46,7 +31,7 @@ function toDownloadSpec(spec: ArtifactSpec): DownloadSpec {
 }
 
 export async function ensureArtifact(
-  spec: ArtifactSpec,
+  spec: DownloadableSpec,
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<CachedArtifact> {
   const dl = toDownloadSpec(spec);
@@ -122,7 +107,7 @@ async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
 async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
   const out: CachedArtifactInfo[] = [];
   try {
-    const db = await openArtifactsIdb();
+    const db = await openIdb(QURAN_DB, QURAN_STORE);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(QURAN_STORE, "readonly");
       const req = tx.objectStore(QURAN_STORE).openCursor();
@@ -167,12 +152,8 @@ export async function deleteCachedArtifact(id: string, tag: string): Promise<voi
     } catch {}
   }
   try {
-    const db = await openArtifactsIdb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(QURAN_STORE, "readwrite");
-      tx.objectStore(QURAN_STORE).delete(`${tag}:${id}`);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+    await runTxVoid(await openIdb(QURAN_DB, QURAN_STORE), QURAN_STORE, "readwrite", (s) => {
+      s.delete(`${tag}:${id}`);
     });
   } catch {}
 }

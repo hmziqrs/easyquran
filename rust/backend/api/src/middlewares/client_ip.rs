@@ -5,10 +5,16 @@ use axum::response::Response;
 
 pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
     let (mut parts, body) = req.into_parts();
-    if let Ok(client_ip) =
-        axum_client_ip::ClientIp::from_request_parts(&mut parts, &()).await
-    {
-        parts.extensions.insert(client_ip);
+    match axum_client_ip::ClientIp::from_request_parts(&mut parts, &()).await {
+        Ok(client_ip) => {
+            parts.extensions.insert(client_ip);
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "client IP resolution failed; request will share the 'unknown' rate-limit bucket"
+            );
+        }
     }
     req = Request::from_parts(parts, body);
     next.run(req).await

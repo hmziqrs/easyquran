@@ -1,13 +1,6 @@
 import { QURAN } from "$lib/config/site";
-import type {
-  SourceCatalogueEntry,
-  TranslationCatalogueEntry,
-} from "$lib/data/quran-types";
-import {
-  bakedTranslationCatalogue,
-  fetchSourceCatalogue,
-  translationCatalogue,
-} from "./catalogue";
+import type { SourceCatalogueEntry, TranslationCatalogueEntry } from "$lib/data/quran-types";
+import { bakedTranslationCatalogue, fetchSourceCatalogue, translationCatalogue } from "./catalogue";
 
 const ERROR_BACKOFF_MS = 30_000;
 

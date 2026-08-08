@@ -14,10 +14,10 @@ const TRANSLATION_FILE_PATH = 6;
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
   ...registeredSourceProfiles().map(
     (profile) =>
-      [
-        profile.artifact.r2Path,
-        path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
-      ] as [string, string],
+      [profile.artifact.r2Path, path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath)] as [
+        string,
+        string,
+      ],
   ),
   ...(rawTranslations as readonly unknown[]).map((row) => {
     const filePath = (row as readonly unknown[])[TRANSLATION_FILE_PATH] as string;

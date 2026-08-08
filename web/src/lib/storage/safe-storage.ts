@@ -39,6 +39,20 @@ export function readRaw(area: StorageArea, key: string): string | null {
   }
 }
 
+export function writeRaw(area: StorageArea, key: string, value: string): void {
+  if (!browser) return;
+  try {
+    (area === "local" ? localStorage : sessionStorage).setItem(key, value);
+  } catch {}
+}
+
+export function removeRaw(area: StorageArea, key: string): void {
+  if (!browser) return;
+  try {
+    (area === "local" ? localStorage : sessionStorage).removeItem(key);
+  } catch {}
+}
+
 export function isFutureSchema(raw: unknown, current: number): boolean {
   if (typeof raw !== "object" || raw === null || !("v" in raw)) return false;
   return (raw as { v: unknown }).v !== current;

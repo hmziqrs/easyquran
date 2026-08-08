@@ -20,6 +20,8 @@
   const seoDescription = $derived(
     `Read ${data.label} of the Qur'an (${data.first}–${data.last}) in translation. Free, fast, and works offline.`,
   );
+  const contentLanguage = $derived(page.params.lang ?? "en");
+  const pending = $derived(data.ayahs.length === 0);
 </script>
 
 <Seo
@@ -27,6 +29,12 @@
   title={seoTitle}
   description={seoDescription}
   includeTextVariants={false}
+  inLanguage={contentLanguage}
+  noindex={pending}
+  crumbs={[
+    { name: "Home", href: "/" },
+    { name: data.label, href: canonicalPath },
+  ]}
 />
 
 <ReaderShell>

@@ -42,7 +42,7 @@ pub async fn verify(
     auth: AuthSession,
     payload: ValidatedJson<V1VerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     let user_id = user.id;
 
     // Fail-closed: a store error must reject, not fall through — otherwise code-guessing is unbounded.
@@ -105,7 +105,7 @@ pub async fn resend(
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let pool = &state.sea_db;
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     let user_id = user.id;
 
     match email_verification::Entity::find_by_user_id_or_code(pool, Some(user_id), None).await {

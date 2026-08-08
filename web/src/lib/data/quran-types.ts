@@ -11,8 +11,7 @@ export const isQuranSourceId = (value: unknown): value is QuranSourceId =>
 
 export type QuranReaderSource = string;
 
-export const isArabicSourceId = (v: string): v is QuranSourceId =>
-  typeof v === "string" && QURAN_SOURCE_IDS.includes(v as QuranSourceId);
+export const isArabicSourceId = isQuranSourceId;
 
 export const QuranScript = {
   Uthmani: "uthmani",
@@ -137,10 +136,14 @@ export interface SajdaEntry {
   kind: SajdaKind;
 }
 
-export interface ArtifactSpec {
-  id: QuranSourceId;
+export interface DownloadableSpec {
+  id: string;
   sizeBytes: number;
   downloadUrl: string;
+}
+
+export interface ArtifactSpec extends DownloadableSpec {
+  id: QuranSourceId;
 }
 
 export type TranslationDirection = "rtl" | "ltr";
@@ -167,7 +170,7 @@ export type SourceCatalogueEntry =
   | { kind: "translation"; entry: TranslationCatalogueEntry };
 
 export interface DownloadProgress {
-  script: QuranSourceId;
+  script: QuranReaderSource;
   loaded: number;
   total: number;
 }

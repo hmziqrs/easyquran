@@ -1,10 +1,6 @@
 import { QURAN } from "$lib/config/site";
 import { isArabicSourceId } from "$lib/data/quran-types";
-import type {
-  QuranRangeText,
-  QuranReaderSource,
-  QuranSurahText,
-} from "$lib/data/quran-types";
+import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "$lib/data/quran-types";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
 import {
@@ -15,9 +11,10 @@ import {
   decodeTranslationSurahText,
   unwrapEnvelope,
 } from "./wire";
+import { fetchWithTimeout } from "./fetch";
 
 async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: "application/json" }, signal });
+  const res = await fetchWithTimeout(url, { headers: { accept: "application/json" }, signal });
   if (!res.ok) throw new Error(`quran api ${res.status}: ${url}`);
   return res.json();
 }
@@ -73,8 +70,8 @@ export const quranApi = {
     return {
       query,
       total: payload.total ?? payload.results.length,
-      limit: payload.limit || DEFAULT_LIMIT,
-      offset: payload.offset || DEFAULT_OFFSET,
+      limit: payload.limit ?? opts.limit ?? DEFAULT_LIMIT,
+      offset: payload.offset ?? opts.offset ?? DEFAULT_OFFSET,
       results: payload.results,
       source: SearchProvider.Api,
     };

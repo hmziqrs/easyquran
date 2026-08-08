@@ -64,7 +64,11 @@ impl ErrorResponse {
         match serde_json::to_value(context) {
             Ok(value) => self.context = Some(value),
             Err(err) => {
-                eprintln!("Failed to serialize error context: {}", err);
+                tracing::warn!(
+                    code = %self.code,
+                    error = %err,
+                    "failed to serialize error context",
+                );
             }
         }
         self
@@ -87,11 +91,13 @@ impl IntoResponse for ErrorResponse {
         let status = StatusCode::from_u16(status_u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         if status.is_server_error() {
-            eprintln!("Server error {}: {}", self.code, self.message);
-            #[cfg(debug_assertions)]
-            if let Some(details) = &self.details {
-                eprintln!("  Details: {}", details);
-            }
+            tracing::error!(
+                code = %self.code,
+                status = status_u16,
+                request_id = ?self.request_id,
+                message = %self.message,
+                "server error returned",
+            );
         }
 
         let retry_after = self.retry_after;

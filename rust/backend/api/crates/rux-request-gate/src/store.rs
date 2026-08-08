@@ -9,6 +9,9 @@ use crate::error::GateError;
 
 type Epoch = i64;
 
+// Longest attempt-rolling window across all callers' AbuseLimiterConfig (block_range; abuse_check itself pops attempts older than this). prune() has no cfg, so this bounds how long an in-progress attempt chain survives eviction.
+const MAX_ATTEMPT_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
+
 fn now_epoch() -> Epoch {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -114,6 +117,17 @@ impl InMemoryStore {
                 map.insert(s.key, b);
             }
         }
+    }
+
+    pub fn prune(&self) {
+        let now = SystemTime::now();
+        let attempt_cutoff = now_epoch().saturating_sub(MAX_ATTEMPT_WINDOW.as_secs() as i64);
+        let mut map = self.limits.lock().expect("rate-limit map poisoned");
+        map.retain(|_, b| {
+            b.fixed_expires.is_some_and(|t| t > now)
+                || b.block_until.is_some_and(|t| t > now)
+                || b.attempts.back().is_some_and(|&t| t >= attempt_cutoff)
+        });
     }
 }
 

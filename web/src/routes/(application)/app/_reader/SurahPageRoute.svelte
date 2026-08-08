@@ -3,6 +3,7 @@
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
+  import { SITE } from "$lib/config/site";
   import { Seo } from "$lib/components";
   import {
     QuranScript,
@@ -13,7 +14,7 @@
     type SurahRouteData,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
-  import { noteReaderView } from "$lib/quran/engagement";
+  import { trackReaderView } from "$lib/quran/track-view.svelte";
   import { reader } from "$lib/stores/reader.svelte";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
@@ -42,18 +43,29 @@
   );
   const seoDescription = $derived(
     `Read Surah ${surah.name} (${surah.arabic}), page ${activeLocalPage} of ${data.pageData.pageCount}, ayahs ${activePage.page.startAyah}–${activePage.page.endAyah}${
-      isTranslation ? "" : ", in the Uthmani script."
-    }.`,
+      isTranslation ? "." : ", in the Uthmani script."
+    }`,
   );
+  const translationPending = $derived(isTranslation && data.pageData.ayahs.length === 0);
   const chapterLd = $derived([
     {
       "@context": "https://schema.org",
       "@type": "Chapter",
+      "@id": `${SITE.url}${canonicalPath}#chapter`,
+      url: `${SITE.url}${canonicalPath}`,
       name: `Surah ${surah.name}`,
       alternateName: surah.arabic,
       position: surah.num,
       inLanguage: contentLanguage,
-      isPartOf: { "@type": "Book", name: "The Quran", inLanguage: contentLanguage },
+      isPartOf: { "@id": `${SITE.url}/#quran` },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "Book",
+      "@id": `${SITE.url}/#quran`,
+      url: `${SITE.url}/`,
+      name: "The Quran",
+      inLanguage: "ar",
     },
   ]);
 
@@ -126,12 +138,8 @@
     reader.setCurrent(surah.num);
   });
 
-  // One count per surah view, including client-side navigation (no remount here).
   const viewKey = $derived(`${normalization.sourceId}:${surah.num}`);
-  $effect(() => {
-    void viewKey;
-    void noteReaderView(normalization.sourceId);
-  });
+  trackReaderView({ key: () => viewKey, sourceId: () => normalization.sourceId });
 
   $effect(() => {
     const ayah = requestedAyah();
@@ -151,6 +159,12 @@
   description={seoDescription}
   extraLd={chapterLd}
   includeTextVariants={false}
+  inLanguage={contentLanguage}
+  noindex={translationPending}
+  crumbs={[
+    { name: "Home", href: "/" },
+    { name: `Surah ${surah.name}`, href: canonicalPath },
+  ]}
 />
 
 <ReaderShell>

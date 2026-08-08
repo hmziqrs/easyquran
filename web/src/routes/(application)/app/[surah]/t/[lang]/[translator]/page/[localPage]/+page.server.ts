@@ -11,10 +11,7 @@ type LocalPageAction =
   | { kind: "redirect"; status: 308; destination: `/app/${string}` }
   | { kind: "proceed"; localPage: number };
 
-function resolveLocalPageAction(
-  raw: string,
-  destination: `/app/${string}`,
-): LocalPageAction {
+function resolveLocalPageAction(raw: string, destination: `/app/${string}`): LocalPageAction {
   const localPage = Number(raw);
   if (!Number.isSafeInteger(localPage) || localPage < 1) return { kind: "not_found" };
   if (localPage === 1) return { kind: "redirect", status: 308, destination };
@@ -38,6 +35,8 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     fetch,
   );
   if (!data) throw error(404, `Unknown Surah page: ${params.localPage}`);
-  if (data.pageData.ayahs.length === 0) setHeaders({ "x-eq-translation-pending": "1" });
+  if (data.pageData.ayahs.length === 0) {
+    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
+  }
   return data;
 };

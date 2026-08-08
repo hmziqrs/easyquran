@@ -135,10 +135,7 @@ export const surahAyahPathFor = (
   ayah: number,
 ): `/app/${string}` => `${surahLocalPagePathFor(ctx, surah, localPage)}#ayah-${surah.num}-${ayah}`;
 
-export const globalPagePathFor = (
-  ctx: SurahRouteContext,
-  globalPage: number,
-): `/app/${string}` =>
+export const globalPagePathFor = (ctx: SurahRouteContext, globalPage: number): `/app/${string}` =>
   ctx.kind === "arabic"
     ? `/app/page/${globalPage}`
     : translationGlobalPagePath(ctx.lang, ctx.translator, globalPage);

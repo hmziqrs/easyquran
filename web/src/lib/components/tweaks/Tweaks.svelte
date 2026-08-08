@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
@@ -10,6 +11,7 @@
   let open = $state(false);
   let triggerButton = $state<HTMLButtonElement>();
   let firstControl = $state<HTMLButtonElement>();
+  let panelEl = $state<HTMLDivElement>();
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -25,8 +27,8 @@
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
 
-  function consentPill(value: boolean): string {
-    return cn(pill, value ? on : off);
+  function pillClass(active: boolean): string {
+    return cn(pill, active ? on : off);
   }
 
   function resolveHex(varName: string): string {
@@ -70,24 +72,35 @@
     }
   }
 
+  function onPointerDown(event: PointerEvent) {
+    if (!open) return;
+    const target = event.target as Node | null;
+    if (!target) return;
+    if (panelEl?.contains(target)) return;
+    if (triggerButton?.contains(target)) return;
+    open = false;
+  }
+
   $effect(() => {
     if (open && firstControl) {
       firstControl.focus();
     }
   });
 
-  $effect(() => () => {
+  onMount(() => () => {
     if (copyTimer) clearTimeout(copyTimer);
   });
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
 <div class="fixed bottom-5 right-5 z-[1000] flex flex-col items-end gap-3">
   {#if open}
     <div
       id="tweaks-panel"
-      role="group"
+      bind:this={panelEl}
+      role="dialog"
+      aria-modal="false"
       aria-label="Settings"
       class="max-h-[min(80vh,640px)] w-[288px] overflow-y-auto rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >
@@ -109,7 +122,7 @@
             {#each themes as t (t)}
               <button
                 type="button"
-                class={cn(pill, prefs.theme === t ? on : off)}
+                class={pillClass(prefs.theme === t)}
                 onclick={() => prefs.setTheme(t)}>{t}</button
               >
             {/each}
@@ -228,7 +241,7 @@
               type="button"
               aria-pressed={consent.analytics}
               onclick={() => consent.setAnalytics(!consent.analytics)}
-              class={consentPill(consent.analytics)}
+              class={pillClass(consent.analytics)}
             >
               Analytics {consent.analytics ? "on" : "off"}
             </button>
@@ -240,7 +253,7 @@
                 consent.setPerformance(!consent.performance);
                 location.reload();
               }}
-              class={consentPill(consent.performance)}
+              class={pillClass(consent.performance)}
             >
               Performance {consent.performance ? "on" : "off"}
             </button>

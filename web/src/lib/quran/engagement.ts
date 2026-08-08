@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import { isArabicSourceId, type QuranReaderSource } from "$lib/data/quran-types";
+import { readRaw, removeRaw, writeRaw } from "$lib/storage";
 import { quranWorker } from "./worker-client";
 
 const VIEWS_KEY = "eq:reader-views";
@@ -7,37 +8,14 @@ const PREFETCH_PREFIX = "eq:tprefetch:";
 
 export const VIEWS_BEFORE_PREFETCH = 2;
 
-/** Sources this tab is done with: already cached, or prefetch already fired. */
 const settled = new Set<string>();
-/** Sources with an in-progress decision, so overlapping views cannot stack requests. */
 const deciding = new Set<string>();
-/** Sources already given their one retry, so a failing download cannot loop. */
 const retried = new Set<string>();
 
-function readStorage(key: string): string | null {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStorage(key: string, value: string): void {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {}
-}
-
-function clearStorage(key: string): void {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {}
-}
-
 function bumpViews(): number {
-  const next = Number(readStorage(VIEWS_KEY) ?? 0) + 1;
+  const next = Number(readRaw("session", VIEWS_KEY) ?? 0) + 1;
   const views = Number.isSafeInteger(next) && next > 0 ? next : 1;
-  writeStorage(VIEWS_KEY, String(views));
+  writeRaw("session", VIEWS_KEY, String(views));
   return views;
 }
 
@@ -61,15 +39,14 @@ function whenIdle(run: () => void): void {
 
 function markSettled(sourceId: string): void {
   settled.add(sourceId);
-  writeStorage(`${PREFETCH_PREFIX}${sourceId}`, "1");
+  writeRaw("session", `${PREFETCH_PREFIX}${sourceId}`, "1");
 }
 
-/** Allow exactly one more attempt after a failed download, then stay settled. */
 function allowRetry(sourceId: string): void {
   if (retried.has(sourceId)) return;
   retried.add(sourceId);
   settled.delete(sourceId);
-  clearStorage(`${PREFETCH_PREFIX}${sourceId}`);
+  removeRaw("session", `${PREFETCH_PREFIX}${sourceId}`);
 }
 
 async function isCached(sourceId: QuranReaderSource): Promise<boolean> {
@@ -77,13 +54,12 @@ async function isCached(sourceId: QuranReaderSource): Promise<boolean> {
   return quranWorker.hasTranslation(sourceId);
 }
 
-/**
- * Records one reader view and, once the visitor looks engaged, kicks off a
- * background download of the translation database.
- *
- * Safe to call on every mount and every navigation: a source is evaluated at
- * most once per tab, and not at all once it is known to be cached.
- */
+if (browser) {
+  quranWorker.onStatus?.((status, detail) => {
+    if (status === "translation-fetch-failed" && detail) allowRetry(detail);
+  });
+}
+
 export async function noteReaderView(
   sourceId: QuranReaderSource | null | undefined,
 ): Promise<void> {
@@ -93,7 +69,7 @@ export async function noteReaderView(
 
   if (!sourceId || isArabicSourceId(sourceId)) return;
   if (settled.has(sourceId) || deciding.has(sourceId)) return;
-  if (readStorage(`${PREFETCH_PREFIX}${sourceId}`)) {
+  if (readRaw("session", `${PREFETCH_PREFIX}${sourceId}`)) {
     settled.add(sourceId);
     return;
   }
@@ -109,26 +85,19 @@ export async function noteReaderView(
 
     markSettled(sourceId);
     whenIdle(() => {
-      // The worker acknowledges this before the download finishes, so a
-      // resolved promise means "accepted", not "cached". Only an outright
-      // rejection is worth a retry.
       void quranWorker.ensureTranslation(sourceId).catch(() => allowRetry(sourceId));
     });
   } catch {
-    // Worker not up yet or request failed — leave unsettled, retry on next view.
   } finally {
     deciding.delete(sourceId);
   }
 }
 
-/**
- * Picking a translation by hand is an explicit signal; skip the view counter.
- */
 export async function noteTranslationChosen(sourceId: QuranReaderSource): Promise<void> {
   if (!browser) return;
   if (isArabicSourceId(sourceId)) return;
   if (settled.has(sourceId) || deciding.has(sourceId)) return;
-  if (readStorage(`${PREFETCH_PREFIX}${sourceId}`)) {
+  if (readRaw("session", `${PREFETCH_PREFIX}${sourceId}`)) {
     settled.add(sourceId);
     return;
   }
@@ -150,7 +119,6 @@ export async function noteTranslationChosen(sourceId: QuranReaderSource): Promis
   }
 }
 
-/** Test-only reset of per-tab state. */
 export function __resetEngagementState(): void {
   settled.clear();
   deciding.clear();

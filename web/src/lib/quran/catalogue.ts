@@ -4,6 +4,7 @@ import {
   type TranslationCatalogueEntry,
   type TranslationDirection,
 } from "$lib/data/quran-types";
+import { fetchWithTimeout } from "$lib/quran/fetch";
 import rawTranslations from "../data/translations.json";
 import { decodeSourcesPayload } from "./wire";
 
@@ -116,12 +117,10 @@ const SOURCE_CATALOGUE_TTL_MS = 300_000;
 let catalogueCache: { entries: SourceCatalogueEntry[]; expiresAt: number } | null = null;
 let pendingCatalogue: Promise<SourceCatalogueEntry[]> | null = null;
 
-export async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 3000);
+export async function fetchSourceCatalogue(signal?: AbortSignal): Promise<SourceCatalogueEntry[]> {
   try {
-    const res = await fetch(`${QURAN.apiBase}/sources`, {
-      signal: ctrl.signal,
+    const res = await fetchWithTimeout(`${QURAN.apiBase}/sources`, {
+      signal,
       headers: { accept: "application/json" },
     });
     if (!res.ok) return [];
@@ -130,8 +129,6 @@ export async function fetchSourceCatalogue(): Promise<SourceCatalogueEntry[]> {
     return localizeDeliveryUrls(entries);
   } catch {
     return [];
-  } finally {
-    clearTimeout(timer);
   }
 }
 
