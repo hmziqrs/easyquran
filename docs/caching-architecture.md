@@ -44,7 +44,7 @@ Two domains, no shared cache between them. They meet only at the HTTP edge and a
 1. **Quran databases are immutable.** Never written, never versioned. Sourced from Tanzil.net.
 2. **Identity = id, never a hash.** `uthmani`, `simple-clean`, `en.sahih`, … OPFS keys, ETags, catalogue rows, specs are all id-keyed. SHA-256 over Quran data is *manual audit only* (`just quran-audit`, `pnpm audit:arabic`, `pnpm verify`) — never in build/boot/runtime/ETag/cache-key. Guarded by `tests/quran_v1.rs` + `web catalogue-sha-guard.test.ts`.
 3. **Integrity at runtime is shape, not digest.** Boot asserts 6236 rows + tiling + ayah-keys; downloads size-check bytes only (`verifyBytes`), never hash.
-4. **Arabic is always resident/pinned; only translations are evictable.** True on both sides (Rust boot-resident corpus; web pinned Arabic in OPFS).
+4. **Arabic is always resident/pinned; only translations are evictable.** True on both sides (Rust boot-resident corpus; web `PINNED_ARABIC` excluded from prune across both OPFS and IDB-stored artifacts — the pin is storage-agnostic).
 
 ---
 
@@ -302,7 +302,7 @@ In-process (no Redis) **fixed-window per-IP** rate limiting + dual-threshold abu
 | 300000 / 30000 / 3000 | catalogue TTL / backoff / `FETCH_TIMEOUT_MS` | catalogue.ts:116, catalogue-store.svelte.ts:5, fetch.ts:1 |
 | 2 | `VIEWS_BEFORE_PREFETCH` | engagement.ts:9 |
 | 7 d / 256 MiB / 1 h | SSR TTL / budget / orphan-tmp | quran-disk-cache.ts:10-12 |
-| `tanzil/arabic/<file>.sqlite`, `tanzil/translations/sqlite/<id>.sqlite` | R2 layout | environment.ts, gateway allowlist |
+| `tanzil/arabic/<file>.sqlite`, `tanzil/translations/sqlite/<id>.sqlite` | R2 layout | gateway `+server.ts:9-10,15`; `source-profiles.ts:77,92` (host `QURAN_R2_UPSTREAM_BASE` at `environment.ts:10`) |
 
 ### Rust
 | Value | Constant | Location |
@@ -314,7 +314,7 @@ In-process (no Redis) **fixed-window per-IP** rate limiting + dual-threshold abu
 | `max-age=60, s-maxage=300` | `SEARCH_CACHE` | cache.rs:8 |
 | `max-age=31536000, immutable` | `IMMUTABLE_CACHE` | cache.rs:10 |
 | 600 / 30 (per 60s) | quran family / search rate limits | main.rs:675,682-684 |
-| 10 s / 24 h | `FLUSH_INTERVAL_SECS` / `MAX_ATTEMPT_WINDOW` | rate_limit_store.rs:17, store.rs:13 |
+| 10 s / 24 h | `FLUSH_INTERVAL_SECS` / `MAX_ATTEMPT_WINDOW` | rate_limit_store.rs:17, rux-request-gate/src/store.rs:13 |
 
 ---
 
@@ -322,11 +322,11 @@ In-process (no Redis) **fixed-window per-IP** rate limiting + dual-threshold abu
 
 Items where the code disagrees with the plan doc. Severity in parens.
 
-1. **(high) SW contract duplication is over-stated.** `docs/quran.md §72` says the SW↔client contract is *duplicated* (SW-inline + `lib/offline/*`) because SvelteKit "forbids relative imports" in the SW. In reality the message types + channel names are **shared** via the SW's relative import `./lib/offline/messages` (relative imports work). Only `META_DB`/`META_STORE` (`service-worker.ts:21-22` vs `lib/offline/meta.ts:4-5`) and `normalizeDataKey` (`service-worker.ts:35-44` vs `lib/offline/keys.ts`) are genuinely duplicated — and *those two* are the real drift hazards the doc should point at instead.
+1. **(high) SW contract duplication is over-stated.** `docs/quran.md:72` says the SW↔client contract is *duplicated* (SW-inline + `lib/offline/*`) because SvelteKit "forbids relative imports" in the SW. In reality the message types + channel names are **shared** via the SW's relative import `./lib/offline/messages` (relative imports work). Only `META_DB`/`META_STORE` (`service-worker.ts:21-22` vs `lib/offline/meta.ts:4-5`) and `normalizeDataKey` (`service-worker.ts:35-44` vs `lib/offline/keys.ts`) are genuinely duplicated — and *those two* are the real drift hazards the doc should point at instead. (`:NN` here and below are `docs/quran.md` line numbers, not section numbers.)
 
-2. **(med) "Install verifies the complete new cache" is false for the shell route.** `§72` claims atomic all-or-nothing install. `SHELL_ROUTE` (`${base}/404.html`) precache is `.catch(()=>null)` (service-worker.ts:159) — a missing/failing shell is silently skipped and the terminal navigation fallback (service-worker.ts:341-342) then returns `Response.error()` instead of an offline page.
+2. **(med) "Install verifies the complete new cache" is false for the shell route.** `docs/quran.md:72` claims atomic all-or-nothing install. `SHELL_ROUTE` (`${base}/404.html`) precache is `.catch(()=>null)` (service-worker.ts:159) — a missing/failing shell is silently skipped and the terminal navigation fallback (service-worker.ts:341-342) then returns `Response.error()` instead of an offline page.
 
-3. **(med) The search ETag embeds a SHA-256 digest.** `§16` ("sha never names an ETag") and `§63` ("never a digest") are literally contradicted: `controller.rs:1163` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data — so it honors the no-sha-on-Quran-*data* intent — but the doc's absolute wording is broader than the intent and should carve out this exception explicitly. *(Verified by hand, `controller.rs:1163-1170`.)*
+3. **(med) The search ETag embeds a SHA-256 digest.** `docs/quran.md:16` ("sha never names an ETag") and `:63` ("never a digest") are literally contradicted: `controller.rs:1163` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data — so it honors the no-sha-on-Quran-*data* intent — but the doc's absolute wording is broader than the intent and should carve out this exception explicitly. *(Verified by hand, `controller.rs:1163-1170`.)*
 
 4. **(low) Translation byte-bound is a separate prune pass, not a unified LRU.** `§3` table says "eviction: LRU, whichever bound trips first" as if both are inside moka. Moka enforces only the count ceiling (`max_capacity`); the byte ceiling is enforced by a serialized post-build `enforce_byte_bound` loop, with transient overshoot bounded by `BUILD_CONCURRENCY=2`.
 
@@ -344,7 +344,7 @@ Curated from the readers + critic, all code-grounded. Listed so a future diff ca
 
 **Web offline:**
 - `eq-data-v1` (`__data.json`) cache is **unbounded** — no eviction but SWR. `PAGES_MAX=300` applies only to `eq-pages`. Long-lived installs with route churn accumulate entries until a version bump.
-- No time-based TTL anywhere in the SW; freshness depends entirely on SWR + `runMaintenance` rescan. If the maintenance cursor stalls (e.g. IDB unavailable mid-loop → cursor never advances), stale `__data.json` persists until next version.
+- No time-based TTL anywhere in the SW; freshness depends entirely on SWR + `runMaintenance` rescan. (If IDB is unavailable, the cursor write is a silent no-op and `normalizeCursor(undefined)` restarts the loop from the pages stage — it does not freeze mid-position; revalidation itself uses fetch + Cache Storage, not IDB.)
 - `eq-pages` `recency` map is one IDB value rewritten wholesale on every touch/trim — read-modify-write with no cross-tab lock; concurrent tabs can lose recency updates (last-writer-wins).
 - `skipWaiting` is gated entirely on a user click; no max-wait auto-activation.
 - Offline fallback is the SvelteKit-generated `404.html`, not a dedicated "you are offline" page.
@@ -352,15 +352,15 @@ Curated from the readers + critic, all code-grounded. Listed so a future diff ca
 - `downloadBytes` has **no timeout/abort/retry**; a hung CDN connection blocks fire-and-forget `ensureTranslation`.
 - No exponential backoff/jitter anywhere; engagement retry is hard-capped at 1 per source per tab.
 - `verifyBytes` is size-only; a byte-accurate corrupt download of exactly `spec.sizeBytes` passes. OPFS `put` is non-atomic (crash mid-write → corrupt file, recovered by next size-check).
-- No quota awareness; OPFS caps are fixed constants regardless of `navigator.storage.estimate()`.
-- `localizeDeliveryUrls` silently preserves a remote `downloadUrl` for a translation id with no baked match — a drifted `/sources` response could inject an arbitrary cross-origin URL (the `/_quran` gateway allowlist is the only backstop).
+- No quota awareness in OPFS retention — `CAP_COUNT`/`CAP_BYTES`/`TTL_MS` are fixed and `computeEvictions` never consults `navigator.storage.estimate()` (that is read only for the offline-pack UI display, `offline-store.svelte.ts:117`).
+- `localizeDeliveryUrls` silently preserves a remote `downloadUrl` for a translation id with no baked match — a drifted `/sources` response could inject an arbitrary URL that the worker fetches verbatim (`translationSpec` returns `t.downloadUrl` unrewritten; no URL-origin validation on the download path). The `/_quran` gateway allowlist does **not** cover this case (it only gates requests that hit `/_quran`).
 
 **Rust hot-db:**
 - `hit_rate` = `1 - builds/lookups` conflates "no traffic" with "perfect" and uses builds (cold loads), not moka's hit/miss counters.
 - Pool catalogue/whitelist frozen at boot; adding a translation needs a restart (acceptable under the immutable-DB rule, but undocumented as an ops constraint).
 - No "byte-bound vs count-bound" breakdown in `PoolStats` — `evictions` aggregates both.
 - `resident_bytes` (atomic) and moka `entry_count` are independently maintained; could diverge on a moka version change (byte-bound test guards the happy path only).
-- `Vary` is hard-coded to only `Accept-Encoding`; Arabic varies by `?script` and translations by source — cross-script/source correctness rests entirely on the ETag differing per `canonical_key`. A CDN that ignores ETag and keys on URL+Vary could cross-serve the wrong script.
+- `Vary` is hard-coded to only `Accept-Encoding`. This is correct for encoding negotiation (gzip/br) and is **not** a cross-script risk: `?script` is a URL query param and the source is a URL path segment, so any CDN that keys on URL already separates both scripts and translations — that variance is URL-borne, not header-borne. (The ETag still differs per `canonical_key`, which includes script/source.)
 - Only `If-None-Match` is honored; `If-Modified-Since` is CORS-allowed but never read (dead exposed header).
 - `respond_cached` and `respond_cached_with_etag` are ~95% duplicated.
 - Rate-limit dedup claims map has **no periodic prune** — long-TTL distinct keys can accumulate unbounded if never released.
@@ -375,4 +375,4 @@ Curated from the readers + critic, all code-grounded. Listed so a future diff ca
 
 - **To see what changed:** `git diff b17324d..HEAD -- docs/caching-architecture.md` shows doc edits; re-run the same audit (10 readers + critic) and diff the constants tables (§2) and the drift/gap lists (§3, §4) to see what shifted in code.
 - **To verify a claim:** every constant carries a `file:line`; every subsystem section names its files. The two highest-stakes claims (`/scripts` URL, search-ETag digest) were hand-verified at `controller.rs:810` and `controller.rs:1163` against this commit.
-- **What is explicitly NOT here:** the auth/session cache (SQLite sessions, outside `/quran`), FCM push delivery mechanics, the owner-profile SSR cache, and mobile clients (none in this repo). Those are adjacent but out of the two-domain scope.
+- **What is explicitly NOT here:** the auth/session cache (SQLite sessions, outside `/quran`), FCM push delivery mechanics, and mobile clients (none in this repo). Those are adjacent but out of the two-domain scope. (The owner-profile *data* cache is covered — see A4, `owner.ts`.)
