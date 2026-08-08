@@ -8,7 +8,7 @@ export const MAX_OFFSET = 500;
 const BARE_ALEF = "ا";
 const YA = "ي";
 const HA = "ه";
-const REMOVED = /[\p{Mn}\p{Me}\p{Cf}\u0640\u06de]/u;
+const REMOVED = /[\p{Mn}\p{Me}\p{Cf}\u0640\u06de\u06e5\u06e6\u06e9]/u;
 
 export interface NormalizedArabicMap {
   normalized: string;

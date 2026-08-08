@@ -11,9 +11,11 @@ use tokio::sync::{Mutex, Semaphore};
 use crate::quran::loader::{load_translation_corpus, QuranLoadError};
 use crate::quran::store::{CatalogueEntry, Corpus, TranslationId};
 
-/// Bounds concurrent cold Corpus builds so the byte ceiling holds during the build phase: moka's
-/// weigher caps resident entries, not in-flight builds, so unbounded parallel distinct-id loads
-/// could transiently allocate far past `max_resident_bytes`. Near-serial (2) closes that gap.
+/// Bounds concurrent cold Corpus builds so the byte ceiling holds during the build phase: moka
+/// enforces only the count ceiling (`max_capacity`) plus `time_to_idle` — there is no byte
+/// weigher — and the separate `enforce_byte_bound` prune loop runs only after a build completes,
+/// so unbounded parallel distinct-id loads could transiently allocate far past
+/// `max_resident_bytes`. Near-serial (2) closes that gap.
 const BUILD_CONCURRENCY: usize = 2;
 
 #[derive(Default)]
@@ -140,8 +142,9 @@ impl TranslationPool {
         let metrics = self.metrics.clone();
         let build_sem = self.build_sem.clone();
         let init = async move {
-            // Gate the build so the byte ceiling holds while a corpus is materialized (moka's
-            // weigher binds residents, not in-flight builds). Cached hits never reach here, so the
+            // Gate the build so the byte ceiling holds while a corpus is materialized (moka caps
+            // only the count ceiling; the byte bound is enforced after the build by the separate
+            // `enforce_byte_bound` loop, not by moka). Cached hits never reach here, so the
             // semaphore only throttles cold loads, never the hot path.
             let _permit = build_sem
                 .acquire()

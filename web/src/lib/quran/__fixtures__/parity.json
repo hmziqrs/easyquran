@@ -5,6 +5,7 @@
     { "input": "مَرْحَبَة", "expected": "مرحبه", "rule": "ta-marbuta folded to ha" },
     { "input": "إِنَّ آيَةً", "expected": "ان ايه", "rule": "hamza-alef + alef-madda folded (ة→ه)" },
     { "input": "كَلِمَةٌ   جَمِيلَة", "expected": "كلمه جميله", "rule": "whitespace collapsed (ة→ه)" },
-    { "input": "ا۞ب", "expected": "اب", "rule": "U+06DE (rub el hizib) stripped — 199 occurrences in Uthmani" }
+    { "input": "ا۞ب", "expected": "اب", "rule": "U+06DE (rub el hizib) stripped — 199 occurrences in Uthmani" },
+    { "input": "اۥۦ۩", "expected": "ا", "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda (categories Lm/So, outside \\p{Mn}) stripped — in 990+806+15 verses in Uthmani; mirror Rust's 06D6-06ED range" }
   ]
 }

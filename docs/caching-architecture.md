@@ -42,7 +42,7 @@ Two domains, no shared cache between them. They meet only at the HTTP edge and a
 ### Cross-cutting invariants (hold across both domains)
 
 1. **Quran databases are immutable.** Never written, never versioned. Sourced from Tanzil.net.
-2. **Identity = id, never a hash.** `uthmani`, `simple-clean`, `en.sahih`, … OPFS keys, ETags, catalogue rows, specs are all id-keyed. SHA-256 over Quran data is *manual audit only* (`just quran-audit`, `pnpm audit:arabic`, `pnpm verify`) — never in build/boot/runtime/ETag/cache-key. Guarded by `tests/quran_v1.rs` + `web catalogue-sha-guard.test.ts`.
+2. **Identity = id, never a hash.** `uthmani`, `simple-clean`, `en.sahih`, … OPFS keys, ETags, catalogue rows, specs are all id-keyed. SHA-256 over Quran data is *manual audit only* (`just quran-audit`, `pnpm audit:arabic`, `pnpm verify`) — never in build/boot/runtime/ETag/cache-key over Quran *data*. The one exception: the `/search` ETag carries a digest over the normalized *query* (user input, not Quran data) — carved out in `docs/quran.md:63`. Guarded by `tests/quran_v1.rs` + `web catalogue-sha-guard.test.ts`.
 3. **Integrity at runtime is shape, not digest.** Boot asserts 6236 rows + tiling + ayah-keys; downloads size-check bytes only (`verifyBytes`), never hash.
 4. **Arabic is always resident/pinned; only translations are evictable.** True on both sides (Rust boot-resident corpus; web `PINNED_ARABIC` excluded from prune across both OPFS and IDB-stored artifacts — the pin is storage-agnostic).
 
@@ -186,6 +186,8 @@ CATALOGUE (115 translations, 44 langs):
 
 **Medium:** Docker named volume `web_quran_cache` at `/app/cache/quran-ssr` (prod); `process.cwd()/.cache/quran-ssr` (dev). Single web container in compose → single writer.
 
+**Runtime:** the prod container runs the adapter-node `server.ts` on the **Bun** runtime (`oven/bun:1.3.14-slim`, `CMD ["bun","server.ts"]`, `deploy/Dockerfile.web:30,49`); `node:24-slim` (`:5`) is the build image only — Arabic prerender reads the sqlite corpus through `node:sqlite`, which Bun does not implement (`:1-4`). The cache code itself is runtime-agnostic.
+
 > Note: `GET /health/quran` (web) is a **different endpoint** from the Rust `GET /quran/health/ready` — the former reports the SSR disk cache, the latter reports the translation pool. Do not conflate.
 
 ### A6. `/_quran` artifact gateway
@@ -235,8 +237,8 @@ The async eviction listener decrements `resident_bytes`, and for `cause != Repla
 | max resident translations | 8 | `QURAN_MAX_RESIDENT_TRANSLATIONS` |
 | max resident bytes | 48 MiB | `QURAN_MAX_RESIDENT_TRANSLATION_BYTES` |
 | idle TTL | 1800 s (30 min) | `QURAN_TRANSLATION_IDLE_TTL_SECS` |
-| `BUILD_CONCURRENCY` | 2 | const (`translation_pool.rs:17`) |
-| prune semaphore | 1 | const (`:70`) |
+| `BUILD_CONCURRENCY` | 2 | const (`translation_pool.rs:19`) |
+| prune semaphore | 1 | const (`:72`) |
 
 **Security:** `parse_id` whitelist membership *is* the path-traversal guard (`TranslationId::parse(s, &id_whitelist)`); unknown/traversal ids → `None` → 400, no path ever built from raw input. Catalogue + `id_whitelist` frozen at boot (no runtime reload).
 
@@ -250,7 +252,7 @@ Stateless header-emission layer (no server-side response store). Every content h
 
 ```
 weak_etag(tag, canonical_key) = W/"{tag}:{canonical_key}"
-  Arabic tag   = "quran-corpus"        (static &'static str; store.rs:325-327)
+  Arabic tag   = "quran-corpus"        (static &'static str; store.rs:326-327)
   Translation  = "tanzil-{id}"         (controller.rs:54-56)
 ```
 
@@ -261,7 +263,7 @@ weak_etag(tag, canonical_key) = W/"{tag}:{canonical_key}"
 | `ARABIC_CACHE` | `public, max-age=300, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800` | surah/ayah/range/juz/page/ruku/hizb/manzil/sources(/scripts) |
 | `SEARCH_CACHE` | `public, max-age=60, s-maxage=300` | `/search` only |
 | `IMMUTABLE_CACHE` | `public, max-age=31536000, immutable` | `/random?date=` only |
-| `NO_STORE` | `no-store` | `/health/ready`, partial `/scripts`/`/sources`, **all 5xx** (`error.rs:84`) |
+| `NO_STORE` | `no-store` | `/health/ready`, partial `/scripts`/`/sources`, `QuranApiError`-originated 5xx (`error.rs:84`). The rate-limit gate's store-unavailable 503 (`rux-request-gate/layer.rs:248`) is a 5xx that is **not** a `QuranApiError` and emits no `Cache-Control` header |
 
 **Search-router split** (`main.rs:672-690`, `mod.rs:57-59`): `/search` is mounted on its own `Router` so it gets a tighter `30/60s` rate limit *before* the merge, then the merged public router is wrapped by `600/60s` `PathKey::Fixed("quran-v1")` — so search is double-limited, and parameterized routes can't fan into separate buckets.
 
@@ -308,8 +310,8 @@ In-process (no Redis) **fixed-window per-IP** rate limiting + dual-threshold abu
 | Value | Constant | Location |
 |---|---|---|
 | 6236 / 114 / 300 | `VERSE_COUNT` / `SURA_COUNT` / `RESPONSE_CAP` | store.rs:1-3 |
-| `"quran-corpus"` / `"tanzil-{id}"` | ETag tags | store.rs:325-327, controller.rs:54-56 |
-| 8 / 48 MiB / 1800 s / 2 / 1 | pool max-count / max-bytes / idle-TTL / `BUILD_CONCURRENCY` / prune-sem | settings.rs:160-162, translation_pool.rs:17,70 |
+| `"quran-corpus"` / `"tanzil-{id}"` | ETag tags | store.rs:326-327, controller.rs:54-56 |
+| 8 / 48 MiB / 1800 s / 2 / 1 | pool max-count / max-bytes / idle-TTL / `BUILD_CONCURRENCY` / prune-sem | settings.rs:160-162, translation_pool.rs:19,72 |
 | `max-age=300, s-maxage=86400, swr=604800, sie=604800` | `ARABIC_CACHE` | cache.rs:5-6 |
 | `max-age=60, s-maxage=300` | `SEARCH_CACHE` | cache.rs:8 |
 | `max-age=31536000, immutable` | `IMMUTABLE_CACHE` | cache.rs:10 |
@@ -326,7 +328,7 @@ Items where the code disagrees with the plan doc. Severity in parens.
 
 2. **(med) "Install verifies the complete new cache" is false for the shell route.** `docs/quran.md:72` claims atomic all-or-nothing install. `SHELL_ROUTE` (`${base}/404.html`) precache is `.catch(()=>null)` (service-worker.ts:159) — a missing/failing shell is silently skipped and the terminal navigation fallback (service-worker.ts:341-342) then returns `Response.error()` instead of an offline page.
 
-3. **(med) The search ETag embeds a SHA-256 digest.** `docs/quran.md:16` ("sha never names an ETag") and `:63` ("never a digest") are literally contradicted: `controller.rs:1163` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data — so it honors the no-sha-on-Quran-*data* intent — but the doc's absolute wording is broader than the intent and should carve out this exception explicitly. *(Verified by hand, `controller.rs:1163-1170`.)*
+3. **(resolved) The search ETag embeds a SHA-256 digest — now carved out in `docs/quran.md`.** `controller.rs:1163` computes `hex::encode(&sha2::Sha256::digest(norm_q.as_bytes())[..8])` and threads it into the search canonical_key. This is a digest over **user input** (the query string), *not* Quran data, so it honors the no-sha-on-Quran-*data* intent. `docs/quran.md:16` and `:63` now state this exception explicitly (`:63`: "`/search` is the exception: its canonical key folds in a sha-256 digest of the normalized query string (user input, not Quran data)"), so the prior doc-vs-code contradiction is closed — retained here as the historical flag that surfaced the carve-out. *(Verified by hand, `controller.rs:1163-1170`; carve-out re-verified against `docs/quran.md:16,63`.)*
 
 4. **(low) Translation byte-bound is a separate prune pass, not a unified LRU.** `§3` table says "eviction: LRU, whichever bound trips first" as if both are inside moka. Moka enforces only the count ceiling (`max_capacity`); the byte ceiling is enforced by a serialized post-build `enforce_byte_bound` loop, with transient overshoot bounded by `BUILD_CONCURRENCY=2`.
 

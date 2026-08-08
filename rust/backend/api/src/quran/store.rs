@@ -143,7 +143,8 @@ impl Corpus {
         out
     }
 
-    /// Resident byte cost: arena + offset table. Used by the translation-pool weigher.
+    /// Resident byte cost: arena + offset table. Feeds the translation-pool resident-byte
+    /// accounting that the separate `enforce_byte_bound` prune loop trims against.
     pub fn bytes(&self) -> usize {
         self.arena.len() + self.offsets.len() * 4
     }
