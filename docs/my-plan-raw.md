@@ -16,7 +16,10 @@ API:
     - But if it is multi-page, then SSG won't work. I mean it will create an experience of reloading the page even it's supposed to be one same page.
   - SQlite database is 1.5mb and might take some time to load we use fall back of API first and then SSG last. as API first still gives us SPA experience. Also, falling back from API to SSG only. It works for if the page we are viewing does not have page initiation. For example,
   - So this is how I supposed our arabic content to be rendered for the best experience. Also, SSG pages are hydrated once the cache is available. 
-- Translation we do only (surah) translated pages (this is for SEO purposes) 
+- Translation we do only (surah) translated pages (this is for SEO purposes).
+  - Now translation databases are not easily loaded in client like we do Arabic database.
+  - We have sort of a trigger to estimate whether user is a one-time viewer or a vivid or continuous reader based on that we load the complete translation database.
+  - Also, just like Arabic one, read do SSG, then on paginated pages, we load from API if cache does not exist, and when the database is cached, we stop using API and start consuming the cache.
 
 
 ```
