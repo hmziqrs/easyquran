@@ -1,31 +1,29 @@
 # Implementation Plan — closing the gap to `my-plan-raw.md`
 
 **Status:** proposed (not started)
-**Baseline commit:** `bad793f`
 **Source of intent:** `docs/my-plan-raw.md` (owner-authored, never edited by agents)
-**Source of current state:** `docs/quran-system.md`, plus the code audit in §0
-**Revision:** v3.2 — after four audit rounds (seven auditors). §12 records what changed.
+**Source of current state:** `docs/quran-system.md`, plus the code ledger in §0
 
 Each workstream states: **goal · files · steps · invariants · tests · done-when**.
 
 ---
 
-## 0. Gap ledger (audited at `bad793f`)
+## 0. Gap ledger
 
 | # | Gap | Domain | Workstream |
 |---|---|---|---|
-| 1 | No popularity signal for translation hot-cache | Rust | W1 |
+| 1 | No durable cross-restart API-demand signal for translation prewarm | Rust | W1 |
 | 2 | `IP_SOURCE=ConnectInfo` in deploy config; wrong behind CF→Traefik | Rust | W2 |
 | 3 | Quran routes never escalate to a ban; no export, no un-ban path | Rust | W3 |
 | 4 | Engagement counter is a sessionStorage int | Web | W4 |
 | 5 | Arabic `readRange` has no API fallback; validator dropped on API path | Web | W5 |
 | 6 | `RangeReader` has no client data path | Web | W6 |
-| 7 | No SSG-last tier for translated routes; degradation not pagination-aware | Web | W7 |
-| 8 | Zero web-side auth; live cache-poisoning holes in its way | Web | W8-0 (+ separate doc) |
+| 7 | Translated routes intentionally have no SSG tier; degradation and recovery are incomplete | Web | W7 + W9 |
+| 8 | Zero web-side auth; cache and origin prerequisites are incomplete | Both | W8 |
 | 9 | Doc divergences unrecorded | Docs | W9 |
-| 10 | Security riders this plan makes load-bearing | Both | W10 |
+| 10 | Cross-cutting delivery and cache safety requirements | Both | W10 |
 
-### Audited and already satisfied — no workstream needed
+### Already satisfied — no workstream needed
 
 - **`my-plan-raw.md:4`** Arabic fully in memory at boot. True (`quran/loader.rs`;
   `main.rs:438,448`; `exit(1)` at `:455`).
@@ -36,16 +34,16 @@ Each workstream states: **goal · files · steps · invariants · tests · done-
   once `onStatus` reports ready (`SurahReader.svelte:611,617-620`). **Not** true for range
   routes — that is W6.
 
-### Corrections to figures the intent doc relies on
+### Planning facts
 
 - **"SQLite database is 1.5 MB"** — true for the pinned Arabic DB (`quran-uthmani.sqlite` =
   1,593,344 B). But time-to-SPA also pays `sqlite3-*.wasm` ≈ 864,752 B → real cold cost
   ≈ **2.4 MB**. Size any "how long is the degraded window" reasoning off 2.4 MB.
 - **`my-plan-raw.md:5`** literally reads "We *do* load all translated database on boot…". In
-  context and against the code the intent is clearly the opposite. Flagged here rather than
-  silently rewriting the owner's sentence.
+  context and against the code the intent is the opposite. This document records that reading;
+  the owner-authored file remains unchanged.
 - Reader route count is ≈ **1,410** (114 surah + 662 surah-local-page + 604 global page +
-  30 juz), not the ~1,300 used in earlier drafts.
+  30 juz).
 
 ### Global invariants
 
@@ -57,27 +55,31 @@ evictable.** 4. **Reader hrefs use the `*For(ctx, …)` family** (guarded by `na
 
 ---
 
-## W1 — Popularity-driven translation residency (Rust)
+## W1 — Durable API-demand prewarm (Rust)
 
-**Goal:** implement "residency based on TTL and popularity" (`my-plan-raw.md:5`).
+**Goal:** preserve the existing bounded TTL + TinyLFU pool while carrying enough API-demand
+evidence across restarts to prewarm likely cold-start translations (`my-plan-raw.md:5`).
 **Files:** `quran/translation_pool.rs`, `services/translation_popularity_store.rs` (new),
-`migration/src/` (new migration), `main.rs`, `modules/quran_v1/controller.rs`, `quran/mod.rs`.
+`migration/src/m000003_translation_popularity.rs` (new), `config/settings.rs`, `main.rs`,
+`modules/quran_v1/{controller.rs,dto.rs}`, `quran/mod.rs`, `deploy/.env.example`.
 
-**Today:** TinyLFU count ceiling + idle TTL + post-build byte-bound LRU prune
-(`translation_pool.rs:76-97,168-192`). No popularity signal.
+**Today:** TinyLFU already supplies in-process frequency-aware admission, with an idle TTL and a
+post-build byte-bound LRU prune (`translation_pool.rs:76-97,168-192`). That satisfies bounded
+runtime popularity. Missing piece is durable evidence for restart prewarm.
 
-### What "popularity" can honestly mean here
+### What the durable signal means
 
 The pool only sees requests reaching the Rust process. Translated pages are SSR behind a 7-day
 HTML disk cache, and warm clients read their local worker DB. So pool hits measure **API
 demand** — a more popular translation may produce *fewer* pool hits once caching works.
 
-That is not a defect: the pool exists to serve API demand, so optimising for API demand is
-correct. But name it honestly — `api_demand_score`, not "reader popularity" (recorded in W9).
+The pool exists to serve API demand, so name the persisted value `api_demand_score`, not
+"reader popularity" (recorded in W9).
 
-**Design decision:** popularity governs **admission** (prewarm); TTL/LRU/byte-bound govern
-**eviction**, unchanged. A popular-but-idle entry resisting eviction would trade a bounded
-latency cost for an unbounded memory cost, and the byte bound is what protects the box.
+**Design decision:** durable demand governs **restart prewarm only**. Moka TinyLFU continues to
+govern runtime admission; TTL/LRU/byte-bound govern eviction unchanged. If prewarm fails the
+evidence threshold in step 8, remove the durable store too — a score with no consumer is dead
+state.
 
 ### Steps
 
@@ -116,9 +118,9 @@ latency cost for an unbounded memory cost, and the byte bound is what protects t
    **Lock-ordering rule:** never hold the `residents` guard across a SQLite write — copy out,
    drop the guard, then write. The listener runs inside `run_pending_tasks()` on the request
    hot path (`:175,192`), so coupling it to DB latency would put request latency behind disk.
-3. **Durable store, owned by migrations.** New migration in `migration/src/` (next after
-   `m000001_init.rs`) — **not** a raw `CREATE TABLE IF NOT EXISTS` at boot. `rate_limit_state`
-   inherited that wart; do not copy it.
+3. **Durable store, owned by migrations.** Add
+   `m000003_translation_popularity.rs`, after W3b's reserved
+   `m000002_rate_limit_state.rs` — **not** raw DDL at boot.
 
    ```sql
    CREATE TABLE translation_popularity (
@@ -138,61 +140,77 @@ latency cost for an unbounded memory cost, and the byte bound is what protects t
    Run popularity on every 6th tick (≈60 s) of the existing 10 s task rather than spawning a
    second task — a second flush task on the one shared SeaORM connection adds write
    amplification and cuts against invariant 6.
-5. **Snapshot, don't drain.** Copy counts out, upsert, then subtract only what committed. A
-   drain-first design loses every count if the upsert errors.
-6. **Decay in Rust, not in SQL.** `pow()` / `exp()` / `ln()` **do not exist in this build** —
+5. **Snapshot, don't drain; commit as one transaction.** Copy counts out, drop the residents
+   guard, then execute one SQLite transaction for all rows. Subtract the snapshot only after the
+   transaction commits. A failed transaction leaves every count intact; per-row autocommits on
+   the single shared connection are forbidden.
+6. **Persist one precise score invariant.** `score` is the value at `updated_at`. On a committed
+   flush at `now`, compute in Rust:
+   `score_now = score * 0.5f64.powf((now - updated_at) / HALF_LIFE_SECS) + committed_hits`, then
+   set `updated_at = now`, increment `hits_total`, and set `last_hit_at = now` only when
+   `committed_hits > 0`. Clamp negative elapsed time to zero. Reads apply the same decay from
+   `updated_at` to read time. This prevents one new hit from making an old score fresh again.
+
+   `pow()` / `exp()` / `ln()` **do not exist in this SQLite build** —
    `sqlx-sqlite` bundles `libsqlite3-sys 0.30.1` without `SQLITE_ENABLE_MATH_FUNCTIONS`, so
    `ORDER BY score * pow(...)` fails at runtime with `no such function: pow`. The table is
    ≤115 rows, so `SELECT` all and decay in Rust:
    `decayed = score * 0.5f64.powf(elapsed_secs / HALF_LIFE_SECS)`, `HALF_LIFE = 7 days`
    (const, not env). Decay **at read**, so rows that stopped being hit don't keep a frozen
    score and outrank recently-popular ones forever.
-7. **Prewarm — bounded, non-self-reinforcing, yielding.** Background `tokio::spawn` after pool
+7. **Prewarm — bounded, non-self-reinforcing, yielding.** `QURAN_PREWARM_TRANSLATIONS` defaults
+   to `2`; `0` disables both collection and prewarm. Background `tokio::spawn` after pool
    construction:
    - `N = min(QURAN_PREWARM_TRANSLATIONS (default 2), max_resident_translations)`;
    - **must not increment `hits`** (else prewarmed ids gain score every boot with zero traffic
      and the top-N freezes) **nor `lookups`** (`:131` — it would corrupt `hit_rate`);
    - **must stamp `tick = 0`** — `enforce_byte_bound` evicts the lowest tick (`:179-186`), so a
      fresh prewarm tick would evict a corpus a real user is reading;
+   - the post-build merge may set `tick = 0` only when metadata is absent or tombstoned; a real
+     request racing the warm must keep its newer tick and hit count;
    - **must yield** while `build_sem.available_permits() < BUILD_CONCURRENCY`: each load holds
      one of two permits (`:149-152`) and each iteration takes `prune_sem` and runs
      `run_pending_tasks` twice;
    - **must not block or fail boot.** Arabic boot is fail-fast; translations are not.
    Implement as a private `warm(id)` path that bypasses the metric increments rather than
    calling `get_or_build` directly.
-8. **Decide prewarm on evidence, with a stated threshold.** `time_to_idle` defaults to 1800 s
+8. **Keep/drop threshold with collectable evidence.** `time_to_idle` defaults to 1800 s
    (`settings.rs:162`), so prewarmed entries evaporate 30 min after boot unless real traffic
    arrives — in which case the first request would have built them anyway. Net value: "first
    request after each restart is fast, for N translations, for 30 minutes."
-   **Threshold:** keep prewarm only if, over one week, `builds` in the first 30 min after each
-   restart exceeds 20% of daily `builds`. Otherwise ship the popularity table for observability
-   and drop prewarm — an acceptable outcome, not a failure.
-9. **Observability.** Add `prewarmed: Vec<String>` and `top_demand: Vec<(String, f64)>` (cap 10)
-   to `/quran/health/ready` (`controller.rs:985`). This drops `PoolStats: Copy`
-   (`translation_pool.rs:33`) — keep `Clone`. The one consumer (`controller.rs:989`) reads
-   scalar fields only, so it should compile untouched; verify rather than assume.
-   Fix the `hit_rate` wart while here: `Option<f64>`, `None` when `lookups == 0`, instead of
-   today's misleading `1.0` (`:217-218`).
+   Keep prewarm only if `cold_builds_within_30m_of_boot / total_cold_builds >= 0.20` over at
+   least seven complete daily windows. Emit both counters through OTLP with a boot identifier;
+   do not infer them from the reset-on-restart health counter. If the threshold fails, remove
+   prewarm, collection, and the table together.
+9. **Observability contract.** Add `prewarmed: Vec<String>` and
+   `top_demand: Vec<(String, f64)>` (cap 10) to `PoolStats`, `TranslationPoolHealth`, its OpenAPI
+   shape, and `/quran/health/ready`. This drops `PoolStats: Copy`; keep `Clone`. Change
+   `hit_rate` in both pool and DTO to `Option<f64>` serialized as `null` when `lookups == 0`,
+   instead of today's misleading `1.0`.
 
 **Invariants:** eviction semantics unchanged; no new lock; no second flush task; no Quran-DB
 writes (`translation_popularity` lives in the app DB, `sqlite:./data/easyquran.db`, entirely
 separate from `db/quran/tanzil/**` — the immutability rule is not touched).
 
-**Tests:** decay halves across one half-life; ordering prefers a recent lower score over an old
-high one; failed upsert leaves counts intact; eviction tombstones rather than dropping hits;
+**Tests:** decay halves across one half-life; a 30-day-old score plus one hit does not become a
+fresh undiminished score; ordering prefers a recent lower score over an old high one; failed
+transaction leaves every count intact; eviction tombstones rather than dropping hits;
 prewarm clamps to `max_resident_translations`, increments neither `hits` nor `lookups`, stamps
 tick 0; prewarm on a bogus id warns without panicking; existing pool tests pass unchanged.
 
-**Done when:** restart warms top-N by decayed demand, `/quran/health/ready` reports it, and no
-eviction or memory-bound behaviour changed.
+**Done when:** restart warms top-N by decayed API demand, metrics can evaluate the keep/drop
+threshold, `/quran/health/ready` reports the explicit nullable contract, and no eviction or
+memory-bound behaviour changed.
 
 ---
 
 ## W2 — Production client-IP correctness (Rust)
 
-**Goal:** per-IP rate limiting actually keys on the client.
-**Files:** `config/settings.rs`, `middlewares/route_blocker.rs`, `state.rs`, `main.rs`,
-`deploy/.env.example`, `docker-compose.yml` (repo root, not `deploy/`), `deploy/README.md`.
+**Goal:** external rate limiting keys on the Cloudflare client IP while trusted Docker-internal
+SSR and health traffic use separate, bounded identities.
+**Files:** `config/settings.rs`, `middlewares/{route_blocker.rs,client_ip.rs}`, `state.rs`,
+`main.rs`, `web/src/lib/server/quran-translation-page.ts`, `deploy/.env.example`,
+`docker-compose.yml`, `deploy/README.md`, `web/scripts/assert-headers.sh`.
 
 **Today:** `settings.rs:98` defaults to `ConnectInfo` and `deploy/.env.example:42` ships
 `IP_SOURCE=ConnectInfo` **uncommented**. Behind CF→Traefik every request carries the proxy's
@@ -205,161 +223,158 @@ unset** — a guard firing only on "unset" catches nothing.
    `RUST_ENV → NODE_ENV → APP_ENV`; `route_blocker.rs:69` reads **only** `APP_ENV`, defaulting
    to `"development"`; `telemetry.rs:101` reads `DEPLOYMENT_ENVIRONMENT`. Since
    `deploy/.env.example:36` sets `RUST_ENV=production` and never `APP_ENV`, **the route blocker
-   is disabled in production right now.** Convert `route_blocker` to the shared helper — a real
-   bug fix riding along.
-2. `from_env` must return `Result` instead of panicking (`settings.rs:97-107` currently
-   `unwrap_or_else(|e| panic!(…))`), or step 3 is untestable. List its call sites (boot +
-   tests) in the change.
-3. Boot check: `is_production() && ip_source == ConnectInfo → error + exit(1)`, naming
-   `CfConnectingIp` and `deploy/.env.example:42`.
-4. Log the resolved IP source at startup unconditionally.
-5. Set `deploy/.env.example:42` to `IP_SOURCE=CfConnectingIp` — **exact PascalCase**;
-   `cf-connecting-ip` would hard-panic. `docker-compose.yml` (repo root) already passes the
-   variable through to the API container via `env_file: [.env]` (`:80`) — verified.
+   is disabled in production right now. Convert `route_blocker` to the shared helper.
+2. `HttpSettings::from_env` returns `Result`, never panics on `IP_SOURCE`. Define environment
+   precedence once: `RUST_ENV → NODE_ENV → APP_ENV`; production is `production`, accepted
+   non-production values are `development|dev|test|testing|ci|local`, and unset/unknown values
+   are configuration errors outside tests.
+3. **Three identities, resolved before rate limiting:**
+   - external request: require `CF-Connecting-IP` in production and use it;
+   - Bun SSR request: require a constant-time match on server-only
+     `X-EasyQuran-Internal-Token`, assign `service:web-ssr`, and use a separate non-escalating
+     limiter configured by `QURAN_INTERNAL_REQUESTS_PER_MINUTE`;
+   - `/healthz` and `/quran/health/ready`: mount outside every content limiter and never require
+     a client-IP header.
+   Missing/invalid internal token never grants internal treatment. Missing CF header on an
+   external production request is rejected, never collapsed into `unknown`.
+4. Generate `INTERNAL_QURAN_API_TOKEN` per deployment. Bun reads it from private runtime env and
+   sends it only to `INTERNAL_QURAN_API_BASE`; it never enters a public env variable, response,
+   or log. Compose passes it to web and API containers.
+5. Production boot with `ConnectInfo`, missing internal token, or a non-positive internal limit
+   returns a configuration error and exits non-zero. Log selected external source and internal
+   policy without logging the token.
+6. Set `deploy/.env.example` to `IP_SOURCE=CfConnectingIp` — **exact PascalCase**;
+   `cf-connecting-ip` is invalid. `docker-compose.yml` passes the environment to the API through
+   `env_file: [.env]`.
 
 ### Trust, not just parsing
 
-`CfConnectingIp` trusts the header unconditionally. If the origin is reachable without going
-through Cloudflare, anyone can spoof `CF-Connecting-IP`. **Precondition for W3a:** Traefik (or
-the host firewall) must restrict origin ingress to Cloudflare ranges; document in
-`deploy/README.md`. Until then escalation stays disabled — a spoofable header plus automated
-banning is a remote "ban anyone" primitive.
+`CfConnectingIp` trusts the header. Before this configuration reaches production, Traefik or the
+host firewall must restrict public origin ingress to current Cloudflare ranges.
+`deploy/README.md` owns the range-update procedure and direct-origin negative test.
+`assert-headers.sh` proves that a public caller cannot choose `CF-Connecting-IP`, an external
+request without the header is rejected at origin, internal SSR succeeds only with the token,
+and health works without either header. W3a remains disabled until this contract passes.
 
-### Rollout
+**Tests:** serialized env tests for production/dev/unset/unknown values; prod + `ConnectInfo` →
+`Err`; prod + `CfConnectingIp` → `Ok`; dev + `ConnectInfo` → `Ok`; route blocker enabled under
+`RUST_ENV=production`; external missing/spoofed CF header rejected; valid internal token gets
+the service bucket; invalid token gets no privilege; internal and external buckets are isolated;
+health never enters either bucket.
 
-Two releases. **R1:** warn loudly at boot and log a structured event (there is no `/metrics`
-endpoint — counters leave via OTLP only, so "emit a metric" means an OTLP attribute, not a
-scrape target). **R2, one week later:** hard-fail. Gives operators a window without an outage.
-
-**Tests:** `from_env` — prod + `ConnectInfo` → `Err`; prod + `CfConnectingIp` → `Ok`; dev +
-`ConnectInfo` → `Ok`. Route blocker enabled under `RUST_ENV=production`.
-
-**Done when:** production boots only with a correct IP source, the route blocker is live in
-prod, and startup logs name the resolved source.
+**Done when:** production boots only with the complete ingress contract, route blocker is live,
+external requests carry verified client identities, internal SSR has its own bounded identity,
+and health traffic cannot enter a content or escalation bucket.
 
 ---
 
-## W3 — Ban escalation, scope persistence, export (Rust)
+## W3 — Ban escalation, persistence, inspection, and export (Rust)
 
-**Goal:** `my-plan-raw.md:7` — ban bad actors longer, feed them to proxy level.
+**Goal:** `my-plan-raw.md:7` — persist longer IP bans, make them operable, and expose a safe
+machine-readable feed for a deployment-owned proxy adapter.
 **Files:** `crates/rux-request-gate/src/{layer.rs,store.rs,abuse.rs}`,
-`services/rate_limit_store.rs`, `migration/src/`, `modules/admin_*`, `main.rs`,
-`docker-compose.yml`.
+`services/rate_limit_store.rs`, `migration/src/m000002_rate_limit_state.rs`,
+`modules/admin_bans_v1/` (new), `modules/quran_v1/error.rs`, `config/settings.rs`, `main.rs`,
+`deploy/.env.example`, `deploy/README.md`.
 
-**Today:** the abuse limiter (Temp/Long scopes, `store.rs:194,203`) is wired only to `auth_v1`,
-`newsletter_v1`, `post_comment_v1`, `forgot_password_v1`, `email_verification_v1`. Quran routes
-get fixed-window layers only — 429s forever, never a ban, no export, no un-ban.
+**Today:** Quran routes have fixed-window limiting only. Existing Temp/Long abuse buckets lose
+scope on restart, no side-effect-free ban lookup exists, `RateLimitStore::del` removes dedup
+claims rather than limit buckets, and no operator API exists.
 
-**Ship order: W3b → W3c → W3a.** Cheapest correctness fix first; the un-ban path before the
-thing that creates bans; the dangerous part last, flagged off.
+**Dependency order:** W3b → W3c → W3a. W3a stays disabled until W2 and W3c are complete.
 
-### W3b — Persist the ban scope (independent bug fix)
+### W3b — Migration-owned persistence
 
-`store.rs:111-114` restores every ban as `Temp`, so `Long` downgrades on restart.
+1. Add `block_scope` to `BucketSnapshot`, snapshot, flush, load, and restore. Unknown stored
+   values fail closed as `Temp` and emit a warning; valid values round-trip exactly.
+2. Add reserved migration `m000002_rate_limit_state.rs`. If `rate_limit_state` is absent, create
+   the five-column table. If it already exists, inspect
+   `PRAGMA table_info(rate_limit_state)` and conditionally add
+   `block_scope TEXT NOT NULL DEFAULT 'Temp'`. Register the migration before replacing the
+   boot-owned table creation, and keep migration-before-`load()` ordering.
+3. Introduce one async persistence-operation lock shared by periodic snapshot/flush and admin
+   mutations. Never hold the in-memory bucket mutex during SQLite I/O.
+4. Expired rows are deleted on the next successful flush; active keys remain only until their
+   fixed or block expiry. This retention rule covers IP, email, and user-id key classes. Only
+   successfully parsed active IP ban keys may appear in an IP export.
 
-1. Add `scope` to `BucketSnapshot` (`store.rs:46-52`) and to `snapshot()`/`restore()`.
-2. **Decision (made, not deferred): move `rate_limit_state` into the migration graph.** It is
-   currently created by raw `CREATE TABLE IF NOT EXISTS` at boot
-   (`services/rate_limit_store.rs:10-33`) while `migration/src/` holds only `m000001_init.rs`,
-   so an `ALTER TABLE` migration would race `ensure_table`. Add the table *and* the new
-   `block_scope TEXT` column in one migration, and delete `ensure_table`'s DDL. This matches
-   W1 and stops the wart spreading.
-   **Old-binary behaviour:** an old binary re-running `ensure_table` against the
-   migration-owned table is a no-op (`IF NOT EXISTS`) and ignores the extra column — safe
-   during a rolling deploy.
-3. Write the scope on flush, read on restore, default `Temp` for pre-existing rows.
+**Tests:** fresh migration; legacy table with rows gains scope without data loss; migration is
+idempotent; `Long` survives restart; invalid scope restores as `Temp`; expired rows purge.
+**Done when:** fresh and existing installs share one migration-owned schema and scope survives
+restart without changing Quran DBs.
 
-**Tests:** a `Long` ban survives restart as `Long`.
-**Done when:** scope round-trips across restart and the table is migration-owned.
+### W3c — Inspect, export, and lift bans
 
-### W3c — Inspect and lift bans (must precede W3a)
+1. Add distinct store operations: `ban_status(key)` performs a read-only active-ban lookup;
+   `clear_limit(key)` removes a limit bucket; dedup `del(key)` keeps its current claim semantics.
+2. `GET /admin/bans` is admin-ACL gated, `no-store`, paginated, and returns active
+   `{ip, scope, blockUntilAt}` rows only.
+3. `DELETE /admin/bans/{ip}` acquires the persistence-operation lock, clears exact
+   `quran-ban:{ip}` and `ratelimit:{ip}:quran-v1` L1 buckets, deletes their L2 rows, then releases
+   the lock. This prevents stale periodic snapshots from resurrecting a lifted ban and prevents
+   the old fixed count from immediately recreating it. State explicit error behavior: any DB
+   failure returns failure and leaves a retryable, logged operation.
+4. `GET /admin/bans/export` returns neutral JSON containing active parsed IPs, scope, and expiry.
+   Human access uses admin ACL. Machine access uses a separate read-only `BAN_EXPORT_TOKEN`
+   compared in constant time; the token is never accepted by mutation routes. Never export
+   `totp:*`, email, user-id, fixed-rate, or unparseable keys.
+5. Traefik/Cloudflare mutation stays outside this repository. `deploy/README.md` documents the
+   JSON contract and requires any deployment adapter to preserve expiry and un-ban semantics;
+   this plan does not claim a proxy block exists merely because an export exists.
 
-1. `GET /admin/bans` — admin-ACL gated, `no-store`, paginated, returns
-   `{ip, scope, block_until_at}`.
-2. **`DELETE /admin/bans/{ip}`** — clears **both** L1 and L2. Without it the only way to lift a
-   wrong ban is a DB edit, and after W3b not even a restart clears it. A ban system with no
-   un-ban is not shippable.
-3. `GET /admin/bans/traefik.yml` — deny fragment for a file-provider mount or polling sidecar.
-4. **Whitelist key prefixes on export; never parse keys generically.** The same `InMemoryStore`
-   holds abuse buckets keyed by **user id**, not IP — `totp:{user.id}`,
-   `email_verify:{user_id}`, `email_verification:{user_id}`
-   (`auth_v1/controller.rs:223,431`; `email_verification_v1/controller.rs:49,130`) alongside
-   `ratelimit:{ip}:{path}` (`layer.rs:168`) and `forgot_password:{ip}`. Generic parsing would
-   put **user IDs into a Traefik deny list** — a PII leak and a garbage ACL. Export must
-   accept only known IP-keyed prefixes and parse IPv6 from the right.
-5. Raw client IPs are PII: admin-gated, `no-store`, and subject to a stated retention rule.
+**Tests:** list/export exclude email and user-id keys; IPv4/IPv6 round-trip; invalid export token
+fails; delete clears L1/L2 and fixed count; barrier-controlled flush/delete race cannot recreate
+the row; restart after delete does not restore it.
+**Done when:** operator can inspect and lift bans without DB edits and a proxy adapter has a
+stable, non-PII-leaking feed.
 
-**Cloudflare sync stays out of scope** — an outward-facing, hard-to-reverse change on a
-third-party account needing its own decision on token scope, list id, blast radius, and
-un-ban. These endpoints give an external job everything it needs. **Needs the owner's explicit
-go-ahead before anyone builds it.**
+### W3a — Escalate suspicious repeated rate blocks (default off)
 
-**Done when:** an operator can list, export, and lift a ban without touching the DB.
+`on_block` remains a synchronous response hook and is not used for store mutation. Escalation
+runs in `RateLimitMiddleware::call`, where resolved identity and store are available.
 
-### W3a — Escalate repeated blocks into a ban (last, default off)
-
-**`on_block` cannot do this.** `BlockFn` is `Arc<dyn Fn(BlockInfo) -> Response + Send + Sync>`
-— synchronous (`layer.rs:28`) — while `abuse::check` is `async` and needs a store handle
-(`abuse.rs:46`); and `BlockInfo` (`layer.rs:19-26`) carries no client IP.
-
-1. Escalate **inline in `RateLimitMiddleware::call`** (`layer.rs:176-206`) where `ip`
-   (`:158`) and `layer.store` are in scope, behind opt-in `EscalationConfig`:
+1. Add explicit config:
    ```rust
    struct EscalationConfig {
-     key_prefix: &'static str,   // must match W3c's export whitelist
-     temp_after: u32,            // default 5 window-blocks
-     temp_window_secs: u64,      // default 3600
-     long_after: u32,            // default 20
-     long_window_secs: u64,      // default 86400
+     enabled: bool,                    // QURAN_BAN_ESCALATION_ENABLED, default false
+     key_prefix: &'static str,         // "quran-ban"
+     temp_after: u32,                  // 5 qualifying blocked windows
+     temp_window_secs: u64,            // 3600
+     temp_duration_secs: u64,          // 3600
+     long_after: u32,                  // 20 qualifying blocked windows
+     long_window_secs: u64,            // 86400
+     long_duration_secs: u64,          // 604800
+     suspicious_4xx_per_window: u32,   // 20
      allowlist: Vec<IpNet>,
    }
    ```
-   (`IpNet` means adding the `ipnet` crate — not currently a dependency anywhere in the
-   workspace.)
-2. **Escalate at most once per window rollover, never per request.**
-   `InMemoryStore::abuse_check` pushes an attempt on *every* call, including while already
-   blocked (`store.rs:172`, inside the `until > now` branch), pruning only past
-   `cfg.block_range` (`:165-168`). Recording per-429 means a flood stores one `i64` per blocked
-   request for the whole `block_range` — turning the ban into a memory amplifier for the exact
-   attack it should stop, making thresholds meaningless (crossed in milliseconds), and
-   auto-escalating every temp-blocked IP to `Long`.
-   *(The 24 h `MAX_ATTEMPT_WINDOW`, `store.rs:13`, applies to `prune()` — the retention here is
-   each caller's `block_range`. Conclusion unchanged.)*
-3. **The dedup primitive must be written fail-closed.** `abuse::dedup_nx` (`abuse.rs:109-117`)
-   fails **open** by design, which contradicts the fail-closed stance everywhere else in this
-   workstream. Either write a fail-closed variant or drop the fail-closed claim — do not ship
-   the contradiction.
-4. **`InMemoryStore.claims` pruning is a hard precondition, not a rider.** `claims`
-   (`store.rs:66`) is never touched by `prune()` (`:121-131`, which walks `limits` only), so
-   every dedup `set_nx_ex` leaks a `String` + `SystemTime` forever — the same memory
-   amplification, moved one map over. Fix `prune()` before enabling escalation.
-5. **Unify the key namespace with W3c.** Escalation keys and export keys must be the same
-   prefix; otherwise `GET /admin/bans` will not show W3a's bans and `DELETE` will not clear
-   them — and the un-ban path was the whole reason W3c ships first.
-6. Wire to the `quran-v1` branch limiter **only** (`main.rs:682-684`). `/quran/search` is
-   merged into `quran` at `:673-676` *before* the branch layer, so wiring both double-counts
-   every blocked search.
-7. **CIDR allowlist required.** The branch limiter collapses all quran paths into one bucket
-   per IP (`middlewares/rate_limit.rs:23-30`) at 600/min. A university or carrier CGNAT exit
-   exceeds that legitimately — today a recoverable 429, after W3a a `Long` ban for thousands.
-   Escalation should also key on abuse *shape* (repeated 4xx, unknown ids, traversal attempts)
-   rather than raw volume; **that detection design is out of scope here and must be specced
-   before it ships** — until then, volume + allowlist only, with conservative thresholds.
-8. **Split the healthcheck out of the escalating bucket.** `/quran/health/ready` lives in
-   `quran_v1::routes()` (`mod.rs:50`) inside the 600/60 bucket, and `docker-compose.yml:92`
-   healthchecks it — a busy box could rate-limit its own healthcheck into a restart loop. Give
-   it its own `PathKey`.
+   Parse `QURAN_BAN_ALLOWLIST` as CIDRs at boot; enabled + missing/invalid allowlist is a boot
+   error. Internal service identities and health routes can never enter this state machine.
+2. Before fixed-window increment, call side-effect-free `ban_status(quran-ban:{ip})`. An active
+   Temp/Long ban immediately returns 429 for every request, including after fixed-window rollover.
+3. Record suspicious Quran 4xx events in a bounded per-IP/window counter for a closed set:
+   unknown source id, invalid range bounds, and unknown Quran route. Exclude normal search
+   validation, ordinary not-found content, 5xx, and successful reads.
+4. A rate window qualifies only when `count == max_requests + 1` **and** the suspicious counter
+   meets its threshold. That equality is the one-event-per-window primitive; do not use
+   `dedup_nx` or append on every 429. Raw volume alone never creates a ban.
+5. `record_block_event` prunes old qualifying events, evaluates Long before Temp, and upgrades
+   to Long when the long threshold is met. Active-ban lookup never appends events. Escalation
+   history is L1-only; active ban scope/expiry is L2-persistent.
+6. Wire only the outer `quran-v1` branch limiter. Search remains under its own 30/min limiter and
+   the outer 600/min ceiling but contributes at most one outer qualifying event per window.
+7. Prune expired `claims` in the existing store as W10.5; escalation itself does not use claims.
 
-**Preconditions, all hard:** W2 enforcing · Cloudflare-range ingress restricted · W3c un-ban
-live · `claims` pruning fixed · allowlist configured · key namespace unified. **Default off.**
+**Hard gates:** W2 ingress contract · W3b migration · W3c un-ban · valid CIDR allowlist · exact
+key namespace · default-off flag.
 
-**Tests:** escalation off by default (existing limiter tests unchanged); N blocks → `Temp`,
-M → `Long`; a sustained flood records **one** attempt per window (memory regression test);
-allowlisted CIDR never escalates; `DELETE /admin/bans/{ip}` clears an escalation-created ban;
-`/quran/health/ready` not in the escalating bucket.
+**Tests:** flag off preserves existing behavior; active ban blocks request 1 after rate-window
+rollover and after restart; volume without suspicious shape never bans; qualifying windows reach
+Temp then Long; Long wins when both thresholds match; active Temp can later upgrade after new
+qualifying windows; flood stores one event per window; allowlisted/internal identities never ban.
 
-**Done when:** a sustained abuser is banned, an operator can see and lift it, and no
-legitimate CGNAT range can be banned by volume alone.
+**Done when:** suspicious sustained abuse creates enforceable persistent bans, raw legitimate
+volume cannot ban a CGNAT range, and every ban is visible and safely removable.
 
 ---
 
@@ -388,6 +403,11 @@ interface EngagementState {           // localStorage "eq:engagement"
 isEngagedReader() = distinctDays >= 2 || totalViews >= 4 || sessionViews >= 3;
 ```
 
+`sessionViews` lives under `sessionStorage "eq:reader-session-views"`. The legacy
+`eq:reader-views` key is read once during migration, seeds both `totalViews` and
+`sessionViews`, then is deleted. A `localStorage "eq:engagement-migrated-v1"` marker makes the
+durable seed idempotent while the session counter continues normally.
+
 **Gate:** `isEngagedReader() && preBumpSourceViews[id] >= 1` — explicitly the **pre-bump**
 value; reading post-bump would make it always true on first exposure and the second signal
 would do nothing.
@@ -407,21 +427,21 @@ would do nothing.
 4. **Monotonic day guard:** increment `distinctDays` only when `today > lastDay`
    lexicographically. DST is harmless; a clock set forward then back would otherwise
    double-count.
-5. `sessionViews` stays in `sessionStorage`.
+5. `sessionViews` uses the new session key above. Migration order is: read validated durable
+   state → read legacy session value → seed durable total once if marker absent → initialize new
+   session counter → write marker → delete legacy key.
 6. Bump `readerViews` always; `sourceViews[id]` only for translation sources.
 7. Keep `PREFETCH_PREFIX` settle markers in `sessionStorage` and every existing guard:
    `saveData`/2g (`:27-32`), `whenIdle` (`:34-38`), one retry per source per tab (`:45-50`).
 8. `noteTranslationChosen` (`:96`) keeps bypassing the gate — an explicit pick beats a heuristic.
-9. **Migration is low-stakes — one release, not two (corrected in v3.2).** The legacy
+9. **Migration is low-stakes and atomic within one synchronous call.** The legacy
    `eq:reader-views` counter is **sessionStorage** (`engagement.ts:6,16-18`) — per-tab,
    dies with the tab — so there is no durable history to protect. Seed `totalViews` from it
-   if present and delete it in the same release. A web rollback then merely restarts the old
-   per-tab counter at 0, indistinguishable from opening a new tab; settle markers
-   (`eq:tprefetch:*`) are untouched, so no downloads re-trigger. (v3.1's two-release scheme
-   guarded a cross-session history that never existed.)
-10. **Rider (required): give `downloadBytes` a timeout.** `workers/download.ts` has no timeout,
-    abort, or retry — the one fetch not wrapped by `fetchWithTimeout`. W4 *increases* how often
-    `ensureTranslation` fires, multiplying the frequency of a hung fire-and-forget fetch.
+   if present and delete it in the same call. Settle markers (`eq:tprefetch:*`) are untouched.
+10. **Give `downloadBytes` a full-transfer timeout and byte ceiling.** One AbortController stays
+    active through headers and complete body streaming, not only until `fetch()` resolves. Abort
+    when elapsed budget expires or bytes exceed declared `sizeBytes`; always cancel reader and
+    clear timer. One retry remains governed by existing per-source session logic.
 
 **Do not** write a "`readJSON` throws" test — `safe-storage.ts:3-11` catches internally and
 returns `undefined`. Test the `undefined` path.
@@ -430,6 +450,8 @@ returns `undefined`. Test the `undefined` path.
 distinct days → prefetch; Arabic-only views never prefetch; `readJSON` → `undefined` falls back
 to session-only without throwing; legacy key seeds `totalViews` once; gate
 reads pre-bump `sourceViews`; `downloadBytes` aborts on timeout.
+Repeat-load migration seeds durable history once while the new session counter continues; an
+oversized stream aborts before unbounded allocation.
 
 **Done when:** a reader returning on a second day gets the translation prefetched, a one-time
 visitor does not, and no code path can hang forever on a download.
@@ -439,74 +461,87 @@ visitor does not, and no code path can hang forever on a download.
 ## W5 — Unify and repair the fallback chain (Web)
 
 **Goal:** `my-plan-raw.md:14` — "fall back to API first".
-**Files:** `lib/quran/worker-client.ts`, `lib/quran/api-client.ts`,
-`app/_reader/SurahReader.svelte`, `src/service-worker.ts`.
+**Files:** `lib/quran/{worker-client.ts,api-client.ts,fetch.ts,range-fetch.ts}`,
+`lib/server/quran-translation-page.ts`, `app/_reader/SurahReader.svelte`,
+`src/service-worker.ts`, browser + server loader tests.
 
 **Today:** translations get an ordered chain (`worker-client.ts:108-156`); Arabic gets ad-hoc
 early-returns — `readSurah:259-269` hits the API only if the worker was never constructed;
-`readRange:286-291` is worker-only with no fallback.
+`readRange:286-291` is worker-only with no fallback. Translated range SSR bypasses
+`quranApi.readRange` and sends one request from `quran-translation-page.ts:32-49`, so juz
+19/23/27/29/30 exceed the backend cap and degrade to empty data even while the API is healthy.
 
-### Precondition (moved forward — this is not an auth-only problem)
+### API cache boundary
 
 **The SW `/quran/` bypass is already dead in production.** `service-worker.ts:252` matches
 `/quran/`, but prod `PUBLIC_QURAN_API_BASE=https://easyquran.fyi/api/quran`
 (`deploy/.env.example:20`) → real paths are `/api/quran/…`, which falls past all five bypasses
 into `swrApp()` and lands in **`eq-app-${version}`**. Quran API JSON is being cached there
-today. W5/W6 turn API reads from rare into routine, so **add `/api/` to the bypass list as part
-of W5**, not later in W8-0.
+today. Add same-origin `/api/` to the bypass list before adding fallback traffic. API response
+caching belongs to HTTP/edge policy, never `eq-app-*` or `eq-data-v1`.
 
 ### Steps
 
 1. Generalise `withTranslationFallback` into `withSourceFallback` with a `hasLocal` probe:
    translations → `hasTranslation(id)`; Arabic → worker readiness. `quranWorker.ready` is a
-   **synchronous getter** (`:159`), so type the probe `() => boolean | Promise<boolean>`.
-2. **Fix the boot-window branch.** The current first branch is `if (!worker && QURAN.apiBase)`
-   (`:124`) and `worker` is `null` until `start()` runs — so a read during boot goes to the
-   network even on a device holding the full local DB. Probe
-   `startPromise !== null || worker !== null`, or `await whenReady()` with a short budget.
-3. **Chunk API range reads to ≤ 300 ayahs** (`RESPONSE_CAP = 300`, `quran/store.rs:3`, enforced
-   `controller.rs:1237-1239`). **Decision: chunk inside `quranApi.readRange`** (not "gate the
-   fallback on span"), because W6 needs whole-juz reads to work.
+   synchronous getter, so type the probe `() => boolean | Promise<boolean>`.
+2. Preserve tier diagnostics even when fallback succeeds. Each read records
+   `{servedBy: "local"|"api", workerFailure?: ReadFailure, apiFailure?: ReadFailure}` through a
+   typed status callback. `ReadFailure` distinguishes timeout, transport, HTTP, malformed data,
+   and worker failure without exposing URLs or response bodies. Final failure retains both tier
+   causes rather than only `lastErr`.
+3. **Fix the boot window.** When worker startup has begun, wait up to
+   `LOCAL_BOOT_BUDGET_MS = 1500` for readiness before choosing API. Merely checking
+   `startPromise !== null || worker !== null` is insufficient because the worker rejects reads
+   until initialization completes. Timeout falls through to API; worker readiness within budget
+   prevents network use when local DB already exists.
+4. **One shared range fetcher for browser and SSR.** `range-fetch.ts` accepts base URL, source,
+   bounds, validator, and fetch implementation. Both `quranApi.readRange` and
+   `fetchTranslationRange` use it, so no server path can bypass chunking.
+5. Chunk reads to ≤300 ayahs (`RESPONSE_CAP = 300`, enforced at
+   `controller.rs:1237-1239`).
    **Five juz exceed the cap — 19 (339), 23 (357), 27 (399), 29 (431), 30 (564)** — computed
    from the juz start table in `web/static/quran-meta/quran-data.json`. Global pages max at 42,
-   so they are safe. Max chunk count is 2. The client already knows the span before calling
-   (`loadQuranData().rangeByIndex(kind, index)` → `{startGlobal, endGlobal}`), so there is no
-   discovery round-trip.
-   **Stitching rules:** apply the coordinate validator **per chunk**; concatenate in order;
-   **any chunk failure fails the whole read** (no partial renders). Timeout (corrected in
-   v3.2): API reads run under `fetchWithTimeout` with `FETCH_TIMEOUT_MS = 3000` (`fetch.ts:1`)
-   — `DEFAULT_TIMEOUT_MS = 30_000` (`worker-client.ts:32`) is the **worker-request** timeout
-   and never applies to the API path. Two sequential chunks worst-case ≈ 6 s, so the real risk
-   is inverted: 3 s may be too *tight* for a 431–564-ayah chunk on a slow network. Pass an
-   explicit per-chunk budget sized for the largest chunk rather than inheriting the 3 s
-   default.
-4. **Thread `validateCoordinate` through `quranApi`.** `api-client.ts` takes no validator, so
+   so they are safe. Max chunk count is 2; every chunk is at most 300.
+6. **Stitch exact complete results.** Per chunk: apply coordinate validator; require first/last
+   indices to equal requested chunk bounds; require exact count. Across chunks: require adjacency;
+   concatenate ayahs; merge normalizations by surah; accept byte-equivalent duplicates created
+   by a split inside one surah and reject conflicting duplicates. Final result must cover
+   `[from,to]` exactly. Any failure rejects the whole read; partial renders are forbidden.
+7. `fetchJsonWithTimeout` owns AbortController through headers **and complete body decoding**.
+   Range chunks use `RANGE_CHUNK_TIMEOUT_MS = 10_000`; timeout cancels body consumption. The
+   30-second worker request timeout remains unrelated.
+8. **Thread `validateCoordinate` through `quranApi`.** `api-client.ts` takes no validator, so
    the API path decodes without the check the worker path performs (`worker-client.ts:288`,
    `SurahReader.svelte:417-419`). W5/W6 make the API path routine, silently weakening the
    invariant.
-5. **Relax the reader's pre-gate.** `SurahReader.loadPage` returns early on
-   `!quranWorker.ready` (`:397-403`), queuing into `pendingPages` and retrying when
-   `onStatus === "ready"` (`:617-620`) — so the read is *deferred*, not permanently dead, but
-   it never reaches the fallback chain while the worker is unhealthy. Let `loadPage` attempt
-   the read and let the chain decide. (Write the test against "deferred", not "dead".)
-6. Resulting order for both source kinds: `local → API → local re-check → throw`.
+9. **Remove both reader gates.** Neither `quran.status === "error"` nor
+   `!quranWorker.ready` may prevent a read. Worker status drives UI only; `loadPage` always calls
+   the fallback chain. A successful API read clears network degradation but may leave worker
+   degradation visible.
+10. Resulting order for both source kinds: `local → API → local re-check → typed failure`.
 
 **Invariant:** a ready worker always beats the API; the API is strictly a fallback.
 
-**Tests:** Arabic `readRange` — worker throws + API healthy → API result; worker healthy → API
-never called; read during boot with a local DB → no network; each of juz 19/23/27/29/30 via API
-→ chunked, no 400; chunk failure → whole read fails, no partial render; API path receives the
-validator; `/api/` never enters `eq-app-*`; translation behaviour byte-identical.
+**Tests:** worker fatal/store status error + API healthy → API result; worker healthy → API never
+called; worker becomes ready inside boot budget → no network; boot budget expires → API; all
+five oversized juz work through browser and translated server loaders; split-inside-surah merges
+normalization; conflicting duplicate/truncated/wrong-boundary chunk rejects; chunk failure → no
+partial result; timeout covers stalled body; API path receives validator; `/api/` never enters
+any Cache Storage bucket; translation surah behavior unchanged.
 
-**Done when:** every Arabic read has the same fallback ladder as translations, oversized juz
-work through the API, and API responses are not cached by the SW.
+**Done when:** Arabic and translation browser reads share one fallback ladder, browser and SSR
+share one exact chunk contract, oversized juz return complete data, tier failures stay
+observable, and API responses never enter service-worker caches.
 
 ---
 
 ## W6 — Client data path for range routes (Web)
 
-**Goal:** `my-plan-raw.md:13` — stop relying on server data once the local DB is warm.
-**Files:** `app/_reader/RangeReader.svelte`, `lib/quran/worker-client.ts`.
+**Goal:** upgrade range routes from server first paint to exact local/API data without blanking,
+mixing route state, or allowing unbounded SvelteKit data cache growth.
+**Files:** `app/_reader/RangeReader.svelte`, `lib/quran/worker-client.ts`,
+`src/service-worker.ts`, `app/__tests__/nav-guard.test.ts`, component + service-worker tests.
 
 **Today:** `RangeReader` renders server `data` and nothing else — no worker read, no
 `onStatus`.
@@ -516,124 +551,122 @@ work through the API, and API responses are not cached by the SW.
 `app/t/[lang]/[translator]/page/[n]` (**`prerender = false`**). Both source kinds must be
 designed for, and the prerender flag differs between them.
 
-### Mechanism decision: component-level swap, not a universal `+page.ts`
+### Mechanism: component-level post-paint swap
 
-An earlier draft proposed moving the decision into a universal `+page.ts` to avoid the
-`__data.json` fetch. **That does not work.** SvelteKit gates the fetch on *the node having a
-server load*, not on the presence of a universal load — so with `+page.server.ts` present,
-`load_data()` runs on every client navigation regardless. Worse, a universal load is *fed*
-`server_data_node.data`, so it cannot start until `__data.json` resolves — putting the worker
-read there would serialize it **behind** the network hop it was meant to avoid.
-
-So: render server data immediately, then upgrade from the worker off the critical path.
-Eliminating the `__data.json` fetch entirely would require deleting `+page.server.ts` for these
-nodes — a much larger change (Arabic prerender currently needs `node:sqlite` at build time,
-which a universal load cannot do). **Out of scope here; recorded in W9.**
+Keeping `+page.server.ts` means SvelteKit resolves `__data.json` before new route props reach the
+component. A universal `+page.ts` does not remove that dependency: it receives server data and
+runs after the server node resolves. Therefore this workstream is a post-paint data upgrade, not
+network-free warm navigation. Removing that dependency requires a separate route architecture;
+W9 records the divergence from `my-plan-raw.md:13,22` explicitly.
 
 For Arabic this costs little: the route is prerendered, so `__data.json` is a **static build
 artifact** served from the CDN/`eq-data-v1`, not an API call.
 
 ### Steps
 
-1. Server `data` is the initial paint; hold `ayahs` in `$state`; subscribe via
-   `quranWorker.onStatus` (pattern at `SurahReader.svelte:611`).
-2. On index change **and** worker ready → `quranWorker.readRange(startGlobal, endGlobal,
-   validator, source)`, validator pattern from `SurahReader.svelte:417-419`.
-3. **Failure behaviour differs by source kind:** Arabic → keep server data (complete and
-   prerendered). Translation → fall through to the API via `withSourceFallback` (W5); freezing
-   on server HTML is wrong there, because the server render may be exactly what is stale.
-4. Compute ranges from `loadQuranData()` — do not re-derive tiling in the component.
-5. Nav links keep `juzPathFor`/`globalPagePathFor` (`:42-44`) — invariant 4.
-6. Do **not** re-fetch on first paint when server data is complete; client reads are for
-   navigation.
+1. Define route key `{sourceId, kind, index}` and one `$state.raw` display snapshot containing
+   `{ayahs, normalizations, surahs}`. These fields always change atomically; never combine client
+   ayahs with server normalization or metadata.
+2. When props change, immediately install the matching server snapshot, capture its route key,
+   then start `quranWorker.readRange` through W5 **without a worker-ready gate**. Install the
+   result only if captured key still equals current key. A slow result for an old route is
+   discarded.
+3. When first paint is complete, skip duplicate client read. When first paint is degraded
+   (`ayahs=[]`) or a later navigation occurs, run the chain. Worker readiness events may retry
+   only the current degraded key.
+4. Derive canonical surah metadata from `loadQuranData()` for every represented surah; never use
+   a non-null assertion against possibly empty `data.surahs`.
+5. Arabic total failure keeps matching server snapshot. Translation worker failure reaches API;
+   total failure keeps matching server snapshot and typed degradation state. No path blanks or
+   restores data from a previous route.
+6. Compute ranges from `loadQuranData()` and preserve translation context on every reader link:
+   use `juzPathFor`/`globalPagePathFor` and the `surah*For(ctx, ...)` family with `ctx` derived
+   from `surahRouteContext(sourceId)` or `routeContextFromParams(page.params)`. Components never
+   call Arabic-only path helpers or hand-build `/app/` navigation strings.
+7. Bound `eq-data-v1` with count `DATA_MAX = 400` and
+   `DATA_BUDGET_BYTES = 32 * 1024 * 1024`. Track data-cache recency separately in IDB, touch on
+   hit/write, and evict least-recent entries until both bounds hold. Offline-pack entries live in
+   their separate versioned cache and do not count against this budget.
+8. Extend `nav-guard.test.ts` to reject component calls to Arabic-only reader path helpers and
+   navigational `/app/` literals used by links, `goto`, or `resolve`. Add translated range-route
+   fixtures that prove the active source context survives page, juz, surah, and ayah navigation.
 
-**Tests:** worker ready + client nav → worker read used; Arabic + worker unavailable → server
-data rendered, no blank page; translation + worker unavailable → API fallback, not a frozen
-render; juz 30 works on both paths; `nav-guard.test.ts` passes.
+**Tests:** complete first paint does not duplicate-read; empty translated SSR recovers complete
+ayahs/normalizations/surah metadata; worker unavailable reaches API; Arabic total failure keeps
+server data; delayed old result after index/source navigation is discarded; juz 30 works on all
+paths; data cache enforces count and byte caps in true LRU order; offline pack untouched;
+translation-context navigation assertions and `nav-guard.test.ts` pass.
 
-**Done when:** navigating juz→juz and page→page with a warm DB renders from the local DB, and
-neither source kind can blank the page on failure.
+**Done when:** range-route props upgrade to matching client data without mixed metadata, stale
+results, blanks, or unbounded `eq-data-v1`; remaining server-load dependency is documented rather
+than presented as network-free SPA navigation.
 
 ---
 
-## W7 — SSG-last tier and pagination-aware degradation (Web)
+## W7 — Pagination-aware degradation and recovery (Web)
 
-**Goal:** `my-plan-raw.md:15-17` — API first, **SSG last**, but only where the view is not
-paginated.
-**Files:** `src/service-worker.ts`, `app/_reader/SurahReader.svelte`, reader status UI.
+**Goal:** implement API-first recovery and Arabic static-data fallback without document reloads;
+state the translated-route divergence from `my-plan-raw.md:22` exactly.
+**Files:** `src/service-worker.ts`, `hooks.server.ts`,
+`app/_reader/SurahReader.svelte`, reader status UI, server-loader and SW tests.
 
-### What is actually true (v2 got this half wrong)
+### Delivery contract
 
-- **For Arabic, an SSG-last tier already exists** — but not for the reason v2 gave. Arabic
-  reader routes are `prerender = true`, so their `__data.json` is a **static build artifact**,
-  not an API response. A SPA navigation to a prerendered Arabic route already gets SSG data
-  with no document reload and no API involvement. That is the real "SSG last".
-- **For translations there is no SSG artifact at all.** Both translated range routes and all
-  translated surah routes are `prerender = false`; their `__data.json` comes from the Bun SSR
-  server. **The intent at `my-plan-raw.md:22` is therefore genuinely unmet, and v2 wrongly
-  asserted it was covered.**
-- **Forcing document navigation is the wrong mechanism** (v2's refutation of v1 stands and was
-  verified): SW navigation is network-first with a 3500 ms timeout
-  (`service-worker.ts:25,304-338`); `eq-pages-v1` gains new entries **only** via
-  `handleNavigation` (`:320-321`) — `revalidateCache` (`:495-521`) refreshes existing keys but
-  never adds one — and is capped at `PAGES_MAX=300` of ~1,410 routes; the offline pack is read only by
-  `handleData` (`:370-381`) and never serves navigations; and a reload discards the worker,
-  re-paying ~2.4 MB.
-
-### The unexplored option
-
-`src/service-worker.ts:4` imports `{ base, build, files, version }` from `$service-worker` —
-**`prerendered` is never imported anywhere in `web/src`.** SvelteKit exposes the full list of
-prerendered routes. A list-driven precache or on-demand fetch of prerendered `__data.json`
-would be a *real* SSG-last tier that does not require a document reload. This was never
-evaluated before earlier drafts declared it unnecessary.
+- Arabic reader routes are prerendered. Their `__data.json` is a static build artifact, so a
+  SvelteKit data load already provides the Arabic SSG-last tier while the static origin is up.
+  Offline pack supplies the same data keys where staged. No document reload or second
+  prerendered-cache mechanism is added.
+- Translated routes are SSR + bounded disk cache and have **no SSG artifact**. Prerendering all
+  115 translations would create at least 13,110 surah routes before local-page/range routes.
+  Translation recovery is local DB → API → matching server data; it is never called SSG-last.
+  W9 records this deliberate divergence.
+- Navigation/reload is not a fallback. Reload discards the worker, re-pays the ~2.4 MB Arabic
+  cold cost, and still cannot manufacture a translated SSG artifact.
 
 ### Steps
 
-1. **Evaluate `prerendered` as the Arabic SSG-last tier.** Measure the byte cost of staging
-   prerendered `__data.json` for the reader routes (the offline pack already stages ~7 MiB /
-   1,308 entries, so much of this may already exist — check for overlap before adding a
-   second mechanism).
-2. **Decide translations explicitly.** Options, pick one and record it in W9:
-   (a) accept that translated routes have no SSG tier and degrade to the API + local DB only;
-   (b) prerender a small high-traffic subset (e.g. top-N translations × 114 surahs) to create
-   one. **Do not assert a tier exists when it does not.**
-3. **Make the pagination distinction explicit in code.** In `SurahReader.loadPage`, keep the
-   inline banner for multi-page surahs with the intent-doc rationale as a comment, and branch
-   on `initial.pageCount === 1` for the single-page case.
-4. **Retry, don't reload.** On a failed in-page load, retry through the fallback chain (W5) and
-   the SW data cache. Explicitly: the "whole-route retry" for the single-page case is a
-   `load`-level retry, **not** a document navigation.
-5. **Distinguish the two failure kinds.** Worker-unhealthy and network-unhealthy must not
-   collapse into one flag — a wasm/sqlite failure says nothing about the network, and the
-   owner's stated failure model (`my-plan-raw.md:14-15`) is *API down, static origin up*, which
-   only a two-signal design can represent. Surface them separately in the reader's status line
-   (copy decision belongs with whoever owns reader UI).
-6. **Any degraded flag must have a clearing rule** — clear on the next successful read, or make
-   it a timestamp decaying over 60 s. A sticky flag with no reset turns one transient failure
-   into a permanently degraded session.
+1. A translated server load that returns empty pending data sets
+   `X-EQ-Translation-Pending: 1` and `Cache-Control: no-store` on both document and
+   `__data.json` responses. `hooks.server.ts` preserves `no-store` instead of overwriting it.
+2. Service worker treats `no-store` **or** `X-EQ-Translation-Pending` as uncacheable and deletes
+   any existing matching `eq-pages-v1`/`eq-data-v1` entry. API recovery must make the next retry
+   observe fresh data, never a cached empty 200.
+3. Multi-page surah failure keeps the current page, shows an inline retry, and retries the
+   missing page through W5. Single-page empty server data first performs one SvelteKit
+   `invalidateAll()` retry, then uses W5 for the same page if server data remains empty. Neither
+   branch performs document navigation.
+4. Consume W5 typed outcomes. Track worker and API degradation independently:
+   - worker failure + API success: content renders; local-offline warning remains;
+   - worker success: clear worker warning;
+   - API failure + matching server/worker content: content remains; network warning shows;
+   - any successful API read clears network warning.
+   Never infer API health from `navigator.onLine`.
+5. Retry operations are single-flight per route/page. Every degraded state has an explicit
+   success-clearing rule; route-key changes discard old state.
 
-**Tests:** multi-page in-page failure → banner + retry, no navigation; single-page failure →
-`load`-level retry; degraded flag clears after one success; healthy → SPA navigation unchanged;
-worker-down + network-up and network-down + worker-up produce different states.
+**Tests:** pending document/data response is `no-store`; SW evicts old pending key; API outage →
+empty pending → API recovery → first retry returns content; multi-page failure retries in-page;
+single-page failure invalidates once then uses W5; no document navigation; worker-down/API-up,
+worker-up/API-down, both-down, and recovery produce distinct clearable states.
 
-**Done when:** the two failure kinds are distinguishable, degradation never forces a document
-reload, and the translated-route SSG question has a recorded decision.
+**Done when:** cached failure cannot survive recovery, worker/API failures remain distinct,
+pagination behavior never reloads the document, Arabic static fallback is truthful, and no
+translated route is described as SSG.
 
 ---
 
-## W8-0 — Auth prerequisites (Web + Rust)
+## W8 — Web authentication and cache isolation (Web + Rust)
 
-Full web auth is **deferred to its own document** — it spans ~10 Rust modules and five UI
-phases (session foundation, email/password, OAuth ×4, passkeys, account UI), and folding it
-here would put four unspecified placeholders into the sequencing graph.
+**Goal:** client-hydrated web authentication for email/password, OAuth, passkeys, and account
+management without placing user-specific content in shared server or browser caches.
+**Files:** `deploy/.env.example`, `docker-compose.yml`, `src/service-worker.ts`,
+`web/src/hooks.server.ts`, new `web/src/lib/auth/`, new auth/account routes,
+`middlewares/{security_headers.rs,cors.rs}`, `utils/cors.rs`, existing Rust auth/user/OAuth/
+passkey modules.
 
-**What stays here** are four prerequisites, three of them one-liners, one a live
-cache-poisoning hole worth fixing regardless of when auth ships.
-**Files:** `deploy/.env.example`, `docker-compose.yml` (repo root), `src/service-worker.ts`,
-`middlewares/security_headers.rs`, `web/src/hooks.server.ts`.
+### W8a — Origin and cache prerequisites
 
-1. **`ALLOWED_ORIGINS` is unset in deploy config.** The private router runs `origin_guard`
+1. **Set and validate `ALLOWED_ORIGINS`.** The private router runs `origin_guard`
    (`main.rs:663`), which rejects any request whose `Origin` is not allowlisted
    (`middlewares/cors.rs:20-28`; list at `utils/cors.rs` = localhost + `hmziq.rs` +
    `hzmiqrs.com` + `blog.hmziq.rs`). `easyquran.fyi` is **not** among them and the variable
@@ -646,31 +679,88 @@ cache-poisoning hole worth fixing regardless of when auth ships.
    which is the more likely failure. What *does* panic at boot is any control byte (a newline
    from a copy-paste) or any non-ASCII byte (a smart quote, NBSP). Validate for both: reject
    empty elements loudly, and reject non-ASCII instead of unwrapping.
-2. **SW `/api/` bypass** — already moved into W5 as a precondition (it is breaking Quran API
-   caching today, not just auth). Listed here for completeness.
-3. **`no-store` on authenticated API responses.** `security_headers.rs:44-70` sets
-   CSP/HSTS/nosniff and nothing cache-related. Defense in depth behind (2).
-4. **SSR disk cache must bail on authenticated requests.** `translationRouteCacheKey` keys on
+2. W5's `/api/` SW bypass is a hard dependency. No authenticated API response may enter Cache
+   Storage.
+3. **Authenticated API `no-store` without harming public Quran caching.** Capture before
+   `next.run`: request contains exact parsed cookie `ruxlog.sid`. After `next`, also inspect
+   `Set-Cookie` for that exact name. Either condition sets `Cache-Control: private, no-store`;
+   otherwise preserve handler cache headers unchanged. Never overwrite anonymous Quran public
+   cache policy.
+4. **Authenticated web document/data isolation.** `translationRouteCacheKey` keys on
    `(sourceId, kind, index)` only and `cacheable` never inspects cookies
    (`hooks.server.ts:11-27,104-105`), while the cached artifact is the **full HTML document
-   including the app shell**. The moment any auth-derived markup renders during SSR on a `/t/`
-   route, one user's HTML is served to everyone. Skip caching when the request carries a
-   session cookie or the response sets one, plus a test asserting cached HTML contains no user
-   tokens. This is the enforcement point for invariant 5.
+   including the app shell**. Cookie-bearing or session-setting web responses are never read
+   from/written to SSR disk cache and receive `Cache-Control: private, no-store`. This includes
+   SvelteKit documents and `__data.json`.
+5. On successful login, logout, or account switch, send an explicit SW message that deletes
+   `eq-pages-v1` and `eq-data-v1`. OPFS Quran DBs and versioned offline pack remain untouched.
+   SW also refuses to cache any request/response marked `private` or `no-store`.
 
-**Notes for the auth document (do not lose these):** the session probe is
-`GET /api/user/v1/get` (`user_v1/mod.rs:17-19`, behind `auth_guard::authenticated`, CSRF-exempt
-as a GET) — **`auth_v1` is 100% POST with no `/me`**; the CSRF token is `HMAC(session_id)`
-(`static_csrf.rs:50-55`), so it must be re-fetched after login/logout if login rotates the
-session id; `/app/**` is prerendered, so auth must hydrate client-side; and nothing currently
-decides what happens to `eq-pages-v1`/`eq-data-v1` on login and logout.
+**Tests:** production Origin passes; malformed origin config returns boot error; anonymous Quran
+headers remain public; cookie-bearing and session-setting API/document/data responses are
+private no-store; SSR disk cache never contains user token; login/logout purge page/data caches;
+OPFS/offline pack remain.
 
-**Tests:** production-shaped `Origin` passes `origin_guard`; malformed `ALLOWED_ORIGINS` fails
-validation instead of panicking; `/api/` never cached by the SW; a cookie-bearing `/t/` request
-is not disk-cached.
+### W8b — Session and CSRF foundation
 
-**Done when:** an authenticated request cannot poison any shared cache, and a POST from the
-production origin is not rejected.
+1. Add `auth-client.ts` as the only web API wrapper for auth. Requests use credentials and the
+   same-origin `/api` base; errors decode existing API envelopes without treating 401 as a crash.
+2. Add request-scoped client state in `auth-state.svelte.ts`: `unknown | anonymous |
+   authenticated`, user profile, verification/2FA state, and one in-flight session probe.
+   Nothing reads browser storage or session at module scope during SSR.
+3. Hydrate after mount with `GET /api/user/v1/get`; 200 authenticates, 401/403 becomes anonymous,
+   transport/5xx remains retryable unknown. `/app/**` stays prerendered and never embeds user
+   data in build output.
+4. Fetch CSRF through `POST /api/csrf/v1/generate`. Token stays in memory, never localStorage.
+   Re-fetch after login, logout, OAuth/passkey login, session termination affecting current
+   session, or any response that rotates `ruxlog.sid`, because token is HMAC(session id).
+5. Auth transitions invoke W8a cache purge before new user state renders.
+
+### W8c — Email/password, verification, 2FA
+
+1. Build login and registration UI over `/api/auth/v1/log_in` and `/api/auth/v1/register`, with
+   field errors, pending state, keyboard/focus behavior, and uniform credential failure copy.
+2. Support TOTP continuation through `/api/auth/v1/login/totp`; do not mark session authenticated
+   before continuation succeeds.
+3. Add email-verification request/confirm flow through
+   `/api/email_verification/v1/resend` and `/api/email_verification/v1/verify`. Verified-only
+   account actions explain the required next step instead of looping on 403.
+4. Logout posts `/api/auth/v1/log_out`, clears in-memory CSRF/auth data, purges SW caches, then
+   probes session once to confirm anonymous state.
+
+### W8d — OAuth and passkeys
+
+1. Web OAuth supports Google, Apple, Facebook, and GitHub through existing
+   `/api/auth/{provider}/v1/login|callback|exchange` routes. Mobile `/token` endpoints remain
+   outside web flow; GitHub remains web-only.
+2. Implement `/auth/{provider}/success`, the exact target used by backend callbacks. Return
+   targets are same-origin allowlisted paths, stored transiently, and cleared after use. OAuth
+   failure/cancel returns to login with safe error state; success refreshes CSRF, purges caches,
+   probes profile, then consumes the return target.
+3. Passkey login uses `/api/passkey/v1/login/begin|finish`; verified account registration uses
+   `/api/passkey/v1/register/begin|finish`, and management uses
+   `/api/passkey/v1/list|remove`. Challenges stay in memory; cancellation is not reported as
+   server failure.
+
+### W8e — Account UI and session lifecycle
+
+1. Add prerendered account shell hydrated from W8b. Anonymous users see login CTA; unknown state
+   shows neutral loading/retry; authenticated users see profile and security controls.
+2. Profile update uses `/api/user/v1/update`; session list/termination uses
+   `/api/auth/v1/sessions/list|terminate/{id}`; 2FA/passkey controls use existing verified routes.
+3. Terminating current session follows logout transition. Terminating another session refreshes
+   list without clearing current auth.
+4. No server-rendered user name, email, token, CSRF value, OAuth payload, or passkey challenge may
+   enter HTML disk cache, Cache Storage, localStorage, logs, analytics, or error URLs.
+
+**Tests:** session probe states; CSRF refresh after every session transition; email/password +
+TOTP flows; all four OAuth success/cancel/error flows; passkey login/register/remove; current vs
+other session termination; anonymous prerender contains no user data; account-switch cache
+isolation; accessibility and `pnpm check` pass.
+
+**Done when:** every supported backend auth path has a web flow, session transitions are
+consistent, CSRF tracks session rotation, and neither server nor browser shared caches can replay
+one user's content to another.
 
 ---
 
@@ -678,186 +768,96 @@ production origin is not rejected.
 
 **Files:** `docs/quran-system.md`, `AGENTS.MD`.
 
-`quran-system.md:112` already records "translated pages = SSR on Bun". Add the *why* and the
-divergences this plan surfaced:
+`quran-system.md:112` already records "translated pages = SSR on Bun". Record the exact
+boundaries that implementations must not blur:
 
 1. **Translated pages are SSR + 7-day disk cache, not SSG.** Prerendering would be
    114 × 115 ≈ 13,110 pages for the surah route alone. SEO is served by hreflang alternates
-   (`routes/sitemap.xml/+server.ts:31-42`). `my-plan-raw.md:19` says SSG; the code is right.
-2. **"SSG last" holds for Arabic only,** because those routes are prerendered and their
-   `__data.json` is a static artifact. Translated routes have no SSG artifact — record W7
-   step 2's decision here once made.
-3. **The pool's popularity metric is API demand, not reader popularity** (W1).
-4. **Range routes keep `+page.server.ts`,** so `__data.json` is fetched on client navigation;
+   (`routes/sitemap.xml/+server.ts:31-42`). This deliberately diverges from
+   `my-plan-raw.md:19,22`; no translated path may be described as SSG.
+2. **Translated delivery is not surah-only.** The same source context spans surah,
+   surah-local-page, global-page, and juz routes so reader navigation cannot fall back to
+   Arabic. The sitemap groups those route shapes with language alternates. This is the exact
+   runtime boundary behind the shorter intent in `my-plan-raw.md:19`.
+3. **"SSG last" holds for Arabic only,** because those routes are prerendered and their
+   `__data.json` is a static artifact. Translated routes recover through local DB, API, or
+   matching server data only.
+4. **The durable pool metric is API demand across process restarts, not reader popularity.**
+   Moka TinyLFU already owns in-process popularity admission (W1).
+5. **Range routes keep `+page.server.ts`,** so `__data.json` is fetched on client navigation;
    the worker read is an upgrade after paint, not a replacement (W6).
-5. `docs/quran.md`, `docs/caching-architecture.md`, and `docs/quran-normalization-reasoning.md`
-   were consolidated into `quran-system.md` at `bad793f`, and the old §4 known-gaps list did
-   not survive — W10 carries the survivors. (`AGENTS.MD` was repointed at `quran-system.md` in
-   that same commit; v3.1's "fix that pointer" instruction was stale — verified no dangling
-   pointer exists at `bad793f`.)
+6. **Authentication is client-hydrated.** `/app/**` remains prerendered; user state never enters
+   build output, translated HTML disk cache, or Cache Storage (W8).
 
 **Do not edit `my-plan-raw.md`.**
 **Done when:** every divergence above is recorded.
 
 ---
 
-## W10 — Riders this plan makes load-bearing
+## W10 — Cross-cutting delivery and cache safety requirements
 
-1. **Remote-controlled fetch origin (security; do first).** `catalogue.ts:96-113`: a catalogue
+1. **Remote-controlled artifact URL.** `catalogue.ts:96-113`: a catalogue
    entry with no baked match keeps `t.downloadUrl` unrewritten and the worker fetches it
    verbatim; the `/_quran` allowlist only gates requests that reach `/_quran`.
    **`manifest.ts:37-42` has the identical hole** for Arabic script specs from `/scripts`.
-   **Decision: reject non-allowlisted origins** (rather than silently dropping entries), so a
-   drifted API response is visible instead of quietly shrinking the catalogue. Fix both files
-   in one change.
-2. **`downloadBytes` timeout** — folded into W4 step 10.
-3. **`/quran/health/ready` own `PathKey`** — folded into W3a step 8.
+   Accept only ids with an exact baked id→delivery-path mapping and always replace API URLs with
+   that baked same-origin path. Unknown ids, path disagreement, non-HTTP schemes, credentials,
+   or non-baked origins reject the whole API payload. Existing catch blocks must emit a
+   structured warning + OTLP counter before falling back to baked data; rejection may not be
+   silent. Tests cover malicious origin, same-origin wrong path, unknown id, and visible fallback.
+2. **`downloadBytes` timeout and byte ceiling** — W4 step 10.
+3. **Health outside content limiters** — W2.
 4. **Bound `eq-data-v1`** (unbounded today; `trimPages` covers `eq-pages` only,
-   `service-worker.ts:525-539`). W5/W6 increase `__data.json` churn. **Scheduled with W6.**
-5. **Prune `InMemoryStore.claims`** — promoted to a hard precondition of W3a (step 4).
-6. **`verifyBytes` size-only + non-atomic OPFS `put`.** Deferred — but it is the second half of
-   rider 1's hole, so if rider 1 is ever resolved by *trusting* URLs rather than restricting
-   them, this must ship with it. **Not scheduled; revisit after W10.1.**
+   `service-worker.ts:525-539`). W6 owns explicit count/byte LRU bounds.
+5. **Prune `InMemoryStore.claims`.** `prune()` removes expired entries from both `limits` and
+   `claims`; add a high-cardinality expiry regression test. This fixes existing dedup retention
+   independently of W3 escalation.
+6. **Crash-safe OPFS replacement without hashing Quran data.** Download to an id-scoped temporary
+   file, close it, verify declared size/content shape, then switch the id's active-file pointer in
+   one IDB transaction and remove the old file afterward. Failure keeps old active file and
+   removes temp. Identity remains the Quran source id; temp names never become versions or cache
+   identities. Tests interrupt download/write/pointer switch and prove old corpus stays readable.
 
 ---
 
-## 11. Sequencing and operations
+## 11. Dependencies and verification
 
 ```
-W10.1 ─► W2(R1 warn) ─► W2(R2 fail) ─┐
-W3b ─► W3c ──────────────────────────┼─► W3a   [+ CF-range ingress, CIDR allowlist,
-W1                                   │          claims-prune — all hard gates]
-W5 ─► W6 (+W10.4) ─► W7 ─────────────┘
-W4
-W8-0
+W10.1 ─► W4
+W3b ─► W3c
+W2 + W3c ─► W3a
+W5 ─► W6 ─► W7
+W5 + W7 ─► W8a ─► W8b ─► W8c/W8d ─► W8e
+W10.5
+W10.6
+W1 (after m000002; owns m000003)
 W9
 ```
 
-**Hard constraints:** W2 enforcing + CF-range ingress + W3c + `claims` pruning + allowlist —
-**all** before W3a. W5 before W6 before W7. W10.1 before anything that adds cookies to the page.
-
-**Suggested first slice:** **W10.1 → W5 → W3b → W2(R1) → W9.**
-W10.1 is security and self-contained; **W5 is the cheapest item that delivers actual owner
-intent** (`my-plan-raw.md:14`, "API first") and also fixes the live `/api/` SW caching bug;
-W3b is a correctness fix with near-zero blast radius (three layers, so not zero *effort*);
-W2 R1 only warns; W9 is docs. Nothing in the slice can ban a user or break a reader.
+**Hard constraints:** W2 ingress proof + W3b + W3c + valid allowlist before W3a. W5 before W6
+before W7. W5 API bypass and W7 pending-response rules before auth. `m000002_rate_limit_state`
+always precedes `m000003_translation_popularity`.
 
 ### Operational requirements
 
-- **Feature flags:** W3a (bans users) and W7 (changes degradation) ship behind flags with a
-  documented kill switch. W1's prewarm is env-gated.
+- **Feature flags:** only W3a needs a kill switch because it bans clients. W1 prewarm is disabled
+  with `QURAN_PREWARM_TRANSLATIONS=0`. Recovery/cache correctness does not get a second behavior
+  branch.
 - **Rollback:** W4's legacy key is per-tab sessionStorage — nothing durable to protect (see
   W4 step 9); W3b's column is additive and readable by old binaries.
-- **Migration ordering:** W1 and W3b both touch schema, and W3b moves an existing
-  boot-created table into migrations. State per PR whether the migration runs before or after
-  the binary, what an old binary does with a new column, and what a new binary does with
-  pre-migration rows. Read `migration/README.md` into the change.
+- **Migration ordering:** boot runs migrations before loading rate-limit/popularity state.
+  `m000002` upgrades legacy rows; `m000003` is new-table-only. Test old binary/new schema and new
+  binary/legacy fixture behavior. Read `migration/README.md` into each schema change.
 - **Partial deploy:** web and API are separate images. W5 must tolerate an older API; W2's
   hard-fail must not land while an older web depends on the API booting. API-first for additive
   changes, web-first for anything relaxing a contract.
 - **Observability:** add counters for escalation/bans (W3), API-fallback rate and degraded-mode
   entry (W5/W7), auth failures (W8). There is **no `/metrics` endpoint** — counters leave via
-  OTLP push only, so dashboards are extra scheduled work, not a free side effect.
-- **Verification per workstream:** `cargo test`, `pnpm test`, plus `tests/quran_v1.rs`,
-  `catalogue-sha-guard.test.ts`, `nav-guard.test.ts`. Nothing is done while any fail.
+  OTLP push only. Provision the corresponding OTLP dashboard queries with each counter.
+- **Verification per workstream:** backend — `cargo fmt --check`, `cargo test`,
+  `cargo clippy --all-targets -- -D warnings`; web — `pnpm check`, `pnpm test`, `pnpm lint`,
+  `pnpm format:check`. Always include `tests/quran_v1.rs`, `catalogue-sha-guard.test.ts`, and
+  `nav-guard.test.ts`. Schema work runs fresh + legacy migration fixtures; cache work runs
+  service-worker/browser tests. Nothing is done while any required check fails.
 
 ---
-
-## 12. Revision history
-
-**v3.2** — after round 4 (independent full re-verification at `bad793f`). Two substantive
-fixes and one cut:
-
-- **W5's chunk-timeout note cited the wrong constant.** API reads run under
-  `fetchWithTimeout`'s 3 s default (`FETCH_TIMEOUT_MS`, `fetch.ts:1`); `DEFAULT_TIMEOUT_MS =
-  30_000` (`worker-client.ts:32`) is the worker-request timeout and never touches the API
-  path. The risk is therefore a too-*tight* budget for a 431–564-ayah chunk, not a 60 s hang
-  — the guidance now says to set an explicit per-chunk budget instead of "use a shorter one".
-- **W9 item 5's pointer instruction was stale.** The `bad793f` consolidation commit itself
-  repointed `AGENTS.MD` at `quran-system.md`; no dangling `docs/quran.md` pointer exists at
-  the plan's own baseline. (The consolidation also folded in
-  `quran-normalization-reasoning.md` — three docs, not two.)
-- **W4's two-release migration cut.** The legacy `eq:reader-views` counter is per-tab
-  sessionStorage; the "rollback wipes every reader's history" rationale protected a history
-  that never existed. One release: seed, delete.
-
-Also corrected: the compose file lives at the repo root, not `deploy/` (W2/W8-0 file lists;
-W2 step 5's passthrough is now verified — `env_file: [.env]` at `:80`); `origin_guard` is
-layered at `main.rs:663`, not `:672`; W1's flush-removal rule restated as re-acquire +
-check-and-remove in one guard with a `hits == 0` drain condition, closing a
-resurrect-then-re-evict race the v3.1 wording left open and removing a literal reading that
-would hold the lock across the SQLite write; W3a's `IpNet` allowlist requires the `ipnet`
-crate (new dependency, previously unstated); line-ref drift fixed (`abuse.rs:109-117`,
-`store.rs:172`, `:165-168`). Everything else re-verified exactly as written, including: all
-W1 pool line refs; no `SQLITE_ENABLE_MATH_FUNCTIONS` anywhere in `libsqlite3-sys 0.30.1`'s
-build script (not even as an opt-in feature); 115 catalogue entries; the five oversized juz
-(339/357/399/431/564), the 42-ayah page max, and the 662 surah-local pages — all recomputed
-from `quran-data.json`; the five abuse-wired modules and the user-id key prefixes
-(`totp:{user.id}` at `auth_v1/controller.rs:223,431`); live `/api/` caching into `eq-app-*`
-via `swrApp`; `prerendered` unimported anywhere in `web/src`; 1,593,344 B Arabic DB +
-864,752 B wasm; the 6.84 MiB / 1,308-entry offline pack; `auth_v1` 100% POST; and W8-0's
-origin-allowlist, CSRF-exemption, and cache-key facts.
-
-**v3.1** — after round 3 (convergence audit). One fix-induced blocker and one major, both in
-W1 step 2's tombstone design, which v3 introduced to fix a round-2 blocker without re-checking
-it against the victim-selection loop it shares state with: tombstones stamped `tick = 0` were
-permanently the `min_by_key` victim, and `cache.invalidate` on an already-absent key is a
-no-op, so `enforce_byte_bound` would spin forever holding `prune_sem` on the request hot path.
-Victim selection now skips tombstones, the tick sentinel is no longer overloaded with prewarm's
-`tick = 0`, and resurrect/flush-remove semantics are defined so a reload between snapshot and
-removal cannot delete a live entry's meta. Also corrected: `ALLOWED_ORIGINS` panics on control
-and non-ASCII bytes, not on spaces or trailing commas (the latter silently yields an empty
-entry); `eq-pages-v1` is also touched by `revalidateCache`, though only for keys already
-present, so the 300-of-1,410 conclusion is unchanged; `restore()` at `main.rs:135` does not
-move with the spawn; and the `PoolStats: Copy` break is smaller than claimed.
-Round 3 independently re-derived the five oversized juz, the 42-ayah page max, the absent
-SQLite math functions, the SvelteKit server-load gating, the live `eq-app-*` caching of Quran
-API JSON, and all four rate-limit-store facts — all confirmed exactly as written.
-
-**v3** — after round 2 (adversarial re-audit + executability audit). Four blockers fixed:
-
-- **W1 step 6 would have failed at runtime.** `pow()`/`exp()`/`ln()` do not exist in the
-  bundled SQLite (`libsqlite3-sys 0.30.1` without `SQLITE_ENABLE_MATH_FUNCTIONS`). Decay moved
-  into Rust over the ≤115-row table.
-- **W1's flush fold is not free.** The rate-limit flush is spawned at `main.rs:136`, 300+ lines
-  before the pool exists; the spawn must move and `sea_db` must be cloned before `AppState`
-  takes it. Also resolved the contradiction between "no second mutex" and "pending accumulator"
-  by tombstoning in the existing map, and added the lock-ordering rule.
-- **W6's mechanism was refuted.** SvelteKit gates the `__data.json` fetch on the node having a
-  *server* load, so a universal `+page.ts` does not avoid it — and a universal load is fed
-  server data, so the worker read would have been serialized behind the very fetch it was meant
-  to dodge. Reverted to the component-level swap. Also corrected the claim that all four routes
-  are `prerender = true` (the two translated ones are not).
-- **W7 was rationalizing away real work.** v2 concluded the SW caches constitute an SSG-last
-  tier; they do not (`eq-pages-v1` holds only previously-visited documents, 300 of ~1,410
-  routes). The correct Arabic argument is that prerendered routes serve `__data.json` as a
-  *static build artifact*. For translated routes there is no SSG artifact at all, so the intent
-  at `my-plan-raw.md:22` is genuinely unmet — now stated instead of asserted away, with
-  `prerendered` from `$service-worker` (never imported anywhere in `web/src`) flagged as the
-  unexplored option.
-
-Also: W5's oversized-juz list corrected from 2 to **five** (19, 23, 27, 29, 30) with chunk
-stitching and partial-failure rules specified; the `/api/` SW bypass moved forward from W8 to
-W5 after finding prod Quran API JSON is cached in `eq-app-*` today; W3c export now whitelists
-key prefixes after finding `totp:{user_id}` in the same store (a deny list would have shipped
-user IDs); W3a's key namespace unified with W3c's, `claims` pruning promoted from rider to hard
-precondition, `dedup_nx`'s fail-**open** behaviour flagged against the fail-closed claim,
-concrete escalation thresholds supplied, abuse-shape detection explicitly deferred as unspecced;
-W3b's deferred "pick one" decision made (table moves into migrations); W1 notes the
-`PoolStats: Copy` break and `lookups` pollution and adds a measurable prewarm keep/drop
-threshold; W8a-e split into its own document, leaving W8-0's four prerequisites here with the
-`ALLOWED_ORIGINS` parse-panic edge; per-workstream **files** and **done-when** restored
-throughout (the header promised them and v2 dropped them); `my-plan-raw.md:18` added to the
-already-satisfied ledger; route count corrected to ~1,410; line refs corrected
-(`catalogue.ts:96-113`, `settings.rs:162`, `SurahReader:397-403`, `layer.rs:168`,
-`store.rs:111-114`).
-
-**v2** — after round 1 (facts / soundness / completeness). Retargeted docs to
-`quran-system.md` after `bad793f` consolidation; W2 rediagnosed (set-but-wrong, not unset; the
-prescribed value would have panicked; found the live `APP_ENV` bug disabling the route blocker
-in prod); W3a's `on_block` premise refuted (sync hook, no IP) and escalation moved inline, with
-the per-429 memory amplification, search double-count, CGNAT risk, and mandatory un-ban path
-added; W1 corrected in five ways; W7's `data-sveltekit-reload` mechanism refuted; W5 gained
-four blockers (`RESPONSE_CAP`, dropped validator, upstream reader gate, boot-window probe);
-W6 rescoped to four routes; W8 gained W8-0; W4 gained pre-bump gate ordering, monotonic day
-guard, cross-tab RMW hazard, two-release migration; added W10 and the operations section.
