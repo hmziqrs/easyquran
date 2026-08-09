@@ -4,7 +4,7 @@
 **Baseline commit:** `bad793f`
 **Source of intent:** `docs/my-plan-raw.md` (owner-authored, never edited by agents)
 **Source of current state:** `docs/quran-system.md`, plus the code audit in §0
-**Revision:** v3.1 — after three audit rounds (six auditors). §12 records what changed.
+**Revision:** v3.2 — after four audit rounds (seven auditors). §12 records what changed.
 
 Each workstream states: **goal · files · steps · invariants · tests · done-when**.
 
@@ -103,11 +103,15 @@ latency cost for an unbounded memory cost, and the byte bound is what protects t
    - **Define resurrection.** If `get_or_build` reloads a tombstoned id, the insert at `:163`
      must *merge* (`evicted = false`, fresh tick, **`hits` preserved**), not overwrite — an
      unconditional `insert` would drop exactly the undrained counts the tombstone exists to
-     protect. Symmetrically, the flush must remove a row **only if it is still tombstoned**,
-     under the same guard it snapshotted with; a blind remove-by-key after a resurrection
-     deletes the live entry's meta, which both stops its hits accruing and makes it
-     unselectable as a byte-bound victim (silently weakening the byte bound to moka's count
-     ceiling and TTL).
+     protect. Symmetrically, the flush must not blindly remove-by-key after the DB write:
+     re-acquire the lock and, in that **single** acquisition, remove only rows that are still
+     tombstoned **and fully drained** (`hits == 0` after subtracting what committed) — the
+     check and the removal under one guard closes the resurrect-then-re-evict race between
+     snapshot and cleanup, and the `hits == 0` condition keeps counts accrued during a brief
+     resurrection. (Re-acquire, don't hold the snapshot guard across the SQLite write — see
+     the lock-ordering rule below.) A blind remove after a resurrection deletes the live
+     entry's meta, which both stops its hits accruing and makes it unselectable as a
+     byte-bound victim (silently weakening the byte bound to moka's count ceiling and TTL).
 
    **Lock-ordering rule:** never hold the `residents` guard across a SQLite write — copy out,
    drop the guard, then write. The listener runs inside `run_pending_tasks()` on the request
@@ -188,7 +192,7 @@ eviction or memory-bound behaviour changed.
 
 **Goal:** per-IP rate limiting actually keys on the client.
 **Files:** `config/settings.rs`, `middlewares/route_blocker.rs`, `state.rs`, `main.rs`,
-`deploy/.env.example`, `deploy/docker-compose.yml`, `deploy/README.md`.
+`deploy/.env.example`, `docker-compose.yml` (repo root, not `deploy/`), `deploy/README.md`.
 
 **Today:** `settings.rs:98` defaults to `ConnectInfo` and `deploy/.env.example:42` ships
 `IP_SOURCE=ConnectInfo` **uncommented**. Behind CF→Traefik every request carries the proxy's
@@ -210,8 +214,8 @@ unset** — a guard firing only on "unset" catches nothing.
    `CfConnectingIp` and `deploy/.env.example:42`.
 4. Log the resolved IP source at startup unconditionally.
 5. Set `deploy/.env.example:42` to `IP_SOURCE=CfConnectingIp` — **exact PascalCase**;
-   `cf-connecting-ip` would hard-panic. Verify `docker-compose.yml` actually passes the
-   variable through to the API container.
+   `cf-connecting-ip` would hard-panic. `docker-compose.yml` (repo root) already passes the
+   variable through to the API container via `env_file: [.env]` (`:80`) — verified.
 
 ### Trust, not just parsing
 
@@ -310,16 +314,18 @@ go-ahead before anyone builds it.**
      allowlist: Vec<IpNet>,
    }
    ```
+   (`IpNet` means adding the `ipnet` crate — not currently a dependency anywhere in the
+   workspace.)
 2. **Escalate at most once per window rollover, never per request.**
    `InMemoryStore::abuse_check` pushes an attempt on *every* call, including while already
-   blocked (`store.rs:174`, inside the `until > now` branch), pruning only past
-   `cfg.block_range` (`:164-167`). Recording per-429 means a flood stores one `i64` per blocked
+   blocked (`store.rs:172`, inside the `until > now` branch), pruning only past
+   `cfg.block_range` (`:165-168`). Recording per-429 means a flood stores one `i64` per blocked
    request for the whole `block_range` — turning the ban into a memory amplifier for the exact
    attack it should stop, making thresholds meaningless (crossed in milliseconds), and
    auto-escalating every temp-blocked IP to `Long`.
    *(The 24 h `MAX_ATTEMPT_WINDOW`, `store.rs:13`, applies to `prune()` — the retention here is
    each caller's `block_range`. Conclusion unchanged.)*
-3. **The dedup primitive must be written fail-closed.** `abuse::dedup_nx` (`abuse.rs:108-115`)
+3. **The dedup primitive must be written fail-closed.** `abuse::dedup_nx` (`abuse.rs:109-117`)
    fails **open** by design, which contradicts the fail-closed stance everywhere else in this
    workstream. Either write a fail-closed variant or drop the fail-closed claim — do not ship
    the contradiction.
@@ -406,9 +412,13 @@ would do nothing.
 7. Keep `PREFETCH_PREFIX` settle markers in `sessionStorage` and every existing guard:
    `saveData`/2g (`:27-32`), `whenIdle` (`:34-38`), one retry per source per tab (`:45-50`).
 8. `noteTranslationChosen` (`:96`) keeps bypassing the gate — an explicit pick beats a heuristic.
-9. **Two-release migration.** R1: read legacy `eq:reader-views`, seed `totalViews`, **leave it
-   in place**. R2: stop reading and delete. One-step deletion means a web rollback wipes every
-   reader's history and silently re-triggers prefetch downloads across the user base.
+9. **Migration is low-stakes — one release, not two (corrected in v3.2).** The legacy
+   `eq:reader-views` counter is **sessionStorage** (`engagement.ts:6,16-18`) — per-tab,
+   dies with the tab — so there is no durable history to protect. Seed `totalViews` from it
+   if present and delete it in the same release. A web rollback then merely restarts the old
+   per-tab counter at 0, indistinguishable from opening a new tab; settle markers
+   (`eq:tprefetch:*`) are untouched, so no downloads re-trigger. (v3.1's two-release scheme
+   guarded a cross-session history that never existed.)
 10. **Rider (required): give `downloadBytes` a timeout.** `workers/download.ts` has no timeout,
     abort, or retry — the one fetch not wrapped by `fetchWithTimeout`. W4 *increases* how often
     `ensureTranslation` fires, multiplying the frequency of a hung fire-and-forget fetch.
@@ -418,7 +428,7 @@ returns `undefined`. Test the `undefined` path.
 
 **Tests:** one view/one day → no prefetch; four views same day → prefetch; two views across two
 distinct days → prefetch; Arabic-only views never prefetch; `readJSON` → `undefined` falls back
-to session-only without throwing; legacy key seeds `totalViews` once and survives R1; gate
+to session-only without throwing; legacy key seeds `totalViews` once; gate
 reads pre-bump `sourceViews`; `downloadBytes` aborts on timeout.
 
 **Done when:** a reader returning on a second day gets the translation prefetched, a one-time
@@ -463,9 +473,13 @@ of W5**, not later in W8-0.
    (`loadQuranData().rangeByIndex(kind, index)` → `{startGlobal, endGlobal}`), so there is no
    discovery round-trip.
    **Stitching rules:** apply the coordinate validator **per chunk**; concatenate in order;
-   **any chunk failure fails the whole read** (no partial renders). Note the worst case is two
-   sequential fetches against `DEFAULT_TIMEOUT_MS = 30_000` — 60 s on a degraded network; use a
-   shorter per-chunk budget.
+   **any chunk failure fails the whole read** (no partial renders). Timeout (corrected in
+   v3.2): API reads run under `fetchWithTimeout` with `FETCH_TIMEOUT_MS = 3000` (`fetch.ts:1`)
+   — `DEFAULT_TIMEOUT_MS = 30_000` (`worker-client.ts:32`) is the **worker-request** timeout
+   and never applies to the API path. Two sequential chunks worst-case ≈ 6 s, so the real risk
+   is inverted: 3 s may be too *tight* for a 431–564-ayah chunk on a slow network. Pass an
+   explicit per-chunk budget sized for the largest chunk rather than inheriting the 3 s
+   default.
 4. **Thread `validateCoordinate` through `quranApi`.** `api-client.ts` takes no validator, so
    the API path decodes without the check the worker path performs (`worker-client.ts:288`,
    `SurahReader.svelte:417-419`). W5/W6 make the API path routine, silently weakening the
@@ -616,11 +630,11 @@ here would put four unspecified placeholders into the sequencing graph.
 
 **What stays here** are four prerequisites, three of them one-liners, one a live
 cache-poisoning hole worth fixing regardless of when auth ships.
-**Files:** `deploy/.env.example`, `deploy/docker-compose.yml`, `src/service-worker.ts`,
+**Files:** `deploy/.env.example`, `docker-compose.yml` (repo root), `src/service-worker.ts`,
 `middlewares/security_headers.rs`, `web/src/hooks.server.ts`.
 
 1. **`ALLOWED_ORIGINS` is unset in deploy config.** The private router runs `origin_guard`
-   (`main.rs:672`), which rejects any request whose `Origin` is not allowlisted
+   (`main.rs:663`), which rejects any request whose `Origin` is not allowlisted
    (`middlewares/cors.rs:20-28`; list at `utils/cors.rs` = localhost + `hmziq.rs` +
    `hzmiqrs.com` + `blog.hmziq.rs`). `easyquran.fyi` is **not** among them and the variable
    appears in neither `deploy/.env.example` nor `docker-compose.yml`. Same-origin POSTs still
@@ -676,12 +690,14 @@ divergences this plan surfaced:
 3. **The pool's popularity metric is API demand, not reader popularity** (W1).
 4. **Range routes keep `+page.server.ts`,** so `__data.json` is fetched on client navigation;
    the worker read is an upgrade after paint, not a replacement (W6).
-5. `docs/caching-architecture.md` and `docs/quran.md` were consolidated into
-   `quran-system.md` at `bad793f`, and the old §4 known-gaps list did not survive — W10 carries
-   the survivors. **`AGENTS.MD` still points at `docs/quran.md §2`; fix that pointer.**
+5. `docs/quran.md`, `docs/caching-architecture.md`, and `docs/quran-normalization-reasoning.md`
+   were consolidated into `quran-system.md` at `bad793f`, and the old §4 known-gaps list did
+   not survive — W10 carries the survivors. (`AGENTS.MD` was repointed at `quran-system.md` in
+   that same commit; v3.1's "fix that pointer" instruction was stale — verified no dangling
+   pointer exists at `bad793f`.)
 
 **Do not edit `my-plan-raw.md`.**
-**Done when:** every divergence above is recorded and `AGENTS.MD` has no dangling pointer.
+**Done when:** every divergence above is recorded.
 
 ---
 
@@ -712,7 +728,7 @@ W10.1 ─► W2(R1 warn) ─► W2(R2 fail) ─┐
 W3b ─► W3c ──────────────────────────┼─► W3a   [+ CF-range ingress, CIDR allowlist,
 W1                                   │          claims-prune — all hard gates]
 W5 ─► W6 (+W10.4) ─► W7 ─────────────┘
-W4 (2 releases)
+W4
 W8-0
 W9
 ```
@@ -730,8 +746,8 @@ W2 R1 only warns; W9 is docs. Nothing in the slice can ban a user or break a rea
 
 - **Feature flags:** W3a (bans users) and W7 (changes degradation) ship behind flags with a
   documented kill switch. W1's prewarm is env-gated.
-- **Rollback:** W4's storage migration is additive for one full release; W3b's column is
-  additive and readable by old binaries.
+- **Rollback:** W4's legacy key is per-tab sessionStorage — nothing durable to protect (see
+  W4 step 9); W3b's column is additive and readable by old binaries.
 - **Migration ordering:** W1 and W3b both touch schema, and W3b moves an existing
   boot-created table into migrations. State per PR whether the migration runs before or after
   the binary, what an old binary does with a new column, and what a new binary does with
@@ -748,6 +764,39 @@ W2 R1 only warns; W9 is docs. Nothing in the slice can ban a user or break a rea
 ---
 
 ## 12. Revision history
+
+**v3.2** — after round 4 (independent full re-verification at `bad793f`). Two substantive
+fixes and one cut:
+
+- **W5's chunk-timeout note cited the wrong constant.** API reads run under
+  `fetchWithTimeout`'s 3 s default (`FETCH_TIMEOUT_MS`, `fetch.ts:1`); `DEFAULT_TIMEOUT_MS =
+  30_000` (`worker-client.ts:32`) is the worker-request timeout and never touches the API
+  path. The risk is therefore a too-*tight* budget for a 431–564-ayah chunk, not a 60 s hang
+  — the guidance now says to set an explicit per-chunk budget instead of "use a shorter one".
+- **W9 item 5's pointer instruction was stale.** The `bad793f` consolidation commit itself
+  repointed `AGENTS.MD` at `quran-system.md`; no dangling `docs/quran.md` pointer exists at
+  the plan's own baseline. (The consolidation also folded in
+  `quran-normalization-reasoning.md` — three docs, not two.)
+- **W4's two-release migration cut.** The legacy `eq:reader-views` counter is per-tab
+  sessionStorage; the "rollback wipes every reader's history" rationale protected a history
+  that never existed. One release: seed, delete.
+
+Also corrected: the compose file lives at the repo root, not `deploy/` (W2/W8-0 file lists;
+W2 step 5's passthrough is now verified — `env_file: [.env]` at `:80`); `origin_guard` is
+layered at `main.rs:663`, not `:672`; W1's flush-removal rule restated as re-acquire +
+check-and-remove in one guard with a `hits == 0` drain condition, closing a
+resurrect-then-re-evict race the v3.1 wording left open and removing a literal reading that
+would hold the lock across the SQLite write; W3a's `IpNet` allowlist requires the `ipnet`
+crate (new dependency, previously unstated); line-ref drift fixed (`abuse.rs:109-117`,
+`store.rs:172`, `:165-168`). Everything else re-verified exactly as written, including: all
+W1 pool line refs; no `SQLITE_ENABLE_MATH_FUNCTIONS` anywhere in `libsqlite3-sys 0.30.1`'s
+build script (not even as an opt-in feature); 115 catalogue entries; the five oversized juz
+(339/357/399/431/564), the 42-ayah page max, and the 662 surah-local pages — all recomputed
+from `quran-data.json`; the five abuse-wired modules and the user-id key prefixes
+(`totp:{user.id}` at `auth_v1/controller.rs:223,431`); live `/api/` caching into `eq-app-*`
+via `swrApp`; `prerendered` unimported anywhere in `web/src`; 1,593,344 B Arabic DB +
+864,752 B wasm; the 6.84 MiB / 1,308-entry offline pack; `auth_v1` 100% POST; and W8-0's
+origin-allowlist, CSRF-exemption, and cache-key facts.
 
 **v3.1** — after round 3 (convergence audit). One fix-induced blocker and one major, both in
 W1 step 2's tombstone design, which v3 introduced to fix a round-2 blocker without re-checking
