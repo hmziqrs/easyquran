@@ -42,8 +42,11 @@ Each workstream states: **goal · files · steps · invariants · tests · done-
 - **`my-plan-raw.md:5`** literally reads "We *do* load all translated database on boot…". In
   context and against the code the intent is the opposite. This document records that reading;
   the owner-authored file remains unchanged.
-- Reader route count is ≈ **1,410** (114 surah + 662 surah-local-page + 604 global page +
-  30 juz).
+- Reader route count is **1,296** (114 surah + 548 surah-local-page + 604 global page + 30 juz).
+  The corpus tiles into 662 surah-local pages, but localPage 1 is not a route: `entries()` emits
+  `2..=n` and the loader 308-redirects `localPage === 1` to the surah root
+  (`app/[surah]/page/[localPage]/+page.server.ts:9-16,25`). Counting 662 double-counts 114 surah
+  roots. Build output confirms 1,308 prerendered `__data.json` = 1,296 reader + 12 non-reader.
 
 ### Global invariants
 
@@ -83,41 +86,45 @@ state.
 
 ### Steps
 
-1. **Definition of a hit:** one increment per `get_or_build` call — i.e. per API request that
-   needs the corpus. Not per ayah, not per surah.
-2. **Counter with no second lock, and no lost counts on eviction.** Widen the existing map to
-   `residents: Mutex<HashMap<TranslationId, ResidentMeta>>`,
-   `ResidentMeta { tick: u64, hits: u64, evicted: bool }`, incremented at the acquisition that
-   already happens (`:162-163`).
-   The eviction listener currently *removes* the entry (`:90`); instead it **tombstones**
-   (`evicted = true`) so undrained hits survive. This keeps the "one lock" property that a
-   separate accumulator would break — but tombstones share the map that `enforce_byte_bound`
-   scans, so three rules are mandatory:
+1. **Definition of a hit:** one increment per *successful* `get_or_build` call — i.e. per API
+   request that needs and obtains the corpus. Not per ayah, not per surah. The function returns
+   early on a catalogue miss (`:135-139`) and on build error (`:161`), both before the increment
+   site, so neither contributes. This differs from `lookups` (`:131`), which counts invalid ids
+   too.
+2. **Counter is a lock-free side table, disjoint from cache state.** The catalogue is fixed at
+   construction (`translation_pool.rs:66-70`, 115 entries), so the counter needs no growth and no
+   lock: build `demand: HashMap<TranslationId, AtomicU64>` once in `new()`, pre-populated with one
+   entry per catalogue id, and `fetch_add(1, Relaxed)` at the acquisition that already happens
+   (`:162-163`).
 
-   - **Victim selection must skip tombstones.** `enforce_byte_bound` picks
-     `residents.iter().min_by_key(tick)` (`:179-186`). A tombstone is not in the cache, so
-     `cache.invalidate(victim)` is a no-op, `resident_bytes` never drops, and the loop spins
-     forever while holding `prune_sem` **on the request hot path** (`:164`). Filter
-     `!evicted` when selecting, and `break` when no live candidate remains.
-   - **Do not stamp `tick = 0` on a tombstone.** Prewarm also uses tick 0 (step 7); sharing the
-     sentinel makes the two indistinguishable in `min_by_key`. Leave the tick untouched and
-     rely on the `evicted` flag alone.
-   - **Define resurrection.** If `get_or_build` reloads a tombstoned id, the insert at `:163`
-     must *merge* (`evicted = false`, fresh tick, **`hits` preserved**), not overwrite — an
-     unconditional `insert` would drop exactly the undrained counts the tombstone exists to
-     protect. Symmetrically, the flush must not blindly remove-by-key after the DB write:
-     re-acquire the lock and, in that **single** acquisition, remove only rows that are still
-     tombstoned **and fully drained** (`hits == 0` after subtracting what committed) — the
-     check and the removal under one guard closes the resurrect-then-re-evict race between
-     snapshot and cleanup, and the `hits == 0` condition keeps counts accrued during a brief
-     resurrection. (Re-acquire, don't hold the snapshot guard across the SQLite write — see
-     the lock-ordering rule below.) A blind remove after a resurrection deletes the live
-     entry's meta, which both stops its hits accruing and makes it unselectable as a
-     byte-bound victim (silently weakening the byte bound to moka's count ceiling and TTL).
+   **The counter must not live in `residents`.** That map is the byte-bound victim index, and
+   coupling the two is what forces every hard problem here. Widening `ResidentMeta` with a `hits`
+   field means eviction must either drop undrained counts or leave a tombstone behind, and a
+   tombstone is an entry in the victim index that is *not* in the cache:
+   `enforce_byte_bound` picks `residents.iter().min_by_key(tick)` (`:179-186`), so
+   `cache.invalidate(victim)` becomes a no-op, `resident_bytes` never drops, `victim` stays
+   `Some`, the `break` at `:187` never fires, and the loop spins forever holding `prune_sem`
+   **on the request hot path** (`:164`). Skipping `evicted` entries during selection does not
+   close this: the entry that matters is created by a hit racing a *late* eviction — `:161`
+   returns a hit, another task's `run_pending_tasks` evicts and tombstones the id, then the
+   insert at `:163` clears the flag and stamps the newest tick. The result is a live-looking
+   meta for an id absent from the cache, and the same spin.
 
-   **Lock-ordering rule:** never hold the `residents` guard across a SQLite write — copy out,
-   drop the guard, then write. The listener runs inside `run_pending_tasks()` on the request
-   hot path (`:175,192`), so coupling it to DB latency would put request latency behind disk.
+   A side table has none of this: it never interacts with eviction, cannot grow, and cannot
+   describe a residency that does not exist. Losing a count is not a concern worth a tombstone —
+   the persisted value is a decayed heuristic, not an accounting ledger — and in fact **no count
+   is lost**, because the side table outlives eviction entirely.
+
+   **Leave `residents` and the eviction listener exactly as they are today** (`:90`).
+   Independently of this workstream, tighten `enforce_byte_bound` to confirm cache membership
+   (`cache.contains_key`) before invalidating and to bound its iterations, so a victim that has
+   already left the cache cannot stall the loop.
+
+   **Lock-ordering rule:** never hold the `residents` guard across an `.await` that can re-enter
+   moka or SQLite. The listener is awaited inline inside `invalidate()` under moka's per-key lock
+   (`:190`) as well as from `run_pending_tasks()` on the request hot path (`:175,192,196`), so
+   any guard held across those calls is both a latency coupling and a deadlock candidate. The
+   flush reads atomics and never takes the guard at all.
 3. **Durable store, owned by migrations.** Add
    `m000003_translation_popularity.rs`, after W3b's reserved
    `m000002_rate_limit_state.rs` — **not** raw DDL at boot.
@@ -133,17 +140,19 @@ state.
 4. **Flush wiring — this is not free, budget for it.** The existing rate-limit flush is spawned
    at `main.rs:136`; the pool is built at `main.rs:459-492`, so the task closure cannot capture
    a pool that does not exist yet. Move the spawn below pool construction and pass a third
-   clone (note `sea_db` is moved into `AppState` at `:495`, so clone before that).
+   clone. The call already passes `sea_db.clone()`, so that argument is unaffected; the clone to
+   take is `translation_pool`, which is moved into `AppState` at `:519`.
    Only the spawn moves — `restore()` is a separate statement at `:135` and stays put, so
    restore-before-serve ordering is unaffected. Nothing between `:136` and `:492` depends on
    the flush task running (only `gate_store` clones at `:171`; no requests are served yet).
    Run popularity on every 6th tick (≈60 s) of the existing 10 s task rather than spawning a
    second task — a second flush task on the one shared SeaORM connection adds write
    amplification and cuts against invariant 6.
-5. **Snapshot, don't drain; commit as one transaction.** Copy counts out, drop the residents
-   guard, then execute one SQLite transaction for all rows. Subtract the snapshot only after the
-   transaction commits. A failed transaction leaves every count intact; per-row autocommits on
-   the single shared connection are forbidden.
+5. **Snapshot, don't drain; commit as one transaction.** `load()` each atomic into a local
+   snapshot, execute one SQLite transaction for all rows, then `fetch_sub` exactly the snapshotted
+   amount per id. A failed transaction leaves every count intact and the next tick retries;
+   `fetch_sub`-after-commit means hits accrued during the write are preserved rather than lost.
+   Per-row autocommits on the single shared connection are forbidden.
 6. **Persist one precise score invariant.** `score` is the value at `updated_at`. On a committed
    flush at `now`, compute in Rust:
    `score_now = score * 0.5f64.powf((now - updated_at) / HALF_LIFE_SECS) + committed_hits`, then
@@ -166,8 +175,8 @@ state.
      and the top-N freezes) **nor `lookups`** (`:131` — it would corrupt `hit_rate`);
    - **must stamp `tick = 0`** — `enforce_byte_bound` evicts the lowest tick (`:179-186`), so a
      fresh prewarm tick would evict a corpus a real user is reading;
-   - the post-build merge may set `tick = 0` only when metadata is absent or tombstoned; a real
-     request racing the warm must keep its newer tick and hit count;
+   - the post-build merge may set `tick = 0` only when no `residents` entry exists yet; a real
+     request racing the warm must keep its newer tick;
    - **must yield** while `build_sem.available_permits() < BUILD_CONCURRENCY`: each load holds
      one of two permits (`:149-152`) and each iteration takes `prune_sem` and runs
      `run_pending_tasks` twice;
@@ -180,23 +189,31 @@ state.
    request after each restart is fast, for N translations, for 30 minutes."
    Keep prewarm only if `cold_builds_within_30m_of_boot / total_cold_builds >= 0.20` over at
    least seven complete daily windows. Emit both counters through OTLP with a boot identifier;
-   do not infer them from the reset-on-restart health counter. If the threshold fails, remove
-   prewarm, collection, and the table together.
+   do not infer them from the reset-on-restart health counter. **Both counters must exclude
+   prewarm's own builds** — `builds` is incremented inside the `init` closure (`:158`) that
+   `warm(id)` also passes through, so a default of `N = 2` would otherwise guarantee two
+   post-boot builds per restart and partly satisfy the threshold with its own traffic. Count
+   prewarm separately (`prewarm_builds`) and net it out. Run the measurement week with
+   `QURAN_PREWARM_TRANSLATIONS=0` so the numerator is entirely real demand. If the threshold
+   fails, remove prewarm, collection, and the table together.
 9. **Observability contract.** Add `prewarmed: Vec<String>` and
    `top_demand: Vec<(String, f64)>` (cap 10) to `PoolStats`, `TranslationPoolHealth`, its OpenAPI
    shape, and `/quran/health/ready`. This drops `PoolStats: Copy`; keep `Clone`. Change
    `hit_rate` in both pool and DTO to `Option<f64>` serialized as `null` when `lookups == 0`,
    instead of today's misleading `1.0`.
 
-**Invariants:** eviction semantics unchanged; no new lock; no second flush task; no Quran-DB
-writes (`translation_popularity` lives in the app DB, `sqlite:./data/easyquran.db`, entirely
-separate from `db/quran/tanzil/**` — the immutability rule is not touched).
+**Invariants:** eviction semantics unchanged — `residents` and the eviction listener are not
+touched; no new lock; no second flush task; no Quran-DB writes (`translation_popularity` lives
+in the app DB, `sqlite:./data/easyquran.db`, entirely separate from `db/quran/tanzil/**` — the
+immutability rule is not touched).
 
 **Tests:** decay halves across one half-life; a 30-day-old score plus one hit does not become a
 fresh undiminished score; ordering prefers a recent lower score over an old high one; failed
-transaction leaves every count intact; eviction tombstones rather than dropping hits;
-prewarm clamps to `max_resident_translations`, increments neither `hits` nor `lookups`, stamps
-tick 0; prewarm on a bogus id warns without panicking; existing pool tests pass unchanged.
+transaction leaves every count intact and the next tick retries; counts accrued during a flush
+survive `fetch_sub`; a demand count survives eviction and re-admission of the same id;
+`enforce_byte_bound` terminates when a selected victim has already left the cache; prewarm
+clamps to `max_resident_translations`, increments neither `hits` nor `lookups`, stamps tick 0;
+prewarm on a bogus id warns without panicking; existing pool tests pass unchanged.
 
 **Done when:** restart warms top-N by decayed API demand, metrics can evaluate the keep/drop
 threshold, `/quran/health/ready` reports the explicit nullable contract, and no eviction or
@@ -209,6 +226,7 @@ memory-bound behaviour changed.
 **Goal:** external rate limiting keys on the Cloudflare client IP while trusted Docker-internal
 SSR and health traffic use separate, bounded identities.
 **Files:** `config/settings.rs`, `middlewares/{route_blocker.rs,client_ip.rs}`, `state.rs`,
+`utils/telemetry.rs`, `db/sea_models/route_status/actions.rs`, `router.rs`,
 `main.rs`, `web/src/lib/server/quran-translation-page.ts`, `deploy/.env.example`,
 `docker-compose.yml`, `deploy/README.md`, `web/scripts/assert-headers.sh`.
 
@@ -219,11 +237,30 @@ unset** — a guard firing only on "unset" catches nothing.
 
 ### Steps
 
-1. **One `is_production()` helper.** Three spellings exist today: `state.rs:107-114` reads
-   `RUST_ENV → NODE_ENV → APP_ENV`; `route_blocker.rs:69` reads **only** `APP_ENV`, defaulting
-   to `"development"`; `telemetry.rs:101` reads `DEPLOYMENT_ENVIRONMENT`. Since
-   `deploy/.env.example:36` sets `RUST_ENV=production` and never `APP_ENV`, **the route blocker
-   is disabled in production right now. Convert `route_blocker` to the shared helper.
+1. **One `is_production()` helper.** No such helper exists yet — `state.rs:107-114` is an inline
+   `let is_prod` inside `derive_field_enc_key`, reading `RUST_ENV → NODE_ENV → APP_ENV`, and
+   `route_blocker.rs:68-69` reads **only** `APP_ENV`, defaulting to `"development"`.
+   (`utils/telemetry.rs:99-102` also reads `DEPLOYMENT_ENVIRONMENT`, but that is an OTLP resource
+   label, not a gate; feed it from the same helper for consistency, nothing branches on it.)
+   Since `deploy/.env.example:36` sets `RUST_ENV=production` and never `APP_ENV`, **the route
+   blocker is disabled in production right now.** Extract the helper and convert `route_blocker`
+   to it.
+
+   **Turning the route blocker on is a behaviour change, not a free rider — price it in the same
+   change.** Once enabled it adds two SQLite round-trips per private-router request
+   (`record_route_pattern` → `RouteStatus::ensure_exists`, `route_blocker.rs:79`, and
+   `is_route_blocked`, `:89`) against the same DB file as `rate_limit_state`; it logs
+   `info!("ROUTER BLOCKER WORKING")` per request (`:76`); and it is fail-closed, returning
+   `CheckFailed` on any DB error (`:99-104`). `/healthz` sits on the private router
+   (`router.rs:48`) and is the compose healthcheck target, so a DB hiccup becomes a restart loop.
+   Required alongside the conversion: drop the per-request log to `debug!`, exempt the health
+   routes per step 3, and decide fail-open vs fail-closed for `is_route_blocked` explicitly.
+
+   Note the default flips direction. `state.rs:107-114` is a deny-list — unset means
+   *production* — while `route_blocker.rs:69` treats unset as development. Adopting the helper
+   enables the blocker in every environment that sets none of the three variables, including
+   test runs that never call the setters at `state.rs:281-295`. Make the test harness set an
+   explicit non-production value.
 2. `HttpSettings::from_env` returns `Result`, never panics on `IP_SOURCE`. Define environment
    precedence once: `RUST_ENV → NODE_ENV → APP_ENV`; production is `production`, accepted
    non-production values are `development|dev|test|testing|ci|local`, and unset/unknown values
@@ -297,6 +334,13 @@ claims rather than limit buckets, and no operator API exists.
 4. Expired rows are deleted on the next successful flush; active keys remain only until their
    fixed or block expiry. This retention rule covers IP, email, and user-id key classes. Only
    successfully parsed active IP ban keys may appear in an IP export.
+5. Batch the flush into one transaction. `flush` currently issues one `DELETE` and then a
+   per-row `INSERT … ON CONFLICT` in a bare loop with no transaction
+   (`services/rate_limit_store.rs:80-107`), which is tolerable while rows are bounded by active
+   rate-limit windows and becomes a per-10s write storm once W3a adds a long-lived row per banned
+   identity. Same rule as W1 step 5: one transaction on the shared connection, per-row
+   autocommits forbidden. Cap persisted ban rows and record the cap; a distributed flood must not
+   grow the table without bound.
 
 **Tests:** fresh migration; legacy table with rows gains scope without data loss; migration is
 idempotent; `Long` survives restart; invalid scope restores as `Temp`; expired rows purge.
@@ -350,6 +394,12 @@ runs in `RateLimitMiddleware::call`, where resolved identity and store are avail
    ```
    Parse `QURAN_BAN_ALLOWLIST` as CIDRs at boot; enabled + missing/invalid allowlist is a boot
    error. Internal service identities and health routes can never enter this state machine.
+   `ip.rs:13` stringifies the resolved address, so escalation must first normalise it to a
+   **ban unit**: IPv4 → `/32`, IPv6 → `/64`. Without that, an IPv6 client counts per `/128`,
+   rotates freely inside a prefix it already owns, never reaches `temp_after`, and produces an
+   unbounded list of single-address deny entries for export. Counting, banning, allowlist
+   matching, and export all key on the same normalised unit. An identity that does not parse as
+   an address never escalates.
 2. Before fixed-window increment, call side-effect-free `ban_status(quran-ban:{ip})`. An active
    Temp/Long ban immediately returns 429 for every request, including after fixed-window rollover.
 3. Record suspicious Quran 4xx events in a bounded per-IP/window counter for a closed set:
@@ -382,6 +432,7 @@ volume cannot ban a CGNAT range, and every ban is visible and safely removable.
 
 **Goal:** `my-plan-raw.md:21`.
 **Files:** `lib/quran/engagement.ts`, `lib/quran/engagement-state.ts` (new),
+`lib/storage/{safe-storage.ts,decoders.ts}`, `lib/stores/reader-persistence.svelte.ts`,
 `lib/workers/download.ts`, engagement tests.
 
 **Today** (`engagement.ts:15-20,83`): one `sessionStorage` integer, threshold 2. Resets every
@@ -400,8 +451,15 @@ interface EngagementState {           // localStorage "eq:engagement"
   firstSeen: number; lastSeen: number;
   sourceViews: Record<string, number>;
 }
-isEngagedReader() = distinctDays >= 2 || totalViews >= 4 || sessionViews >= 3;
+isEngagedReader() = distinctDays >= 2 || totalViews >= 4;
 ```
+
+`sessionViews` is tracked but is **not** a disjunct. Because `totalViews` includes the current
+session, `sessionViews >= 3` can only fire at `totalViews == 3` — one view earlier than the
+`totalViews >= 4` branch — so its sole effect is to admit a first-time visitor who opens three
+ranges in one sitting. That is exactly the one-time viewer this workstream exists to exclude;
+keeping the branch would move the defect from two clicks to three rather than removing it. The
+counter stays because the settle/retry guards and diagnostics read it.
 
 `sessionViews` lives under `sessionStorage "eq:reader-session-views"`. The legacy
 `eq:reader-views` key is read once during migration, seeds both `totalViews` and
@@ -416,10 +474,13 @@ would do nothing.
 
 1. New `lib/quran/engagement-state.ts` — load/save/bump. **Never read storage at module
    scope**: `readJSON` no-ops under SSR/prerender (`safe-storage.ts:4`), so a module-scope read
-   would freeze `undefined` into the bundle. Read lazily inside the call.
+   evaluates to `undefined` on the server, and in the browser it snapshots once at hydration and
+   never observes a later write. Read lazily inside the call.
 2. **Validate the shape explicitly.** `isFutureSchema` returns `false` for an object with no
    `v` key (`safe-storage.ts:56-59`), so a legacy or garbage blob passes as valid current
-   schema. Check field types.
+   schema. Check field types with the existing `lib/storage/decoders.ts` helpers
+   (`asObject`/`asNumber`/`asString`/`asStringRecord`) that `reader-persistence`, `prefs`, and
+   `consent` already use — do not hand-roll a second validator.
 3. **Keep the read-modify-write synchronous** — no `await` between `readJSON` and `writeJSON`,
    re-read immediately before writing. `localStorage` RMW is non-atomic across tabs; the
    current sessionStorage design has no such hazard, so this migration introduces it. (Do not
@@ -430,7 +491,13 @@ would do nothing.
 5. `sessionViews` uses the new session key above. Migration order is: read validated durable
    state → read legacy session value → seed durable total once if marker absent → initialize new
    session counter → write marker → delete legacy key.
-6. Bump `readerViews` always; `sourceViews[id]` only for translation sources.
+6. Bump `readerViews` always; `sourceViews[id]` only for translation sources. Seed engagement
+   from the durable reader state that already exists rather than starting every current reader at
+   zero: `easyquran.reader` (localStorage, `reader-persistence.svelte.ts:28`) holds `lastRead`
+   with its `sourceId` plus bookmarks and notes, and `easyquran.reader.source`
+   (`reader-settings.svelte.ts:53`) records the chosen translation. A non-empty bookmark set or a
+   `lastRead` from a previous day is stronger evidence of a continuous reader than any view
+   counter, and costs no new state. Treat either as satisfying `distinctDays >= 2` at seed time.
 7. Keep `PREFETCH_PREFIX` settle markers in `sessionStorage` and every existing guard:
    `saveData`/2g (`:27-32`), `whenIdle` (`:34-38`), one retry per source per tab (`:45-50`).
 8. `noteTranslationChosen` (`:96`) keeps bypassing the gate — an explicit pick beats a heuristic.
@@ -480,11 +547,27 @@ into `swrApp()` and lands in **`eq-app-${version}`**. Quran API JSON is being ca
 today. Add same-origin `/api/` to the bypass list before adding fallback traffic. API response
 caching belongs to HTTP/edge policy, never `eq-app-*` or `eq-data-v1`.
 
+**The bypass has a boot-latency cost — pay it deliberately.** Two boot-path requests are
+`/api/quran/…` and are currently served cache-first by `swrApp`: `resolveManifest`
+(`manifest.ts:47`, `/scripts`) and `fetchSourceCatalogue` (`catalogue.ts:122`, `/sources`). Both
+run inside the `Promise.all` that precedes `quranWorker.start()`, so bypassing them makes every
+cold load pay live round trips *before* the worker starts — widening the exact boot window step 3
+exists to close. Failure is graceful (both fall back to baked data), so this is latency, not
+breakage. Resolve it explicitly: scope the bypass to the read endpoints
+(`/api/quran/(surah|range|search)`) and leave boot metadata cacheable, or bypass all of `/api/`
+and give `/scripts` and `/sources` their own short-TTL cache. Do not bypass `/api/` wholesale
+without one of the two.
+
 ### Steps
 
 1. Generalise `withTranslationFallback` into `withSourceFallback` with a `hasLocal` probe:
    translations → `hasTranslation(id)`; Arabic → worker readiness. `quranWorker.ready` is a
    synchronous getter, so type the probe `() => boolean | Promise<boolean>`.
+   The warm-local side effect must become a per-kind parameter. `withTranslationFallback:139`
+   unconditionally calls `quranWorker.ensureTranslation(args.reader)` before the API attempt;
+   for an Arabic reader that resolves to `translationRunner(arabicSourceId)` and starts a
+   pointless artifact download whose failure is swallowed by a bare `catch`. Pass it as an
+   optional `onMiss` supplied only by the translation kind.
 2. Preserve tier diagnostics even when fallback succeeds. Each read records
    `{servedBy: "local"|"api", workerFailure?: ReadFailure, apiFailure?: ReadFailure}` through a
    typed status callback. `ReadFailure` distinguishes timeout, transport, HTTP, malformed data,
@@ -514,7 +597,9 @@ caching belongs to HTTP/edge policy, never `eq-app-*` or `eq-data-v1`.
 8. **Thread `validateCoordinate` through `quranApi`.** `api-client.ts` takes no validator, so
    the API path decodes without the check the worker path performs (`worker-client.ts:288`,
    `SurahReader.svelte:417-419`). W5/W6 make the API path routine, silently weakening the
-   invariant.
+   invariant. This covers `search` as well: `api-client.ts:68` calls `decodeSearchResponse`
+   with no validator while the worker path passes one — same invariant, same file, and it is
+   the one API path that is already routine today.
 9. **Remove both reader gates.** Neither `quran.status === "error"` nor
    `!quranWorker.ready` may prevent a read. Worker status drives UI only; `loadPage` always calls
    the fallback chain. A successful API read clears network degradation but may leave worker
@@ -562,6 +647,16 @@ W9 records the divergence from `my-plan-raw.md:13,22` explicitly.
 For Arabic this costs little: the route is prerendered, so `__data.json` is a **static build
 artifact** served from the CDN/`eq-data-v1`, not an API call.
 
+Two properties of that path are load-bearing for this workstream and for W7, so state them
+rather than assuming them. First, `handleData` is **cache-first** stale-while-revalidate: a
+cached entry is returned immediately and revalidated in the background. Repeat visits to a
+*translated* range route therefore read `eq-data-v1`, not a fresh SSR render — which is why step
+5's translation branch must not freeze on server data, and why W7 step 2 must evict pending
+entries rather than wait them out. Second, nothing precaches prerendered `__data.json`: the
+precache list is `build + files` plus a few fixed paths, and `build`/`files` exclude prerendered
+pages. A cold client pays a network round trip on its first visit to any range route; the
+offline pack covers these keys only once a user has opted into it.
+
 ### Steps
 
 1. Define route key `{sourceId, kind, index}` and one `$state.raw` display snapshot containing
@@ -579,7 +674,10 @@ artifact** served from the CDN/`eq-data-v1`, not an API call.
 5. Arabic total failure keeps matching server snapshot. Translation worker failure reaches API;
    total failure keeps matching server snapshot and typed degradation state. No path blanks or
    restores data from a previous route.
-6. Compute ranges from `loadQuranData()` and preserve translation context on every reader link:
+6. For the rendered range, take bounds from the server payload — both loaders already return
+   `startGlobal`/`endGlobal` on `RangePageData`, so no lookup is needed and no cold-miss network
+   fetch is introduced. `loadQuranData()` is required only for the coordinate validator and for
+   ranges other than the current one. Preserve translation context on every reader link:
    use `juzPathFor`/`globalPagePathFor` and the `surah*For(ctx, ...)` family with `ctx` derived
    from `surahRouteContext(sourceId)` or `routeContextFromParams(page.params)`. Components never
    call Arabic-only path helpers or hand-build `/app/` navigation strings.
@@ -614,8 +712,12 @@ state the translated-route divergence from `my-plan-raw.md:22` exactly.
 
 - Arabic reader routes are prerendered. Their `__data.json` is a static build artifact, so a
   SvelteKit data load already provides the Arabic SSG-last tier while the static origin is up.
-  Offline pack supplies the same data keys where staged. No document reload or second
-  prerendered-cache mechanism is added.
+  The offline pack already contains every prerendered `__data.json` — the generator collects all
+  of them, giving 1,296 reader entries of its 1,308 — so no second staging mechanism is needed
+  and importing `prerendered` from `$service-worker` would only duplicate it. The pack is
+  **opt-in** and is read only after a network miss, so it is a user-enabled deepening of this
+  tier, not a default one; if it should serve prerendered paths earlier, that is a change to the
+  data-cache lookup order, not a new cache. No document reload is added.
 - Translated routes are SSR + bounded disk cache and have **no SSG artifact**. Prerendering all
   115 translations would create at least 13,110 surah routes before local-page/range routes.
   Translation recovery is local DB → API → matching server data; it is never called SSG-last.
@@ -671,14 +773,34 @@ passkey modules.
    (`middlewares/cors.rs:20-28`; list at `utils/cors.rs` = localhost + `hmziq.rs` +
    `hzmiqrs.com` + `blog.hmziq.rs`). `easyquran.fyi` is **not** among them and the variable
    appears in neither `deploy/.env.example` nor `docker-compose.yml`. Same-origin POSTs still
-   send `Origin`, so **every login and register would 403.** Add
-   `ALLOWED_ORIGINS=https://${DOMAIN}` to both.
+   send `Origin`, so **every login and register would 403.** Set
+   `ALLOWED_ORIGINS=https://easyquran.fyi` in `deploy/.env.example`, spelled literally.
+   `docker-compose.yml` already forwards it through `env_file: [.env]`; do not also declare it
+   under `environment:`, which only creates a second place to drift.
+
+   **Write the domain out; do not interpolate.** Compose does not expand `${…}` inside values
+   loaded via `env_file`, so `ALLOWED_ORIGINS=https://${DOMAIN}` reaches the API as that literal
+   string. Every byte in it is printable ASCII, so the parse below **succeeds** — no panic, no
+   warning, and `origin_guard` still rejects every login. This is the repo's existing convention
+   for exactly this reason: `PUBLIC_API_BASE_URL` (`deploy/.env.example:19`) spells the domain
+   out even though `DOMAIN` is set four lines earlier.
+
    **Sharp edge:** `utils/cors.rs` does `.parse::<HeaderValue>().unwrap()` per entry. Entries
    are trimmed first and `HeaderValue` accepts any byte in `0x20..0x7E` plus tab, so spaces and
    trailing commas do **not** panic — a trailing comma yields an empty, silently useless entry,
    which is the more likely failure. What *does* panic at boot is any control byte (a newline
    from a copy-paste) or any non-ASCII byte (a smart quote, NBSP). Validate for both: reject
-   empty elements loudly, and reject non-ASCII instead of unwrapping.
+   empty elements loudly, and reject non-ASCII instead of unwrapping. Because every failure in
+   this family is silent rather than loud, log the **resolved** allowlist once at startup — that
+   line is what makes a literal `${DOMAIN}` or an empty entry visible.
+
+   Two further properties of the allowlist belong in this change. It is rebuilt **per request**:
+   `middlewares/cors.rs:18` calls `get_allowed_origins()` inside the request path, re-reading two
+   env vars and re-parsing ~25 `HeaderValue`s on every private-router request — the path this
+   workstream puts login on. Hoist it into a `LazyLock`, which also makes validation a
+   single boot-time failure site. And the baked list carries nine hardcoded developer LAN
+   entries (`192.168.0.101` and `192.168.0.23` across five ports, `utils/cors.rs:18-26`) that
+   ship to production; drop them from the production build or gate them behind non-production.
 2. W5's `/api/` SW bypass is a hard dependency. No authenticated API response may enter Cache
    Storage.
 3. **Authenticated API `no-store` without harming public Quran caching.** Capture before
@@ -709,11 +831,19 @@ OPFS/offline pack remain.
    authenticated`, user profile, verification/2FA state, and one in-flight session probe.
    Nothing reads browser storage or session at module scope during SSR.
 3. Hydrate after mount with `GET /api/user/v1/get`; 200 authenticates, 401/403 becomes anonymous,
-   transport/5xx remains retryable unknown. `/app/**` stays prerendered and never embeds user
-   data in build output.
+   transport/5xx remains retryable unknown. `/app/**` is prerendered by layout default and never
+   embeds user data in build output. Four nodes override `prerender = false` — the translated
+   surah, surah-local-page, juz, and global-page routes — and those are precisely the SSR'd
+   documents W8a step 4 protects; auth hydration must behave identically on both sets.
 4. Fetch CSRF through `POST /api/csrf/v1/generate`. Token stays in memory, never localStorage.
+   The route is CSRF-exempt and `csrf_guard` returns `MissingToken` when there is no session, so
+   a first-time visitor must call it **before** `POST /api/auth/v1/log_in`; make that ordering
+   explicit in `auth-client.ts` rather than leaving it to call-site discipline.
    Re-fetch after login, logout, OAuth/passkey login, session termination affecting current
-   session, or any response that rotates `ruxlog.sid`, because token is HMAC(session id).
+   session, or any response that rotates `ruxlog.sid` (`main.rs:626`), because token is
+   HMAC(session id). Rotation is not limited to login/logout: `cycle_id()` is called by
+   `rotate_session_after_trust_change` (`auth_v1/controller.rs:681-689`), so **2FA setup, verify,
+   and disable each invalidate the current token** and must trigger a re-fetch.
 5. Auth transitions invoke W8a cache purge before new user state renders.
 
 ### W8c — Email/password, verification, 2FA
@@ -772,7 +902,12 @@ one user's content to another.
 boundaries that implementations must not blur:
 
 1. **Translated pages are SSR + 7-day disk cache, not SSG.** Prerendering would be
-   114 × 115 ≈ 13,110 pages for the surah route alone. SEO is served by hreflang alternates
+   114 × 115 ≈ 13,110 pages for the top-level surah route, and the surah tree does not stop
+   there: surah-local pages add 548 × 115 ≈ 63,020, so the surah shape alone is ~76,000 routes
+   before juz and global pages. Quote the full figure — the 13,110 number alone understates the
+   cost by roughly six times. Prerendering also requires a live API at build time
+   (`quran-translation-page.ts` fetches ranges over HTTP), which Arabic prerender does not.
+   SEO is served by hreflang alternates
    (`routes/sitemap.xml/+server.ts:31-42`). This deliberately diverges from
    `my-plan-raw.md:19,22`; no translated path may be described as SSG.
 2. **Translated delivery is not surah-only.** The same source context spans surah,
@@ -812,8 +947,13 @@ boundaries that implementations must not blur:
 5. **Prune `InMemoryStore.claims`.** `prune()` removes expired entries from both `limits` and
    `claims`; add a high-cardinality expiry regression test. This fixes existing dedup retention
    independently of W3 escalation.
-6. **Crash-safe OPFS replacement without hashing Quran data.** Download to an id-scoped temporary
-   file, close it, verify declared size/content shape, then switch the id's active-file pointer in
+6. **Crash-safe OPFS replacement without hashing Quran data.** Verification today is not merely
+   size-only, it is **skippable**: both the check and its call site are gated on
+   `spec.sizeBytes !== undefined` (`workers/download.ts:14-23,63-65`), so a catalogue entry that
+   omits the field is written with no verification at all — the other half of item 1's hole.
+   A missing declared size must reject the entry, not waive the check. Download to an id-scoped
+   temporary file, close it, verify declared size/content shape, then switch the id's active-file
+   pointer in
    one IDB transaction and remove the old file afterward. Failure keeps old active file and
    removes temp. Identity remains the Quran source id; temp names never become versions or cache
    identities. Tests interrupt download/write/pointer switch and prove old corpus stays readable.
