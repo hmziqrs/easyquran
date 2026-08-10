@@ -105,4 +105,28 @@ describe("VerifyEmailFlow confirm", () => {
     expect(flow.verified).toBe(false);
     expect(flow.genericError).toMatch(/network/i);
   });
+
+  it("401 on verify -> session-expired copy, not the login credential banner", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(err(401, { type: "unauthorized" }));
+    const flow = createVerifyEmailFlow({ client, state });
+    const res = await flow.verify();
+    expect(res).toBe(false);
+    expect(flow.genericError).toBe("Your session expired. Please log in again.");
+    expect(flow.genericError).not.toBe("Email or password is incorrect.");
+    expect(flow.alreadyVerified).toBe(false);
+    expect(flow.verified).toBe(false);
+  });
+
+  it("401 on resend -> session-expired copy, not the login credential banner", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(err(401, { type: "unauthorized" }));
+    const flow = createVerifyEmailFlow({ client, state });
+    const res = await flow.resend();
+    expect(res).toBe(false);
+    expect(flow.genericError).toBe("Your session expired. Please log in again.");
+    expect(flow.genericError).not.toBe("Email or password is incorrect.");
+  });
 });

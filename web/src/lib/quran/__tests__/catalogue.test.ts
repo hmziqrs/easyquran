@@ -203,6 +203,21 @@ describe("fetchSourceCatalogue", () => {
     });
   });
 
+  it("emits a consent-gated telemetry event when the payload fails to decode", async () => {
+    vi.useRealTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ garbage: true }));
+    decode.mockReturnValue(null);
+    consentState.analytics = true;
+    const out = await mod.fetchSourceCatalogue();
+    expect(out).toEqual([]);
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+      expect(track).toHaveBeenCalledWith("quran_artifact_rejected", {
+        reason: "sources_payload_malformed",
+      });
+    });
+  });
+
   it("suppresses telemetry when consent is denied", async () => {
     const entry = translationEntry({ sizeBytes: SQ_NAHI_SIZE + 1 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { sources: [entry] } }));

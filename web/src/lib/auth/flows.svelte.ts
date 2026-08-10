@@ -356,6 +356,8 @@ export class VerifyEmailFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 401) {
+          this.genericError = "Your session expired. Please log in again.";
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.alreadyVerified = true;
           this.genericError = null;
@@ -389,6 +391,9 @@ export class VerifyEmailFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 401) {
+          this.genericError = "Your session expired. Please log in again.";
+          this.fieldErrors = {};
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.alreadyVerified = true;
           this.genericError = null;

@@ -180,7 +180,10 @@ export async function fetchSourceCatalogue(signal?: AbortSignal): Promise<Source
     });
     if (!res.ok) return [];
     const entries = decodeSourcesPayload(await res.json());
-    if (!entries) return [];
+    if (!entries) {
+      reportArtifactRejection("sources_payload_malformed");
+      return [];
+    }
     const validated = validateAndLocalizeCatalogue(entries);
     if (!validated) {
       reportArtifactRejection("sources_payload");
