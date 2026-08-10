@@ -21,7 +21,7 @@ import {
   RANGE_CHUNK_TIMEOUT_MS,
 } from "$lib/quran/fetch";
 import { fetchRangeChunks, type RangeJsonFetcher } from "$lib/quran/range-fetch";
-import { decodeTranslationRangeText } from "$lib/quran/wire";
+import { decodeTranslationRangeText, type AyahCoordinateValidator } from "$lib/quran/wire";
 import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
@@ -68,6 +68,9 @@ function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
   };
 }
 
+const validateServerCoordinate: AyahCoordinateValidator = (globalIndex, surah, ayah) =>
+  QURAN_DATA.globalIndexOf(surah, ayah) === globalIndex;
+
 async function fetchTranslationRange(
   sourceId: string,
   from: number,
@@ -80,7 +83,7 @@ async function fetchTranslationRange(
       source: sourceId,
       from,
       to,
-      decode: (raw) => decodeTranslationRangeText(raw),
+      decode: (raw) => decodeTranslationRangeText(raw, validateServerCoordinate),
       fetchImpl: serverJsonFetcher(fetcher),
     });
   } catch (e) {

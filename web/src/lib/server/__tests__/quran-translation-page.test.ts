@@ -121,3 +121,41 @@ describe("loadTranslationRangeData juz chunking through the SSR loader", () => {
     expect(result.ayahs.at(-1)!.globalIndex).toBe(entry.endGlobal);
   });
 });
+
+describe("SSR translation range per-chunk coordinate validation", () => {
+  // Corrupt one ayah's ayah-number (and its key to stay self-consistent) while
+  // leaving its globalIndex and surah intact. The represented-surah set and
+  // contiguity are unchanged, so without a coordinate validator this decodes
+  // fine; the server validator must reject the whole read.
+  function wireChunkBadCoordinate(from: number, to: number) {
+    const chunk = wireChunk(from, to);
+    const body = chunk.data;
+    const target = body.ayahs[1]!;
+    const wrongAyah = target.ayah + 5;
+    body.ayahs[1] = { ...target, ayah: wrongAyah, key: `${target.surah}:${wrongAyah}` };
+    return body;
+  }
+
+  it("rejects a chunk whose (surah,ayah) disagrees with globalIndex (no partial render)", async () => {
+    const entry = QURAN_DATA.rangeByIndex(RangeKind.Juz, 1)!;
+    const body = wireChunkBadCoordinate(entry.startGlobal, entry.endGlobal);
+
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { ayahs: body.ayahs, normalizations: body.normalizations } }),
+    } as Response));
+
+    const result = await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
+
+    expect(result.ayahs).toHaveLength(0);
+    expect(result.normalizations).toHaveLength(0);
+  });
+
+  it("accepts an otherwise-identical chunk whose coordinates agree with globalIndex", async () => {
+    const entry = QURAN_DATA.rangeByIndex(RangeKind.Juz, 1)!;
+    const { fetcher } = makeFetcher();
+    const result = await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
+    expect(result.ayahs).toHaveLength(entry.endGlobal - entry.startGlobal + 1);
+  });
+});
