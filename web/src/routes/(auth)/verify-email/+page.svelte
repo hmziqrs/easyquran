@@ -43,6 +43,7 @@
     submitLabel="Confirm email"
     pending={flow.pending}
     serverError={flow.genericError}
+    successNotice={flow.successMessage}
     onsubmit={handleSubmit}
   >
     <div class="flex flex-col gap-1.5">

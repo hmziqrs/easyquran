@@ -84,7 +84,7 @@ describe("VerifyEmailFlow confirm", () => {
     expect(flow.genericError).toMatch(/60s/);
   });
 
-  it("resend success -> uniform account-exists copy", async () => {
+  it("resend success -> success notice, not the error banner", async () => {
     const client = mockClient();
     const state = mockState();
     client.unsafeRequest.mockResolvedValueOnce(ok({ message: "sent" }));
@@ -92,7 +92,8 @@ describe("VerifyEmailFlow confirm", () => {
     const res = await flow.resend();
     expect(res).toBe(true);
     expect(flow.lastResentAt).not.toBeNull();
-    expect(flow.genericError).toMatch(/account exists/i);
+    expect(flow.successMessage).toMatch(/account exists/i);
+    expect(flow.genericError).toBeNull();
   });
 
   it("transport failure on verify -> network message, verified stays false", async () => {

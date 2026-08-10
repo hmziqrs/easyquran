@@ -358,6 +358,7 @@ export class VerifyEmailFlow {
   pending = $state(false);
   resendPending = $state(false);
   genericError = $state<string | null>(null);
+  successMessage = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   lastResentAt = $state<number | null>(null);
   verified = $state(false);
@@ -372,6 +373,7 @@ export class VerifyEmailFlow {
     if (this.resendPending) return false;
     this.resendPending = true;
     this.genericError = null;
+    this.successMessage = null;
     try {
       const res = await this.client.unsafeRequest<unknown>("/email_verification/v1/resend", {
         method: "POST",
@@ -391,7 +393,7 @@ export class VerifyEmailFlow {
         return false;
       }
       this.lastResentAt = Date.now();
-      this.genericError = ACCOUNT_EXISTS_RESEND;
+      this.successMessage = ACCOUNT_EXISTS_RESEND;
       return true;
     } catch {
       this.genericError = "Network error. Check your connection and try again.";
@@ -405,6 +407,7 @@ export class VerifyEmailFlow {
     if (this.pending) return false;
     this.pending = true;
     this.genericError = null;
+    this.successMessage = null;
     this.fieldErrors = {};
     try {
       const res = await this.client.unsafeRequest<unknown>("/email_verification/v1/verify", {
