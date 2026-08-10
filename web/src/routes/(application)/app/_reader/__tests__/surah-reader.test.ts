@@ -391,6 +391,66 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     expect(region).toBeNull();
   });
 
+  // W7-R2-2 mirror: an api-degraded flag set by one adjacent read clears on a
+  // subsequent clean adjacent read (the status callback re-assigns, not merges).
+  it("clears apiDegraded when a later adjacent read succeeds cleanly", async () => {
+    stubDistinctRanges();
+    workerStub.readRange.mockImplementation(
+      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+        if (from <= 8) onStatus?.({ servedBy: "local", apiFailure: { kind: "http", status: 503 } });
+        else onStatus?.({ servedBy: "local" });
+        return Promise.resolve(surahOneRange(from, _to));
+      },
+    );
+
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await driveAdjacentRead();
+
+    expect(workerStub.readRange).toHaveBeenCalled();
+    let region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/network is slow/i);
+
+    fireForwardFill();
+    await flushMicrotasks(20);
+
+    region = target.querySelector('[role="status"]');
+    expect(region).toBeNull();
+  });
+
+  // W7 both-down: worker AND API failing in one status surfaces a clearable
+  // degraded state (worker copy wins the template if/else; status re-assigns, not merges).
+  it("surfaces worker+API both-down as a single clearable degraded state", async () => {
+    stubDistinctRanges();
+    workerStub.readRange.mockImplementation(
+      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+        if (from <= 8) {
+          onStatus?.({
+            servedBy: "api",
+            workerFailure: { kind: "worker" },
+            apiFailure: { kind: "http", status: 503 },
+          });
+        } else {
+          onStatus?.({ servedBy: "local" });
+        }
+        return Promise.resolve(surahOneRange(from, _to));
+      },
+    );
+
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await driveAdjacentRead();
+
+    expect(workerStub.readRange).toHaveBeenCalled();
+    let region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/local offline copy/i);
+    expect(region?.textContent ?? "").not.toMatch(/couldn't be loaded/i);
+
+    fireForwardFill();
+    await flushMicrotasks(20);
+
+    region = target.querySelector('[role="status"]');
+    expect(region).toBeNull();
+  });
+
   // W7-R2-3: a route-key change (navigation) discards stale degraded state.
   // Svelte 5 removed imperative $set on mounted instances, so the in-place
   // route-key $effect (which clears degraded when `initial` changes on a LIVING
