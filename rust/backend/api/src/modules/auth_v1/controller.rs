@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -470,8 +470,8 @@ pub async fn twofa_verify(
             active.two_fa_last_totp_counter = sea_orm::Unchanged(Some(matched));
             active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
             let updated = active.update(&state.sea_db).await?;
-            rotate_session_after_trust_change(&mut auth).await;
-            return Ok((StatusCode::OK, Json(json!(updated))));
+            let rotated = rotate_session_after_trust_change(&mut auth).await;
+            return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
         } else {
             warn!(
                 user_id = user.id,
@@ -506,8 +506,8 @@ pub async fn twofa_verify(
                 active.two_fa_backup_codes = sea_orm::Set(Some(serde_json::json!(updated_hashes)));
                 active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
                 let updated = active.update(&state.sea_db).await?;
-                rotate_session_after_trust_change(&mut auth).await;
-                return Ok((StatusCode::OK, Json(json!(updated))));
+                let rotated = rotate_session_after_trust_change(&mut auth).await;
+                return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
             }
         }
     }
@@ -612,9 +612,9 @@ pub async fn twofa_disable(
     active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
     let updated = active.update(&state.sea_db).await?;
 
-    rotate_session_after_trust_change(&mut auth).await;
+    let rotated = rotate_session_after_trust_change(&mut auth).await;
 
-    Ok((StatusCode::OK, Json(json!(updated))))
+    Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))))
 }
 
 #[debug_handler]
@@ -677,15 +677,32 @@ pub async fn sessions_terminate(
 
 pub(crate) use crate::services::auth::{lookup_session_mapping, record_session_mapping};
 
+/// W8b: sent on every response whose handler called `cycle_id()` successfully, so
+/// the web client knows to refresh its in-memory CSRF token (which rebinds to the
+/// new session id). The header is CORS-exposed (see main.rs) and carries no value
+/// beyond presence.
+pub(crate) const SESSION_ROTATED: HeaderName = HeaderName::from_static("x-eq-session-rotated");
+
+fn session_rotated_headers(rotated: bool) -> HeaderMap {
+    let mut h = HeaderMap::new();
+    if rotated {
+        h.insert(SESSION_ROTATED, HeaderValue::from_static("1"));
+    }
+    h
+}
+
 /// F#16: rotate the session id at trust transitions (2FA on/off) so the per-session CSRF token rebinds; a rotation failure is logged non-fatal (trust change already succeeded) — surfacing a 500 would mislead the client.
-async fn rotate_session_after_trust_change(auth: &mut AuthSession) {
+/// Returns whether the id was cycled AND persisted, so callers can emit [`SESSION_ROTATED`].
+async fn rotate_session_after_trust_change(auth: &mut AuthSession) -> bool {
     if let Err(err) = auth.session().cycle_id().await {
         warn!(error = %err, "F#16: failed to re-rotate session id at trust transition; CSRF token NOT rebound");
-        return;
+        return false;
     }
     if let Err(err) = auth.session().save().await {
         warn!(error = %err, "F#16: failed to persist rotated session id at trust transition");
+        return false;
     }
+    true
 }
 
 mod login_totp_token {

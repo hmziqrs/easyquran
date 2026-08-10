@@ -700,6 +700,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
             axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
             axum::http::header::SET_COOKIE,
+            // W8b: client reads this to refresh its in-memory CSRF after a cycle_id().
+            axum::http::HeaderName::from_static("x-eq-session-rotated"),
         ])
         .allow_origin(AllowOrigin::list(allowed_origins.header_values().to_vec()))
         .allow_credentials(true)
