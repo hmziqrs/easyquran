@@ -688,6 +688,8 @@ export class TwoFactorFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
+          this.genericError = VERIFY_EMAIL_NEXT;
         } else {
           const c = classifyAuthError(res.status, res.error, TWO_FA_VERIFY_FIELDS);
           if (c.kind === "field") {

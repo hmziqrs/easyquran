@@ -146,6 +146,24 @@ describe("TwoFactorFlow verify (rotates only on success)", () => {
     expect(state.transition).not.toHaveBeenCalled();
     expect(state.setUser).not.toHaveBeenCalled();
   });
+
+  it("verify 403 AUTH_008 (verified-only) -> next-step copy, not wrong-code field error", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(ok({ secret: "S", otpauth_url: "u", backup_codes: [] }, false))
+      .mockResolvedValueOnce(err(403, { type: "AUTH_008" }));
+    const flow = createTwoFactorFlow({ client, state });
+    await flow.setup();
+    flow.verifyCode = "123456";
+    const res = await flow.verify();
+    expect(res).toBe(false);
+    expect(flow.genericError).toMatch(/verify your email/i);
+    expect(flow.fieldErrors.code).toBeUndefined();
+    expect(state.transition).not.toHaveBeenCalled();
+    expect(state.setUser).not.toHaveBeenCalled();
+    expect(flow.step).not.toBe("enabled");
+  });
 });
 
 describe("TwoFactorFlow disable (rotates)", () => {
