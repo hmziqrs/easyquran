@@ -149,7 +149,7 @@ export function assertStagedQuranContent(
   }
 }
 
-function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): void {
+export function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): void {
   if (!sqlite3) throw new Error("[quran-worker] sqlite3 not initialized before staging check");
   const database = openReadOnly(bytes);
   try {
@@ -164,6 +164,10 @@ function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): void {
 
 function stagedQuranValidator(): StagedValidator {
   return (bytes, spec) => assertStagedQuranBytes(bytes, spec.id);
+}
+
+export async function __initValidatorRuntime(): Promise<void> {
+  if (!sqlite3) sqlite3 = await init();
 }
 
 async function bootArabic(

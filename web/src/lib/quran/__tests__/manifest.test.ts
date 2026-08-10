@@ -161,6 +161,36 @@ describe("resolveManifest API -> baked fallback contract", () => {
     expect(out.source).toBe("baked");
   });
 
+  it("emits scripts_payload_malformed telemetry on a malformed/undecodable payload", async () => {
+    vi.useRealTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ garbage: true }));
+    decode.mockReturnValue(null);
+    consentState.analytics = true;
+    const out = await mod.resolveManifest();
+    expect(out.source).toBe("baked");
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+      expect(track).toHaveBeenCalledWith("quran_artifact_rejected", {
+        reason: "scripts_payload_malformed",
+      });
+    });
+  });
+
+  it("emits scripts_plan_incomplete telemetry when the decoded payload lacks a planned source", async () => {
+    vi.useRealTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { scripts: [] } }));
+    decode.mockReturnValue([]);
+    consentState.analytics = true;
+    const out = await mod.resolveManifest();
+    expect(out.source).toBe("baked");
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+      expect(track).toHaveBeenCalledWith("quran_artifact_rejected", {
+        reason: "scripts_plan_incomplete",
+      });
+    });
+  });
+
   it("falls back to baked when the response is not ok", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}, false));
     const out = await mod.resolveManifest();

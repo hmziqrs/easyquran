@@ -65,7 +65,14 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     });
     if (!res.ok) return baked;
     const scripts = decodeScriptsPayload(await res.json());
-    if (!scripts || !hasRegisteredPlan(scripts)) return baked;
+    if (!scripts) {
+      reportArtifactRejection("scripts_payload_malformed");
+      return baked;
+    }
+    if (!hasRegisteredPlan(scripts)) {
+      reportArtifactRejection("scripts_plan_incomplete");
+      return baked;
+    }
     const validated = validateAndLocalizeScripts(scripts);
     if (!validated) {
       reportArtifactRejection("scripts_payload");
