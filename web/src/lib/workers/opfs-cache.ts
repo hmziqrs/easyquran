@@ -37,6 +37,27 @@ export type StagedValidator = (
   spec: DownloadableSpec,
 ) => Promise<void> | void;
 
+export class StagedValidationRejection extends Error {
+  constructor(rejection: unknown) {
+    const msg = rejection instanceof Error ? rejection.message : String(rejection);
+    super(`staged validation rejected DB: ${msg}`);
+    this.name = "StagedValidationRejection";
+  }
+}
+
+async function runStagedValidator(
+  validate: StagedValidator | undefined,
+  bytes: Uint8Array<ArrayBuffer>,
+  spec: DownloadableSpec,
+): Promise<void> {
+  if (!validate) return;
+  try {
+    await validate(bytes, spec);
+  } catch (err) {
+    throw new StagedValidationRejection(err);
+  }
+}
+
 export function activeFileName(id: string): string {
   return `${id}${ACTIVE_SUFFIX}`;
 }
@@ -296,6 +317,7 @@ export async function ensureArtifact(
     try {
       return await ensureOpfsArtifact(spec, dl, progress, options.validate);
     } catch (err) {
+      if (err instanceof StagedValidationRejection) throw err;
       console.warn(`[opfs-cache] OPFS unavailable for ${spec.id}, falling back:`, err);
     }
   }
@@ -330,7 +352,7 @@ async function ensureOpfsArtifact(
     if (adoption.adopt && legacy) {
       try {
         await verifyBytes(legacy, dl);
-        if (validate) await validate(legacy, spec);
+        await runStagedValidator(validate, legacy, spec);
         await writePointer({ sourceId: spec.id, activeFile: active });
         void stampLastUsed(spec.id);
         return { bytes: legacy, store: "opfs", downloaded: false };
@@ -347,7 +369,7 @@ async function ensureOpfsArtifact(
     await writeOpfsFile(spec.id, temp, bytes);
     staged = await readOpfsFile(spec.id, temp);
     if (!staged) throw new Error(`[opfs-cache] ${spec.id}: staged temp unreadable`);
-    if (validate) await validate(staged, spec);
+    await runStagedValidator(validate, staged, spec);
   } catch (err) {
     await removeOpfsFile(spec.id, temp);
     throw err;
@@ -396,7 +418,7 @@ async function ensureIdbArtifact(
     } catch {}
   }
   const bytes = await downloadBytes(dl, progress);
-  if (validate) await validate(bytes, spec);
+  await runStagedValidator(validate, bytes, spec);
   await store.put(spec.id, spec.id, bytes);
   await stampLastUsed(spec.id);
   return { bytes, store: "idb", downloaded: true };

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import init, { type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { QuranSourceId } from "$lib/data/quran-types";
 import { QURAN_ROW_COUNT } from "$lib/workers/opfs-cache";
 
@@ -33,20 +33,10 @@ interface BuildRow {
 
 let builder: Sqlite3Static | null = null;
 
-function serializeQuranDb(rows: readonly BuildRow[]): Uint8Array {
+function serializeAfter(setup: (db: Database) => void): Uint8Array {
   const s = builder!;
   const db = new s.oo1.DB();
-  db.exec('CREATE TABLE quran_text ("index" INTEGER, sura INTEGER, aya INTEGER, text TEXT)');
-  const stmt = db.prepare('INSERT INTO quran_text VALUES (?,?,?,?)');
-  try {
-    for (const r of rows) {
-      stmt.bind([r.index, r.sura, r.aya, ""]);
-      stmt.step();
-      stmt.reset();
-    }
-  } finally {
-    stmt.finalize();
-  }
+  setup(db);
   const capi = s.capi;
   const wasm = s.wasm;
   const pSize = wasm.alloc(8);
@@ -57,6 +47,28 @@ function serializeQuranDb(rows: readonly BuildRow[]): Uint8Array {
   db.close();
   wasm.dealloc(pSize);
   return bytes;
+}
+
+function serializeQuranDb(rows: readonly BuildRow[]): Uint8Array {
+  return serializeAfter((db) => {
+    db.exec('CREATE TABLE quran_text ("index" INTEGER, sura INTEGER, aya INTEGER, text TEXT)');
+    const stmt = db.prepare('INSERT INTO quran_text VALUES (?,?,?,?)');
+    try {
+      for (const r of rows) {
+        stmt.bind([r.index, r.sura, r.aya, ""]);
+        stmt.step();
+        stmt.reset();
+      }
+    } finally {
+      stmt.finalize();
+    }
+  });
+}
+
+function serializeWrongSchemaDb(): Uint8Array {
+  return serializeAfter((db) => {
+    db.exec("CREATE TABLE meta (key TEXT, value TEXT)");
+  });
 }
 
 function contiguousRows(count: number, startIndex = 1): BuildRow[] {
@@ -98,6 +110,13 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     const bytes = serializeQuranDb(rows);
     expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
       /non-contiguous/,
+    );
+  });
+
+  it("rejects a DB with the wrong schema (missing quran_text table)", () => {
+    const bytes = serializeWrongSchemaDb();
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+      /no such table/i,
     );
   });
 
