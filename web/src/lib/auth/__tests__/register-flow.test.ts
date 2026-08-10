@@ -178,4 +178,20 @@ describe("RegisterFlow register->login->verification", () => {
     expect(calls.some((p) => p.includes("email_verification"))).toBe(false);
     expect(calls).toEqual(["/auth/v1/register", "/auth/v1/log_in"]);
   });
+
+  it("confirm_password mismatch -> aborts with field error, register NOT attempted", async () => {
+    const client = mockClient();
+    const state = mockState();
+    const flow = createRegisterFlow({ client, state });
+    flow.email = "new@eq.test";
+    flow.password = "strong-password-1";
+    flow.confirmPassword = "different-password";
+    const res = await flow.submit();
+    expect(res).toBe(false);
+    expect(flow.fieldErrors.confirm_password).toBe(
+      "Password and confirm password do not match",
+    );
+    expect(flow.step).toBe("form");
+    expect(client.unsafeRequest).not.toHaveBeenCalled();
+  });
 });

@@ -86,14 +86,37 @@
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-semibold">Two-factor authentication is on</h3>
-      <p class="text-sm text-fg-2">Disabling removes the second step at sign-in.</p>
+      <p class="text-sm text-fg-2">
+        Enter your authenticator code to remove the second step at sign-in.
+      </p>
     </div>
-    {#if flow.genericError}
-      <p role="alert" class="text-sm text-destructive">{flow.genericError}</p>
-    {/if}
-    <Button variant="ghost" class="self-start" disabled={flow.pending} onclick={() => flow.disable()}>
-      {flow.pending ? "Disabling…" : "Disable 2FA"}
-    </Button>
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+        void flow.disable();
+      }}
+      class="flex flex-col gap-2"
+    >
+      <Label for="twofa-disable-code">Authentication code</Label>
+      <Input
+        id="twofa-disable-code"
+        type="text"
+        autocomplete="one-time-code"
+        maxlength={64}
+        bind:value={flow.disableCode}
+        aria-invalid={Boolean(flow.fieldErrors.code)}
+      />
+      <p class="text-xs text-fg-3">Your 6-digit code or a backup code.</p>
+      {#if flow.fieldErrors.code}
+        <span class="text-xs text-destructive">{flow.fieldErrors.code}</span>
+      {/if}
+      {#if flow.genericError}
+        <span role="alert" class="text-xs text-destructive">{flow.genericError}</span>
+      {/if}
+      <Button type="submit" variant="ghost" class="self-start" disabled={flow.pending}>
+        {flow.pending ? "Disabling…" : "Disable 2FA"}
+      </Button>
+    </form>
   </section>
 {:else if showDisabledNotice}
   <section class="flex flex-col gap-3">

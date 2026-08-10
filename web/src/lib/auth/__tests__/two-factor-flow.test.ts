@@ -149,16 +149,39 @@ describe("TwoFactorFlow verify (rotates only on success)", () => {
 });
 
 describe("TwoFactorFlow disable (rotates)", () => {
-  it("disable success -> transition(two-fa-disable), setUser, step disabled", async () => {
+  it("disable success -> body carries code, transition(two-fa-disable), setUser, step disabled", async () => {
     const client = mockClient();
     const state = mockState();
     client.unsafeRequest.mockResolvedValueOnce(ok(DISABLED, true));
     const flow = createTwoFactorFlow({ client, state });
+    flow.disableCode = "123456";
     const res = await flow.disable();
     expect(res).toBe(true);
     expect(state.transition).toHaveBeenCalledWith({ kind: "two-fa-disable" });
     expect(state.setUser).toHaveBeenCalledWith(DISABLED);
     expect(flow.step).toBe("disabled");
+    expect(client.unsafeRequest).toHaveBeenCalledWith(
+      "/auth/v1/2fa/disable",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.objectContaining({ code: expect.any(String) }),
+      }),
+    );
+    expect(flow.disableCode).toBe("");
+  });
+
+  it("disable wrong code (401 invalid_token) -> code field error, no transition", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(err(401, { type: "invalid_token" }));
+    const flow = createTwoFactorFlow({ client, state });
+    flow.disableCode = "000000";
+    const res = await flow.disable();
+    expect(res).toBe(false);
+    expect(flow.fieldErrors.code).toBeDefined();
+    expect(flow.step).not.toBe("disabled");
+    expect(state.transition).not.toHaveBeenCalled();
+    expect(state.setUser).not.toHaveBeenCalled();
   });
 
   it("disable 403 verified-only -> next-step copy", async () => {

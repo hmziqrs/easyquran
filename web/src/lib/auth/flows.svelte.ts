@@ -56,6 +56,7 @@ const FORGOT_REQUEST_FIELDS = ["email"] as const;
 const FORGOT_VERIFY_FIELDS = ["email", "code"] as const;
 const RESET_FIELDS = ["password", "confirm_password"] as const;
 const TWO_FA_VERIFY_FIELDS = ["code"] as const;
+const TWO_FA_DISABLE_FIELDS = ["code"] as const;
 
 function decodeUser(data: unknown): UserProfile | null {
   return decodeUserProfile(data);
@@ -276,6 +277,11 @@ export class RegisterFlow {
 
   async submit(): Promise<boolean> {
     if (this.pending) return false;
+    if (this.password !== this.confirmPassword) {
+      this.genericError = null;
+      this.fieldErrors = { confirm_password: "Password and confirm password do not match" };
+      return false;
+    }
     this.pending = true;
     this.genericError = null;
     this.fieldErrors = {};
@@ -596,6 +602,7 @@ export class TwoFactorFlow {
   readonly client: AuthClient;
   readonly state: FlowStateLike;
   verifyCode = $state("");
+  disableCode = $state("");
   pending = $state(false);
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
@@ -711,6 +718,7 @@ export class TwoFactorFlow {
     try {
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/disable", {
         method: "POST",
+        body: { code: this.disableCode.trim() },
       });
       if (!res.ok) {
         if (res.status === 0) {
@@ -718,12 +726,20 @@ export class TwoFactorFlow {
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
-          const c = classifyAuthError(res.status, res.error, []);
-          this.genericError = c.message;
+          const c = classifyAuthError(res.status, res.error, TWO_FA_DISABLE_FIELDS);
+          if (c.kind === "field") {
+            this.fieldErrors = c.fieldErrors;
+          } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+            this.fieldErrors = { code: "Invalid authentication code." };
+            this.genericError = null;
+          } else {
+            this.genericError = c.message;
+          }
         }
         return false;
       }
       const user = decodeUser(res.data);
+      this.disableCode = "";
       if (!user) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
