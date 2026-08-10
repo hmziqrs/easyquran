@@ -150,6 +150,36 @@ describe("fetchJsonWithTimeout", () => {
     await expect(p).rejects.toBeInstanceOf(FetchTimeoutError);
   });
 
+  it("cancels stalled body-stream consumption inside res.json() past the timeout", async () => {
+    let observed: AbortSignal | null | undefined;
+    let streamErrored = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+      const sig = (init as RequestInit | undefined)?.signal;
+      observed = sig;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"ok":'));
+          sig?.addEventListener("abort", () => {
+            streamErrored = true;
+            controller.error(new DOMException("aborted", "AbortError"));
+          });
+        },
+      });
+      return Promise.resolve(
+        new Response(stream, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    });
+    const p = fetchJsonWithTimeout("https://x.test/", { timeout: 500 });
+    p.catch(() => {});
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(p).rejects.toBeInstanceOf(FetchTimeoutError);
+    expect(streamErrored).toBe(true);
+    expect(observed?.aborted).toBe(true);
+  });
+
   it("classifies a non-ok HTTP response as FetchHttpError without leaking the URL", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 503 }));
     await expect(fetchJsonWithTimeout("https://secret.test/path")).rejects.toThrow(/http 503/);
