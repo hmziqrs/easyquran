@@ -325,7 +325,11 @@ impl TranslationPool {
             metrics.builds.fetch_add(1, Ordering::Relaxed);
             Ok(Arc::new(corpus))
         };
+        // Cold detection mirrors get_or_build: moka skips init for a resident id, so gate the
+        // prewarm counter on an actual build to avoid over-counting a racing residency.
+        let builds_before = self.metrics.builds.load(Ordering::Relaxed);
         let corpus = self.cache.try_get_with(id.clone(), init).await;
+        let is_cold = self.metrics.builds.load(Ordering::Relaxed) > builds_before;
         if corpus.is_ok() {
             self.metrics
                 .residents
@@ -333,7 +337,9 @@ impl TranslationPool {
                 .await
                 .entry(id.clone())
                 .or_insert(0);
-            self.otlp_prewarm_builds.add(1, &self.otlp_attrs(id));
+            if is_cold {
+                self.otlp_prewarm_builds.add(1, &self.otlp_attrs(id));
+            }
         }
         corpus
     }
@@ -923,6 +929,58 @@ mod tests {
                 "real cold build for a non-candidate id never enters the candidate set"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn otlp_counter_exclusion_prewarm_never_real_cold_candidate_only_cold() {
+        // OTLP counter exclusion contract. The OTel meter is a no-op in unit tests, so the
+        // contract is proven structurally via the gates that drive the counters:
+        //   - otlp_real_cold_builds and otlp_candidate_cold_builds fire ONLY inside get_or_build's
+        //     `is_cold` branch; warm() never touches either.
+        //   - A prewarmed id requested via get_or_build is a cache HIT (builds unchanged), so
+        //     is_cold is false and neither counter can fire — even though the id is a candidate
+        //     within the idle TTL.
+        //   - otlp_candidate_cold_builds also requires candidate_set membership, which a
+        //     non-candidate cold build can never enter.
+        let p = pool_with(true, 1).await;
+        let prewarm_str = p.catalogue().keys().next().unwrap().clone();
+        let prewarm_id = p.parse_id(&prewarm_str).unwrap();
+        let non_candidate_str = p
+            .catalogue()
+            .keys()
+            .find(|k| *k != &prewarm_str)
+            .unwrap()
+            .clone();
+        let non_candidate_id = p.parse_id(&non_candidate_str).unwrap();
+
+        // Prewarm one id: exactly one cold build, candidate set = {prewarm_str}.
+        p.prewarm(vec![(prewarm_str.clone(), 1.0)]).await;
+        let builds_after_prewarm = p.metrics.builds.load(Ordering::Relaxed);
+        assert_eq!(builds_after_prewarm, 1, "one cold build during prewarm");
+        assert!(p.candidate_set.read().unwrap().contains(&prewarm_str));
+
+        // Contract A: a real request for the prewarmed id is a HIT — builds unchanged → is_cold
+        // false → otlp_real_cold_builds cannot fire, and otlp_candidate_cold_builds cannot fire
+        // either (not a cold build, despite candidate membership + within TTL).
+        let _ = p.get_or_build(&prewarm_id).await.unwrap();
+        assert_eq!(
+            p.metrics.builds.load(Ordering::Relaxed),
+            builds_after_prewarm,
+            "prewarmed id is a hit: no new build → real/candidate counters gated off"
+        );
+
+        // Contract B: a cold build for a non-candidate id is real-cold (builds++) but never enters
+        // the candidate set, so otlp_candidate_cold_builds stays gated off.
+        let _ = p.get_or_build(&non_candidate_id).await.unwrap();
+        assert_eq!(
+            p.metrics.builds.load(Ordering::Relaxed),
+            builds_after_prewarm + 1,
+            "non-candidate id is a real cold build"
+        );
+        assert!(
+            !p.candidate_set.read().unwrap().contains(&non_candidate_str),
+            "non-candidate cold build never enters candidate set"
+        );
     }
 
     #[tokio::test]
