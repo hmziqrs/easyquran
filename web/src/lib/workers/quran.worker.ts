@@ -125,7 +125,6 @@ export function assertStagedQuranContent(
       `[quran-stage:${sourceId}] coordinate count ${rows.length} != ${QURAN_ROW_COUNT}`,
     );
   }
-  let previous = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
     if (row.surah < 1 || row.surah > 114 || row.ayah < 1) {
@@ -133,13 +132,13 @@ export function assertStagedQuranContent(
         `[quran-stage:${sourceId}] bad coordinate ${row.globalIndex}/${row.surah}:${row.ayah}`,
       );
     }
-    if (i === 0) previous = row.globalIndex;
-    else if (row.globalIndex !== previous + 1) {
+    if (row.globalIndex !== i + 1) {
       throw new Error(
-        `[quran-stage:${sourceId}] non-contiguous globalIndex at ${row.globalIndex}`,
+        i === 0
+          ? `[quran-stage:${sourceId}] globalIndex must start at 1, got ${row.globalIndex}`
+          : `[quran-stage:${sourceId}] non-contiguous globalIndex at ${row.globalIndex}`,
       );
     }
-    previous = row.globalIndex;
   }
   if (isArabicSourceId(sourceId)) {
     const profile = resolveSourceProfile(sourceId);

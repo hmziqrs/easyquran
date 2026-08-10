@@ -113,6 +113,15 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     );
   });
 
+  it("rejects a shifted-contiguous corpus whose globalIndex does not start at 1", () => {
+    // 6236 rows, contiguous, but indices 5..6240 (not 1..6236): the old
+    // contiguity-only check accepted this. The start-at-1 assertion must reject it.
+    const bytes = serializeQuranDb(contiguousRows(QURAN_ROW_COUNT, 5));
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+      /start at 1/,
+    );
+  });
+
   it("rejects a DB with the wrong schema (missing quran_text table)", () => {
     const bytes = serializeWrongSchemaDb();
     expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
