@@ -9,7 +9,7 @@ use axum_macros::debug_handler;
 use axum_client_ip::ClientIp;
 
 use rux_auth::AuthBackend as AuthBackendTrait;
-use sea_orm::{ActiveModelTrait, EntityTrait};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait};
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
@@ -36,15 +36,43 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 };
 
 #[debug_handler(state = AppState)]
-#[instrument(skip(auth), fields(user_id))]
-pub async fn log_out(mut auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
+#[instrument(skip(state, auth), fields(user_id))]
+pub async fn log_out(
+    State(state): State<AppState>,
+    mut auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
     if let Some(user) = &auth.user {
         tracing::Span::current().record("user_id", user.id);
         info!(user_id = user.id, "User logging out");
     }
 
+    // Capture the opaque tower session id BEFORE logout deletes the session record.
+    let tower_sid = auth.session().id().map(|id| id.to_string());
+
     match auth.logout().await {
         Ok(_) => {
+            // W8e: revoke the audit row AND clear the durable binding so the session
+            // does not keep listing as active; logout alone only deletes the tower
+            // session record. Best-effort — the tower session is already gone, so the
+            // cookie no longer authenticates; reconcile reaps any lingerers at boot.
+            if let Some(tower_sid) = tower_sid {
+                if let Some(audit_id) = auth
+                    .backend()
+                    .lookup_session_mapping_by_tower(&state.sea_db, &tower_sid)
+                    .await
+                {
+                    if let Err(e) = user_session::Entity::revoke(&state.sea_db, audit_id).await {
+                        warn!(error = ?e, audit_id, "log_out: failed to revoke user_session audit row");
+                    }
+                }
+                if let Err(e) = auth
+                    .backend()
+                    .clear_session_mapping(&state.sea_db, &tower_sid)
+                    .await
+                {
+                    warn!(error = ?e, "log_out: failed to clear durable session binding");
+                }
+            }
             info!("Logout successful");
             Ok((StatusCode::OK, Json(json!({"message": "Logged out"}))))
         }
@@ -135,21 +163,10 @@ pub async fn log_in(
                         "Login successful"
                     );
 
-                    let session_row = user_session::Entity::create(
-                        &state.sea_db,
-                        user_session::NewUserSession::new(user.id, device, ip),
-                    )
-                    .await
-                    .ok();
-
-                    // V-HIGH-2: record the sid_map so sessions_terminate can DEL the live tower-session record; revoked_at is audit-only, else the cookie authenticates until its 14-day expiry.
-                    if (auth.session().save().await).is_ok() {
-                        if let (Some(row), Some(tower_sid)) =
-                            (session_row.as_ref(), auth.session().id())
-                        {
-                            record_session_mapping(row.id, &tower_sid.to_string());
-                        }
-                    }
+                    // W8e: create the audit row, persist the tower session, and record the
+                    // durable binding. Fail-closed — any failure destroys the tower session
+                    // and revokes the audit row so neither lingers unbound.
+                    create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await?;
 
                     tracing::Span::current().record("result", "success");
                     Ok((StatusCode::OK, Json(json!(user))))
@@ -285,19 +302,8 @@ pub async fn login_totp(
             );
             tracing::Span::current().record("result", "success");
 
-            let session_row = user_session::Entity::create(
-                &state.sea_db,
-                user_session::NewUserSession::new(user.id, device, ip),
-            )
-            .await
-            .ok();
-
-            // V-HIGH-2: record sid_map (same as password-login path).
-            if (auth.session().save().await).is_ok() {
-                if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-                    record_session_mapping(row.id, &tower_sid.to_string());
-                }
-            }
+            // W8e durable binding, same fail-closed contract as password login.
+            create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await?;
 
             Ok((StatusCode::OK, Json(json!(user))))
         }
@@ -329,7 +335,7 @@ pub async fn register(
 
     match user::Entity::create(&state.sea_db, payload.into_new_user(), code_hash).await {
         Ok(user) => {
-            info!(user_id = user.id, email = %user.email, "User registered successfully");
+            info!(user_id = user.id, "User registered successfully");
             tracing::Span::current().record("user_id", user.id);
             tracing::Span::current().record("result", "success");
 
@@ -344,7 +350,6 @@ pub async fn register(
                 {
                     tracing::error!(
                         user_id,
-                        email = %email_for_task,
                         "Failed to send verification email: {}",
                         err
                     );
@@ -470,7 +475,7 @@ pub async fn twofa_verify(
             active.two_fa_last_totp_counter = sea_orm::Unchanged(Some(matched));
             active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
             let updated = active.update(&state.sea_db).await?;
-            let rotated = rotate_session_after_trust_change(&mut auth).await;
+            let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
             return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
         } else {
             warn!(
@@ -506,7 +511,7 @@ pub async fn twofa_verify(
                 active.two_fa_backup_codes = sea_orm::Set(Some(serde_json::json!(updated_hashes)));
                 active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
                 let updated = active.update(&state.sea_db).await?;
-                let rotated = rotate_session_after_trust_change(&mut auth).await;
+                let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
                 return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
             }
         }
@@ -612,7 +617,7 @@ pub async fn twofa_disable(
     active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
     let updated = active.update(&state.sea_db).await?;
 
-    let rotated = rotate_session_after_trust_change(&mut auth).await;
+    let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
 
     Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))))
 }
@@ -625,17 +630,48 @@ pub async fn sessions_list(
     let user = auth.user_required()?;
     let page = 1;
 
+    // W8e: compute isCurrent server-side by resolving the current tower session id
+    // to its audit row via the durable binding, without exposing the opaque tower id.
+    let current_audit_id = match auth.session().id() {
+        Some(id) => auth
+            .backend()
+            .lookup_session_mapping_by_tower(&state.sea_db, &id.to_string())
+            .await,
+        None => None,
+    };
+
     match user_session::Entity::list_by_user(&state.sea_db, user.id, Some(page)).await {
-        Ok(result) => Ok((
-            StatusCode::OK,
-            Json(json!({
-                "data": result.data,
-                "total": result.total,
-                "page": page,
-            })),
-        )),
+        Ok(result) => {
+            let data: Vec<serde_json::Value> = result
+                .data
+                .into_iter()
+                .map(|row| {
+                    let is_current = Some(row.id) == current_audit_id;
+                    annotate_session_row(row, is_current)
+                })
+                .collect();
+            Ok((
+                StatusCode::OK,
+                Json(json!({
+                    "data": data,
+                    "total": result.total,
+                    "page": page,
+                })),
+            ))
+        }
         Err(err) => Err(err),
     }
+}
+
+/// Attach a server-computed `isCurrent` flag to a session row for `sessions_list`.
+/// The opaque tower session id never enters the response — only the audit row id
+/// (already the public terminator id) and the derived boolean.
+fn annotate_session_row(row: user_session::Model, is_current: bool) -> serde_json::Value {
+    let mut v = serde_json::to_value(&row).unwrap_or(serde_json::Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("isCurrent".to_string(), serde_json::Value::Bool(is_current));
+    }
+    v
 }
 
 #[debug_handler]
@@ -691,18 +727,123 @@ fn session_rotated_headers(rotated: bool) -> HeaderMap {
     h
 }
 
-/// F#16: rotate the session id at trust transitions (2FA on/off) so the per-session CSRF token rebinds; a rotation failure is logged non-fatal (trust change already succeeded) — surfacing a 500 would mislead the client.
-/// Returns whether the id was cycled AND persisted, so callers can emit [`SESSION_ROTATED`].
-async fn rotate_session_after_trust_change(auth: &mut AuthSession) -> bool {
+/// W8e durable binding at session creation (login / login-totp). Creates the
+/// `user_session` audit row, persists the tower session, then records the 1:1
+/// binding. FAIL-CLOSED: on any step's failure, revoke the audit row and destroy
+/// the tower session so neither lingers unbound, then surface an ErrorResponse.
+async fn create_bound_session(
+    db: &DatabaseConnection,
+    auth: &mut AuthSession,
+    user_id: i32,
+    device: Option<String>,
+    ip: Option<String>,
+) -> Result<(), ErrorResponse> {
+    let audit_row = match user_session::Entity::create(
+        db,
+        user_session::NewUserSession::new(user_id, device, ip),
+    )
+    .await
+    {
+        Ok(row) => row,
+        Err(err) => {
+            error!(error = ?err, user_id, "session audit row creation failed; destroying tower session (fail-closed)");
+            let _ = auth.logout().await;
+            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("An error occurred while logging in"));
+        }
+    };
+
+    if let Err(err) = auth.session().save().await {
+        error!(error = %err, user_id, audit_row_id = audit_row.id, "tower session save failed; revoking audit row (fail-closed)");
+        let _ = user_session::Entity::revoke(db, audit_row.id).await;
+        return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("An error occurred while logging in"));
+    }
+
+    let tower_sid = match auth.session().id() {
+        Some(id) => id.to_string(),
+        None => {
+            warn!(user_id, audit_row_id = audit_row.id, "tower session id missing after save; revoking audit row and deleting tower session (fail-closed)");
+            let _ = user_session::Entity::revoke(db, audit_row.id).await;
+            let _ = auth.session().delete().await;
+            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("An error occurred while logging in"));
+        }
+    };
+
+    let record = auth
+        .backend()
+        .record_session_mapping(db, audit_row.id, &tower_sid)
+        .await;
+    if let Err(err) = record {
+        error!(error = ?err, user_id, audit_row_id = audit_row.id, "durable session binding failed; destroying tower session (fail-closed)");
+        let _ = user_session::Entity::revoke(db, audit_row.id).await;
+        let _ = auth.logout().await;
+        return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("An error occurred while logging in"));
+    }
+
+    Ok(())
+}
+
+/// F#16 + W8e: rotate the session id at trust transitions (2FA on/off) so the
+/// per-session CSRF token rebinds, AND rebind the durable audit↔tower mapping to
+/// the new tower id. Returns whether the id was cycled AND persisted, so callers
+/// can emit [`SESSION_ROTATED`].
+///
+/// A `cycle_id`/save store failure is non-fatal (returns `Ok(false)`) — surfacing
+/// a 500 would mislead the client since the trust change already succeeded. A
+/// binding-replace failure is FAIL-CLOSED per W8e: the freshly-rotated session is
+/// destroyed and the audit row revoked so neither lingers, returning `Err`.
+async fn rotate_session_after_trust_change(
+    db: &DatabaseConnection,
+    auth: &mut AuthSession,
+) -> Result<bool, ErrorResponse> {
+    // The binding still points at the pre-rotation tower id; capture it first so we
+    // can move the binding after cycle_id rotates the opaque id.
+    let old_tower = auth.session().id().map(|id| id.to_string());
+
     if let Err(err) = auth.session().cycle_id().await {
-        warn!(error = %err, "F#16: failed to re-rotate session id at trust transition; CSRF token NOT rebound");
-        return false;
+        warn!(error = %err, "F#16: failed to rotate session id at trust transition; CSRF token NOT rebound");
+        return Ok(false);
     }
     if let Err(err) = auth.session().save().await {
         warn!(error = %err, "F#16: failed to persist rotated session id at trust transition");
-        return false;
+        return Ok(false);
     }
-    true
+
+    let new_tower = match auth.session().id() {
+        Some(id) => id.to_string(),
+        None => return Ok(false),
+    };
+
+    let Some(old) = old_tower else {
+        // No prior tower id — nothing bound to rebind. Rotation still succeeded.
+        return Ok(true);
+    };
+
+    let audit_id = auth
+        .backend()
+        .lookup_session_mapping_by_tower(db, &old)
+        .await;
+    let Some(audit_id) = audit_id else {
+        warn!("W8e: no durable binding for prior tower id at rotation; session rotated, binding not moved (reconciled at boot)");
+        return Ok(true);
+    };
+
+    if let Err(err) = auth
+        .backend()
+        .replace_session_mapping(db, audit_id, &old, &new_tower)
+        .await
+    {
+        warn!(error = %err, audit_id, "W8e: durable binding replace failed; destroying rotated session (fail-closed)");
+        let _ = user_session::Entity::revoke(db, audit_id).await;
+        let _ = auth.backend().clear_session_mapping(db, &old).await;
+        let _ = auth.session().delete().await;
+        return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Session rotation could not be completed"));
+    }
+    Ok(true)
 }
 
 mod login_totp_token {
@@ -762,6 +903,7 @@ mod login_totp_token {
 
 #[cfg(test)]
 mod tests {
+    use super::annotate_session_row;
     use super::login_totp_token;
     use crate::services::auth::session_mapping_key;
 
@@ -786,5 +928,76 @@ mod tests {
             );
         }
         let _ = std::any::type_name::<login_totp_token::AssertWired>;
+    }
+
+    // --- W8e sessions_list isCurrent -----------------------------------------
+
+    fn sample_row(id: i32) -> crate::db::sea_models::user_session::Model {
+        crate::db::sea_models::user_session::Model {
+            id,
+            user_id: 100,
+            device: Some(format!("dev-{id}")),
+            ip_address: None,
+            last_seen: chrono::Utc::now().fixed_offset(),
+            revoked_at: None,
+        }
+    }
+
+    #[test]
+    fn annotate_session_row_marks_current_for_matching_audit_id() {
+        let v = annotate_session_row(sample_row(7), true);
+        assert_eq!(v["isCurrent"], serde_json::Value::Bool(true));
+        assert_eq!(v["id"], 7, "audit row id must be present as the public id");
+    }
+
+    #[test]
+    fn annotate_session_row_marks_non_current_for_other_audit_id() {
+        let v = annotate_session_row(sample_row(7), false);
+        assert_eq!(v["isCurrent"], serde_json::Value::Bool(false));
+    }
+
+    #[test]
+    fn annotate_session_row_never_exposes_tower_session_id() {
+        let v = annotate_session_row(sample_row(1), true);
+        let obj = v.as_object().expect("row must serialize to a JSON object");
+        assert!(
+            !obj.contains_key("tower_session_id") && !obj.contains_key("towerSessionId"),
+            "opaque tower session id must not appear in sessions_list response"
+        );
+    }
+
+    #[test]
+    fn sessions_iscurrent_marks_exactly_the_current_row() {
+        // Mirrors the sessions_list computation: resolve current_audit_id once,
+        // then mark each row by comparing its audit id.
+        let rows = vec![sample_row(1), sample_row(2), sample_row(3)];
+        let current_audit_id: Option<i32> = Some(2);
+        let annotated: Vec<serde_json::Value> = rows
+            .into_iter()
+            .map(|r| {
+                let is_current = Some(r.id) == current_audit_id;
+                annotate_session_row(r, is_current)
+            })
+            .collect();
+        let currents: Vec<&serde_json::Value> = annotated
+            .iter()
+            .filter(|v| v["isCurrent"] == serde_json::Value::Bool(true))
+            .collect();
+        assert_eq!(currents.len(), 1, "exactly one row must be current");
+        assert_eq!(currents[0]["id"], 2);
+
+        // No row is current when the binding lookup misses (e.g. pre-binding-era
+        // session, or tower id absent).
+        let rows = vec![sample_row(10), sample_row(11)];
+        let annotated: Vec<serde_json::Value> = rows
+            .into_iter()
+            .map(|r| annotate_session_row(r, false))
+            .collect();
+        assert!(
+            annotated
+                .iter()
+                .all(|v| v["isCurrent"] == serde_json::Value::Bool(false)),
+            "no row is current when current_audit_id is None"
+        );
     }
 }
