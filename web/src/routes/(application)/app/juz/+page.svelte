@@ -1,8 +1,11 @@
 <script lang="ts">
   import { Seo } from "$lib/components";
+  import { juzPathFor, type SurahRouteContext } from "$lib/data/quran";
   import ReaderShell from "../_reader/ReaderShell.svelte";
 
   let { data } = $props();
+
+  const arabicCtx: SurahRouteContext = { kind: "arabic" };
 
   const seoTitle = "Juz index — Qur'an · EasyQuran";
   const seoDescription = "Browse the 30 juz of the Qur'an. Free, fast, and works offline.";
@@ -25,7 +28,7 @@
     {#each data.ajzur as juz (juz.index)}
       <li>
         <a
-          href={`/app/juz/${juz.index}`}
+          href={juzPathFor(arabicCtx, juz.index)}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-3 rounded-lg border border-line px-4 py-3 transition-colors hover:bg-bg-2"
         >

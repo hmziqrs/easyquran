@@ -12,6 +12,7 @@ import {
 
 const ARABIC_ONLY_HELPERS = /\bsurahPath\b|\bsurahLocalPagePath\b|\bsurahAyahPath\b/;
 const HAND_BUILT_APP_NAV = /\/app\/(?!\$\{string\})/;
+const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
 
 const components = import.meta.glob("../../../**/*.svelte", {
   query: "?raw",
@@ -19,11 +20,20 @@ const components = import.meta.glob("../../../**/*.svelte", {
   eager: true,
 }) as Record<string, string>;
 
-const readerComponents = import.meta.glob("../_reader/**/*.svelte", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+function stripComments(src: string): string {
+  return src
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
+function handBuiltAppNavHits(src: string): string[] {
+  const hits: string[] = [];
+  for (const line of stripComments(src).split("\n")) {
+    if (NAV_SIGNAL.test(line) && HAND_BUILT_APP_NAV.test(line)) hits.push(line.trim());
+  }
+  return hits;
+}
 
 describe("reader navigation regression guard", () => {
   it("the centralized route-aware helpers are exported from $lib/data/quran", () => {
@@ -51,13 +61,13 @@ describe("reader navigation regression guard", () => {
   });
 });
 
-describe("reader components never hand-build /app/ navigation literals", () => {
-  it("no .svelte under _reader hand-builds a /app/ url used by links/goto/resolve", () => {
-    for (const [path, src] of Object.entries(readerComponents)) {
+describe("route components never hand-build /app/ navigation literals", () => {
+  it("no .svelte under src/routes hand-builds a /app/ url used by href/goto/resolve", () => {
+    for (const [path, src] of Object.entries(components)) {
       expect(
-        src,
+        handBuiltAppNavHits(src),
         `Hand-built /app/ navigation literal in ${path} -> use juzPathFor/globalPagePathFor/surah*For(ctx, ...) instead`,
-      ).not.toMatch(HAND_BUILT_APP_NAV);
+      ).toEqual([]);
     }
   });
 
@@ -70,6 +80,14 @@ describe("reader components never hand-build /app/ navigation literals", () => {
   it("the /app/ guard ignores the template-literal type placeholder", () => {
     expect(HAND_BUILT_APP_NAV.test("function f(): `/app/${string}` {")).toBe(false);
     expect(HAND_BUILT_APP_NAV.test("function g(x: `/app/${string}` | null): void {}")).toBe(false);
+  });
+
+  it("the nav-signal scope ignores non-navigation /app/ uses (seo path, comments)", () => {
+    expect(handBuiltAppNavHits('<Seo path="/app/juz" />')).toEqual([]);
+    expect(handBuiltAppNavHits('<Seo path={`/app/page/${n}`} />')).toEqual([]);
+    expect(handBuiltAppNavHits('// href="/app/foo" was the old route')).toEqual([]);
+    expect(handBuiltAppNavHits('/* <a href="/app/bar">legacy</a> */')).toEqual([]);
+    expect(handBuiltAppNavHits('const url = "https://example.com/app/baz";')).toEqual([]);
   });
 });
 
