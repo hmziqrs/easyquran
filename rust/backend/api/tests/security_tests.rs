@@ -372,4 +372,231 @@ fn auth_path_logs_contain_no_sensitive_values() {
         !user_actions.contains("email = %"),
         "user actions must not log email (create/find_by_email/create_from_google/admin_create)"
     );
+
+    // --- W8f step 6: broaden the source-level guard across every auth/mail path ---
+
+    // auth_v1/controller.rs — login, register, 2FA. email/password/code are
+    // payload fields that must never reach tracing output (only user_id/ip/result).
+    let auth_v1 = include_str!("../src/modules/auth_v1/controller.rs");
+    assert!(
+        !auth_v1.contains("email = %payload"),
+        "auth_v1 controller must not log the login/register email (email = %payload.*)"
+    );
+    assert!(
+        !auth_v1.contains("password = %"),
+        "auth_v1 controller must not log the password"
+    );
+    assert!(
+        !auth_v1.contains("code = %payload"),
+        "auth_v1 controller must not log the 2FA/backup code (code = %payload.*)"
+    );
+
+    // OAuth provider controllers. `code = %err.code` is the ErrorCode enum
+    // (legitimate, opaque) — never confuse it with the authorization/OTP code,
+    // so scope to `code = %payload` and `email = %<source>`.
+    let google = include_str!("../src/modules/google_auth_v1/controller.rs");
+    assert!(
+        !google.contains("email = %claims"),
+        "google_auth_v1 must not log the id_token claims email"
+    );
+    assert!(
+        !google.contains("email = %user_info"),
+        "google_auth_v1 must not log the userinfo email"
+    );
+    assert!(
+        !google.contains("code = %payload"),
+        "google_auth_v1 must not log the OAuth authorization code"
+    );
+    assert!(
+        !google.contains("password = %"),
+        "google_auth_v1 must not log credentials"
+    );
+
+    let apple = include_str!("../src/modules/apple_auth_v1/controller.rs");
+    assert!(
+        !apple.contains("email = %claims"),
+        "apple_auth_v1 must not log the id_token claims email"
+    );
+    assert!(
+        !apple.contains("code = %payload"),
+        "apple_auth_v1 must not log the OAuth authorization code"
+    );
+    assert!(
+        !apple.contains("password = %"),
+        "apple_auth_v1 must not log credentials"
+    );
+
+    let facebook = include_str!("../src/modules/facebook_auth_v1/controller.rs");
+    assert!(
+        !facebook.contains("email = %user_info"),
+        "facebook_auth_v1 must not log the Graph API email"
+    );
+    assert!(
+        !facebook.contains("code = %payload"),
+        "facebook_auth_v1 must not log the OAuth authorization code"
+    );
+    assert!(
+        !facebook.contains("password = %"),
+        "facebook_auth_v1 must not log credentials"
+    );
+
+    let github = include_str!("../src/modules/github_auth_v1/controller.rs");
+    assert!(
+        !github.contains("email = %"),
+        "github_auth_v1 must not log the GitHub email"
+    );
+    assert!(
+        !github.contains("code = %payload"),
+        "github_auth_v1 must not log the OAuth authorization code"
+    );
+    assert!(
+        !github.contains("password = %"),
+        "github_auth_v1 must not log credentials"
+    );
+
+    // services/oauth/login.rs — find_or_create_user_for_oauth receives the IdP
+    // email/name; only user_id + provider NAME may appear.
+    let oauth_login = include_str!("../src/services/oauth/login.rs");
+    assert!(
+        !oauth_login.contains("email = %"),
+        "oauth::login must not log the IdP email"
+    );
+    assert!(
+        !oauth_login.contains("code = %"),
+        "oauth::login must not log any code value"
+    );
+    assert!(
+        !oauth_login.contains("password = %"),
+        "oauth::login must not log credentials"
+    );
+
+    // Mail providers — recipient/subject/to are PII and must never be logged;
+    // only opaque domain + provider name + redacted rate key are permitted.
+    let smtp = include_str!("../src/services/mail/smtp.rs");
+    assert!(
+        !smtp.contains("recipient = %msg"),
+        "smtp provider must not log the recipient address"
+    );
+    assert!(
+        !smtp.contains("subject = %msg"),
+        "smtp provider must not log the email subject"
+    );
+    assert!(
+        !smtp.contains("to = %msg"),
+        "smtp provider must not log the recipient (msg.to)"
+    );
+    assert!(
+        !smtp.contains("password = %"),
+        "smtp provider must not log the SMTP password"
+    );
+
+    let cloudflare = include_str!("../src/services/mail/cloudflare.rs");
+    assert!(
+        !cloudflare.contains("recipient = %"),
+        "cloudflare provider must not log the recipient address"
+    );
+    assert!(
+        !cloudflare.contains("subject = %msg"),
+        "cloudflare provider must not log the email subject"
+    );
+    assert!(
+        !cloudflare.contains("to = %msg"),
+        "cloudflare provider must not log the recipient (msg.to)"
+    );
+    assert!(
+        !cloudflare.contains("email = %"),
+        "cloudflare provider must not log an email address"
+    );
+
+    let mail_router = include_str!("../src/services/mail/router.rs");
+    assert!(
+        !mail_router.contains("recipient = %msg"),
+        "mail router must not log the full recipient address (domain-only is allowed)"
+    );
+    assert!(
+        !mail_router.contains("subject = %msg"),
+        "mail router must not log the email subject"
+    );
+    assert!(
+        !mail_router.contains("email = %msg"),
+        "mail router must not log the recipient email"
+    );
+    assert!(
+        !mail_router.contains("to = %msg"),
+        "mail router must not log msg.to"
+    );
+}
+
+#[tokio::test]
+async fn tracing_capture_asserts_no_pii_in_mail_drop_path() {
+    // W8f step 6: tracing-capture guard. Drives a representative mail path
+    // (NoOpMailProvider::send — the MAIL_PROVIDER=none drop/failure path) under
+    // a capturing fmt subscriber and asserts no recipient/code/subject VALUE
+    // appears in the captured event fields. The provider is handed a message
+    // whose `to`/`subject` carry real-looking PII; the invariant is that those
+    // values never reach tracing output.
+    //
+    // login / forgot-password-generate need a full AppState + DB harness
+    // (integration scope) and are covered by the source-level guard above; this
+    // capture test is the runtime check for the callable mail-failure path.
+    use ruxlog::services::mail::none::NoOpMailProvider;
+    use ruxlog::services::mail::{MailProvider, OutboundEmail};
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
+    use tracing_subscriber::fmt::MakeWriter;
+
+    #[derive(Clone)]
+    struct CaptureMaker(Arc<Mutex<Vec<u8>>>);
+    impl<'a> MakeWriter<'a> for CaptureMaker {
+        type Writer = CaptureBuf;
+        fn make_writer(&'a self) -> Self::Writer {
+            CaptureBuf(self.0.clone())
+        }
+    }
+    struct CaptureBuf(Arc<Mutex<Vec<u8>>>);
+    impl Write for CaptureBuf {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureMaker(buf.clone()))
+        .with_ansi(false)
+        .finish();
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let pii_email = "victim@example.com";
+    let pii_code = "123456";
+    let msg = OutboundEmail {
+        to: pii_email.to_string(),
+        subject: format!("Reset code {pii_code}"),
+        html: None,
+        text: None,
+        template: None,
+    };
+    let provider = NoOpMailProvider;
+    let _ = MailProvider::send(&provider, msg).await;
+
+    drop(guard);
+    let captured = String::from_utf8(buf.lock().unwrap().clone()).expect("utf8");
+
+    // Capture must have actually happened — else the negative asserts are vacuous.
+    assert!(
+        captured.contains("mail dropped"),
+        "captured tracing output should include the noop-drop event; got: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_email),
+        "recipient address leaked into noop mailer tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_code),
+        "verification/reset code leaked into noop mailer tracing output: {captured}"
+    );
 }
