@@ -41,8 +41,10 @@ $EDITOR .env                 # DOMAIN, COOKIE_KEY (openssl rand -hex 32), PROXY_
 docker compose up -d --build
 ```
 
-First build is slow (Rust compiles once; cached after). Verify:
-`curl https://easyquran.fyi/api/healthz` → `{"status":"healthy"}`.
+First build is slow (Rust compiles once; cached after). Verify the public Quran
+route: `curl https://easyquran.fyi/api/quran/health/ready` → `{"ready":true,…}`.
+`/healthz` is deliberately **not** on the public router — reach it from the
+Docker network (`curl http://api:8888/healthz`) or the in-container healthcheck.
 
 ## Deploying with Dokploy
 
@@ -116,7 +118,7 @@ on the proxy's TCP address. Three isolated, non-escalating identities:
 | External client | `CF-Connecting-IP` header (parsed `IpAddr`) | `ratelimit:{ip}:…` | content ceiling (600/min) — the only one that can enter W3a escalation |
 | Trusted internal SSR (Bun) | server-only `X-EasyQuran-Internal-Token`, constant-time match | `ratelimit:internal-webssr:…` | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (default 600) |
 | Public readiness | exempt from identity resolution | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120) |
-| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters | — | — |
+| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters; **not on the public host router** (Docker-network / in-container only) | — | — |
 
 `.env.example` ships `IP_SOURCE=CfConnectingIp` (exact PascalCase; `connect-info`
 and `cf-connecting-ip` are invalid). The api refuses to boot in production with
@@ -269,7 +271,7 @@ mail with SPF+DKIM pass.
 
 ## Notes
 
-- `/api` is stripped at the edge (`easyquran.fyi/api/healthz` → `/healthz`).
+- `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.
 - API image contains root-owned, filesystem-read-only Quran source files; databases are never written.
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
