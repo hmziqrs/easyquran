@@ -15,7 +15,7 @@ use crate::{
     services::{
         abuse_limiter,
         auth::AuthSession,
-        mail::{mail_error_to_response, send_email_verification_code},
+        mail::{mail_error_kind, mail_error_to_response, send_email_verification_code},
     },
     AppState,
 };
@@ -139,7 +139,11 @@ pub async fn resend(
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
     email_verification::Entity::regenerate(pool, user_id, code_hash).await?;
     if let Err(err) = send_email_verification_code(&state.mailer, &user.email, &code).await {
-        error!(user_id, "Failed to send verification email: {}", err);
+        error!(
+            user_id,
+            error_kind = mail_error_kind(&err),
+            "Failed to send verification email"
+        );
         return Err(mail_error_to_response(&err));
     }
 
@@ -275,7 +279,11 @@ pub async fn admin_issue_code(
     email_verification::Entity::regenerate(&state.sea_db, user_id, code_hash).await?;
 
     if let Err(err) = send_email_verification_code(&state.mailer, &target.email, &code).await {
-        error!(user_id, "Failed to send verification email: {}", err);
+        error!(
+            user_id,
+            error_kind = mail_error_kind(&err),
+            "Failed to send verification email"
+        );
         return Err(mail_error_to_response(&err));
     }
 

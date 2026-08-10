@@ -11,7 +11,7 @@ use crate::{
     extractors::ValidatedJson,
     services::{
         abuse_limiter,
-        mail::{mail_error_to_response, send_forgot_password_email},
+        mail::{mail_error_kind, mail_error_to_response, send_forgot_password_email},
     },
     AppState,
 };
@@ -164,7 +164,11 @@ pub async fn generate(
         return Err(err);
     }
     if let Err(err) = send_forgot_password_email(&state.mailer, &payload.email, &code).await {
-        error!(user_id, "Failed to send forgot password email: {}", err);
+        error!(
+            user_id,
+            error_kind = mail_error_kind(&err),
+            "Failed to send forgot password email"
+        );
         return Err(mail_error_to_response(&err));
     }
 
@@ -214,7 +218,10 @@ pub async fn verify(
 
     let reset_token = reset_token::mint(user_id).await?;
 
-    info!(user_id, "Forgot password code verified and consumed; reset token issued");
+    info!(
+        user_id,
+        "Forgot password code verified and consumed; reset token issued"
+    );
     Ok((StatusCode::OK, Json(V1VerifyResponse { reset_token })))
 }
 
