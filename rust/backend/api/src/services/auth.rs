@@ -271,10 +271,7 @@ impl AuthBackend {
             ))
             .await
         {
-            Ok(Some(row)) => row
-                .try_get_by_index::<i64>(0)
-                .ok()
-                .map(|v| v as i32),
+            Ok(Some(row)) => row.try_get_by_index::<i64>(0).ok().map(|v| v as i32),
             Ok(None) => None,
             Err(e) => {
                 warn!(error = %e, "session binding lookup failed (treated as miss)");
@@ -374,10 +371,14 @@ impl AuthBackend {
         Ok(())
     }
 
-    /// Boot reconciliation (W8e): revoke live `user_session` audit rows that have
-    /// NO durable binding (pre-binding-era or orphaned sessions) and reap binding
-    /// rows whose audit row is already revoked. Produces one clean re-authentication
-    /// boundary at startup. Returns the count of newly-revoked unbound audit rows.
+    /// Boot reconciliation (W8e): (1) revoke live `user_session` audit rows that
+    /// have NO durable binding (pre-binding-era sessions), (2) reap binding rows
+    /// whose audit row is already revoked and delete their live tower sessions,
+    /// and (3) forcibly remove live AUTH tower sessions that have no binding row
+    /// by enumerating the session store (the one path that works without a
+    /// per-id binding lookup). Together these make the startup restart a single
+    /// clean re-authentication boundary. Returns the count of newly-revoked
+    /// unbound audit rows.
     pub async fn reconcile_unbound_sessions(
         &self,
         db: &DatabaseConnection,
@@ -385,8 +386,8 @@ impl AuthBackend {
     ) -> Result<usize, DbErr> {
         let now = chrono::Utc::now().fixed_offset();
         // 1. Revoke live audit rows with no durable binding. Their tower-session
-        //    id was never recorded, so the live tower session cannot be DEL'd by id
-        //    here — it expires on its 14-day TTL or on the next re-auth cycle_id().
+        //    id was never recorded, so neither this step nor step 2 can reach the
+        //    live tower session by id — step 3 enumerates the store to remove it.
         let revoked = db
             .execute(Statement::from_sql_and_values(
                 DatabaseBackend::Sqlite,
@@ -434,6 +435,44 @@ impl AuthBackend {
             Vec::<Value>::new(),
         ))
         .await?;
+
+        // 3. Forcibly remove live AUTH tower sessions that have no durable binding.
+        //    Steps 1+2 only reach sessions whose audit row IS bound. Pre-binding
+        //    sessions have no binding row, so there is no tower id to delete by —
+        //    enumerate the live store and drop any auth session whose id is not
+        //    bound. This is what makes the restart a true single re-authentication
+        //    boundary instead of leaving legacy sessions live to their 14-day TTL.
+        //    Anonymous (non-auth) sessions are preserved. Non-fatal: a sweep error
+        //    logs and the boundary still holds via the revoked audit rows + the
+        //    in-memory revocation set.
+        let bound: HashSet<String> = db
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT tower_session_id FROM auth_session_binding",
+                Vec::<Value>::new(),
+            ))
+            .await?
+            .into_iter()
+            .filter_map(|r| r.try_get_by_index::<String>(0).ok())
+            .collect();
+        match session_store.delete_unbound_auth_sessions(&bound).await {
+            Ok(removed) => {
+                let n = removed.len();
+                if n > 0 {
+                    info!(
+                        removed_live = n,
+                        "Session-binding reconciliation: removed unbound live auth tower sessions"
+                    );
+                    if let Ok(mut set) = self.revoked.lock() {
+                        set.extend(removed);
+                    }
+                }
+            }
+            Err(e) => warn!(
+                error = %e,
+                "reconcile: unbound live session sweep failed (non-fatal; boundary holds via audit rows)"
+            ),
+        }
 
         if count > 0 {
             info!(
@@ -668,10 +707,15 @@ mod tests {
 
         b.record_session_mapping(&db, 10, "t1").await.unwrap();
         assert_eq!(b.lookup_session_mapping_by_tower(&db, "t1").await, Some(10));
-        assert_eq!(b.lookup_session_mapping_by_tower(&db, "missing").await, None);
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "missing").await,
+            None
+        );
 
         // cycle_id rotation: same audit row, new opaque tower id; old tower cleared.
-        b.replace_session_mapping(&db, 10, "t1", "t2").await.unwrap();
+        b.replace_session_mapping(&db, 10, "t1", "t2")
+            .await
+            .unwrap();
         assert_eq!(b.lookup_session_mapping_by_tower(&db, "t2").await, Some(10));
         assert_eq!(
             b.lookup_session_mapping_by_tower(&db, "t1").await,
@@ -695,7 +739,10 @@ mod tests {
         // already has a row and the ON CONFLICT(tower_session_id) clause does not
         // fire (tower differs) → the UNIQUE(user_session_id) index rejects it.
         let err = b.record_session_mapping(&db, 20, "b").await;
-        assert!(err.is_err(), "second tower for one audit row must fail closed");
+        assert!(
+            err.is_err(),
+            "second tower for one audit row must fail closed"
+        );
     }
 
     // W8e durable termination: terminating an OTHER session by audit id must clear
@@ -742,9 +789,7 @@ mod tests {
         ))
         .await
         .unwrap();
-        b.clear_session_mapping(&db, &other_tower)
-            .await
-            .unwrap();
+        b.clear_session_mapping(&db, &other_tower).await.unwrap();
 
         // OTHER: durable binding cleared and audit row revoked.
         assert_eq!(
@@ -851,7 +896,8 @@ mod tests {
 
         // Post-termination: both tower ids are dead, audit row revoked.
         assert_eq!(
-            b.lookup_session_mapping_by_tower(&db, "post-rotation").await,
+            b.lookup_session_mapping_by_tower(&db, "post-rotation")
+                .await,
             None,
             "terminated session's new tower binding must be cleared",
         );
@@ -974,7 +1020,10 @@ mod tests {
 
         let (b, store) = backend(&db).await;
         let count = b.reconcile_unbound_sessions(&db, store).await.unwrap();
-        assert_eq!(count, 1, "only the live unbound row (id=2) is newly revoked");
+        assert_eq!(
+            count, 1,
+            "only the live unbound row (id=2) is newly revoked"
+        );
 
         let r2 = db
             .query_one(Statement::from_sql_and_values(
@@ -1011,7 +1060,10 @@ mod tests {
             .into_iter()
             .map(|r| r.try_get_by_index::<String>(0).unwrap())
             .collect();
-        assert!(bindings.contains(&"t1".to_string()), "row1 binding must survive");
+        assert!(
+            bindings.contains(&"t1".to_string()),
+            "row1 binding must survive"
+        );
         assert!(
             !bindings.contains(&"t3".to_string()),
             "orphan binding for revoked row must be reaped"
@@ -1021,5 +1073,102 @@ mod tests {
         let (b2, store2) = backend(&db).await;
         let again = b2.reconcile_unbound_sessions(&db, store2).await.unwrap();
         assert_eq!(again, 0, "second reconcile revokes nothing new");
+    }
+
+    // W8e step 3: a pre-binding live AUTH tower session has no binding row, so
+    // steps 1+2 cannot reach it by id. Reconcile must enumerate the session store
+    // and forcibly delete it (the "one clean re-authentication boundary"), while
+    // leaving an anonymous session and a bound auth session intact.
+    #[tokio::test]
+    async fn reconcile_forcibly_removes_unbound_live_auth_sessions_only() {
+        use std::collections::HashMap;
+        use std::str::FromStr;
+        use tower_sessions::session::{Id, Record};
+        use tower_sessions::SessionStore;
+
+        async fn save_tower(
+            store: &crate::services::session_store::SqliteSessionStore,
+            id_val: i128,
+            auth: bool,
+        ) -> String {
+            let mut data = HashMap::<String, serde_json::Value>::new();
+            if auth {
+                data.insert("rux_auth".to_string(), serde_json::json!({"user_id": 100}));
+            } else {
+                data.insert("csrf_issued".to_string(), serde_json::json!(true));
+            }
+            let rec = Record {
+                id: Id(id_val),
+                data,
+                expiry_date: time::OffsetDateTime::now_utc() + time::Duration::weeks(2),
+            };
+            store.save(&rec).await.unwrap();
+            Id(id_val).to_string()
+        }
+
+        let db = mem_db().await;
+        // One LIVE audit row with a durable binding → its auth tower session survives.
+        db.execute_unprepared(
+            "INSERT INTO \"user_sessions\" (id, user_id, last_seen, revoked_at) VALUES \
+             (1, 100, '2026-01-01T00:00:00+00:00', NULL)",
+        )
+        .await
+        .unwrap();
+        let (b, store) = backend(&db).await;
+
+        // bound-auth: binding present → kept. unbound-auth: no binding → reaped.
+        // anon: not an auth session (no rux_auth key) → kept.
+        let bound_auth = save_tower(&store, 11_111, true).await;
+        let unbound_auth = save_tower(&store, 22_222, true).await;
+        let anon = save_tower(&store, 33_333, false).await;
+        b.record_session_mapping(&db, 1, &bound_auth).await.unwrap();
+
+        let count = b
+            .reconcile_unbound_sessions(&db, store.clone())
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "no live unbound AUDIT rows in this scenario");
+
+        // Unbound auth session was forcibly removed from the live store.
+        let unbound_id = Id::from_str(&unbound_auth).unwrap();
+        assert!(
+            store.load(&unbound_id).await.unwrap().is_none(),
+            "unbound live auth tower session must be forcibly removed by the sweep"
+        );
+        // Anonymous session preserved (CSRF continuity for logged-out visitors).
+        let anon_id = Id::from_str(&anon).unwrap();
+        assert!(
+            store.load(&anon_id).await.unwrap().is_some(),
+            "anonymous tower session must survive the unbound sweep"
+        );
+        // Bound auth session preserved.
+        let bound_id = Id::from_str(&bound_auth).unwrap();
+        assert!(
+            store.load(&bound_id).await.unwrap().is_some(),
+            "bound live auth tower session must survive"
+        );
+
+        // Removed tower id mirrored into the in-memory revocation set.
+        let in_revoked = b
+            .revoked
+            .lock()
+            .map(|s| s.contains(&unbound_auth))
+            .unwrap_or(false);
+        assert!(
+            in_revoked,
+            "removed unbound tower id must be in the revocation set"
+        );
+
+        // Idempotent: a second reconcile finds no unbound auth session to remove.
+        let (b2, store2) = backend(&db).await;
+        let _ = b2.reconcile_unbound_sessions(&db, store2).await.unwrap();
+        assert!(
+            store.load(&anon_id).await.unwrap().is_some(),
+            "re-running reconcile must not touch anonymous sessions"
+        );
+        assert!(
+            store.load(&bound_id).await.unwrap().is_some(),
+            "re-running reconcile must not touch bound sessions"
+        );
     }
 }
