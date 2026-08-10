@@ -5,8 +5,7 @@
 //! DB write to the request hot path.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement, TransactionError,
@@ -14,16 +13,10 @@ use sea_orm::{
 };
 use tracing::warn;
 
-use crate::quran::TranslationPool;
-
 /// Half-life for the decayed-demand score. Const, not env — operable tunables live behind the
 /// collection/prewarm switches, not the math. 7 days balances "last week's traffic pattern still
 /// informs cold start" against "ancient popularity doesn't freeze the top-N".
 const HALF_LIFE_SECS: f64 = 7.0 * 24.0 * 60.0 * 60.0;
-
-/// Reuses the existing 10s rate-limit cadence; the popularity flush acts only every 6th tick.
-const FLUSH_INTERVAL_SECS: u64 = 10;
-const POPULARITY_FLUSH_EVERY_N_TICKS: u32 = 6;
 
 /// Cap on the health-snapshot ranking (PoolStats::top_demand / TranslationPoolHealth).
 const HEALTH_TOP_N: usize = 10;
@@ -186,42 +179,6 @@ pub async fn flush(
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
     })
-}
-
-/// Periodic flush. Snapshots the lock-free demand side table, writes one transaction, and only
-/// on a committed transaction subtracts the snapshotted amount from each atomic — so a failed txn
-/// leaves every count intact for the next tick, and hits accrued during the write survive. Acts
-/// only every 6th tick (~60s) and in a single transaction to keep write-amplification on the
-/// shared SQLite connection minimal. The guard on the health snapshot is never held across
-/// `.await`.
-pub fn spawn_flush_task(db: DatabaseConnection, pool: Arc<TranslationPool>) {
-    if !pool.demand_collect_enabled() {
-        return;
-    }
-    tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(Duration::from_secs(FLUSH_INTERVAL_SECS));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut tick = 0u32;
-        loop {
-            ticker.tick().await;
-            tick = tick.wrapping_add(1);
-            if !tick.is_multiple_of(POPULARITY_FLUSH_EVERY_N_TICKS) {
-                continue;
-            }
-            let now = epoch_now();
-            let snapshot = pool.demand_snapshot();
-            let catalogue_ids = pool.catalogue_ids().clone();
-            match flush(&db, &snapshot, &catalogue_ids, now).await {
-                Ok(ranked) => {
-                    pool.set_top_demand(ranked);
-                    // fetch_sub AFTER commit, exactly the snapshotted amount: counts accrued
-                    // during the transaction stay in the atomic (snapshot is stale by that much).
-                    pool.demand_subtract(&snapshot);
-                }
-                Err(e) => warn!(error = %e, "translation popularity flush failed (non-fatal)"),
-            }
-        }
-    });
 }
 
 #[cfg(test)]
@@ -399,7 +356,7 @@ mod tests {
     #[tokio::test]
     async fn flush_against_missing_table_returns_err() {
         // No table created → the txn's SELECT errors. A failed flush leaves the caller's demand
-        // counts intact (spawn_flush_task subtracts only on Ok), so the next tick retries.
+        // counts intact (the flush caller subtracts only on Ok), so the next tick retries.
         let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
         opt.max_connections(1);
         let db = Database::connect(opt).await.unwrap();
