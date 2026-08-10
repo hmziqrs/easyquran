@@ -91,7 +91,6 @@ impl QuranApiError {
     /// Tag this error as belonging to the W3a suspicious closed set. Call sites
     /// that build a suspicious 4xx (unknown source id, invalid range bounds) use
     /// this so the escalation engine counts it without parsing message text.
-    #[allow(dead_code)]
     pub fn classified(mut self, class: QuranErrorClass) -> Self {
         self.class = Some(class);
         self

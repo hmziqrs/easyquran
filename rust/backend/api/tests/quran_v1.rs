@@ -272,6 +272,22 @@ async fn get(uri: &str) -> (StatusCode, Value, reqwest::header::HeaderMap) {
     req(Method::GET, uri).await
 }
 
+/// Raw response (extensions intact) for W3a classification assertions.
+async fn get_resp(uri: &str) -> axum::response::Response {
+    ensure_dev_env();
+    app()
+        .await
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 fn data(v: &Value) -> &Value {
     &v["data"]
 }
@@ -1558,5 +1574,30 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::NO_STORE),
         "partial upstream must be no-store, not a cached truncation"
+    );
+}
+
+#[tokio::test]
+async fn w3a_unknown_source_is_classified() {
+    use ruxlog::modules::quran_v1::error::QuranErrorClass;
+    let resp = get_resp("/quran/sources/not-a-real-source/surah/1").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        resp.extensions().get::<QuranErrorClass>(),
+        Some(&QuranErrorClass::UnknownSource),
+        "unknown source id must carry the typed UnknownSource class for W3a escalation"
+    );
+}
+
+#[tokio::test]
+async fn w3a_invalid_range_bounds_are_classified() {
+    use ruxlog::modules::quran_v1::error::QuranErrorClass;
+    // from > to is an impossible bound, not a mere over-cap request.
+    let resp = get_resp("/quran/sources/uthmani/range?from=5&to=2").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        resp.extensions().get::<QuranErrorClass>(),
+        Some(&QuranErrorClass::InvalidRange),
+        "impossible from/to bounds must carry the typed InvalidRange class for W3a escalation"
     );
 }

@@ -11,7 +11,7 @@ use crate::AppState;
 
 use super::cache;
 use super::dto::*;
-use super::error::{QPath, QQuery, QuranApiError};
+use super::error::{QPath, QQuery, QuranApiError, QuranErrorClass};
 
 fn invalid(msg: impl Into<String>) -> QuranApiError {
     QuranApiError::invalid(msg)
@@ -48,7 +48,8 @@ fn parse_source(
     }
     Err(invalid(format!(
         "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean) or a catalogue translation id"
-    )))
+    ))
+    .classified(QuranErrorClass::UnknownSource))
 }
 
 fn translation_profile(id: &str) -> String {
@@ -183,7 +184,8 @@ fn compute_window(
             if f == 0 || t == 0 || f > t || (f as u32) > total || (t as u32) > total {
                 return Err(invalid(format!(
                     "invalid range from={f} to={t} for a unit of {total} ayahs (inclusive, 1-based)"
-                )));
+                ))
+                .classified(QuranErrorClass::InvalidRange));
             }
             (unit_start + (f as u32 - 1), unit_start + (t as u32 - 1))
         }
@@ -1237,7 +1239,8 @@ pub async fn source_range(
     let from = q.from.unwrap_or(1).max(1);
     let to = q.to.unwrap_or(VERSE_COUNT).min(VERSE_COUNT);
     if from > to {
-        return Err(invalid(format!("from ({from}) must be <= to ({to})")));
+        return Err(invalid(format!("from ({from}) must be <= to ({to})"))
+            .classified(QuranErrorClass::InvalidRange));
     }
     let count = to - from + 1;
     if count > RESPONSE_CAP {
