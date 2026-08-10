@@ -7,8 +7,8 @@ use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement, TransactionError,
     TransactionTrait, Value,
 };
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::collections::HashSet;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::task;
 use tower_sessions::SessionStore;
@@ -225,9 +225,7 @@ impl AuthBackend {
     // Backs the user_session audit row ↔ opaque tower session id mapping with
     // the auth_session_binding table (m000004). record + replace are FAIL-CLOSED:
     // a DB error returns Err so the caller destroys/rolls back the tower session
-    // instead of serving one that can never be terminated by audit id. The legacy
-    // in-memory free fns below remain as a compatibility shim for call sites that
-    // have not yet migrated; the durable methods on AuthBackend are canonical.
+    // instead of serving one that can never be terminated by audit id.
 
     /// Record the 1:1 binding from a `user_session` audit row to its opaque tower
     /// session id at login/passkey/OAuth creation. FAIL-CLOSED: returns Err on any
@@ -280,6 +278,32 @@ impl AuthBackend {
             Ok(None) => None,
             Err(e) => {
                 warn!(error = %e, "session binding lookup failed (treated as miss)");
+                None
+            }
+        }
+    }
+
+    /// Forward lookup used by audit-row-keyed termination (`sessions_terminate`):
+    /// `user_session` audit row id → the opaque tower session id bound to it.
+    /// None on miss; a DB error is logged and treated as a miss (fail-closed
+    /// lives at record/replace time, not on reads).
+    pub async fn lookup_tower_by_audit_id(
+        &self,
+        db: &DatabaseConnection,
+        user_session_id: i32,
+    ) -> Option<String> {
+        match db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT tower_session_id FROM auth_session_binding WHERE user_session_id = ?",
+                vec![Value::from(user_session_id)],
+            ))
+            .await
+        {
+            Ok(Some(row)) => row.try_get_by_index::<String>(0).ok(),
+            Ok(None) => None,
+            Err(e) => {
+                warn!(error = %e, "session binding tower lookup failed (treated as miss)");
                 None
             }
         }
@@ -537,44 +561,6 @@ impl RuxAuthBackend for AuthBackend {
 }
 
 pub const SESSION_MAX_AGE_SECS: u64 = 14 * 24 * 60 * 60;
-
-type Mapping = (String, Instant);
-
-static SESSION_MAP: OnceLock<Mutex<HashMap<i32, Mapping>>> = OnceLock::new();
-
-fn session_map() -> &'static Mutex<HashMap<i32, Mapping>> {
-    SESSION_MAP.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn reap_stale(map: &mut HashMap<i32, Mapping>) {
-    map.retain(|_, (_, at)| at.elapsed().as_secs() < SESSION_MAX_AGE_SECS);
-}
-
-#[allow(dead_code)]
-pub(crate) fn session_mapping_key(pg_session_id: i32) -> String {
-    format!("rux:sid_map:{pg_session_id}")
-}
-
-pub(crate) fn record_session_mapping(pg_session_id: i32, tower_session_id: &str) {
-    let mut map = match session_map().lock() {
-        Ok(guard) => guard,
-        Err(e) => {
-            warn!(error = %e, "session map poisoned; cannot record tower-session mapping");
-            return;
-        }
-    };
-    reap_stale(&mut map);
-    map.insert(
-        pg_session_id,
-        (tower_session_id.to_string(), Instant::now()),
-    );
-}
-
-pub(crate) fn lookup_session_mapping(pg_session_id: i32) -> Option<String> {
-    let mut map = session_map().lock().ok()?;
-    reap_stale(&mut map);
-    map.get(&pg_session_id).map(|(sid, _)| sid.clone())
-}
 
 #[async_trait]
 impl SessionRevocation for AuthBackend {

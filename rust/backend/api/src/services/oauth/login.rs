@@ -2,8 +2,9 @@ use sea_orm::{ActiveModelTrait, Set};
 use tracing::{error, info, instrument, warn};
 
 use crate::{
-    db::sea_models::{user, user_oauth_identity, user_session},
+    db::sea_models::{user, user_oauth_identity},
     error::{ErrorCode, ErrorResponse},
+    modules::auth_v1::controller::create_bound_session,
     services::auth::AuthSession,
     AppState,
 };
@@ -154,25 +155,12 @@ pub async fn finish_oauth_login(
         ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to create session")
     })?;
 
-    let session_row = user_session::Entity::create(
-        &state.sea_db,
-        user_session::NewUserSession::new(
-            user.id,
-            Some(format!("{} OAuth", provider.label())),
-            None,
-        ),
-    )
-    .await
-    .ok();
-
-    // record_session_mapping lets sessions_terminate revoke this session later; save() first because auth.login cycles the session id.
-    if (auth.session().save().await).is_ok() {
-        if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-            crate::services::auth::record_session_mapping(row.id, &tower_sid.to_string());
-        }
-    }
-
-    Ok(())
+    // W8e: durable binding with the same fail-closed contract as password login
+    // (create audit row -> save tower session -> record binding). On failure the
+    // tower session is destroyed and the audit row revoked so neither lingers.
+    let device = Some(format!("{} OAuth", provider.label()));
+    let ip: Option<String> = None;
+    create_bound_session(&state.sea_db, auth, user.id, device, ip).await
 }
 
 pub fn generate_oauth_nonce() -> String {

@@ -4,10 +4,10 @@ use rux_auth::AuthBackend as AuthBackendTrait;
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::{passkey_credential, user_session};
+use crate::db::sea_models::passkey_credential;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::extractors::ValidatedJson;
-use crate::modules::auth_v1::controller::record_session_mapping;
+use crate::modules::auth_v1::controller::create_bound_session;
 use crate::modules::passkey_v1::validator::{
     V1LoginFinishPayload, V1RegisterFinishPayload, V1RemovePasskeyPayload,
 };
@@ -187,24 +187,19 @@ pub async fn login_finish(
             );
             tracing::Span::current().record("result", "success");
 
-            let session_row = user_session::Entity::create(
-                &state.sea_db,
-                user_session::NewUserSession::new(user.id, device, ip),
-            )
-            .await
-            .ok();
-
-            // Record session-row -> tower-session-id so sessions_terminate can invalidate the live session.
-            if (auth.session().save().await).is_ok() {
-                if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-                    record_session_mapping(row.id, &tower_sid.to_string());
+            // W8e: durable binding with the same fail-closed contract as password
+            // login. On failure create_bound_session destroys the tower session and
+            // revokes the audit row so neither lingers unbound.
+            match create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await {
+                Ok(()) => Ok((
+                    StatusCode::OK,
+                    Json(json!({ "status": "ok", "user": user })),
+                )),
+                Err(err) => {
+                    tracing::Span::current().record("result", "session_error");
+                    Err(err)
                 }
             }
-
-            Ok((
-                StatusCode::OK,
-                Json(json!({ "status": "ok", "user": user })),
-            ))
         }
         Err(err) => {
             warn!(error = %err, user_id = user.id, "passkey login: session creation failed");

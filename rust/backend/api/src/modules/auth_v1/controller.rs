@@ -695,13 +695,31 @@ pub async fn sessions_terminate(
     user_session::Entity::revoke(&state.sea_db, id).await?;
 
     {
-        // V-HIGH-2: revoke only stamps revoked_at (audit-only); the live tower-session record must also be deleted or the cookie authenticates until its 14-day expiry.
-        if let Some(tower_sid) = lookup_session_mapping(id) {
+        // V-HIGH-2: revoke only stamps revoked_at (audit-only); the live tower-session
+        // record must also be deleted or the cookie authenticates until its 14-day
+        // expiry. Resolve the bound tower id via the durable binding, then terminate
+        // the live record and clear the binding row.
+        if let Some(tower_sid) = auth
+            .backend()
+            .lookup_tower_by_audit_id(&state.sea_db, id)
+            .await
+        {
             auth.backend().terminate(&tower_sid).await;
+            if let Err(e) = auth
+                .backend()
+                .clear_session_mapping(&state.sea_db, &tower_sid)
+                .await
+            {
+                warn!(
+                    error = ?e,
+                    session_id = id,
+                    "sessions_terminate: failed to clear durable binding"
+                );
+            }
         } else {
             warn!(
                 session_id = id,
-                "No tower-session mapping for session; live record could not be DEL'd — cookie valid until 14-day expiry (revoked_at is audit-only)"
+                "No durable tower-session binding for session; live record could not be DEL'd — cookie valid until 14-day expiry (revoked_at is audit-only)"
             );
         }
         Ok((
@@ -710,8 +728,6 @@ pub async fn sessions_terminate(
         ))
     }
 }
-
-pub(crate) use crate::services::auth::{lookup_session_mapping, record_session_mapping};
 
 /// W8b: sent on every response whose handler called `cycle_id()` successfully, so
 /// the web client knows to refresh its in-memory CSRF token (which rebinds to the
@@ -727,11 +743,13 @@ fn session_rotated_headers(rotated: bool) -> HeaderMap {
     h
 }
 
-/// W8e durable binding at session creation (login / login-totp). Creates the
-/// `user_session` audit row, persists the tower session, then records the 1:1
-/// binding. FAIL-CLOSED: on any step's failure, revoke the audit row and destroy
-/// the tower session so neither lingers unbound, then surface an ErrorResponse.
-async fn create_bound_session(
+/// W8e durable binding at session creation (login / login-totp / passkey / OAuth).
+/// Creates the `user_session` audit row, persists the tower session, then records
+/// the 1:1 binding. FAIL-CLOSED: on any step's failure, revoke the audit row and
+/// destroy the tower session so neither lingers unbound, then surface an
+/// ErrorResponse. Shared by every session-issuing handler so the fail-closed
+/// teardown stays in one place.
+pub(crate) async fn create_bound_session(
     db: &DatabaseConnection,
     auth: &mut AuthSession,
     user_id: i32,
@@ -905,18 +923,6 @@ mod login_totp_token {
 mod tests {
     use super::annotate_session_row;
     use super::login_totp_token;
-    use crate::services::auth::session_mapping_key;
-
-    #[test]
-    fn session_mapping_key_is_stable_and_namespaced() {
-        assert_eq!(session_mapping_key(1), "rux:sid_map:1");
-        assert_eq!(session_mapping_key(42), "rux:sid_map:42");
-        assert_eq!(
-            session_mapping_key(7),
-            format!("rux:sid_map:{}", 7),
-            "key must be the pg id under the rux namespace"
-        );
-    }
 
     #[test]
     fn login_totp_redis_key_prefix_is_stable() {
