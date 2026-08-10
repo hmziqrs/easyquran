@@ -32,6 +32,9 @@ export default defineConfig({
       adapter: adapter({
         precompress: true,
       }),
+      prerender: {
+        handleMissingId: "warn",
+      },
     }),
   ]),
 });

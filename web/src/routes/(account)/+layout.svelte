@@ -12,6 +12,8 @@
   });
 </script>
 
-<Container width="narrow" class="py-16">
-  {@render children()}
-</Container>
+<main id="main" tabindex="-1">
+  <Container width="narrow" class="py-16">
+    {@render children()}
+  </Container>
+</main>

@@ -272,7 +272,13 @@ mail with SPF+DKIM pass.
 ## Notes
 
 - `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.
-- API image contains root-owned, filesystem-read-only Quran source files; databases are never written.
+- API reads Quran sources from a read-only bind mount (`./db/quran/tanzil` → `/app/quran`,
+  compose `volumes:`); the image no longer bakes them. Immutability is enforced both by the
+  `:ro` mount (FS-level read-only for current and future inodes — strictly stronger than the
+  old `chmod -R a-w`) and by `read_only(true).immutable(true)` in the loader. The
+  Dockerfile.api COPY removal and the compose mount are a coupled pair — ship and revert together.
+- The web runtime reads `quran-data.json` from the build's `client/quran-meta/` output
+  (adapter-node copies `static/` → `build/client/`).
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
 - VPS needs ≥2 GB RAM for the Rust build (add swap on smaller boxes).

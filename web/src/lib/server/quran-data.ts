@@ -6,6 +6,7 @@ import type { CatalogEntry, SurahLink, SurahRenderMetadata } from "$lib/data/qur
 const roots = [
   path.resolve(process.cwd(), "static/quran-meta"),
   path.resolve(process.cwd(), "web/static/quran-meta"),
+  path.resolve(process.cwd(), "build/client/quran-meta"),
 ];
 const dataPath = roots.map((root) => path.join(root, "quran-data.json")).find(existsSync);
 if (!dataPath) throw new Error("[quran-data] missing quran-data.json");

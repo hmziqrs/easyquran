@@ -17,9 +17,9 @@ web/.svelte-kit
 **/*.sqlite-wal
 db/quran/tanzil/translations/sqlite
 db/quran/tanzil/arabic/quran-simple-clean.sqlite
+db/quran/tanzil/translations/sql
+db/quran/tanzil/translations/scripts
+db/quran/tanzil/translations/index.json
 !db/quran/tanzil/arabic/quran-uthmani.sqlite
-!db/quran/tanzil/arabic/quran-simple-clean.sqlite
-!db/quran/tanzil/translations/sqlite/
-!db/quran/tanzil/translations/sqlite/*.sqlite
 
 EasyQuran Website.dc.html

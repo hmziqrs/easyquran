@@ -90,6 +90,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - api_data:/app/data
+      # Immutable Quran sources (read-only). 1:1 with the /app/quran ENV paths in
+      # Dockerfile.api. Plain git blobs (no LFS) — present in every clone, incl. Dokploy.
+      - ./db/quran/tanzil:/app/quran:ro
     networks:
       proxy:
         aliases: [api]

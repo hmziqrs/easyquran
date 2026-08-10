@@ -29,12 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     # this, the named volume mounts root-owned and the app can't create its db.
     && mkdir -p /app/data && chown -R appuser /app/data
 COPY --from=builder /tmp/ruxlog /app/ruxlog
-COPY db/quran/tanzil/arabic/quran-uthmani.sqlite /app/quran/arabic/quran-uthmani.sqlite
-COPY db/quran/tanzil/arabic/quran-simple-clean.sqlite /app/quran/arabic/quran-simple-clean.sqlite
-COPY db/quran/tanzil/quran-data.xml /app/quran/quran-data.xml
-COPY db/quran/tanzil/translations/index.min.json /app/quran/translations/index.min.json
-COPY db/quran/tanzil/translations/sqlite /app/quran/translations/sqlite
-RUN chmod -R a-w /app/quran
+# Quran sources are provided at runtime by the read-only compose bind mount of
+# db/quran/tanzil → /app/quran (see docker-compose.yml). ENV paths below target that mount.
 
 ENV QURAN_UTHMANI_PATH=/app/quran/arabic/quran-uthmani.sqlite \
     QURAN_SIMPLE_CLEAN_PATH=/app/quran/arabic/quran-simple-clean.sqlite \
