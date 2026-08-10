@@ -49,6 +49,7 @@ import {
   deleteDataMeta,
   enforceDataBounds,
   enforceDataBoundsInner,
+  handleData,
   isCacheable,
   normalizeDataKey,
   purgeAllDataMeta,
@@ -310,6 +311,22 @@ describe("every deletion path clears matching metadata", () => {
     await enforceDataBoundsInner();
     const meta = await scanDataMeta();
     expect(meta.has(dataKey(3))).toBe(false);
+    expect((await cache.keys()).length).toBe(0);
+  });
+
+  it("a failed cache.put during handleData revalidation clears the key's metadata (W6 step 7)", async () => {
+    await recordDataEntry(dataKey(5), responseWith(40));
+    expect(await readDataMeta(dataKey(5))).toBeDefined();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responseWith(40)));
+
+    const cache = await fakeCaches.open(DATA_CACHE);
+    const putSpy = vi.spyOn(cache, "put").mockRejectedValue(new Error("quota exceeded"));
+
+    await handleData(new Request(urlFor(5)));
+
+    expect(putSpy).toHaveBeenCalledTimes(1);
+    expect(await readDataMeta(dataKey(5))).toBeUndefined();
     expect((await cache.keys()).length).toBe(0);
   });
 });
