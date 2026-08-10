@@ -230,6 +230,15 @@ describe("manifest wire", () => {
     expect(decodeScript({ ...scripts[0], sizeBytes: "1" })).toBeNull();
     expect(decodeScriptsPayload({ data: { scripts } })).toEqual(scripts);
   });
+
+  it("fails closed when any entry is malformed", () => {
+    expect(
+      decodeScriptsPayload({ data: { scripts: [scripts[0], { ...scripts[1], sizeBytes: 0 }] } }),
+    ).toBeNull();
+    expect(
+      decodeScriptsPayload({ data: { scripts: [{ ...scripts[0], id: "unknown" }, scripts[1]] } }),
+    ).toBeNull();
+  });
 });
 
 describe("translation surah Worker wire", () => {

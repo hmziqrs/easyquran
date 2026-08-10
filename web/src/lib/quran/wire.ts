@@ -259,7 +259,8 @@ export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
   const out: ArtifactSpec[] = [];
   for (const item of data.scripts) {
     const spec = decodeScript(item);
-    if (spec) out.push(spec);
+    if (!spec) return null;
+    out.push(spec);
   }
   return out;
 }
