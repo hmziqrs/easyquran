@@ -699,6 +699,125 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
   });
 });
 
+describe("W10c a valid corpus stays byte-identical and re-readable through each failure point", () => {
+  // The crash-safe contract: a validated corpus on disk must never be mutated
+  // or destroyed by any failure path. These cases seed a VALID corpus (never
+  // pre-corrupting it in setup) and assert the bytes come back unchanged after
+  // each failure, and that a follow-up read still serves it.
+  let env: ReturnType<typeof installFakes>;
+  const realFetch = (globalThis as { fetch?: unknown }).fetch;
+
+  beforeEach(() => {
+    env = installFakes();
+  });
+  afterEach(() => {
+    (globalThis as { fetch?: unknown }).fetch = realFetch;
+    const nav = globalThis.navigator as { storage?: unknown } | undefined;
+    if (nav) delete nav.storage;
+    delete (globalThis as { indexedDB?: unknown }).indexedDB;
+  });
+
+  it("serves the exact seeded bytes on every repeat read (no mutation, no redownload)", async () => {
+    const spec = makeSpec(16);
+    const original = PAYLOAD(16);
+    await seedFile(spec.id, activeFileName(spec.id), original, env.root);
+    await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
+
+    let fetched = 0;
+    (globalThis as { fetch: unknown }).fetch = async () => {
+      fetched += 1;
+      return { ok: true, status: 200, body: null, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+
+    for (let i = 0; i < 3; i++) {
+      const art = await ensureArtifact(spec);
+      expect(art.downloaded).toBe(false);
+      // Bytes are byte-identical to the seeded corpus — no in-place mutation.
+      expect(Array.from(art.bytes)).toEqual(Array.from(original));
+    }
+    expect(fetched).toBe(0);
+
+    // The on-disk file itself is unchanged.
+    const onDisk = await readSeed(spec.id, activeFileName(spec.id), env.root);
+    expect(Array.from(onDisk!)).toEqual(Array.from(original));
+  });
+
+  it("keeps the valid corpus byte-identical when a separate redownload's validation rejects", async () => {
+    // Seed a valid corpus for spec A. Force the redownload path by dropping the
+    // pointer AND leaving an INVALID legacy file, so adoption fails verifyBytes
+    // and ensureArtifact falls through to a fresh download whose staging is
+    // rejected by the validator. The on-disk file (invalid legacy) is untouched
+    // by the failure; a separately-seeded valid second corpus stays readable.
+    const a = makeSpec(16, "en.sahih");
+    const valid = PAYLOAD(16);
+    await seedFile(a.id, activeFileName(a.id), valid, env.root);
+    await writePointer({ sourceId: a.id, activeFile: activeFileName(a.id) });
+
+    const b = makeSpec(8, "fr.hamidullah");
+    // Legacy file for B is wrong-sized so it will not be adopted.
+    await seedFile(b.id, activeFileName(b.id), new Uint8Array(4).fill(9), env.root);
+    setFetchPayload(PAYLOAD(8));
+    const rejectValidate = () => {
+      throw new Error("content reject");
+    };
+    await expect(ensureArtifact(b, undefined, { validate: rejectValidate })).rejects.toThrow(
+      /content reject/,
+    );
+
+    // Spec A's valid corpus is byte-identical and still readable.
+    const art = await ensureArtifact(a);
+    expect(art.downloaded).toBe(false);
+    expect(Array.from(art.bytes)).toEqual(Array.from(valid));
+    const onDisk = await readSeed(a.id, activeFileName(a.id), env.root);
+    expect(Array.from(onDisk!)).toEqual(Array.from(valid));
+  });
+
+  it("keeps the valid corpus readable when another artifact's download is interrupted", async () => {
+    const a = makeSpec(16, "en.sahih");
+    const valid = PAYLOAD(16);
+    await seedFile(a.id, activeFileName(a.id), valid, env.root);
+    await writePointer({ sourceId: a.id, activeFile: activeFileName(a.id) });
+
+    const b = makeSpec(8, "fr.hamidullah");
+    setFetchError("network down");
+    await expect(ensureArtifact(b)).rejects.toThrow(/network down/);
+
+    // A's corpus survives B's interrupted download byte-identically.
+    const art = await ensureArtifact(a);
+    expect(art.downloaded).toBe(false);
+    expect(Array.from(art.bytes)).toEqual(Array.from(valid));
+  });
+
+  it("re-opens and re-serves a valid legacy corpus exactly once, byte-identical", async () => {
+    const spec = makeSpec(16);
+    const original = PAYLOAD(16);
+    await seedFile(spec.id, activeFileName(spec.id), original, env.root);
+    // No pointer yet -> first call adopts the valid legacy file once.
+
+    let validates = 0;
+    const validate = (bytes: Uint8Array) => {
+      validates += 1;
+      // The validator sees the real staged/legacy bytes, not a stub.
+      expect(Array.from(bytes)).toEqual(Array.from(original));
+    };
+
+    const first = await ensureArtifact(spec, undefined, { validate });
+    expect(first.downloaded).toBe(false);
+    expect(validates).toBe(1);
+    expect(Array.from(first.bytes)).toEqual(Array.from(original));
+    expect(await readPointerViaExport(spec.id)).toEqual({
+      sourceId: spec.id,
+      activeFile: activeFileName(spec.id),
+    });
+
+    // Second call serves via pointer (no re-validation, no re-adoption).
+    const second = await ensureArtifact(spec, undefined, { validate });
+    expect(second.downloaded).toBe(false);
+    expect(validates).toBe(1);
+    expect(Array.from(second.bytes)).toEqual(Array.from(original));
+  });
+});
+
 describe("pointer round-trip through the pointer store", () => {
   beforeEach(() => installFakes());
   afterEach(() => {

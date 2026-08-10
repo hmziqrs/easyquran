@@ -264,3 +264,101 @@ describe("fetchRangeChunks", () => {
     ).rejects.toThrow(MalformedDataError);
   });
 });
+
+// W5: the five oversized juz (19/23/27/29/30) are the only ranges that exceed
+// the backend RESPONSE_CAP. They must pass through the shared server/SSR range
+// path (fetchRangeChunks, used by quran-translation-page.ts) as at most two
+// cap-sized requests that stitch back to one contiguous result.
+describe("five oversized juz through the shared range path", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // [juz, from, to] — global-index bounds and the exact ayah count each juz
+  // covers, computed from web/static/quran-meta/quran-data.json.
+  const JUZ: Array<[number, number, number]> = [
+    [19, 2876, 3214],
+    [23, 3733, 4089],
+    [27, 4706, 5104],
+    [29, 5242, 5672],
+    [30, 5673, 6236],
+  ];
+
+  // Build a contiguous chunk whose surah assignment increases monotonically
+  // with the global index (surah every 50 ayahs), so every represented surah
+  // carries exactly one normalization.
+  function contiguousChunk(from: number, to: number): QuranRangeText {
+    const list: Ayah[] = [];
+    const bySurah = new Map<number, SurahNormalization>();
+    for (let g = from; g <= to; g++) {
+      const surah = Math.floor((g - 1) / 50) + 1;
+      list.push({ key: `${surah}:${g}`, surah, ayah: g, globalIndex: g, text: `t${g}` });
+      bySurah.set(surah, norm(surah));
+    }
+    return { ayahs: list, normalizations: [...bySurah.values()] };
+  }
+
+  it.each(JUZ)("juz %i chunks to <=2 cap-sized requests and stitches contiguously", async (juz, from, to) => {
+    void juz;
+    const count = to - from + 1;
+    expect(count).toBeGreaterThan(RESPONSE_CAP); // sanity: this juz is oversized
+
+    const bounds = planRangeChunks(from, to);
+    const bodies = bounds.map(([f, t]) => ({ data: contiguousChunk(f, t) }));
+    const f = fetcherReturning(...bodies);
+
+    const result = await fetchRangeChunks({
+      base: "https://x/api",
+      source: "en.x",
+      from,
+      to,
+      decode: decoder,
+      fetchImpl: f,
+    });
+
+    // Out-of-cap request chunks to at most 2, each at most RESPONSE_CAP wide.
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls).toHaveLength(bounds.length);
+    expect(bounds.length).toBeLessThanOrEqual(2);
+    for (const [bf, bt] of bounds) {
+      expect(bt - bf + 1).toBeLessThanOrEqual(RESPONSE_CAP);
+    }
+
+    // Stitched result covers [from,to] exactly and contiguously.
+    expect(result.ayahs).toHaveLength(count);
+    expect(result.ayahs[0]!.globalIndex).toBe(from);
+    expect(result.ayahs.at(-1)!.globalIndex).toBe(to);
+    for (let i = 1; i < result.ayahs.length; i++) {
+      expect(result.ayahs[i]!.globalIndex).toBe(result.ayahs[i - 1]!.globalIndex + 1);
+    }
+  });
+
+  it("merges byte-equivalent normalization when the chunk split falls inside one surah", async () => {
+    // Force the planner's split point to land inside surah 1: both chunks
+    // contain only surah-1 ayahs and both return the same normalization, so
+    // stitching must dedupe to one surah-1 normalization entry.
+    const from = 1;
+    const to = RESPONSE_CAP + 5;
+    const bounds = planRangeChunks(from, to);
+    expect(bounds).toHaveLength(2);
+    const oneSurahAyahs = (a: number, b: number): Ayah[] => {
+      const out: Ayah[] = [];
+      for (let g = a; g <= b; g++) out.push({ key: `1:${g}`, surah: 1, ayah: g, globalIndex: g, text: `t${g}` });
+      return out;
+    };
+    const a: QuranRangeText = { ayahs: oneSurahAyahs(bounds[0]![0], bounds[0]![1]), normalizations: [norm(1)] };
+    const b: QuranRangeText = { ayahs: oneSurahAyahs(bounds[1]![0], bounds[1]![1]), normalizations: [norm(1)] };
+    const f = fetcherReturning({ data: a }, { data: b });
+
+    const result = await fetchRangeChunks({
+      base: "https://x/api",
+      source: "en.x",
+      from,
+      to,
+      decode: decoder,
+      fetchImpl: f,
+    });
+
+    expect(result.ayahs).toHaveLength(to - from + 1);
+    expect(result.normalizations).toEqual([norm(1)]);
+    expect(result.normalizations).toHaveLength(1);
+  });
+});

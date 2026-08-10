@@ -275,6 +275,37 @@ describe("reader engagement", () => {
       }
     });
 
+    it("repeat-load migration seeds durable history once while the new session counter continues", async () => {
+      // A repeat "load" = a fresh module instance against the same browser
+      // storage. The legacy counter must seed the durable total exactly once
+      // (the first confirmed load); every subsequent load must only add its own
+      // view, while the session counter keeps accumulating across all loads.
+      sessionStorage.setItem(LEGACY_KEY, "2");
+
+      const loads = 4;
+      let lastSession = -1;
+      for (let i = 0; i < loads; i++) {
+        vi.resetModules();
+        const { noteReaderView } = await importEngagement();
+        await noteReaderView(TRANSLATION);
+        await flush();
+
+        const d = readDurable();
+        expect(d?.legacySeeded).toBe(true);
+        // durable.totalViews = legacy seed (2) applied once + one view per load.
+        expect(d?.totalViews).toBe(2 + (i + 1));
+        // The session counter never resets and increments by one each load.
+        const s = Number(sessionStorage.getItem(SESSION_KEY) ?? 0);
+        expect(s).toBe(2 + (i + 1));
+        expect(s).toBeGreaterThan(lastSession);
+        lastSession = s;
+      }
+
+      // Legacy key removed after the first confirmed durable read-back and
+      // never reappears on later loads.
+      expect(sessionStorage.getItem(LEGACY_KEY)).toBeNull();
+    });
+
     it("round-trips numeric source counts and drops garbage on decode", async () => {
       seedDurable({ totalViews: 5, sourceViews: { a: 3, b: 5 } });
       const { noteReaderView } = await importEngagement();
