@@ -99,30 +99,30 @@ describe("AccountClient.listSessions", () => {
 });
 
 describe("AccountClient.terminateSession", () => {
-  it("DELETEs /auth/v1/sessions/terminate/{id} and surfaces server-computed isCurrent", async () => {
+  it("DELETEs /auth/v1/sessions/terminate/{id} and returns ok for the real response shape", async () => {
     const client = mockClient();
-    client.unsafeRequest.mockResolvedValueOnce(ok({ is_current: false }));
+    client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Session terminated" }));
     const ac = createAccountClient(client);
     const res = await ac.terminateSession("s-xyz");
     expect(res.status).toBe("ok");
-    expect(res.isCurrent).toBe(false);
+    expect(res.httpStatus).toBe(200);
     expect(client.unsafeRequest).toHaveBeenCalledWith(
       "/auth/v1/sessions/terminate/s-xyz",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
 
-  it("current-session termination is reported as isCurrent=true", async () => {
+  it("does not derive isCurrent from the terminate response (list is the source of truth)", async () => {
     const client = mockClient();
-    client.unsafeRequest.mockResolvedValueOnce(ok({ isCurrent: true }));
+    client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Session terminated" }));
     const ac = createAccountClient(client);
     const res = await ac.terminateSession("me");
-    expect(res.isCurrent).toBe(true);
+    expect(res.isCurrent).toBe(false);
   });
 
   it("encodes the id into the path segment safely", async () => {
     const client = mockClient();
-    client.unsafeRequest.mockResolvedValueOnce(ok({ is_current: false }));
+    client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Session terminated" }));
     const ac = createAccountClient(client);
     await ac.terminateSession("a b/c");
     const path = (client.unsafeRequest.mock.calls[0] as [string, unknown])[0];

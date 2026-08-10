@@ -33,7 +33,7 @@ pub fn routes() -> Router<AppState> {
         .route("/sessions/list", post(controller::sessions_list))
         .route(
             "/sessions/terminate/{id}",
-            post(controller::sessions_terminate),
+            post(controller::sessions_terminate).delete(controller::sessions_terminate),
         )
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 

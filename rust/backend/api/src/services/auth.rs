@@ -100,7 +100,7 @@ impl AuthBackend {
         }
     }
 
-    #[instrument(skip(self, password), fields(email = %email, result))]
+    #[instrument(skip(self, password, email), fields(result))]
     pub async fn authenticate_password(
         &self,
         email: String,
@@ -696,6 +696,100 @@ mod tests {
         // fire (tower differs) → the UNIQUE(user_session_id) index rejects it.
         let err = b.record_session_mapping(&db, 20, "b").await;
         assert!(err.is_err(), "second tower for one audit row must fail closed");
+    }
+
+    // W8e durable termination: terminating an OTHER session by audit id must clear
+    // that audit row's binding on the auth_session_binding (m000004) table and leave
+    // the CURRENT session's binding untouched. The m000004 round-trip (write →
+    // forward-lookup → clear) is what makes termination survive a restart — the
+    // tower-session store is volatile, but the audit row ↔ tower-id binding is
+    // durable, so a reboot reconcile can still resolve and reap the live record.
+    #[tokio::test]
+    async fn terminate_other_session_clears_its_binding_and_keeps_current_intact() {
+        use sea_orm::{DatabaseBackend, Statement, Value};
+        let db = mem_db().await;
+        let now = "2026-01-01T00:00:00+00:00";
+        // Two live audit rows for the same user: id=1 is the CURRENT session,
+        // id=2 is another device. Both have durable bindings on m000004.
+        db.execute_unprepared(
+            "INSERT INTO \"user_sessions\" (id, user_id, last_seen, revoked_at) VALUES \
+             (1, 100, '2026-01-01T00:00:00+00:00', NULL), \
+             (2, 100, '2026-01-01T00:00:00+00:00', NULL)",
+        )
+        .await
+        .unwrap();
+        let (b, _store) = backend(&db).await;
+        b.record_session_mapping(&db, 1, "tower-current")
+            .await
+            .unwrap();
+        b.record_session_mapping(&db, 2, "tower-other")
+            .await
+            .unwrap();
+
+        // Terminate the OTHER session by audit id, mirroring sessions_terminate:
+        // forward-lookup the bound tower id, revoke the audit row, clear the binding.
+        let other_tower = b.lookup_tower_by_audit_id(&db, 2).await;
+        assert_eq!(
+            other_tower.as_deref(),
+            Some("tower-other"),
+            "m000004 forward lookup must resolve the bound tower id"
+        );
+        let other_tower = other_tower.unwrap();
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "UPDATE user_sessions SET revoked_at = ? WHERE id = ?",
+            vec![Value::from(now), Value::from(2)],
+        ))
+        .await
+        .unwrap();
+        b.clear_session_mapping(&db, &other_tower)
+            .await
+            .unwrap();
+
+        // OTHER: durable binding cleared and audit row revoked.
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 2).await,
+            None,
+            "terminated other session must have its m000004 binding cleared"
+        );
+        let ra2: Option<String> = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT revoked_at FROM user_sessions WHERE id = 2",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get_by_index(0)
+            .unwrap();
+        assert!(
+            ra2.is_some(),
+            "terminated other session audit row must be revoked"
+        );
+
+        // CURRENT: binding intact and audit row still live — not terminatable by
+        // accident when another session is revoked.
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 1).await.as_deref(),
+            Some("tower-current"),
+            "current session binding must survive terminating another session"
+        );
+        let ra1: Option<String> = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT revoked_at FROM user_sessions WHERE id = 1",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get_by_index(0)
+            .unwrap();
+        assert!(
+            ra1.is_none(),
+            "current session must stay live (not revoked by accident)"
+        );
     }
 
     #[tokio::test]

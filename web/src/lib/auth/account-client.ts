@@ -120,9 +120,7 @@ export class AccountClient {
       { method: "DELETE" },
     );
     const status = statusFor(res.status);
-    const data = res.ok ? (res.data as Record<string, unknown> | null) : null;
-    const isCurrent = !!(data && (data.is_current === true || data.isCurrent === true));
-    return { status, httpStatus: res.status, isCurrent };
+    return { status, httpStatus: res.status, isCurrent: false };
   }
 }
 
