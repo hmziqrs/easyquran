@@ -781,7 +781,7 @@
             More ayahs are unavailable right now. You can keep reading this page or use the page links.
           {/if}
         </span>
-        {#if loadFailed}
+        {#if loadFailed && (initial.ayahs.length === 0 || failedPage !== null)}
           <button
             type="button"
             onclick={retryDegradedPage}

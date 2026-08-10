@@ -26,7 +26,7 @@ const {
   gotoSpy: vi.fn().mockResolvedValue(undefined),
   readerStub: {
     hasLastRead: false,
-    lastRead: null,
+    lastRead: null as { num: number; n: number; sourceId?: string } | null,
     lastReadRef: "",
     markRead: vi.fn(),
     seedAyahs: vi.fn(),
@@ -155,6 +155,8 @@ beforeEach(() => {
   quranStore.error = null;
   readerStub.seedAyahs.mockReset();
   readerStub.markRead.mockReset();
+  readerStub.hasLastRead = false;
+  readerStub.lastRead = null;
 
   // happy-dom lacks ResizeObserver; the reader attaches one in two places.
   vi.stubGlobal(
@@ -458,5 +460,41 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     region = target.querySelector('[role="status"]');
     expect(region?.textContent ?? "").toMatch(/Page 3 couldn't be loaded/i);
     expect(target.querySelector('button[type="button"]')).not.toBeNull();
+  });
+});
+
+describe("SurahReader W7-R2-1 retry-button gate", () => {
+  it("hides Retry when loadFailed has no actionable target (continueReading failure)", async () => {
+    const full = pageData({ ayahs: 7, pageCount: 3 });
+    readerStub.hasLastRead = true;
+    readerStub.lastRead = { num: 1, n: 1, sourceId: "uthmani" };
+    loadQuranDataStub.mockRejectedValue(new Error("boom"));
+
+    mount(SurahReader, { target, props: propsFor(full) });
+    await flushMicrotasks();
+
+    const continueBtn = Array.from(target.querySelectorAll("button")).find((b) =>
+      /continue reading/i.test(b.textContent ?? ""),
+    );
+    continueBtn?.click();
+    await flushMicrotasks(20);
+
+    const region = target.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region?.querySelector('button[type="button"]')).toBeNull();
+  });
+
+  it("shows Retry for a real failed adjacent page", async () => {
+    const full = pageData({ ayahs: 7, pageCount: 3 });
+    workerStub.readRange.mockRejectedValue(new Error("boom"));
+
+    mount(SurahReader, { target, props: propsFor(full) });
+    await flushMicrotasks();
+    flushRaf();
+    await flushMicrotasks(20);
+
+    const region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/couldn't be loaded/i);
+    expect(region?.querySelector('button[type="button"]')).not.toBeNull();
   });
 });
