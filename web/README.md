@@ -33,7 +33,7 @@ Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`
     │  ├─ layout.css         # design system: @theme + token values
     │  ├─ +layout.svelte     # global: css, JSON-LD, prefs, analytics boot
     │  ├─ (marketing)/       # public, indexable, prerendered
-    │  ├─ (application)/app/ # product UI, noindex, prerendered
+    │  ├─ (application)/app/ # product UI, noindex; Arabic prerendered, translated routes SSR + disk-TTL (see Part 3, divergence #1)
     │  ├─ sitemap.xml/ llms.txt/ llms-full.txt/
     │  └─ [slug].md/ [slug].txt/   # text variants from prerendered HTML
     └─ lib/
