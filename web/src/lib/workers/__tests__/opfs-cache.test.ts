@@ -23,6 +23,7 @@ import {
 } from "$lib/workers/opfs-cache";
 import type { DownloadableSpec } from "$lib/data/quran-types";
 import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "$lib/workers/download";
+import { openIdb } from "$lib/workers/idb";
 
 const SPEC_ID = "en.sahih";
 function makeSpec(sizeBytes: number, id: string = SPEC_ID): DownloadableSpec {
@@ -380,6 +381,30 @@ async function readSeed(
 
 async function readPointerViaExport(sourceId: string): Promise<ActivePointer | null> {
   return readPointer(sourceId);
+}
+
+async function breakNextPointerPut(): Promise<() => void> {
+  // Wrap the pointer store so the next readwrite `put` (the commit-phase
+  // writePointer) throws synchronously inside runTxVoid's executor, rejecting
+  // the commit. `get` (readPointer) stays intact, and other DBs are untouched.
+  const pointerDb = (await openIdb(POINTER_DB, POINTER_STORE)) as unknown as FakeDB;
+  const origTransaction = pointerDb.transaction;
+  pointerDb.transaction = (store: string, mode: IDBTransactionMode): FakeTx => {
+    const tx = origTransaction.call(pointerDb, store, mode);
+    if (store !== POINTER_STORE) return tx;
+    const origObjectStore = tx.objectStore;
+    tx.objectStore = (): FakeStoreHandle => {
+      const handle = origObjectStore.call(tx, store);
+      handle.put = ((..._args: unknown[]) => {
+        throw new Error("commit writePointer boom");
+      }) as FakeStoreHandle["put"];
+      return handle;
+    };
+    return tx;
+  };
+  return () => {
+    pointerDb.transaction = origTransaction;
+  };
 }
 
 describe("DownloadSpec sizeBytes boundary", () => {
@@ -820,6 +845,46 @@ describe("W10c a valid corpus stays byte-identical and re-readable through each 
     expect(second.downloaded).toBe(false);
     expect(validates).toBe(1);
     expect(Array.from(second.bytes)).toEqual(Array.from(original));
+  });
+
+  it("preserves the valid corpus, cleans the staged temp, and leaves the pointer unchanged when a redownload's commit-phase pointer write fails", async () => {
+    // A is the old validated corpus that must survive B's commit failure.
+    const a = makeSpec(16, "en.sahih");
+    const valid = PAYLOAD(16);
+    await seedFile(a.id, activeFileName(a.id), valid, env.root);
+    await writePointer({ sourceId: a.id, activeFile: activeFileName(a.id) });
+
+    // B reaches the commit phase on a fresh redownload; moveOpfsFile promotes
+    // temp -> active (consuming the temp), then writePointer throws. This is
+    // the commit-phase failure point at which the temp is already cleaned and
+    // the pointer is not yet updated. ensureArtifact swallows the OPFS failure
+    // and falls back to IDB, so the call still resolves.
+    const b = makeSpec(24, "fr.hamidullah");
+    setFetchPayload(PAYLOAD(24));
+    const restore = await breakNextPointerPut();
+    let result: Awaited<ReturnType<typeof ensureArtifact>>;
+    try {
+      result = await ensureArtifact(b);
+    } finally {
+      restore();
+    }
+
+    // OPFS commit failed, so B was served via the IDB fallback.
+    expect(result.store).toBe("idb");
+    // The commit move succeeded before the pointer write threw, so B's staged
+    // temp was consumed and cleaned.
+    expect(await readSeed(b.id, tempFileName(b.id), env.root)).toBeNull();
+    // The pointer write threw, so B's pointer stays unchanged (none).
+    expect(await readPointerViaExport(b.id)).toBeNull();
+
+    // A's valid corpus is untouched by B's commit failure: byte-identical on
+    // disk and still served from cache.
+    const onDisk = await readSeed(a.id, activeFileName(a.id), env.root);
+    expect(onDisk).not.toBeNull();
+    expect(Array.from(onDisk!)).toEqual(Array.from(valid));
+    const art = await ensureArtifact(a);
+    expect(art.downloaded).toBe(false);
+    expect(Array.from(art.bytes)).toEqual(Array.from(valid));
   });
 });
 
