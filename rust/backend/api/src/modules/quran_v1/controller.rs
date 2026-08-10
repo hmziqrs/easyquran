@@ -473,7 +473,8 @@ pub async fn ayahs_multi(
             if from == 0 || to == 0 || from > to || from > VERSE_COUNT || to > VERSE_COUNT {
                 return Err(invalid(format!(
                     "fromGlobal={from} toGlobal={to} invalid (inclusive, 1..={VERSE_COUNT}, required together)"
-                )));
+                ))
+                .classified(QuranErrorClass::InvalidRange));
             }
             serve_range_ayahs(
                 &state,

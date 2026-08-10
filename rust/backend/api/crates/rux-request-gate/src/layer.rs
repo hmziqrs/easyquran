@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::net::{IpAddr, Ipv6Addr};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -225,7 +226,18 @@ where
             // absent identity falls back to a shared non-IP "unknown" bucket that
             // can never parse as a BanUnit (so never escalates under W3a).
             let identity = layer.identity_source.resolve(&req);
+            // W3a invariant: one canonical BanUnit keys fixed limiting + history +
+            // bans + persistence + export. An external IP's fixed-window bucket
+            // must live under the CANONICAL unit (IPv4 /32, IPv6 /64) — the same
+            // string the escalation engine bans under and the W3c admin un-ban
+            // clears via `ratelimit:{unit.canonical()}:quran-v1`. Keying on the
+            // raw IP instead strands a lifted ban's fixed counter under a key the
+            // un-ban never touches. `canonical_unit_key` mirrors BanUnit::from_ip
+            // in the api crate byte-for-byte; the two MUST stay in lockstep.
+            // Internal service identities keep their non-IP bucket label (never
+            // escalates/bans); an absent identity falls back to "unknown".
             let id_key = match &identity {
+                Some(RequestIdentity::External(ip)) => canonical_unit_key(*ip),
                 Some(id) => id.bucket_key(),
                 None => "unknown".to_string(),
             };
@@ -353,6 +365,30 @@ where
     }
 }
 
+// Canonical W3a ban-unit key for an external IP: IPv4 collapses to a /32, IPv6
+// to its /64 network (host bits zeroed). This MIRRORS BanUnit::from_ip(ip)
+// .canonical() in the api crate (modules/admin_bans_v1/dto.rs) byte-for-byte —
+// the same string keys fixed limiting, escalation history, active bans, L2
+// persistence, and export, so the W3c admin un-ban (which clears
+// `ratelimit:{unit}:quran-v1`) reaps the exact fixed counter the limiter
+// increments. The gate crate cannot import BanUnit (the api crate depends on
+// it), so the two are kept in lockstep by this mirror; the round-trip tests in
+// dto.rs pin the canonical format, and `canonical_unit_key_mirrors_ban_unit`
+// below pins this side of the contract.
+fn canonical_unit_key(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(v4) => format!("{v4}/32"),
+        IpAddr::V6(v6) => {
+            // Zero the host bits (bytes 8..16) to form the /64 network, matching
+            // ipnet::Ipv6Net::trunc(). std's Ipv6Addr Display emits the same
+            // canonical RFC 5952 form ipnet does, so the strings are identical.
+            let mut net = v6.octets();
+            net[8..].fill(0);
+            format!("{}/64", Ipv6Addr::from(net))
+        }
+    }
+}
+
 // Shared 429 builder: applies on_block + the standard x-ratelimit headers.
 // Hoisted so both the fixed-window block and the W3a active-ban / just-created
 // ban short-circuits emit an identical shaped response.
@@ -401,7 +437,7 @@ mod tests {
     use super::*;
     use crate::ip::IdentitySource;
     use crate::store::InMemoryStore;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
     use tower::Service;
@@ -527,5 +563,31 @@ mod tests {
         assert_eq!(r3.status(), axum::http::StatusCode::OK);
         // 3rd request is the first block (max=2 → count 3 > 2).
         assert_eq!(r3b.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[test]
+    fn canonical_unit_key_mirrors_ban_unit() {
+        // W3a invariant: the fixed-window bucket key for an external IP MUST be
+        // the canonical ban unit (IPv4 /32, IPv6 /64 truncated), the same string
+        // the escalation engine bans under and the W3c admin un-ban clears via
+        // `ratelimit:{unit}:quran-v1`. This pins this side of the mirror; the
+        // round-trip tests in admin_bans_v1/dto.rs pin BanUnit's side.
+        assert_eq!(
+            canonical_unit_key(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 5))),
+            "203.0.113.5/32"
+        );
+        // Host bits truncated to the /64 network.
+        assert_eq!(
+            canonical_unit_key(IpAddr::V6(Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 0x1))),
+            "2001:db8::/64"
+        );
+        // Every address in the same /64 collapses to one unit.
+        let a = canonical_unit_key(IpAddr::V6(Ipv6Addr::new(
+            0x2001, 0x0db8, 0, 0, 0, 0, 0, 0x1,
+        )));
+        let b = canonical_unit_key(IpAddr::V6(Ipv6Addr::new(
+            0x2001, 0x0db8, 0, 0, 0, 0, 0, 0xabcd,
+        )));
+        assert_eq!(a, b, "a /64 range must key to one fixed bucket");
     }
 }
