@@ -338,3 +338,38 @@ fn error_codes_distinct_status_for_auth_vs_db() {
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     );
 }
+
+#[test]
+fn auth_path_logs_contain_no_sensitive_values() {
+    // W8f invariant: auth-path logs emit only opaque user id, provider NAME,
+    // result, trace id, client_ip — NEVER email, OTP/verification code,
+    // recipient address, or subject. Source-level guard against reintroduction.
+    let email_verify = include_str!("../src/modules/email_verification_v1/controller.rs");
+    let forgot_pw = include_str!("../src/modules/forgot_password_v1/controller.rs");
+    let mail_none = include_str!("../src/services/mail/none.rs");
+    let user_actions = include_str!("../src/db/sea_models/user/actions.rs");
+
+    assert!(
+        !email_verify.contains("code = %payload.code"),
+        "email_verification_v1 controller must not log the OTP (code = %payload.code)"
+    );
+
+    assert!(
+        !forgot_pw.contains("email = %"),
+        "forgot_password_v1 controller must not log the recovery email address"
+    );
+
+    assert!(
+        !mail_none.contains("recipient = %msg.to"),
+        "noop mail provider must not log the recipient address"
+    );
+    assert!(
+        !mail_none.contains("subject = %msg.subject"),
+        "noop mail provider must not log the email subject"
+    );
+
+    assert!(
+        !user_actions.contains("email = %"),
+        "user actions must not log email (create/find_by_email/create_from_google/admin_create)"
+    );
+}

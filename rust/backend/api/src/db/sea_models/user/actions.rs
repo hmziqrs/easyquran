@@ -72,7 +72,7 @@ impl Entity {
         Ok(results)
     }
 
-    #[instrument(skip(conn, new_user, email_code_hash), fields(user_id, email = %new_user.email))]
+    #[instrument(skip(conn, new_user, email_code_hash), fields(user_id))]
     pub async fn create(
         conn: &DbConn,
         new_user: NewUser,
@@ -108,7 +108,7 @@ impl Entity {
                     ErrorResponse::new(ErrorCode::TransactionError)
                         .with_message("Failed to commit transaction")
                 })?;
-                info!(user_id = model.id, email = %model.email, "User created");
+                info!(user_id = model.id, "User created");
                 Ok(model)
             }
             Err(err) => {
@@ -279,7 +279,7 @@ impl Entity {
         Ok(result.rows_affected > 0)
     }
 
-    #[instrument(skip(conn), fields(email = %user_email))]
+    #[instrument(skip(conn))]
     pub async fn find_by_email(conn: &DbConn, user_email: String) -> DbResult<Option<Model>> {
         match Self::find()
             .filter(Column::Email.eq(user_email))
@@ -308,7 +308,7 @@ impl Entity {
         }
     }
 
-    #[instrument(skip(conn), fields(user_id, email = %google_email))]
+    #[instrument(skip(conn), fields(user_id))]
     pub async fn create_from_google(
         conn: &DbConn,
         google_id: String,
@@ -333,7 +333,7 @@ impl Entity {
         match user.insert(conn).await {
             Ok(model) => {
                 tracing::Span::current().record("user_id", model.id);
-                info!(user_id = model.id, email = %model.email, "User created from Google");
+                info!(user_id = model.id, "User created from Google");
                 Ok(model)
             }
             Err(err) => {
@@ -343,7 +343,7 @@ impl Entity {
         }
     }
 
-    #[instrument(skip(conn, new_user), fields(user_id, email = %new_user.email))]
+    #[instrument(skip(conn, new_user), fields(user_id))]
     pub async fn admin_create(
         conn: &DbConn,
         public_url: &str,
