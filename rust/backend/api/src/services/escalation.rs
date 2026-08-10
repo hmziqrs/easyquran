@@ -552,6 +552,21 @@ mod tests {
         assert!(eng.active_ban(&a).await.is_some());
         assert!(eng.active_ban(&b).await.is_some());
 
+        // The transient suspicious counter map is LRU-pruned by OLDEST
+        // window_epoch once it exceeds `max_tracked_identities`. window_epoch is
+        // second-granular (`now_epoch()`). Under parallel test load, a/b/c can
+        // all be observed within the same wall-clock second, so their epochs
+        // tie; the tie is broken by arbitrary HashMap iteration order, letting
+        // the prune evict c mid-window — c's counter then rebuilds at 0 and
+        // `on_first_block` short-circuits below the suspicious threshold,
+        // skipping the capacity-saturation path this test pins. Wait out the
+        // current second so c's epoch is strictly newest and the prune
+        // deterministically keeps it.
+        let started = now_epoch();
+        while now_epoch() == started {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
         // A third unit at/over capacity: no new ban, fixed limiting continues.
         let c = ip(10, 0, 0, 3);
         let created = run_window_to_block(&eng, &c, 10, 1).await;
