@@ -567,15 +567,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Periodic durable-state flushes spawn after the pool exists (the popularity flush captures a
-    // pool clone). restore() stays above so rate-limit state is live before any request; nothing
-    // between the original spawn site and here serves requests, so the relocation is ordering-safe.
-    ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
-
-    if demand_collect {
-        // Boot prewarm is backgrounded: translations are NOT fail-fast (Arabic is). A bogus or
-        // absent candidate id warns and is skipped. load_ranked decays in Rust; the pool filters
-        // by current catalogue membership before truncating to N.
+    // Periodic durability runs as ONE spawned task on the shared SeaORM
+    // connection: the rate-limit snapshot every 10s, plus — when demand
+    // collection is on — the translation-popularity flush riding the same task
+    // every 6th tick (~60s). Folding the popularity flush in here eliminates
+    // the second spawned writer the W1 D1 draft left behind (one connection, no
+    // extra write amplification). restore() stays above so rate-limit state is
+    // live before any request; nothing between the original spawn site and here
+    // serves requests, so the relocation is ordering-safe.
+    let popularity_flush = if demand_collect {
+        // Boot prewarm is backgrounded: translations are NOT fail-fast (Arabic
+        // is). A bogus or absent candidate id warns and is skipped. load_ranked
+        // decays in Rust; the pool filters by current catalogue membership
+        // before truncating to N.
         let db_for_prewarm = sea_db.clone();
         let pool_for_prewarm = translation_pool.clone();
         tokio::spawn(async move {
@@ -583,11 +587,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ruxlog::services::translation_popularity_store::load_ranked(&db_for_prewarm).await;
             pool_for_prewarm.prewarm(ranked).await;
         });
-        ruxlog::services::translation_popularity_store::spawn_flush_task(
-            sea_db.clone(),
-            translation_pool.clone(),
-        );
-    }
+        // Slow-companion callback for rate_limit_store::spawn_flush_task. Each
+        // invocation clones the captured Arcs so the Fn (not FnOnce) can fire
+        // every 6th tick for the life of the task. epoch_now is private to the
+        // popularity module, so the same SystemTime->secs expression is inlined
+        // here rather than widening that module's surface.
+        let pop_db = sea_db.clone();
+        let pop_pool = translation_pool.clone();
+        Some(move || {
+            let db = pop_db.clone();
+            let pool = pop_pool.clone();
+            async move {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                let snapshot = pool.demand_snapshot();
+                let catalogue_ids = pool.catalogue_ids().clone();
+                match ruxlog::services::translation_popularity_store::flush(
+                    &db,
+                    &snapshot,
+                    &catalogue_ids,
+                    now,
+                )
+                .await
+                {
+                    Ok(ranked) => {
+                        pool.set_top_demand(ranked);
+                        // fetch_sub AFTER commit, exactly the snapshotted amount:
+                        // counts accrued during the transaction stay in the
+                        // atomic (snapshot is stale by that much).
+                        pool.demand_subtract(&snapshot);
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "translation popularity flush failed (non-fatal)")
+                    }
+                }
+            }
+        })
+    } else {
+        None
+    };
+
+    ruxlog::services::rate_limit_store::spawn_flush_task(
+        sea_db.clone(),
+        gate_store.clone(),
+        popularity_flush,
+    );
 
     let state = AppState {
         sea_db,

@@ -29,6 +29,13 @@ const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS rate_limit_state (
 
 const FLUSH_INTERVAL_SECS: u64 = 10;
 
+/// A slow companion flush (the translation-popularity snapshot) rides the same
+/// task every Nth tick (~60s at N=6) so the shared SeaORM connection never has a
+/// second spawned writer competing for it. The cadence lives here on purpose:
+/// the companion is wired by the bin as an opaque callback, so this module never
+/// imports the quran/translation stack (no layering inversion).
+const SLOW_FLUSH_EVERY_N_TICKS: u32 = 6;
+
 const ACTIVE_BAN_MAX_DEFAULT: u64 = 2_000;
 
 // One async operation lock shared by the periodic flush and (future) admin
@@ -108,13 +115,30 @@ pub async fn load(db: &sea_orm::DatabaseConnection) -> Vec<BucketSnapshot> {
     }
 }
 
-pub fn spawn_flush_task(db: sea_orm::DatabaseConnection, store: Arc<InMemoryStore>) {
+/// Spawn the single periodic durability task. Every `FLUSH_INTERVAL_SECS` it
+/// snapshots the in-memory gate store into SQLite under `PERSISTENCE_LOCK`. When
+/// `every_sixth_tick` is `Some`, that callback runs every `SLOW_FLUSH_EVERY_N_TICKS`-th
+/// tick on the SAME task — used by the bin to attach the translation-popularity
+/// flush so a second spawned writer never competes for the shared SeaORM connection.
+/// The callback runs OUTSIDE `PERSISTENCE_LOCK` (it owns its own transaction against
+/// a separate table and never contends with admin ban mutations) and owns its own
+/// `DatabaseConnection` clone, so no guard is held across its `.await`.
+pub fn spawn_flush_task<E, EFut>(
+    db: sea_orm::DatabaseConnection,
+    store: Arc<InMemoryStore>,
+    every_sixth_tick: Option<E>,
+) where
+    E: Fn() -> EFut + Send + Sync + 'static,
+    EFut: std::future::Future<Output = ()> + Send + 'static,
+{
     let max = active_ban_max();
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(Duration::from_secs(FLUSH_INTERVAL_SECS));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut tick = 0u32;
         loop {
             ticker.tick().await;
+            tick = tick.wrapping_add(1);
             // Serialize durable writes against admin mutations; snapshot() is
             // taken under the lock so a concurrent un-ban cannot lose to a
             // stale snapshot. The bucket mutex is released inside snapshot()
@@ -139,6 +163,16 @@ pub fn spawn_flush_task(db: sea_orm::DatabaseConnection, store: Arc<InMemoryStor
                 warn!(error = %e, "rate-limit L2 flush failed (non-fatal)");
             }
             store.prune();
+            // Slow companion (translation popularity) shares this task: every
+            // Nth tick, outside the persistence lock. The callback owns its own
+            // transaction against a separate table, so it must not be serialized
+            // with admin ban mutations (that would only widen the critical
+            // section and re-introduce the cross-store contention W1 removed).
+            if tick.is_multiple_of(SLOW_FLUSH_EVERY_N_TICKS) {
+                if let Some(cb) = every_sixth_tick.as_ref() {
+                    cb().await;
+                }
+            }
         }
     });
 }
