@@ -564,6 +564,20 @@ impl WebAuthSettings {
             for p in &oauth_providers {
                 let rk = provider_redirect_key(p);
                 let redirect = std::env::var(rk).unwrap_or_default();
+                // W8F-R2: an explicit https:// scheme gate on the raw redirect URI.
+                // origin_of returns "" for a scheme-less value (e.g. "host/cb"), and
+                // the membership test below is gated on !origin.is_empty(), so a
+                // scheme-less callback slips through and only fails later at runtime.
+                // An http:// callback parses to an origin but crosses cleartext. Reject
+                // both here, mirroring the FRONTEND_URL / OAUTH_ALLOWED_REDIRECT_ORIGINS
+                // HTTPS checks above.
+                if !redirect.trim().starts_with("https://") {
+                    return Err(format!(
+                        "Production with WEB_AUTH_ENABLED=true: {rk} must use an explicit \
+                         https:// scheme (got '{redirect}'); scheme-less or http:// OAuth \
+                         callbacks are rejected"
+                    ));
+                }
                 let origin = origin_of(&redirect);
                 if !origin.is_empty() && !allowed.contains(&origin) && origin != frontend_origin {
                     return Err(format!(
@@ -1360,6 +1374,55 @@ mod tests {
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         let cfg = WebAuthSettings::from_env().expect("matched origin must boot");
         assert!(cfg.enabled);
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_schemeless_provider_redirect_uri() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
+        std::env::set_var("GOOGLE_CLIENT_ID", "g");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        // Scheme-less: origin_of returns "" -> bypasses the redirect-origin
+        // membership check (gated on !origin.is_empty()), so the explicit
+        // https:// scheme gate must catch it before boot succeeds.
+        std::env::set_var("GOOGLE_REDIRECT_URI", "easyquran.fyi/api/cb");
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        let err = WebAuthSettings::from_env().expect_err("scheme-less redirect must fail");
+        assert!(err.contains("GOOGLE_REDIRECT_URI"), "got: {err}");
+        assert!(err.contains("https://"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_http_provider_redirect_uri() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
+        std::env::set_var("GOOGLE_CLIENT_ID", "g");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        // http:// callback: parses to an origin, but the scheme gate must reject
+        // it regardless of membership — the auth code + cookie would cross cleartext.
+        std::env::set_var("GOOGLE_REDIRECT_URI", "http://easyquran.fyi/api/cb");
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        let err = WebAuthSettings::from_env().expect_err("http redirect must fail");
+        assert!(err.contains("GOOGLE_REDIRECT_URI"), "got: {err}");
+        assert!(err.contains("https://"), "got: {err}");
         restore_env(snap);
     }
 
