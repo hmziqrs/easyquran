@@ -792,6 +792,163 @@ mod tests {
         );
     }
 
+    // Spec scenario: durable current-vs-other termination AFTER a cycle_id()
+    // rotation (the post-2FA/passkey re-auth path). The audit row is unchanged;
+    // only the opaque tower id moves old→new via replace_session_mapping. A later
+    // sessions_terminate must resolve the NEW tower id and reap it, and the OLD
+    // tower id must no longer resolve (it was evicted by replace).
+    #[tokio::test]
+    async fn rotation_then_terminate_via_new_tower_old_no_longer_resolves() {
+        use sea_orm::{DatabaseBackend, Statement, Value};
+        let db = mem_db().await;
+        let now = "2026-01-01T00:00:00+00:00";
+        db.execute_unprepared(
+            "INSERT INTO \"user_sessions\" (id, user_id, last_seen, revoked_at) VALUES \
+             (7, 100, '2026-01-01T00:00:00+00:00', NULL)",
+        )
+        .await
+        .unwrap();
+        let (b, _store) = backend(&db).await;
+
+        // 1. Login: bind audit row 7 → "pre-rotation" tower id.
+        b.record_session_mapping(&db, 7, "pre-rotation")
+            .await
+            .unwrap();
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 7).await.as_deref(),
+            Some("pre-rotation"),
+        );
+
+        // 2. cycle_id() rotation (2FA/passkey): same audit row, new tower id.
+        b.replace_session_mapping(&db, 7, "pre-rotation", "post-rotation")
+            .await
+            .unwrap();
+
+        // OLD tower id no longer resolves; the NEW tower id owns audit row 7.
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "pre-rotation").await,
+            None,
+            "old tower id must not resolve after cycle_id rotation",
+        );
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 7).await.as_deref(),
+            Some("post-rotation"),
+            "new tower id must be bound to the audit row post-rotation",
+        );
+
+        // 3. Terminate the session via the NEW tower id — the only id that
+        //    resolves — mirroring sessions_terminate on a post-rotation session.
+        let live_tower = b.lookup_tower_by_audit_id(&db, 7).await.unwrap();
+        assert_eq!(live_tower, "post-rotation");
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "UPDATE user_sessions SET revoked_at = ? WHERE id = ?",
+            vec![Value::from(now), Value::from(7)],
+        ))
+        .await
+        .unwrap();
+        b.clear_session_mapping(&db, &live_tower).await.unwrap();
+
+        // Post-termination: both tower ids are dead, audit row revoked.
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "post-rotation").await,
+            None,
+            "terminated session's new tower binding must be cleared",
+        );
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "pre-rotation").await,
+            None,
+            "pre-rotation tower id stays dead after termination",
+        );
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 7).await,
+            None,
+            "audit row 7 must have no live tower binding after termination",
+        );
+        let ra: Option<String> = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT revoked_at FROM user_sessions WHERE id = 7",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get_by_index(0)
+            .unwrap();
+        assert!(
+            ra.is_some(),
+            "rotated+terminated session audit row must be revoked"
+        );
+    }
+
+    // Cross-RESTART guarantee: a true multi-process restart is impractical in a
+    // unit test, so this asserts the PROPERTY that makes termination survive a
+    // reboot — the binding is persisted to the auth_session_binding (m000004)
+    // TABLE, never held in an in-memory cache. Every lookup_* / record / clear /
+    // replace method issues a fresh SQL statement against the table, so a
+    // brand-new AuthBackend with ZERO shared in-memory state (empty revoked set,
+    // fresh session_store — i.e. a rebooted process) resolves the binding purely
+    // from durable storage. A direct table read-back after the writer is dropped
+    // is therefore the cross-restart proof.
+    #[tokio::test]
+    async fn binding_survives_simulated_restart_via_table_readback() {
+        use sea_orm::{DatabaseBackend, Statement, Value};
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "INSERT INTO \"user_sessions\" (id, user_id, last_seen, revoked_at) VALUES \
+             (42, 100, '2026-01-01T00:00:00+00:00', NULL)",
+        )
+        .await
+        .unwrap();
+
+        // Process A: record the binding at login, then "exit".
+        let (a, _store_a) = backend(&db).await;
+        a.record_session_mapping(&db, 42, "tower-A").await.unwrap();
+        drop(a);
+
+        // The binding is in the TABLE, not in any backend-owned cache — prove it
+        // by reading the row straight off auth_session_binding after the writer
+        // is gone.
+        let persisted_tower: String = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT tower_session_id FROM auth_session_binding WHERE user_session_id = ?",
+                vec![Value::from(42)],
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get_by_index(0)
+            .unwrap();
+        assert_eq!(persisted_tower, "tower-A");
+
+        // Process B: freshly-booted AuthBackend shares NO in-memory state with A
+        // (empty revoked set, new session_store). It resolves the binding purely
+        // by reading the table — exactly what a rebooted process does.
+        let (b, _store_b) = backend(&db).await;
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 42).await.as_deref(),
+            Some("tower-A"),
+            "fresh process must resolve the durable binding from the table",
+        );
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "tower-A").await,
+            Some(42),
+            "fresh process must resolve the reverse mapping from the table",
+        );
+
+        // The fresh process can terminate the session by audit id — the
+        // cross-restart termination path a boot reconcile relies on.
+        let tower = b.lookup_tower_by_audit_id(&db, 42).await.unwrap();
+        b.clear_session_mapping(&db, &tower).await.unwrap();
+        assert_eq!(
+            b.lookup_tower_by_audit_id(&db, 42).await,
+            None,
+            "fresh process can terminate the binding it resolved from the table",
+        );
+    }
+
     #[tokio::test]
     async fn reconcile_revokes_unbound_and_cleans_orphan_bindings() {
         use sea_orm::{DatabaseBackend, Statement, Value};
