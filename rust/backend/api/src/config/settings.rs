@@ -510,11 +510,9 @@ impl WebAuthSettings {
                     let pk = std::env::var("APPLE_PRIVATE_KEY").unwrap_or_default();
                     let pkp = std::env::var("APPLE_PRIVATE_KEY_PATH").unwrap_or_default();
                     if pk.trim().is_empty() && pkp.trim().is_empty() {
-                        return Err(
-                            "Production with WEB_AUTH_ENABLED=true: apple requires \
+                        return Err("Production with WEB_AUTH_ENABLED=true: apple requires \
                              APPLE_PRIVATE_KEY or APPLE_PRIVATE_KEY_PATH"
-                                .to_string(),
-                        );
+                            .to_string());
                     }
                 }
             }
@@ -547,6 +545,22 @@ impl WebAuthSettings {
                      https:// origins"
                 ));
             }
+            // Presence gate: the HTTPS-scheme check above is a no-op when FRONTEND_URL
+            // is unset/empty (empty origin parses as neither http:// nor https://). An
+            // absent FRONTEND_URL boots successfully then breaks every OAuth
+            // success/failure redirect at runtime, so reject it explicitly here.
+            if std::env::var("FRONTEND_URL")
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
+                return Err(
+                    "Production with WEB_AUTH_ENABLED=true requires FRONTEND_URL to be set \
+                     (the OAuth success/failure redirect target; without it every post-login \
+                     redirect breaks at runtime)."
+                        .to_string(),
+                );
+            }
             for p in &oauth_providers {
                 let rk = provider_redirect_key(p);
                 let redirect = std::env::var(rk).unwrap_or_default();
@@ -569,7 +583,11 @@ impl WebAuthSettings {
 
 fn provider_required_keys(p: &str) -> &'static [&'static str] {
     match p {
-        "google" => &["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"],
+        "google" => &[
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_REDIRECT_URI",
+        ],
         "apple" => &[
             "APPLE_CLIENT_ID",
             "APPLE_TEAM_ID",
@@ -581,7 +599,11 @@ fn provider_required_keys(p: &str) -> &'static [&'static str] {
             "FACEBOOK_CLIENT_SECRET",
             "FACEBOOK_REDIRECT_URI",
         ],
-        "github" => &["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_REDIRECT_URI"],
+        "github" => &[
+            "GITHUB_CLIENT_ID",
+            "GITHUB_CLIENT_SECRET",
+            "GITHUB_REDIRECT_URI",
+        ],
         _ => &[],
     }
 }
@@ -1374,6 +1396,24 @@ mod tests {
     }
 
     #[test]
+    fn prod_rejects_missing_frontend_url() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        // FRONTEND_URL intentionally left unset: the HTTPS-scheme check is a no-op
+        // on an empty origin, so a presence gate must catch it before boot succeeds.
+        let err = WebAuthSettings::from_env().expect_err("missing FRONTEND_URL must fail");
+        assert!(err.contains("FRONTEND_URL"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
     fn prod_rejects_empty_mail_from_address() {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
@@ -1459,6 +1499,7 @@ mod tests {
         std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
         std::env::set_var("CLOUDFLARE_EMAIL_ACCOUNT_ID", "acc");
         std::env::set_var("CLOUDFLARE_EMAIL_API_TOKEN", "tok");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         // No oauth providers configured → oauth loop is a no-op → boot succeeds.
         let cfg = WebAuthSettings::from_env().expect("cloudflare with creds must boot");
         assert!(cfg.enabled);
@@ -1467,7 +1508,10 @@ mod tests {
 
     #[test]
     fn origin_of_parses_scheme_host_port() {
-        assert_eq!(origin_of("https://easyquran.fyi/cb"), "https://easyquran.fyi");
+        assert_eq!(
+            origin_of("https://easyquran.fyi/cb"),
+            "https://easyquran.fyi"
+        );
         assert_eq!(
             origin_of("https://easyquran.fyi:8443/a/b"),
             "https://easyquran.fyi:8443"
