@@ -178,6 +178,39 @@ describe("OAuthFlow.finish", () => {
     await flow.finish();
     expect(client.refreshCsrf).toHaveBeenCalled();
   });
+
+  it("recovers via session probe when callback already consumed the state (primary success path)", async () => {
+    // Production path: IdP -> backend callback consumes the one-time state and
+    // establishes the session, then 302s to /auth/{provider}/success. The success
+    // page calls finish(), whose exchange POST comes back non-ok (state gone) but
+    // the session probe finds the authenticated session the callback created.
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce({
+      ok: false,
+      status: 410,
+      data: null,
+      error: { message: "state already consumed" },
+      rotated: false,
+    });
+    const state = mockState();
+    const flow = createOAuthFlow("google", { client, state, navigate: vi.fn() });
+    sessionStorage.setItem("eq:oauth-return", "/account");
+
+    const res = await flow.finish();
+
+    // Exchange failure is absorbed; the flow recovers via the probe and succeeds.
+    expect(res.ok).toBe(true);
+    expect(res.returnTarget).toBe("/account");
+    expect(res.errorCode).toBeUndefined();
+    expect(flow.lastErrorCode).toBeNull();
+    // Exchange did not rotate, so CSRF is refreshed before the probe.
+    expect(client.refreshCsrf).toHaveBeenCalled();
+    // transition -> probe -> setUser; the user comes from the probe, not the exchange.
+    expect(state.transition).toHaveBeenCalledWith({ kind: "oauth" });
+    expect(state.probe).toHaveBeenCalledTimes(1);
+    expect(state.setUser).toHaveBeenCalledWith(PROFILE);
+    expect(consumeReturnTarget()).toBeNull();
+  });
 });
 
 describe("OAuthFlow.reportFailure", () => {
