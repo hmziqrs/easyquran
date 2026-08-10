@@ -4,6 +4,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { createRegisterFlow } from "$lib/auth/flows.svelte";
+  import { authState } from "$lib/auth/auth-state.svelte";
 
   const flow = createRegisterFlow();
 
@@ -11,7 +12,8 @@
     if (flow.step === "totp") {
       const ok = await flow.login.submitTotp();
       if (!ok) return;
-      await goto("/app");
+      const user = authState.user;
+      await goto(user && !user.is_verified ? "/verify-email" : "/app");
       return;
     }
     const ok = await flow.submit();
