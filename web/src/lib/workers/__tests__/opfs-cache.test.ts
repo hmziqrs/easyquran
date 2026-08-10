@@ -599,13 +599,15 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     expect(await readPointerViaExport(spec.id)).toBeNull();
   });
 
-  it("leaves the prior validated corpus untouched when a redownload fails", async () => {
+  it("cleans the staged temp and leaves the existing pointer stable when a redownload's validation rejects", async () => {
+    // Not a corpus-preservation claim: a same-spec valid corpus is served from
+    // cache and never redownloaded, so this asserts only temp-cleanup,
+    // active-file immutability, and pointer stability (cross-spec preservation
+    // is covered in the W10c block below).
     const spec = makeSpec(16);
-    const oldBytes = PAYLOAD(16);
-    await seedFile(spec.id, activeFileName(spec.id), oldBytes, env.root);
+    const activeBefore = new Uint8Array(4).fill(1);
+    await seedFile(spec.id, activeFileName(spec.id), activeBefore, env.root);
     await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
-
-    await seedFile(spec.id, activeFileName(spec.id), new Uint8Array(4).fill(1), env.root);
 
     setFetchPayload(PAYLOAD(16));
     const failValidate = () => {
@@ -616,6 +618,9 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     );
 
     expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+    const activeAfter = await readSeed(spec.id, activeFileName(spec.id), env.root);
+    expect(activeAfter).not.toBeNull();
+    expect(Array.from(activeAfter!)).toEqual(Array.from(activeBefore));
     const pointer = await readPointerViaExport(spec.id);
     expect(pointer?.activeFile).toBe(activeFileName(spec.id));
   });
