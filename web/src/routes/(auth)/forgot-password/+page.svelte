@@ -4,7 +4,6 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { createForgotPasswordFlow } from "$lib/auth/flows.svelte";
-  import { ACCOUNT_EXISTS_RESET } from "$lib/auth/auth-copy";
 
   const flow = createForgotPasswordFlow();
 
@@ -33,7 +32,7 @@
     submitLabel="Send reset code"
     pending={flow.pending}
     serverError={flow.genericError}
-    successNotice={flow.genericError === ACCOUNT_EXISTS_RESET ? ACCOUNT_EXISTS_RESET : null}
+    successNotice={flow.successMessage}
     onsubmit={handleSubmit}
   >
     <div class="flex flex-col gap-1.5">

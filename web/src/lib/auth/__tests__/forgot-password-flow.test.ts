@@ -47,7 +47,7 @@ function storageProbe(): { readKeys: string[] } {
 }
 
 describe("ForgotPasswordFlow request (uniform account-existence copy)", () => {
-  it("200 -> uniform copy, step verify", async () => {
+  it("200 -> successMessage copy (green), genericError clear, step verify", async () => {
     const client = mockClient();
     const state = mockState();
     client.unsafeRequest.mockResolvedValueOnce(ok({ message: "If an account exists..." }));
@@ -56,7 +56,21 @@ describe("ForgotPasswordFlow request (uniform account-existence copy)", () => {
     const res = await flow.request();
     expect(res).toBe(true);
     expect(flow.step).toBe("verify");
-    expect(flow.genericError).toMatch(/account exists/i);
+    expect(flow.successMessage).toMatch(/account exists/i);
+    expect(flow.genericError).toBeNull();
+  });
+
+  it("masquerade failure (404) -> account-existence copy surfaces as successMessage (green), not serverError", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(err(404));
+    const flow = createForgotPasswordFlow({ client, state });
+    flow.email = "no-such-account@eq.test";
+    const res = await flow.request();
+    expect(res).toBe(false);
+    expect(flow.step).toBe("request");
+    expect(flow.successMessage).toMatch(/account exists/i);
+    expect(flow.genericError).toBeNull();
   });
 
   it("429 rate-limit on request -> rate-limit message (does not masquerade as account-exists)", async () => {
@@ -68,6 +82,7 @@ describe("ForgotPasswordFlow request (uniform account-existence copy)", () => {
     expect(res).toBe(false);
     expect(flow.step).toBe("request");
     expect(flow.genericError).toMatch(/60s/);
+    expect(flow.successMessage).toBeNull();
   });
 });
 

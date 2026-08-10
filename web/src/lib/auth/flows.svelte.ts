@@ -456,6 +456,7 @@ export class ForgotPasswordFlow {
   confirmPassword = $state("");
   pending = $state(false);
   genericError = $state<string | null>(null);
+  successMessage = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   step = $state<"request" | "verify" | "reset" | "done">("request");
   #resetToken: string | null = null;
@@ -477,6 +478,7 @@ export class ForgotPasswordFlow {
     if (this.pending) return false;
     this.pending = true;
     this.genericError = null;
+    this.successMessage = null;
     this.fieldErrors = {};
     try {
       const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/request", {
@@ -494,12 +496,14 @@ export class ForgotPasswordFlow {
         } else if (c.kind === "rate-limit") {
           this.genericError = c.message;
         } else {
-          this.genericError = ACCOUNT_EXISTS_RESET;
+          this.genericError = null;
+          this.successMessage = ACCOUNT_EXISTS_RESET;
         }
         return false;
       }
       this.step = "verify";
-      this.genericError = ACCOUNT_EXISTS_RESET;
+      this.genericError = null;
+      this.successMessage = ACCOUNT_EXISTS_RESET;
       return true;
     } catch {
       this.genericError = "Network error. Check your connection and try again.";
@@ -513,6 +517,7 @@ export class ForgotPasswordFlow {
     if (this.pending) return false;
     this.pending = true;
     this.genericError = null;
+    this.successMessage = null;
     this.fieldErrors = {};
     try {
       const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/verify", {
@@ -559,6 +564,7 @@ export class ForgotPasswordFlow {
     }
     this.pending = true;
     this.genericError = null;
+    this.successMessage = null;
     this.fieldErrors = {};
     try {
       const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/reset", {
