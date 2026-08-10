@@ -141,6 +141,8 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         revoked_sessions,
         mailer,
         settings,
+        allowed_origins: ruxlog::utils::cors::build_allowed_origins(false, None, None, None)
+            .expect("dev default origins parse"),
         storage,
         secret_key: b"test_secret_key".to_vec(),
         http_client: build_http_client(),
@@ -187,11 +189,6 @@ async fn full_app() -> axum::Router {
         .with_http_only(true)
         .with_name("ruxlog.sid")
         .with_private(cookie_key);
-    // Dev-mode origin set (localhost/LAN). Mirrors main.rs: one boot-built value
-    // shared between the private CorsLayer and origin_guard (via Extension), so the
-    // guard never reads env per request.
-    let allowed = ruxlog::utils::cors::build_allowed_origins(false, None, None, None)
-        .expect("dev default origins parse");
     let private_cors = tower_http::cors::CorsLayer::new()
         .allow_methods([
             axum::http::Method::GET,
@@ -201,17 +198,16 @@ async fn full_app() -> axum::Router {
             axum::http::Method::OPTIONS,
         ])
         .allow_origin(tower_http::cors::AllowOrigin::list(
-            allowed.header_values().to_vec(),
+            state.allowed_origins.header_values().to_vec(),
         ))
         .allow_credentials(true);
     let ip_source = state.settings.http.ip_source.clone();
     let private = ruxlog::router::router(state.clone())
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.clone().into_extension())
-        .layer(axum::Extension(state.clone()))
         .layer(tower_http::compression::CompressionLayer::new())
+        .layer(axum::Extension(state.clone()))
         .layer(middleware::from_fn(ruxlog::middlewares::cors::origin_guard))
-        .layer(axum::Extension(allowed.clone()))
         .layer(middleware::from_fn(
             ruxlog::middlewares::static_csrf::csrf_guard,
         ))

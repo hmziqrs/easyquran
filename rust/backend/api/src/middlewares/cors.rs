@@ -2,7 +2,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use tracing::{instrument, warn};
 
 use crate::error::CorsError;
-use crate::utils::cors::AllowedOrigins;
+use crate::state::AppState;
 
 #[instrument(skip(req, next), fields(origin))]
 pub async fn origin_guard(req: Request, next: Next) -> Result<Response, CorsError> {
@@ -14,14 +14,15 @@ pub async fn origin_guard(req: Request, next: Next) -> Result<Response, CorsErro
     let origin_str = origin_header.to_str().unwrap_or("<invalid>").to_string();
     tracing::Span::current().record("origin", &*origin_str);
 
-    // The allowed set is built once at boot and attached as a request extension
-    // OUTSIDE this middleware; origin_guard never reads env or parses per request.
-    // A missing extension fails closed (rejects) — it can only occur if the boot
-    // wiring forgot the Extension layer, which would be visible immediately.
+    // The allowed set is built once at boot and stored on AppState; origin_guard
+    // reads it from the AppState extension layered outer to this middleware and
+    // never reads env or parses per request. A missing AppState extension fails
+    // closed (rejects) — it can only occur if the boot wiring forgot the Extension
+    // layer, which would be visible immediately.
     let is_allowed = req
         .extensions()
-        .get::<AllowedOrigins>()
-        .map(|allowed| allowed.contains_header(origin_header))
+        .get::<AppState>()
+        .map(|state| state.allowed_origins.contains_header(origin_header))
         .unwrap_or(false);
 
     if is_allowed {

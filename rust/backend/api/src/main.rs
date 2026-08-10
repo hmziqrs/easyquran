@@ -643,6 +643,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         revoked_sessions: revoked_sessions.clone(),
         mailer,
         settings: settings.clone(),
+        allowed_origins: allowed_origins.clone(),
         storage: StorageState {
             config: object_storage,
             client: s3_client,
@@ -813,12 +814,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
             internal_token.clone(),
         )))
-        .layer(axum::Extension(state.clone()))
         .layer(compression.clone())
+        .layer(axum::Extension(state.clone()))
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
-        // Provides the boot-built AllowedOrigins to origin_guard above (it sits
-        // outer to origin_guard). origin_guard never reads env per request.
-        .layer(axum::Extension(allowed_origins.clone()))
         // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)

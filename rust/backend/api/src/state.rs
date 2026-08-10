@@ -8,6 +8,7 @@ use crate::services::session_store::SqliteSessionStore;
 use crate::services::billing::BillingRouter;
 
 use crate::services::image_moderation::ImageModerator;
+use crate::utils::cors::AllowedOrigins;
 use rux_fcm::FcmClient;
 
 pub use crate::config::OptimizerConfig;
@@ -44,6 +45,7 @@ pub struct AppState {
     pub revoked_sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     pub mailer: std::sync::Arc<crate::services::mail::MailRouter>,
     pub settings: std::sync::Arc<Settings>,
+    pub allowed_origins: AllowedOrigins,
     pub storage: StorageState,
     pub secret_key: Vec<u8>,
     pub http_client: reqwest::Client,

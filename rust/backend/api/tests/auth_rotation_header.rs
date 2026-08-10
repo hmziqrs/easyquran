@@ -195,6 +195,8 @@ async fn state() -> AppState {
         revoked_sessions,
         mailer,
         settings,
+        allowed_origins: ruxlog::utils::cors::build_allowed_origins(false, None, None, None)
+            .expect("dev default origins parse"),
         storage,
         secret_key: b"test_secret_key".to_vec(),
         http_client: build_http_client(),

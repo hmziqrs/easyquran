@@ -226,6 +226,8 @@ mod tests {
             revoked_sessions,
             mailer,
             settings,
+            allowed_origins: crate::utils::cors::build_allowed_origins(false, None, None, None)
+                .expect("dev default origins parse"),
             storage: StorageState {
                 config: ObjectStorageConfig {
                     region: "auto".into(),
