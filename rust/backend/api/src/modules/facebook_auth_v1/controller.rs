@@ -59,17 +59,52 @@ pub async fn facebook_callback(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Facebook OAuth callback");
 
+    // Provider cancellation/error (?error_reason=user_denied, ?error_code=…, …) — no exchange.
+    if query.is_error() {
+        tracing::Span::current().record("result", "cancelled");
+        let url = oauth::redirect::build_failure_redirect(
+            oauth::OAuthProvider::Facebook,
+            oauth::redirect::FAILURE_CANCELLED,
+        )?;
+        return Ok(Redirect::temporary(&url));
+    }
+
+    match run_facebook_callback(&state, &mut auth, query).await {
+        Ok(user) => {
+            tracing::Span::current().record("user_id", user.id);
+            info!(user_id = user.id, "Facebook login successful");
+            tracing::Span::current().record("result", "success");
+            let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Facebook)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(err) => {
+            warn!(code = %err.code, "Facebook callback failed; redirecting to opaque failure path");
+            tracing::Span::current().record("result", "error");
+            let url = oauth::redirect::build_failure_redirect(
+                oauth::OAuthProvider::Facebook,
+                oauth::redirect::error_to_failure_code(&err),
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+    }
+}
+
+/// Inner callback body surfaced to the caller, which redirects failures to the opaque failure path.
+async fn run_facebook_callback(
+    state: &AppState,
+    auth: &mut AuthSession,
+    query: FacebookCallbackQuery,
+) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let _oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
+    let _oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
 
     let client = get_facebook_oauth_client()?;
     let token_result = client
-        .exchange_code(AuthorizationCode::new(query.code))
+        .exchange_code(AuthorizationCode::new(query.code()?))
         .request_async(async_http_client)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange Facebook authorization code");
-            tracing::Span::current().record("result", "token_exchange_failed");
             ErrorResponse::new(ErrorCode::ExternalServiceError)
                 .with_message("Failed to exchange authorization code")
                 .with_details(e.to_string())
@@ -77,13 +112,7 @@ pub async fn facebook_callback(
 
     let access_token = token_result.access_token().secret();
     let user_info = fetch_facebook_user_info(&state.http_client, access_token).await?;
-    let user = finish_facebook_login(&state, &mut auth, user_info).await?;
-
-    info!(user_id = user.id, "Facebook login successful");
-    tracing::Span::current().record("result", "success");
-
-    let redirect_url = oauth::build_allowed_success_redirect("/auth/facebook/success")?;
-    Ok(Redirect::temporary(&redirect_url))
+    finish_facebook_login(state, auth, user_info).await
 }
 
 #[debug_handler]

@@ -49,7 +49,7 @@ impl std::fmt::Display for OAuthProvider {
 
 /// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(state), fields(provider = %provider, provider_user_id = %provider_user_id, email = %email))]
+#[instrument(skip(state), fields(provider = %provider))]
 pub async fn find_or_create_user_for_oauth(
     state: &AppState,
     provider: OAuthProvider,
@@ -75,7 +75,7 @@ pub async fn find_or_create_user_for_oauth(
 
     if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
         if !email_verified {
-            warn!(user_id = existing.id, email = %email, "Refusing to link OAuth account: IdP email is not verified");
+            warn!(user_id = existing.id, "Refusing to link OAuth account: IdP email is not verified");
             return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
                 .with_message("Unable to link this account"));
         }
@@ -94,7 +94,7 @@ pub async fn find_or_create_user_for_oauth(
     }
 
     if !email_verified {
-        warn!(email = %email, "Refusing to create account from OAuth: IdP email is not verified");
+        warn!("Refusing to create account from OAuth: IdP email is not verified");
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("The provider has not verified this email address"));
     }

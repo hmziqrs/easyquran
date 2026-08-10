@@ -66,11 +66,47 @@ pub async fn github_callback(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing GitHub OAuth callback");
 
+    // Provider cancellation/error (?error=access_denied, …) — never attempt an exchange.
+    if query.is_error() {
+        tracing::Span::current().record("result", "cancelled");
+        let url = oauth::redirect::build_failure_redirect(
+            oauth::OAuthProvider::Github,
+            oauth::redirect::FAILURE_CANCELLED,
+        )?;
+        return Ok(Redirect::temporary(&url));
+    }
+
+    match run_github_callback(&state, &mut auth, query).await {
+        Ok(user) => {
+            tracing::Span::current().record("user_id", user.id);
+            info!(user_id = user.id, "GitHub login successful");
+            tracing::Span::current().record("result", "success");
+            let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Github)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(err) => {
+            warn!(code = %err.code, "GitHub callback failed; redirecting to opaque failure path");
+            tracing::Span::current().record("result", "error");
+            let url = oauth::redirect::build_failure_redirect(
+                oauth::OAuthProvider::Github,
+                oauth::redirect::error_to_failure_code(&err),
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+    }
+}
+
+/// Inner callback body surfaced to the caller, which redirects failures to the opaque failure path.
+async fn run_github_callback(
+    state: &AppState,
+    auth: &mut AuthSession,
+    query: GitHubCallbackQuery,
+) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
 
     let client = get_github_oauth_client()?;
-    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code));
+    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code()?));
     if let Some(verifier) = oauth_state.pkce_verifier {
         exchange = exchange.set_pkce_verifier(verifier);
     }
@@ -79,7 +115,6 @@ pub async fn github_callback(
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange GitHub authorization code");
-            tracing::Span::current().record("result", "token_exchange_failed");
             ErrorResponse::new(ErrorCode::ExternalServiceError)
                 .with_message("Failed to exchange authorization code")
                 .with_details(e.to_string())
@@ -87,13 +122,7 @@ pub async fn github_callback(
 
     let access_token = token_result.access_token().secret();
     let user_info = fetch_github_user_info(&state.http_client, access_token).await?;
-    let user = finish_github_login(&state, &mut auth, user_info, access_token).await?;
-
-    info!(user_id = user.id, "GitHub login successful");
-    tracing::Span::current().record("result", "success");
-
-    let redirect_url = oauth::build_allowed_success_redirect("/auth/github/success")?;
-    Ok(Redirect::temporary(&redirect_url))
+    finish_github_login(state, auth, user_info, access_token).await
 }
 
 #[debug_handler]

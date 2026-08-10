@@ -64,13 +64,43 @@ pub async fn apple_callback(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Apple OAuth callback");
 
-    let user = finish_apple_code(&state, &mut auth, &query.code, &query.state).await?;
+    // Provider cancellation/error (?error=user_cancelled, …) — never attempt an exchange.
+    if query.is_error() {
+        tracing::Span::current().record("result", "cancelled");
+        let url = oauth::redirect::build_failure_redirect(
+            oauth::OAuthProvider::Apple,
+            oauth::redirect::FAILURE_CANCELLED,
+        )?;
+        return Ok(Redirect::temporary(&url));
+    }
 
-    info!(user_id = user.id, "Apple login successful");
-    tracing::Span::current().record("result", "success");
+    match run_apple_callback(&state, &mut auth, query).await {
+        Ok(user) => {
+            tracing::Span::current().record("user_id", user.id);
+            info!(user_id = user.id, "Apple login successful");
+            tracing::Span::current().record("result", "success");
+            let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Apple)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(err) => {
+            warn!(code = %err.code, "Apple callback failed; redirecting to opaque failure path");
+            tracing::Span::current().record("result", "error");
+            let url = oauth::redirect::build_failure_redirect(
+                oauth::OAuthProvider::Apple,
+                oauth::redirect::error_to_failure_code(&err),
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+    }
+}
 
-    let redirect_url = oauth::build_allowed_success_redirect("/auth/apple/success")?;
-    Ok(Redirect::temporary(&redirect_url))
+/// Inner callback body surfaced to the caller, which redirects failures to the opaque failure path.
+async fn run_apple_callback(
+    state: &AppState,
+    auth: &mut AuthSession,
+    query: AppleCallbackQuery,
+) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
+    finish_apple_code(state, auth, &query.code()?, &query.state()?).await
 }
 
 #[debug_handler]
