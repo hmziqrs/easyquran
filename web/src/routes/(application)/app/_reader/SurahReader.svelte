@@ -400,7 +400,9 @@
       return;
     }
     loadingPages.add(localPage);
-    loadFailed = false;
+    // Do NOT blanket-clear loadFailed here: an adjacent-page load must not hide
+    // an already-failed page's inline retry. Failure clears only on this page's
+    // own success (below) or on route change.
     const readRouteKey = routeKey;
     try {
       const quranData = await loadQuranData();
@@ -437,7 +439,10 @@
       await preserveViewport(() => {
         loadedPages = [...loadedPages, pageData];
       });
-      if (failedPage === localPage) failedPage = null;
+      if (failedPage === localPage) {
+        failedPage = null;
+        loadFailed = false;
+      }
       if (clientMounted) writeHistoryState();
     } catch {
       if (readRouteKey === routeKey) {

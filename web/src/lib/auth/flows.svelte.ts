@@ -233,7 +233,7 @@ export class RegisterFlow {
     const c = classifyAuthError(status, error, REGISTER_FIELDS);
     this.fieldErrors = c.fieldErrors;
     if (c.kind === "credential") {
-      this.genericError = GENERIC_TRY_AGAIN;
+      this.genericError = CREDENTIAL_FAILURE;
       this.fieldErrors = {};
     } else if (c.kind === "field") {
       this.genericError = null;

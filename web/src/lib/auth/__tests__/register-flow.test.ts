@@ -129,6 +129,22 @@ describe("RegisterFlow register->login->verification", () => {
     expect(client.unsafeRequest).toHaveBeenCalledTimes(1);
   });
 
+  it("register credential failure (401) -> uniform credential copy, no field leak", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(err(401, { type: "unauthorized" }));
+    const flow = createRegisterFlow({ client, state });
+    flow.email = "new@eq.test";
+    flow.password = "strong-password-1";
+    flow.confirmPassword = "strong-password-1";
+    const res = await flow.submit();
+    expect(res).toBe(false);
+    expect(flow.step).toBe("form");
+    expect(flow.genericError).toBe("Email or password is incorrect.");
+    expect(flow.fieldErrors).toEqual({});
+    expect(client.unsafeRequest).toHaveBeenCalledTimes(1);
+  });
+
   it("register ok but login credential failure -> form step, uniform copy", async () => {
     const client = mockClient();
     const state = mockState();
