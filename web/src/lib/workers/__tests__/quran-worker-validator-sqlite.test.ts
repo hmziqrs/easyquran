@@ -71,6 +71,22 @@ function serializeWrongSchemaDb(): Uint8Array {
   });
 }
 
+function serializeNoTextColumnDb(rows: readonly BuildRow[]): Uint8Array {
+  return serializeAfter((db) => {
+    db.exec('CREATE TABLE quran_text ("index" INTEGER, sura INTEGER, aya INTEGER)');
+    const stmt = db.prepare("INSERT INTO quran_text VALUES (?,?,?)");
+    try {
+      for (const r of rows) {
+        stmt.bind([r.index, r.sura, r.aya]);
+        stmt.step();
+        stmt.reset();
+      }
+    } finally {
+      stmt.finalize();
+    }
+  });
+}
+
 function contiguousRows(count: number, startIndex = 1): BuildRow[] {
   const rows: BuildRow[] = [];
   for (let i = 0; i < count; i++) rows.push({ index: startIndex + i, sura: 1, aya: 1 });
@@ -126,6 +142,16 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     const bytes = serializeWrongSchemaDb();
     expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
       /no such table/i,
+    );
+  });
+
+  it("rejects a DB whose quran_text table has no text column", () => {
+    // 6236 rows, index/sura/aya present and contiguous, but no `text` column:
+    // count + coordinates never select text, so without the probe this DB
+    // passes staging and only blows up at read time.
+    const bytes = serializeNoTextColumnDb(contiguousRows(QURAN_ROW_COUNT));
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+      /no such column/i,
     );
   });
 

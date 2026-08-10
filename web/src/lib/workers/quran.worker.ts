@@ -155,6 +155,7 @@ export function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): voi
     const runner = createWasmQueryRunner(database);
     const count = runOne(runner, TANZIL_QURAN_DATABASE.queries.count);
     const rows = runQuery(runner, TANZIL_QURAN_DATABASE.queries.coordinates);
+    runner.all("SELECT text FROM quran_text LIMIT 1");
     assertStagedQuranContent(count, rows, sourceId);
   } finally {
     database.close();
