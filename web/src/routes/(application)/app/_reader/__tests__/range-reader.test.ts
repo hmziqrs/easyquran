@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { mount, unmount } from "svelte";
+import type { Component } from "svelte";
 import {
   createRangeReaderCoordinator,
   equalRangeKey,
@@ -6,12 +8,29 @@ import {
   rangeRouteKey,
   type RangeDisplaySnapshot,
 } from "$lib/quran/worker-client";
-import type { Ayah, SurahLink, SurahNormalization } from "$lib/data/quran-types";
+import type {
+  Ayah,
+  RangePageData,
+  SurahLink,
+  SurahNormalization,
+} from "$lib/data/quran-types";
+import RangeReader from "../RangeReader.svelte";
+import RangeReaderHost from "./RangeReaderHost.svelte";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   siteConfig: { apiBase: "https://api.test/quran" },
   apiReads: { readRange: vi.fn() },
   wireMocks: { decodeArabicRange: vi.fn() },
+}));
+
+// Mount-test doubles. Kept separate from the coordinator doubles above so the
+// pure-logic describes stay self-contained.
+const { nav, loadQuranDataStub, gotoSpy, verseRowStub, tooltipStub } = vi.hoisted(() => ({
+  nav: { params: { lang: "en", translator: "sahih" } },
+  loadQuranDataStub: vi.fn(),
+  gotoSpy: vi.fn().mockResolvedValue(undefined),
+  verseRowStub: (() => {}) as unknown as Component,
+  tooltipStub: (() => {}) as unknown as Component,
 }));
 
 vi.mock("$lib/config/site", () => ({ QURAN: siteConfig }));
@@ -26,6 +45,19 @@ vi.mock("$lib/quran/wire", () => ({
   decodeSearchResponse: vi.fn(),
   unwrapEnvelope: vi.fn(),
 }));
+
+// Mount-test wiring: RangeReader reaches $app/*, loadQuranData, track-view, and
+// the VerseRow/Tooltip children. Only the async boundaries are stubbed — the
+// real coordinator, real quranWorker (which falls through to the mocked
+// quranApi.readRange when the worker is not started), and real view helpers
+// (groupRangeAyahs/bodyText) run unmodified.
+vi.mock("$app/navigation", () => ({ goto: gotoSpy }));
+vi.mock("$app/paths", () => ({ resolve: (p: string) => p }));
+vi.mock("$app/state", () => ({ page: nav }));
+vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
+vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));
+vi.mock("../VerseRow.svelte", () => ({ default: verseRowStub }));
+vi.mock("$lib/components/ui/tooltip", () => ({ TooltipProvider: tooltipStub }));
 
 function ayah(surah: number, n: number, globalIndex: number): Ayah {
   return { key: `${surah}:${n}`, surah, ayah: n, globalIndex, text: `v-${surah}-${n}` };
@@ -218,5 +250,202 @@ describe("range reader readRange reaches the API when the worker is unavailable 
     const result = await quranWorker.readRange(0, 1);
     expect(result).toBe(FULL_A);
     expect(apiReads.readRange).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mount tests: verify the actual post-paint swap wiring inside RangeReader
+// ($effect.pre -> coordinator.installServer -> runClientRead -> displayed
+// reassignment) and the surah-metadata derivation, neither of which the
+// coordinator-only describes above can see. The real quranWorker falls through
+// to the mocked quranApi.readRange (worker not started), so the API stub is the
+// client-read boundary.
+// ---------------------------------------------------------------------------
+
+function flushMicrotasks(n = 12): Promise<void> {
+  let p = Promise.resolve();
+  for (let i = 0; i < n; i++) p = p.then(() => undefined);
+  return p;
+}
+
+// Minimal RangePageData (the `data` prop). Defaults model a degraded
+// translation SSR paint: empty ayahs/normalizations/surahs -> the coordinator
+// returns read=true, so $effect.pre kicks runClientRead.
+function rangePage(opts: {
+  kind?: "juz" | "page";
+  index: number;
+  startGlobal: number;
+  endGlobal: number;
+  ayahs?: Ayah[];
+  normalizations?: SurahNormalization[];
+  surahs?: SurahLink[];
+}): RangePageData {
+  const kind = opts.kind ?? "juz";
+  const ayahs = opts.ayahs ?? [];
+  return {
+    kind,
+    index: opts.index,
+    label: `${kind === "juz" ? "Juz" : "Page"} ${opts.index}`,
+    startGlobal: opts.startGlobal,
+    endGlobal: opts.endGlobal,
+    first: ayahs[0]?.key ?? "1:1",
+    last: ayahs[ayahs.length - 1]?.key ?? "1:1",
+    ayahs,
+    normalizations: opts.normalizations ?? [],
+    surahs: opts.surahs ?? [],
+  };
+}
+
+// Surah catalogue returned by loadQuranData(). runClientRead derives the
+// displayed surah metadata from this — names here are intentionally distinct
+// from any server paint so a rendered name proves the client derivation ran.
+function seedQuranData(): void {
+  loadQuranDataStub.mockResolvedValue({
+    surahs: [
+      { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة" },
+      { num: 2, slug: "al-baqarah", name: "Al-Baqarah", arabic: "البقرة" },
+    ],
+    globalIndexOf: (_s: number, a: number) => a,
+  });
+}
+
+describe("RangeReader mount — post-paint swap wiring + surah-metadata derivation", () => {
+  let target: HTMLElement;
+  let mounted: ReturnType<typeof mount> | undefined;
+
+  beforeEach(() => {
+    apiReads.readRange.mockReset();
+    wireMocks.decodeArabicRange.mockReset();
+    siteConfig.apiBase = "https://api.test/quran";
+    nav.params = { lang: "en", translator: "sahih" };
+    loadQuranDataStub.mockReset();
+    seedQuranData();
+    gotoSpy.mockReset().mockResolvedValue(undefined);
+    target = document.createElement("div");
+    document.body.appendChild(target);
+  });
+
+  afterEach(() => {
+    if (mounted) unmount(mounted);
+    mounted = undefined;
+    quranWorker.dispose();
+    if (target.parentNode) target.parentNode.removeChild(target);
+  });
+
+  it("runs the client read after a degraded SSR paint and swaps in derived ayahs + surah metadata", async () => {
+    // Degraded translation SSR paint: no ayahs, no normalizations, no surahs.
+    const degraded = rangePage({ index: 30, startGlobal: 5700, endGlobal: 5720 });
+    // Client read recovers surah 1 content.
+    apiReads.readRange.mockResolvedValue({
+      ayahs: [ayah(1, 1, 5700)],
+      normalizations: [norm(1, "en.sahih")],
+    });
+
+    mounted = mount(RangeReader, { target, props: { data: degraded } });
+    await flushMicrotasks(20);
+
+    // Wiring: $effect.pre -> coordinator.installServer (read=true) ->
+    // runClientRead reached the worker, which fell through to quranApi.readRange.
+    expect(apiReads.readRange).toHaveBeenCalled();
+    // Surah metadata is derived in runClientRead from loadQuranData().surahs;
+    // the server paint carried none, so the name can only come from the client.
+    expect(target.textContent ?? "").toMatch(/Al-Fatihah/);
+    // displayed reassignment: the degraded fallback is gone (displayed.ayahs > 0).
+    expect(target.textContent ?? "").not.toMatch(/couldn't be loaded/i);
+  });
+
+  it("does not run a client read when the SSR first paint is already complete", async () => {
+    // Arabic-like complete paint: ayahs + a matching normalization present.
+    const complete = rangePage({
+      index: 30,
+      startGlobal: 5700,
+      endGlobal: 5720,
+      ayahs: [ayah(1, 1, 5700)],
+      normalizations: [norm(1, "uthmani")],
+      surahs: [surah(1)],
+    });
+
+    mounted = mount(RangeReader, { target, props: { data: complete } });
+    await flushMicrotasks(20);
+
+    // installServer returned read=false (non-degraded first paint), so the
+    // post-paint swap chain never reaches the worker/API.
+    expect(apiReads.readRange).not.toHaveBeenCalled();
+    // The complete server paint renders directly: the surah name comes from the
+    // server paint (surah(1) -> "Surah 1"), not the loadQuranData catalogue
+    // ("Al-Fatihah"), confirming runClientRead never derived client metadata.
+    expect(target.textContent ?? "").toMatch(/Surah 1/);
+    expect(target.textContent ?? "").not.toMatch(/Al-Fatihah/);
+  });
+});
+
+describe("RangeReader mount — atomic snapshot guarded by route key on a living instance", () => {
+  let target: HTMLElement;
+  let mounted: ReturnType<typeof mount> | undefined;
+
+  beforeEach(() => {
+    apiReads.readRange.mockReset();
+    wireMocks.decodeArabicRange.mockReset();
+    siteConfig.apiBase = "https://api.test/quran";
+    nav.params = { lang: "en", translator: "sahih" };
+    loadQuranDataStub.mockReset();
+    seedQuranData();
+    gotoSpy.mockReset().mockResolvedValue(undefined);
+    target = document.createElement("div");
+    document.body.appendChild(target);
+  });
+
+  afterEach(() => {
+    if (mounted) unmount(mounted);
+    mounted = undefined;
+    quranWorker.dispose();
+    if (target.parentNode) target.parentNode.removeChild(target);
+  });
+
+  // Svelte 5 removed imperative $set on mounted instances, so a host component
+  // (RangeReaderHost) drives the reactive `data` prop update on the LIVING
+  // RangeReader. The coordinator is created once at init and persists across
+  // the navigation, which is what makes the route-key guard meaningful here —
+  // a remount would spawn a fresh coordinator and could not test the discard.
+  it("discards a delayed result from the previous route and keeps the current route's snapshot", async () => {
+    // Deferred API promises keyed by the range's start global (juz 30 vs juz 29
+    // have distinct ranges), so each client read blocks until we release it.
+    const pending = new Map<number, (v: unknown) => void>();
+    apiReads.readRange.mockImplementation((_reader: unknown, from: number) => {
+      return new Promise((r) => {
+        pending.set(from, r as (v: unknown) => void);
+      });
+    });
+
+    const juz30 = rangePage({ index: 30, startGlobal: 5700, endGlobal: 5720 });
+    const juz29 = rangePage({ index: 29, startGlobal: 5500, endGlobal: 5520 });
+
+    let navigate!: (next: RangePageData) => void;
+    mounted = mount(RangeReaderHost, {
+      target,
+      props: { initial: juz30, expose: (fn) => (navigate = fn) },
+    });
+    await flushMicrotasks(20);
+    // The juz 30 client read is in flight; its result has not been applied.
+    expect(pending.has(5700)).toBe(true);
+
+    // Navigate to juz 29 on the living instance (same coordinator).
+    navigate(juz29);
+    await flushMicrotasks(20);
+    expect(pending.has(5500)).toBe(true);
+
+    // Release the CURRENT route's read first: surah 2 content is applied.
+    pending.get(5500)!({ ayahs: [ayah(2, 1, 5500)], normalizations: [norm(2, "en.sahih")] });
+    await flushMicrotasks(20);
+    expect(target.textContent ?? "").toMatch(/Al-Baqarah/);
+
+    // Now release the STALE juz 30 read (surah 1). The route-key guard must
+    // discard it: coord.applyClientResult returns applied=false, so displayed
+    // is not reassigned and the current route's snapshot is preserved.
+    pending.get(5700)!({ ayahs: [ayah(1, 1, 5700)], normalizations: [norm(1, "en.sahih")] });
+    await flushMicrotasks(20);
+
+    expect(target.textContent ?? "").toMatch(/Al-Baqarah/);
+    expect(target.textContent ?? "").not.toMatch(/Al-Fatihah/);
   });
 });
