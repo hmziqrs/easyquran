@@ -370,6 +370,20 @@ describe("reader engagement", () => {
       expect(d2?.sourceViews[QuranSourceId.TanzilUthmani]).toBeUndefined();
       expect(d2?.sourceViews["fr.hamidullah"]).toBe(1);
     });
+
+    it("a notes-only reader (no bookmarks) qualifies the reader and seeds the chosen translation", async () => {
+      seedReaderState({
+        notes: { "2:255": "remember this verse" },
+        sourceId: TRANSLATION,
+      });
+      const { noteReaderView } = await importEngagement();
+      await noteReaderView("fr.hamidullah");
+      await flush();
+      const d = readDurable();
+      expect(d?.qualified).toBe(true);
+      expect(d?.sourceViews[TRANSLATION]).toBe(1);
+      expect(d?.sourceViews["fr.hamidullah"]).toBe(1);
+    });
   });
 
   describe("prefetch orchestration", () => {

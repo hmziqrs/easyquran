@@ -110,6 +110,11 @@ export class LoginFlow {
     this.state.setTwoFaPending(false);
   }
 
+  adoptTotpToken(token: string): void {
+    this.#totpToken = token;
+    this.step = "totp";
+  }
+
   private fail(status: number, error: AuthErrorEnvelope | null): void {
     if (status === 0) {
       this.genericError = "Network error. Check your connection and try again.";
@@ -316,7 +321,9 @@ export class RegisterFlow {
     }
     const totp = isTotpRequired(res.data);
     if (totp) {
+      this.login.adoptTotpToken(totp.totpToken);
       this.step = "totp";
+      this.state.setTwoFaPending(true);
       this.genericError = TWO_FA_NEXT;
       return false;
     }
