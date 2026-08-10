@@ -545,35 +545,10 @@ async fn tracing_capture_asserts_no_pii_in_mail_drop_path() {
     // capture test is the runtime check for the callable mail-failure path.
     use ruxlog::services::mail::none::NoOpMailProvider;
     use ruxlog::services::mail::{MailProvider, OutboundEmail};
-    use std::io::Write;
     use std::sync::{Arc, Mutex};
-    use tracing_subscriber::fmt::MakeWriter;
-
-    #[derive(Clone)]
-    struct CaptureMaker(Arc<Mutex<Vec<u8>>>);
-    impl<'a> MakeWriter<'a> for CaptureMaker {
-        type Writer = CaptureBuf;
-        fn make_writer(&'a self) -> Self::Writer {
-            CaptureBuf(self.0.clone())
-        }
-    }
-    struct CaptureBuf(Arc<Mutex<Vec<u8>>>);
-    impl Write for CaptureBuf {
-        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(b);
-            Ok(b.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
 
     let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(CaptureMaker(buf.clone()))
-        .with_ansi(false)
-        .finish();
-    let guard = tracing::subscriber::set_default(subscriber);
+    let guard = install_capture_subscriber(buf.clone());
 
     let pii_email = "victim@example.com";
     let pii_code = "123456";
@@ -588,7 +563,7 @@ async fn tracing_capture_asserts_no_pii_in_mail_drop_path() {
     let _ = MailProvider::send(&provider, msg).await;
 
     drop(guard);
-    let captured = String::from_utf8(buf.lock().unwrap().clone()).expect("utf8");
+    let captured = captured_string(&buf);
 
     // Capture must have actually happened — else the negative asserts are vacuous.
     assert!(
@@ -602,5 +577,179 @@ async fn tracing_capture_asserts_no_pii_in_mail_drop_path() {
     assert!(
         !captured.contains(pii_code),
         "verification/reset code leaked into noop mailer tracing output: {captured}"
+    );
+}
+
+// ===========================================================================
+// W8f runtime tracing-capture harness — shared by the mail-funnel capture tests.
+// ===========================================================================
+// Drives the callable auth/mail funnels (recovery-generate via
+// send_forgot_password_email; login/register/verification-resend via
+// send_email_verification_code) through the REAL MailRouter under a thread-local
+// capturing subscriber, and asserts no recipient email, OTP/reset code, or
+// subject value reaches tracing output. The router's #[instrument(...)] span
+// skips `msg` and records only recipient_domain; this is the runtime complement
+// to the static source guard, closing its blind spots on the call paths most
+// likely to leak email/code/subject.
+
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use tracing_subscriber::fmt::MakeWriter;
+
+#[derive(Clone)]
+struct CaptureMaker(Arc<Mutex<Vec<u8>>>);
+impl<'a> MakeWriter<'a> for CaptureMaker {
+    type Writer = CaptureBuf;
+    fn make_writer(&'a self) -> Self::Writer {
+        CaptureBuf(self.0.clone())
+    }
+}
+struct CaptureBuf(Arc<Mutex<Vec<u8>>>);
+impl Write for CaptureBuf {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(b);
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Install a thread-local capturing fmt subscriber. The returned guard restores
+/// the prior default on drop; keep it alive across the awaited call.
+fn install_capture_subscriber(buf: Arc<Mutex<Vec<u8>>>) -> tracing::subscriber::DefaultGuard {
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(CaptureMaker(buf))
+        .with_ansi(false)
+        .finish();
+    tracing::subscriber::set_default(subscriber)
+}
+
+fn captured_string(buf: &Arc<Mutex<Vec<u8>>>) -> String {
+    String::from_utf8(buf.lock().unwrap().clone()).expect("utf8")
+}
+
+/// MailRouter funnel backed by the no-op provider on an empty in-memory DB. The
+/// suppression-list lookup fails open against the absent table (domain-only warn),
+/// so transactional sends reach the no-op drop — exercising the router's span
+/// instrumentation, the fail-open warn, and the provider drop log in one call.
+async fn noop_mail_router() -> ruxlog::services::mail::MailRouter {
+    use ruxlog::services::mail::{
+        none::NoOpMailProvider, router::MailRouterLimits, MailProvider, MailRouter,
+    };
+    use std::collections::HashMap;
+
+    let db = sea_orm::Database::connect("sqlite::memory:")
+        .await
+        .expect("in-memory sqlite connects");
+    let providers: HashMap<String, Arc<dyn MailProvider>> = [(
+        "none".to_string(),
+        Arc::new(NoOpMailProvider) as Arc<dyn MailProvider>,
+    )]
+    .into_iter()
+    .collect();
+    MailRouter::new(
+        providers,
+        "none".to_string(),
+        Arc::new(rux_request_gate::InMemoryStore::default()),
+        db,
+        MailRouterLimits::default(),
+        true,
+    )
+}
+
+#[tokio::test]
+async fn tracing_capture_asserts_no_pii_in_recovery_generate_mail_funnel() {
+    // W8f runtime guard for the recovery-generate path
+    // (forgot_password_v1::generate -> send_forgot_password_email -> MailRouter).
+    // The router's instrumented span + the no-op drop are where a recipient
+    // address or reset code could leak; this asserts they don't. Only the
+    // recipient DOMAIN may appear (router policy).
+    use ruxlog::services::mail::send_forgot_password_email;
+
+    let mailer = noop_mail_router().await;
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let guard = install_capture_subscriber(buf.clone());
+
+    let pii_email = "victim@example.com";
+    let pii_local = "victim";
+    let pii_code = "918273";
+    let _ = send_forgot_password_email(&mailer, pii_email, pii_code).await;
+
+    drop(guard);
+    let captured = captured_string(&buf);
+
+    assert!(
+        captured.contains("mail dropped"),
+        "capture sentinel missing — funnel did not reach the no-op drop; got: {captured}"
+    );
+    assert!(
+        captured.contains("example.com"),
+        "recipient DOMAIN should be surfaced (router domain-only policy); got: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_email),
+        "full recipient address leaked into recovery-generate tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_local),
+        "recipient mailbox local-part leaked into recovery-generate tracing output (domain-only is allowed): {captured}"
+    );
+    assert!(
+        !captured.contains(pii_code),
+        "reset code leaked into recovery-generate tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains("Password reset verification code"),
+        "subject text leaked into recovery-generate tracing output: {captured}"
+    );
+}
+
+#[tokio::test]
+async fn tracing_capture_asserts_no_pii_in_login_verification_mail_funnel() {
+    // W8f runtime guard for the register / verification-resend paths, both of
+    // which funnel through send_email_verification_code -> MailRouter (the same
+    // service fn admin_issue_code uses too). This is the path most likely to
+    // leak an OTP code or recipient address; asserts neither does. The login
+    // handler's own info/warn logs (payload skipped by #[instrument]) stay on
+    // the static source guard — a full log_in runtime capture needs the
+    // AppState+AuthSession+DB integration harness (see blockers).
+    use ruxlog::services::mail::send_email_verification_code;
+
+    let mailer = noop_mail_router().await;
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let guard = install_capture_subscriber(buf.clone());
+
+    let pii_email = "victim@example.com";
+    let pii_local = "victim";
+    let pii_code = "547219";
+    let _ = send_email_verification_code(&mailer, pii_email, pii_code).await;
+
+    drop(guard);
+    let captured = captured_string(&buf);
+
+    assert!(
+        captured.contains("mail dropped"),
+        "capture sentinel missing — funnel did not reach the no-op drop; got: {captured}"
+    );
+    assert!(
+        captured.contains("example.com"),
+        "recipient DOMAIN should be surfaced (router domain-only policy); got: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_email),
+        "full recipient address leaked into login/verification tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_local),
+        "recipient mailbox local-part leaked into login/verification tracing output (domain-only is allowed): {captured}"
+    );
+    assert!(
+        !captured.contains(pii_code),
+        "OTP code leaked into login/verification tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains("Email verification code"),
+        "subject text leaked into login/verification tracing output: {captured}"
     );
 }
