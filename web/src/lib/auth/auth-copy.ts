@@ -68,19 +68,15 @@ export function extractFieldErrors(
 
 const CREDENTIAL_STATUSES = new Set([401, 403, 404]);
 const CREDENTIAL_TYPES = new Set([
-  "unauthorized",
-  "forbidden",
-  "not_found",
-  "invalid_credentials",
-  "bad_credentials",
-  "credentials_incorrect",
+  "AUTH_001",
+  "AUTH_002",
+  "AUTH_003",
+  "AUTH_004",
+  "AUTH_006",
+  "AUTH_009",
 ]);
-export const VERIFIED_ONLY_TYPES = new Set([
-  "verification_required",
-  "email_not_verified",
-  "unverified_account",
-  "operation_not_allowed",
-]);
+const RATE_LIMIT_TYPES = new Set(["AUTH_007", "SRV_004"]);
+export const VERIFIED_ONLY_TYPES = new Set(["AUTH_008"]);
 
 export function isVerifiedOnlyError(error: AuthErrorEnvelope | null): boolean {
   if (!error?.type) return false;
@@ -93,7 +89,10 @@ export function isTransportFailure(status: number): boolean {
 
 export function isRateLimited(error: AuthErrorEnvelope | null, status: number): boolean {
   if (status === 429) return true;
-  return error?.type === "too_many_attempts" || typeof error?.retry_after === "number";
+  return (
+    (error?.type != null && RATE_LIMIT_TYPES.has(error.type)) ||
+    typeof error?.retry_after === "number"
+  );
 }
 
 export function classifyAuthError(
