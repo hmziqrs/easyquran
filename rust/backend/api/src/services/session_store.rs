@@ -30,7 +30,10 @@ impl std::fmt::Debug for SqliteSessionStore {
 impl SqliteSessionStore {
     pub async fn new(db: DatabaseConnection) -> Self {
         if let Err(e) = db
-            .execute(Statement::from_string(DatabaseBackend::Sqlite, CREATE_TABLE))
+            .execute(Statement::from_string(
+                DatabaseBackend::Sqlite,
+                CREATE_TABLE,
+            ))
             .await
         {
             tracing::warn!(error = %e, "failed to create sessions table (non-fatal)");
@@ -80,8 +83,8 @@ impl SessionStore for SqliteSessionStore {
     }
 
     async fn save(&self, record: &Record) -> session_store::Result<()> {
-        let data = rmp_serde::to_vec(record)
-            .map_err(|e| session_store::Error::Encode(e.to_string()))?;
+        let data =
+            rmp_serde::to_vec(record).map_err(|e| session_store::Error::Encode(e.to_string()))?;
         let expiry = OffsetDateTime::unix_timestamp(record.expiry_date);
         self.db
             .execute(Statement::from_sql_and_values(

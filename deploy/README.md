@@ -106,11 +106,96 @@ the offline pack + manifest are served correctly. Exits non-zero on any hard fai
 | Node Quran SSR | `INTERNAL_QURAN_API_BASE` | `http://api:8888/quran` (runtime-private) |
 | Other server work | `INTERNAL_API_BASE_URL` | `http://api:8888` (runtime-private) |
 
-The web build reads local Uthmani SQLite only for Arabic SSG. Translation SSR
-reads the internal Axum API. Browser OPFS downloads use the web origin's strict
-`/_quran/tanzil/*` gateway, which streams only baked artifact keys from R2 and
-forwards range requests. Docker images are production builds. In local mode,
-Vite serves those same URLs directly from tracked immutable artifacts.
+## Ingress identity contract (W2)
+
+External rate limiting keys on the **verified Cloudflare client identity**, not
+on the proxy's TCP address. Three isolated, non-escalating identities:
+
+| Identity | How resolved | Bucket | Limiter |
+|---|---|---|---|
+| External client | `CF-Connecting-IP` header (parsed `IpAddr`) | `ratelimit:{ip}:…` | content ceiling (600/min) — the only one that can enter W3a escalation |
+| Trusted internal SSR (Bun) | server-only `X-EasyQuran-Internal-Token`, constant-time match | `ratelimit:internal-webssr:…` | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (default 600) |
+| Public readiness | exempt from identity resolution | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120) |
+| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters | — | — |
+
+`.env.example` ships `IP_SOURCE=CfConnectingIp` (exact PascalCase; `connect-info`
+and `cf-connecting-ip` are invalid). The api refuses to boot in production with
+`IP_SOURCE=ConnectInfo` — behind Cloudflare→Traefik that would collapse every
+caller into one proxy-IP bucket. Production boot also fails closed on a missing
+`INTERNAL_QURAN_API_TOKEN` or a non-positive internal/health limit.
+
+### Generate the internal token
+
+```bash
+# Per deployment. Server-only — NEVER under a PUBLIC_ var, never in a response or log.
+openssl rand -hex 32   # → INTERNAL_QURAN_API_TOKEN in .env
+```
+
+Compose interpolates it into both containers: the api compares it
+constant-time in its identity gate; the web (Bun) container reads it from private
+runtime env and sends it only to `INTERNAL_QURAN_API_BASE` on
+`X-EasyQuran-Internal-Token` (`web/src/lib/server/quran-translation-page.ts`).
+
+### Restrict origin ingress to Cloudflare ranges (required before production)
+
+`CfConnectingIp` **trusts** the header. The api cannot tell a forged
+`CF-Connecting-IP` from Cloudflare's own — only the network path can. Before
+this configuration reaches production, Traefik (or the host firewall) MUST deny
+public origin ingress from anywhere except current Cloudflare ranges, so a
+public caller can never choose the header value.
+
+Range-update procedure (owner-run; the ranges are not part of this repo):
+
+1. Fetch the current Cloudflare IPv4/IPv6 lists:
+   `https://www.cloudflare.com/ips-v4` and `https://www.cloudflare.com/ips-v6`.
+2. Configure your external Traefik (the one on `PROXY_NETWORK`) to permit origin
+   traffic (the `api` and `web` upstreams) only from those CIDRs; deny direct
+   origin access from any other source.
+3. Re-run on a schedule — Cloudflare publishes range changes a few times a year.
+
+### Direct-origin negative test (owner-run after restricting ranges)
+
+From a host that is **not** behind Cloudflare (e.g. a direct curl from your laptop
+to the origin IP, bypassing Traefik), confirm the contract holds:
+
+```bash
+export INTERNAL_QURAN_API_TOKEN="$(grep ^INTERNAL_QURAN_API_TOKEN= .env | cut -d= -f2-)"
+web/scripts/assert-headers.sh https://easyquran.fyi https://easyquran.fyi/api
+```
+
+It proves: an external request without `CF-Connecting-IP` is rejected at origin
+(400), a forged internal token gets no privilege, the Docker health route and
+public readiness stay exempt from the identity gate, and a valid internal token
+enters the service bucket. The live CF-range negative test (a non-CF origin
+cannot set `CF-Connecting-IP`) is the owner's sign-off; this script is the
+scaffolding.
+
+## Ban inspection & export (`/admin/bans`)
+
+The API owns IP-ban enforcement in-process (L1) with SQLite durability (L2).
+Three operator routes, all behind the edge `/api` strip and the session/CSRF/origin
+stack of the private router:
+
+- `GET /api/admin/bans` — list active bans (admin session ACL; `Cache-Control: no-store`; paginated `?page=&perPage=`).
+- `DELETE /api/admin/bans` — lift a ban (admin session ACL; JSON body `{"banUnit":"203.0.113.5/32"}`). Deletes the exact L2 `quran-ban:{unit}` + `ratelimit:{unit}:quran-v1` rows in one transaction, then clears the matching L1 buckets and suspicious history. A DB failure returns failure **without** clearing L1, so the ban stays enforced and the delete is safe to retry.
+- `GET /api/admin/bans/export` — neutral JSON feed for a deployment-owned proxy adapter. Human access uses the admin session ACL; machine access uses `Authorization: Bearer $BAN_EXPORT_TOKEN` (compared constant-time; set via `BAN_EXPORT_TOKEN`, generate with `openssl rand -hex 32`). The token is **never** accepted by the list/delete routes.
+
+A ban unit is one canonical value: an IPv4 address → `a.b.c.d/32`, an IPv6 address → its `/64` network (host bits truncated). Export emits **only** active `quran-ban:` rows whose suffix parses as a valid `/32` or `/64` unit — email, user-id, totp, and fixed-rate keys are never exported. Export shape:
+
+```json
+{ "bans": [ { "banUnit": "203.0.113.5/32", "scope": "Long", "expiresAt": 1735689600 } ] }
+```
+
+`expiresAt` is a UNIX timestamp (seconds); `scope` is `"Temp"` or `"Long"`.
+
+**Proxy adapter contract (outside this repo).** A Traefik/Cloudflare middleware
+that consumes this export is a deployment-owned component — none lives in this
+repository, and an existing export row is **not** proof that an edge block is in
+place. Any adapter MUST preserve both the expiry timestamp and the un-ban
+semantics: lift the edge block no later than `expiresAt`, and re-poll export
+after an operator `DELETE /admin/bans` so a lifted ban is not kept at the edge.
+The export never contains PII (no email, user-id, or raw path) — only canonical
+CIDR units.
 
 ## Notes
 

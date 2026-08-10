@@ -724,29 +724,24 @@ mod login_totp_token {
         let token = hex::encode(*bytes);
         bytes.zeroize();
 
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "login_totp token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "login_totp token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         map.insert(namespaced_key(&token), (user_id, Instant::now()));
         Ok(token)
     }
 
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "login_totp token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "login_totp token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
     }
 }
-
 
 #[cfg(test)]
 mod tests {

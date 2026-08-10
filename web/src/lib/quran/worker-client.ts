@@ -1,15 +1,26 @@
 import { isArabicSourceId } from "$lib/data/quran-types";
 import type {
+  Ayah,
   CanonicalQuranCoordinates,
   DownloadProgress,
   QuranRangeText,
   QuranReaderSource,
   QuranSurahText,
   SourceCatalogueEntry,
+  SurahLink,
+  SurahNormalization,
 } from "$lib/data/quran-types";
 import { QURAN } from "$lib/config/site";
 import { quranApi } from "./api-client";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
+import {
+  classifyApiFailure,
+  classifyWorkerFailure,
+  LOCAL_BOOT_BUDGET_MS,
+  ReadChainError,
+  type ReadFailure,
+  type ReadTierStatus,
+} from "./fetch";
 import type { ResolvedManifest } from "./manifest";
 import type { WorkerEvent, WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
@@ -105,54 +116,103 @@ function request<T>(
   });
 }
 
-async function withTranslationFallback<T>(args: {
-  reader: QuranReaderSource;
+function waitForBootBudget(): Promise<void> {
+  if (isReady || !startPromise) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      statusListeners.delete(listener);
+      resolve();
+    };
+    const timer = setTimeout(finish, LOCAL_BOOT_BUDGET_MS);
+    const listener = (status: WorkerStatus): void => {
+      if (status === "ready" || status === "error") finish();
+    };
+    statusListeners.add(listener);
+    void startPromise?.then(finish, finish);
+  });
+}
+
+interface SourceFallbackArgs<T> {
+  hasLocal: () => boolean | Promise<boolean>;
+  onMiss?: () => void;
   workerReq: (id: number) => WorkerRequest;
   decode: (raw: unknown) => T | null;
   apiFetch: () => Promise<T>;
   errorMessage: string;
-}): Promise<T> {
-  let lastErr: unknown = undefined;
-  const cached = async (): Promise<boolean> => {
-    try {
-      return await quranWorker.hasTranslation(args.reader);
-    } catch (e) {
-      lastErr = e;
-      return false;
+  onStatus?: (status: ReadTierStatus) => void;
+}
+
+async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
+  let workerFailure: ReadFailure | undefined;
+  let apiFailure: ReadFailure | undefined;
+  let workerError: unknown;
+
+  if (!isReady && startPromise) await waitForBootBudget();
+
+  const tryLocal = async (): Promise<{ value: T } | null> => {
+    let local: boolean;
+    const probe = args.hasLocal();
+    if (typeof probe === "boolean") {
+      local = probe;
+    } else {
+      try {
+        local = await probe;
+      } catch (e) {
+        if (!workerFailure) {
+          workerFailure = classifyWorkerFailure(e);
+          workerError = e;
+        }
+        return null;
+      }
     }
-  };
-  if (!worker && QURAN.apiBase) {
-    try {
-      return await args.apiFetch();
-    } catch (e) {
-      throw new Error(args.errorMessage, { cause: e });
-    }
-  }
-  if (await cached()) {
+    if (!local) return null;
     try {
       const decoded = args.decode(await request<unknown>(args.workerReq));
-      if (decoded) return decoded;
+      if (decoded) return { value: decoded };
+      if (!workerFailure) workerFailure = { kind: "malformed" };
     } catch (e) {
-      lastErr = e;
+      if (!workerFailure) {
+        workerFailure = classifyWorkerFailure(e);
+        workerError = e;
+      }
     }
+    return null;
+  };
+
+  const fail = (): never => {
+    const detail = workerError instanceof Error ? `: ${workerError.message}` : "";
+    args.onStatus?.({ servedBy: apiFailure ? "api" : "local", workerFailure, apiFailure });
+    throw new ReadChainError(`${args.errorMessage}${detail}`, workerFailure, apiFailure);
+  };
+
+  const first = await tryLocal();
+  if (first) {
+    args.onStatus?.({ servedBy: "local" });
+    return first.value;
   }
-  if (worker) void quranWorker.ensureTranslation(args.reader);
+
+  args.onMiss?.();
+
   if (QURAN.apiBase) {
     try {
-      return await args.apiFetch();
+      const result = await args.apiFetch();
+      args.onStatus?.({ servedBy: "api", workerFailure });
+      return result;
     } catch (e) {
-      lastErr = e;
+      apiFailure = classifyApiFailure(e);
+    }
+    const recheck = await tryLocal();
+    if (recheck) {
+      args.onStatus?.({ servedBy: "local", apiFailure });
+      return recheck.value;
     }
   }
-  try {
-    if (await cached()) {
-      const decoded = args.decode(await request<unknown>(args.workerReq));
-      if (decoded) return decoded;
-    }
-  } catch (e) {
-    lastErr = e;
-  }
-  throw new Error(args.errorMessage, lastErr !== undefined ? { cause: lastErr } : undefined);
+
+  return fail();
 }
 
 export const quranWorker = {
@@ -254,25 +314,32 @@ export const quranWorker = {
     resetWorker(new Error("quran worker disposed"));
   },
 
-  async readSurah(num: number, source?: QuranReaderSource): Promise<QuranSurahText> {
+  async readSurah(
+    num: number,
+    source?: QuranReaderSource,
+    onStatus?: (status: ReadTierStatus) => void,
+  ): Promise<QuranSurahText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
     if (isArabicSourceId(reader)) {
-      if (!worker && QURAN.apiBase) {
-        try {
-          return await quranApi.readSurah(reader, num);
-        } catch {}
-      }
-      const raw = await request<unknown>((id) => ({ id, type: "readSurah", num, source }));
-      const decoded = decodeQuranSurahText(raw);
-      if (!decoded) throw new Error("quran worker returned a malformed surah");
-      return decoded;
+      return withSourceFallback({
+        hasLocal: () => quranWorker.ready,
+        workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
+        decode: decodeQuranSurahText,
+        apiFetch: () => quranApi.readSurah(reader, num),
+        errorMessage: `arabic surah unavailable: ${reader}/${num}`,
+        onStatus,
+      });
     }
-    return withTranslationFallback({
-      reader,
+    return withSourceFallback({
+      hasLocal: () => (quranWorker.ready ? quranWorker.hasTranslation(reader) : false),
+      onMiss: () => {
+        void quranWorker.ensureTranslation(reader).catch(() => {});
+      },
       workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
       decode: decodeTranslationSurahText,
       apiFetch: () => quranApi.readSurah(reader, num),
       errorMessage: `translation surah unavailable: ${reader}/${num}`,
+      onStatus,
     });
   },
 
@@ -281,20 +348,29 @@ export const quranWorker = {
     to: number,
     validateCoordinate?: AyahCoordinateValidator,
     source?: QuranReaderSource,
+    onStatus?: (status: ReadTierStatus) => void,
   ): Promise<QuranRangeText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
     if (isArabicSourceId(reader)) {
-      const raw = await request<unknown>((id) => ({ id, type: "readRange", from, to, source }));
-      const decoded = decodeQuranRangeText(raw, validateCoordinate);
-      if (!decoded) throw new Error("quran worker returned a malformed range");
-      return decoded;
+      return withSourceFallback({
+        hasLocal: () => quranWorker.ready,
+        workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
+        decode: (raw) => decodeQuranRangeText(raw, validateCoordinate),
+        apiFetch: () => quranApi.readRange(reader, from, to, undefined, validateCoordinate),
+        errorMessage: `arabic range unavailable: ${reader} ${from}-${to}`,
+        onStatus,
+      });
     }
-    return withTranslationFallback({
-      reader,
+    return withSourceFallback({
+      hasLocal: () => (quranWorker.ready ? quranWorker.hasTranslation(reader) : false),
+      onMiss: () => {
+        void quranWorker.ensureTranslation(reader).catch(() => {});
+      },
       workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
       decode: (raw) => decodeTranslationRangeText(raw, validateCoordinate),
-      apiFetch: () => quranApi.readRange(reader, from, to),
+      apiFetch: () => quranApi.readRange(reader, from, to, undefined, validateCoordinate),
       errorMessage: `translation range unavailable: ${reader} ${from}-${to}`,
+      onStatus,
     });
   },
 
@@ -321,3 +397,108 @@ export const quranWorker = {
     );
   },
 };
+
+export interface RangeRouteKey {
+  readonly sourceId: string | null;
+  readonly kind: "juz" | "page";
+  readonly index: number;
+}
+
+export interface RangeDisplaySnapshot {
+  readonly ayahs: readonly Ayah[];
+  readonly normalizations: readonly SurahNormalization[];
+  readonly surahs: readonly SurahLink[];
+}
+
+export interface RangeServerInstall {
+  readonly read: boolean;
+}
+
+export interface RangeClientApply {
+  readonly applied: boolean;
+}
+
+export interface RangeReaderCoordinator {
+  installServer(key: RangeRouteKey, snapshot: RangeDisplaySnapshot): RangeServerInstall;
+  applyClientResult(key: RangeRouteKey, snapshot: RangeDisplaySnapshot): RangeClientApply;
+  markFailed(key: RangeRouteKey, failure: ReadFailure | undefined): void;
+  canRetry(): RangeRouteKey | null;
+  currentSnapshot(): RangeDisplaySnapshot;
+  currentKey(): RangeRouteKey | null;
+  isDegraded(): boolean;
+  lastFailure(): ReadFailure | undefined;
+}
+
+export function rangeRouteKey(
+  sourceId: string | null,
+  kind: "juz" | "page",
+  index: number,
+): RangeRouteKey {
+  return { sourceId, kind, index };
+}
+
+export function equalRangeKey(a: RangeRouteKey, b: RangeRouteKey): boolean {
+  return a.sourceId === b.sourceId && a.kind === b.kind && a.index === b.index;
+}
+
+const EMPTY_RANGE_SNAPSHOT: RangeDisplaySnapshot = {
+  ayahs: [],
+  normalizations: [],
+  surahs: [],
+};
+
+export function createRangeReaderCoordinator(): RangeReaderCoordinator {
+  let currentKey: RangeRouteKey | null = null;
+  let displayed: RangeDisplaySnapshot | null = null;
+  let degraded = false;
+  let failure: ReadFailure | undefined;
+
+  return {
+    installServer(key, snapshot) {
+      const prevKey = currentKey;
+      currentKey = key;
+      displayed = snapshot;
+      degraded = snapshot.ayahs.length === 0;
+      failure = undefined;
+      let read: boolean;
+      if (prevKey === null) {
+        read = degraded;
+      } else if (equalRangeKey(prevKey, key)) {
+        read = degraded;
+      } else {
+        read = true;
+      }
+      return { read };
+    },
+    applyClientResult(key, snapshot) {
+      if (currentKey === null || !equalRangeKey(key, currentKey)) {
+        return { applied: false };
+      }
+      displayed = snapshot;
+      degraded = false;
+      failure = undefined;
+      return { applied: true };
+    },
+    markFailed(key, f) {
+      if (currentKey === null || !equalRangeKey(key, currentKey)) return;
+      degraded = displayed ? displayed.ayahs.length === 0 : true;
+      failure = f;
+    },
+    canRetry() {
+      if (currentKey !== null && degraded) return currentKey;
+      return null;
+    },
+    currentSnapshot() {
+      return displayed ?? EMPTY_RANGE_SNAPSHOT;
+    },
+    currentKey() {
+      return currentKey;
+    },
+    isDegraded() {
+      return degraded;
+    },
+    lastFailure() {
+      return failure;
+    },
+  };
+}

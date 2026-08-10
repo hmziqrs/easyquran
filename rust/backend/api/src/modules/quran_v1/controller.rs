@@ -1013,6 +1013,12 @@ pub async fn health_ready(
             hit_rate: pool.hit_rate,
             evictions: pool.evictions,
             evictions_per_minute: pool.evictions_per_minute,
+            prewarmed: pool.prewarmed,
+            top_demand: pool
+                .top_demand
+                .into_iter()
+                .map(|(id, score)| DemandEntry { id, score })
+                .collect(),
         },
     };
     let bytes = serde_json::to_vec(&body).expect("health serializes");

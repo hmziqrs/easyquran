@@ -88,7 +88,7 @@ async fn main() {
                 .expect("Failed to get applied migrations");
 
             println!("Applied migrations:");
-            for migration in applied_migrations {
+            for _migration in applied_migrations {
                 println!("  Migration applied");
             }
 
@@ -97,7 +97,7 @@ async fn main() {
                 .await
                 .expect("Failed to get pending migrations");
 
-            for migration in pending_migrations {
+            for _migration in pending_migrations {
                 println!("  Migration pending");
             }
         }

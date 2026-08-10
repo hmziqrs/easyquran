@@ -113,9 +113,7 @@ pub async fn resend(
             if verification.is_in_delay() {
                 warn!(user_id, "Email verification resend in delay period");
                 return Err(ErrorResponse::new(ErrorCode::TooManyAttempts)
-                    .with_message(
-                        "Please wait 1 minute before requesting a new verification code",
-                    )
+                    .with_message("Please wait 1 minute before requesting a new verification code")
                     .with_retry_after(60));
             }
         }

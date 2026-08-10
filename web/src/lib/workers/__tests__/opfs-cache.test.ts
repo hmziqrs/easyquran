@@ -1,0 +1,724 @@
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import {
+  ACTIVE_SUFFIX,
+  activeFileName,
+  clearPointer,
+  decideLegacyAdoption,
+  decidePromotion,
+  deleteCachedArtifact,
+  ensureArtifact,
+  filterSourceFiles,
+  idFromActiveFileName,
+  isActiveFileName,
+  isTempFileName,
+  listCachedArtifacts,
+  POINTER_DB,
+  POINTER_STORE,
+  QURAN_ROW_COUNT,
+  readPointer,
+  sweepAbandonedTemps,
+  tempFileName,
+  writePointer,
+  type ActivePointer,
+} from "$lib/workers/opfs-cache";
+import type { DownloadableSpec } from "$lib/data/quran-types";
+import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "$lib/workers/download";
+
+const SPEC_ID = "en.sahih";
+function makeSpec(sizeBytes: number, id: string = SPEC_ID): DownloadableSpec {
+  return { id, sizeBytes, downloadUrl: `https://example.test/${id}.sqlite` };
+}
+const PAYLOAD = (n: number) => new Uint8Array(n).fill(7);
+
+class FakeFileHandle {
+  constructor(
+    public parent: FakeDirHandle,
+    public name: string,
+  ) {}
+  get bytes(): Uint8Array {
+    return this.parent.files.get(this.name)!;
+  }
+  async getFile() {
+    return {
+      arrayBuffer: async () => this.bytes.buffer.slice(0),
+    };
+  }
+  async createWritable() {
+    let buf = new Uint8Array(0);
+    return {
+      write: async (chunk: Uint8Array) => {
+        buf = chunk.slice(0);
+      },
+      close: async () => {
+        this.parent.files.set(this.name, buf);
+      },
+    };
+  }
+  async move(name: string) {
+    const b = this.parent.files.get(this.name);
+    if (!b) throw new DOMException(this.name, "NotFoundError");
+    this.parent.files.delete(this.name);
+    this.parent.files.set(name, b);
+    this.name = name;
+  }
+}
+
+class FakeDirHandle {
+  dirs = new Map<string, FakeDirHandle>();
+  files = new Map<string, Uint8Array>();
+  constructor(public name = "") {}
+  async getDirectoryHandle(name: string, opts: { create?: boolean } = {}): Promise<FakeDirHandle> {
+    if (this.files.has(name)) throw new DOMException(name, "TypeMismatchError");
+    const existing = this.dirs.get(name);
+    if (existing) return existing;
+    if (!opts.create) throw new DOMException(name, "NotFoundError");
+    const d = new FakeDirHandle(name);
+    this.dirs.set(name, d);
+    return d;
+  }
+  async getFileHandle(name: string, opts: { create?: boolean } = {}): Promise<FakeFileHandle> {
+    if (this.dirs.has(name)) throw new DOMException(name, "TypeMismatchError");
+    if (this.files.has(name)) return new FakeFileHandle(this, name);
+    if (!opts.create) throw new DOMException(name, "NotFoundError");
+    this.files.set(name, new Uint8Array(0));
+    return new FakeFileHandle(this, name);
+  }
+  async *keys(): AsyncIterable<string> {
+    for (const n of [...this.dirs.keys(), ...this.files.keys()]) yield n;
+  }
+  async removeEntry(name: string): Promise<void> {
+    if (this.dirs.has(name)) {
+      this.dirs.delete(name);
+      return;
+    }
+    if (this.files.has(name)) {
+      this.files.delete(name);
+      return;
+    }
+    throw new DOMException(name, "NotFoundError");
+  }
+}
+
+interface FakeStore {
+  data: Map<unknown, unknown>;
+}
+interface FakeDB {
+  name: string;
+  stores: Map<string, FakeStore>;
+  objectStoreNames: { contains(n: string): boolean };
+  transaction(store: string, mode: IDBTransactionMode): FakeTx;
+  createObjectStore(name: string): FakeStore;
+}
+interface FakeReq {
+  result: unknown;
+  error: DOMException | null;
+  onsuccess: ((ev: unknown) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+  onupgradeneeded: ((ev: unknown) => void) | null;
+}
+interface FakeCursor {
+  key: unknown;
+  value: unknown;
+  continue(): void;
+}
+interface FakeStoreHandle {
+  data: Map<unknown, unknown>;
+  get(key: unknown): FakeReq;
+  put(value: unknown, key?: unknown): FakeReq;
+  delete(key: unknown): FakeReq;
+  openCursor(): FakeReq;
+}
+interface FakeTx {
+  aborted: boolean;
+  error: DOMException | null;
+  oncomplete: ((ev: unknown) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+  onabort: ((ev: unknown) => void) | null;
+  objectStore(name: string): FakeStoreHandle;
+  abort(): void;
+}
+
+interface FakeEnv {
+  root: FakeDirHandle;
+  idb: IDBFactory;
+  reset: () => void;
+}
+
+const fakeSingleton: { env: FakeEnv | null } = { env: null };
+
+function buildFakes(): FakeEnv {
+  const root = new FakeDirHandle("root");
+  const dbByName = new Map<string, FakeDB>();
+
+  function makeStore(db: FakeDB, name: string): FakeStore {
+    let store = db.stores.get(name);
+    if (!store) {
+      store = { data: new Map() };
+      db.stores.set(name, store);
+    }
+    return store;
+  }
+
+  function makeStoreHandle(
+    store: FakeStore,
+    tx: FakeTx,
+    track: (req: FakeReq) => void,
+    release: (req: FakeReq) => void,
+  ): FakeStoreHandle {
+    function opReq(result: unknown, mutate: () => void): FakeReq {
+      mutate();
+      const req: FakeReq = {
+        result,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+      };
+      track(req);
+      queueMicrotask(() => {
+        try {
+          req.onsuccess?.(req);
+        } finally {
+          release(req);
+        }
+      });
+      return req;
+    }
+    return {
+      data: store.data,
+      get: (key) => opReq(store.data.get(key), () => {}),
+      put: (value, key) =>
+        opReq(key ?? null, () => {
+          if (key !== undefined) store.data.set(key, value);
+        }),
+      delete: (key) =>
+        opReq(undefined, () => {
+          store.data.delete(key);
+        }),
+      openCursor: () => {
+        const req: FakeReq = {
+          result: null,
+          error: null,
+          onsuccess: null,
+          onerror: null,
+          onupgradeneeded: null,
+        };
+        const keys = [...store.data.keys()];
+        let i = 0;
+        track(req);
+        const fire = () => {
+          if (tx.aborted) return;
+          if (i >= keys.length) {
+            req.result = null;
+            try {
+              req.onsuccess?.(req);
+            } finally {
+              release(req);
+            }
+            return;
+          }
+          const key = keys[i]!;
+          const cursor: FakeCursor = {
+            key,
+            value: store.data.get(key),
+            continue: () => {
+              i += 1;
+              queueMicrotask(fire);
+            },
+          };
+          req.result = cursor;
+          req.onsuccess?.(req);
+        };
+        queueMicrotask(fire);
+        return req;
+      },
+    };
+  }
+
+  function makeTx(db: FakeDB, name: string): FakeTx {
+    const store = makeStore(db, name);
+    let pending = 0;
+    let completed = false;
+    function maybeComplete() {
+      if (pending === 0 && !completed && !tx.aborted) {
+        completed = true;
+        queueMicrotask(() => {
+          if (!tx.aborted) tx.oncomplete?.(tx);
+        });
+      }
+    }
+    function track(_req: FakeReq) {
+      pending += 1;
+    }
+    function release(_req: FakeReq) {
+      pending -= 1;
+      maybeComplete();
+    }
+    const tx: FakeTx = {
+      aborted: false,
+      error: null,
+      oncomplete: null,
+      onerror: null,
+      onabort: null,
+      objectStore: () => makeStoreHandle(store, tx, track, release),
+      abort: () => {
+        tx.aborted = true;
+        tx.error = new DOMException("aborted", "AbortError");
+        queueMicrotask(() => tx.onabort?.(tx));
+      },
+    };
+    queueMicrotask(maybeComplete);
+    return tx;
+  }
+
+  function makeDB(name: string): FakeDB {
+    const db: FakeDB = {
+      name,
+      stores: new Map(),
+      objectStoreNames: { contains: (n) => db.stores.has(n) },
+      createObjectStore: (n) => makeStore(db, n),
+      transaction: (n) => makeTx(db, n),
+    };
+    return db;
+  }
+
+  const idb = {
+    open(name: string, _version: number): FakeReq {
+      let db = dbByName.get(name);
+      const isNew = !db;
+      if (!db) {
+        db = makeDB(name);
+        dbByName.set(name, db);
+      }
+      const req: FakeReq = {
+        result: db,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+      };
+      queueMicrotask(() => {
+        if (isNew) req.onupgradeneeded?.(req);
+        req.onsuccess?.(req);
+      });
+      return req;
+    },
+  };
+
+  const env: FakeEnv = {
+    root,
+    idb: idb as unknown as IDBFactory,
+    reset: () => {
+      root.dirs.clear();
+      root.files.clear();
+      for (const db of dbByName.values()) {
+        for (const store of db.stores.values()) store.data.clear();
+      }
+    },
+  };
+  return env;
+}
+
+function installFakes(): FakeEnv {
+  if (!fakeSingleton.env) fakeSingleton.env = buildFakes();
+  const env = fakeSingleton.env;
+  (globalThis as { indexedDB: unknown }).indexedDB = env.idb;
+  Object.defineProperty(globalThis.navigator, "storage", {
+    value: { getDirectory: async () => env.root },
+    configurable: true,
+    writable: true,
+  });
+  (globalThis as { fetch: unknown }).fetch = async () => ({
+    ok: true,
+    status: 200,
+    body: null,
+    arrayBuffer: async () => new ArrayBuffer(0),
+  });
+  env.reset();
+  return env;
+}
+
+function setFetchPayload(bytes: Uint8Array): void {
+  (globalThis as { fetch: unknown }).fetch = async () => ({
+    ok: true,
+    status: 200,
+    body: null,
+    arrayBuffer: async () => bytes.buffer.slice(0),
+  });
+}
+
+function setFetchError(message: string): void {
+  (globalThis as { fetch: unknown }).fetch = async () => {
+    throw new Error(message);
+  };
+}
+
+async function seedFile(tag: string, name: string, bytes: Uint8Array, root: FakeDirHandle) {
+  const top = await root.getDirectoryHandle("easyquran", { create: true });
+  const dir = await top.getDirectoryHandle(tag, { create: true });
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(bytes);
+  await w.close();
+}
+
+async function readSeed(
+  tag: string,
+  name: string,
+  root: FakeDirHandle,
+): Promise<Uint8Array | null> {
+  try {
+    const top = await root.getDirectoryHandle("easyquran", { create: false });
+    const dir = await top.getDirectoryHandle(tag, { create: false });
+    const fh = await dir.getFileHandle(name, { create: false });
+    const file = await fh.getFile();
+    return new Uint8Array(await file.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function readPointerViaExport(sourceId: string): Promise<ActivePointer | null> {
+  return readPointer(sourceId);
+}
+
+describe("DownloadSpec sizeBytes boundary", () => {
+  it("requires sizeBytes on a production DownloadSpec", () => {
+    const spec: DownloadSpec = { url: "https://example.test/x", sizeBytes: 16 };
+    expect(spec.sizeBytes).toBe(16);
+  });
+
+  it("verifyBytes rejects a mismatched buffer for a production spec", async () => {
+    const spec: DownloadSpec = { url: "https://example.test/x", sizeBytes: 16 };
+    await expect(verifyBytes(new Uint8Array(15), spec)).rejects.toThrow(/size/);
+  });
+
+  it("verifyBytes skips the size check for an unsafe fixture without sizeBytes", async () => {
+    const unsafe = unsafeDownloadSpec({ url: "https://example.test/x" });
+    const buf = new Uint8Array(99);
+    await expect(verifyBytes(buf, unsafe)).resolves.toBe(buf);
+  });
+});
+
+describe("opfs-cache filename helpers", () => {
+  it("derives active and temp names from an id", () => {
+    expect(activeFileName("en.sahih")).toBe(`en.sahih${ACTIVE_SUFFIX}`);
+    expect(tempFileName("en.sahih")).toBe("en.sahih.sqlite.tmp");
+  });
+
+  it("classifies temp vs active file names", () => {
+    expect(isTempFileName("en.sahih.sqlite.tmp")).toBe(true);
+    expect(isTempFileName("en.sahih.sqlite")).toBe(false);
+    expect(isActiveFileName("en.sahih.sqlite")).toBe(true);
+    expect(isActiveFileName("en.sahih.sqlite.tmp")).toBe(false);
+    expect(isActiveFileName("notes.txt")).toBe(false);
+  });
+
+  it("extracts the id from an active file name", () => {
+    expect(idFromActiveFileName("en.sahih.sqlite")).toBe("en.sahih");
+    expect(idFromActiveFileName("en.sahih.sqlite.tmp")).toBeNull();
+    expect(idFromActiveFileName("notes.txt")).toBeNull();
+  });
+});
+
+describe("decideLegacyAdoption", () => {
+  it("never re-adopts when a pointer already exists", () => {
+    const pointer: ActivePointer = { sourceId: SPEC_ID, activeFile: activeFileName(SPEC_ID) };
+    const d = decideLegacyAdoption({ pointer, candidateFile: activeFileName(SPEC_ID) });
+    expect(d.adopt).toBe(false);
+    expect(d.activeFile).toBe(pointer.activeFile);
+  });
+
+  it("adopts the legacy candidate exactly once on first pointer-aware boot", () => {
+    const d = decideLegacyAdoption({
+      pointer: null,
+      candidateFile: activeFileName(SPEC_ID),
+    });
+    expect(d.adopt).toBe(true);
+    expect(d.activeFile).toBe(activeFileName(SPEC_ID));
+  });
+
+  it("does not adopt when no legacy file is present", () => {
+    const d = decideLegacyAdoption({ pointer: null, candidateFile: null });
+    expect(d.adopt).toBe(false);
+    expect(d.activeFile).toBeNull();
+  });
+});
+
+describe("decidePromotion", () => {
+  it("refuses to commit when validation failed", () => {
+    const d = decidePromotion({
+      oldPointer: null,
+      newActiveFile: activeFileName(SPEC_ID),
+      validationOk: false,
+    });
+    expect(d.commitPointer).toBe(false);
+    expect(d.removeOldFile).toBe(false);
+    expect(d.oldFile).toBeNull();
+  });
+
+  it("commits and removes nothing when there is no prior pointer", () => {
+    const d = decidePromotion({
+      oldPointer: null,
+      newActiveFile: activeFileName(SPEC_ID),
+      validationOk: true,
+    });
+    expect(d.commitPointer).toBe(true);
+    expect(d.removeOldFile).toBe(false);
+    expect(d.oldFile).toBeNull();
+  });
+
+  it("keeps the old file when the active name is unchanged", () => {
+    const oldPointer: ActivePointer = { sourceId: SPEC_ID, activeFile: activeFileName(SPEC_ID) };
+    const d = decidePromotion({
+      oldPointer,
+      newActiveFile: activeFileName(SPEC_ID),
+      validationOk: true,
+    });
+    expect(d.commitPointer).toBe(true);
+    expect(d.removeOldFile).toBe(false);
+  });
+
+  it("removes the prior active file when the name differs", () => {
+    const oldPointer: ActivePointer = { sourceId: SPEC_ID, activeFile: "en.sahih.v1.sqlite" };
+    const d = decidePromotion({
+      oldPointer,
+      newActiveFile: activeFileName(SPEC_ID),
+      validationOk: true,
+    });
+    expect(d.commitPointer).toBe(true);
+    expect(d.removeOldFile).toBe(true);
+    expect(d.oldFile).toBe("en.sahih.v1.sqlite");
+  });
+});
+
+describe("filterSourceFiles", () => {
+  const pointers = (entries: [string, string][]): Map<string, ActivePointer> =>
+    new Map(entries.map(([id, file]) => [id, { sourceId: id, activeFile: file }]));
+
+  it("lists only pointer-active files as sources and flags abandoned temps", () => {
+    const files = [
+      { tag: "a", name: "a.sqlite" },
+      { tag: "a", name: "a.sqlite.tmp" },
+      { tag: "b", name: "b.sqlite" },
+      { tag: "c", name: "c.sqlite" },
+      { tag: "d", name: "notes.txt" },
+    ];
+    const r = filterSourceFiles({
+      pointers: pointers([
+        ["a", "a.sqlite"],
+        ["c", "c.other.sqlite"],
+      ]),
+      files,
+    });
+    const sourceIds = r.sources.map((s) => s.id);
+    expect(sourceIds).toEqual(["a"]);
+    expect(r.abandonedTemps.map((t) => t.name)).toEqual(["a.sqlite.tmp"]);
+  });
+
+  it("ignores files whose tag does not match the id encoded in the name", () => {
+    const r = filterSourceFiles({
+      pointers: pointers([["x", "y.sqlite"]]),
+      files: [{ tag: "x", name: "y.sqlite" }],
+    });
+    expect(r.sources).toHaveLength(0);
+  });
+
+  it("treats an unadopted legacy active file as not a source", () => {
+    const r = filterSourceFiles({
+      pointers: new Map(),
+      files: [{ tag: "legacy", name: "legacy.sqlite" }],
+    });
+    expect(r.sources).toHaveLength(0);
+    expect(r.abandonedTemps).toHaveLength(0);
+  });
+});
+
+describe("ensureArtifact crash-safe OPFS flow", () => {
+  let env: ReturnType<typeof installFakes>;
+  const realFetch = (globalThis as { fetch?: unknown }).fetch;
+
+  beforeEach(() => {
+    env = installFakes();
+  });
+  afterEach(() => {
+    (globalThis as { fetch?: unknown }).fetch = realFetch;
+    const nav = globalThis.navigator as { storage?: unknown } | undefined;
+    if (nav) delete nav.storage;
+    delete (globalThis as { indexedDB?: unknown }).indexedDB;
+  });
+
+  it("promotes a fully validated staged DB to active and writes the pointer", async () => {
+    const spec = makeSpec(16);
+    setFetchPayload(PAYLOAD(16));
+    const art = await ensureArtifact(spec);
+    expect(art.downloaded).toBe(true);
+    expect(art.store).toBe("opfs");
+    expect(art.bytes.byteLength).toBe(16);
+
+    const active = await readSeed(spec.id, activeFileName(spec.id), env.root);
+    expect(active).not.toBeNull();
+    expect(active!.byteLength).toBe(16);
+
+    const temp = await readSeed(spec.id, tempFileName(spec.id), env.root);
+    expect(temp).toBeNull();
+
+    const pointer = await readPointerViaExport(spec.id);
+    expect(pointer).toEqual({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
+  });
+
+  it("serves the old corpus and skips redownload when the pointer is valid", async () => {
+    const spec = makeSpec(16);
+    await seedFile(spec.id, activeFileName(spec.id), PAYLOAD(16), env.root);
+    await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
+
+    let fetched = 0;
+    (globalThis as { fetch: unknown }).fetch = async () => {
+      fetched += 1;
+      return { ok: true, status: 200, body: null, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+
+    const art = await ensureArtifact(spec);
+    expect(art.downloaded).toBe(false);
+    expect(fetched).toBe(0);
+    const pointer = await readPointerViaExport(spec.id);
+    expect(pointer?.activeFile).toBe(activeFileName(spec.id));
+  });
+
+  it("cleans the staged temp and writes no pointer when validation fails", async () => {
+    const spec = makeSpec(16);
+    setFetchPayload(PAYLOAD(16));
+    const failValidate = () => {
+      throw new Error("content reject");
+    };
+    await expect(ensureArtifact(spec, undefined, { validate: failValidate })).rejects.toThrow(
+      /content reject/,
+    );
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+    expect(await readSeed(spec.id, activeFileName(spec.id), env.root)).toBeNull();
+    expect(await readPointerViaExport(spec.id)).toBeNull();
+  });
+
+  it("leaves the prior validated corpus untouched when a redownload fails", async () => {
+    const spec = makeSpec(16);
+    const oldBytes = PAYLOAD(16);
+    await seedFile(spec.id, activeFileName(spec.id), oldBytes, env.root);
+    await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
+
+    await seedFile(spec.id, activeFileName(spec.id), new Uint8Array(4).fill(1), env.root);
+
+    setFetchPayload(PAYLOAD(16));
+    const failValidate = () => {
+      throw new Error("content reject");
+    };
+    await expect(ensureArtifact(spec, undefined, { validate: failValidate })).rejects.toThrow(
+      /content reject/,
+    );
+
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+    const pointer = await readPointerViaExport(spec.id);
+    expect(pointer?.activeFile).toBe(activeFileName(spec.id));
+  });
+
+  it("removes nothing when the download itself is interrupted", async () => {
+    const spec = makeSpec(16);
+    setFetchError("network down");
+    await expect(ensureArtifact(spec)).rejects.toThrow(/network down/);
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+    expect(await readSeed(spec.id, activeFileName(spec.id), env.root)).toBeNull();
+    expect(await readPointerViaExport(spec.id)).toBeNull();
+  });
+
+  it("adopts a valid legacy file once on first pointer-aware boot", async () => {
+    const spec = makeSpec(16);
+    const legacy = PAYLOAD(16);
+    await seedFile(spec.id, activeFileName(spec.id), legacy, env.root);
+
+    let validates = 0;
+    const validate = () => {
+      validates += 1;
+    };
+    const first = await ensureArtifact(spec, undefined, { validate });
+    expect(first.downloaded).toBe(false);
+    expect(validates).toBe(1);
+    expect(await readPointerViaExport(spec.id)).toEqual({
+      sourceId: spec.id,
+      activeFile: activeFileName(spec.id),
+    });
+
+    const second = await ensureArtifact(spec, undefined, { validate });
+    expect(second.downloaded).toBe(false);
+    expect(validates).toBe(1);
+  });
+
+  it("redownloads and replaces an invalid legacy file without adopting it", async () => {
+    const spec = makeSpec(16);
+    await seedFile(spec.id, activeFileName(spec.id), new Uint8Array(4).fill(9), env.root);
+    setFetchPayload(PAYLOAD(16));
+
+    const art = await ensureArtifact(spec);
+    expect(art.downloaded).toBe(true);
+    expect(art.bytes.byteLength).toBe(16);
+    const active = await readSeed(spec.id, activeFileName(spec.id), env.root);
+    expect(active!.byteLength).toBe(16);
+    expect(await readPointerViaExport(spec.id)).toEqual({
+      sourceId: spec.id,
+      activeFile: activeFileName(spec.id),
+    });
+  });
+
+  it("sweeps abandoned temp files and never lists them as sources", async () => {
+    const spec = makeSpec(16);
+    const other = makeSpec(8, "fr.hamidullah");
+    await seedFile(spec.id, tempFileName(spec.id), PAYLOAD(16), env.root);
+    await seedFile(other.id, activeFileName(other.id), PAYLOAD(8), env.root);
+    await writePointer({
+      sourceId: other.id,
+      activeFile: activeFileName(other.id),
+    });
+
+    await sweepAbandonedTemps();
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+
+    const listed = await listCachedArtifacts();
+    const ids = listed.map((l) => l.id);
+    expect(ids).toContain(other.id);
+    expect(ids).not.toContain(spec.id);
+  });
+
+  it("deleteCachedArtifact clears the pointer, active file, and any temp", async () => {
+    const spec = makeSpec(16);
+    setFetchPayload(PAYLOAD(16));
+    await ensureArtifact(spec);
+    await seedFile(spec.id, tempFileName(spec.id), PAYLOAD(4), env.root);
+
+    await deleteCachedArtifact(spec.id, spec.id);
+    expect(await readSeed(spec.id, activeFileName(spec.id), env.root)).toBeNull();
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+    expect(await readPointerViaExport(spec.id)).toBeNull();
+  });
+});
+
+describe("pointer round-trip through the pointer store", () => {
+  beforeEach(() => installFakes());
+  afterEach(() => {
+    const nav = globalThis.navigator as { storage?: unknown } | undefined;
+    if (nav) delete nav.storage;
+    delete (globalThis as { indexedDB?: unknown }).indexedDB;
+  });
+
+  it("writes and reads back the active pointer, then clears it", async () => {
+    const p: ActivePointer = { sourceId: SPEC_ID, activeFile: activeFileName(SPEC_ID) };
+    expect(await readPointer(SPEC_ID)).toBeNull();
+    await writePointer(p);
+    expect(await readPointer(SPEC_ID)).toEqual(p);
+    await clearPointer(SPEC_ID);
+    expect(await readPointer(SPEC_ID)).toBeNull();
+  });
+
+  it("uses a dedicated pointer database separate from the recency store", () => {
+    expect(POINTER_DB).not.toBe("easyquran-meta");
+    expect(POINTER_STORE).toBe("opfsPointers");
+    expect(QURAN_ROW_COUNT).toBe(6236);
+  });
+});

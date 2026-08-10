@@ -1,23 +1,14 @@
 import { browser } from "$app/environment";
 import { isArabicSourceId, type QuranReaderSource } from "$lib/data/quran-types";
 import { readRaw, removeRaw, writeRaw } from "$lib/storage";
+import { bumpReaderView } from "./engagement-state";
 import { quranWorker } from "./worker-client";
 
-const VIEWS_KEY = "eq:reader-views";
 const PREFETCH_PREFIX = "eq:tprefetch:";
-
-export const VIEWS_BEFORE_PREFETCH = 2;
 
 const settled = new Set<string>();
 const deciding = new Set<string>();
 const retried = new Set<string>();
-
-function bumpViews(): number {
-  const next = Number(readRaw("session", VIEWS_KEY) ?? 0) + 1;
-  const views = Number.isSafeInteger(next) && next > 0 ? next : 1;
-  writeRaw("session", VIEWS_KEY, String(views));
-  return views;
-}
 
 interface NetworkInformation {
   readonly saveData?: boolean;
@@ -65,7 +56,7 @@ export async function noteReaderView(
 ): Promise<void> {
   if (!browser) return;
 
-  const views = bumpViews();
+  const { preBumpSourceViews, engaged } = bumpReaderView(sourceId);
 
   if (!sourceId || isArabicSourceId(sourceId)) return;
   if (settled.has(sourceId) || deciding.has(sourceId)) return;
@@ -73,6 +64,7 @@ export async function noteReaderView(
     settled.add(sourceId);
     return;
   }
+  if (!engaged || preBumpSourceViews < 1) return;
 
   deciding.add(sourceId);
   try {
@@ -80,7 +72,6 @@ export async function noteReaderView(
       markSettled(sourceId);
       return;
     }
-    if (views < VIEWS_BEFORE_PREFETCH) return;
     if (!connectionAllowsPrefetch()) return;
 
     markSettled(sourceId);

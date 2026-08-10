@@ -665,7 +665,6 @@ mod tests {
     use super::*;
     use chrono::Timelike;
 
-
     #[test]
     fn valid_envelope_with_all_fields_passes() {
         let env = AnalyticsEnvelope {
@@ -804,7 +803,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn resolve_defaults_to_30_day_window() {
         let env = AnalyticsEnvelope {
@@ -927,7 +925,6 @@ mod tests {
         assert_eq!(resolved.sort_order, SortOrder::Asc);
     }
 
-
     #[test]
     fn sort_order_from_option_asc() {
         assert_eq!(SortOrder::from_option(Some("asc")), SortOrder::Asc);
@@ -957,7 +954,6 @@ mod tests {
         assert_eq!(SortOrder::Asc.as_sql(), "ASC");
         assert_eq!(SortOrder::Desc.as_sql(), "DESC");
     }
-
 
     #[test]
     fn interval_hour_bucket_expr() {
@@ -1002,7 +998,6 @@ mod tests {
         assert_eq!(AnalyticsInterval::default(), AnalyticsInterval::Day);
     }
 
-
     #[test]
     fn dashboard_period_as_str() {
         assert_eq!(DashboardPeriod::SevenDays.as_str(), "7d");
@@ -1027,7 +1022,6 @@ mod tests {
     fn dashboard_period_default_is_thirty_days() {
         assert_eq!(DashboardPeriod::default(), DashboardPeriod::ThirtyDays);
     }
-
 
     #[test]
     fn meta_new_sets_required_fields() {
@@ -1075,7 +1069,6 @@ mod tests {
         assert!(meta.filters_applied.is_some());
     }
 
-
     #[test]
     fn offset_page_one() {
         let env = AnalyticsEnvelope {
@@ -1108,7 +1101,6 @@ mod tests {
         assert_eq!(resolved.offset(), 40);
     }
 
-
     #[test]
     fn bounds_returns_included_both_ends() {
         let from = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
@@ -1129,7 +1121,6 @@ mod tests {
             _ => panic!("expected Bound::Included for both bounds"),
         }
     }
-
 
     #[test]
     fn registration_trends_filters_default() {
@@ -1215,7 +1206,6 @@ mod tests {
         assert!(filters.validate().is_ok());
     }
 
-
     #[test]
     fn registration_trends_request_invalid_envelope_fails() {
         let req = RegistrationTrendsRequest {
@@ -1265,7 +1255,6 @@ mod tests {
         assert!(req.validate().is_err());
     }
 
-
     #[test]
     fn parse_date_yyyy_mm_dd() {
         let date = parse_date("2025-06-15").unwrap();
@@ -1304,7 +1293,6 @@ mod tests {
         let date = parse_date("2025-06-15").unwrap();
         assert_eq!(date, NaiveDate::from_ymd_opt(2025, 6, 15).unwrap());
     }
-
 
     #[test]
     fn constants_are_sensible() {

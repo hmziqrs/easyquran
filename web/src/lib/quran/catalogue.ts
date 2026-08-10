@@ -6,7 +6,14 @@ import {
 } from "$lib/data/quran-types";
 import { fetchWithTimeout } from "$lib/quran/fetch";
 import rawTranslations from "../data/translations.json";
-import { decodeSourcesPayload } from "./wire";
+import {
+  type BakedArtifactEntry,
+  type BakedArtifactMap,
+  buildArabicBakedMap,
+  decodeSourcesPayload,
+  reportArtifactRejection,
+  validateArtifactAgainstBaked,
+} from "./wire";
 
 export const TranslationField = {
   Id: 0,
@@ -76,7 +83,12 @@ function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
   ] as TranslationRow;
 }
 
-export function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
+interface DecodedTranslation {
+  row: TranslationRow;
+  entry: TranslationCatalogueEntry;
+}
+
+function decodeBakedTranslations(): DecodedTranslation[] {
   return (rawTranslations as readonly unknown[]).map((raw, index) => {
     const row = decodeTranslationRow(raw, index);
     const entry: TranslationCatalogueEntry = {
@@ -89,28 +101,71 @@ export function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
       sizeBytes: row[TranslationField.FileSize],
       downloadUrl: `${QURAN.artifactBase}/tanzil/translations/${row[TranslationField.FilePath]}`,
     };
-    return { kind: "translation" as const, entry };
+    return { row, entry };
   });
 }
 
-function localizeDeliveryUrls(entries: readonly SourceCatalogueEntry[]): SourceCatalogueEntry[] {
-  const translations = new Map(
-    bakedTranslationCatalogue().map((item) => [
-      item.kind === "translation" ? item.entry.id : "",
-      item,
-    ]),
-  );
-  const arabic = new Map(QURAN.scripts.map((spec) => [spec.id, spec]));
-  return entries.map((item) => {
+export function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
+  return decodeBakedTranslations().map(({ entry }) => ({
+    kind: "translation" as const,
+    entry,
+  }));
+}
+
+function bakedTranslationArtifactMap(): BakedArtifactMap {
+  const map = new Map<string, BakedArtifactEntry>();
+  for (const { row, entry } of decodeBakedTranslations()) {
+    map.set(entry.id, {
+      sizeBytes: entry.sizeBytes,
+      r2Path: `/tanzil/translations/${row[TranslationField.FilePath]}`,
+      sameOriginDeliveryPath: entry.downloadUrl,
+    });
+  }
+  return map;
+}
+
+function validateAndLocalizeCatalogue(
+  entries: readonly SourceCatalogueEntry[],
+): SourceCatalogueEntry[] | null {
+  const translations = bakedTranslationArtifactMap();
+  const arabic = buildArabicBakedMap(QURAN.scripts, QURAN.artifactBase);
+  const out: SourceCatalogueEntry[] = [];
+  for (const item of entries) {
     if (item.kind === "translation") {
-      const local = translations.get(item.entry.id);
-      return local?.kind === "translation"
-        ? { ...item, entry: { ...item.entry, downloadUrl: local.entry.downloadUrl } }
-        : item;
+      const validated = validateArtifactAgainstBaked(
+        item.entry.id,
+        item.entry.sizeBytes,
+        item.entry.downloadUrl,
+        translations,
+      );
+      if (!validated) return null;
+      out.push({
+        kind: "translation",
+        entry: {
+          ...item.entry,
+          sizeBytes: validated.sizeBytes,
+          downloadUrl: validated.downloadUrl,
+        },
+      });
+    } else {
+      const validated = validateArtifactAgainstBaked(
+        item.spec.id,
+        item.spec.sizeBytes,
+        item.spec.downloadUrl,
+        arabic,
+      );
+      if (!validated) return null;
+      out.push({
+        kind: "arabic",
+        spec: {
+          ...item.spec,
+          sizeBytes: validated.sizeBytes,
+          downloadUrl: validated.downloadUrl,
+        },
+      });
     }
-    const local = arabic.get(item.spec.id);
-    return local ? { ...item, spec: { ...item.spec, downloadUrl: local.downloadUrl } } : item;
-  });
+  }
+  return out;
 }
 
 const SOURCE_CATALOGUE_TTL_MS = 300_000;
@@ -126,7 +181,12 @@ export async function fetchSourceCatalogue(signal?: AbortSignal): Promise<Source
     if (!res.ok) return [];
     const entries = decodeSourcesPayload(await res.json());
     if (!entries) return [];
-    return localizeDeliveryUrls(entries);
+    const validated = validateAndLocalizeCatalogue(entries);
+    if (!validated) {
+      reportArtifactRejection("sources_payload");
+      return [];
+    }
+    return validated;
   } catch {
     return [];
   }

@@ -2,7 +2,8 @@ pub mod env;
 pub mod settings;
 
 pub use settings::{
-    HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, Settings, SiteSettings,
+    HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, RateLimitSettings, Settings,
+    SiteSettings,
 };
 
 pub mod body_limits {

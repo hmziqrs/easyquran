@@ -118,7 +118,9 @@ impl MailRouter {
     }
 
     async fn enforce(&self, key: &str, cfg: AbuseLimiterConfig) -> Result<(), MailError> {
-        match rux_request_gate::check(&self.gate_store, &abuse_limiter::TelemetryHooks, key, cfg).await {
+        match rux_request_gate::check(&self.gate_store, &abuse_limiter::TelemetryHooks, key, cfg)
+            .await
+        {
             Ok(LimiterDecision::Allowed { .. }) => Ok(()),
             Ok(LimiterDecision::Blocked {
                 retry_after_secs, ..
@@ -258,7 +260,10 @@ impl MailProvider for MailRouter {
     }
 
     async fn verify_webhook(&self, event: WebhookEvent) -> Result<ParsedMailEvent, MailError> {
-        let provider = self.registry.get_for_webhook(&event).map_err(MailError::from)?;
+        let provider = self
+            .registry
+            .get_for_webhook(&event)
+            .map_err(MailError::from)?;
         provider.verify_webhook(event).await
     }
 }

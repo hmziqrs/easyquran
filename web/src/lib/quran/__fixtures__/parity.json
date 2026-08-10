@@ -1,13 +1,33 @@
 {
   "normalize": [
     { "input": "بِسْمِ", "expected": "بسم", "rule": "harakat dropped" },
-    { "input": "ٱلْحَمْدُ لِلَّهِ", "expected": "الحمد لله", "rule": "alef-wasla folded + whitespace trimmed/collapsed" },
+    {
+      "input": "ٱلْحَمْدُ لِلَّهِ",
+      "expected": "الحمد لله",
+      "rule": "alef-wasla folded + whitespace trimmed/collapsed"
+    },
     { "input": "مَرْحَبَة", "expected": "مرحبه", "rule": "ta-marbuta folded to ha" },
     { "input": "إِنَّ آيَةً", "expected": "ان ايه", "rule": "hamza-alef + alef-madda folded (ة→ه)" },
     { "input": "كَلِمَةٌ   جَمِيلَة", "expected": "كلمه جميله", "rule": "whitespace collapsed (ة→ه)" },
-    { "input": "ا۞ب", "expected": "ا۞ب", "rule": "U+06DE rub-el-hizb KEPT — quran.com indexes ornaments as searchable tokens (199 verses in Uthmani)" },
-    { "input": "اۥۦ۩", "expected": "اۥۦ۩", "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda KEPT (quran.com parity — searchable)" },
-    { "input": "بۗر", "expected": "بۗر", "rule": "U+06D7 stop mark KEPT (quran.com parity — searchable)" },
-    { "input": "الضآلين", "expected": "الضالين", "rule": "U+0653 maddah STRIPPED (intra-cluster) so a bare query matches Uthmani's decomposed alef-madda — matches quran.com index behavior" }
+    {
+      "input": "ا۞ب",
+      "expected": "ا۞ب",
+      "rule": "U+06DE rub-el-hizb KEPT — quran.com indexes ornaments as searchable tokens (199 verses in Uthmani)"
+    },
+    {
+      "input": "اۥۦ۩",
+      "expected": "اۥۦ۩",
+      "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda KEPT (quran.com parity — searchable)"
+    },
+    {
+      "input": "بۗر",
+      "expected": "بۗر",
+      "rule": "U+06D7 stop mark KEPT (quran.com parity — searchable)"
+    },
+    {
+      "input": "الضآلين",
+      "expected": "الضالين",
+      "rule": "U+0653 maddah STRIPPED (intra-cluster) so a bare query matches Uthmani's decomposed alef-madda — matches quran.com index behavior"
+    }
   ]
 }

@@ -198,7 +198,9 @@ impl BillingRouter {
         success_url: &str,
         cancel_url: &str,
     ) -> Result<CheckoutSession, BillingError> {
-        let provider_name = self.geo_router.resolve(client_ip, self.registry.providers());
+        let provider_name = self
+            .geo_router
+            .resolve(client_ip, self.registry.providers());
         let provider = self.get_provider(&provider_name)?;
         tracing::info!(
             ip = %client_ip,
@@ -223,7 +225,9 @@ impl BillingRouter {
         success_url: &str,
         cancel_url: &str,
     ) -> Result<CheckoutSession, BillingError> {
-        let provider_name = self.geo_router.resolve(client_ip, self.registry.providers());
+        let provider_name = self
+            .geo_router
+            .resolve(client_ip, self.registry.providers());
         let provider = self.get_provider(&provider_name)?;
         tracing::info!(
             ip = %client_ip,

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
+import { ReadChainError } from "$lib/quran/fetch";
 import { QURAN_DATA } from "$lib/server/quran-data";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
@@ -148,7 +149,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("withTranslationFallback via readSurah", () => {
+describe("withSourceFallback via readSurah", () => {
   it("serves the cached worker result without touching the API when decode succeeds", async () => {
     const fake = await startReady();
     wireMocks.decodeTranslationSurah.mockReturnValue(DECODED_SURAH);
@@ -198,7 +199,8 @@ describe("withTranslationFallback via readSurah", () => {
     respondHasTranslation(fake, false);
     await vi.advanceTimersByTimeAsync(0);
     const ensure = fake.posted.find(
-      (m): m is Extract<WorkerRequest, { type: "ensureTranslation" }> => m.type === "ensureTranslation",
+      (m): m is Extract<WorkerRequest, { type: "ensureTranslation" }> =>
+        m.type === "ensureTranslation",
     )!;
     expect(ensure).toBeDefined();
     fake.emit("message", { id: ensure.id, ok: true, result: null });
@@ -227,22 +229,56 @@ describe("withTranslationFallback via readSurah", () => {
     try {
       await p;
     } catch (err) {
-      expect((err as Error).cause).toBeInstanceOf(Error);
-      expect(String((err as Error).cause)).toMatch(/api down/);
+      expect(err).toBeInstanceOf(ReadChainError);
+      expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
     }
+  });
+
+  it("reports servedBy local without touching the API when the worker serves", async () => {
+    const fake = await startReady();
+    wireMocks.decodeTranslationSurah.mockReturnValue(DECODED_SURAH);
+    const onStatus = vi.fn();
+    const p = quranWorker.readSurah(1, TRANSLATION, onStatus);
+    await vi.advanceTimersByTimeAsync(0);
+    respondHasTranslation(fake, true);
+    await vi.advanceTimersByTimeAsync(0);
+    respondReadSurah(fake, { cached: true });
+    await expect(p).resolves.toBe(DECODED_SURAH);
+    expect(apiReads.readSurah).not.toHaveBeenCalled();
+    expect(onStatus).toHaveBeenCalledWith(expect.objectContaining({ servedBy: "local" }));
+  });
+
+  it("reports servedBy api with workerFailure when the API serves after a worker miss", async () => {
+    const fake = await startReady();
+    wireMocks.decodeTranslationSurah.mockReturnValue(null);
+    apiReads.readSurah.mockResolvedValue(DECODED_SURAH);
+    const onStatus = vi.fn();
+    const p = quranWorker.readSurah(1, TRANSLATION, onStatus);
+    await vi.advanceTimersByTimeAsync(0);
+    respondHasTranslation(fake, true);
+    await vi.advanceTimersByTimeAsync(0);
+    respondReadSurah(fake, { cached: true });
+    await expect(p).resolves.toBe(DECODED_SURAH);
+    expect(onStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        servedBy: "api",
+        workerFailure: { kind: "malformed" },
+      }),
+    );
   });
 });
 
-describe("withTranslationFallback without a worker", () => {
-  it("wraps an API failure with the chained cause when worker is down", async () => {
+describe("withSourceFallback without a worker", () => {
+  it("retains the typed API failure when worker is down", async () => {
     apiReads.readSurah.mockRejectedValue(new Error("api down"));
     const p = quranWorker.readSurah(1, TRANSLATION);
     await expect(p).rejects.toThrow(/translation surah unavailable/);
     try {
       await p;
     } catch (err) {
-      expect((err as Error).cause).toBeInstanceOf(Error);
-      expect(String((err as Error).cause)).toMatch(/api down/);
+      expect(err).toBeInstanceOf(ReadChainError);
+      expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
+      expect((err as ReadChainError).workerFailure).toBeUndefined();
     }
     expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1);
   });
@@ -256,7 +292,7 @@ describe("withTranslationFallback without a worker", () => {
   });
 });
 
-describe("withTranslationFallback via readRange", () => {
+describe("withSourceFallback via readRange", () => {
   it("serves the cached worker result for readRange without touching the API", async () => {
     const fake = await startReady();
     wireMocks.decodeTranslationRange.mockReturnValue(DECODED_RANGE);
@@ -283,10 +319,10 @@ describe("withTranslationFallback via readRange", () => {
     expect(ensure.type).toBe("ensureTranslation");
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await expect(p).resolves.toBe(DECODED_RANGE);
-    expect(apiReads.readRange).toHaveBeenCalledWith(TRANSLATION, 0, 1);
+    expect(apiReads.readRange).toHaveBeenCalledWith(TRANSLATION, 0, 1, undefined, undefined);
   });
 
-  it("chains the underlying API error for readRange when every tier fails", async () => {
+  it("chains the underlying API failure for readRange when every tier fails", async () => {
     const fake = await startReady();
     wireMocks.decodeTranslationRange.mockReturnValue(null);
     apiReads.readRange.mockRejectedValue(new Error("api down"));
@@ -303,7 +339,8 @@ describe("withTranslationFallback via readRange", () => {
     try {
       await p;
     } catch (err) {
-      expect((err as Error).cause).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(ReadChainError);
+      expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
     }
   });
 });

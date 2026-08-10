@@ -14,8 +14,9 @@ pub mod route_blocker_config;
 pub mod route_blocker_service;
 pub mod scheduler;
 pub mod session_store;
-pub mod webhook_util;
+pub mod translation_popularity_store;
 pub mod webauthn;
+pub mod webhook_util;
 
 // Security: predictable-RNG seeder + admin TUI must never ship in release — keep the seed-system cfg gates intact.
 #[cfg(feature = "seed-system")]

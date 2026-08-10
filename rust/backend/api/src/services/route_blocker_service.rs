@@ -114,9 +114,7 @@ impl RouteBlockerService {
         Ok(json!({ "message": "All routes synced to cache successfully" }))
     }
 
-    pub async fn initialize_cache(
-        state: &AppState,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub async fn initialize_cache(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
         match Self::sync_all_routes_to_cache(State(state.clone())).await {
             Ok(_) => Ok(()),
             Err(e) => {

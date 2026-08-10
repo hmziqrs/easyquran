@@ -1,4 +1,3 @@
-
 pub mod cloudflare;
 pub mod error_map;
 mod html_templates;

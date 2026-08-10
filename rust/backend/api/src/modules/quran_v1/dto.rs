@@ -239,9 +239,19 @@ pub struct TranslationPoolHealth {
     pub idle_ttl_seconds: u64,
     pub builds: u64,
     pub lookups: u64,
-    pub hit_rate: f64,
+    pub hit_rate: Option<f64>,
     pub evictions: u64,
     pub evictions_per_minute: u64,
+    pub prewarmed: Vec<String>,
+    pub top_demand: Vec<DemandEntry>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct DemandEntry {
+    pub id: String,
+    pub score: f64,
 }
 
 #[derive(Serialize, Debug)]

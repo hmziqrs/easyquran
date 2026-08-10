@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { alignSearchText } from "../alignment.ts";
 
 describe("alignSearchText", () => {
@@ -8,7 +8,9 @@ describe("alignSearchText", () => {
     expect(aligned.matchNorm.length).toBe(aligned.matchDisplayStarts.length);
     expect(aligned.matchNorm.length).toBe(aligned.matchDisplayEnds.length);
     expect(aligned.matchDisplayStarts.every((s) => Number.isInteger(s) && s >= 0)).toBe(true);
-    expect(aligned.matchDisplayEnds.every((e) => Number.isInteger(e) && e <= text.length)).toBe(true);
+    expect(aligned.matchDisplayEnds.every((e) => Number.isInteger(e) && e <= text.length)).toBe(
+      true,
+    );
   });
 
   it("identity path keeps an ornament as a searchable, highlightable token", () => {

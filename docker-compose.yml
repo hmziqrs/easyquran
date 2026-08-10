@@ -32,6 +32,9 @@ services:
       PORT: "8080"
       ORIGIN: https://${DOMAIN}
       INTERNAL_QURAN_API_BASE: ${INTERNAL_QURAN_API_BASE}
+      # Server-only: proves trusted Docker-internal SSR to the API identity gate.
+      # Compose interpolates this from .env; never expose under a PUBLIC_ var.
+      INTERNAL_QURAN_API_TOKEN: ${INTERNAL_QURAN_API_TOKEN}
       QURAN_SSR_CACHE_DIR: /app/cache/quran-ssr
       QURAN_SSR_CACHE_TTL_MS: ${QURAN_SSR_CACHE_TTL_MS:-604800000}
       QURAN_SSR_CACHE_BUDGET_BYTES: ${QURAN_SSR_CACHE_BUDGET_BYTES:-268435456}

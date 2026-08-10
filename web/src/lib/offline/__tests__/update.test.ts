@@ -177,9 +177,7 @@ describe("UpdateStore.apply", () => {
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: SKIP_WAITING });
     expect(sessionStorage.getItem(RELOAD_GUARD)).toBe("1");
     expect(
-      dispatchSpy.mock.calls.some(
-        ([event]) => (event as Event).type === PREPARE_RELOAD_EVENT,
-      ),
+      dispatchSpy.mock.calls.some(([event]) => (event as Event).type === PREPARE_RELOAD_EVENT),
     ).toBe(true);
     expectNoReload();
   });

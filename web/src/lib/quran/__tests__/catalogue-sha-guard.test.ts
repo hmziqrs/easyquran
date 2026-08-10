@@ -30,7 +30,6 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
     "src/lib/quran/view/source-profiles.ts",
     "src/lib/workers/download.ts",
     "src/lib/workers/opfs-cache.ts",
-    "src/lib/workers/cached.ts",
     "src/lib/workers/quran.worker.ts",
     "src/lib/quran/manifest.ts",
     "src/lib/quran/wire.ts",
@@ -55,9 +54,11 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
 
   it("artifact cache is keyed by id, not sha256", () => {
     const cache = read("src/lib/workers/opfs-cache.ts");
-    expect(cache).toContain("opfs.get(spec.id,");
-    expect(cache).toContain("opfs.put(spec.id,");
-    expect(cache).toContain("tag: spec.id,");
+    // OPFS artifact filenames are id-derived (activeFileName/tempFileName build
+    // from id); the IDB pointer record is keyed by sourceId. Never a hash.
+    expect(cache).toContain("function activeFileName(id:");
+    expect(cache).toContain("pointer.sourceId");
+    expect(cache).not.toMatch(/\bsha256\b|\bsha2\b/i);
   });
 
   it("/scripts ArtifactSpec carries no sha256 (decoder ignores stray sha)", () => {

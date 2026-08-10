@@ -4,11 +4,11 @@ use rux_auth::{
     AuthBackend as RuxAuthBackend, AuthError, AuthErrorCode, AuthUser, BanStatus, SessionRevocation,
 };
 use sea_orm::DatabaseConnection;
-use tower_sessions::SessionStore;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::time::Instant;
 use tokio::task;
+use tower_sessions::SessionStore;
 use tracing::{error, info, instrument, warn};
 
 use crate::{

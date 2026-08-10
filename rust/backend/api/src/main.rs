@@ -9,7 +9,7 @@ use tower_http::{
 use tower_sessions::{cookie::Key, Expiry, SessionManagerLayer};
 
 use ruxlog::config::env::{env_bool, env_u64, env_with_fallback, parse_env_u64};
-use ruxlog::utils::cors::get_allowed_origins;
+use ruxlog::utils::cors::allowed_origins_from_env;
 use ruxlog::{
     config::Settings,
     db, middlewares, router,
@@ -122,7 +122,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     telemetry::init_pool_metrics();
 
-    let settings = Arc::new(Settings::from_env());
+    let settings = Arc::new(match Settings::from_env() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Configuration error: {e}");
+            std::process::exit(1);
+        }
+    });
+
+    // Log the selected external identity source + both isolated policies. The
+    // internal token is never logged — only whether it is set.
+    tracing::info!(
+        ip_source = ?settings.http.ip_source,
+        internal_requests_per_minute = settings.rate_limit.internal_requests_per_minute,
+        health_requests_per_minute = settings.rate_limit.health_requests_per_minute,
+        internal_token_set = !settings.rate_limit.internal_token.is_empty(),
+        "Ingress contract configured"
+    );
+
+    // Built once at boot from ALLOWED_ORIGINS (+ dev defaults in non-production);
+    // shared immutable between CorsLayer and origin_guard. No env read happens per
+    // request. Production fails closed without an HTTPS list containing the
+    // EasyQuran origin; misconfiguration exits 1 like any other config error.
+    let allowed_origins = match allowed_origins_from_env() {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("Configuration error: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(origins = ?allowed_origins.origins(), "Allowed origins resolved");
 
     // Required boot side-effect: installs the field-encryption key into the process-wide OnceLock the SeaORM model layer reads — deleting it breaks field encryption.
     ruxlog::state::load_field_enc_key();
@@ -133,7 +162,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     ruxlog::services::rate_limit_store::ensure_table(&sea_db).await;
     gate_store.restore(ruxlog::services::rate_limit_store::load(&sea_db).await);
-    ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
 
     let session_store = Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
 
@@ -456,6 +484,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+    let demand_collect = env_bool("QURAN_DEMAND_COLLECT", true);
+
     let (translation_pool, translation_catalogue_entries, translation_catalogue_load_duration_ms) = {
         let catalogue_load_started = std::time::Instant::now();
         let qset = &settings.quran;
@@ -470,6 +500,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     qset.max_resident_translations,
                     qset.max_resident_bytes,
                     std::time::Duration::from_secs(qset.translation_idle_ttl_secs),
+                    demand_collect,
+                    env_u64("QURAN_PREWARM_TRANSLATIONS", 2),
                 );
                 tracing::info!(
                     translations = count,
@@ -490,6 +522,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     };
+
+    // Periodic durable-state flushes spawn after the pool exists (the popularity flush captures a
+    // pool clone). restore() stays above so rate-limit state is live before any request; nothing
+    // between the original spawn site and here serves requests, so the relocation is ordering-safe.
+    ruxlog::services::rate_limit_store::spawn_flush_task(sea_db.clone(), gate_store.clone());
+
+    if demand_collect {
+        // Boot prewarm is backgrounded: translations are NOT fail-fast (Arabic is). A bogus or
+        // absent candidate id warns and is skipped. load_ranked decays in Rust; the pool filters
+        // by current catalogue membership before truncating to N.
+        let db_for_prewarm = sea_db.clone();
+        let pool_for_prewarm = translation_pool.clone();
+        tokio::spawn(async move {
+            let ranked =
+                ruxlog::services::translation_popularity_store::load_ranked(&db_for_prewarm).await;
+            pool_for_prewarm.prewarm(ranked).await;
+        });
+        ruxlog::services::translation_popularity_store::spawn_flush_task(
+            sea_db.clone(),
+            translation_pool.clone(),
+        );
+    }
 
     let state = AppState {
         sea_db,
@@ -647,27 +701,80 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
             axum::http::header::SET_COOKIE,
         ])
-        .allow_origin(AllowOrigin::list(get_allowed_origins()))
+        .allow_origin(AllowOrigin::list(allowed_origins.header_values().to_vec()))
         .allow_credentials(true)
         .max_age(Duration::from_secs(360));
 
     let ip_source = settings.http.ip_source.clone();
+    // Server-only token shared with trusted Docker-internal SSR. Layered as an
+    // extension (never a public env var, response, or log) for the identity
+    // middleware to compare constant-time.
+    let internal_token: std::sync::Arc<str> =
+        std::sync::Arc::<str>::from(settings.rate_limit.internal_token.as_str());
 
     let private = router::router(state.clone())
         .layer(middleware::from_fn(
             middlewares::client_ip::resolve_client_ip,
         ))
         .layer(ip_source.clone().into_extension())
+        .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
+            internal_token.clone(),
+        )))
         .layer(axum::Extension(state.clone()))
         .layer(compression.clone())
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
+        // Provides the boot-built AllowedOrigins to origin_guard above (it sits
+        // outer to origin_guard). origin_guard never reads env per request.
+        .layer(axum::Extension(allowed_origins.clone()))
         // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
         .layer(cors)
         .layer(middlewares::route_blocker::RouteBlockerLayer::new(
             state.clone(),
-        ));
+        ))
+        // Outermost: every private API response (including origin/route-block
+        // rejections) is uncacheable. Does not infer auth from `ruxlog.sid`, which
+        // CSRF generation mints for anonymous sessions too. The public Quran router
+        // never enters this middleware.
+        .layer(middleware::from_fn(middlewares::cors::private_no_store));
+
+    // W3a escalation: attached ONLY to the outer quran-v1 content limiter, and
+    // only when QURAN_BAN_ESCALATION_ENABLED=true (default-off). Every other
+    // limiter (internal SSR, health, search, auth, ...) holds None and keeps the
+    // exact pre-W3a path. The engine talks to the in-memory gate store only.
+    // Parsed independently here (not as a RateLimitSettings field) so existing
+    // struct literals in other modules compile unchanged. enabled + a
+    // missing/invalid allowlist is a boot error (fail closed).
+    let escalation: Option<std::sync::Arc<dyn rux_request_gate::Escalation>> = {
+        let cfg = match ruxlog::config::settings::EscalationConfig::from_env(
+            settings.rate_limit.active_ban_max,
+        ) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("Configuration error: {e}");
+                std::process::exit(1);
+            }
+        };
+        if cfg.enabled {
+            tracing::info!(
+                allowlist_entries = cfg.allowlist.len(),
+                temp_after = cfg.temp_after,
+                long_after = cfg.long_after,
+                "Quran ban escalation ENABLED (W3a)"
+            );
+            let engine: std::sync::Arc<dyn rux_request_gate::Escalation> = std::sync::Arc::new(
+                ruxlog::services::rate_limit_store::escalation::EscalationEngine::new(
+                    cfg,
+                    state.gate_store.clone(),
+                ),
+            );
+            Some(engine)
+        } else {
+            tracing::debug!("Quran ban escalation disabled (W3a default-off)");
+            None
+        }
+    };
 
     let quran = ruxlog::modules::quran_v1::routes()
         .merge(
@@ -679,13 +786,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     let public = router::with_observability(quran)
         .layer(compression)
-        .layer(middlewares::rate_limit::rate_limit_layer_branch(
-            &state, 600, 60, "quran-v1",
-        ))
+        // Three isolated limiters: health (identity-independent) + internal SSR
+        // (service label) + external content (verified IP). Each self-skips via
+        // `applies`; only external IPs enter the content/escalation bucket.
+        .layer(middlewares::rate_limit::quran_health_layer(&state))
+        .layer(middlewares::rate_limit::quran_internal_layer(&state))
+        .layer(middlewares::rate_limit::quran_content_layer(&state).with_escalation(escalation))
         .layer(middleware::from_fn(
             middlewares::client_ip::resolve_client_ip,
         ))
         .layer(ip_source.into_extension())
+        .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
+            internal_token,
+        )))
         .layer(axum::Extension(state.clone()))
         .layer(ruxlog::modules::quran_v1::cors::public_cors_layer());
 

@@ -12,6 +12,9 @@ mod store;
 pub use abuse::{check, dedup_nx, release_dedup, AbuseLimiterConfig, BlockScope, LimiterDecision};
 pub use error::GateError;
 pub use hooks::{LimiterHooks, NoHooks};
-pub use ip::{ClientIpSource, FnIpSource, IpSource};
-pub use layer::{BlockInfo, PathKey, RateLimitLayer, RateLimitLayerBuilder};
-pub use store::{BucketSnapshot, InMemoryStore, RateLimitStore};
+pub use ip::{
+    ClientIpIdentitySource, ClientIpSource, FnIpSource, IdentitySource, InternalServiceId,
+    IpSource, RequestIdentity,
+};
+pub use layer::{BlockInfo, Escalation, PathKey, RateLimitLayer, RateLimitLayerBuilder};
+pub use store::{BanStatus, BucketSnapshot, InMemoryStore, QualifyingCounts, RateLimitStore};

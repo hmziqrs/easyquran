@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
-  import { beforeNavigate, goto, replaceState } from "$app/navigation";
+  import { beforeNavigate, goto, invalidateAll, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page as appPage } from "$app/state";
   import {
@@ -18,13 +18,13 @@
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
+  import type { ReadTierStatus } from "$lib/quran/fetch";
   import { virtualPageWindow } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
-  import { online } from "$lib/offline/online.svelte";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import {
     currentUrlLocalPage,
@@ -73,9 +73,12 @@
     return [...byPage.values()].sort((a, b) => a.page.localPage - b.page.localPage);
   });
   let readerPages: HTMLElement | null = $state(null);
-  const pendingPages = new SvelteSet<number>();
   const loadingPages = new SvelteSet<number>();
   let loadFailed = $state(false);
+  let failedPage = $state<number | null>(null);
+  let workerDegraded = $state(false);
+  let apiDegraded = $state(false);
+  let initialRetryInFlight = false;
   let clientMounted = $state(false);
   let activeLocalPage = $state<number | null>(null);
   let virtualCenterPage = $state<number | null>(null);
@@ -101,6 +104,8 @@
   const sourceId = $derived(initial.normalization.sourceId);
   const routeContext = $derived(surahRouteContext(sourceId));
   const isTranslationSource = $derived(routeContext.kind !== "arabic");
+  const routeKey = $derived(`${sourceId}:${initial.surah.num}:${initial.page.localPage}`);
+  let lastRouteKey: string | null = null;
   function pagePathFor(localPage: number): `/app/${string}` {
     return surahLocalPagePathFor(routeContext, initial.surah, localPage);
   }
@@ -394,17 +399,9 @@
     ) {
       return;
     }
-    if (quran.status === "error") {
-      loadFailed = true;
-      return;
-    }
-    if (!quranWorker.ready) {
-      pendingPages.add(localPage);
-      return;
-    }
-    pendingPages.delete(localPage);
     loadingPages.add(localPage);
     loadFailed = false;
+    const readRouteKey = routeKey;
     try {
       const quranData = await loadQuranData();
       const pageDataRange = quranData.surahLocalPage(initial.surah.num, localPage);
@@ -416,7 +413,13 @@
         pageDataRange.endGlobal,
         (globalIndex, surah, ayah) => quranData.globalIndexOf(surah, ayah) === globalIndex,
         isTranslationSource ? sourceId : undefined,
+        (status: ReadTierStatus) => {
+          if (readRouteKey !== routeKey) return;
+          workerDegraded = !!status.workerFailure;
+          apiDegraded = !!status.apiFailure;
+        },
       );
+      if (readRouteKey !== routeKey) return;
       const normalization = range.normalizations.find(
         (value) => value.surah === initial.surah.num,
       );
@@ -434,11 +437,41 @@
       await preserveViewport(() => {
         loadedPages = [...loadedPages, pageData];
       });
+      if (failedPage === localPage) failedPage = null;
       if (clientMounted) writeHistoryState();
     } catch {
-      loadFailed = true;
+      if (readRouteKey === routeKey) {
+        loadFailed = true;
+        failedPage = localPage;
+      }
     } finally {
       loadingPages.delete(localPage);
+    }
+  }
+
+  async function retryInitialPage(): Promise<void> {
+    if (initialRetryInFlight) return;
+    initialRetryInFlight = true;
+    const startKey = routeKey;
+    try {
+      await invalidateAll();
+      if (startKey !== routeKey) return;
+      if (initial.ayahs.length === 0) void loadPage(initial.page.localPage);
+    } catch {
+      if (startKey === routeKey && initial.ayahs.length === 0) {
+        void loadPage(initial.page.localPage);
+      }
+    } finally {
+      initialRetryInFlight = false;
+    }
+  }
+
+  function retryDegradedPage(): void {
+    if (initial.ayahs.length === 0) {
+      void retryInitialPage();
+    } else if (failedPage !== null) {
+      loadFailed = false;
+      void loadPage(failedPage);
     }
   }
 
@@ -598,26 +631,29 @@
     writeHistoryState();
   });
 
+  $effect(() => {
+    const key = routeKey;
+    if (lastRouteKey !== null && lastRouteKey !== key) {
+      workerDegraded = false;
+      apiDegraded = false;
+      loadFailed = false;
+      failedPage = null;
+    }
+    lastRouteKey = key;
+  });
+
   onMount(() => {
     clientMounted = true;
     lastScrollY = window.scrollY;
     cachePage(initial);
-    if (initial.ayahs.length === 0) void loadPage(initial.page.localPage);
+    if (initial.ayahs.length === 0) void retryInitialPage();
     void restoreHistory().then(() => {
       stableAnchor = captureAnchor();
       scheduleForwardFill();
       void nextFrame().then(() => writeHistoryState());
     });
     const stop = quranWorker.onStatus((status) => {
-      if (status === "error") {
-        loadFailed = true;
-        pendingPages.clear();
-        return;
-      }
       if (status !== "ready") return;
-      for (const localPage of [...pendingPages].sort((a, b) => a - b)) {
-        void loadPage(localPage);
-      }
       scheduleForwardFill();
     });
     let updateChannel: BroadcastChannel | null = null;
@@ -720,28 +756,30 @@
 
     <span class="sr-only" aria-live="polite">Page {visibleLocalPage} of {initial.pageCount}</span>
 
-    {#if clientMounted && (loadFailed || quran.status === "error")}
+    {#if clientMounted && (loadFailed || workerDegraded || apiDegraded || quran.status === "error")}
       <div
         role="status"
         class="flex items-center justify-between gap-3 border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9"
       >
         <span>
-          {#if initial.ayahs.length === 0}
+          {#if loadFailed && initial.ayahs.length === 0}
             This translation couldn't be loaded right now.
-          {:else if online.hydrated && !online.online}
-            You're offline — more ayahs will load when you reconnect. You can keep reading this page or
-            use the page links.
+          {:else if loadFailed && failedPage !== null}
+            Page {failedPage} couldn't be loaded right now. You can keep reading this page.
+          {:else if workerDegraded}
+            Local offline copy unavailable — serving from the network.
+          {:else if apiDegraded}
+            Network is slow or unavailable — showing available content.
+          {:else if quran.status === "error"}
+            Offline data could not start. You can keep reading this page or use the page links.
           {:else}
             More ayahs are unavailable right now. You can keep reading this page or use the page links.
           {/if}
         </span>
-        {#if initial.ayahs.length === 0}
+        {#if loadFailed}
           <button
             type="button"
-            onclick={() => {
-              loadFailed = false;
-              void loadPage(initial.page.localPage);
-            }}
+            onclick={retryDegradedPage}
             class="shrink-0 rounded-full border border-line px-3 py-1 text-xs text-fg transition-colors hover:bg-bg-1"
           >
             Retry

@@ -1,0 +1,779 @@
+import {
+  authClient,
+  decodeUserProfile,
+  type AuthClient,
+  type AuthErrorEnvelope,
+  type SessionProbeResult,
+  type UserProfile,
+} from "$lib/auth/auth-client";
+import { authState } from "$lib/auth/auth-state.svelte";
+import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
+import {
+  ACCOUNT_EXISTS_RESEND,
+  ACCOUNT_EXISTS_RESET,
+  CREDENTIAL_FAILURE,
+  classifyAuthError,
+  GENERIC_TRY_AGAIN,
+  isVerifiedOnlyError,
+  RESET_SUCCESS,
+  TWO_FA_NEXT,
+  VERIFY_EMAIL_NEXT,
+} from "$lib/auth/auth-copy";
+
+export interface FlowStateLike {
+  transition(ctx: AuthTransitionContext): Promise<void>;
+  setUser(user: UserProfile | null): void;
+  setTwoFaPending(pending: boolean): void;
+  reset(): void;
+  probe(): Promise<SessionProbeResult>;
+}
+
+export interface FlowDeps {
+  readonly client?: AuthClient;
+  readonly state?: FlowStateLike;
+}
+
+const LOGIN_FIELDS = ["email", "password"] as const;
+const REGISTER_FIELDS = ["name", "email", "password", "confirm_password"] as const;
+const VERIFY_EMAIL_FIELDS = ["code"] as const;
+const FORGOT_REQUEST_FIELDS = ["email"] as const;
+const FORGOT_VERIFY_FIELDS = ["email", "code"] as const;
+const RESET_FIELDS = ["password", "confirm_password"] as const;
+const TWO_FA_VERIFY_FIELDS = ["code"] as const;
+
+function decodeUser(data: unknown): UserProfile | null {
+  return decodeUserProfile(data);
+}
+
+function isTotpRequired(data: unknown): { totpToken: string } | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  if (o.status !== "totp_required") return null;
+  const totpToken = o.totp_token;
+  if (typeof totpToken !== "string" || !totpToken) return null;
+  return { totpToken };
+}
+
+export class LoginFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  email = $state("");
+  password = $state("");
+  code = $state("");
+  pending = $state(false);
+  genericError = $state<string | null>(null);
+  fieldErrors = $state<Readonly<Record<string, string>>>({});
+  step = $state<"credentials" | "totp" | "done">("credentials");
+  #totpToken: string | null = null;
+
+  constructor(client: AuthClient, state: FlowStateLike) {
+    this.client = client;
+    this.state = state;
+  }
+
+  get twoFactorPending(): boolean {
+    return this.step === "totp";
+  }
+
+  reset(): void {
+    this.password = "";
+    this.code = "";
+    this.genericError = null;
+    this.fieldErrors = {};
+    this.step = "credentials";
+    this.#totpToken = null;
+    this.pending = false;
+  }
+
+  cancelTotp(): void {
+    this.step = "credentials";
+    this.#totpToken = null;
+    this.code = "";
+    this.genericError = null;
+    this.fieldErrors = {};
+    this.state.setTwoFaPending(false);
+  }
+
+  private fail(status: number, error: AuthErrorEnvelope | null): void {
+    if (status === 0) {
+      this.genericError = "Network error. Check your connection and try again.";
+      this.fieldErrors = {};
+      return;
+    }
+    const c = classifyAuthError(status, error, LOGIN_FIELDS);
+    this.fieldErrors = c.fieldErrors;
+    if (c.kind === "credential") {
+      this.genericError = CREDENTIAL_FAILURE;
+      this.fieldErrors = {};
+    } else if (c.kind === "field") {
+      this.genericError = null;
+    } else {
+      this.genericError = c.message;
+      this.fieldErrors = {};
+    }
+  }
+
+  async submitCredentials(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/log_in", {
+        method: "POST",
+        body: { email: this.email, password: this.password },
+      });
+      if (!res.ok) {
+        this.fail(res.status, res.error);
+        return false;
+      }
+      const totp = isTotpRequired(res.data);
+      if (totp) {
+        this.#totpToken = totp.totpToken;
+        this.step = "totp";
+        this.state.setTwoFaPending(true);
+        this.genericError = TWO_FA_NEXT;
+        return false;
+      }
+      const user = decodeUser(res.data);
+      if (!user) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      await this.state.transition({ kind: "login" });
+      this.state.setUser(user);
+      this.state.setTwoFaPending(false);
+      this.step = "done";
+      return true;
+    } catch {
+      this.fail(0, null);
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  async submitTotp(): Promise<boolean> {
+    if (this.pending) return false;
+    if (!this.#totpToken) {
+      this.cancelTotp();
+      this.genericError = "Your sign-in session expired. Please start again.";
+      return false;
+    }
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/login/totp", {
+        method: "POST",
+        body: { totp_token: this.#totpToken, code: this.code },
+      });
+      if (!res.ok) {
+        this.fail(res.status, res.error);
+        if (this.fieldErrors.code) {
+          this.genericError = null;
+        } else if (
+          res.status === 400 ||
+          res.status === 401 ||
+          res.status === 403 ||
+          res.status === 422
+        ) {
+          this.fieldErrors = { code: "Invalid authentication code." };
+          this.genericError = null;
+        }
+        return false;
+      }
+      const user = decodeUser(res.data);
+      if (!user) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      const token = this.#totpToken;
+      this.#totpToken = null;
+      void token;
+      await this.state.transition({ kind: "login" });
+      this.state.setUser(user);
+      this.state.setTwoFaPending(false);
+      this.step = "done";
+      return true;
+    } catch {
+      this.fail(0, null);
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+}
+
+export class RegisterFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  readonly login: LoginFlow;
+  name = $state("");
+  email = $state("");
+  password = $state("");
+  confirmPassword = $state("");
+  pending = $state(false);
+  genericError = $state<string | null>(null);
+  fieldErrors = $state<Readonly<Record<string, string>>>({});
+  step = $state<"form" | "registering" | "logging-in" | "unverified" | "totp" | "done">("form");
+
+  constructor(client: AuthClient, state: FlowStateLike, login: LoginFlow) {
+    this.client = client;
+    this.state = state;
+    this.login = login;
+  }
+
+  private fail(status: number, error: AuthErrorEnvelope | null): void {
+    if (status === 0) {
+      this.genericError = "Network error. Check your connection and try again.";
+      this.fieldErrors = {};
+      return;
+    }
+    const c = classifyAuthError(status, error, REGISTER_FIELDS);
+    this.fieldErrors = c.fieldErrors;
+    if (c.kind === "credential") {
+      this.genericError = GENERIC_TRY_AGAIN;
+      this.fieldErrors = {};
+    } else if (c.kind === "field") {
+      this.genericError = null;
+    } else {
+      this.genericError = c.message;
+      this.fieldErrors = {};
+    }
+  }
+
+  async submit(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    this.step = "registering";
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/register", {
+        method: "POST",
+        body: {
+          name: this.name,
+          email: this.email,
+          password: this.password,
+          confirm_password: this.confirmPassword,
+        },
+      });
+      if (!res.ok) {
+        this.step = "form";
+        this.fail(res.status, res.error);
+        return false;
+      }
+      this.login.email = this.email;
+      this.login.password = this.password;
+      this.step = "logging-in";
+      const loggedIn = await this.runPostRegisterLogin();
+      return loggedIn;
+    } catch {
+      this.step = "form";
+      this.fail(0, null);
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  private async runPostRegisterLogin(): Promise<boolean> {
+    const res = await this.client.unsafeRequest<unknown>("/auth/v1/log_in", {
+      method: "POST",
+      body: { email: this.email, password: this.password },
+    });
+    if (!res.ok) {
+      this.step = "form";
+      this.fail(res.status, res.error);
+      return false;
+    }
+    const totp = isTotpRequired(res.data);
+    if (totp) {
+      this.step = "totp";
+      this.genericError = TWO_FA_NEXT;
+      return false;
+    }
+    if (!res.rotated) {
+      try {
+        await this.client.refreshCsrf();
+      } catch {}
+    }
+    const user = decodeUser(res.data);
+    if (!user) {
+      this.genericError = GENERIC_TRY_AGAIN;
+      this.step = "form";
+      return false;
+    }
+    await this.state.transition({ kind: "login" });
+    this.state.setUser(user);
+    this.step = user.is_verified ? "done" : "unverified";
+    return true;
+  }
+}
+
+export class VerifyEmailFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  code = $state("");
+  pending = $state(false);
+  resendPending = $state(false);
+  genericError = $state<string | null>(null);
+  fieldErrors = $state<Readonly<Record<string, string>>>({});
+  lastResentAt = $state<number | null>(null);
+  verified = $state(false);
+  alreadyVerified = $state(false);
+
+  constructor(client: AuthClient, state: FlowStateLike) {
+    this.client = client;
+    this.state = state;
+  }
+
+  async resend(): Promise<boolean> {
+    if (this.resendPending) return false;
+    this.resendPending = true;
+    this.genericError = null;
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/email_verification/v1/resend", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
+          this.alreadyVerified = true;
+          this.genericError = null;
+        } else {
+          const c = classifyAuthError(res.status, res.error, []);
+          this.genericError = c.message;
+        }
+        return false;
+      }
+      this.lastResentAt = Date.now();
+      this.genericError = ACCOUNT_EXISTS_RESEND;
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.resendPending = false;
+    }
+  }
+
+  async verify(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/email_verification/v1/verify", {
+        method: "POST",
+        body: { code: this.code },
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
+          this.alreadyVerified = true;
+          this.genericError = null;
+        } else {
+          const c = classifyAuthError(res.status, res.error, VERIFY_EMAIL_FIELDS);
+          if (c.kind === "field") {
+            this.fieldErrors = c.fieldErrors;
+          } else {
+            this.genericError = c.message;
+            this.fieldErrors = {};
+          }
+        }
+        return false;
+      }
+      this.verified = true;
+      this.genericError = null;
+      await this.state.probe();
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+}
+
+export class ForgotPasswordFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  email = $state("");
+  code = $state("");
+  password = $state("");
+  confirmPassword = $state("");
+  pending = $state(false);
+  genericError = $state<string | null>(null);
+  fieldErrors = $state<Readonly<Record<string, string>>>({});
+  step = $state<"request" | "verify" | "reset" | "done">("request");
+  #resetToken: string | null = null;
+
+  constructor(client: AuthClient, state: FlowStateLike) {
+    this.client = client;
+    this.state = state;
+  }
+
+  get resetTokenInMemory(): boolean {
+    return this.#resetToken !== null;
+  }
+
+  clearSecrets(): void {
+    this.#resetToken = null;
+  }
+
+  async request(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/request", {
+        method: "POST",
+        body: { email: this.email },
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+          return false;
+        }
+        const c = classifyAuthError(res.status, res.error, FORGOT_REQUEST_FIELDS);
+        if (c.kind === "field") {
+          this.fieldErrors = c.fieldErrors;
+        } else if (c.kind === "rate-limit") {
+          this.genericError = c.message;
+        } else {
+          this.genericError = ACCOUNT_EXISTS_RESET;
+        }
+        return false;
+      }
+      this.step = "verify";
+      this.genericError = ACCOUNT_EXISTS_RESET;
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  async verifyCode(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/verify", {
+        method: "POST",
+        body: { email: this.email, code: this.code },
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+          return false;
+        }
+        const c = classifyAuthError(res.status, res.error, FORGOT_VERIFY_FIELDS);
+        if (c.kind === "field") {
+          this.fieldErrors = c.fieldErrors;
+        } else {
+          this.genericError = c.message;
+        }
+        return false;
+      }
+      const data = res.data as Record<string, unknown> | null;
+      const token = data && typeof data.reset_token === "string" ? data.reset_token : null;
+      if (!token) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      this.#resetToken = token;
+      this.step = "reset";
+      this.genericError = null;
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  async reset(): Promise<boolean> {
+    if (this.pending) return false;
+    if (!this.#resetToken) {
+      this.step = "request";
+      this.genericError = "Your reset session expired. Please start again.";
+      return false;
+    }
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/forgot_password/v1/reset", {
+        method: "POST",
+        body: {
+          reset_token: this.#resetToken,
+          password: this.password,
+          confirm_password: this.confirmPassword,
+        },
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+          return false;
+        }
+        const c = classifyAuthError(res.status, res.error, RESET_FIELDS);
+        if (c.kind === "field") {
+          this.fieldErrors = c.fieldErrors;
+        } else {
+          this.genericError = c.message;
+        }
+        return false;
+      }
+      this.#resetToken = null;
+      this.step = "done";
+      this.genericError = RESET_SUCCESS;
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+}
+
+export interface TwoFactorSetupData {
+  readonly secret: string;
+  readonly otpauthUrl: string;
+  readonly backupCodes: ReadonlyArray<string>;
+}
+
+export class TwoFactorFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  verifyCode = $state("");
+  pending = $state(false);
+  genericError = $state<string | null>(null);
+  fieldErrors = $state<Readonly<Record<string, string>>>({});
+  step = $state<"idle" | "setup" | "verify" | "enabled" | "disabled">("idle");
+  #setup: TwoFactorSetupData | null = null;
+
+  constructor(client: AuthClient, state: FlowStateLike) {
+    this.client = client;
+    this.state = state;
+  }
+
+  get setupData(): TwoFactorSetupData | null {
+    return this.#setup;
+  }
+
+  clearSecrets(): void {
+    this.#setup = null;
+  }
+
+  async setup(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/setup", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
+          this.genericError = VERIFY_EMAIL_NEXT;
+        } else {
+          const c = classifyAuthError(res.status, res.error, []);
+          this.genericError = c.message;
+        }
+        return false;
+      }
+      const data = res.data as Record<string, unknown> | null;
+      const secret = data && typeof data.secret === "string" ? data.secret : null;
+      const otpauthUrl = data && typeof data.otpauth_url === "string" ? data.otpauth_url : null;
+      const backupCodes =
+        data && Array.isArray(data.backup_codes) ? (data.backup_codes as unknown[]) : [];
+      if (!secret || !otpauthUrl) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      this.#setup = {
+        secret,
+        otpauthUrl,
+        backupCodes: backupCodes.filter((c): c is string => typeof c === "string"),
+      };
+      this.step = "verify";
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  async verify(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/verify", {
+        method: "POST",
+        body: { code: this.verifyCode },
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+        } else {
+          const c = classifyAuthError(res.status, res.error, TWO_FA_VERIFY_FIELDS);
+          if (c.kind === "field") {
+            this.fieldErrors = c.fieldErrors;
+          } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+            this.fieldErrors = { code: "Invalid authentication code." };
+          } else {
+            this.genericError = c.message;
+          }
+        }
+        return false;
+      }
+      const user = decodeUser(res.data);
+      this.#setup = null;
+      if (!user) {
+        this.step = "idle";
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      await this.state.transition({ kind: "two-fa-verify" });
+      this.state.setUser(user);
+      this.step = "enabled";
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  async disable(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    this.fieldErrors = {};
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/disable", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        if (res.status === 0) {
+          this.genericError = "Network error. Check your connection and try again.";
+        } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
+          this.genericError = VERIFY_EMAIL_NEXT;
+        } else {
+          const c = classifyAuthError(res.status, res.error, []);
+          this.genericError = c.message;
+        }
+        return false;
+      }
+      const user = decodeUser(res.data);
+      if (!user) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
+      await this.state.transition({ kind: "two-fa-disable" });
+      this.state.setUser(user);
+      this.step = "disabled";
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+}
+
+export class LogoutFlow {
+  readonly client: AuthClient;
+  readonly state: FlowStateLike;
+  pending = $state(false);
+  genericError = $state<string | null>(null);
+  anonymous = $state(false);
+
+  constructor(client: AuthClient, state: FlowStateLike) {
+    this.client = client;
+    this.state = state;
+  }
+
+  async run(): Promise<boolean> {
+    if (this.pending) return false;
+    this.pending = true;
+    this.genericError = null;
+    try {
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/log_out", {
+        method: "POST",
+      });
+      if (!res.ok && res.status !== 401 && res.status !== 403) {
+        this.genericError = "Sign out failed. Please try again.";
+        return false;
+      }
+      this.client.clearCsrf();
+      await this.state.transition({ kind: "logout" });
+      this.state.reset();
+      const probe = await this.state.probe();
+      this.anonymous = probe?.kind === "anonymous";
+      return true;
+    } catch {
+      this.genericError = "Network error. Check your connection and try again.";
+      return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+}
+
+export interface AllFlows {
+  login: LoginFlow;
+  register: RegisterFlow;
+  verifyEmail: VerifyEmailFlow;
+  forgotPassword: ForgotPasswordFlow;
+  twoFactor: TwoFactorFlow;
+  logout: LogoutFlow;
+}
+
+export function createLoginFlow(deps: FlowDeps = {}): LoginFlow {
+  return new LoginFlow(deps.client ?? authClient, deps.state ?? authState);
+}
+
+export function createRegisterFlow(deps: FlowDeps = {}): RegisterFlow {
+  const client = deps.client ?? authClient;
+  const state = deps.state ?? authState;
+  const login = new LoginFlow(client, state);
+  return new RegisterFlow(client, state, login);
+}
+
+export function createVerifyEmailFlow(deps: FlowDeps = {}): VerifyEmailFlow {
+  return new VerifyEmailFlow(deps.client ?? authClient, deps.state ?? authState);
+}
+
+export function createForgotPasswordFlow(deps: FlowDeps = {}): ForgotPasswordFlow {
+  return new ForgotPasswordFlow(deps.client ?? authClient, deps.state ?? authState);
+}
+
+export function createTwoFactorFlow(deps: FlowDeps = {}): TwoFactorFlow {
+  return new TwoFactorFlow(deps.client ?? authClient, deps.state ?? authState);
+}
+
+export function createLogoutFlow(deps: FlowDeps = {}): LogoutFlow {
+  return new LogoutFlow(deps.client ?? authClient, deps.state ?? authState);
+}

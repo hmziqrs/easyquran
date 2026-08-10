@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 pub enum SeedMode {
     #[default]
     Random,
-    Static { value: u64 },
+    Static {
+        value: u64,
+    },
 }
 
 impl SeedMode {

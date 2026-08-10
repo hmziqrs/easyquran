@@ -28,7 +28,10 @@ const translations: TranslationEntry[] = (rawTranslations as readonly (readonly 
   },
 );
 
-function alternatesBlock(arabicLoc: string, pathForCtx: (ctx: SurahRouteContext) => string): string {
+function alternatesBlock(
+  arabicLoc: string,
+  pathForCtx: (ctx: SurahRouteContext) => string,
+): string {
   let out = `    <xhtml:link rel="alternate" hreflang="ar" href="${escape(arabicLoc)}"/>`;
   out += `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${escape(arabicLoc)}"/>`;
   const seen = new Set(["ar"]);

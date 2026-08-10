@@ -3,7 +3,12 @@ import type { ArtifactSpec } from "$lib/data/quran-types";
 import { FETCH_TIMEOUT_MS, fetchWithTimeout } from "./fetch";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "./source-plan";
 import { resolveSourceProfile } from "./view/source-profiles";
-import { decodeScriptsPayload } from "./wire";
+import {
+  buildArabicBakedMap,
+  decodeScriptsPayload,
+  reportArtifactRejection,
+  validateArtifactAgainstBaked,
+} from "./wire";
 
 export const ManifestSource = {
   Api: "api",
@@ -34,11 +39,20 @@ function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
   }
 }
 
-function localizeDeliveryUrls(scripts: readonly ArtifactSpec[]): ArtifactSpec[] {
-  return scripts.map((script) => {
-    const local = QURAN.scripts.find((candidate) => candidate.id === script.id);
-    return local ? { ...script, downloadUrl: local.downloadUrl } : script;
-  });
+function validateAndLocalizeScripts(scripts: readonly ArtifactSpec[]): ArtifactSpec[] | null {
+  const baked = buildArabicBakedMap(QURAN.scripts, QURAN.artifactBase);
+  const out: ArtifactSpec[] = [];
+  for (const spec of scripts) {
+    const validated = validateArtifactAgainstBaked(
+      spec.id,
+      spec.sizeBytes,
+      spec.downloadUrl,
+      baked,
+    );
+    if (!validated) return null;
+    out.push({ ...spec, sizeBytes: validated.sizeBytes, downloadUrl: validated.downloadUrl });
+  }
+  return out;
 }
 
 export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedManifest> {
@@ -52,7 +66,12 @@ export async function resolveManifest(signal?: AbortSignal): Promise<ResolvedMan
     if (!res.ok) return baked;
     const scripts = decodeScriptsPayload(await res.json());
     if (!scripts || !hasRegisteredPlan(scripts)) return baked;
-    return { scripts: localizeDeliveryUrls(scripts), source: ManifestSource.Api };
+    const validated = validateAndLocalizeScripts(scripts);
+    if (!validated) {
+      reportArtifactRejection("scripts_payload");
+      return baked;
+    }
+    return { scripts: validated, source: ManifestSource.Api };
   } catch {
     return baked;
   }

@@ -44,10 +44,14 @@ pub fn store_oauth_state(
     let payload = json!({ "v": pkce_verifier_secret, "n": nonce }).to_string();
     let mut map = oauth_states().lock().map_err(|e| {
         error!(error = %e, "OAuth state map poisoned");
-        ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to store OAuth state")
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Failed to store OAuth state")
     })?;
     reap_stale(&mut map);
-    map.insert(state_key(session_id, state_secret), (payload, Instant::now()));
+    map.insert(
+        state_key(session_id, state_secret),
+        (payload, Instant::now()),
+    );
     Ok(())
 }
 

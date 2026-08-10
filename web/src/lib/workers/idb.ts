@@ -66,3 +66,29 @@ export function idbDelete(db: IDBDatabase, store: string, key: IDBValidKey): Pro
     s.delete(key);
   });
 }
+
+export async function idbScan<T>(
+  db: IDBDatabase,
+  store: string,
+  prefix: string,
+): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(store, "readonly");
+    const request = tx.objectStore(store).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      const key = cursor.key;
+      if (typeof key === "string" && key.startsWith(prefix)) {
+        out[key.slice(prefix.length)] = cursor.value as T;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+  return out;
+}

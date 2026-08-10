@@ -20,7 +20,9 @@ use crate::{
 
 use super::{
     service::get_facebook_oauth_client,
-    validator::{FacebookCallbackQuery, FacebookExchangeRequest, FacebookTokenRequest, FacebookUserInfo},
+    validator::{
+        FacebookCallbackQuery, FacebookExchangeRequest, FacebookTokenRequest, FacebookUserInfo,
+    },
 };
 
 #[debug_handler]

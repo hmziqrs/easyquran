@@ -30,6 +30,8 @@ use crate::modules::admin_acl_v1;
 
 use crate::modules::admin_route_v1;
 
+use crate::modules::admin_bans_v1;
+
 #[cfg(feature = "seed-system")]
 use crate::modules::seed_v1;
 
@@ -96,6 +98,11 @@ pub fn router(state: AppState) -> Router<AppState> {
     router = router.nest("/admin/route/v1", admin_route_v1::routes());
 
     router = router.nest("/admin/acl/v1", admin_acl_v1::routes());
+
+    // Merged (not nested) so the module's absolute, spec-exact operator URLs
+    // (/admin/bans, /admin/bans/export) are served verbatim. Auth layers and the
+    // origin/CSRF/session stack come from the enclosing private router.
+    router = router.merge(admin_bans_v1::routes());
 
     #[cfg(feature = "seed-system")]
     {

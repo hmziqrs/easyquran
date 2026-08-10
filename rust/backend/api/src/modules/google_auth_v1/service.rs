@@ -252,12 +252,17 @@ fn verify_id_token_with_keys(
     expected_iss: &[&str],
     expected_nonce: Option<&str>,
 ) -> Result<GoogleIdTokenClaims, ErrorResponse> {
-    verify_id_token_with_keys_core(id_token, keys, &[expected_aud], expected_iss, expected_nonce)
-        .map_err(|e| e.response)
+    verify_id_token_with_keys_core(
+        id_token,
+        keys,
+        &[expected_aud],
+        expected_iss,
+        expected_nonce,
+    )
+    .map_err(|e| e.response)
 }
 
 async fn fetch_google_jwks() -> Result<Vec<GoogleJwkKey>, ErrorResponse> {
-
     {
         let guard = JWKS_CACHE.read().await;
         if let Some(cached) = guard.as_ref() {
@@ -451,9 +456,14 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
     #[test]
     fn unknown_kid_is_the_only_retry_worthy_failure() {
         let token = sign_token(&valid_claims(), Some("not-a-known-kid"));
-        let err =
-            verify_id_token_with_keys_core(&token, &test_keys(), &[TEST_AUD], &GOOGLE_ISSUERS, None)
-                .expect_err("unknown kid must error");
+        let err = verify_id_token_with_keys_core(
+            &token,
+            &test_keys(),
+            &[TEST_AUD],
+            &GOOGLE_ISSUERS,
+            None,
+        )
+        .expect_err("unknown kid must error");
         assert!(
             err.unknown_signer,
             "unknown kid must be flagged retry-worthy"

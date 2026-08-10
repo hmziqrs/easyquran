@@ -269,9 +269,7 @@ describe("OfflineStore.enable", () => {
       bytes: 5,
       entries: 1,
     });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(manifestBody, { status: 200 }),
-    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(manifestBody, { status: 200 }));
 
     const store = createOfflineStore();
     const enableSpy = vi.spyOn(store, "enable").mockResolvedValue(undefined);

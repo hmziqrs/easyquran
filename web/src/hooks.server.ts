@@ -35,11 +35,7 @@ function htmlLangForRoute(
     const lang = params.lang;
     return lang && /^[a-zA-Z-]+$/.test(lang) ? lang : null;
   }
-  if (
-    id.includes("/app/[surah]") ||
-    id.includes("/app/juz/") ||
-    id.includes("/app/page/")
-  ) {
+  if (id.includes("/app/[surah]") || id.includes("/app/juz/") || id.includes("/app/page/")) {
     return "ar";
   }
   return null;
@@ -78,18 +74,33 @@ function buildCsp(): string {
   ].join("; ");
 }
 
-function applyHeaders(response: Response, pathname: string): void {
+export function hasNoStore(response: Response): boolean {
+  const cc = response.headers.get("cache-control");
+  return !!cc && /no-store/i.test(cc);
+}
+
+function responseSetsCookie(response: Response): boolean {
+  if (response.headers.get("set-cookie")) return true;
+  const getter = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  return typeof getter === "function" && getter.call(response.headers).length > 0;
+}
+
+export function applyHeaders(response: Response, pathname: string, requestHasCookie = false): void {
   response.headers.set("Content-Security-Policy", buildCsp());
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  if (response.status >= 500) {
-    response.headers.set("Cache-Control", "no-store");
-  } else if (
+  const translationPending = response.headers.get("x-eq-translation-pending");
+  const privateMode = requestHasCookie || responseSetsCookie(response);
+  const isImmutableAsset =
     pathname.startsWith("/_app/immutable/") ||
     pathname.startsWith("/_quran/tanzil/") ||
-    packPattern.test(pathname)
-  ) {
+    packPattern.test(pathname);
+  if (privateMode && !isImmutableAsset) {
+    response.headers.set("Cache-Control", "private, no-store");
+  } else if (response.status >= 500 || hasNoStore(response) || translationPending) {
+    response.headers.set("Cache-Control", "no-store");
+  } else if (isImmutableAsset) {
     response.headers.set("Cache-Control", IMMUTABLE);
   } else {
     response.headers.set("Cache-Control", "no-cache");
@@ -101,8 +112,10 @@ function applyHeaders(response: Response, pathname: string): void {
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
+  const requestHasCookie = !!event.request.headers.get("cookie");
   const key = translationRouteCacheKey(event);
-  const cacheable = event.request.method === "GET" && !event.isDataRequest && key !== null;
+  const cacheable =
+    event.request.method === "GET" && !event.isDataRequest && key !== null && !requestHasCookie;
   const langOverride = htmlLangForRoute(event.route.id, event.params);
   const resolveOpts = langOverride
     ? {
@@ -126,7 +139,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     const response = await resolve(event, resolveOpts);
     const contentType = response.headers.get("content-type") ?? "";
+    const setsCookie = responseSetsCookie(response);
     if (
+      !setsCookie &&
       response.status === 200 &&
       contentType.includes("text/html") &&
       !response.headers.get("x-eq-translation-pending")
@@ -139,11 +154,11 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     response.headers.set("server-timing", 'quran_ssr_cache;desc="miss"');
     response.headers.set("x-easyquran-quran-cache", "miss");
-    applyHeaders(response, pathname);
+    applyHeaders(response, pathname, requestHasCookie);
     return response;
   }
 
   const response = await resolve(event, resolveOpts);
-  applyHeaders(response, pathname);
+  applyHeaders(response, pathname, requestHasCookie);
   return response;
 };

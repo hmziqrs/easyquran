@@ -9,6 +9,7 @@ import {
   SourceKind,
   type Ayah,
   type ArtifactSpec,
+  type DownloadableSpec,
   type QuranRangeText,
   type QuranSurahText,
   type SourceCatalogueEntry,
@@ -396,4 +397,80 @@ export function decodeTranslationRangeText(
   validateCoordinate?: AyahCoordinateValidator,
 ): QuranRangeText | null {
   return decodeRangeText(raw, validateCoordinate, decodeTranslationNormalization);
+}
+
+export interface BakedArtifactEntry {
+  readonly sizeBytes: number;
+  readonly r2Path: string;
+  readonly sameOriginDeliveryPath: string;
+}
+
+export type BakedArtifactMap = ReadonlyMap<string, BakedArtifactEntry>;
+
+export interface ValidatedArtifact {
+  readonly id: string;
+  readonly sizeBytes: number;
+  readonly downloadUrl: string;
+}
+
+export function buildArabicBakedMap(
+  scripts: readonly DownloadableSpec[],
+  artifactBase: string,
+): BakedArtifactMap {
+  const map = new Map<string, BakedArtifactEntry>();
+  for (const spec of scripts) {
+    const r2Path = spec.downloadUrl.startsWith(artifactBase)
+      ? spec.downloadUrl.slice(artifactBase.length)
+      : "";
+    map.set(spec.id, {
+      sizeBytes: spec.sizeBytes,
+      r2Path,
+      sameOriginDeliveryPath: spec.downloadUrl,
+    });
+  }
+  return map;
+}
+
+export function reportArtifactRejection(reason: string): void {
+  void import("$lib/stores/consent.svelte")
+    .then((mod) =>
+      mod.consent.analytics
+        ? import("$lib/firebase/analytics").then((m) =>
+            m.track("quran_artifact_rejected", { reason }),
+          )
+        : null,
+    )
+    .catch(() => {});
+}
+
+export function parseArtifactUrl(raw: unknown, baked: BakedArtifactEntry): URL | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  if (url.username !== "" || url.password !== "") return null;
+  if (url.search !== "" || url.hash !== "") return null;
+  if (url.pathname !== baked.r2Path) return null;
+  return url;
+}
+
+export function validateArtifactAgainstBaked(
+  id: string,
+  sizeBytes: number,
+  downloadUrl: string,
+  baked: BakedArtifactMap,
+): ValidatedArtifact | null {
+  const entry = baked.get(id);
+  if (!entry) return null;
+  if (sizeBytes !== entry.sizeBytes) return null;
+  if (!parseArtifactUrl(downloadUrl, entry)) return null;
+  return {
+    id,
+    sizeBytes: entry.sizeBytes,
+    downloadUrl: entry.sameOriginDeliveryPath,
+  };
 }

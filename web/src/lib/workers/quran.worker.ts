@@ -14,6 +14,7 @@ import {
   type SurahNormalization,
 } from "$lib/data/quran-types";
 import {
+  runOne,
   runQuery,
   TANZIL_QURAN_DATABASE,
   type CanonicalQuranRow,
@@ -21,7 +22,12 @@ import {
 } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
-import { ensureArtifact, listCachedArtifacts } from "./opfs-cache";
+import {
+  ensureArtifact,
+  listCachedArtifacts,
+  QURAN_ROW_COUNT,
+  type StagedValidator,
+} from "./opfs-cache";
 import { pruneTranslations } from "./opfs-retention";
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
@@ -105,6 +111,52 @@ function openReadOnly(bytes: Uint8Array): Database {
   return database;
 }
 
+function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): void {
+  if (!sqlite3) throw new Error("[quran-worker] sqlite3 not initialized before staging check");
+  const database = openReadOnly(bytes);
+  try {
+    const runner = createWasmQueryRunner(database);
+    const count = runOne(runner, TANZIL_QURAN_DATABASE.queries.count);
+    if (count !== QURAN_ROW_COUNT) {
+      throw new Error(`[quran-stage:${sourceId}] row count ${count} != ${QURAN_ROW_COUNT}`);
+    }
+    const rows = runQuery(runner, TANZIL_QURAN_DATABASE.queries.coordinates);
+    if (rows.length !== QURAN_ROW_COUNT) {
+      throw new Error(
+        `[quran-stage:${sourceId}] coordinate count ${rows.length} != ${QURAN_ROW_COUNT}`,
+      );
+    }
+    let previous = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      if (row.surah < 1 || row.surah > 114 || row.ayah < 1) {
+        throw new Error(
+          `[quran-stage:${sourceId}] bad coordinate ${row.globalIndex}/${row.surah}:${row.ayah}`,
+        );
+      }
+      if (i === 0) previous = row.globalIndex;
+      else if (row.globalIndex !== previous + 1) {
+        throw new Error(
+          `[quran-stage:${sourceId}] non-contiguous globalIndex at ${row.globalIndex}`,
+        );
+      }
+      previous = row.globalIndex;
+    }
+    if (isArabicSourceId(sourceId)) {
+      const profile = resolveSourceProfile(sourceId);
+      if (profile.canonicalRowCount !== QURAN_ROW_COUNT) {
+        throw new Error(`[quran-stage:${sourceId}] profile row count mismatch`);
+      }
+    }
+  } finally {
+    database.close();
+  }
+}
+
+function stagedQuranValidator(): StagedValidator {
+  return (bytes, spec) => assertStagedQuranBytes(bytes, spec.id);
+}
+
 async function bootArabic(
   manifest: ResolvedManifest,
   coordinates: CanonicalQuranCoordinates,
@@ -121,7 +173,9 @@ async function bootArabic(
     if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
     const profile = resolveSourceProfile(spec.id);
     status("downloading", sourceId);
-    const artifact = await ensureArtifact(spec, progressEmitter(spec));
+    const artifact = await ensureArtifact(spec, progressEmitter(spec), {
+      validate: stagedQuranValidator(),
+    });
     const database = openReadOnly(artifact.bytes);
     const runner = createWasmQueryRunner(database);
     const source = loadQuranSource(runner, profile, coordinates);
@@ -251,7 +305,9 @@ async function fetchTranslationRunner(sourceId: string): Promise<QuranQueryRunne
   if (activeTranslationFetches++ === 0) status("downloading", sourceId);
   try {
     try {
-      const artifact = await ensureArtifact(spec, progressEmitter(spec));
+      const artifact = await ensureArtifact(spec, progressEmitter(spec), {
+        validate: stagedQuranValidator(),
+      });
       if (artifact.downloaded) {
         void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
       }

@@ -58,9 +58,12 @@ pub async fn find_or_create_user_for_oauth(
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
-    if let Some(identity) =
-        user_oauth_identity::Entity::find_by_provider(&state.sea_db, provider.as_str(), provider_user_id)
-            .await?
+    if let Some(identity) = user_oauth_identity::Entity::find_by_provider(
+        &state.sea_db,
+        provider.as_str(),
+        provider_user_id,
+    )
+    .await?
     {
         let user = user::Entity::find_by_id_with_404(&state.sea_db, identity.user_id).await?;
         info!(
@@ -80,7 +83,13 @@ pub async fn find_or_create_user_for_oauth(
             user_id = existing.id,
             "Linking OAuth account to existing user"
         );
-        link_identity(&state.sea_db, existing.id, provider.as_str(), provider_user_id).await?;
+        link_identity(
+            &state.sea_db,
+            existing.id,
+            provider.as_str(),
+            provider_user_id,
+        )
+        .await?;
         return Ok(existing);
     }
 
@@ -147,7 +156,11 @@ pub async fn finish_oauth_login(
 
     let session_row = user_session::Entity::create(
         &state.sea_db,
-        user_session::NewUserSession::new(user.id, Some(format!("{} OAuth", provider.label())), None),
+        user_session::NewUserSession::new(
+            user.id,
+            Some(format!("{} OAuth", provider.label())),
+            None,
+        ),
     )
     .await
     .ok();

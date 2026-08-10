@@ -110,10 +110,7 @@ describe("NotificationsStore.subscribe happy path", () => {
 
 describe("NotificationsStore #refreshToken dedup", () => {
   it("shares a single getFcmToken call across concurrent refresh triggers", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ token: "old", subscribed: true }),
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
     let release: (value: string | null) => void = () => {};
     messaging.getFcmToken.mockReturnValue(
       new Promise<string | null>((resolve) => {
@@ -134,10 +131,7 @@ describe("NotificationsStore #refreshToken dedup", () => {
 
 describe("NotificationsStore generation race-guard", () => {
   it("does not register the stale token after unsubscribe bumps the generation", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ token: "old", subscribed: true }),
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
     let release: (value: string | null) => void = () => {};
     messaging.getFcmToken.mockReturnValue(
       new Promise<string | null>((resolve) => {
@@ -190,10 +184,7 @@ describe("NotificationsStore foreground message", () => {
 
 describe("NotificationsStore.syncPermission", () => {
   it("revokes subscription when permission has flipped to denied", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ token: "tok", subscribed: true }),
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "tok", subscribed: true }));
     const store = createNotifications();
     store.hydrate();
     await flush();

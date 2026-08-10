@@ -60,12 +60,10 @@ mod reset_token {
         let token = hex::encode(*bytes);
         bytes.zeroize();
 
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "reset_token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "reset_token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         map.insert(namespaced_key(&token), (user_id, Instant::now()));
         Ok(token)
@@ -73,12 +71,10 @@ mod reset_token {
 
     /// Removal on take is required for single-use semantics — never a read (`get`), or a replayed `reset` could reuse the token.
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "reset_token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "reset_token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
     }
