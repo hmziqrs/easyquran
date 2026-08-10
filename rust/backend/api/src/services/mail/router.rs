@@ -88,6 +88,19 @@ impl MailRouter {
         self.registry.get(name).map_err(MailError::from)
     }
 
+    /// Best-effort redaction of the rate-limit key for logs. The recipient key
+    /// embeds the full mailbox (`mail:send:rcpt:{email}`); collapse it to the
+    /// recipient domain. Provider keys (`mail:send:provider:{name}`) carry no PII
+    /// and pass through verbatim. Matches the module's domain-only PII policy.
+    fn redact_rate_key(key: &str) -> String {
+        if let Some(rest) = key.strip_prefix("mail:send:rcpt:") {
+            let domain = rest.split('@').nth(1).unwrap_or("unknown");
+            format!("mail:send:rcpt:<redacted>@{domain}")
+        } else {
+            key.to_string()
+        }
+    }
+
     async fn lookup_suppressed(&self, recipient: &str) -> Result<bool, ()> {
         let row = match SuppressionEntity::find_by_recipient(&self.db, recipient).await {
             Ok(m) => m,
@@ -129,7 +142,14 @@ impl MailRouter {
                 Err(MailError::Throttled { retry_after_secs })
             }
             Err(e) => {
-                warn!(error = %e, %key, "mail rate limiter Redis error (fail-closed 503)");
+                // PII: the rcpt key embeds the full recipient address — log only a
+                // redacted form (recipient domain) so ops still see which limiter
+                // fired without leaking the mailbox.
+                warn!(
+                    error = %e,
+                    rate_key = %Self::redact_rate_key(key),
+                    "mail rate limiter Redis error (fail-closed 503)"
+                );
                 Err(MailError::LimiterUnavailable)
             }
         }

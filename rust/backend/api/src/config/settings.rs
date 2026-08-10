@@ -410,7 +410,7 @@ impl RateLimitSettings {
 /// credentials are present at boot — never the credential values themselves.
 /// Surfaced on the public readiness endpoint so an operator can see WHICH
 /// provider is misconfigured without exposing secrets (W8f).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ProviderStatus {
     pub name: String,
     pub ready: bool,
@@ -421,7 +421,7 @@ pub struct ProviderStatus {
 // Production with WEB_AUTH_ENABLED=true fails boot unless every listed provider
 // has its credentials + HTTPS redirect (origin-matched), WebAuthn is a real RP,
 // and MAIL_PROVIDER is a real transport (not none).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct WebAuthSettings {
     pub enabled: bool,
     pub oauth_providers: Vec<String>,
@@ -458,6 +458,40 @@ impl WebAuthSettings {
                      MAIL_PROVIDER=smtp|cloudflare and configure credentials."
                         .to_string(),
                 );
+            }
+            // Verification + recovery mail must come from a real identity. Require
+            // non-empty from-address + from-name; both are read by build_mail_router.
+            if std::env::var("MAIL_FROM_ADDRESS")
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
+                return Err(
+                    "Production with WEB_AUTH_ENABLED=true requires a non-empty MAIL_FROM_ADDRESS \
+                     (the From: identity used for verification + recovery mail)."
+                        .to_string(),
+                );
+            }
+            if std::env::var("MAIL_FROM_NAME")
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
+                return Err(
+                    "Production with WEB_AUTH_ENABLED=true requires a non-empty MAIL_FROM_NAME \
+                     (display name paired with MAIL_FROM_ADDRESS)."
+                        .to_string(),
+                );
+            }
+            // The selected provider must have its credentials present. Values are
+            // never logged — presence is checked, mirroring provider_creds_present.
+            for k in mail_provider_required_keys(&mail) {
+                if std::env::var(k).unwrap_or_default().trim().is_empty() {
+                    return Err(format!(
+                        "Production with WEB_AUTH_ENABLED=true: MAIL_PROVIDER='{mail}' is missing \
+                         {k}"
+                    ));
+                }
             }
             for p in &oauth_providers {
                 if provider_required_keys(p).is_empty() {
@@ -532,6 +566,17 @@ fn provider_required_keys(p: &str) -> &'static [&'static str] {
     }
 }
 
+/// Required env vars for the selected mail transport (mirrors the keys
+/// build_mail_router / smtp::create_connection / CloudflareMailProvider read).
+/// Used only for presence checks at boot — values never logged.
+fn mail_provider_required_keys(provider: &str) -> &'static [&'static str] {
+    match provider.trim() {
+        "smtp" => &["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"],
+        "cloudflare" => &["CLOUDFLARE_EMAIL_ACCOUNT_ID", "CLOUDFLARE_EMAIL_API_TOKEN"],
+        _ => &[],
+    }
+}
+
 fn provider_redirect_key(p: &str) -> &'static str {
     match p {
         "google" => "GOOGLE_REDIRECT_URI",
@@ -599,16 +644,6 @@ pub struct Settings {
 // default. Validates production config as a side effect of from_env (fails boot
 // on MAIL_PROVIDER=none / missing creds / redirect mismatch).
 static WEB_AUTH: std::sync::OnceLock<WebAuthSettings> = std::sync::OnceLock::new();
-
-impl Default for WebAuthSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            oauth_providers: Vec::new(),
-            providers_status: Vec::new(),
-        }
-    }
-}
 
 /// Process-wide web-auth settings. Returns a disabled default before the first
 /// `Settings::from_env()` (e.g. in tests that build a literal `Settings`).
@@ -1127,6 +1162,13 @@ mod tests {
             "WEB_AUTH_ENABLED",
             "WEB_OAUTH_PROVIDERS",
             "MAIL_PROVIDER",
+            "MAIL_FROM_ADDRESS",
+            "MAIL_FROM_NAME",
+            "SMTP_HOST",
+            "SMTP_USERNAME",
+            "SMTP_PASSWORD",
+            "CLOUDFLARE_EMAIL_ACCOUNT_ID",
+            "CLOUDFLARE_EMAIL_API_TOKEN",
             "FRONTEND_URL",
             "OAUTH_ALLOWED_REDIRECT_ORIGINS",
             "GOOGLE_CLIENT_ID",
@@ -1147,6 +1189,17 @@ mod tests {
         ] {
             std::env::remove_var(k);
         }
+    }
+
+    /// Set a complete, valid SMTP mail config so the W8f mail-transport gate
+    /// passes and a test can exercise a later check (oauth creds / redirect
+    /// origin / boot success). Complement to clear_web_auth_env.
+    fn set_valid_smtp_mail() {
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        std::env::set_var("SMTP_HOST", "smtp.example.com");
+        std::env::set_var("SMTP_USERNAME", "u");
+        std::env::set_var("SMTP_PASSWORD", "p");
     }
 
     #[test]
@@ -1213,6 +1266,7 @@ mod tests {
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
         std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
         let err = WebAuthSettings::from_env().expect_err("missing google creds must fail");
         assert!(err.contains("google"), "got: {err}");
@@ -1228,6 +1282,7 @@ mod tests {
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
         std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
         std::env::set_var("GOOGLE_CLIENT_ID", "g");
         std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
@@ -1249,6 +1304,7 @@ mod tests {
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
         std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
         std::env::set_var("GOOGLE_CLIENT_ID", "g");
         std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
@@ -1256,6 +1312,98 @@ mod tests {
         std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         let cfg = WebAuthSettings::from_env().expect("matched origin must boot");
+        assert!(cfg.enabled);
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_empty_mail_from_address() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        // MAIL_FROM_ADDRESS intentionally left unset; from-name + smtp creds set
+        // so the only failing check is the from-address requirement.
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        std::env::set_var("SMTP_HOST", "smtp.example.com");
+        std::env::set_var("SMTP_USERNAME", "u");
+        std::env::set_var("SMTP_PASSWORD", "p");
+        let err = WebAuthSettings::from_env().expect_err("empty MAIL_FROM_ADDRESS must fail");
+        assert!(err.contains("MAIL_FROM_ADDRESS"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_empty_mail_from_name() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        // MAIL_FROM_NAME intentionally left unset.
+        std::env::set_var("SMTP_HOST", "smtp.example.com");
+        std::env::set_var("SMTP_USERNAME", "u");
+        std::env::set_var("SMTP_PASSWORD", "p");
+        let err = WebAuthSettings::from_env().expect_err("empty MAIL_FROM_NAME must fail");
+        assert!(err.contains("MAIL_FROM_NAME"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_smtp_missing_creds() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        // SMTP creds intentionally unset.
+        let err = WebAuthSettings::from_env().expect_err("missing SMTP creds must fail");
+        assert!(err.contains("SMTP_HOST"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_cloudflare_missing_creds() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "cloudflare");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        // CLOUDFLARE_EMAIL_* creds intentionally unset.
+        let err = WebAuthSettings::from_env().expect_err("missing CF creds must fail");
+        assert!(err.contains("CLOUDFLARE_EMAIL_ACCOUNT_ID"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_accepts_cloudflare_with_creds() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "cloudflare");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        std::env::set_var("CLOUDFLARE_EMAIL_ACCOUNT_ID", "acc");
+        std::env::set_var("CLOUDFLARE_EMAIL_API_TOKEN", "tok");
+        // No oauth providers configured → oauth loop is a no-op → boot succeeds.
+        let cfg = WebAuthSettings::from_env().expect("cloudflare with creds must boot");
         assert!(cfg.enabled);
         restore_env(snap);
     }
