@@ -1,6 +1,8 @@
 use sea_orm::{ActiveModelTrait, Set};
 use tracing::{error, info, instrument, warn};
 
+use rux_auth::AuthBackend as AuthBackendTrait;
+
 use crate::{
     db::sea_models::{user, user_oauth_identity},
     error::{ErrorCode, ErrorResponse},
@@ -76,7 +78,10 @@ pub async fn find_or_create_user_for_oauth(
 
     if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
         if !email_verified {
-            warn!(user_id = existing.id, "Refusing to link OAuth account: IdP email is not verified");
+            warn!(
+                user_id = existing.id,
+                "Refusing to link OAuth account: IdP email is not verified"
+            );
             return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
                 .with_message("Unable to link this account"));
         }
@@ -150,6 +155,22 @@ pub async fn finish_oauth_login(
     user: &user::Model,
     provider: OAuthProvider,
 ) -> Result<(), ErrorResponse> {
+    // W8D-001: fail-closed ban guard — same contract as password (auth_v1
+    // log_in), TOTP, and passkey login. A banned user must not evade the ban
+    // by signing in via OAuth, and a ban-lookup error must never grant access.
+    match auth.backend().check_ban(&user.id).await {
+        Ok(ban_status) if ban_status.is_banned() => {
+            warn!(user_id = user.id, "Banned user attempted OAuth login");
+            return Err(ErrorResponse::new(ErrorCode::AccountLocked)
+                .with_message("This account has been banned"));
+        }
+        Ok(_) => {}
+        Err(_) => {
+            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Unable to verify account status"));
+        }
+    }
+
     auth.login(user).await.map_err(|e| {
         error!(error = %e, user_id = user.id, "Failed to create OAuth session");
         ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to create session")

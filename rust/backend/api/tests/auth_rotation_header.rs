@@ -63,7 +63,12 @@ use ruxlog::state::{build_http_client, AppState, QuranRuntimeMetrics, StorageSta
 
 use migration::{Migrator, MigratorTrait};
 use ruxlog::db::sea_models::user::{self, NewUser, UserRole};
+use ruxlog::db::sea_models::user_ban;
+use ruxlog::error::ErrorCode;
+use ruxlog::services::auth::{AuthBackend, AuthSession};
+use ruxlog::services::oauth::{self, OAuthProvider};
 use ruxlog::utils::code_hash::hash_code;
+use sea_orm::ActiveModelTrait;
 
 // ruxlog is built without cfg(test) when linked into an integration binary, so
 // is_production() cannot use cfg(test) to default an unset env. Pin the env to
@@ -536,4 +541,83 @@ async fn login_emits_session_rotated_header() {
         Some("1"),
         "a successful login rotates the session and must emit X-EQ-Session-Rotated: 1"
     );
+}
+
+// ============================================================================
+// W8D-001: OAuth ban-guard tests
+// ============================================================================
+
+// finish_oauth_login cannot be reached through a provider callback in a test
+// (the success path needs a real upstream token exchange + JWKS signature
+// verification — see the NOTE at the top of this file). So the guard is driven
+// directly: a real AuthSession over the in-memory DB + SqliteSessionStore,
+// exactly the object the four providers hand it. This exercises the real
+// fail-closed check_ban call site plus the full success path (auth.login +
+// create_bound_session) for the non-banned case.
+
+async fn seed_user_model(state: &AppState, email: &str) -> user::Model {
+    seed_user(state, email, "super-secret-password").await;
+    user::Entity::find_by_email(&state.sea_db, email.to_string())
+        .await
+        .expect("find seeded user")
+        .expect("seeded user exists")
+}
+
+async fn build_auth(state: &AppState) -> AuthSession {
+    let backend = AuthBackend::new(
+        &state.sea_db,
+        state.session_store.clone(),
+        state.revoked_sessions.clone(),
+    );
+    // Lazy session — no store I/O until auth.login touches it.
+    let session = tower_sessions::Session::new(None, state.session_store.clone(), None);
+    AuthSession::new(backend, session).await
+}
+
+#[tokio::test]
+async fn oauth_login_rejects_banned_user() {
+    let state = state().await;
+    let user = seed_user_model(&state, "oauth-banned@test.local").await;
+
+    // Active ban: no expiry, not revoked -> check_ban returns is_banned().
+    let now = chrono::Utc::now().fixed_offset();
+    user_ban::ActiveModel {
+        user_id: sea_orm::Set(user.id),
+        reason: sea_orm::Set(Some("abuse".to_string())),
+        banned_by: sea_orm::Set(None),
+        expires_at: sea_orm::Set(None),
+        created_at: sea_orm::Set(now),
+        revoked_at: sea_orm::Set(None),
+        revoked_by: sea_orm::Set(None),
+        ..Default::default()
+    }
+    .insert(&state.sea_db)
+    .await
+    .expect("ban row inserted");
+
+    let mut auth = build_auth(&state).await;
+    let err = oauth::finish_oauth_login(&state, &mut auth, &user, OAuthProvider::Github)
+        .await
+        .expect_err("banned user must not obtain an OAuth session");
+    assert_eq!(
+        err.code,
+        ErrorCode::AccountLocked,
+        "banned OAuth login must surface AccountLocked"
+    );
+    assert!(
+        err.message.contains("banned"),
+        "expected the same ban message password-login returns, got: {}",
+        err.message
+    );
+}
+
+#[tokio::test]
+async fn oauth_login_allows_non_banned_user() {
+    let state = state().await;
+    let user = seed_user_model(&state, "oauth-clean@test.local").await;
+
+    let mut auth = build_auth(&state).await;
+    oauth::finish_oauth_login(&state, &mut auth, &user, OAuthProvider::Github)
+        .await
+        .expect("non-banned user must complete OAuth login (guard must not fire)");
 }
