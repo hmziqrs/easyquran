@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { env } from "$env/dynamic/private";
 import { RangeKind } from "$lib/data/quran-data";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
 import type { Ayah } from "$lib/data/quran-types";
@@ -11,7 +12,7 @@ vi.mock("$env/dynamic/private", () => ({
 }));
 
 vi.mock("$env/dynamic/public", () => ({
-  env: { PUBLIC_QURAN_API_BASE: "", PUBLIC_ENV: "local" },
+  env: { PUBLIC_QURAN_API_BASE: "https://public.test", PUBLIC_ENV: "local" },
 }));
 
 vi.mock("$lib/quran/catalogue", () => ({
@@ -157,5 +158,45 @@ describe("SSR translation range per-chunk coordinate validation", () => {
     const { fetcher } = makeFetcher();
     const result = await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
     expect(result.ayahs).toHaveLength(entry.endGlobal - entry.startGlobal + 1);
+  });
+});
+
+describe("SSR internal token gating on the resolved API base", () => {
+  const savedBase = env.INTERNAL_QURAN_API_BASE;
+  const savedToken = env.INTERNAL_QURAN_API_TOKEN;
+
+  afterEach(() => {
+    env.INTERNAL_QURAN_API_BASE = savedBase;
+    env.INTERNAL_QURAN_API_TOKEN = savedToken;
+  });
+
+  // Captures every header the SSR layer forwards to the upstream fetcher.
+  function headerCapturingFetcher() {
+    const seen = new Headers();
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      const from = Number(u.searchParams.get("from"));
+      const to = Number(u.searchParams.get("to"));
+      if (init?.headers) for (const [k, v] of new Headers(init.headers)) seen.set(k, v);
+      return { ok: true, status: 200, json: async () => wireChunk(from, to) } as Response;
+    });
+    return { fetcher, seen };
+  }
+
+  it("attaches the internal token when INTERNAL_QURAN_API_BASE is set", async () => {
+    env.INTERNAL_QURAN_API_BASE = "https://api.test";
+    env.INTERNAL_QURAN_API_TOKEN = "secret-token";
+    const { fetcher, seen } = headerCapturingFetcher();
+    await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
+    expect(seen.get("x-easyquran-internal-token")).toBe("secret-token");
+  });
+
+  it("sends NO internal token when INTERNAL_QURAN_API_BASE is unset (public fallback)", async () => {
+    env.INTERNAL_QURAN_API_BASE = undefined;
+    env.INTERNAL_QURAN_API_TOKEN = "secret-token";
+    const { fetcher, seen } = headerCapturingFetcher();
+    await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
+    expect(seen.has("x-easyquran-internal-token")).toBe(false);
+    expect(seen.get("x-easyquran-internal-token")).toBeNull();
   });
 });

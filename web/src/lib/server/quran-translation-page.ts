@@ -41,6 +41,10 @@ function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
   // API's identity gate. Read from private runtime env; never logged, never
   // exposed in a public env var or response, sent only to INTERNAL_QURAN_API_BASE.
   const internalToken = env.INTERNAL_QURAN_API_TOKEN;
+  // Only send the secret to the internal Docker base. When INTERNAL_QURAN_API_BASE
+  // is unset, requireApiBase() falls back to the public CF-fronted base, which
+  // must never receive the shared internal token.
+  const usingInternal = !!env.INTERNAL_QURAN_API_BASE;
   return async (url, init) => {
     const ctrl = new AbortController();
     const external = init?.signal;
@@ -52,7 +56,7 @@ function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
     const timer = setTimeout(() => ctrl.abort(), init?.timeout ?? RANGE_CHUNK_TIMEOUT_MS);
     try {
       const headers = new Headers(init?.headers);
-      if (internalToken) headers.set("x-easyquran-internal-token", internalToken);
+      if (internalToken && usingInternal) headers.set("x-easyquran-internal-token", internalToken);
       const res = await fetcher(url, { ...init, headers, signal: ctrl.signal });
       if (!res.ok) throw new FetchHttpError(res.status);
       return await res.json();
