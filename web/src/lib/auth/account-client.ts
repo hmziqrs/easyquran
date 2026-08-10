@@ -15,7 +15,9 @@ export interface SessionInfo {
 }
 
 export interface SessionListResponse {
-  readonly sessions: ReadonlyArray<SessionInfo>;
+  readonly data: ReadonlyArray<SessionInfo>;
+  readonly total?: number;
+  readonly page?: number;
 }
 
 export interface ProfileUpdateInput {
@@ -41,27 +43,39 @@ export interface TerminateResult {
 function decodeSession(raw: unknown): SessionInfo | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (typeof o.id !== "string") return null;
+  // id is the numeric i32 audit-row id on the wire; tolerate a numeric string
+  // (never require a string id — the backend sends a number).
+  const id =
+    typeof o.id === "number"
+      ? String(o.id)
+      : typeof o.id === "string" && o.id.length > 0
+        ? o.id
+        : null;
+  if (id === null) return null;
+  // Backend row fields: device, last_seen (snake_case) + isCurrent (camelCase,
+  // server-derived). Tolerate optional camelCase variants for robustness.
+  const lastSeenAt =
+    typeof o.last_seen === "string"
+      ? o.last_seen
+      : typeof o.lastSeenAt === "string"
+        ? o.lastSeenAt
+        : undefined;
+  const userAgent =
+    typeof o.device === "string"
+      ? o.device
+      : typeof o.user_agent === "string"
+        ? o.user_agent
+        : typeof o.userAgent === "string"
+          ? o.userAgent
+          : undefined;
   const createdAt =
     typeof o.created_at === "string"
       ? o.created_at
       : typeof o.createdAt === "string"
         ? o.createdAt
         : undefined;
-  const lastSeenAt =
-    typeof o.last_seen_at === "string"
-      ? o.last_seen_at
-      : typeof o.lastSeenAt === "string"
-        ? o.lastSeenAt
-        : undefined;
-  const userAgent =
-    typeof o.user_agent === "string"
-      ? o.user_agent
-      : typeof o.userAgent === "string"
-        ? o.userAgent
-        : undefined;
   return {
-    id: o.id,
+    id,
     isCurrent: o.is_current === true || o.isCurrent === true,
     ...(createdAt !== undefined ? { createdAt } : {}),
     ...(lastSeenAt !== undefined ? { lastSeenAt } : {}),
@@ -72,7 +86,8 @@ function decodeSession(raw: unknown): SessionInfo | null {
 export function decodeSessionList(raw: unknown): SessionInfo[] {
   if (!raw || typeof raw !== "object") return [];
   const o = raw as Record<string, unknown>;
-  const arr = Array.isArray(o.sessions) ? o.sessions : Array.isArray(raw) ? raw : [];
+  // Real envelope is { data: [...], total, page }. Accept a bare array too.
+  const arr = Array.isArray(o.data) ? o.data : Array.isArray(raw) ? raw : [];
   const out: SessionInfo[] = [];
   for (const entry of arr) {
     const s = decodeSession(entry);

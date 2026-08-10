@@ -151,6 +151,11 @@ export class LoginFlow {
         this.genericError = TWO_FA_NEXT;
         return false;
       }
+      if (!res.rotated) {
+        try {
+          await this.client.refreshCsrf();
+        } catch {}
+      }
       const user = decodeUser(res.data);
       if (!user) {
         this.genericError = GENERIC_TRY_AGAIN;
@@ -198,6 +203,11 @@ export class LoginFlow {
           this.genericError = null;
         }
         return false;
+      }
+      if (!res.rotated) {
+        try {
+          await this.client.refreshCsrf();
+        } catch {}
       }
       const user = decodeUser(res.data);
       if (!user) {

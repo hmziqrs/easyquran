@@ -32,50 +32,71 @@ afterEach(() => {
 });
 
 describe("decodeSessionList isCurrent decode", () => {
-  it("decodes snake_case is_current from the server", () => {
+  it("decodes the real {data:[...]} envelope with numeric ids + isCurrent", () => {
     const list = decodeSessionList({
-      sessions: [
-        { id: "s1", is_current: true, created_at: "2026-01-01T00:00:00Z" },
-        { id: "s2", is_current: false },
+      data: [
+        {
+          id: 1,
+          user_id: 100,
+          device: "MacBook/Safari",
+          ip_address: null,
+          last_seen: "2026-01-01T00:00:00Z",
+          revoked_at: null,
+          isCurrent: true,
+        },
+        { id: 2, device: null, last_seen: "2026-02-01T00:00:00Z", isCurrent: false },
       ],
+      total: 2,
+      page: 1,
     });
     expect(list).toHaveLength(2);
+    expect(list[0].id).toBe("1");
     expect(list[0].isCurrent).toBe(true);
+    expect(list[0].userAgent).toBe("MacBook/Safari");
+    expect(list[0].lastSeenAt).toBe("2026-01-01T00:00:00Z");
+    expect(list[1].id).toBe("2");
     expect(list[1].isCurrent).toBe(false);
-    expect(list[0].createdAt).toBe("2026-01-01T00:00:00Z");
   });
 
-  it("tolerates camelCase isCurrent shape", () => {
+  it("tolerates snake_case is_current + numeric-string id", () => {
     const list = decodeSessionList({
-      sessions: [{ id: "s1", isCurrent: true, lastSeenAt: "2026-02-01T00:00:00Z" }],
+      data: [{ id: "42", is_current: true, last_seen: "2026-02-01T00:00:00Z" }],
     });
+    expect(list[0].id).toBe("42");
     expect(list[0].isCurrent).toBe(true);
     expect(list[0].lastSeenAt).toBe("2026-02-01T00:00:00Z");
   });
 
-  it("drops entries missing a string id", () => {
+  it("drops entries missing any id, keeps numeric + string ids", () => {
     const list = decodeSessionList({
-      sessions: [{ is_current: true }, { id: 7 }, { id: "ok" }],
+      data: [{ is_current: true }, { id: null }, { id: 7 }, { id: "ok" }],
     });
-    expect(list.map((s) => s.id)).toEqual(["ok"]);
+    expect(list.map((s) => s.id)).toEqual(["7", "ok"]);
+  });
+
+  it("accepts a bare array response", () => {
+    const list = decodeSessionList([{ id: 5, isCurrent: true }]);
+    expect(list.map((s) => s.id)).toEqual(["5"]);
   });
 
   it("returns empty for malformed payloads", () => {
     expect(decodeSessionList(null)).toEqual([]);
     expect(decodeSessionList({})).toEqual([]);
-    expect(decodeSessionList({ sessions: "nope" })).toEqual([]);
+    expect(decodeSessionList({ data: "nope" })).toEqual([]);
+    expect(decodeSessionList({ sessions: [{ id: 1 }] })).toEqual([]);
   });
 });
 
 describe("AccountClient.listSessions", () => {
-  it("GETs /auth/v1/sessions/list and decodes isCurrent", async () => {
+  it("GETs /auth/v1/sessions/list and decodes isCurrent from the {data} envelope", async () => {
     const client = mockClient();
     client.get.mockResolvedValueOnce(
-      ok({ sessions: [{ id: "a", is_current: true }, { id: "b", is_current: false }] }),
+      ok({ data: [{ id: 1, isCurrent: true }, { id: 2, isCurrent: false }] }),
     );
     const ac = createAccountClient(client);
     const res = await ac.listSessions();
     expect(res.status).toBe("ok");
+    expect(res.data?.map((s) => s.id)).toEqual(["1", "2"]);
     expect(res.data?.map((s) => s.isCurrent)).toEqual([true, false]);
     expect(client.get).toHaveBeenCalledWith("/auth/v1/sessions/list");
   });

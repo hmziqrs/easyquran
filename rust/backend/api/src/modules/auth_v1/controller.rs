@@ -138,6 +138,7 @@ pub async fn log_in(
                 info!(user_id = user.id, "Login requires TOTP (2FA enrolled)");
                 return Ok((
                     StatusCode::OK,
+                    session_rotated_headers(false),
                     Json(json!({
                         "status": "totp_required",
                         "totp_token": totp_token,
@@ -168,8 +169,16 @@ pub async fn log_in(
                     // and revokes the audit row so neither lingers unbound.
                     create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await?;
 
+                    // W8B-001: login_with_metadata already cycled the session id
+                    // (anti session-fixation), so the per-session CSRF token rebinds.
+                    // Emit the header so the web client refreshes its in-memory token;
+                    // reaching this branch means cycle_id succeeded (else Err above).
                     tracing::Span::current().record("result", "success");
-                    Ok((StatusCode::OK, Json(json!(user))))
+                    Ok((
+                        StatusCode::OK,
+                        session_rotated_headers(true),
+                        Json(json!(user)),
+                    ))
                 }
                 Err(err) => {
                     error!(error = %err, user_id = user.id, "Session creation failed");
@@ -305,7 +314,12 @@ pub async fn login_totp(
             // W8e durable binding, same fail-closed contract as password login.
             create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await?;
 
-            Ok((StatusCode::OK, Json(json!(user))))
+            // W8B-001: login_with_metadata cycled the session id (see log_in).
+            Ok((
+                StatusCode::OK,
+                session_rotated_headers(true),
+                Json(json!(user)),
+            ))
         }
         Err(err) => {
             error!(error = %err, user_id = user.id, "login/totp: session creation failed");
@@ -735,7 +749,7 @@ pub async fn sessions_terminate(
 /// beyond presence.
 pub(crate) const SESSION_ROTATED: HeaderName = HeaderName::from_static("x-eq-session-rotated");
 
-fn session_rotated_headers(rotated: bool) -> HeaderMap {
+pub(crate) fn session_rotated_headers(rotated: bool) -> HeaderMap {
     let mut h = HeaderMap::new();
     if rotated {
         h.insert(SESSION_ROTATED, HeaderValue::from_static("1"));

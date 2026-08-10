@@ -7,7 +7,7 @@ use tracing::{info, instrument, warn};
 use crate::db::sea_models::passkey_credential;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::extractors::ValidatedJson;
-use crate::modules::auth_v1::controller::create_bound_session;
+use crate::modules::auth_v1::controller::{create_bound_session, session_rotated_headers};
 use crate::modules::passkey_v1::validator::{
     V1LoginFinishPayload, V1RegisterFinishPayload, V1RemovePasskeyPayload,
 };
@@ -193,6 +193,9 @@ pub async fn login_finish(
             match create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await {
                 Ok(()) => Ok((
                     StatusCode::OK,
+                    // W8B-001: login_with_metadata cycled the session id (see
+                    // auth_v1 log_in) — emit the header so the web client refreshes CSRF.
+                    session_rotated_headers(true),
                     Json(json!({ "status": "ok", "user": user })),
                 )),
                 Err(err) => {
