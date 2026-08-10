@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
   import type { Snippet } from "svelte";
 
   type Props = {
@@ -33,10 +34,7 @@
     if (pending) return;
     await onsubmit();
     if (!formEl) return;
-    const errored = formEl.querySelector<HTMLElement>("[data-invalid='true'], [aria-invalid='true']");
-    if (errored && typeof errored.focus === "function") {
-      errored.focus();
-    }
+    focusFirstInvalid(formEl);
   }
 </script>
 
