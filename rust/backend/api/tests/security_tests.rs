@@ -489,6 +489,10 @@ fn auth_path_logs_contain_no_sensitive_values() {
         !smtp.contains("password = %"),
         "smtp provider must not log the SMTP password"
     );
+    assert!(
+        !smtp.contains("= %username"),
+        "smtp provider must not log the SMTP username (credential component, often an email address)"
+    );
 
     let cloudflare = include_str!("../src/services/mail/cloudflare.rs");
     assert!(

@@ -30,7 +30,6 @@ pub async fn create_connection() -> AsyncSmtpTransport<Tokio1Executor> {
     let implicit_tls = use_implicit_tls();
     tracing::info!(
         smtp_host = %host,
-        smtp_user = %username,
         tls_mode = if implicit_tls { "implicit(tls/465)" } else { "starttls(587)" },
         "Initializing SMTP transport"
     );
