@@ -87,7 +87,6 @@ export async function fetchRangeChunks(opts: RangeFetchOptions): Promise<QuranRa
     if (!decoded) throw new MalformedDataError("malformed range chunk");
     chunks.push(decoded);
   }
-  if (chunks.length === 1) return chunks[0]!;
   const stitched = stitchRangeChunks(chunks, bounds);
   if (!stitched) throw new MalformedDataError("range stitch failed");
   return stitched;

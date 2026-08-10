@@ -263,6 +263,27 @@ describe("fetchRangeChunks", () => {
       }),
     ).rejects.toThrow(MalformedDataError);
   });
+
+  // W5: an in-cap (single-chunk) read must flow through stitchRangeChunks, so a
+  // payload that disagrees with the requested bounds is rejected — not silently
+  // returned as-is (which the removed single-chunk short-circuit used to allow).
+  it.each([
+    ["wrong last index", { ayahs: ayahs(2, 6), normalizations: [norm(1)] }],
+    ["wrong count", { ayahs: ayahs(1, 3), normalizations: [norm(1)] }],
+    ["normalization for absent surah", { ayahs: ayahs(1, 5), normalizations: [norm(1), norm(2)] }],
+  ])("rejects an in-cap single chunk with %s", async (_label, payload) => {
+    const f = fetcherReturning({ data: payload });
+    await expect(
+      fetchRangeChunks({
+        base: "https://x/api",
+        source: "en.x",
+        from: 1,
+        to: 5,
+        decode: decoder,
+        fetchImpl: f,
+      }),
+    ).rejects.toThrow(MalformedDataError);
+  });
 });
 
 // W5: the five oversized juz (19/23/27/29/30) are the only ranges that exceed

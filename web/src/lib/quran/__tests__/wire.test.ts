@@ -11,6 +11,8 @@ vi.mock("$lib/stores/consent.svelte", () => ({ consent: consentState }));
 
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import { RangeKind } from "$lib/data/quran-data";
+import { MalformedDataError } from "$lib/quran/fetch";
+import { fetchRangeChunks } from "$lib/quran/range-fetch";
 import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";
 import {
   buildArabicBakedMap,
@@ -517,8 +519,15 @@ describe("translation route loaders", () => {
     const page = QURAN_DATA.surahLocalPage(1, 1)!;
     const overflowing = translationRangeFor(page.startGlobal, page.startGlobal + surah.ayahCount);
     await expect(
-      loadTranslationSurahRouteData(surah, 1, "en", "sahih", fetcherReturning(overflowing)),
-    ).rejects.toThrow(/contiguously/);
+      fetchRangeChunks({
+        base: "https://api.test/quran",
+        source: "en.sahih",
+        from: page.startGlobal,
+        to: page.endGlobal,
+        decode: (raw) => decodeTranslationRangeText(raw, validateCoordinate),
+        fetchImpl: async () => overflowing,
+      }),
+    ).rejects.toThrow(MalformedDataError);
   });
 
   it("loads a global page range and surfaces its ayahs", async () => {
