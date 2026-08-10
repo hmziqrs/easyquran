@@ -303,3 +303,160 @@ describe("SurahReader W7 distinct, clearable degradation state", () => {
     expect(target.querySelector('button[type="button"]')).not.toBeNull();
   });
 });
+
+describe("SurahReader W7 degradation state lifecycle", () => {
+  async function driveAdjacentRead(): Promise<void> {
+    await flushMicrotasks();
+    flushRaf();
+    await flushMicrotasks(20);
+  }
+
+  // Re-arm forward-fill via a resize so the next page (requestNextPage) loads
+  // deterministically without depending on happy-dom scroll geometry.
+  function fireForwardFill(): void {
+    window.dispatchEvent(new Event("resize"));
+    flushRaf();
+  }
+
+  // Force an upward-scroll processScroll cycle so requestPreviousPage runs.
+  // lastScrollY starts at 0 on mount; a negative scrollY yields direction -1.
+  function scrollUp(): void {
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      writable: true,
+      value: -1,
+    });
+    window.dispatchEvent(new Event("scroll"));
+    flushRaf();
+  }
+
+  function stubDistinctRanges(): void {
+    loadQuranDataStub.mockResolvedValue({
+      surahLocalPage: (_num: number, localPage: number) => ({
+        surah: 1,
+        localPage,
+        globalPage: localPage,
+        startGlobal: (localPage - 1) * 7 + 1,
+        endGlobal: (localPage - 1) * 7 + 7,
+        startAyah: 1,
+        endAyah: 7,
+        first: "1:1",
+        last: "1:7",
+      }),
+      globalIndexOf: (_s: number, a: number) => a,
+      surahByNum: () => SURAH,
+      surahLocalPageForAyah: () => ({ localPage: 1 }),
+    });
+  }
+
+  function surahOneRange(from: number, to: number) {
+    const ayahs = Array.from({ length: to - from + 1 }, (_, i) => ({
+      key: `1:${from + i}`,
+      surah: 1,
+      ayah: from + i,
+      globalIndex: from + i,
+      text: `v${from + i}`,
+    }));
+    return {
+      ayahs,
+      normalizations: [(pageData() as { normalization: unknown }).normalization],
+    };
+  }
+
+  // W7-R2-2: a worker-degraded flag set by one adjacent read clears on a
+  // subsequent clean adjacent read (the status callback re-assigns, not merges).
+  it("clears workerDegraded when a later adjacent read succeeds cleanly", async () => {
+    stubDistinctRanges();
+    workerStub.readRange.mockImplementation(
+      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+        if (from <= 8) onStatus?.({ servedBy: "local", workerFailure: { kind: "worker" } });
+        else onStatus?.({ servedBy: "local" });
+        return Promise.resolve(surahOneRange(from, _to));
+      },
+    );
+
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await driveAdjacentRead();
+
+    expect(workerStub.readRange).toHaveBeenCalled();
+    let region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/local offline copy/i);
+
+    fireForwardFill();
+    await flushMicrotasks(20);
+
+    region = target.querySelector('[role="status"]');
+    expect(region).toBeNull();
+  });
+
+  // W7-R2-3: a route-key change (navigation) discards stale degraded state.
+  // Svelte 5 removed imperative $set on mounted instances, so the in-place
+  // route-key $effect (which clears degraded when `initial` changes on a LIVING
+  // instance) cannot be driven here without a wrapper component. This covers the
+  // real navigation path — SvelteKit remounts the route with a new initial — and
+  // asserts the new instance starts clean and owns independent degradation state.
+  it("does not carry degraded state from a prior route into a fresh mount", async () => {
+    stubDistinctRanges();
+    workerStub.readRange.mockImplementation(
+      (from: number, to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+        onStatus?.({ servedBy: "local", workerFailure: { kind: "worker" } });
+        return Promise.resolve(surahOneRange(from, to));
+      },
+    );
+
+    const first = mount(SurahReader, {
+      target,
+      props: propsFor(pageData({ ayahs: 7, pageCount: 3 })),
+    });
+    await driveAdjacentRead();
+    expect(target.querySelector('[role="status"]')?.textContent ?? "").toMatch(
+      /local offline copy/i,
+    );
+    unmount(first);
+
+    const next = document.createElement("div");
+    document.body.appendChild(next);
+    mount(SurahReader, {
+      target: next,
+      props: propsFor(pageData({ localPage: 2, ayahs: 7, pageCount: 3 })),
+    });
+    await flushMicrotasks(20);
+    expect(next.querySelector('[role="status"]')).toBeNull();
+    expect(target.querySelector('[role="status"]')).toBeNull();
+
+    flushRaf();
+    await flushMicrotasks(20);
+    expect(next.querySelector('[role="status"]')?.textContent ?? "").toMatch(
+      /local offline copy/i,
+    );
+  });
+
+  // W7-R2-4: regression for the round-1 loadFailed-scoping fix — a successful
+  // adjacent-page load must NOT blanket-clear a different page's loadFailed.
+  // Page 3 fails (failedPage=3); loading page 1 succeeds and must leave page 3's
+  // inline retry visible.
+  it("keeps a different page's loadFailed + retry visible after an adjacent success", async () => {
+    stubDistinctRanges();
+    workerStub.readRange.mockImplementation((from: number) => {
+      if (from >= 15) return Promise.reject(new Error("boom")); // page 3 fails
+      return Promise.resolve(surahOneRange(from, from + 6)); // page 1 succeeds
+    });
+
+    mount(SurahReader, {
+      target,
+      props: propsFor(pageData({ localPage: 2, ayahs: 7, pageCount: 3 })),
+    });
+    await driveAdjacentRead();
+
+    let region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/Page 3 couldn't be loaded/i);
+    expect(target.querySelector('button[type="button"]')).not.toBeNull();
+
+    scrollUp();
+    await flushMicrotasks(20);
+
+    region = target.querySelector('[role="status"]');
+    expect(region?.textContent ?? "").toMatch(/Page 3 couldn't be loaded/i);
+    expect(target.querySelector('button[type="button"]')).not.toBeNull();
+  });
+});

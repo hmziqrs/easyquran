@@ -18,6 +18,7 @@ import {
   runQuery,
   TANZIL_QURAN_DATABASE,
   type CanonicalQuranRow,
+  type QuranCoordinateRow,
   type QuranQueryRunner,
 } from "$lib/quran/sql";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
@@ -111,43 +112,51 @@ function openReadOnly(bytes: Uint8Array): Database {
   return database;
 }
 
+export function assertStagedQuranContent(
+  count: number,
+  rows: readonly QuranCoordinateRow[],
+  sourceId: string,
+): void {
+  if (count !== QURAN_ROW_COUNT) {
+    throw new Error(`[quran-stage:${sourceId}] row count ${count} != ${QURAN_ROW_COUNT}`);
+  }
+  if (rows.length !== QURAN_ROW_COUNT) {
+    throw new Error(
+      `[quran-stage:${sourceId}] coordinate count ${rows.length} != ${QURAN_ROW_COUNT}`,
+    );
+  }
+  let previous = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (row.surah < 1 || row.surah > 114 || row.ayah < 1) {
+      throw new Error(
+        `[quran-stage:${sourceId}] bad coordinate ${row.globalIndex}/${row.surah}:${row.ayah}`,
+      );
+    }
+    if (i === 0) previous = row.globalIndex;
+    else if (row.globalIndex !== previous + 1) {
+      throw new Error(
+        `[quran-stage:${sourceId}] non-contiguous globalIndex at ${row.globalIndex}`,
+      );
+    }
+    previous = row.globalIndex;
+  }
+  if (isArabicSourceId(sourceId)) {
+    const profile = resolveSourceProfile(sourceId);
+    if (profile.canonicalRowCount !== QURAN_ROW_COUNT) {
+      throw new Error(`[quran-stage:${sourceId}] profile row count mismatch`);
+    }
+  }
+}
+
 function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): void {
   if (!sqlite3) throw new Error("[quran-worker] sqlite3 not initialized before staging check");
   const database = openReadOnly(bytes);
   try {
     const runner = createWasmQueryRunner(database);
     const count = runOne(runner, TANZIL_QURAN_DATABASE.queries.count);
-    if (count !== QURAN_ROW_COUNT) {
-      throw new Error(`[quran-stage:${sourceId}] row count ${count} != ${QURAN_ROW_COUNT}`);
-    }
     const rows = runQuery(runner, TANZIL_QURAN_DATABASE.queries.coordinates);
-    if (rows.length !== QURAN_ROW_COUNT) {
-      throw new Error(
-        `[quran-stage:${sourceId}] coordinate count ${rows.length} != ${QURAN_ROW_COUNT}`,
-      );
-    }
-    let previous = 0;
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]!;
-      if (row.surah < 1 || row.surah > 114 || row.ayah < 1) {
-        throw new Error(
-          `[quran-stage:${sourceId}] bad coordinate ${row.globalIndex}/${row.surah}:${row.ayah}`,
-        );
-      }
-      if (i === 0) previous = row.globalIndex;
-      else if (row.globalIndex !== previous + 1) {
-        throw new Error(
-          `[quran-stage:${sourceId}] non-contiguous globalIndex at ${row.globalIndex}`,
-        );
-      }
-      previous = row.globalIndex;
-    }
-    if (isArabicSourceId(sourceId)) {
-      const profile = resolveSourceProfile(sourceId);
-      if (profile.canonicalRowCount !== QURAN_ROW_COUNT) {
-        throw new Error(`[quran-stage:${sourceId}] profile row count mismatch`);
-      }
-    }
+    assertStagedQuranContent(count, rows, sourceId);
   } finally {
     database.close();
   }
