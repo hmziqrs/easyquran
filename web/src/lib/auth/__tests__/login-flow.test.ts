@@ -172,6 +172,50 @@ describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
     await flow.submitCredentials();
     expect(client.refreshCsrf).not.toHaveBeenCalled();
   });
+
+  it("submitTotp: awaits refreshCsrf exactly once before transition/setUser when TOTP response did not rotate", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(ok({ status: "totp_required", totp_token: "tt-rot" }))
+      .mockResolvedValueOnce(ok(PROFILE, false));
+    const flow = createLoginFlow({ client, state });
+    flow.email = "2fa@eq.test";
+    flow.password = "secret-12345";
+    await flow.submitCredentials();
+    flow.code = "123456";
+    const res = await flow.submitTotp();
+    expect(res).toBe(true);
+    expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
+    const refreshOrder = (
+      client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
+    ).mock.invocationCallOrder[0];
+    const transitionOrder = (
+      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
+    ).mock.invocationCallOrder[0];
+    const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
+      .mock.invocationCallOrder[0];
+    expect(refreshOrder).toBeLessThan(transitionOrder);
+    expect(refreshOrder).toBeLessThan(setUserOrder);
+    expect(state.setUser).toHaveBeenCalledWith(PROFILE);
+    expect(state.setTwoFaPending).toHaveBeenCalledWith(false);
+    expect(flow.step).toBe("done");
+  });
+
+  it("submitTotp: skips refreshCsrf when the TOTP response already rotated the token", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(ok({ status: "totp_required", totp_token: "tt-rot2" }))
+      .mockResolvedValueOnce(ok(PROFILE, true));
+    const flow = createLoginFlow({ client, state });
+    flow.email = "2fa@eq.test";
+    flow.password = "secret-12345";
+    await flow.submitCredentials();
+    flow.code = "123456";
+    await flow.submitTotp();
+    expect(client.refreshCsrf).not.toHaveBeenCalled();
+  });
 });
 
 describe("LoginFlow TOTP continuation", () => {
