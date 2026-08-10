@@ -136,6 +136,44 @@ describe("LoginFlow credentials", () => {
   });
 });
 
+describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
+  it("awaits refreshCsrf exactly once before transition/setUser when response did not rotate", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(ok(PROFILE, false));
+    const flow = createLoginFlow({ client, state });
+    flow.email = "sara@eq.test";
+    flow.password = "secret-12345";
+    const res = await flow.submitCredentials();
+    expect(res).toBe(true);
+    expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
+    const refreshOrder = (
+      client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
+    ).mock.invocationCallOrder[0];
+    const transitionOrder = (
+      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
+    ).mock.invocationCallOrder[0];
+    const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
+      .mock.invocationCallOrder[0];
+    expect(refreshOrder).toBeLessThan(transitionOrder);
+    expect(refreshOrder).toBeLessThan(setUserOrder);
+    expect(state.setUser).toHaveBeenCalledWith(PROFILE);
+    expect(state.setTwoFaPending).toHaveBeenCalledWith(false);
+    expect(flow.step).toBe("done");
+  });
+
+  it("skips refreshCsrf when the response already rotated the token", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(ok(PROFILE, true));
+    const flow = createLoginFlow({ client, state });
+    flow.email = "sara@eq.test";
+    flow.password = "secret-12345";
+    await flow.submitCredentials();
+    expect(client.refreshCsrf).not.toHaveBeenCalled();
+  });
+});
+
 describe("LoginFlow TOTP continuation", () => {
   it("totp_required stores token in memory, marks pending, does NOT authenticate", async () => {
     const client = mockClient();
