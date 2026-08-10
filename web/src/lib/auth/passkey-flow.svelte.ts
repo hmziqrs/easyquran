@@ -18,21 +18,11 @@ import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
 
 export interface PasskeyInfo {
   readonly id: string;
-  readonly label?: string;
+  readonly label: string;
+  readonly deviceType?: string | null;
+  readonly transports?: unknown;
   readonly createdAt?: string;
-  readonly lastUsedAt?: string;
-}
-
-export interface PasskeyListResponse {
-  readonly passkeys: ReadonlyArray<PasskeyInfo>;
-}
-
-export interface PasskeyLoginBegin {
-  readonly publicKey: unknown;
-}
-
-export interface PasskeyRegisterBegin {
-  readonly publicKey: unknown;
+  readonly lastUsedAt?: string | null;
 }
 
 export interface PasskeyFlowStateLike {
@@ -46,6 +36,15 @@ export interface PasskeyFlowDeps {
   readonly client?: AuthClient;
   readonly state?: PasskeyFlowStateLike;
   readonly credentials?: CredentialsContainer;
+}
+
+interface CredentialView {
+  readonly id: number;
+  readonly credential_id: string;
+  readonly device_type?: string | null;
+  readonly transports?: unknown;
+  readonly created_at?: string;
+  readonly last_used_at?: string | null;
 }
 
 function b64uToBuffer(b64u: string): ArrayBuffer {
@@ -82,6 +81,17 @@ function isUserCancellation(e: unknown): boolean {
   return false;
 }
 
+function toPasskeyInfo(view: CredentialView): PasskeyInfo {
+  return {
+    id: view.credential_id,
+    label: typeof view.device_type === "string" && view.device_type ? view.device_type : "Passkey",
+    deviceType: view.device_type ?? null,
+    transports: view.transports,
+    createdAt: view.created_at,
+    lastUsedAt: view.last_used_at ?? null,
+  };
+}
+
 type NavigatorCredentials = CredentialsContainer | undefined;
 
 function resolveCredentials(inject?: CredentialsContainer): NavigatorCredentials {
@@ -101,6 +111,8 @@ export class PasskeyFlow {
   passkeys = $state<ReadonlyArray<PasskeyInfo>>([]);
   #loginOptions: PublicKeyCredentialRequestOptions | null = null;
   #registerOptions: PublicKeyCredentialCreationOptions | null = null;
+  #loginState: unknown = null;
+  #registerState: unknown = null;
 
   constructor(client: AuthClient, state: PasskeyFlowStateLike, credentials?: CredentialsContainer) {
     this.client = client;
@@ -115,6 +127,8 @@ export class PasskeyFlow {
   clearSecrets(): void {
     this.#loginOptions = null;
     this.#registerOptions = null;
+    this.#loginState = null;
+    this.#registerState = null;
   }
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
@@ -139,15 +153,16 @@ export class PasskeyFlow {
     this.genericError = null;
     this.fieldErrors = {};
     try {
-      const begin = await this.client.unsafeRequest<PasskeyLoginBegin>(
-        "/passkey/v1/login/begin",
-        { method: "POST" },
-      );
+      const begin = await this.client.unsafeRequest<{
+        challenge?: unknown;
+        authentication_state?: unknown;
+      }>("/passkey/v1/login/begin", { method: "POST" });
       if (!begin.ok) {
         this.fail(begin.status, begin.error);
         return false;
       }
-      const options = this.#toRequestOptions(begin.data);
+      this.#loginState = begin.data?.authentication_state ?? null;
+      const options = this.#toRequestOptions(begin.data?.challenge);
       if (!options) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
@@ -170,15 +185,21 @@ export class PasskeyFlow {
         this.cancelled = true;
         return false;
       }
-      const finish = await this.client.unsafeRequest<UserProfile>(
+      const finish = await this.client.unsafeRequest<{ status?: string; user?: unknown }>(
         "/passkey/v1/login/finish",
-        { method: "POST", body: this.#serializeAssertion(assertion) },
+        {
+          method: "POST",
+          body: {
+            credential: this.#serializeAssertion(assertion),
+            authentication_state: this.#loginState,
+          },
+        },
       );
       if (!finish.ok) {
         this.fail(finish.status, finish.error);
         return false;
       }
-      const user = decodeUserProfile(finish.data);
+      const user = decodeUserProfile(finish.data?.user);
       if (!user) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
@@ -198,6 +219,7 @@ export class PasskeyFlow {
     } finally {
       this.pending = false;
       this.#loginOptions = null;
+      this.#loginState = null;
     }
   }
 
@@ -212,10 +234,10 @@ export class PasskeyFlow {
     this.genericError = null;
     this.fieldErrors = {};
     try {
-      const begin = await this.client.unsafeRequest<PasskeyRegisterBegin>(
-        "/passkey/v1/register/begin",
-        { method: "POST", body: label ? { label } : undefined },
-      );
+      const begin = await this.client.unsafeRequest<{
+        challenge?: unknown;
+        registration_state?: unknown;
+      }>("/passkey/v1/register/begin", { method: "POST" });
       if (!begin.ok) {
         if (begin.status === 403 || isVerifiedOnlyError(begin.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
@@ -224,7 +246,8 @@ export class PasskeyFlow {
         }
         return false;
       }
-      const options = this.#toCreationOptions(begin.data);
+      this.#registerState = begin.data?.registration_state ?? null;
+      const options = this.#toCreationOptions(begin.data?.challenge);
       if (!options) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
@@ -247,9 +270,18 @@ export class PasskeyFlow {
         this.cancelled = true;
         return false;
       }
-      const finish = await this.client.unsafeRequest<PasskeyListResponse>(
+      const serialized = this.#serializeAttestation(credential);
+      const finish = await this.client.unsafeRequest<CredentialView>(
         "/passkey/v1/register/finish",
-        { method: "POST", body: this.#serializeAttestation(credential) },
+        {
+          method: "POST",
+          body: {
+            credential: serialized.credential,
+            registration_state: this.#registerState,
+            ...(serialized.transports ? { transports: serialized.transports } : {}),
+            ...(label ? { device_type: label } : {}),
+          },
+        },
       );
       if (!finish.ok) {
         if (finish.status === 403 || isVerifiedOnlyError(finish.error)) {
@@ -259,7 +291,11 @@ export class PasskeyFlow {
         }
         return false;
       }
-      this.#mergeList(finish.data);
+      if (finish.data) {
+        this.#mergeSingle(finish.data);
+      } else {
+        await this.list();
+      }
       if (!finish.rotated) {
         try {
           await this.client.refreshCsrf();
@@ -274,51 +310,67 @@ export class PasskeyFlow {
     } finally {
       this.pending = false;
       this.#registerOptions = null;
+      this.#registerState = null;
     }
   }
 
   async list(): Promise<ReadonlyArray<PasskeyInfo> | null> {
-    const res = await this.client.get<PasskeyListResponse>("/passkey/v1/list");
+    const res = await this.client.unsafeRequest<{ data?: unknown }>(
+      "/passkey/v1/list",
+      { method: "POST" },
+    );
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) return null;
       return null;
     }
-    this.#mergeList(res.data);
+    this.#mergeList(res.data?.data);
     return this.passkeys;
   }
 
   async remove(id: string): Promise<boolean> {
     if (!id) return false;
-    const res = await this.client.unsafeRequest<PasskeyListResponse>(
+    const res = await this.client.unsafeRequest<{ message?: string }>(
       "/passkey/v1/remove",
-      { method: "POST", body: { id } },
+      { method: "POST", body: { credential_id: id } },
     );
     if (!res.ok) {
       this.fail(res.status, res.error);
       return false;
     }
-    this.#mergeList(res.data);
+    this.passkeys = this.passkeys.filter((p) => p.id !== id);
     return true;
   }
 
-  #mergeList(data: PasskeyListResponse | null): void {
-    if (!data) return;
-    const arr = Array.isArray(data.passkeys) ? data.passkeys : [];
-    this.passkeys = arr.filter((p): p is PasskeyInfo => {
-      if (!p || typeof p !== "object") return false;
-      return typeof (p as { id?: unknown }).id === "string";
-    });
+  #mergeSingle(view: unknown): void {
+    if (!view || typeof view !== "object") return;
+    const v = view as Partial<CredentialView>;
+    if (typeof v.credential_id !== "string") return;
+    const info = toPasskeyInfo(v as CredentialView);
+    const existing = this.passkeys.filter((p) => p.id !== info.id);
+    this.passkeys = [...existing, info];
   }
 
-  #toRequestOptions(data: unknown): PublicKeyCredentialRequestOptions | null {
-    if (!data || typeof data !== "object") return null;
-    const o = (data as { publicKey?: unknown }).publicKey;
+  #mergeList(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    const out: PasskeyInfo[] = [];
+    for (const entry of data) {
+      if (!entry || typeof entry !== "object") continue;
+      const v = entry as Partial<CredentialView>;
+      if (typeof v.credential_id !== "string") continue;
+      out.push(toPasskeyInfo(v as CredentialView));
+    }
+    this.passkeys = out;
+  }
+
+  #toRequestOptions(challenge: unknown): PublicKeyCredentialRequestOptions | null {
+    if (!challenge || typeof challenge !== "object") return null;
+    const o = (challenge as { publicKey?: unknown }).publicKey;
     if (!o || typeof o !== "object") return null;
     const raw = o as Record<string, unknown>;
-    const challenge = decodeBufferField(raw.challenge);
-    if (!challenge) return null;
+    const challengeBuf = decodeBufferField(raw.challenge);
+    if (!challengeBuf) return null;
     const out: PublicKeyCredentialRequestOptions = {
-      challenge,
+      challenge: challengeBuf,
       ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
       ...(typeof raw.rpId === "string" ? { rpId: raw.rpId } : {}),
       ...(Array.isArray(raw.allowCredentials) ? { allowCredentials: this.#decodeCredentialDescriptors(raw.allowCredentials) } : {}),
@@ -327,20 +379,20 @@ export class PasskeyFlow {
     return out;
   }
 
-  #toCreationOptions(data: unknown): PublicKeyCredentialCreationOptions | null {
-    if (!data || typeof data !== "object") return null;
-    const o = (data as { publicKey?: unknown }).publicKey;
+  #toCreationOptions(challenge: unknown): PublicKeyCredentialCreationOptions | null {
+    if (!challenge || typeof challenge !== "object") return null;
+    const o = (challenge as { publicKey?: unknown }).publicKey;
     if (!o || typeof o !== "object") return null;
     const raw = o as Record<string, unknown>;
-    const challenge = decodeBufferField(raw.challenge);
-    if (!challenge) return null;
+    const challengeBuf = decodeBufferField(raw.challenge);
+    if (!challengeBuf) return null;
     const userRaw = raw.user;
     if (!userRaw || typeof userRaw !== "object") return null;
     const u = userRaw as Record<string, unknown>;
     const userId = decodeBufferField(u.id);
     if (!userId) return null;
     const out: PublicKeyCredentialCreationOptions = {
-      challenge,
+      challenge: challengeBuf,
       rp: this.#decodeRp(raw.rp),
       user: {
         id: userId,
@@ -404,28 +456,40 @@ export class PasskeyFlow {
     };
     return {
       id: cred.id,
-      raw_id: bufferToB64u(cred.rawId),
+      rawId: bufferToB64u(cred.rawId),
       type: cred.type,
       response: {
-        client_data_json: bufferToB64u(response.clientDataJSON),
-        ...(response.authenticatorData ? { authenticator_data: bufferToB64u(response.authenticatorData) } : {}),
+        clientDataJSON: bufferToB64u(response.clientDataJSON),
+        ...(response.authenticatorData ? { authenticatorData: bufferToB64u(response.authenticatorData) } : {}),
         ...(response.signature ? { signature: bufferToB64u(response.signature) } : {}),
-        ...(response.userHandle ? { user_handle: bufferToB64u(response.userHandle) } : {}),
+        ...(response.userHandle ? { userHandle: bufferToB64u(response.userHandle) } : {}),
       },
     };
   }
 
-  #serializeAttestation(cred: PublicKeyCredential): Record<string, unknown> {
+  #serializeAttestation(cred: PublicKeyCredential): {
+    credential: Record<string, unknown>;
+    transports: string[] | null;
+  } {
     const response = cred.response as AuthenticatorAttestationResponse;
-    return {
+    let transports: string[] | null = null;
+    if (typeof response.getTransports === "function") {
+      try {
+        const t = response.getTransports();
+        if (Array.isArray(t) && t.length > 0) transports = t.slice();
+      } catch {}
+    }
+    const credential: Record<string, unknown> = {
       id: cred.id,
-      raw_id: bufferToB64u(cred.rawId),
+      rawId: bufferToB64u(cred.rawId),
       type: cred.type,
       response: {
-        client_data_json: bufferToB64u(response.clientDataJSON),
-        attestation_object: bufferToB64u(response.attestationObject),
+        clientDataJSON: bufferToB64u(response.clientDataJSON),
+        attestationObject: bufferToB64u(response.attestationObject),
+        ...(transports ? { transports } : {}),
       },
     };
+    return { credential, transports };
   }
 }
 
