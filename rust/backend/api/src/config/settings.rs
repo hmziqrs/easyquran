@@ -527,6 +527,26 @@ impl WebAuthSettings {
                 .filter(|s| !s.is_empty())
                 .collect();
             let frontend_origin = origin_of(&std::env::var("FRONTEND_URL").unwrap_or_default());
+            // W8F-3: OAuth redirects must never cross to an http:// origin — the
+            // authorization code + session cookie would traverse cleartext. Reject
+            // any non-HTTPS entry in the allowlist or FRONTEND_URL before the
+            // provider-loop membership test runs.
+            for o in &allowed {
+                if o.starts_with("http://") {
+                    return Err(format!(
+                        "Production with WEB_AUTH_ENABLED=true: OAUTH_ALLOWED_REDIRECT_ORIGINS \
+                         entry '{o}' is not HTTPS (got http://); OAuth callbacks require https:// \
+                         origins"
+                    ));
+                }
+            }
+            if frontend_origin.starts_with("http://") {
+                return Err(format!(
+                    "Production with WEB_AUTH_ENABLED=true: FRONTEND_URL origin \
+                     '{frontend_origin}' is not HTTPS (got http://); OAuth callbacks require \
+                     https:// origins"
+                ));
+            }
             for p in &oauth_providers {
                 let rk = provider_redirect_key(p);
                 let redirect = std::env::var(rk).unwrap_or_default();
@@ -1313,6 +1333,43 @@ mod tests {
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         let cfg = WebAuthSettings::from_env().expect("matched origin must boot");
         assert!(cfg.enabled);
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_http_allowed_redirect_origin() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        // An http:// origin in the allowlist must fail boot even with no oauth
+        // providers — the HTTPS scheme is enforced before membership is considered.
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "http://easyquran.fyi");
+        let err = WebAuthSettings::from_env().expect_err("http allowed origin must fail");
+        assert!(err.contains("HTTPS"), "got: {err}");
+        assert!(err.contains("OAUTH_ALLOWED_REDIRECT_ORIGINS"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_http_frontend_url() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "http://easyquran.fyi");
+        let err = WebAuthSettings::from_env().expect_err("http FRONTEND_URL must fail");
+        assert!(err.contains("HTTPS"), "got: {err}");
+        assert!(err.contains("FRONTEND_URL"), "got: {err}");
         restore_env(snap);
     }
 

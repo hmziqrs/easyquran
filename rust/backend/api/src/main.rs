@@ -160,7 +160,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let gate_store = std::sync::Arc::new(rux_request_gate::InMemoryStore::default());
 
-    ruxlog::services::rate_limit_store::ensure_table(&sea_db).await;
+    // rate_limit_state schema owned by migration m000002 (runs inside
+    // get_sea_connection before this point); restore() reads what it created.
     gate_store.restore(ruxlog::services::rate_limit_store::load(&sea_db).await);
 
     let session_store = Arc::new(SqliteSessionStore::new(sea_db.clone()).await);
