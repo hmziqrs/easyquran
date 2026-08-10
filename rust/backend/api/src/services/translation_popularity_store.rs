@@ -184,7 +184,10 @@ pub async fn flush(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::quran::{load_catalogue, TranslationPool};
     use sea_orm::{ConnectOptions, Database};
+    use std::path::PathBuf;
+    use std::time::Duration;
 
     const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS translation_popularity (
         id TEXT PRIMARY KEY,
@@ -353,16 +356,116 @@ mod tests {
         assert!((score - 6.0).abs() < 1e-9, "catalogue row updated");
     }
 
+    async fn demand_pool() -> TranslationPool {
+        // Real catalogue + real translations dir, with demand collection ON so get_or_build
+        // bumps the AtomicU64 side table the flush task snapshots.
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let translations_dir = format!("{base}/translations");
+        let cat = load_catalogue(&format!("{translations_dir}/index.min.json"))
+            .await
+            .expect("catalogue loads");
+        TranslationPool::new(
+            &cat,
+            PathBuf::from(&translations_dir),
+            8,
+            48 * 1024 * 1024,
+            Duration::from_secs(1800),
+            true,
+            0,
+        )
+    }
+
+    fn demand_for(snap: &[(String, u64)], id: &str) -> u64 {
+        snap.iter()
+            .find(|(s, _)| s == id)
+            .map(|(_, c)| *c)
+            .unwrap_or(0)
+    }
+
+    fn demand_total(snap: &[(String, u64)]) -> u64 {
+        snap.iter().map(|(_, c)| *c).sum()
+    }
+
     #[tokio::test]
-    async fn flush_against_missing_table_returns_err() {
-        // No table created → the txn's SELECT errors. A failed flush leaves the caller's demand
-        // counts intact (the flush caller subtracts only on Ok), so the next tick retries.
+    async fn failed_flush_leaves_demand_intact_and_next_tick_commits() {
+        // Flush-task contract: snapshot -> flush; on Err the caller does NOT demand_subtract, so
+        // the pool's AtomicU64 side table keeps the accrued counts and the next tick retries with
+        // them. Proven here against the real TranslationPool + real SQLite: (1) the flush still
+        // surfaces the missing-table error, (2) a failed flush leaves every demand counter
+        // UNCHANGED (subtract runs only on Ok), and (3) the next successful tick commits the
+        // accrued hits to translation_popularity.
         let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
         opt.max_connections(1);
         let db = Database::connect(opt).await.unwrap();
         let now = epoch_now();
-        let snapshot = vec![("en.sahih".to_string(), 1u64)];
-        let res = flush(&db, &snapshot, &cat("en.sahih"), now).await;
+
+        let pool = demand_pool().await;
+        let id_str = pool
+            .catalogue()
+            .keys()
+            .next()
+            .expect("catalogue is non-empty")
+            .clone();
+        let id = pool.parse_id(&id_str).expect("catalogue id parses");
+        let catalogue: HashSet<String> = pool.catalogue_ids().clone();
+
+        // Accrue real API demand: two successful lookups bump this id's AtomicU64 to 2.
+        let _ = pool.get_or_build(&id).await.unwrap();
+        let _ = pool.get_or_build(&id).await.unwrap();
+
+        // Snapshot the demand side table BEFORE the flush attempt.
+        let before = pool.demand_snapshot();
+        let accrued = demand_for(&before, &id_str);
+        assert_eq!(accrued, 2, "two successful lookups accrue two demand hits");
+        let total_before = demand_total(&before);
+
+        // 1. Failing flush: no translation_popularity table -> the txn's SELECT errors. Per the
+        //    contract the caller does NOT subtract, so every demand counter must be preserved.
+        let res = flush(&db, &before, &catalogue, now).await;
         assert!(res.is_err(), "missing table must surface as an error");
+
+        let after = pool.demand_snapshot();
+        assert_eq!(
+            demand_total(&after),
+            total_before,
+            "a failed flush must not mutate any demand counter (subtract runs only on Ok)"
+        );
+        assert_eq!(
+            demand_for(&after, &id_str),
+            accrued,
+            "the accrued count for the hit id is intact for the next tick to retry"
+        );
+
+        // 2. Next tick: table now exists. Re-snapshot (captures everything accrued, including
+        //    during the failed flush) and flush again -> Ok, committing the accrued hits.
+        db.execute_unprepared(CREATE_TABLE).await.unwrap();
+        let snapshot = pool.demand_snapshot();
+        let ranked = flush(&db, &snapshot, &catalogue, now)
+            .await
+            .expect("flush succeeds once the table exists");
+
+        let (score, hits_total, _, _) = read_row(&db, &id_str).await;
+        assert_eq!(
+            hits_total, accrued as i64,
+            "accrued hits committed to the row"
+        );
+        assert!(
+            (score - accrued as f64).abs() < 1e-9,
+            "score_now reflects the committed hits: {score}"
+        );
+        assert!(
+            ranked.iter().any(|(s, _)| s == &id_str),
+            "the committed id appears in the ranked health snapshot"
+        );
+
+        // 3. Per the contract, a successful flush is followed by demand_subtract, draining the
+        //    committed counts so the next tick starts fresh for them.
+        pool.demand_subtract(&snapshot);
+        let drained = pool.demand_snapshot();
+        assert_eq!(
+            demand_for(&drained, &id_str),
+            0,
+            "demand_subtract after Ok drains the committed count"
+        );
     }
 }

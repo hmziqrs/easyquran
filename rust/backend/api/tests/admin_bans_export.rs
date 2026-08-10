@@ -20,6 +20,12 @@ use ruxlog::services::mail::{router::MailRouterLimits, MailRouter};
 use ruxlog::services::session_store::SqliteSessionStore;
 use ruxlog::state::{build_http_client, AppState, QuranRuntimeMetrics, StorageState};
 
+use migration::{Migrator, MigratorTrait};
+use rux_auth::AuthSession as GenAuthSession;
+use ruxlog::db::sea_models::user::{self, UserRole};
+use ruxlog::services::auth::AuthBackend;
+use sea_orm::ActiveModelTrait;
+
 const EXPORT_TOKEN: &str = "test-export-secret-token-xyz";
 
 // ruxlog is built without cfg(test) when linked into an integration test
@@ -160,10 +166,8 @@ async fn state() -> AppState {
 // SessionManagerLayer (provides Session) + Extension<AppState> (the from_fn
 // guard extracts both). No CSRF layer here so the rejection under test is the
 // auth guard alone, not CSRF.
-async fn app() -> axum::Router {
-    let state = state().await;
-    let cookie_key =
-        tower_sessions::cookie::Key::derive_from(state.settings.cookie_key.as_bytes());
+fn router_with_state(state: AppState) -> axum::Router {
+    let cookie_key = tower_sessions::cookie::Key::derive_from(state.settings.cookie_key.as_bytes());
     let session_layer = tower_sessions::SessionManagerLayer::new((*state.session_store).clone())
         .with_secure(false)
         .with_http_only(true)
@@ -173,6 +177,10 @@ async fn app() -> axum::Router {
         .layer(axum::Extension(state.clone()))
         .layer(session_layer)
         .with_state(state)
+}
+
+async fn app() -> axum::Router {
+    router_with_state(state().await)
 }
 
 fn is_auth_rejection(status: StatusCode) -> bool {
@@ -187,7 +195,10 @@ async fn invalid_export_bearer_token_rejected_on_export_route() {
             Request::builder()
                 .method("GET")
                 .uri("/admin/bans/export")
-                .header("authorization", "Bearer definitely-not-the-configured-token")
+                .header(
+                    "authorization",
+                    "Bearer definitely-not-the-configured-token",
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -292,5 +303,91 @@ async fn export_token_does_not_authorize_list_route() {
         is_auth_rejection(res.status()),
         "export token must NOT grant list access on GET /admin/bans; got {}",
         res.status()
+    );
+}
+
+#[tokio::test]
+async fn admin_session_fallthrough_authorizes_export_route() {
+    // Positive coverage of the human-access branch of admin_or_export_token: a
+    // request carrying a valid admin SESSION cookie but NO bearer token must reach
+    // the read-only export handler. The sibling tests cover the export-TOKEN path
+    // (valid accepted, invalid rejected, never honored on mutation/list routes);
+    // this one proves the session-ACL fallthrough succeeds for a real admin.
+    let state = state().await;
+
+    // The fallthrough session check reaches the DB (get_user + check_ban), so apply the
+    // real schema and seed an admin directly through the sea-orm model (before_save
+    // backfills the per-user session_auth_secret that binds the session).
+    Migrator::up(&state.sea_db, None)
+        .await
+        .expect("migrations apply");
+    let now = chrono::Utc::now().fixed_offset();
+    let admin = user::ActiveModel {
+        name: sea_orm::Set("export-admin".into()),
+        email: sea_orm::Set("export-admin@example.com".into()),
+        password: sea_orm::Set(None),
+        role: sea_orm::Set(UserRole::Admin),
+        is_verified: sea_orm::Set(true),
+        two_fa_enabled: sea_orm::Set(false),
+        created_at: sea_orm::Set(now),
+        updated_at: sea_orm::Set(now),
+        ..Default::default()
+    }
+    .insert(&state.sea_db)
+    .await
+    .expect("admin user seeded");
+
+    // Establish a real authenticated session in the SAME store the router uses, via the
+    // real AuthSession::login path. This populates the `rux_auth` session key and binds
+    // session_auth_hash so the fallthrough branch authenticates on the next request.
+    let backend = AuthBackend::new(
+        &state.sea_db,
+        state.session_store.clone(),
+        state.revoked_sessions.clone(),
+    );
+    let session = tower_sessions::Session::new(None, state.session_store.clone(), None);
+    let mut auth = GenAuthSession::new(backend, session).await;
+    auth.login(&admin).await.expect("admin logs in");
+    auth.session().save().await.expect("session persisted");
+    let session_id = auth
+        .session()
+        .id()
+        .expect("session has an id after login + save")
+        .to_string();
+    drop(auth);
+
+    // The router reads the session id from a PRIVATE ruxlog.sid cookie. Mint that cookie
+    // with the same key the SessionManagerLayer derives, so the request carries a genuine
+    // signed + encrypted session id — the value is opaque to the client, exactly as in
+    // production. (No route in this isolated router establishes a session on its own, so
+    // we forge the cookie the layer would otherwise issue on a Set-Cookie response.)
+    let cookie_key = tower_sessions::cookie::Key::derive_from(state.settings.cookie_key.as_bytes());
+    let mut jar = tower_sessions::cookie::CookieJar::new();
+    jar.private_mut(&cookie_key)
+        .add(tower_sessions::cookie::Cookie::new(
+            "ruxlog.sid",
+            session_id,
+        ));
+    let cookie_header = jar
+        .get("ruxlog.sid")
+        .expect("forged session cookie present")
+        .to_string();
+
+    let app = router_with_state(state);
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/bans/export")
+                .header("cookie", &cookie_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "a valid admin session (no bearer) must reach the export handler via the fallthrough branch"
     );
 }
