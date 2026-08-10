@@ -14,6 +14,7 @@ use crate::{
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
+    modules::auth_v1::controller::session_rotated_headers,
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -152,6 +153,7 @@ pub async fn facebook_exchange(
 
     Ok((
         StatusCode::OK,
+        session_rotated_headers(true),
         Json(json!({
             "success": true,
             "user": user,

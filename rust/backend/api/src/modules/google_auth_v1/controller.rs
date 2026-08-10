@@ -18,6 +18,7 @@ use crate::{
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
+    modules::auth_v1::controller::session_rotated_headers,
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -185,6 +186,7 @@ pub async fn google_exchange(
 
     Ok((
         StatusCode::OK,
+        session_rotated_headers(true),
         Json(json!({
             "success": true,
             "user": user,
@@ -403,4 +405,29 @@ async fn find_or_create_user(
         user_info.name.clone(),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::modules::auth_v1::controller::{session_rotated_headers, SESSION_ROTATED};
+
+    // W8B-003: regression guard that the rotation header is emitted on the
+    // success path of a session-rotating endpoint (login / OAuth exchange).
+    // finish_oauth_login cycles the session id, so the exchange response must
+    // carry X-EQ-Session-Rotated or the web client's CSRF token goes stale.
+    #[test]
+    fn session_rotated_header_present_on_successful_rotation() {
+        let headers = session_rotated_headers(true);
+        assert_eq!(
+            headers.get(&SESSION_ROTATED).map(|v| v.to_str().unwrap()),
+            Some("1"),
+            "successful rotation must emit the X-EQ-Session-Rotated header"
+        );
+
+        let headers = session_rotated_headers(false);
+        assert!(
+            !headers.contains_key(&SESSION_ROTATED),
+            "non-rotating response must omit the header"
+        );
+    }
 }
