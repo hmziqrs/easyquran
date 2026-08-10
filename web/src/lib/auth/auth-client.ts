@@ -219,6 +219,13 @@ export class AuthClient {
     return this.#request<T>(init.method, path, init);
   }
 
+  async get<T>(
+    path: string,
+    opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<AuthRequestResult<T>> {
+    return this.#request<T>("GET", path, opts);
+  }
+
   async getUser(signal?: AbortSignal): Promise<SessionProbeResult> {
     let res: AuthRequestResult<UserProfile>;
     try {

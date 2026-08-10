@@ -19,6 +19,22 @@ import {
   TWO_FA_NEXT,
   VERIFY_EMAIL_NEXT,
 } from "$lib/auth/auth-copy";
+import {
+  createOAuthFlow,
+  type OAuthFlow,
+  type OAuthFlowDeps,
+  type OAuthProvider,
+} from "$lib/auth/oauth-flow.svelte";
+import {
+  createPasskeyFlow,
+  type PasskeyFlow,
+  type PasskeyFlowDeps,
+} from "$lib/auth/passkey-flow.svelte";
+import {
+  createAccountClient,
+  type AccountClient,
+} from "$lib/auth/account-client";
+import { isOAuthProvider } from "$lib/auth/oauth-flow.svelte";
 
 export interface FlowStateLike {
   transition(ctx: AuthTransitionContext): Promise<void>;
@@ -749,6 +765,14 @@ export interface AllFlows {
   forgotPassword: ForgotPasswordFlow;
   twoFactor: TwoFactorFlow;
   logout: LogoutFlow;
+  oauth: Readonly<Record<OAuthProvider, OAuthFlow>>;
+  passkey: PasskeyFlow;
+  account: AccountClient;
+}
+
+export interface FlowsDeps extends FlowDeps {
+  readonly oauth?: OAuthFlowDeps;
+  readonly passkey?: PasskeyFlowDeps;
 }
 
 export function createLoginFlow(deps: FlowDeps = {}): LoginFlow {
@@ -776,4 +800,45 @@ export function createTwoFactorFlow(deps: FlowDeps = {}): TwoFactorFlow {
 
 export function createLogoutFlow(deps: FlowDeps = {}): LogoutFlow {
   return new LogoutFlow(deps.client ?? authClient, deps.state ?? authState);
+}
+
+const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = [
+  "google",
+  "apple",
+  "facebook",
+  "github",
+];
+
+export function createOAuthFlows(
+  deps: OAuthFlowDeps = {},
+): Record<OAuthProvider, OAuthFlow> {
+  const out = {} as Record<OAuthProvider, OAuthFlow>;
+  for (const provider of OAUTH_PROVIDERS) {
+    out[provider] = createOAuthFlow(provider, deps);
+  }
+  return out;
+}
+
+export function createFlows(deps: FlowsDeps = {}): AllFlows {
+  const client = deps.client ?? authClient;
+  const state = deps.state ?? authState;
+  return {
+    login: new LoginFlow(client, state),
+    register: new RegisterFlow(client, state, new LoginFlow(client, state)),
+    verifyEmail: new VerifyEmailFlow(client, state),
+    forgotPassword: new ForgotPasswordFlow(client, state),
+    twoFactor: new TwoFactorFlow(client, state),
+    logout: new LogoutFlow(client, state),
+    oauth: createOAuthFlows({
+      client: deps.oauth?.client ?? client,
+      state: deps.oauth?.state ?? state,
+      navigate: deps.oauth?.navigate,
+    }),
+    passkey: createPasskeyFlow({
+      client: deps.passkey?.client ?? client,
+      state: deps.passkey?.state ?? state,
+      credentials: deps.passkey?.credentials,
+    }),
+    account: createAccountClient(client),
+  };
 }
