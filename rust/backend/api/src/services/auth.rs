@@ -3,10 +3,13 @@ use password_auth::verify_password;
 use rux_auth::{
     AuthBackend as RuxAuthBackend, AuthError, AuthErrorCode, AuthUser, BanStatus, SessionRevocation,
 };
-use sea_orm::DatabaseConnection;
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement, TransactionError,
+    TransactionTrait, Value,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::task;
 use tower_sessions::SessionStore;
 use tracing::{error, info, instrument, warn};
@@ -217,6 +220,212 @@ impl AuthBackend {
             }
         }
     }
+
+    // ── Durable session binding (W8e) ───────────────────────────────────────
+    // Backs the user_session audit row ↔ opaque tower session id mapping with
+    // the auth_session_binding table (m000004). record + replace are FAIL-CLOSED:
+    // a DB error returns Err so the caller destroys/rolls back the tower session
+    // instead of serving one that can never be terminated by audit id. The legacy
+    // in-memory free fns below remain as a compatibility shim for call sites that
+    // have not yet migrated; the durable methods on AuthBackend are canonical.
+
+    /// Record the 1:1 binding from a `user_session` audit row to its opaque tower
+    /// session id at login/passkey/OAuth creation. FAIL-CLOSED: returns Err on any
+    /// DB error so the caller tears down the tower session it just created.
+    pub async fn record_session_mapping(
+        &self,
+        db: &DatabaseConnection,
+        user_session_id: i32,
+        tower_session_id: &str,
+    ) -> Result<(), DbErr> {
+        let now = epoch_secs();
+        // UPSERT on tower_session_id; the UNIQUE(user_session_id) index makes a
+        // collision with a different audit row a constraint error → caller fails.
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "INSERT INTO auth_session_binding (tower_session_id, user_session_id, created_at) \
+             VALUES (?, ?, ?) \
+             ON CONFLICT(tower_session_id) DO UPDATE SET \
+             user_session_id=excluded.user_session_id, created_at=excluded.created_at",
+            vec![
+                Value::from(tower_session_id.to_string()),
+                Value::from(user_session_id),
+                Value::from(now),
+            ],
+        ))
+        .await?;
+        Ok(())
+    }
+
+    /// Reverse lookup used by session termination: opaque tower session id → the
+    /// owning `user_session` audit row id. None on miss; a DB error is logged and
+    /// treated as a miss (fail-closed lives at record/replace time, not on reads).
+    pub async fn lookup_session_mapping_by_tower(
+        &self,
+        db: &DatabaseConnection,
+        tower_session_id: &str,
+    ) -> Option<i32> {
+        match db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT user_session_id FROM auth_session_binding WHERE tower_session_id = ?",
+                vec![Value::from(tower_session_id.to_string())],
+            ))
+            .await
+        {
+            Ok(Some(row)) => row
+                .try_get_by_index::<i64>(0)
+                .ok()
+                .map(|v| v as i32),
+            Ok(None) => None,
+            Err(e) => {
+                warn!(error = %e, "session binding lookup failed (treated as miss)");
+                None
+            }
+        }
+    }
+
+    /// Drop the binding for a tower session id (logout / termination). A missing
+    /// row is not an error; a real DB error is returned so logout can surface it.
+    pub async fn clear_session_mapping(
+        &self,
+        db: &DatabaseConnection,
+        tower_session_id: &str,
+    ) -> Result<(), DbErr> {
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "DELETE FROM auth_session_binding WHERE tower_session_id = ?",
+            vec![Value::from(tower_session_id.to_string())],
+        ))
+        .await?;
+        Ok(())
+    }
+
+    /// Swap the binding on a `cycle_id()` rotation: the audit row is unchanged,
+    /// the opaque tower id moves from `old_tower` to `new_tower`. FAIL-CLOSED: one
+    /// transaction, and on DB error the caller destroys the freshly-rotated tower
+    /// session rather than leaving one that maps to no audit row.
+    pub async fn replace_session_mapping(
+        &self,
+        db: &DatabaseConnection,
+        user_session_id: i32,
+        old_tower: &str,
+        new_tower: &str,
+    ) -> Result<(), DbErr> {
+        let now = epoch_secs();
+        let old = old_tower.to_string();
+        let new = new_tower.to_string();
+        db.transaction::<_, (), DbErr>(|txn| {
+            let (old, new) = (old.clone(), new.clone());
+            Box::pin(async move {
+                // Drop the old tower row, then evict any stale row still pointing
+                // this audit row at an earlier tower id (enforces exactly-one).
+                txn.execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Sqlite,
+                    "DELETE FROM auth_session_binding WHERE tower_session_id = ?",
+                    vec![Value::from(old)],
+                ))
+                .await?;
+                txn.execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Sqlite,
+                    "DELETE FROM auth_session_binding WHERE user_session_id = ?",
+                    vec![Value::from(user_session_id)],
+                ))
+                .await?;
+                txn.execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Sqlite,
+                    "INSERT INTO auth_session_binding (tower_session_id, user_session_id, created_at) \
+                     VALUES (?, ?, ?)",
+                    vec![Value::from(new), Value::from(user_session_id), Value::from(now)],
+                ))
+                .await?;
+                Ok(())
+            })
+        })
+        .await
+        .map_err(|e| match e {
+            TransactionError::Connection(e) => e,
+            TransactionError::Transaction(e) => e,
+        })?;
+        Ok(())
+    }
+
+    /// Boot reconciliation (W8e): revoke live `user_session` audit rows that have
+    /// NO durable binding (pre-binding-era or orphaned sessions) and reap binding
+    /// rows whose audit row is already revoked. Produces one clean re-authentication
+    /// boundary at startup. Returns the count of newly-revoked unbound audit rows.
+    pub async fn reconcile_unbound_sessions(
+        &self,
+        db: &DatabaseConnection,
+        session_store: Arc<crate::services::session_store::SqliteSessionStore>,
+    ) -> Result<usize, DbErr> {
+        let now = chrono::Utc::now().fixed_offset();
+        // 1. Revoke live audit rows with no durable binding. Their tower-session
+        //    id was never recorded, so the live tower session cannot be DEL'd by id
+        //    here — it expires on its 14-day TTL or on the next re-auth cycle_id().
+        let revoked = db
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "UPDATE user_sessions SET revoked_at = ? \
+                 WHERE revoked_at IS NULL \
+                 AND id NOT IN (SELECT user_session_id FROM auth_session_binding)",
+                vec![Value::from(now)],
+            ))
+            .await?;
+        let count = revoked.rows_affected() as usize;
+
+        // 2. Orphan bindings: binding exists but its audit row is revoked. Delete
+        //    the live tower session (the binding holds the opaque id), then drop
+        //    the binding row so a re-issue under the same audit row cannot collide.
+        let orphans = db
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT b.tower_session_id FROM auth_session_binding b \
+                 JOIN user_sessions u ON b.user_session_id = u.id \
+                 WHERE u.revoked_at IS NOT NULL",
+                Vec::<Value>::new(),
+            ))
+            .await?;
+        use std::str::FromStr;
+        for row in orphans {
+            let tower: Option<String> = row.try_get_by_index(0).ok();
+            if let Some(tower) = tower.filter(|s| !s.is_empty()) {
+                if let Ok(id) = tower_sessions::session::Id::from_str(&tower) {
+                    if let Err(e) = session_store.delete(&id).await {
+                        warn!(
+                            error = %e,
+                            "reconcile: tower-session delete failed (audit row already revoked)"
+                        );
+                    }
+                }
+                if let Ok(mut set) = self.revoked.lock() {
+                    set.insert(tower);
+                }
+            }
+        }
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "DELETE FROM auth_session_binding WHERE user_session_id IN \
+             (SELECT id FROM user_sessions WHERE revoked_at IS NOT NULL)",
+            Vec::<Value>::new(),
+        ))
+        .await?;
+
+        if count > 0 {
+            info!(
+                revoked_unbound = count,
+                "Session-binding reconciliation: revoked pre-binding audit rows"
+            );
+        }
+        Ok(count)
+    }
+}
+
+fn epoch_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 impl std::fmt::Debug for AuthBackend {
@@ -414,5 +623,166 @@ mod tests {
             dummy.starts_with("$argon2id$"),
             "DUMMY_VERIFY_HASH must be an Argon2id PHC string, got: {dummy:?}"
         );
+    }
+
+    // --- W8e durable session binding ------------------------------------------
+
+    async fn mem_db() -> sea_orm::DatabaseConnection {
+        use sea_orm::{ConnectOptions, Database};
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let db = Database::connect(opt).await.unwrap();
+        db.execute_unprepared(
+            r#"CREATE TABLE "user_sessions" (
+                "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+                "user_id" INTEGER NOT NULL,
+                "device" TEXT,
+                "ip_address" TEXT,
+                "last_seen" TEXT NOT NULL,
+                "revoked_at" TEXT
+            )"#,
+        )
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "CREATE TABLE auth_session_binding (\
+             tower_session_id TEXT PRIMARY KEY, \
+             user_session_id INTEGER NOT NULL, \
+             created_at INTEGER NOT NULL)",
+        )
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "CREATE UNIQUE INDEX idx_auth_session_binding_user \
+             ON auth_session_binding (user_session_id)",
+        )
+        .await
+        .unwrap();
+        db
+    }
+
+    async fn backend(
+        db: &sea_orm::DatabaseConnection,
+    ) -> (
+        AuthBackend,
+        std::sync::Arc<crate::services::session_store::SqliteSessionStore>,
+    ) {
+        use std::collections::HashSet;
+        let store = std::sync::Arc::new(
+            crate::services::session_store::SqliteSessionStore::new(db.clone()).await,
+        );
+        let revoked = std::sync::Arc::new(std::sync::Mutex::new(HashSet::<String>::new()));
+        (AuthBackend::new(db, store.clone(), revoked), store)
+    }
+
+    #[tokio::test]
+    async fn binding_record_lookup_replace_clear_roundtrip() {
+        let db = mem_db().await;
+        let (b, _store) = backend(&db).await;
+
+        b.record_session_mapping(&db, 10, "t1").await.unwrap();
+        assert_eq!(b.lookup_session_mapping_by_tower(&db, "t1").await, Some(10));
+        assert_eq!(b.lookup_session_mapping_by_tower(&db, "missing").await, None);
+
+        // cycle_id rotation: same audit row, new opaque tower id; old tower cleared.
+        b.replace_session_mapping(&db, 10, "t1", "t2").await.unwrap();
+        assert_eq!(b.lookup_session_mapping_by_tower(&db, "t2").await, Some(10));
+        assert_eq!(
+            b.lookup_session_mapping_by_tower(&db, "t1").await,
+            None,
+            "old tower must be cleared after rotate"
+        );
+
+        b.clear_session_mapping(&db, "t2").await.unwrap();
+        assert_eq!(b.lookup_session_mapping_by_tower(&db, "t2").await, None);
+    }
+
+    #[tokio::test]
+    async fn binding_record_second_tower_for_same_audit_row_fails_closed() {
+        // The UNIQUE(user_session_id) index must keep exactly one live tower per
+        // audit row. A direct second INSERT bypassing replace() surfaces as a
+        // constraint error → record returns Err (fail-closed), never silently OK.
+        let db = mem_db().await;
+        let (b, _store) = backend(&db).await;
+        b.record_session_mapping(&db, 20, "a").await.unwrap();
+        // 'a' is a fresh tower id, so this UPSERTs; but the user_session_id 20
+        // already has a row and the ON CONFLICT(tower_session_id) clause does not
+        // fire (tower differs) → the UNIQUE(user_session_id) index rejects it.
+        let err = b.record_session_mapping(&db, 20, "b").await;
+        assert!(err.is_err(), "second tower for one audit row must fail closed");
+    }
+
+    #[tokio::test]
+    async fn reconcile_revokes_unbound_and_cleans_orphan_bindings() {
+        use sea_orm::{DatabaseBackend, Statement, Value};
+        let db = mem_db().await;
+        let now = "2026-01-01T00:00:00+00:00";
+        // row 1: live + bound  (survives)
+        // row 2: live + unbound (revoked by reconcile)
+        // row 3: revoked + orphan binding (binding reaped)
+        db.execute_unprepared(&format!(
+            "INSERT INTO \"user_sessions\" (id, user_id, last_seen, revoked_at) VALUES \
+             (1, 100, '{now}', NULL), \
+             (2, 100, '{now}', NULL), \
+             (3, 100, '{now}', '{now}')"
+        ))
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "INSERT INTO auth_session_binding (tower_session_id, user_session_id, created_at) \
+             VALUES ('t1', 1, 0), ('t3', 3, 0)",
+        )
+        .await
+        .unwrap();
+
+        let (b, store) = backend(&db).await;
+        let count = b.reconcile_unbound_sessions(&db, store).await.unwrap();
+        assert_eq!(count, 1, "only the live unbound row (id=2) is newly revoked");
+
+        let r2 = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT revoked_at FROM user_sessions WHERE id = 2",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let ra2: Option<String> = r2.try_get_by_index(0).unwrap();
+        assert!(ra2.is_some(), "unbound live session must be revoked");
+
+        let r1 = db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT revoked_at FROM user_sessions WHERE id = 1",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let ra1: Option<String> = r1.try_get_by_index(0).unwrap();
+        assert!(ra1.is_none(), "bound live session must stay live");
+
+        let bindings: Vec<String> = db
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT tower_session_id FROM auth_session_binding",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| r.try_get_by_index::<String>(0).unwrap())
+            .collect();
+        assert!(bindings.contains(&"t1".to_string()), "row1 binding must survive");
+        assert!(
+            !bindings.contains(&"t3".to_string()),
+            "orphan binding for revoked row must be reaped"
+        );
+
+        // Re-running reconcile is a no-op (idempotent): nothing unbound remains.
+        let (b2, store2) = backend(&db).await;
+        let again = b2.reconcile_unbound_sessions(&db, store2).await.unwrap();
+        assert_eq!(again, 0, "second reconcile revokes nothing new");
     }
 }

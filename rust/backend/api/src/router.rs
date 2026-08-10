@@ -46,23 +46,32 @@ use crate::utils::sanitize::xml_escape;
 use super::AppState;
 
 pub fn router(state: AppState) -> Router<AppState> {
+    let web_auth_enabled = crate::config::settings::web_auth().enabled;
     let mut router = Router::new()
         .route("/healthz", get(health_check))
         .route("/robots.txt", get(robots_txt))
         .route("/sitemap.xml", get(sitemap_xml))
-        .route("/csrf/v1/generate", post(csrf_v1::controller::generate))
-        .nest(
+        .route("/csrf/v1/generate", post(csrf_v1::controller::generate));
+
+    // Auth nests mount ONLY when WEB_AUTH_ENABLED (W8f). CSRF generation stays
+    // unconditional (it is foundation, used by anonymous sessions too).
+    if web_auth_enabled {
+        router = router.nest(
             "/auth/v1",
             auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         );
-
-    router = router.nest("/auth/google/v1", google_auth_v1::routes());
+        router = router.nest("/auth/google/v1", google_auth_v1::routes());
+        router = router
+            .nest("/email_verification/v1", email_verification_v1::routes())
+            .nest("/forgot_password/v1", forgot_password_v1::routes());
+        router = router.nest("/passkey/v1", passkey_v1::routes());
+        router = router
+            .nest("/auth/facebook/v1", facebook_auth_v1::routes())
+            .nest("/auth/github/v1", github_auth_v1::routes())
+            .nest("/auth/apple/v1", apple_auth_v1::routes());
+    }
 
     router = router.nest("/user/v1", user_v1::routes());
-
-    router = router
-        .nest("/email_verification/v1", email_verification_v1::routes())
-        .nest("/forgot_password/v1", forgot_password_v1::routes());
 
     router = router.nest(
         "/post/v1",
@@ -120,13 +129,6 @@ pub fn router(state: AppState) -> Router<AppState> {
             "/notification/v1",
             notification_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         );
-
-    router = router.nest("/passkey/v1", passkey_v1::routes());
-
-    router = router
-        .nest("/auth/facebook/v1", facebook_auth_v1::routes())
-        .nest("/auth/github/v1", github_auth_v1::routes())
-        .nest("/auth/apple/v1", apple_auth_v1::routes());
 
     #[cfg(feature = "openapi")]
     {

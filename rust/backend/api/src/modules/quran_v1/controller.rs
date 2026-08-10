@@ -995,6 +995,17 @@ pub async fn health_ready(
         surah_count: quran::SURA_COUNT as u16,
         arabic_resident_bytes: (state.quran.uthmani.bytes() + state.quran.simple_clean.bytes())
             as u64,
+        auth: AuthHealth {
+            enabled: crate::config::settings::web_auth().enabled,
+            providers: crate::config::settings::web_auth()
+                .providers_status
+                .iter()
+                .map(|p| ProviderStatusDto {
+                    name: p.name.clone(),
+                    ready: p.ready,
+                })
+                .collect(),
+        },
         loading: QuranLoadingHealth {
             arabic_load_duration_ms: state.quran_runtime_metrics.arabic_load_duration_ms,
             translation_catalogue_load_duration_ms: state

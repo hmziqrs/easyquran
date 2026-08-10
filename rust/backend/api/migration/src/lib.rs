@@ -3,6 +3,7 @@ pub use sea_orm_migration::prelude::*;
 mod m000001_init;
 mod m000002_rate_limit_state;
 mod m000003_translation_popularity;
+mod m000004_auth_session_binding;
 
 pub struct Migrator;
 
@@ -13,6 +14,9 @@ impl MigratorTrait for Migrator {
             Box::new(m000001_init::Migration),
             Box::new(m000002_rate_limit_state::Migration),
             Box::new(m000003_translation_popularity::Migration),
+            // m000004 ships AFTER m000003; additive (new table only), so an old
+            // binary rolled back across this migration simply ignores the table.
+            Box::new(m000004_auth_session_binding::Migration),
         ]
     }
 }

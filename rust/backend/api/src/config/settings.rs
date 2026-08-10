@@ -406,6 +406,181 @@ impl RateLimitSettings {
     }
 }
 
+/// Readiness-only per-provider state. `ready` reflects whether the provider's
+/// credentials are present at boot — never the credential values themselves.
+/// Surfaced on the public readiness endpoint so an operator can see WHICH
+/// provider is misconfigured without exposing secrets (W8f).
+#[derive(Clone, Debug)]
+pub struct ProviderStatus {
+    pub name: String,
+    pub ready: bool,
+}
+
+// Web auth gate (W8f). Default OFF: when WEB_AUTH_ENABLED is false the auth
+// router is not mounted and production does not require auth-side credentials.
+// Production with WEB_AUTH_ENABLED=true fails boot unless every listed provider
+// has its credentials + HTTPS redirect (origin-matched), WebAuthn is a real RP,
+// and MAIL_PROVIDER is a real transport (not none).
+#[derive(Clone, Debug)]
+pub struct WebAuthSettings {
+    pub enabled: bool,
+    pub oauth_providers: Vec<String>,
+    pub providers_status: Vec<ProviderStatus>,
+}
+
+impl WebAuthSettings {
+    pub fn from_env() -> Result<Self, String> {
+        let enabled = env_bool("WEB_AUTH_ENABLED", false);
+        let oauth_providers: Vec<String> = std::env::var("WEB_OAUTH_PROVIDERS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        // providers_status is computed always (readiness DTO reports it). `ready`
+        // means "credentials present" — no values stored.
+        let providers_status = oauth_providers
+            .iter()
+            .map(|p| ProviderStatus {
+                name: p.clone(),
+                ready: provider_creds_present(p),
+            })
+            .collect();
+
+        let is_prod = is_production()?;
+        if is_prod && enabled {
+            // Auth needs a real mail transport for verification + recovery.
+            let mail = std::env::var("MAIL_PROVIDER").unwrap_or_default();
+            if mail.trim() == "none" {
+                return Err(
+                    "Production with WEB_AUTH_ENABLED=true rejects MAIL_PROVIDER=none; set \
+                     MAIL_PROVIDER=smtp|cloudflare and configure credentials."
+                        .to_string(),
+                );
+            }
+            for p in &oauth_providers {
+                if provider_required_keys(p).is_empty() {
+                    return Err(format!(
+                        "Unknown provider '{p}' in WEB_OAUTH_PROVIDERS; valid: google, apple, facebook, github"
+                    ));
+                }
+                for k in provider_required_keys(p) {
+                    if std::env::var(k).unwrap_or_default().trim().is_empty() {
+                        return Err(format!(
+                            "Production with WEB_AUTH_ENABLED=true: provider '{p}' is missing {k}"
+                        ));
+                    }
+                }
+                if p == "apple" {
+                    let pk = std::env::var("APPLE_PRIVATE_KEY").unwrap_or_default();
+                    let pkp = std::env::var("APPLE_PRIVATE_KEY_PATH").unwrap_or_default();
+                    if pk.trim().is_empty() && pkp.trim().is_empty() {
+                        return Err(
+                            "Production with WEB_AUTH_ENABLED=true: apple requires \
+                             APPLE_PRIVATE_KEY or APPLE_PRIVATE_KEY_PATH"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+            // Redirect-origin match: each provider callback origin must be in the
+            // allowed list or equal FRONTEND_URL.
+            let allowed: Vec<String> = std::env::var("OAUTH_ALLOWED_REDIRECT_ORIGINS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let frontend_origin = origin_of(&std::env::var("FRONTEND_URL").unwrap_or_default());
+            for p in &oauth_providers {
+                let rk = provider_redirect_key(p);
+                let redirect = std::env::var(rk).unwrap_or_default();
+                let origin = origin_of(&redirect);
+                if !origin.is_empty() && !allowed.contains(&origin) && origin != frontend_origin {
+                    return Err(format!(
+                        "Production with WEB_AUTH_ENABLED=true: {rk} origin '{origin}' is not in \
+                         OAUTH_ALLOWED_REDIRECT_ORIGINS and does not match FRONTEND_URL"
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            enabled,
+            oauth_providers,
+            providers_status,
+        })
+    }
+}
+
+fn provider_required_keys(p: &str) -> &'static [&'static str] {
+    match p {
+        "google" => &["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"],
+        "apple" => &[
+            "APPLE_CLIENT_ID",
+            "APPLE_TEAM_ID",
+            "APPLE_KEY_ID",
+            "APPLE_REDIRECT_URI",
+        ],
+        "facebook" => &[
+            "FACEBOOK_CLIENT_ID",
+            "FACEBOOK_CLIENT_SECRET",
+            "FACEBOOK_REDIRECT_URI",
+        ],
+        "github" => &["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_REDIRECT_URI"],
+        _ => &[],
+    }
+}
+
+fn provider_redirect_key(p: &str) -> &'static str {
+    match p {
+        "google" => "GOOGLE_REDIRECT_URI",
+        "apple" => "APPLE_REDIRECT_URI",
+        "facebook" => "FACEBOOK_REDIRECT_URI",
+        "github" => "GITHUB_REDIRECT_URI",
+        _ => "",
+    }
+}
+
+fn provider_creds_present(p: &str) -> bool {
+    if provider_required_keys(p).is_empty() {
+        return false;
+    }
+    for k in provider_required_keys(p) {
+        if std::env::var(k).unwrap_or_default().trim().is_empty() {
+            return false;
+        }
+    }
+    if p == "apple" {
+        let pk = std::env::var("APPLE_PRIVATE_KEY").unwrap_or_default();
+        let pkp = std::env::var("APPLE_PRIVATE_KEY_PATH").unwrap_or_default();
+        if pk.trim().is_empty() && pkp.trim().is_empty() {
+            return false;
+        }
+    }
+    true
+}
+
+/// scheme://host[:port] of an absolute URL, or empty if it does not parse as
+/// http(s). Used to compare a provider callback against the allowed origins.
+fn origin_of(url: &str) -> String {
+    let url = url.trim();
+    let scheme = if url.starts_with("https://") {
+        "https://"
+    } else if url.starts_with("http://") {
+        "http://"
+    } else {
+        return String::new();
+    };
+    let rest = &url[scheme.len()..];
+    let host_port = rest.split('/').next().unwrap_or("");
+    if host_port.is_empty() {
+        String::new()
+    } else {
+        format!("{scheme}{host_port}")
+    }
+}
+
 /// Do NOT add `derive(Debug)` — `cookie_key` is a raw secret and would leak.
 pub struct Settings {
     pub cookie_key: String,
@@ -415,6 +590,30 @@ pub struct Settings {
     pub optimizer: OptimizerConfig,
     pub quran: QuranSettings,
     pub rate_limit: RateLimitSettings,
+}
+
+// Web auth is exposed via a process-wide accessor (not a Settings field) so the
+// auth router gate + readiness surface can read it without every test that
+// constructs a literal `Settings { ... }` needing to populate it. Set once by
+// Settings::from_env at boot; tests that bypass from_env read the disabled
+// default. Validates production config as a side effect of from_env (fails boot
+// on MAIL_PROVIDER=none / missing creds / redirect mismatch).
+static WEB_AUTH: std::sync::OnceLock<WebAuthSettings> = std::sync::OnceLock::new();
+
+impl Default for WebAuthSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            oauth_providers: Vec::new(),
+            providers_status: Vec::new(),
+        }
+    }
+}
+
+/// Process-wide web-auth settings. Returns a disabled default before the first
+/// `Settings::from_env()` (e.g. in tests that build a literal `Settings`).
+pub fn web_auth() -> &'static WebAuthSettings {
+    WEB_AUTH.get_or_init(WebAuthSettings::default)
 }
 
 impl Settings {
@@ -431,6 +630,13 @@ impl Settings {
         let site = SiteSettings::from_env();
         let quran = QuranSettings::from_env();
         let rate_limit = RateLimitSettings::from_env()?;
+        // Validate web-auth config as a boot side effect (fails boot in production
+        // on MAIL_PROVIDER=none / missing provider creds / redirect-origin
+        // mismatch). Stored process-wide so the auth router gate and the readiness
+        // surface read it without a Settings field (keeps literal Settings test
+        // construction working).
+        let web_auth = WebAuthSettings::from_env()?;
+        let _ = WEB_AUTH.set(web_auth);
 
         Ok(Self {
             cookie_key,
@@ -912,5 +1118,157 @@ mod tests {
         let nets = parse_allowlist("203.0.113.0/24, 2001:db8::/64,198.51.100.5/32").unwrap();
         assert_eq!(nets.len(), 3);
         restore_env(snap);
+    }
+
+    // --- W8f web-auth production gate ------------------------------------------
+
+    fn clear_web_auth_env() {
+        for k in [
+            "WEB_AUTH_ENABLED",
+            "WEB_OAUTH_PROVIDERS",
+            "MAIL_PROVIDER",
+            "FRONTEND_URL",
+            "OAUTH_ALLOWED_REDIRECT_ORIGINS",
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_REDIRECT_URI",
+            "FACEBOOK_CLIENT_ID",
+            "FACEBOOK_CLIENT_SECRET",
+            "FACEBOOK_REDIRECT_URI",
+            "GITHUB_CLIENT_ID",
+            "GITHUB_CLIENT_SECRET",
+            "GITHUB_REDIRECT_URI",
+            "APPLE_CLIENT_ID",
+            "APPLE_TEAM_ID",
+            "APPLE_KEY_ID",
+            "APPLE_PRIVATE_KEY",
+            "APPLE_PRIVATE_KEY_PATH",
+            "APPLE_REDIRECT_URI",
+        ] {
+            std::env::remove_var(k);
+        }
+    }
+
+    #[test]
+    fn web_auth_defaults_off_when_unset() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "development");
+        let cfg = WebAuthSettings::from_env().expect("defaults must succeed");
+        assert!(!cfg.enabled, "WEB_AUTH_ENABLED must default to false");
+        assert!(cfg.oauth_providers.is_empty());
+        assert!(cfg.providers_status.is_empty());
+        restore_env(snap);
+    }
+
+    #[test]
+    fn web_auth_providers_status_reports_ready_when_creds_present() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google, github");
+        std::env::set_var("GOOGLE_CLIENT_ID", "g");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        std::env::set_var("GOOGLE_REDIRECT_URI", "https://easyquran.fyi/cb");
+        let cfg = WebAuthSettings::from_env().unwrap();
+        let google = cfg
+            .providers_status
+            .iter()
+            .find(|p| p.name == "google")
+            .unwrap();
+        assert!(google.ready, "google has all creds → ready");
+        let github = cfg
+            .providers_status
+            .iter()
+            .find(|p| p.name == "github")
+            .unwrap();
+        assert!(!github.ready, "github has no creds → not ready");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_mail_none_when_auth_enabled() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "none");
+        let err = WebAuthSettings::from_env().expect_err("prod+auth+MAIL=none must fail");
+        assert!(err.contains("MAIL_PROVIDER=none"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_missing_provider_creds() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
+        let err = WebAuthSettings::from_env().expect_err("missing google creds must fail");
+        assert!(err.contains("google"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_rejects_redirect_origin_mismatch() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
+        std::env::set_var("GOOGLE_CLIENT_ID", "g");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        // evil.example is neither in the allowlist nor FRONTEND_URL.
+        std::env::set_var("GOOGLE_REDIRECT_URI", "https://evil.example/cb");
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        let err = WebAuthSettings::from_env().expect_err("redirect-origin mismatch must fail");
+        assert!(err.contains("GOOGLE_REDIRECT_URI"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_accepts_matched_redirect_origin() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "google");
+        std::env::set_var("GOOGLE_CLIENT_ID", "g");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        std::env::set_var("GOOGLE_REDIRECT_URI", "https://easyquran.fyi/api/cb");
+        std::env::set_var("OAUTH_ALLOWED_REDIRECT_ORIGINS", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        let cfg = WebAuthSettings::from_env().expect("matched origin must boot");
+        assert!(cfg.enabled);
+        restore_env(snap);
+    }
+
+    #[test]
+    fn origin_of_parses_scheme_host_port() {
+        assert_eq!(origin_of("https://easyquran.fyi/cb"), "https://easyquran.fyi");
+        assert_eq!(
+            origin_of("https://easyquran.fyi:8443/a/b"),
+            "https://easyquran.fyi:8443"
+        );
+        assert_eq!(origin_of("http://localhost:8080"), "http://localhost:8080");
+        assert_eq!(origin_of("not-a-url"), "");
+        assert_eq!(origin_of("ftp://example.com"), "");
     }
 }

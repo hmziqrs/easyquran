@@ -30,6 +30,26 @@ impl WebauthnService {
     }
 
     pub fn new(rp_id: &str, rp_origin: &str, rp_name: &str) -> Result<Self, ErrorResponse> {
+        // W8f: production rejects localhost/default WebAuthn RP. env_class() is read
+        // directly (not from_env's own defaults) so the gate covers every
+        // construction path; tests run non-production and are unaffected.
+        if matches!(
+            crate::config::settings::env_class(),
+            crate::config::settings::EnvClass::Production
+        ) {
+            let is_localhost_rp = rp_id == "localhost"
+                || rp_origin.starts_with("http://localhost")
+                || rp_origin.starts_with("http://127.0.0.1")
+                || rp_origin.starts_with("http://[::1]");
+            if is_localhost_rp {
+                return Err(ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
+                    "Production rejects localhost WebAuthn RP: set WEBAUTHN_RP_ID and \
+                     WEBAUTHN_RP_ORIGIN to the real origin (e.g. easyquran.fyi / \
+                     https://easyquran.fyi)",
+                ));
+            }
+        }
+
         let origin = url::Url::parse(rp_origin).map_err(|e| {
             ErrorResponse::new(ErrorCode::ConfigurationError)
                 .with_message(
@@ -161,4 +181,96 @@ fn user_handle_for(user_id: i32) -> Uuid {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
     Uuid::from_bytes(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::settings::{env_class, EnvClass};
+
+    // env_class reads RUST_ENV → NODE_ENV → APP_ENV. Snapshot + restore so the
+    // global never leaks into other tests regardless of the host environment.
+    struct EnvSnap {
+        rust_env: Option<String>,
+        node_env: Option<String>,
+        app_env: Option<String>,
+    }
+    fn snap() -> EnvSnap {
+        EnvSnap {
+            rust_env: std::env::var("RUST_ENV").ok(),
+            node_env: std::env::var("NODE_ENV").ok(),
+            app_env: std::env::var("APP_ENV").ok(),
+        }
+    }
+    fn clear_env() {
+        std::env::remove_var("RUST_ENV");
+        std::env::remove_var("NODE_ENV");
+        std::env::remove_var("APP_ENV");
+    }
+    fn restore(s: EnvSnap) {
+        match s.rust_env {
+            Some(v) => std::env::set_var("RUST_ENV", v),
+            None => std::env::remove_var("RUST_ENV"),
+        }
+        match s.node_env {
+            Some(v) => std::env::set_var("NODE_ENV", v),
+            None => std::env::remove_var("NODE_ENV"),
+        }
+        match s.app_env {
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
+        }
+    }
+
+    #[test]
+    fn prod_rejects_localhost_webauthn_rp() {
+        let s = snap();
+        clear_env();
+        std::env::set_var("RUST_ENV", "production");
+        assert!(matches!(env_class(), EnvClass::Production));
+        // Use .err() (not unwrap_err) — WebauthnService does not impl Debug.
+        let err = WebauthnService::new("localhost", "http://localhost:8080", "Test")
+            .err()
+            .expect("localhost RP must error in production");
+        restore(s);
+        assert!(
+            matches!(err.code, ErrorCode::ConfigurationError),
+            "localhost RP must be a ConfigurationError in production"
+        );
+    }
+
+    #[test]
+    fn prod_rejects_loopback_origin() {
+        let s = snap();
+        clear_env();
+        std::env::set_var("RUST_ENV", "production");
+        let err = WebauthnService::new("easyquran.fyi", "http://127.0.0.1:8080", "EasyQuran")
+            .err()
+            .expect("loopback origin must error in production");
+        restore(s);
+        assert!(matches!(err.code, ErrorCode::ConfigurationError));
+    }
+
+    #[test]
+    fn prod_accepts_real_origin() {
+        let s = snap();
+        clear_env();
+        std::env::set_var("RUST_ENV", "production");
+        let r = WebauthnService::new("easyquran.fyi", "https://easyquran.fyi", "EasyQuran");
+        restore(s);
+        assert!(r.is_ok(), "production must accept the real easyquran.fyi RP");
+    }
+
+    #[test]
+    fn dev_accepts_real_origin_without_prod_gate() {
+        // The prod gate is env-class-scoped: in dev a real RP constructs fine,
+        // and (separately) localhost is rejected by webauthn-rs itself, not by the
+        // W8f gate. This test pins the non-production happy path.
+        let s = snap();
+        clear_env();
+        std::env::set_var("RUST_ENV", "development");
+        let r = WebauthnService::new("example.com", "https://example.com", "Test");
+        restore(s);
+        assert!(r.is_ok(), "dev must construct a real-origin WebAuthn service");
+    }
 }

@@ -168,6 +168,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let revoked_sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
 
+    // W8e: reconcile the durable session-binding table (m000004) at boot. Revokes
+    // live user_session audit rows that have no durable binding (pre-binding or
+    // orphaned) so the process restart is one clean re-authentication boundary.
+    // Gated on WEB_AUTH_ENABLED: until web auth is turned on, existing
+    // mobile/backend sessions have no durable binding (the new record path is not
+    // wired yet) and must NOT be mass-revoked. Runs only at the web-auth cutover.
+    // Non-fatal: a failure logs loudly but does not block boot; the next boot
+    // retries. Migrations have already run inside get_sea_connection().
+    if ruxlog::config::settings::web_auth().enabled {
+        let boot_backend = ruxlog::services::auth::AuthBackend::new(
+            &sea_db,
+            session_store.clone(),
+            revoked_sessions.clone(),
+        );
+        match boot_backend
+            .reconcile_unbound_sessions(&sea_db, session_store.clone())
+            .await
+        {
+            Ok(n) if n > 0 => tracing::info!(
+                revoked = n,
+                "Startup session-binding reconciliation revoked unbound sessions"
+            ),
+            Ok(_) => tracing::debug!("Startup session-binding reconciliation: no unbound sessions"),
+            Err(e) => tracing::error!(
+                error = %e,
+                "Session-binding reconciliation failed at boot (non-fatal)"
+            ),
+        }
+    }
+
     let object_storage = settings.object_storage.clone();
 
     tracing::debug!(
@@ -424,6 +454,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(std::sync::Arc::new(svc))
             }
             Err(e) => {
+                // W8f: when web auth is enabled in production, a broken/localhost
+                // WebAuthn config fails boot instead of silently disabling passkeys.
+                if ruxlog::config::settings::web_auth().enabled
+                    && matches!(
+                        ruxlog::config::settings::env_class(),
+                        ruxlog::config::settings::EnvClass::Production
+                    )
+                {
+                    eprintln!(
+                        "Configuration error: WEB_AUTH_ENABLED=true in production requires a valid \
+                         WebAuthn RP — {e}"
+                    );
+                    std::process::exit(1);
+                }
                 tracing::warn!(
                     error = %e,
                     "WebAuthn passkey service disabled (invalid configuration; passkey endpoints will return 503)"
