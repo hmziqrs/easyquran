@@ -1,4 +1,3 @@
-
 pub mod controller;
 pub mod validator;
 
@@ -23,11 +22,10 @@ pub fn routes() -> Router<AppState> {
             auth_guard::verified_with_role::<{ auth_guard::ROLE_ADMIN }>,
         ));
 
-    let public = Router::<AppState>::new()
-        .route(
-            "/webhook/{provider}",
-            post(controller::mail_webhook_receiver),
-        );
+    let public = Router::<AppState>::new().route(
+        "/webhook/{provider}",
+        post(controller::mail_webhook_receiver),
+    );
 
     admin
         .merge(public)

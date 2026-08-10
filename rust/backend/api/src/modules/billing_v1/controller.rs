@@ -48,7 +48,8 @@ mod checkout_intent {
 
     const INTENT_TTL_SECS: u64 = 3600;
 
-    static INTENT_STORE: OnceLock<Mutex<HashMap<String, (CheckoutIntent, Instant)>>> = OnceLock::new();
+    static INTENT_STORE: OnceLock<Mutex<HashMap<String, (CheckoutIntent, Instant)>>> =
+        OnceLock::new();
 
     fn intent_store() -> &'static Mutex<HashMap<String, (CheckoutIntent, Instant)>> {
         INTENT_STORE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -570,7 +571,6 @@ pub async fn webhook_receiver(
         let body_hash = hex::encode(hasher.finalize());
         let dedup_key = format!("webhook:{provider}:{body_hash}");
         if !rux_request_gate::dedup_nx(&state.gate_store, &dedup_key, 86_400).await {
-
             tracing::info!(
                 provider = %provider,
                 "Replay webhook (already processed within 24h); acknowledging"

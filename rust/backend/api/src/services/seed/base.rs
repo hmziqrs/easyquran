@@ -644,8 +644,6 @@ pub async fn seed_all_with_progress(
     })
 }
 
-
-
 async fn seed_user_sessions(db: &DatabaseConnection) -> SeedResult<()> {
     let users = user::Entity::find().all(db).await?;
     let devices = [

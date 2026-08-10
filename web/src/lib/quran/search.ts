@@ -63,7 +63,7 @@ export async function quranSearch(query: string, opts: SearchOpts = {}): Promise
 
   if (QURAN.apiBase) {
     try {
-      return await quranApi.search(query, opts);
+      return await quranApi.search(query, opts, undefined, validateCoordinate);
     } catch (e) {
       console.warn("[quran-search] api failed, degrading:", e);
     }

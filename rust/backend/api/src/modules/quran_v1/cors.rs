@@ -16,11 +16,7 @@ pub fn public_cors_layer() -> CorsLayer {
             header::CACHE_CONTROL,
             HeaderName::from_static("pragma"),
         ])
-        .expose_headers([
-            header::ETAG,
-            header::CACHE_CONTROL,
-            header::RETRY_AFTER,
-        ])
+        .expose_headers([header::ETAG, header::CACHE_CONTROL, header::RETRY_AFTER])
         .allow_credentials(false)
         .max_age(Duration::from_secs(86400))
 }

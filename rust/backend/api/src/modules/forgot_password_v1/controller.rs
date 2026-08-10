@@ -11,7 +11,7 @@ use crate::{
     extractors::ValidatedJson,
     services::{
         abuse_limiter,
-        mail::{mail_error_to_response, send_forgot_password_email},
+        mail::{mail_error_kind, mail_error_to_response, send_forgot_password_email},
     },
     AppState,
 };
@@ -60,12 +60,10 @@ mod reset_token {
         let token = hex::encode(*bytes);
         bytes.zeroize();
 
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "reset_token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "reset_token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         map.insert(namespaced_key(&token), (user_id, Instant::now()));
         Ok(token)
@@ -73,12 +71,10 @@ mod reset_token {
 
     /// Removal on take is required for single-use semantics — never a read (`get`), or a replayed `reset` could reuse the token.
     pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let mut map = tokens()
-            .lock()
-            .map_err(|e| {
-                error!(error = %e, "reset_token map poisoned");
-                ErrorResponse::new(ErrorCode::InternalServerError)
-            })?;
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "reset_token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
         reap_stale(&mut map);
         Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
     }
@@ -103,7 +99,7 @@ fn equalize_unknown_email_work() -> String {
 }
 
 #[debug_handler]
-#[instrument(skip(state, payload), fields(email = %payload.email, client_ip = %secure_ip))]
+#[instrument(skip(state, payload), fields(client_ip = %secure_ip))]
 pub async fn generate(
     state: State<AppState>,
     ClientIp(secure_ip): ClientIp,
@@ -164,20 +160,24 @@ pub async fn generate(
     let code = forgot_password::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
     if let Err(err) = forgot_password::Entity::regenerate(pool, user_id, code_hash).await {
-        error!(user_id, email = %payload.email, "Failed to store forgot-password code: {}", err);
+        error!(user_id, "Failed to store forgot-password code: {}", err);
         return Err(err);
     }
     if let Err(err) = send_forgot_password_email(&state.mailer, &payload.email, &code).await {
-        error!(user_id, email = %payload.email, "Failed to send forgot password email: {}", err);
+        error!(
+            user_id,
+            error_kind = mail_error_kind(&err),
+            "Failed to send forgot password email"
+        );
         return Err(mail_error_to_response(&err));
     }
 
-    info!(user_id, email = %payload.email, "Recovery email sent");
+    info!(user_id, "Recovery email sent");
     Ok(uniform_success_response())
 }
 
 #[debug_handler]
-#[instrument(skip(state, payload), fields(email = %payload.email, client_ip = %secure_ip))]
+#[instrument(skip(state, payload), fields(client_ip = %secure_ip))]
 pub async fn verify(
     state: State<AppState>,
     ClientIp(secure_ip): ClientIp,
@@ -198,27 +198,30 @@ pub async fn verify(
     let verification = match result {
         Ok(verification) => {
             if verification.is_expired() {
-                warn!(email = %payload.email, "Forgot password code expired");
+                warn!("Forgot password code expired");
                 return Err(ErrorResponse::new(ErrorCode::InvalidInput)
                     .with_message("The verification code has expired"));
             }
             verification
         }
         Err(err) => {
-            warn!(email = %payload.email, "Invalid forgot password code");
+            warn!("Invalid forgot password code");
             return Err(err);
         }
     };
     let user_id = verification.user_id;
 
     if let Err(err) = forgot_password::Entity::consume_code(&state.sea_db, user_id).await {
-        error!(user_id, email = %payload.email, "Failed to consume forgot-password code: {}", err);
+        error!(user_id, "Failed to consume forgot-password code: {}", err);
         return Err(err);
     }
 
     let reset_token = reset_token::mint(user_id).await?;
 
-    info!(user_id, email = %payload.email, "Forgot password code verified and consumed; reset token issued");
+    info!(
+        user_id,
+        "Forgot password code verified and consumed; reset token issued"
+    );
     Ok((StatusCode::OK, Json(V1VerifyResponse { reset_token })))
 }
 

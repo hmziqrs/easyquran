@@ -1,4 +1,3 @@
-
 pub mod cloudflare;
 pub mod error_map;
 mod html_templates;
@@ -11,6 +10,24 @@ pub mod templates;
 pub use error_map::mail_error_to_response;
 pub use provider::{MailError, MailProvider, OutboundEmail, SendReceipt};
 pub use router::MailRouter;
+
+/// Non-PII discriminant for a [`MailError`]: names the failure class only
+/// (never the recipient address / server response that variants like
+/// `ProviderApi` or `InvalidRecipient` can carry). Use this in tracing logs
+/// instead of the full `Display`, which may echo PII from upstream SMTP/API.
+pub fn mail_error_kind(err: &MailError) -> &'static str {
+    match err {
+        MailError::Config(_) => "config",
+        MailError::ProviderApi(_) => "provider_api",
+        MailError::Request(_) => "request",
+        MailError::Throttled { .. } => "throttled",
+        MailError::LimiterUnavailable => "limiter_unavailable",
+        MailError::Suppressed => "suppressed",
+        MailError::InvalidRecipient(_) => "invalid_recipient",
+        MailError::WebhookVerification(_) => "webhook_verification",
+        MailError::Other(_) => "other",
+    }
+}
 
 use provider::{TEMPLATE_PASSWORD_RESET, TEMPLATE_VERIFICATION};
 

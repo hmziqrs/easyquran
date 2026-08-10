@@ -8,6 +8,7 @@ use crate::services::session_store::SqliteSessionStore;
 use crate::services::billing::BillingRouter;
 
 use crate::services::image_moderation::ImageModerator;
+use crate::utils::cors::AllowedOrigins;
 use rux_fcm::FcmClient;
 
 pub use crate::config::OptimizerConfig;
@@ -44,6 +45,7 @@ pub struct AppState {
     pub revoked_sessions: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     pub mailer: std::sync::Arc<crate::services::mail::MailRouter>,
     pub settings: std::sync::Arc<Settings>,
+    pub allowed_origins: AllowedOrigins,
     pub storage: StorageState,
     pub secret_key: Vec<u8>,
     pub http_client: reqwest::Client,
@@ -104,14 +106,12 @@ pub const FIELD_ENC_KEY_DEV_DEFAULT: &[u8] = b"ruxlog_dev_field_enc_key_do_not_"
 
 pub fn derive_field_enc_key() -> [u8; 32] {
     let raw = std::env::var("FIELD_ENC_KEY").ok();
-    let is_prod = !matches!(
-        std::env::var("RUST_ENV")
-            .or_else(|_| std::env::var("NODE_ENV"))
-            .or_else(|_| std::env::var("APP_ENV"))
-            .as_deref()
-            .ok(),
-        Some("development" | "dev" | "test" | "testing" | "ci" | "local")
-    );
+    // Boot path: an unset/unknown environment is a configuration error (production
+    // fails closed). cfg!(test) reads unset/unknown as non-production.
+    let is_prod = match crate::config::settings::is_production() {
+        Ok(p) => p,
+        Err(e) => panic!("Configuration error: {e}"),
+    };
 
     let key_bytes: Vec<u8> = match raw {
         Some(s) if !s.trim().is_empty() => s.into_bytes(),
@@ -277,6 +277,7 @@ mod tests {
 
     #[test]
     fn field_enc_key_accepts_32_byte_value() {
+        let _g = crate::config::settings::TEST_ENV_MUTEX.lock().unwrap();
         let prev = std::env::var("FIELD_ENC_KEY").ok();
         let prev_env = std::env::var("RUST_ENV").ok();
         let key: Vec<u8> = (1..=32u8).collect();

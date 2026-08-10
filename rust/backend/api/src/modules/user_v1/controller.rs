@@ -253,8 +253,7 @@ pub async fn admin_list(
     let query = payload.0.into_user_query();
     let page = query.page.unwrap_or(1);
 
-    let result =
-        User::admin_list(&state.sea_db, &state.storage.config.public_url, query).await?;
+    let result = User::admin_list(&state.sea_db, &state.storage.config.public_url, query).await?;
     let users = result.data;
     let total = result.total;
     info!(total, page, "Admin listed users");

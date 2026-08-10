@@ -41,8 +41,10 @@ $EDITOR .env                 # DOMAIN, COOKIE_KEY (openssl rand -hex 32), PROXY_
 docker compose up -d --build
 ```
 
-First build is slow (Rust compiles once; cached after). Verify:
-`curl https://easyquran.fyi/api/healthz` → `{"status":"healthy"}`.
+First build is slow (Rust compiles once; cached after). Verify the public Quran
+route: `curl https://easyquran.fyi/api/quran/health/ready` → `{"ready":true,…}`.
+`/healthz` is deliberately **not** on the public router — reach it from the
+Docker network (`curl http://api:8888/healthz`) or the in-container healthcheck.
 
 ## Deploying with Dokploy
 
@@ -106,15 +108,170 @@ the offline pack + manifest are served correctly. Exits non-zero on any hard fai
 | Node Quran SSR | `INTERNAL_QURAN_API_BASE` | `http://api:8888/quran` (runtime-private) |
 | Other server work | `INTERNAL_API_BASE_URL` | `http://api:8888` (runtime-private) |
 
-The web build reads local Uthmani SQLite only for Arabic SSG. Translation SSR
-reads the internal Axum API. Browser OPFS downloads use the web origin's strict
-`/_quran/tanzil/*` gateway, which streams only baked artifact keys from R2 and
-forwards range requests. Docker images are production builds. In local mode,
-Vite serves those same URLs directly from tracked immutable artifacts.
+## Ingress identity contract (W2)
+
+External rate limiting keys on the **verified Cloudflare client identity**, not
+on the proxy's TCP address. Three isolated, non-escalating identities:
+
+| Identity | How resolved | Bucket | Limiter |
+|---|---|---|---|
+| External client | `CF-Connecting-IP` header (parsed `IpAddr`) | `ratelimit:{ip}:…` | content ceiling (600/min) — the only one that can enter W3a escalation |
+| Trusted internal SSR (Bun) | server-only `X-EasyQuran-Internal-Token`, constant-time match | `ratelimit:internal-webssr:…` | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (default 600) |
+| Public readiness | exempt from identity resolution | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120) |
+| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters; **not on the public host router** (Docker-network / in-container only) | — | — |
+
+`.env.example` ships `IP_SOURCE=CfConnectingIp` (exact PascalCase; `connect-info`
+and `cf-connecting-ip` are invalid). The api refuses to boot in production with
+`IP_SOURCE=ConnectInfo` — behind Cloudflare→Traefik that would collapse every
+caller into one proxy-IP bucket. Production boot also fails closed on a missing
+`INTERNAL_QURAN_API_TOKEN` or a non-positive internal/health limit.
+
+### Generate the internal token
+
+```bash
+# Per deployment. Server-only — NEVER under a PUBLIC_ var, never in a response or log.
+openssl rand -hex 32   # → INTERNAL_QURAN_API_TOKEN in .env
+```
+
+Compose interpolates it into both containers: the api compares it
+constant-time in its identity gate; the web (Bun) container reads it from private
+runtime env and sends it only to `INTERNAL_QURAN_API_BASE` on
+`X-EasyQuran-Internal-Token` (`web/src/lib/server/quran-translation-page.ts`).
+
+### Restrict origin ingress to Cloudflare ranges (required before production)
+
+`CfConnectingIp` **trusts** the header. The api cannot tell a forged
+`CF-Connecting-IP` from Cloudflare's own — only the network path can. Before
+this configuration reaches production, Traefik (or the host firewall) MUST deny
+public origin ingress from anywhere except current Cloudflare ranges, so a
+public caller can never choose the header value.
+
+Range-update procedure (owner-run; the ranges are not part of this repo):
+
+1. Fetch the current Cloudflare IPv4/IPv6 lists:
+   `https://www.cloudflare.com/ips-v4` and `https://www.cloudflare.com/ips-v6`.
+2. Configure your external Traefik (the one on `PROXY_NETWORK`) to permit origin
+   traffic (the `api` and `web` upstreams) only from those CIDRs; deny direct
+   origin access from any other source.
+3. Re-run on a schedule — Cloudflare publishes range changes a few times a year.
+
+### Direct-origin negative test (owner-run after restricting ranges)
+
+From a host that is **not** behind Cloudflare (e.g. a direct curl from your laptop
+to the origin IP, bypassing Traefik), confirm the contract holds:
+
+```bash
+export INTERNAL_QURAN_API_TOKEN="$(grep ^INTERNAL_QURAN_API_TOKEN= .env | cut -d= -f2-)"
+web/scripts/assert-headers.sh https://easyquran.fyi https://easyquran.fyi/api
+```
+
+It proves: an external request without `CF-Connecting-IP` is rejected at origin
+(400), a forged internal token gets no privilege, the Docker health route and
+public readiness stay exempt from the identity gate, and a valid internal token
+enters the service bucket. The live CF-range negative test (a non-CF origin
+cannot set `CF-Connecting-IP`) is the owner's sign-off; this script is the
+scaffolding.
+
+## Ban inspection & export (`/admin/bans`)
+
+The API owns IP-ban enforcement in-process (L1) with SQLite durability (L2).
+Three operator routes, all behind the edge `/api` strip and the session/CSRF/origin
+stack of the private router:
+
+- `GET /api/admin/bans` — list active bans (admin session ACL; `Cache-Control: no-store`; paginated `?page=&perPage=`).
+- `DELETE /api/admin/bans` — lift a ban (admin session ACL; JSON body `{"banUnit":"203.0.113.5/32"}`). Deletes the exact L2 `quran-ban:{unit}` + `ratelimit:{unit}:quran-v1` rows in one transaction, then clears the matching L1 buckets and suspicious history. A DB failure returns failure **without** clearing L1, so the ban stays enforced and the delete is safe to retry.
+- `GET /api/admin/bans/export` — neutral JSON feed for a deployment-owned proxy adapter. Human access uses the admin session ACL; machine access uses `Authorization: Bearer $BAN_EXPORT_TOKEN` (compared constant-time; set via `BAN_EXPORT_TOKEN`, generate with `openssl rand -hex 32`). The token is **never** accepted by the list/delete routes.
+
+A ban unit is one canonical value: an IPv4 address → `a.b.c.d/32`, an IPv6 address → its `/64` network (host bits truncated). Export emits **only** active `quran-ban:` rows whose suffix parses as a valid `/32` or `/64` unit — email, user-id, totp, and fixed-rate keys are never exported. Export shape:
+
+```json
+{ "bans": [ { "banUnit": "203.0.113.5/32", "scope": "Long", "expiresAt": 1735689600 } ] }
+```
+
+`expiresAt` is a UNIX timestamp (seconds); `scope` is `"Temp"` or `"Long"`.
+
+**Proxy adapter contract (outside this repo).** A Traefik/Cloudflare middleware
+that consumes this export is a deployment-owned component — none lives in this
+repository, and an existing export row is **not** proof that an edge block is in
+place. Any adapter MUST preserve both the expiry timestamp and the un-ban
+semantics: lift the edge block no later than `expiresAt`, and re-poll export
+after an operator `DELETE /admin/bans` so a lifted ban is not kept at the edge.
+The export never contains PII (no email, user-id, or raw path) — only canonical
+CIDR units.
+
+## Mail delivery smoke test (before enabling WEB_AUTH_ENABLED)
+
+Production boot fails closed when `WEB_AUTH_ENABLED=true` unless `MAIL_PROVIDER`
+is a real transport with credentials and a non-empty `MAIL_FROM_ADDRESS` /
+`MAIL_FROM_NAME` (see `WebAuthSettings::from_env`). That gate proves credentials
+are *present* — it cannot prove mail is *delivered*. A misconfigured SPF/DKIM
+record, a relay that silently drops, or a `MAIL_FROM_ADDRESS` the receiving MTA
+rejects all pass boot and then break verification + recovery for real users.
+
+Run this controlled-inbox smoke **before** you flip `WEB_AUTH_ENABLED=true` on
+production. The controlled inbox is an address **you own** (e.g. a personal
+mailbox or a throwaway you can read), never a real user.
+
+### Procedure
+
+1. **Keep production off.** On the production env class, leave `WEB_AUTH_ENABLED`
+   unset/false. The boot gate below runs only under `RUST_ENV=production` +
+   `WEB_AUTH_ENABLED=true`, so this smoke runs without touching it.
+
+2. **Stand up the mail stack on a non-production instance.** Point a staging
+   container (or a local `cargo run --bin ruxlog` with `RUST_ENV=development`)
+   at the *same* mail config production will use:
+   - `MAIL_PROVIDER=smtp` (or `cloudflare`) + the real credentials
+     (`SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`, or
+     `CLOUDFLARE_EMAIL_ACCOUNT_ID`/`CLOUDFLARE_EMAIL_API_TOKEN`).
+   - The real `MAIL_FROM_ADDRESS` + `MAIL_FROM_NAME`.
+   - `WEB_AUTH_ENABLED=true` — under a non-production env class the prod boot
+     gate is skipped, so the auth router mounts and the MailRouter runs the
+     genuine code path (same templates, same from-address, same provider).
+
+3. **Send a verification email to the controlled inbox.** Register/authenticate
+   the controlled address through the web auth flow so the verification-code
+   email fires, or hit the verification-send endpoint directly. This exercises
+   the real `send_email_verification_code` → `MailRouter` → provider path.
+
+4. **Confirm delivery at the controlled inbox:**
+   - The message arrives within a reasonable window (a few minutes).
+   - `From:` matches `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`.
+   - Authentication-Results show **SPF pass + DKIM pass** for your sending
+     domain.
+   - It is in the inbox, not the spam/junk folder.
+
+5. **Only after delivery is confirmed**, set `WEB_AUTH_ENABLED=true` on the
+   production env class and redeploy.
+
+### Fast transport-only pre-check (optional)
+
+Before the full smoke above, a quick relay check with `swaks` confirms the SMTP
+transport + credentials + from-address are accepted end-to-end (it does **not**
+exercise the api's MailRouter or templates, so it cannot replace step 3):
+
+```bash
+swaks --auth \
+  --server "$(grep ^SMTP_HOST= .env | cut -d= -f2-):587" \
+  --to controlled-inbox@example.com \
+  --from "$(grep ^MAIL_FROM_ADDRESS= .env | cut -d= -f2-)" \
+  --auth-user "$(grep ^SMTP_USERNAME= .env | cut -d= -f2-)" \
+  --auth-password "$(grep ^SMTP_PASSWORD= .env | cut -d= -f2-)" \
+  --header "Subject: EasyQuran mail smoke"
+```
+
+### If delivery fails
+
+Do **not** enable `WEB_AUTH_ENABLED=true` on production. Check, in order: SMTP
+credentials + host/port, the sending domain's SPF/DKIM/DMARC records, that
+`MAIL_FROM_ADDRESS` is on a domain you control, and (for `MAIL_PROVIDER=cloudflare`)
+that the recipient is in `CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES` if you set that
+allowlist. Re-run the smoke from step 2 until the controlled inbox receives the
+mail with SPF+DKIM pass.
 
 ## Notes
 
-- `/api` is stripped at the edge (`easyquran.fyi/api/healthz` → `/healthz`).
+- `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.
 - API image contains root-owned, filesystem-read-only Quran source files; databases are never written.
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.

@@ -88,6 +88,14 @@ impl TelemetryConfig {
 }
 
 fn build_resource() -> Resource {
+    // OTLP resource label only — nothing branches on it. Fed from the one
+    // env-class helper (RUST_ENV -> NODE_ENV -> APP_ENV) for consistency.
+    let deployment_environment = match crate::config::settings::env_class() {
+        crate::config::settings::EnvClass::Production => "production",
+        crate::config::settings::EnvClass::NonProduction
+        | crate::config::settings::EnvClass::Unset
+        | crate::config::settings::EnvClass::Unknown => "development",
+    };
     Resource::builder()
         .with_service_name(
             env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "ruxlog-api".to_string()),
@@ -98,7 +106,7 @@ fn build_resource() -> Resource {
         ))
         .with_attribute(opentelemetry::KeyValue::new(
             "deployment.environment",
-            env::var("DEPLOYMENT_ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
+            deployment_environment,
         ))
         .build()
 }
@@ -349,7 +357,9 @@ impl PoolMetrics {
             .with_description("Number of active database pool connections")
             .build();
 
-        Self { _db_gauge: db_gauge }
+        Self {
+            _db_gauge: db_gauge,
+        }
     }
 }
 

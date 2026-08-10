@@ -1,9 +1,12 @@
 use sea_orm::{ActiveModelTrait, Set};
 use tracing::{error, info, instrument, warn};
 
+use rux_auth::AuthBackend as AuthBackendTrait;
+
 use crate::{
-    db::sea_models::{user, user_oauth_identity, user_session},
+    db::sea_models::{user, user_oauth_identity},
     error::{ErrorCode, ErrorResponse},
+    modules::auth_v1::controller::create_bound_session,
     services::auth::AuthSession,
     AppState,
 };
@@ -49,7 +52,7 @@ impl std::fmt::Display for OAuthProvider {
 
 /// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(state), fields(provider = %provider, provider_user_id = %provider_user_id, email = %email))]
+#[instrument(skip(state), fields(provider = %provider))]
 pub async fn find_or_create_user_for_oauth(
     state: &AppState,
     provider: OAuthProvider,
@@ -58,9 +61,12 @@ pub async fn find_or_create_user_for_oauth(
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
-    if let Some(identity) =
-        user_oauth_identity::Entity::find_by_provider(&state.sea_db, provider.as_str(), provider_user_id)
-            .await?
+    if let Some(identity) = user_oauth_identity::Entity::find_by_provider(
+        &state.sea_db,
+        provider.as_str(),
+        provider_user_id,
+    )
+    .await?
     {
         let user = user::Entity::find_by_id_with_404(&state.sea_db, identity.user_id).await?;
         info!(
@@ -72,7 +78,10 @@ pub async fn find_or_create_user_for_oauth(
 
     if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
         if !email_verified {
-            warn!(user_id = existing.id, email = %email, "Refusing to link OAuth account: IdP email is not verified");
+            warn!(
+                user_id = existing.id,
+                "Refusing to link OAuth account: IdP email is not verified"
+            );
             return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
                 .with_message("Unable to link this account"));
         }
@@ -80,12 +89,18 @@ pub async fn find_or_create_user_for_oauth(
             user_id = existing.id,
             "Linking OAuth account to existing user"
         );
-        link_identity(&state.sea_db, existing.id, provider.as_str(), provider_user_id).await?;
+        link_identity(
+            &state.sea_db,
+            existing.id,
+            provider.as_str(),
+            provider_user_id,
+        )
+        .await?;
         return Ok(existing);
     }
 
     if !email_verified {
-        warn!(email = %email, "Refusing to create account from OAuth: IdP email is not verified");
+        warn!("Refusing to create account from OAuth: IdP email is not verified");
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("The provider has not verified this email address"));
     }
@@ -140,26 +155,33 @@ pub async fn finish_oauth_login(
     user: &user::Model,
     provider: OAuthProvider,
 ) -> Result<(), ErrorResponse> {
+    // W8D-001: fail-closed ban guard — same contract as password (auth_v1
+    // log_in), TOTP, and passkey login. A banned user must not evade the ban
+    // by signing in via OAuth, and a ban-lookup error must never grant access.
+    match auth.backend().check_ban(&user.id).await {
+        Ok(ban_status) if ban_status.is_banned() => {
+            warn!(user_id = user.id, "Banned user attempted OAuth login");
+            return Err(ErrorResponse::new(ErrorCode::AccountLocked)
+                .with_message("This account has been banned"));
+        }
+        Ok(_) => {}
+        Err(_) => {
+            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Unable to verify account status"));
+        }
+    }
+
     auth.login(user).await.map_err(|e| {
         error!(error = %e, user_id = user.id, "Failed to create OAuth session");
         ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to create session")
     })?;
 
-    let session_row = user_session::Entity::create(
-        &state.sea_db,
-        user_session::NewUserSession::new(user.id, Some(format!("{} OAuth", provider.label())), None),
-    )
-    .await
-    .ok();
-
-    // record_session_mapping lets sessions_terminate revoke this session later; save() first because auth.login cycles the session id.
-    if (auth.session().save().await).is_ok() {
-        if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-            crate::services::auth::record_session_mapping(row.id, &tower_sid.to_string());
-        }
-    }
-
-    Ok(())
+    // W8e: durable binding with the same fail-closed contract as password login
+    // (create audit row -> save tower session -> record binding). On failure the
+    // tower session is destroyed and the audit row revoked so neither lingers.
+    let device = Some(format!("{} OAuth", provider.label()));
+    let ip: Option<String> = None;
+    create_bound_session(&state.sea_db, auth, user.id, device, ip).await
 }
 
 pub fn generate_oauth_nonce() -> String {

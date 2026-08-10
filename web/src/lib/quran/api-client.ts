@@ -10,14 +10,10 @@ import {
   decodeTranslationRangeText,
   decodeTranslationSurahText,
   unwrapEnvelope,
+  type AyahCoordinateValidator,
 } from "./wire";
-import { fetchWithTimeout } from "./fetch";
-
-async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetchWithTimeout(url, { headers: { accept: "application/json" }, signal });
-  if (!res.ok) throw new Error(`quran api ${res.status}: ${url}`);
-  return res.json();
-}
+import { fetchJsonWithTimeout, MalformedDataError } from "./fetch";
+import { fetchRangeChunks } from "./range-fetch";
 
 function requireBase(): string {
   if (!QURAN.apiBase) throw new Error("quran api base not configured (PUBLIC_QURAN_API_BASE)");
@@ -30,11 +26,14 @@ export const quranApi = {
     num: number,
     signal?: AbortSignal,
   ): Promise<QuranSurahText> {
-    const body = await getJson(`${requireBase()}/sources/${sourceId}/surah/${num}`, signal);
+    const body = await fetchJsonWithTimeout(`${requireBase()}/sources/${sourceId}/surah/${num}`, {
+      headers: { accept: "application/json" },
+      signal,
+    });
     const decoded = isArabicSourceId(sourceId)
       ? decodeQuranSurahText(unwrapEnvelope(body))
       : decodeTranslationSurahText(unwrapEnvelope(body));
-    if (!decoded) throw new Error(`quran api: malformed surah for ${sourceId}/${num}`);
+    if (!decoded) throw new MalformedDataError("malformed surah");
     return decoded;
   },
 
@@ -43,30 +42,38 @@ export const quranApi = {
     from: number,
     to: number,
     signal?: AbortSignal,
+    validateCoordinate?: AyahCoordinateValidator,
   ): Promise<QuranRangeText> {
-    const body = await getJson(
-      `${requireBase()}/sources/${sourceId}/range?from=${from}&to=${to}`,
+    const decode = isArabicSourceId(sourceId)
+      ? (raw: unknown) => decodeQuranRangeText(raw, validateCoordinate)
+      : (raw: unknown) => decodeTranslationRangeText(raw, validateCoordinate);
+    return fetchRangeChunks({
+      base: requireBase(),
+      source: String(sourceId),
+      from,
+      to,
+      decode,
+      fetchImpl: fetchJsonWithTimeout,
       signal,
-    );
-    const decoded = isArabicSourceId(sourceId)
-      ? decodeQuranRangeText(unwrapEnvelope(body))
-      : decodeTranslationRangeText(unwrapEnvelope(body));
-    if (!decoded) throw new Error(`quran api: malformed range for ${sourceId}/${from}-${to}`);
-    return decoded;
+    });
   },
 
   async search(
     query: string,
     opts: SearchOpts = {},
     signal?: AbortSignal,
+    validateCoordinate?: AyahCoordinateValidator,
   ): Promise<SearchResponse> {
     const url = new URL(`${requireBase()}/search`);
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(opts.limit ?? DEFAULT_LIMIT));
     url.searchParams.set("offset", String(opts.offset ?? DEFAULT_OFFSET));
-    const body = await getJson(url.toString(), signal);
-    const payload = decodeSearchResponse(unwrapEnvelope(body));
-    if (!payload) throw new Error("quran api: malformed search response");
+    const body = await fetchJsonWithTimeout(url.toString(), {
+      headers: { accept: "application/json" },
+      signal,
+    });
+    const payload = decodeSearchResponse(unwrapEnvelope(body), validateCoordinate);
+    if (!payload) throw new MalformedDataError("malformed search response");
     return {
       query,
       total: payload.total ?? payload.results.length,

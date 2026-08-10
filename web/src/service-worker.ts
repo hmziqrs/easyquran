@@ -6,24 +6,28 @@ import {
   SKIP_WAITING,
   APP_READY,
   UPDATE_TAKEOVER,
+  PURGE_USER_CACHES,
+  PURGE_ACK,
   SW_BROADCAST_CHANNEL,
   type ClientToSwMessage,
   type SwToClientMessage,
 } from "./lib/offline/messages";
-import { openIdb, idbGet, idbPut, idbDelete } from "./lib/workers/idb";
+import { openIdb, idbGet, idbPut, idbDelete, idbScan } from "./lib/workers/idb";
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const APP_CACHE = `eq-app-${version}`;
-const PAGES_CACHE = "eq-pages-v1";
-const DATA_CACHE = "eq-data-v1";
+export const PAGES_CACHE = "eq-pages-v1";
+export const DATA_CACHE = "eq-data-v1";
 
 const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";
 
 const SHELL_ROUTE = `${base}/404.html`;
 const NAV_TIMEOUT_MS = 3500;
-const PAGES_MAX = 300;
+export const PAGES_MAX = 300;
+export const DATA_MAX = 400;
+export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
 
 const PRECACHE = Array.from(
@@ -32,7 +36,7 @@ const PRECACHE = Array.from(
 
 const IMMUTABLE = new Set([...build, ...files]);
 
-function normalizeDataKey(url: string | URL): string {
+export function normalizeDataKey(url: string | URL): string {
   const u = typeof url === "string" ? new URL(url, sw.location.origin) : url;
   const params = new URLSearchParams();
   for (const [key, value] of u.searchParams) {
@@ -43,9 +47,14 @@ function normalizeDataKey(url: string | URL): string {
   return `${u.pathname}${search}`;
 }
 
-function isCacheable(res: Response): boolean {
+export function isPending(res: Response): boolean {
+  return res.headers.get("x-eq-translation-pending") === "1";
+}
+
+export function isCacheable(res: Response): boolean {
   const cc = res.headers.get("cache-control");
-  if (cc && /no-store/i.test(cc)) return false;
+  if (cc && (/no-store/i.test(cc) || /private/i.test(cc))) return false;
+  if (isPending(res)) return false;
   return true;
 }
 
@@ -81,28 +90,149 @@ async function metaDel(key: string): Promise<void> {
 }
 
 async function metaScan<T>(prefix: string): Promise<Record<string, T>> {
-  const out: Record<string, T> = {};
   try {
-    const database = await db();
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(META_STORE, "readonly");
-      const request = tx.objectStore(META_STORE).openCursor();
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) {
-          resolve();
-          return;
-        }
-        const key = cursor.key;
-        if (typeof key === "string" && key.startsWith(prefix)) {
-          out[key.slice(prefix.length)] = cursor.value as T;
-        }
-        cursor.continue();
-      };
-      request.onerror = () => reject(request.error);
-    });
+    return await idbScan<T>(await db(), META_STORE, prefix);
+  } catch {
+    return {};
+  }
+}
+
+interface DataMetaEntry {
+  key: string;
+  lastUsed: number;
+  sizeBytes: number;
+}
+
+const DATA_META_PREFIX = "data:";
+
+function dataMetaId(key: string): string {
+  return `${DATA_META_PREFIX}${key}`;
+}
+
+function responseSize(res: Response): number {
+  const cl = res.headers.get("content-length");
+  if (cl) {
+    const n = Number(cl);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return 0;
+}
+
+let dataMetaLock: Promise<void> = Promise.resolve();
+function serializeDataMeta(fn: () => Promise<void>): Promise<void> {
+  const next = dataMetaLock.then(fn, fn);
+  dataMetaLock = next.catch(() => undefined);
+  return next;
+}
+
+async function rawDataMetaDel(key: string): Promise<void> {
+  try {
+    await idbDelete(await db(), META_STORE, dataMetaId(key));
   } catch {}
-  return out;
+}
+
+async function rawDataMetaSet(entry: DataMetaEntry): Promise<void> {
+  try {
+    await idbPut(await db(), META_STORE, entry, dataMetaId(entry.key));
+  } catch {}
+}
+
+async function rawDataMetaGet(key: string): Promise<DataMetaEntry | undefined> {
+  try {
+    return await idbGet<DataMetaEntry>(await db(), META_STORE, dataMetaId(key));
+  } catch {
+    return undefined;
+  }
+}
+
+async function rawDataMetaScan(): Promise<Map<string, DataMetaEntry>> {
+  const obj = await metaScan<DataMetaEntry>(DATA_META_PREFIX);
+  return new Map(Object.entries(obj));
+}
+
+export function recordDataEntry(key: string, res: Response): Promise<void> {
+  const sizeBytes = responseSize(res);
+  const lastUsed = Date.now();
+  return serializeDataMeta(() => rawDataMetaSet({ key, lastUsed, sizeBytes }));
+}
+
+export function touchDataMeta(key: string): Promise<void> {
+  return serializeDataMeta(async () => {
+    const existing = await rawDataMetaGet(key);
+    if (!existing) return;
+    await rawDataMetaSet({ key, lastUsed: Date.now(), sizeBytes: existing.sizeBytes });
+  });
+}
+
+export function deleteDataMeta(key: string): Promise<void> {
+  return serializeDataMeta(() => rawDataMetaDel(key));
+}
+
+export function purgeAllDataMeta(): Promise<void> {
+  return serializeDataMeta(async () => {
+    const entries = await rawDataMetaScan();
+    await Promise.all([...entries.keys()].map((key) => rawDataMetaDel(key)));
+  });
+}
+
+export async function purgeUserCachesHandler(port?: MessagePort): Promise<void> {
+  try {
+    await caches.delete(PAGES_CACHE);
+    await caches.delete(DATA_CACHE);
+    await purgeAllDataMeta();
+  } catch {}
+  if (port) {
+    try {
+      port.postMessage({ type: PURGE_ACK } satisfies SwToClientMessage);
+    } catch {}
+  }
+}
+
+export async function enforceDataBoundsInner(): Promise<void> {
+  const data = await caches.open(DATA_CACHE);
+  const meta = await rawDataMetaScan();
+  const cacheReqs = await data.keys();
+  const cacheKeys = new Set<string>();
+  for (const req of cacheReqs) cacheKeys.add(normalizeDataKey(req.url));
+
+  for (const key of meta.keys()) {
+    if (!cacheKeys.has(key)) {
+      await rawDataMetaDel(key);
+      meta.delete(key);
+    }
+  }
+  const missingMeta: string[] = [];
+  for (const key of cacheKeys) if (!meta.has(key)) missingMeta.push(key);
+
+  const entries = [...meta.values()].sort((a, b) => a.lastUsed - b.lastUsed);
+  let totalBytes = 0;
+  for (const e of entries) totalBytes += e.sizeBytes;
+  let count = cacheKeys.size;
+
+  for (const entry of entries) {
+    if (count <= DATA_MAX && totalBytes <= DATA_BUDGET_BYTES) break;
+    const deleted = await data.delete(new Request(entry.key)).catch(() => false);
+    await rawDataMetaDel(entry.key);
+    if (deleted) count--;
+    totalBytes -= entry.sizeBytes;
+  }
+  for (const key of missingMeta) {
+    if (count <= DATA_MAX) break;
+    const deleted = await data.delete(new Request(key)).catch(() => false);
+    if (deleted) count--;
+  }
+}
+
+export function enforceDataBounds(): Promise<void> {
+  return serializeDataMeta(enforceDataBoundsInner);
+}
+
+export async function readDataMeta(key: string): Promise<DataMetaEntry | undefined> {
+  return rawDataMetaGet(key);
+}
+
+export async function scanDataMeta(): Promise<Map<string, DataMetaEntry>> {
+  return rawDataMetaScan();
 }
 
 let broadcastChannel: BroadcastChannel | null = null;
@@ -178,6 +308,7 @@ async function activate(): Promise<void> {
     await setCursor(null);
   }
   await metaSet("installedVersion", version);
+  void enforceDataBounds();
   if (priorExisted) announceTakeover();
 }
 
@@ -210,6 +341,9 @@ sw.addEventListener("message", (event) => {
       return;
     case APP_READY:
       void onAppReady(event.source as Client | null);
+      return;
+    case PURGE_USER_CACHES:
+      void purgeUserCachesHandler(event.ports[0]);
       return;
   }
 });
@@ -254,6 +388,7 @@ sw.addEventListener("fetch", (event) => {
   if (url.hostname.endsWith("r2.easyquran.fyi")) return;
   if (url.pathname === "/firebase-config.js") return;
   if (url.pathname.includes("/translations/")) return;
+  if (url.origin === sw.location.origin && url.pathname.startsWith("/api/")) return;
 
   if (
     url.pathname === "/_app/version.json" ||
@@ -334,25 +469,40 @@ async function handleNavigation(req: Request): Promise<Response> {
   const pages = await caches.open(PAGES_CACHE);
   const pageHit = await pages.match(req);
   if (pageHit) {
-    await touchRecency(req.url);
-    return pageHit;
+    if (!isCacheable(pageHit)) {
+      await pages.delete(req).catch(() => {});
+    } else {
+      await touchRecency(req.url);
+      return pageHit;
+    }
   }
 
   const fallback = await app.match(SHELL_ROUTE);
   return fallback || Response.error();
 }
 
-async function handleData(req: Request): Promise<Response> {
+export async function handleData(req: Request): Promise<Response> {
   const key = normalizeDataKey(req.url);
   const data = await caches.open(DATA_CACHE);
-  const hit = await data.match(key);
+  let hit = await data.match(key);
+
+  if (hit && !isCacheable(hit)) {
+    await data.delete(new Request(key)).catch(() => {});
+    await deleteDataMeta(key);
+    hit = undefined;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
   const revalidate = fetch(req, { signal: controller.signal })
     .then(async (res) => {
-      if (res && res.ok && isCacheable(res)) {
-        await data.put(new Request(key), res.clone()).catch(() => {});
+      if (!res || !res.ok || !isCacheable(res)) return res;
+      try {
+        await data.put(new Request(key), res.clone());
+        void recordDataEntry(key, res);
+        void enforceDataBounds();
+      } catch {
+        await deleteDataMeta(key);
       }
       return res;
     })
@@ -361,6 +511,7 @@ async function handleData(req: Request): Promise<Response> {
 
   if (hit) {
     void revalidate;
+    void touchDataMeta(key);
     return hit;
   }
 
@@ -469,6 +620,7 @@ async function runMaintenance(): Promise<void> {
         }
         case "trim": {
           await trimPages();
+          await enforceDataBounds();
           if (attempted > 0 && successes === 0) {
             await setCursor(null);
             return;
@@ -509,6 +661,7 @@ async function revalidateCache(
       const res = await fetch(item.req, { cache: "no-store" });
       if (res && res.ok && isCacheable(res)) {
         await cache.put(item.req, res.clone());
+        if (stage === "data") void recordDataEntry(normalizeDataKey(item.req.url), res);
         ok = true;
       }
     } catch {

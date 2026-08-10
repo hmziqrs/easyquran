@@ -19,7 +19,7 @@ use super::validator::{V1CreateSuppression, V1DeleteSuppression, V1ListSuppressi
 use {
     crate::{
         db::sea_models::email_suppression::{SuppressionReason, SuppressionUpsert},
-        services::{mail::provider::WebhookEvent},
+        services::mail::provider::WebhookEvent,
     },
     sha2::{Digest, Sha256},
 };

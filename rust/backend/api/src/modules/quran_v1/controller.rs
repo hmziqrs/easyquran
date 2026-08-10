@@ -11,7 +11,7 @@ use crate::AppState;
 
 use super::cache;
 use super::dto::*;
-use super::error::{QPath, QQuery, QuranApiError};
+use super::error::{QPath, QQuery, QuranApiError, QuranErrorClass};
 
 fn invalid(msg: impl Into<String>) -> QuranApiError {
     QuranApiError::invalid(msg)
@@ -48,7 +48,8 @@ fn parse_source(
     }
     Err(invalid(format!(
         "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean) or a catalogue translation id"
-    )))
+    ))
+    .classified(QuranErrorClass::UnknownSource))
 }
 
 fn translation_profile(id: &str) -> String {
@@ -183,7 +184,8 @@ fn compute_window(
             if f == 0 || t == 0 || f > t || (f as u32) > total || (t as u32) > total {
                 return Err(invalid(format!(
                     "invalid range from={f} to={t} for a unit of {total} ayahs (inclusive, 1-based)"
-                )));
+                ))
+                .classified(QuranErrorClass::InvalidRange));
             }
             (unit_start + (f as u32 - 1), unit_start + (t as u32 - 1))
         }
@@ -471,7 +473,8 @@ pub async fn ayahs_multi(
             if from == 0 || to == 0 || from > to || from > VERSE_COUNT || to > VERSE_COUNT {
                 return Err(invalid(format!(
                     "fromGlobal={from} toGlobal={to} invalid (inclusive, 1..={VERSE_COUNT}, required together)"
-                )));
+                ))
+                .classified(QuranErrorClass::InvalidRange));
             }
             serve_range_ayahs(
                 &state,
@@ -993,6 +996,17 @@ pub async fn health_ready(
         surah_count: quran::SURA_COUNT as u16,
         arabic_resident_bytes: (state.quran.uthmani.bytes() + state.quran.simple_clean.bytes())
             as u64,
+        auth: AuthHealth {
+            enabled: crate::config::settings::web_auth().enabled,
+            providers: crate::config::settings::web_auth()
+                .providers_status
+                .iter()
+                .map(|p| ProviderStatusDto {
+                    name: p.name.clone(),
+                    ready: p.ready,
+                })
+                .collect(),
+        },
         loading: QuranLoadingHealth {
             arabic_load_duration_ms: state.quran_runtime_metrics.arabic_load_duration_ms,
             translation_catalogue_load_duration_ms: state
@@ -1013,6 +1027,12 @@ pub async fn health_ready(
             hit_rate: pool.hit_rate,
             evictions: pool.evictions,
             evictions_per_minute: pool.evictions_per_minute,
+            prewarmed: pool.prewarmed,
+            top_demand: pool
+                .top_demand
+                .into_iter()
+                .map(|(id, score)| DemandEntry { id, score })
+                .collect(),
         },
     };
     let bytes = serde_json::to_vec(&body).expect("health serializes");
@@ -1231,7 +1251,8 @@ pub async fn source_range(
     let from = q.from.unwrap_or(1).max(1);
     let to = q.to.unwrap_or(VERSE_COUNT).min(VERSE_COUNT);
     if from > to {
-        return Err(invalid(format!("from ({from}) must be <= to ({to})")));
+        return Err(invalid(format!("from ({from}) must be <= to ({to})"))
+            .classified(QuranErrorClass::InvalidRange));
     }
     let count = to - from + 1;
     if count > RESPONSE_CAP {

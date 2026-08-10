@@ -4,10 +4,10 @@ use rux_auth::AuthBackend as AuthBackendTrait;
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::{passkey_credential, user_session};
+use crate::db::sea_models::passkey_credential;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::extractors::ValidatedJson;
-use crate::modules::auth_v1::controller::record_session_mapping;
+use crate::modules::auth_v1::controller::{create_bound_session, session_rotated_headers};
 use crate::modules::passkey_v1::validator::{
     V1LoginFinishPayload, V1RegisterFinishPayload, V1RemovePasskeyPayload,
 };
@@ -187,24 +187,22 @@ pub async fn login_finish(
             );
             tracing::Span::current().record("result", "success");
 
-            let session_row = user_session::Entity::create(
-                &state.sea_db,
-                user_session::NewUserSession::new(user.id, device, ip),
-            )
-            .await
-            .ok();
-
-            // Record session-row -> tower-session-id so sessions_terminate can invalidate the live session.
-            if (auth.session().save().await).is_ok() {
-                if let (Some(row), Some(tower_sid)) = (session_row.as_ref(), auth.session().id()) {
-                    record_session_mapping(row.id, &tower_sid.to_string());
+            // W8e: durable binding with the same fail-closed contract as password
+            // login. On failure create_bound_session destroys the tower session and
+            // revokes the audit row so neither lingers unbound.
+            match create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await {
+                Ok(()) => Ok((
+                    StatusCode::OK,
+                    // W8B-001: login_with_metadata cycled the session id (see
+                    // auth_v1 log_in) — emit the header so the web client refreshes CSRF.
+                    session_rotated_headers(true),
+                    Json(json!({ "status": "ok", "user": user })),
+                )),
+                Err(err) => {
+                    tracing::Span::current().record("result", "session_error");
+                    Err(err)
                 }
             }
-
-            Ok((
-                StatusCode::OK,
-                Json(json!({ "status": "ok", "user": user })),
-            ))
         }
         Err(err) => {
             warn!(error = %err, user_id = user.id, "passkey login: session creation failed");
@@ -213,5 +211,179 @@ pub async fn login_finish(
                 .with_message("An error occurred while logging in")
                 .with_details(err.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::sea_models::user;
+    use crate::services::webauthn::WebauthnService;
+    use chrono::TimeZone;
+    use validator::Validate;
+
+    fn make_user() -> user::Model {
+        let now = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .unwrap()
+            .fixed_offset();
+        user::Model {
+            id: 1,
+            name: "Pk User".to_string(),
+            email: "pk@example.com".to_string(),
+            password: None,
+            avatar_id: None,
+            is_verified: true,
+            role: user::UserRole::User,
+            two_fa_enabled: false,
+            two_fa_secret: None,
+            two_fa_backup_codes: None,
+            two_fa_last_totp_counter: None,
+            google_id: None,
+            oauth_provider: None,
+            session_auth_secret: "test-secret".to_string(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn svc() -> WebauthnService {
+        WebauthnService::new("example.com", "https://example.com", "Test")
+            .expect("dev WebAuthn service must construct for a real origin")
+    }
+
+    #[test]
+    fn login_begin_envelope_shape_matches_wire_contract() {
+        let svc = svc();
+        let (challenge, authentication_state) = svc.start_login().unwrap();
+        let body = json!({
+            "challenge": challenge,
+            "authentication_state": authentication_state,
+        });
+        assert!(body.get("challenge").is_some(), "must carry challenge");
+        assert!(
+            body.get("authentication_state").is_some(),
+            "must carry authentication_state for the client to echo back"
+        );
+        assert!(
+            body["challenge"].get("publicKey").is_some(),
+            "RequestChallengeResponse must wrap options under publicKey"
+        );
+    }
+
+    #[test]
+    fn register_begin_envelope_shape_matches_wire_contract() {
+        let svc = svc();
+        let (challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
+        let body = json!({
+            "challenge": challenge,
+            "registration_state": registration_state,
+        });
+        assert!(body.get("challenge").is_some(), "must carry challenge");
+        assert!(
+            body.get("registration_state").is_some(),
+            "must carry registration_state for the client to echo back"
+        );
+        assert!(
+            body["challenge"].get("publicKey").is_some(),
+            "CreationChallengeResponse must wrap options under publicKey"
+        );
+    }
+
+    #[test]
+    fn login_finish_payload_round_trips_real_authentication_state() {
+        let svc = svc();
+        let (_challenge, authentication_state) = svc.start_login().unwrap();
+        let state_value = serde_json::to_value(&authentication_state).unwrap();
+
+        let body = json!({
+            "credential": {
+                "id": "cred-1",
+                "rawId": "AA",
+                "type": "public-key",
+                "response": {
+                    "clientDataJSON": "AA",
+                    "authenticatorData": "AA",
+                    "signature": "AA"
+                }
+            },
+            "authentication_state": state_value
+        });
+        let payload: V1LoginFinishPayload =
+            serde_json::from_value(body).expect("real authentication_state must round-trip");
+        assert_eq!(payload.credential.type_, "public-key");
+    }
+
+    #[test]
+    fn register_finish_payload_round_trips_real_registration_state() {
+        let svc = svc();
+        let (_challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
+        let state_value = serde_json::to_value(&registration_state).unwrap();
+
+        let body = json!({
+            "credential": {
+                "id": "cred-2",
+                "rawId": "AA",
+                "type": "public-key",
+                "response": {
+                    "clientDataJSON": "AA",
+                    "attestationObject": "AA"
+                }
+            },
+            "registration_state": state_value,
+            "device_type": "MacBook",
+            "transports": ["internal"]
+        });
+        let payload: V1RegisterFinishPayload =
+            serde_json::from_value(body).expect("real registration_state must round-trip");
+        assert_eq!(payload.credential.type_, "public-key");
+        assert_eq!(payload.device_type.as_deref(), Some("MacBook"));
+        assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn list_envelope_uses_data_key() {
+        // controller returns json!({ "data": views }) — NOT { "passkeys": [...] }.
+        let view = passkey_credential::Model {
+            id: 1,
+            user_id: 5,
+            credential_id: "cred-1".to_string(),
+            public_key: Vec::new(),
+            counter: 0,
+            device_type: None,
+            transports: None,
+            created_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().fixed_offset(),
+            last_used_at: None,
+        }
+        .into_view();
+        let body = json!({ "data": [view] });
+        assert!(body.get("data").is_some(), "list envelope must use the data key");
+        assert!(
+            body.get("passkeys").is_none(),
+            "list envelope must not use the legacy passkeys key"
+        );
+        assert_eq!(body["data"][0]["credential_id"].as_str(), Some("cred-1"));
+        assert!(
+            body["data"][0].get("public_key").is_none(),
+            "credential view must never expose public_key"
+        );
+    }
+
+    #[test]
+    fn remove_envelope_uses_message_key() {
+        let body = json!({ "message": "Passkey removed" });
+        assert_eq!(body["message"].as_str(), Some("Passkey removed"));
+        assert!(
+            body.get("data").is_none(),
+            "remove envelope is a message, not a list"
+        );
+    }
+
+    #[test]
+    fn login_finish_success_envelope_wraps_user() {
+        let user = make_user();
+        let body = json!({ "status": "ok", "user": user });
+        assert_eq!(body["status"].as_str(), Some("ok"));
+        assert_eq!(body["user"]["email"].as_str(), Some("pk@example.com"));
     }
 }

@@ -18,6 +18,7 @@ use crate::{
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
+    modules::auth_v1::controller::session_rotated_headers,
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -74,11 +75,49 @@ pub async fn google_callback(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Google OAuth callback");
 
+    // Provider cancellation/error redirect (?error=access_denied, …) — never attempt an exchange.
+    if query.is_error() {
+        tracing::Span::current().record("result", "cancelled");
+        let url = oauth::redirect::build_failure_redirect(
+            oauth::OAuthProvider::Google,
+            oauth::redirect::FAILURE_CANCELLED,
+        )?;
+        return Ok(Redirect::temporary(&url));
+    }
+
+    match run_google_callback(&state, &mut auth, query).await {
+        Ok(user) => {
+            tracing::Span::current().record("user_id", user.id);
+            info!(user_id = user.id, "Google login successful");
+            tracing::Span::current().record("result", "success");
+            let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Google)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(err) => {
+            // Any post-validator failure → opaque failure redirect (no payload/code/state in URL).
+            warn!(code = %err.code, "Google callback failed; redirecting to opaque failure path");
+            tracing::Span::current().record("result", "error");
+            let url = oauth::redirect::build_failure_redirect(
+                oauth::OAuthProvider::Google,
+                oauth::redirect::error_to_failure_code(&err),
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+    }
+}
+
+/// Inner callback body: session/state consumption, code exchange, login finish. Any error here is
+/// surfaced to the caller, which redirects to the opaque failure path rather than returning JSON.
+async fn run_google_callback(
+    state: &AppState,
+    auth: &mut AuthSession,
+    query: GoogleCallbackQuery,
+) -> Result<user::Model, ErrorResponse> {
     let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state)?;
+    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
 
     let client = get_google_oauth_client()?;
-    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code));
+    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code()?));
     if let Some(verifier) = oauth_state.pkce_verifier {
         exchange = exchange.set_pkce_verifier(verifier);
     }
@@ -87,27 +126,12 @@ pub async fn google_callback(
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange authorization code");
-            tracing::Span::current().record("result", "token_exchange_failed");
             ErrorResponse::new(ErrorCode::ExternalServiceError)
                 .with_message("Failed to exchange authorization code")
                 .with_details(e.to_string())
         })?;
 
-    let user = finish_google_login(
-        &state,
-        &mut auth,
-        token_result,
-        oauth_state.nonce.as_deref(),
-    )
-    .await?;
-
-    info!(user_id = user.id, "Google login successful");
-    tracing::Span::current().record("result", "success");
-
-    // Allow-list the redirect — a raw FRONTEND_URL concat is an open redirect.
-    let redirect_url = oauth::build_allowed_success_redirect("/auth/google/success")?;
-
-    Ok(Redirect::temporary(&redirect_url))
+    finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref()).await
 }
 
 #[debug_handler(state = AppState)]
@@ -162,6 +186,7 @@ pub async fn google_exchange(
 
     Ok((
         StatusCode::OK,
+        session_rotated_headers(true),
         Json(json!({
             "success": true,
             "user": user,
@@ -277,15 +302,11 @@ async fn finish_google_login(
         };
 
     let user_info = fetch_google_user_info(&state.http_client, access_token).await?;
-    info!(google_id = %user_info.id, email = %user_info.email, "Retrieved user info from Google");
+    info!("Retrieved user info from Google");
 
     if let Some(claims) = &id_claims {
         if claims.sub != user_info.id || claims.email != user_info.email {
-            warn!(
-                id_sub = %claims.sub,
-                userinfo_id = %user_info.id,
-                "id_token/userinfo identity mismatch — rejecting login"
-            );
+            warn!("id_token/userinfo identity mismatch — rejecting login");
             return Err(ErrorResponse::new(ErrorCode::InvalidToken)
                 .with_message("OAuth identity verification failed"));
         }
@@ -343,7 +364,6 @@ async fn find_or_create_user(
         if !user_info.verified_email {
             warn!(
                 user_id = existing_user.id,
-                email = %user_info.email,
                 "Refusing to link Google account: IdP email is not verified"
             );
             return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
@@ -372,10 +392,7 @@ async fn find_or_create_user(
 
     // Same gate on create — without it an unverified email squats a new account at the victim's address.
     if !user_info.verified_email {
-        warn!(
-            email = %user_info.email,
-            "Refusing to create account from Google: IdP email is not verified"
-        );
+        warn!("Refusing to create account from Google: IdP email is not verified");
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Google has not verified this email address"));
     }
@@ -388,4 +405,29 @@ async fn find_or_create_user(
         user_info.name.clone(),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::modules::auth_v1::controller::{session_rotated_headers, SESSION_ROTATED};
+
+    // W8B-003: regression guard that the rotation header is emitted on the
+    // success path of a session-rotating endpoint (login / OAuth exchange).
+    // finish_oauth_login cycles the session id, so the exchange response must
+    // carry X-EQ-Session-Rotated or the web client's CSRF token goes stale.
+    #[test]
+    fn session_rotated_header_present_on_successful_rotation() {
+        let headers = session_rotated_headers(true);
+        assert_eq!(
+            headers.get(&SESSION_ROTATED).map(|v| v.to_str().unwrap()),
+            Some("1"),
+            "successful rotation must emit the X-EQ-Session-Rotated header"
+        );
+
+        let headers = session_rotated_headers(false);
+        assert!(
+            !headers.contains_key(&SESSION_ROTATED),
+            "non-rotating response must omit the header"
+        );
+    }
 }

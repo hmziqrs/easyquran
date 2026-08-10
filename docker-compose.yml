@@ -10,8 +10,10 @@
 # and the build-time data files under db/ resolve correctly.
 #
 # Routing (from the labels), all on DOMAIN:
-#   Host(DOMAIN) && PathPrefix(`/api`) → api:8888   (strip /api, priority 100)
-#   Host(DOMAIN)                        → web:8080
+#   Host(DOMAIN) && PathPrefix(`/api`) && !PathPrefix(`/api/healthz`) → api:8888   (strip /api, priority 100)
+#   Host(DOMAIN)                                                        → web:8080
+# /healthz is NOT on the public host router — only the in-container healthcheck
+# (curl localhost:8888/healthz) or a Docker-network monitor (api:8888/healthz) reaches it.
 
 name: ${PROJECT:-easyquran}
 
@@ -32,6 +34,9 @@ services:
       PORT: "8080"
       ORIGIN: https://${DOMAIN}
       INTERNAL_QURAN_API_BASE: ${INTERNAL_QURAN_API_BASE}
+      # Server-only: proves trusted Docker-internal SSR to the API identity gate.
+      # Compose interpolates this from .env; never expose under a PUBLIC_ var.
+      INTERNAL_QURAN_API_TOKEN: ${INTERNAL_QURAN_API_TOKEN}
       QURAN_SSR_CACHE_DIR: /app/cache/quran-ssr
       QURAN_SSR_CACHE_TTL_MS: ${QURAN_SSR_CACHE_TTL_MS:-604800000}
       QURAN_SSR_CACHE_BUDGET_BYTES: ${QURAN_SSR_CACHE_BUDGET_BYTES:-268435456}
@@ -97,7 +102,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${PROXY_NETWORK}"
-      - "traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/healthz`)"
       - "traefik.http.routers.api.entrypoints=${HTTPS_ENTRYPOINT}"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=${ACME_RESOLVER}"

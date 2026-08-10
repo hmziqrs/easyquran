@@ -217,6 +217,27 @@ pub struct HealthReady {
     pub arabic_resident_bytes: u64,
     pub loading: QuranLoadingHealth,
     pub translation_pool: TranslationPoolHealth,
+    pub auth: AuthHealth,
+}
+
+// Auth readiness surface (W8f). Reports the gate flag + per-provider ready state
+// computed at boot from credential PRESENCE — never the credential values. Live
+// on the public readiness endpoint so an operator sees which provider is
+// misconfigured without any secret reaching the response.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct AuthHealth {
+    pub enabled: bool,
+    pub providers: Vec<ProviderStatusDto>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ProviderStatusDto {
+    pub name: String,
+    pub ready: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -239,9 +260,19 @@ pub struct TranslationPoolHealth {
     pub idle_ttl_seconds: u64,
     pub builds: u64,
     pub lookups: u64,
-    pub hit_rate: f64,
+    pub hit_rate: Option<f64>,
     pub evictions: u64,
     pub evictions_per_minute: u64,
+    pub prewarmed: Vec<String>,
+    pub top_demand: Vec<DemandEntry>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct DemandEntry {
+    pub id: String,
+    pub score: f64,
 }
 
 #[derive(Serialize, Debug)]

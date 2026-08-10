@@ -11,10 +11,9 @@ impl MailProvider for NoOpMailProvider {
         "none"
     }
 
-    async fn send(&self, msg: OutboundEmail) -> Result<SendReceipt, MailError> {
+    async fn send(&self, _msg: OutboundEmail) -> Result<SendReceipt, MailError> {
         tracing::warn!(
-            recipient = %msg.to,
-            subject = %msg.subject,
+            provider = "none",
             "mail dropped: MAIL_PROVIDER=none (no mail backend configured)"
         );
         Ok(SendReceipt::default())

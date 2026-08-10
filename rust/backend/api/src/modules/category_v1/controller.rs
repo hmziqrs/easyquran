@@ -186,7 +186,10 @@ pub async fn find_with_query(
     .await
     {
         Ok(result) => {
-            info!(total = result.total, page, "Categories retrieved with query");
+            info!(
+                total = result.total,
+                page, "Categories retrieved with query"
+            );
             Ok((
                 StatusCode::OK,
                 Json(json!({

@@ -46,16 +46,20 @@ pub(crate) fn map_limiter_result(
     use rux_request_gate::{GateError, LimiterDecision};
     match res {
         Ok(LimiterDecision::Allowed { .. }) => Ok(()),
-        Ok(LimiterDecision::Blocked { retry_after_secs, .. }) => Err(ErrorResponse::new(ErrorCode::TooManyAttempts)
+        Ok(LimiterDecision::Blocked {
+            retry_after_secs, ..
+        }) => Err(ErrorResponse::new(ErrorCode::TooManyAttempts)
             .with_message(format!(
                 "Too many attempts. Try again in {} seconds.",
                 retry_after_secs
             ))
             .with_retry_after(retry_after_secs)
             .with_context(json!({ "retryAfter": retry_after_secs }))),
-        Err(GateError::StoreUnavailable(detail)) => Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
-            .with_message("Limiter unavailable (store error)")
-            .with_details(detail)),
+        Err(GateError::StoreUnavailable(detail)) => {
+            Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
+                .with_message("Limiter unavailable (store error)")
+                .with_details(detail))
+        }
         Err(GateError::UnexpectedResult) => Err(ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Limiter returned unexpected result")),
     }

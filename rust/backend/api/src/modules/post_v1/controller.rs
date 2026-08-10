@@ -342,7 +342,6 @@ pub async fn track_view(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
     if !rux_request_gate::dedup_nx(&state.gate_store, &dedup_key, 300).await {
-
         return Ok((
             StatusCode::OK,
             Json(json!({ "message": "View tracked successfully" })),
@@ -392,8 +391,7 @@ pub async fn query(
             query_params.author_id = Some(user.id);
         }
         UserRole::Admin | UserRole::SuperAdmin => {}
-        UserRole::Moderator => {
-        }
+        UserRole::Moderator => {}
         UserRole::User => {
             return Err(
                 ErrorResponse::new(ErrorCode::OperationNotAllowed).with_message("Access denied")

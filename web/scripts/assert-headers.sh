@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Asserts (1) the §6.1 delivery contract against the web origin and (2) the W2
+# ingress identity contract against the api origin. Run before each release:
+#
+#   web/scripts/assert-headers.sh http://localhost:8080 http://localhost:8888
+#
+# W2 ingress notes:
+#   - The api origin must run in production (RUST_ENV=production,
+#     IP_SOURCE=CfConnectingIp). External requests are simulated by sending
+#     CF-Connecting-IP directly — the SAME header Cloudflare sets. Proving a
+#     public caller CANNOT forge it requires the live CF→Traefik path (restrict
+#     origin ingress to Cloudflare ranges; see deploy/README.md). That live
+#     negative test is owner-run and documented there.
+#   - INTERNAL_QURAN_API_TOKEN may be exported to exercise the internal-SSR
+#     bucket; if unset, the token checks warn instead of failing hard.
+
 ORIGIN="${1:-http://localhost:8080}"
 API_ORIGIN="${2:-}"
+INTERNAL_TOKEN="${INTERNAL_QURAN_API_TOKEN:-}"
+# A simulated verified client IP (TEST-NET-3 / documentation range). Behind real
+# Cloudflare this header is set by CF, not by the caller.
+CF_IP="${CF_CONNECTING_IP:-203.0.113.10}"
 fail=0
 
 ok()   { printf '  ok   %s\n' "$*"; }
@@ -12,6 +31,11 @@ warn() { printf '  WARN %s\n' "$*"; }
 contains() {
 	local label="$1" haystack="$2" needle="$3"
 	if grep -qi -- "$needle" <<<"$haystack"; then ok "$label"; else fail_ "$label (missing '$needle')"; fi
+}
+
+code_is() {
+	local label="$1" got="$2" want="$3"
+	if [[ "$got" == "$want" ]]; then ok "$label ($got)"; else fail_ "$label (got $got, want $want)"; fi
 }
 
 printf 'Asserting §6.1 delivery contract against %s\n' "$ORIGIN"
@@ -90,14 +114,61 @@ else
 fi
 
 if [[ -n "$API_ORIGIN" ]]; then
-	quran_range=$(curl -sS "$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7")
-	contains "translation API reads packaged immutable sqlite" "$quran_range" '"ayahs"'
-	# Second read exercises translation-pool hit path before sampling health metrics.
-	curl -sS -o /dev/null "$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7"
+	printf '\nAsserting W2 ingress identity contract against %s\n' "$API_ORIGIN"
+
+	# A verified external caller (CF-Connecting-IP set, as Cloudflare does).
+	cf=(-H "cf-connecting-ip: $CF_IP")
+
+	# External Quran reads require the verified header (content bucket).
+	quran_range=$(curl -sS "${cf[@]}" "$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7")
+	contains "external Quran read succeeds with CF-Connecting-IP" "$quran_range" '"ayahs"'
+	# Second read exercises translation-pool hit path before sampling health.
+	curl -sS "${cf[@]}" -o /dev/null "$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7"
 	quran_health=$(curl -sS "$API_ORIGIN/quran/health/ready")
 	contains "Quran readiness exports Arabic resident bytes" "$quran_health" '"arabicResidentBytes"'
 	contains "Quran readiness exports translation-pool metrics" "$quran_health" '"translationPool"'
 	contains "Quran readiness exports eviction rate" "$quran_health" '"evictionsPerMinute"'
+
+	printf '\n  -- negative identity checks --\n'
+	# An external request WITHOUT CF-Connecting-IP is rejected at origin (never
+	# collapsed into the 'unknown' bucket).
+	no_cf_code=$(curl -sS -o /dev/null -w '%{http_code}' "$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7" || true)
+	code_is "external request without CF-Connecting-IP rejected" "$no_cf_code" "400"
+
+	# A public caller cannot buy internal treatment by sending a forged token
+	# without a valid CF identity either.
+	forged_code=$(curl -sS -o /dev/null -w '%{http_code}' \
+		-H 'x-easyquran-internal-token: attacker-forged' \
+		"$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7" || true)
+	code_is "forged internal token without CF identity rejected" "$forged_code" "400"
+
+	printf '\n  -- health isolation checks --\n'
+	# Docker/localhost healthchecks carry no CF header and no token; /healthz and
+	# /quran/health/ready stay 200 (exempt from identity + route blocker).
+	healthz_code=$(curl -sS -o /dev/null -w '%{http_code}' "$API_ORIGIN/healthz" || true)
+	code_is "/healthz exempt from identity gate (Docker health)" "$healthz_code" "200"
+	ready_code=$(curl -sS -o /dev/null -w '%{http_code}' "$API_ORIGIN/quran/health/ready" || true)
+	code_is "/quran/health/ready exempt from identity gate (isolated bucket)" "$ready_code" "200"
+
+	if [[ -n "$INTERNAL_TOKEN" ]]; then
+		printf '\n  -- internal SSR bucket checks --\n'
+		# Valid token → trusted internal SSR (service bucket), no CF header needed.
+		internal_code=$(curl -sS -o /dev/null -w '%{http_code}' \
+			-H "x-easyquran-internal-token: $INTERNAL_TOKEN" \
+			"$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7" || true)
+		code_is "valid internal token enters service bucket (200)" "$internal_code" "200"
+		# Invalid token (wrong value) never grants internal treatment → rejected
+		# without a CF identity.
+		invalid_code=$(curl -sS -o /dev/null -w '%{http_code}' \
+			-H "x-easyquran-internal-token: not-the-real-token" \
+			"$API_ORIGIN/quran/sources/en.sahih/range?from=1&to=7" || true)
+		code_is "invalid internal token gets no privilege" "$invalid_code" "400"
+	else
+		warn "INTERNAL_QURAN_API_TOKEN unset — skipping internal-SSR bucket checks"
+	fi
+
+	printf '\n  -- CF-range reminder --\n'
+	warn "CfConnectingIp trusts the header; owner MUST restrict origin ingress to Cloudflare ranges (deploy/README.md) and run the live negative test from a non-CF origin."
 fi
 
 if [[ "$fail" -ne 0 ]]; then

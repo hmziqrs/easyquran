@@ -433,7 +433,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn empty_blocks_rejected() {
         let doc = EditorJsDocument {
@@ -719,14 +718,12 @@ mod tests {
         assert!(doc.validate().is_ok());
     }
 
-
     #[test]
     fn into_json_roundtrip() {
         let doc = make_doc(vec![("paragraph", serde_json::json!({"text": "hi"}))]);
         let json = doc.into_json();
         assert!(json.get("blocks").unwrap().as_array().unwrap().len() == 1);
     }
-
 
     #[test]
     fn valid_series_create() {
@@ -757,7 +754,6 @@ mod tests {
         };
         assert!(payload.validate().is_err());
     }
-
 
     #[test]
     fn valid_series_update() {

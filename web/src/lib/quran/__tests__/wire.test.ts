@@ -1,11 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "https://api.test/quran" } }));
 
+const { track, consentState } = vi.hoisted(() => ({
+  track: vi.fn(),
+  consentState: { analytics: true },
+}));
+vi.mock("$lib/firebase/analytics", () => ({ track }));
+vi.mock("$lib/stores/consent.svelte", () => ({ consent: consentState }));
+
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import { RangeKind } from "$lib/data/quran-data";
+import { MalformedDataError } from "$lib/quran/fetch";
+import { fetchRangeChunks } from "$lib/quran/range-fetch";
 import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";
 import {
+  buildArabicBakedMap,
   decodeQuranRangeText,
   decodeQuranSurahText,
   decodeScript,
@@ -15,7 +25,11 @@ import {
   decodeSourcesPayload,
   decodeTranslationRangeText,
   decodeTranslationSurahText,
+  parseArtifactUrl,
+  reportArtifactRejection,
   unwrapEnvelope,
+  validateArtifactAgainstBaked,
+  type BakedArtifactEntry,
 } from "$lib/quran/wire";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import {
@@ -217,6 +231,15 @@ describe("manifest wire", () => {
     expect(decodeScript({ ...scripts[0], sizeBytes: -1 })).toBeNull();
     expect(decodeScript({ ...scripts[0], sizeBytes: "1" })).toBeNull();
     expect(decodeScriptsPayload({ data: { scripts } })).toEqual(scripts);
+  });
+
+  it("fails closed when any entry is malformed", () => {
+    expect(
+      decodeScriptsPayload({ data: { scripts: [scripts[0], { ...scripts[1], sizeBytes: 0 }] } }),
+    ).toBeNull();
+    expect(
+      decodeScriptsPayload({ data: { scripts: [{ ...scripts[0], id: "unknown" }, scripts[1]] } }),
+    ).toBeNull();
   });
 });
 
@@ -496,8 +519,15 @@ describe("translation route loaders", () => {
     const page = QURAN_DATA.surahLocalPage(1, 1)!;
     const overflowing = translationRangeFor(page.startGlobal, page.startGlobal + surah.ayahCount);
     await expect(
-      loadTranslationSurahRouteData(surah, 1, "en", "sahih", fetcherReturning(overflowing)),
-    ).rejects.toThrow(/contiguously/);
+      fetchRangeChunks({
+        base: "https://api.test/quran",
+        source: "en.sahih",
+        from: page.startGlobal,
+        to: page.endGlobal,
+        decode: (raw) => decodeTranslationRangeText(raw, validateCoordinate),
+        fetchImpl: async () => overflowing,
+      }),
+    ).rejects.toThrow(MalformedDataError);
   });
 
   it("loads a global page range and surfaces its ayahs", async () => {
@@ -519,5 +549,116 @@ describe("translation route loaders", () => {
     await expect(
       loadTranslationRangeData("page", overflow, "en", "sahih", fetcherReturning({})),
     ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("baked artifact delivery contract", () => {
+  const baked: BakedArtifactEntry = {
+    sizeBytes: 100,
+    r2Path: "/tanzil/arabic/quran-uthmani.sqlite",
+    sameOriginDeliveryPath: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
+  };
+
+  describe("buildArabicBakedMap", () => {
+    it("strips the artifactBase prefix to derive the canonical R2 path", () => {
+      const map = buildArabicBakedMap(
+        [
+          {
+            id: "uthmani",
+            sizeBytes: 100,
+            downloadUrl: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
+          },
+        ],
+        "/_quran",
+      );
+      expect(map.get("uthmani")).toEqual({
+        sizeBytes: 100,
+        r2Path: "/tanzil/arabic/quran-uthmani.sqlite",
+        sameOriginDeliveryPath: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
+      });
+    });
+  });
+
+  describe("parseArtifactUrl", () => {
+    it("accepts a clean https url whose pathname equals the baked R2 path", () => {
+      expect(
+        parseArtifactUrl("https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite", baked),
+      ).toBeInstanceOf(URL);
+    });
+
+    it.each([
+      ["http origin", "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ["credentials", "https://user:pass@r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ["query string", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite?x=1"],
+      ["fragment", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite#sec"],
+      ["canonical path mismatch", "https://r2.easyquran.fyi/evil/quran-uthmani.sqlite"],
+      ["non-https scheme", "ftp://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+    ])("rejects %s", (_label, url) => {
+      expect(parseArtifactUrl(url, baked)).toBeNull();
+    });
+
+    it.each([
+      ["empty string", ""],
+      ["non-string", 42],
+      ["unparseable", "not-a-url"],
+    ])("rejects %s", (_label, value) => {
+      expect(parseArtifactUrl(value, baked)).toBeNull();
+    });
+  });
+
+  describe("validateArtifactAgainstBaked", () => {
+    const map = new Map([["uthmani", baked]]);
+
+    it("reconstructs size and download url from baked fields on a valid entry", () => {
+      expect(
+        validateArtifactAgainstBaked(
+          "uthmani",
+          100,
+          "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
+          map,
+        ),
+      ).toEqual({
+        id: "uthmani",
+        sizeBytes: 100,
+        downloadUrl: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
+      });
+    });
+
+    it.each([
+      [
+        "unknown id",
+        ["missing", 100, "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ],
+      [
+        "size mismatch",
+        ["uthmani", 101, "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ],
+      ["path mismatch", ["uthmani", 100, "https://r2.easyquran.fyi/evil/quran-uthmani.sqlite"]],
+    ])("rejects %s", (_label, [id, sizeBytes, downloadUrl]) => {
+      expect(
+        validateArtifactAgainstBaked(id as string, sizeBytes as number, downloadUrl as string, map),
+      ).toBeNull();
+    });
+  });
+});
+
+describe("artifact rejection telemetry", () => {
+  beforeEach(() => {
+    track.mockReset();
+    consentState.analytics = true;
+  });
+
+  it("emits a structured event through the consent-gated channel", async () => {
+    reportArtifactRejection("scripts_payload");
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledWith("quran_artifact_rejected", { reason: "scripts_payload" });
+    });
+  });
+
+  it("suppresses the event when analytics consent is denied", async () => {
+    consentState.analytics = false;
+    reportArtifactRejection("scripts_payload");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(track).not.toHaveBeenCalled();
   });
 });

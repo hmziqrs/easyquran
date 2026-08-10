@@ -167,8 +167,10 @@ mod tests {
 
     #[test]
     fn from_json_str_rejects_invalid_json() {
-        let err = ServiceAccount::from_json_str("not json").expect_err("must reject");
-        assert!(matches!(err, FcmError::Auth(_)));
+        assert!(matches!(
+            ServiceAccount::from_json_str("not json"),
+            Err(FcmError::Auth(_))
+        ));
     }
 
     #[test]
@@ -184,7 +186,7 @@ mod tests {
         assert_eq!(sa.client_email, "fcm@test.iam.gserviceaccount.com");
         assert_eq!(sa.project_id, "test-project");
         assert_eq!(sa.private_key_id, "kid-123");
-        let dbg = format!("{:?}", &sa.private_key);
+        let dbg = format!("{:?}", sa.private_key);
         assert!(
             !dbg.contains("BEGIN PRIVATE KEY"),
             "private key leaked into Debug: {}",

@@ -385,9 +385,7 @@ impl BillingProvider for PayPalProvider {
             user_id: resource["custom_id"].as_str().and_then(|s| s.parse().ok()),
             amount_cents: resource["amount"]["total"]
                 .as_str()
-                .and_then(|s| {
-                    s.parse::<f64>().ok().map(|f| (f * 100.0) as i64)
-                })
+                .and_then(|s| s.parse::<f64>().ok().map(|f| (f * 100.0) as i64))
                 .or_else(|| {
                     resource["amount"]["value"]
                         .as_str()

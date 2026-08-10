@@ -1,7 +1,7 @@
 pub mod controller;
 pub mod validator;
 
-use axum::{middleware, routing::post, Router};
+use axum::{middleware, routing::{get, post}, Router};
 
 use crate::{middlewares::auth_guard, AppState};
 
@@ -30,10 +30,13 @@ pub fn routes() -> Router<AppState> {
     }
 
     let authenticated = authenticated
-        .route("/sessions/list", post(controller::sessions_list))
+        .route(
+            "/sessions/list",
+            get(controller::sessions_list).post(controller::sessions_list),
+        )
         .route(
             "/sessions/terminate/{id}",
-            post(controller::sessions_terminate),
+            post(controller::sessions_terminate).delete(controller::sessions_terminate),
         )
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 

@@ -16,10 +16,28 @@ pub struct AbuseLimiterConfig {
     pub block_duration: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BlockScope {
+    #[default]
     Temp,
     Long,
+}
+
+impl BlockScope {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            BlockScope::Temp => "Temp",
+            BlockScope::Long => "Long",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "Temp" => Some(BlockScope::Temp),
+            "Long" => Some(BlockScope::Long),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -107,7 +125,10 @@ pub async fn check(
 }
 
 pub async fn dedup_nx(store: &dyn RateLimitStore, key: &str, ttl_secs: usize) -> bool {
-    match store.set_nx_ex(key, Duration::from_secs(ttl_secs as u64)).await {
+    match store
+        .set_nx_ex(key, Duration::from_secs(ttl_secs as u64))
+        .await
+    {
         Ok(claimed) => claimed,
         Err(err) => {
             warn!(error = %err, %key, "dedup check failed (fail-open)");
@@ -143,13 +164,39 @@ mod tests {
         async fn incr_expire(&self, _: &str, _: Duration) -> Result<(u64, u64), GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
-        async fn abuse_check(&self, _: &str, _: AbuseLimiterConfig) -> Result<LimiterDecision, GateError> {
+        async fn abuse_check(
+            &self,
+            _: &str,
+            _: AbuseLimiterConfig,
+        ) -> Result<LimiterDecision, GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
         async fn set_nx_ex(&self, _: &str, _: Duration) -> Result<bool, GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
         async fn del(&self, _: &str) -> Result<(), GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
+        async fn ban_status(&self, _: &str) -> Result<Option<crate::store::BanStatus>, GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
+        async fn clear_limit(&self, _: &str) -> Result<(), GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
+        async fn set_block(
+            &self,
+            _: &str,
+            _: crate::abuse::BlockScope,
+            _: Duration,
+        ) -> Result<(), GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
+        async fn record_qualifying(
+            &self,
+            _: &str,
+            _: Duration,
+            _: Duration,
+        ) -> Result<crate::store::QualifyingCounts, GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
     }

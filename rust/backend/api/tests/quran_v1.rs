@@ -8,7 +8,8 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use ruxlog::config::{
-    HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, Settings, SiteSettings,
+    HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, RateLimitSettings, Settings,
+    SiteSettings,
 };
 use ruxlog::middlewares::{client_ip, rate_limit};
 use ruxlog::modules::quran_v1;
@@ -18,6 +19,15 @@ use ruxlog::services::billing::router::{BillingRouter, GeoRouter, GeoRulesConfig
 use ruxlog::services::mail::{router::MailRouterLimits, MailRouter};
 use ruxlog::services::session_store::SqliteSessionStore;
 use ruxlog::state::{build_http_client, AppState, QuranRuntimeMetrics, StorageState};
+
+// ruxlog is compiled without cfg(test) when linked as a dependency of this
+// integration-test binary, so is_production() cannot use cfg(test) to default an
+// unset env. These tests exercise the public Quran API on the ConnectInfo
+// (non-CF) path, so pin the env to development once for the whole process.
+static DEV_ENV: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+fn ensure_dev_env() {
+    DEV_ENV.get_or_init(|| std::env::set_var("RUST_ENV", "development"));
+}
 
 fn quran_settings() -> QuranSettings {
     let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
@@ -37,6 +47,7 @@ async fn state() -> AppState {
 }
 
 async fn state_with_public_url(public_url: &str) -> AppState {
+    ensure_dev_env();
     let quran = Arc::new(
         load_quran_store(&quran_settings())
             .await
@@ -84,6 +95,13 @@ async fn state_with_public_url(public_url: &str) -> AppState {
             keep_original: false,
             default_webp_quality: 80,
         },
+        rate_limit: RateLimitSettings {
+            active_ban_max: 2_000,
+            ban_export_token: String::new(),
+            internal_token: String::new(),
+            internal_requests_per_minute: 600,
+            health_requests_per_minute: 120,
+        },
         quran: quran_settings(),
     });
     let storage = StorageState {
@@ -111,6 +129,8 @@ async fn state_with_public_url(public_url: &str) -> AppState {
             qs.max_resident_translations,
             qs.max_resident_bytes,
             std::time::Duration::from_secs(qs.translation_idle_ttl_secs),
+            true,
+            2,
         ))
     };
 
@@ -121,6 +141,8 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         revoked_sessions,
         mailer,
         settings,
+        allowed_origins: ruxlog::utils::cors::build_allowed_origins(false, None, None, None)
+            .expect("dev default origins parse"),
         storage,
         secret_key: b"test_secret_key".to_vec(),
         http_client: build_http_client(),
@@ -176,21 +198,24 @@ async fn full_app() -> axum::Router {
             axum::http::Method::OPTIONS,
         ])
         .allow_origin(tower_http::cors::AllowOrigin::list(
-            ruxlog::utils::cors::get_allowed_origins(),
+            state.allowed_origins.header_values().to_vec(),
         ))
         .allow_credentials(true);
     let ip_source = state.settings.http.ip_source.clone();
     let private = ruxlog::router::router(state.clone())
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.clone().into_extension())
-        .layer(axum::Extension(state.clone()))
         .layer(tower_http::compression::CompressionLayer::new())
+        .layer(axum::Extension(state.clone()))
         .layer(middleware::from_fn(ruxlog::middlewares::cors::origin_guard))
         .layer(middleware::from_fn(
             ruxlog::middlewares::static_csrf::csrf_guard,
         ))
         .layer(session_layer)
-        .layer(private_cors);
+        .layer(private_cors)
+        .layer(middleware::from_fn(
+            ruxlog::middlewares::cors::private_no_store,
+        ));
     let public = app_over_public(&state, ip_source);
     axum::Router::new()
         .merge(private)
@@ -241,6 +266,22 @@ async fn req(method: Method, uri: &str) -> (StatusCode, Value, reqwest::header::
 
 async fn get(uri: &str) -> (StatusCode, Value, reqwest::header::HeaderMap) {
     req(Method::GET, uri).await
+}
+
+/// Raw response (extensions intact) for W3a classification assertions.
+async fn get_resp(uri: &str) -> axum::response::Response {
+    ensure_dev_env();
+    app()
+        .await
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
 }
 
 fn data(v: &Value) -> &Value {
@@ -495,12 +536,40 @@ async fn health_ready_endpoint() {
     assert_eq!(body["translationPool"]["idleTtlSeconds"], 1800);
     assert_eq!(body["translationPool"]["builds"], 0);
     assert_eq!(body["translationPool"]["lookups"], 0);
-    assert_eq!(body["translationPool"]["hitRate"], 1.0);
+    assert!(
+        body["translationPool"]["hitRate"].is_null(),
+        "hitRate is null until the first lookup lands (no lookups yet)"
+    );
     assert_eq!(body["translationPool"]["evictions"], 0);
     assert_eq!(body["translationPool"]["evictionsPerMinute"], 0);
+    assert!(
+        body["translationPool"]["prewarmed"].is_array(),
+        "prewarmed is always a (possibly empty) array"
+    );
+    assert!(
+        body["translationPool"]["topDemand"].is_array(),
+        "topDemand is always a (possibly empty) array"
+    );
     assert_eq!(body["loading"]["arabicLoadDurationMs"], 7);
     assert_eq!(body["loading"]["translationCatalogueLoadDurationMs"], 3);
     assert_eq!(body["loading"]["translationCatalogueEntries"], 115);
+    // W8F-002: exercise the auth readiness surface (enabled + providers[]) so the
+    // readiness privacy contract (provider names + ready/not-ready, NO secrets) is
+    // asserted end-to-end. The test harness builds a literal Settings (never
+    // Settings::from_env), so web_auth() holds its disabled default.
+    assert_eq!(
+        body["auth"]["enabled"], false,
+        "auth.enabled must be false in the test harness (WEB_AUTH off)"
+    );
+    assert!(
+        body["auth"]["providers"].is_array(),
+        "auth.providers must always serialize as a (possibly empty) array"
+    );
+    assert_eq!(
+        body["auth"]["providers"].as_array().unwrap().len(),
+        0,
+        "no oauth providers configured in the test harness → empty providers list"
+    );
     assert!(
         body.get("sourceDigests").is_none(),
         "health must not expose source digests — manual audit only (docs/quran-system.md — Hard rules)"
@@ -605,7 +674,10 @@ async fn search_finds_ornament_bearing_query() {
         .iter()
         .map(|r| r["ayah"]["globalIndex"].as_u64().unwrap())
         .collect();
-    assert!(hits.contains(&24), "2:17 (globalIndex 24) should match: {hits:?}");
+    assert!(
+        hits.contains(&24),
+        "2:17 (globalIndex 24) should match: {hits:?}"
+    );
 }
 
 #[tokio::test]
@@ -894,6 +966,75 @@ async fn phase_1a_auth_regression_on_merged_router() {
     assert!(
         resp.headers().get(header::SET_COOKIE).is_none(),
         "public branch must not set a session cookie"
+    );
+}
+
+// --- W8a: private API no-store + public Quran cache isolation ----------------
+
+#[tokio::test]
+async fn w8a_private_api_responses_are_private_no_store() {
+    std::env::set_var(
+        "COOKIE_KEY",
+        "test_cookie_key_padded_to_more_than_32_bytes_for_tests",
+    );
+    let app = full_app().await;
+
+    // /csrf/v1/generate is on the PRIVATE router. With no Origin header,
+    // origin_guard early-returns, so the handler runs and private_no_store stamps
+    // the response. This must hold for EVERY private response — authenticated or
+    // not — because CSRF generation mints `ruxlog.sid` for anonymous sessions too.
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/csrf/v1/generate")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK, "csrf generate succeeds");
+    let cc = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .expect("private response must carry Cache-Control");
+    assert_eq!(
+        cc.to_str().unwrap(),
+        "private, no-store",
+        "private API responses must be Cache-Control: private, no-store"
+    );
+}
+
+#[tokio::test]
+async fn w8a_anonymous_quran_headers_remain_public_with_csrf_cookie() {
+    let app = app().await;
+
+    // An anonymous ruxlog.sid cookie (CSRF generation mints one for anon sessions)
+    // must NOT flip the public Quran cache policy to private/no-store. The public
+    // router never enters private_no_store and ignores the cookie entirely.
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/quran/surahs")
+                .header(header::COOKIE, "ruxlog.sid=anonymous-csrf-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cc = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .expect("public surahs response carries a Cache-Control policy");
+    let cc = cc.to_str().unwrap();
+    assert!(
+        cc.starts_with("public"),
+        "public Quran response must stay public even with an anon CSRF cookie (got {cc})"
+    );
+    assert!(
+        !cc.contains("no-store") && !cc.contains("private"),
+        "public Quran response must not be private/no-store (got {cc})"
     );
 }
 
@@ -1446,5 +1587,30 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::NO_STORE),
         "partial upstream must be no-store, not a cached truncation"
+    );
+}
+
+#[tokio::test]
+async fn w3a_unknown_source_is_classified() {
+    use ruxlog::modules::quran_v1::error::QuranErrorClass;
+    let resp = get_resp("/quran/sources/not-a-real-source/surah/1").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        resp.extensions().get::<QuranErrorClass>(),
+        Some(&QuranErrorClass::UnknownSource),
+        "unknown source id must carry the typed UnknownSource class for W3a escalation"
+    );
+}
+
+#[tokio::test]
+async fn w3a_invalid_range_bounds_are_classified() {
+    use ruxlog::modules::quran_v1::error::QuranErrorClass;
+    // from > to is an impossible bound, not a mere over-cap request.
+    let resp = get_resp("/quran/sources/uthmani/range?from=5&to=2").await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        resp.extensions().get::<QuranErrorClass>(),
+        Some(&QuranErrorClass::InvalidRange),
+        "impossible from/to bounds must carry the typed InvalidRange class for W3a escalation"
     );
 }

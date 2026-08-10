@@ -24,6 +24,10 @@ use utoipa::OpenApi;
         crate::quran::Place,
         crate::quran::Bismillah,
         crate::quran::SajdaKind,
+        crate::modules::admin_bans_v1::dto::BanRow,
+        crate::modules::admin_bans_v1::dto::BanListResponse,
+        crate::modules::admin_bans_v1::dto::ExportRow,
+        crate::modules::admin_bans_v1::dto::ExportResponse,
     )),
     info(
         title = "EasyQuran API",

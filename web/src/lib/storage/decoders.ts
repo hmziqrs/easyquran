@@ -47,3 +47,14 @@ export function asStringRecord(raw: unknown): Record<string, string> {
   }
   return out;
 }
+
+export function asNumberRecord(raw: unknown, min: number, max: number): Record<string, number> {
+  const obj = asObject(raw);
+  if (!obj) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const n = asNumber(v, min, max);
+    if (n !== undefined && Number.isSafeInteger(n)) out[k] = n;
+  }
+  return out;
+}
