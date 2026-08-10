@@ -63,6 +63,7 @@
   const rangeSourceId = $derived(
     ctx.kind === SourceKind.Arabic ? null : translationIdFromSegments(ctx.lang, ctx.translator),
   );
+  const isArabic = $derived(rangeSourceId === null);
   const viewKey = $derived(`${rangeSourceId}:${data.kind}:${data.index}`);
   trackReaderView({ key: () => viewKey, sourceId: () => rangeSourceId });
 
@@ -145,7 +146,7 @@
   });
 </script>
 
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-4" data-source-kind={isArabic ? "arabic" : "translation"}>
   {#each groups as g (g.surah.num)}
     <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
       <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-9">
@@ -165,7 +166,7 @@
         </p>
       {/if}
       <TooltipProvider delayDuration={300}>
-        <ol class="flex list-none flex-col p-0">
+        <ol class="ayah-list flex list-none flex-col p-0">
           {#each g.ayahs as a (a.key)}
             <VerseRow text={bodyText(a.text, a.ayah, g.normalization)} n={a.ayah} vKey={a.key} />
           {/each}
@@ -209,3 +210,12 @@
     </div>
   {/if}
 </div>
+
+<style>
+  :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .ayah-list {
+    display: block;
+    direction: rtl;
+    text-align: justify;
+    text-align-last: center;
+  }
+</style>

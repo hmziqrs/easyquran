@@ -13,5 +13,5 @@
 </script>
 
 <Container width="narrow" class="flex min-h-[70vh] flex-col justify-center py-16">
-  <div class="mx-auto w-full max-w-[420px]">{@render children()}</div>
+  <main id="main" class="mx-auto w-full max-w-[420px]">{@render children()}</main>
 </Container>

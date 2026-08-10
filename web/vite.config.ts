@@ -33,7 +33,7 @@ export default defineConfig({
         precompress: true,
       }),
       prerender: {
-        handleMissingId: "warn",
+        handleMissingId: "fail",
       },
     }),
   ]),

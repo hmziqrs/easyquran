@@ -101,13 +101,13 @@
     font-family: var(--font-sans);
   }
 
-  :global([data-reader-mode="reading"]) .verse-row {
+  :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-row {
     display: inline;
     padding: 0;
     border: 0;
   }
 
-  :global([data-reader-mode="reading"]) .verse-text {
+  :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-text {
     display: inline;
   }
 </style>

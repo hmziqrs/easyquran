@@ -17,7 +17,7 @@
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
-  import type { Snippet } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import {
     Sidebar,
     SidebarHeader,
@@ -42,11 +42,22 @@
   function oninput(e: Event) {
     reader.setQuery((e.currentTarget as HTMLInputElement).value);
   }
+  async function focusSearch(): Promise<void> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await tick();
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.select();
+        return;
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    }
+  }
   function onKey(e: KeyboardEvent) {
     if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      inputEl?.focus();
-      inputEl?.select();
+      if (!sidebar.openMobile) sidebar.setOpenMobile(true);
+      void focusSearch();
     }
   }
   function onItemClick() {

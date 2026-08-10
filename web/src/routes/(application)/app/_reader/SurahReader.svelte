@@ -716,7 +716,12 @@
       onBigger={() => changeFontSize(() => reader.bigger())}
     />
 
-    <div {@attach captureReaderPages} class="reader-pages" tabindex="-1">
+    <div
+      {@attach captureReaderPages}
+      class="reader-pages"
+      data-source-kind={isTranslationSource ? "translation" : "arabic"}
+      tabindex="-1"
+    >
       <TooltipProvider delayDuration={300}>
         {#each pages as pageData (pageData.page.localPage)}
           {#if renderedPageNumbers.has(pageData.page.localPage)}
@@ -834,7 +839,7 @@
     padding-top: 0;
   }
 
-  :global([data-reader-mode="reading"]) .reader-pages .ayah-list {
+  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="arabic"] .ayah-list {
     display: block;
     direction: rtl;
     text-align: justify;
