@@ -254,7 +254,43 @@ describe("X-EQ-Session-Rotated header refreshes CSRF", () => {
     const res = await c.unsafeRequest("/auth/v1/log_in", { method: "POST", body: {} });
     expect(res.ok).toBe(true);
     expect(res.rotated).toBe(true);
+    expect(c.getCsrfToken()).toBeNull();
+  });
+
+  it("a failed post-rotation refresh clears the stale token so the next unsafe request re-bootstraps CSRF", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonRes({ token: "anon-1" }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json", "X-EQ-Session-Rotated": "1" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonRes({ type: "internal_server_error", status: 500 }, { status: 500 }),
+      )
+      .mockResolvedValueOnce(jsonRes({ token: "anon-2" }))
+      .mockResolvedValue(jsonRes({ ok: true }));
+    const c = createAuthClient();
+    await c.ensureAnonymousSession();
     expect(c.getCsrfToken()).toBe("anon-1");
+    const rotated = await c.unsafeRequest("/auth/v1/log_in", { method: "POST", body: {} });
+    expect(rotated.rotated).toBe(true);
+    expect(c.getCsrfToken()).toBeNull();
+    const next = await c.unsafeRequest("/auth/v1/log_out", { method: "POST" });
+    expect(next.ok).toBe(true);
+    expect(c.getCsrfToken()).toBe("anon-2");
+    const calls = fetchMock.mock.calls.map(([url]) => url);
+    expect(calls).toEqual([
+      "https://eq.test/api/csrf/v1/generate",
+      "https://eq.test/api/auth/v1/log_in",
+      "https://eq.test/api/csrf/v1/generate",
+      "https://eq.test/api/csrf/v1/generate",
+      "https://eq.test/api/auth/v1/log_out",
+    ]);
+    const rebootstrapInit = (fetchMock.mock.calls[3] as [string, RequestInit])[1];
+    expect(rebootstrapInit.method).toBe("POST");
   });
 });
 

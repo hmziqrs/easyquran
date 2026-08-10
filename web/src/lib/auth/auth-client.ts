@@ -181,6 +181,7 @@ export class AuthClient {
       try {
         this.#csrfToken = await this.fetchCsrf();
       } catch {
+        this.#csrfToken = null;
       } finally {
         this.#refreshing = false;
       }
