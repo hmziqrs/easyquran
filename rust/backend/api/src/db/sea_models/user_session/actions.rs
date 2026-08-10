@@ -76,8 +76,13 @@ impl Entity {
             _ => 1,
         };
 
+        // W8E-001: sessions_list is the "devices currently signed in" view, so only
+        // ACTIVE rows count. Filtering at the SQL layer (not the controller) keeps
+        // both pagination and `total` honest — a user with many revoked sessions
+        // would otherwise see empty pages and an inflated count.
         let query = Self::find()
             .filter(Column::UserId.eq(user_id))
+            .filter(Column::RevokedAt.is_null())
             .order_by(Column::LastSeen, Order::Desc);
 
         let paginator = query.paginate(conn, Self::PER_PAGE);

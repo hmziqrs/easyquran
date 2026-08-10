@@ -362,11 +362,7 @@ pub async fn register(
                     send_email_verification_code(&app_state.mailer, &email_for_task, &code_for_task)
                         .await
                 {
-                    tracing::error!(
-                        user_id,
-                        "Failed to send verification email: {}",
-                        err
-                    );
+                    tracing::error!(user_id, "Failed to send verification email: {}", err);
                 }
             });
 
@@ -490,7 +486,11 @@ pub async fn twofa_verify(
             active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
             let updated = active.update(&state.sea_db).await?;
             let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
-            return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
+            return Ok((
+                StatusCode::OK,
+                session_rotated_headers(rotated),
+                Json(json!(updated)),
+            ));
         } else {
             warn!(
                 user_id = user.id,
@@ -526,7 +526,11 @@ pub async fn twofa_verify(
                 active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
                 let updated = active.update(&state.sea_db).await?;
                 let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
-                return Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))));
+                return Ok((
+                    StatusCode::OK,
+                    session_rotated_headers(rotated),
+                    Json(json!(updated)),
+                ));
             }
         }
     }
@@ -633,7 +637,11 @@ pub async fn twofa_disable(
 
     let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
 
-    Ok((StatusCode::OK, session_rotated_headers(rotated), Json(json!(updated))))
+    Ok((
+        StatusCode::OK,
+        session_rotated_headers(rotated),
+        Json(json!(updated)),
+    ))
 }
 
 #[debug_handler]
@@ -647,23 +655,17 @@ pub async fn sessions_list(
     // W8e: compute isCurrent server-side by resolving the current tower session id
     // to its audit row via the durable binding, without exposing the opaque tower id.
     let current_audit_id = match auth.session().id() {
-        Some(id) => auth
-            .backend()
-            .lookup_session_mapping_by_tower(&state.sea_db, &id.to_string())
-            .await,
+        Some(id) => {
+            auth.backend()
+                .lookup_session_mapping_by_tower(&state.sea_db, &id.to_string())
+                .await
+        }
         None => None,
     };
 
     match user_session::Entity::list_by_user(&state.sea_db, user.id, Some(page)).await {
         Ok(result) => {
-            let data: Vec<serde_json::Value> = result
-                .data
-                .into_iter()
-                .map(|row| {
-                    let is_current = Some(row.id) == current_audit_id;
-                    annotate_session_row(row, is_current)
-                })
-                .collect();
+            let data = sessions_list_payload(result.data, current_audit_id);
             Ok((
                 StatusCode::OK,
                 Json(json!({
@@ -675,6 +677,25 @@ pub async fn sessions_list(
         }
         Err(err) => Err(err),
     }
+}
+
+/// Build the `sessions_list` response payload: drop any revoked row, then attach
+/// the server-computed `isCurrent` flag. W8E-001 — `list_by_user` already filters
+/// `revoked_at IS NULL` (so pagination/total stay honest), but this guard ensures
+/// a terminated session can never reach the "devices currently signed in" UI even
+/// if a future change alters the fetch path. The opaque tower session id never
+/// enters the response — only the audit row id and the derived boolean.
+fn sessions_list_payload(
+    rows: Vec<user_session::Model>,
+    current_audit_id: Option<i32>,
+) -> Vec<serde_json::Value> {
+    rows.into_iter()
+        .filter(|row| row.revoked_at.is_none())
+        .map(|row| {
+            let is_current = Some(row.id) == current_audit_id;
+            annotate_session_row(row, is_current)
+        })
+        .collect()
 }
 
 /// Attach a server-computed `isCurrent` flag to a session row for `sessions_list`.
@@ -937,6 +958,7 @@ mod login_totp_token {
 mod tests {
     use super::annotate_session_row;
     use super::login_totp_token;
+    use super::sessions_list_payload;
 
     #[test]
     fn login_totp_redis_key_prefix_is_stable() {
@@ -960,6 +982,13 @@ mod tests {
             ip_address: None,
             last_seen: chrono::Utc::now().fixed_offset(),
             revoked_at: None,
+        }
+    }
+
+    fn sample_revoked_row(id: i32) -> crate::db::sea_models::user_session::Model {
+        crate::db::sea_models::user_session::Model {
+            revoked_at: Some(chrono::Utc::now().fixed_offset()),
+            ..sample_row(id)
         }
     }
 
@@ -1019,5 +1048,47 @@ mod tests {
                 .all(|v| v["isCurrent"] == serde_json::Value::Bool(false)),
             "no row is current when current_audit_id is None"
         );
+    }
+
+    // --- W8E-001 sessions_list active-only filter ----------------------------
+
+    #[test]
+    fn sessions_list_payload_excludes_revoked_sessions() {
+        // A terminated session must never appear in the "devices currently signed
+        // in" list, even if one slipped past the query layer.
+        let rows = vec![
+            sample_row(1),
+            sample_revoked_row(2),
+            sample_row(3),
+            sample_revoked_row(4),
+        ];
+        let payload = sessions_list_payload(rows, None);
+        let ids: Vec<i64> = payload.iter().filter_map(|v| v["id"].as_i64()).collect();
+        assert_eq!(ids, vec![1, 3], "revoked sessions must be filtered out");
+        assert!(
+            payload.iter().all(|v| v["revoked_at"].is_null()),
+            "no row in the payload should carry a revoked_at value once filtered"
+        );
+    }
+
+    #[test]
+    fn sessions_list_payload_keeps_active_sessions_and_marks_current() {
+        let rows = vec![sample_row(10), sample_row(11), sample_revoked_row(12)];
+        let payload = sessions_list_payload(rows, Some(11));
+        let ids: Vec<i64> = payload.iter().filter_map(|v| v["id"].as_i64()).collect();
+        assert_eq!(ids, vec![10, 11], "active sessions are retained");
+        let current = payload
+            .iter()
+            .filter(|v| v["isCurrent"] == serde_json::Value::Bool(true))
+            .collect::<Vec<_>>();
+        assert_eq!(current.len(), 1);
+        assert_eq!(current[0]["id"], 11);
+    }
+
+    #[test]
+    fn sessions_list_payload_empty_when_all_revoked() {
+        let rows = vec![sample_revoked_row(1), sample_revoked_row(2)];
+        let payload = sessions_list_payload(rows, Some(1));
+        assert!(payload.is_empty(), "no active rows means no payload");
     }
 }
