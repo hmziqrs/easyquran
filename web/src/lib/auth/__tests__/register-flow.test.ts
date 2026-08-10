@@ -158,6 +158,8 @@ describe("RegisterFlow register->login->verification", () => {
     const res = await flow.submit();
     expect(res).toBe(false);
     expect(flow.step).toBe("form");
+    expect(flow.genericError).toBe("Email or password is incorrect.");
+    expect(flow.fieldErrors).toEqual({});
     expect(state.setUser).not.toHaveBeenCalled();
   });
 
