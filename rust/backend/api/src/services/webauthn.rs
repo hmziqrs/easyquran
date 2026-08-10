@@ -25,7 +25,21 @@ impl WebauthnService {
         let rp_name = std::env::var("WEBAUTHN_RP_NAME")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "Ruxlog".to_string());
+            .unwrap_or_else(|| {
+                // W8F-001: a missing WEBAUTHN_RP_NAME must NOT silently become the
+                // literal "Ruxlog" in production — that presents the wrong brand in
+                // passkey prompts. Pass an empty value through so new()'s production
+                // gate rejects it (mirroring localhost rp_id/origin). dev/test keep
+                // the localhost-era fallback.
+                if matches!(
+                    crate::config::settings::env_class(),
+                    crate::config::settings::EnvClass::Production
+                ) {
+                    String::new()
+                } else {
+                    "Ruxlog".to_string()
+                }
+            });
         Self::new(&rp_id, &rp_origin, &rp_name)
     }
 
@@ -42,11 +56,25 @@ impl WebauthnService {
                 || rp_origin.starts_with("http://127.0.0.1")
                 || rp_origin.starts_with("http://[::1]");
             if is_localhost_rp {
-                return Err(ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
-                    "Production rejects localhost WebAuthn RP: set WEBAUTHN_RP_ID and \
+                return Err(
+                    ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
+                        "Production rejects localhost WebAuthn RP: set WEBAUTHN_RP_ID and \
                      WEBAUTHN_RP_ORIGIN to the real origin (e.g. easyquran.fyi / \
                      https://easyquran.fyi)",
-                ));
+                    ),
+                );
+            }
+            // W8F-001: a non-empty WEBAUTHN_RP_NAME is required in production —
+            // it is the brand string shown in passkey prompts, and from_env no
+            // longer masks an unset value with the "Ruxlog" default here. Empty
+            // also catches a direct construction that forgot the name.
+            if rp_name.trim().is_empty() {
+                return Err(
+                    ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
+                        "Production requires a non-empty WEBAUTHN_RP_NAME (the display name \
+                     shown in passkey prompts, e.g. EasyQuran); got unset/empty.",
+                    ),
+                );
             }
         }
 
@@ -186,7 +214,7 @@ fn user_handle_for(user_id: i32) -> Uuid {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::settings::{env_class, EnvClass};
+    use crate::config::settings::{env_class, EnvClass, TEST_ENV_MUTEX};
 
     // env_class reads RUST_ENV → NODE_ENV → APP_ENV. Snapshot + restore so the
     // global never leaks into other tests regardless of the host environment.
@@ -224,6 +252,7 @@ mod tests {
 
     #[test]
     fn prod_rejects_localhost_webauthn_rp() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
         std::env::set_var("RUST_ENV", "production");
@@ -241,6 +270,7 @@ mod tests {
 
     #[test]
     fn prod_rejects_loopback_origin() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
         std::env::set_var("RUST_ENV", "production");
@@ -253,16 +283,76 @@ mod tests {
 
     #[test]
     fn prod_accepts_real_origin() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
         std::env::set_var("RUST_ENV", "production");
         let r = WebauthnService::new("easyquran.fyi", "https://easyquran.fyi", "EasyQuran");
         restore(s);
-        assert!(r.is_ok(), "production must accept the real easyquran.fyi RP");
+        assert!(
+            r.is_ok(),
+            "production must accept the real easyquran.fyi RP"
+        );
+    }
+
+    // W8F-001: a non-empty WEBAUTHN_RP_NAME is required in production. The gate
+    // lives in new() (mirroring the localhost rejection); from_env stops masking
+    // an unset value with the "Ruxlog" default so the gate can fire.
+    #[test]
+    fn prod_rejects_empty_rp_name() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let s = snap();
+        clear_env();
+        std::env::set_var("RUST_ENV", "production");
+        assert!(matches!(env_class(), EnvClass::Production));
+        let err = WebauthnService::new("easyquran.fyi", "https://easyquran.fyi", "")
+            .err()
+            .expect("empty RP name must error in production");
+        restore(s);
+        assert!(
+            matches!(err.code, ErrorCode::ConfigurationError),
+            "empty RP name must be a ConfigurationError in production"
+        );
+    }
+
+    #[test]
+    fn prod_from_env_rejects_unset_rp_name() {
+        // The masking bug: an unset WEBAUTHN_RP_NAME used to fall back to the
+        // literal "Ruxlog" and boot. With real rp_id/origin set so the localhost
+        // gate does not fire first, from_env must surface the empty-name Err.
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let s = snap();
+        let prev_id = std::env::var("WEBAUTHN_RP_ID").ok();
+        let prev_origin = std::env::var("WEBAUTHN_RP_ORIGIN").ok();
+        let prev_name = std::env::var("WEBAUTHN_RP_NAME").ok();
+        clear_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEBAUTHN_RP_ID", "easyquran.fyi");
+        std::env::set_var("WEBAUTHN_RP_ORIGIN", "https://easyquran.fyi");
+        std::env::remove_var("WEBAUTHN_RP_NAME");
+        let err = WebauthnService::from_env()
+            .err()
+            .expect("unset WEBAUTHN_RP_NAME must error in production (no Ruxlog fallback)");
+        restore(s);
+        for (k, v) in [
+            ("WEBAUTHN_RP_ID", prev_id),
+            ("WEBAUTHN_RP_ORIGIN", prev_origin),
+            ("WEBAUTHN_RP_NAME", prev_name),
+        ] {
+            match v {
+                Some(val) => std::env::set_var(k, val),
+                None => std::env::remove_var(k),
+            }
+        }
+        assert!(
+            matches!(err.code, ErrorCode::ConfigurationError),
+            "unset RP name must be a ConfigurationError in production"
+        );
     }
 
     #[test]
     fn dev_accepts_real_origin_without_prod_gate() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
         // The prod gate is env-class-scoped: in dev a real RP constructs fine,
         // and (separately) localhost is rejected by webauthn-rs itself, not by the
         // W8f gate. This test pins the non-production happy path.
@@ -271,6 +361,9 @@ mod tests {
         std::env::set_var("RUST_ENV", "development");
         let r = WebauthnService::new("example.com", "https://example.com", "Test");
         restore(s);
-        assert!(r.is_ok(), "dev must construct a real-origin WebAuthn service");
+        assert!(
+            r.is_ok(),
+            "dev must construct a real-origin WebAuthn service"
+        );
     }
 }

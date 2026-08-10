@@ -557,6 +557,23 @@ async fn health_ready_endpoint() {
     assert_eq!(body["loading"]["arabicLoadDurationMs"], 7);
     assert_eq!(body["loading"]["translationCatalogueLoadDurationMs"], 3);
     assert_eq!(body["loading"]["translationCatalogueEntries"], 115);
+    // W8F-002: exercise the auth readiness surface (enabled + providers[]) so the
+    // readiness privacy contract (provider names + ready/not-ready, NO secrets) is
+    // asserted end-to-end. The test harness builds a literal Settings (never
+    // Settings::from_env), so web_auth() holds its disabled default.
+    assert_eq!(
+        body["auth"]["enabled"], false,
+        "auth.enabled must be false in the test harness (WEB_AUTH off)"
+    );
+    assert!(
+        body["auth"]["providers"].is_array(),
+        "auth.providers must always serialize as a (possibly empty) array"
+    );
+    assert_eq!(
+        body["auth"]["providers"].as_array().unwrap().len(),
+        0,
+        "no oauth providers configured in the test harness → empty providers list"
+    );
     assert!(
         body.get("sourceDigests").is_none(),
         "health must not expose source digests — manual audit only (docs/quran-system.md — Hard rules)"
