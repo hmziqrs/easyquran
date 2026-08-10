@@ -13,6 +13,7 @@
   const showSetupCta = $derived(verified && !twoFactorEnabled && flow.step === "idle");
   const showVerifyPanel = $derived(flow.step === "verify");
   const showEnabledPanel = $derived(flow.step === "enabled" || (twoFactorEnabled && flow.step === "idle"));
+  const showDisabledNotice = $derived(flow.step === "disabled");
 </script>
 
 {#if !verified}
@@ -92,6 +93,19 @@
     {/if}
     <Button variant="ghost" class="self-start" disabled={flow.pending} onclick={() => flow.disable()}>
       {flow.pending ? "Disabling…" : "Disable 2FA"}
+    </Button>
+  </section>
+{:else if showDisabledNotice}
+  <section class="flex flex-col gap-3">
+    <div class="flex flex-col gap-1">
+      <h3 class="text-base font-semibold">Two-factor authentication is off</h3>
+      <p class="text-sm text-fg-2">Two-factor authentication has been disabled.</p>
+    </div>
+    {#if flow.genericError}
+      <p role="alert" class="text-sm text-destructive">{flow.genericError}</p>
+    {/if}
+    <Button variant="accent" class="self-start" disabled={flow.pending} onclick={() => flow.setup()}>
+      {flow.pending ? "Starting…" : "Set up 2FA"}
     </Button>
   </section>
 {/if}

@@ -87,7 +87,7 @@
     const res = await accountClient.terminateSession(id);
     terminatePendingId = null;
     if (res.status === "ok") {
-      if (res.isCurrent || isCurrent) {
+      if (isCurrent) {
         await logout.run();
         await goto(ANONYMOUS_CTA_HREF);
       } else {

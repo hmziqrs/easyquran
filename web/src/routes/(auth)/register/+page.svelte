@@ -23,6 +23,11 @@
   function invalid(field: string): boolean {
     return Boolean(flow.fieldErrors[field]);
   }
+
+  const totpServerError = $derived(
+    flow.login.genericError ?? (flow.login.fieldErrors.code ? null : flow.genericError),
+  );
+  const totpInvalid = $derived(Boolean(flow.login.fieldErrors.code));
 </script>
 
 {#if flow.step === "totp"}
@@ -30,8 +35,8 @@
     heading="Two-factor code"
     subheading="Enter the 6-digit code from your authenticator app to finish signing in."
     submitLabel="Continue"
-    pending={flow.pending}
-    serverError={flow.genericError}
+    pending={flow.login.pending}
+    serverError={totpServerError}
     onsubmit={handleSubmit}
   >
     <div class="flex flex-col gap-1.5">
@@ -43,7 +48,12 @@
         autocomplete="one-time-code"
         maxlength={6}
         bind:value={flow.login.code}
+        aria-invalid={totpInvalid}
+        data-invalid={totpInvalid}
       />
+      {#if flow.login.fieldErrors.code}
+        <span class="text-xs text-destructive">{flow.login.fieldErrors.code}</span>
+      {/if}
     </div>
   </AuthForm>
 {:else}
