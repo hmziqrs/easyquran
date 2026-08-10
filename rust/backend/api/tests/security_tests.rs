@@ -377,6 +377,21 @@ fn auth_path_logs_contain_no_sensitive_values() {
 
     // auth_v1/controller.rs — login, register, 2FA. email/password/code are
     // payload fields that must never reach tracing output (only user_id/ip/result).
+    //
+    // W8f-003: the original `email = %payload` / `password = %` / `code = %payload`
+    // matchers only catch the `field = %value` form. They miss two blind spots:
+    //   (a) message interpolation — e.g. `info!("reg {email}")` or
+    //       `error!("login fail {login_key}")` — where the controller binds
+    //       `let email = payload.email.clone()` / `let login_key = payload.email
+    //       .trim().to_lowercase()` and then interpolates the local into a
+    //       tracing message;
+    //   (b) field form against the LOCAL binding — `email = %email`,
+    //       `email = %login_key` — rather than `email = %payload.email`.
+    // The guards below close both. `error = %err` / `error = ?err` stay allowed:
+    // those carry an opaque DbErr/Backend error, NOT a payload field, and blanket
+    // banning them would false-positive on the legitimate session/auth error logs.
+    // (The risk that such an `err` embeds an email at runtime is covered by the
+    //  register DB-path runtime capture test further down.)
     let auth_v1 = include_str!("../src/modules/auth_v1/controller.rs");
     assert!(
         !auth_v1.contains("email = %payload"),
@@ -389,6 +404,53 @@ fn auth_path_logs_contain_no_sensitive_values() {
     assert!(
         !auth_v1.contains("code = %payload"),
         "auth_v1 controller must not log the 2FA/backup code (code = %payload.*)"
+    );
+    // Local-binding field form: the controller materializes `email` and
+    // `login_key` (lowercased email, also used as the per-account throttle key)
+    // into locals — never log those by name either.
+    assert!(
+        !auth_v1.contains("email = %email"),
+        "auth_v1 controller must not log the local `email` binding (payload.email clone)"
+    );
+    assert!(
+        !auth_v1.contains("email = %login_key"),
+        "auth_v1 controller must not log the throttle key (lowercased email) as an email field"
+    );
+    assert!(
+        !auth_v1.contains("login_key = %"),
+        "auth_v1 controller must not log the login throttle key (lowercased email)"
+    );
+    // Message interpolation: a tracing message literal must never interpolate the
+    // PII locals. `{login_key}` appears legitimately inside `format!("login:
+    // {login_key}")` (the rate-limit KEY, not a log), so it is excluded; the rest
+    // are pure leak vectors.
+    assert!(
+        !auth_v1.contains("{email}"),
+        "auth_v1 controller must not interpolate the email local into a tracing message"
+    );
+    assert!(
+        !auth_v1.contains("{password}"),
+        "auth_v1 controller must not interpolate the password into a tracing message"
+    );
+    assert!(
+        !auth_v1.contains("{code}"),
+        "auth_v1 controller must not interpolate the 2FA/backup code into a tracing message"
+    );
+
+    // user/actions.rs create() is the DB-layer log on the register path (register
+    // -> user::Entity::create). It is #[instrument(skip(conn, new_user,
+    // email_code_hash))] so new_user (email/password) never enters the span; the
+    // only field log is `error!("Failed to create user: {}", err)`. Guard the
+    // interpolation blind spot here too. `new_user.email`/`new_user.password`
+    // appear in non-log `Set(..)`/`generate_hash(..)` calls, so they are NOT
+    // blanket-banned — only their presence inside a tracing message literal.
+    assert!(
+        !user_actions.contains("{email}"),
+        "user actions must not interpolate an email into a tracing message (create/create_from_google/admin_create)"
+    );
+    assert!(
+        !user_actions.contains("{password}"),
+        "user actions must not interpolate a password into a tracing message"
     );
 
     // OAuth provider controllers. `code = %err.code` is the ErrorCode enum
@@ -751,5 +813,91 @@ async fn tracing_capture_asserts_no_pii_in_login_verification_mail_funnel() {
     assert!(
         !captured.contains("Email verification code"),
         "subject text leaked into login/verification tracing output: {captured}"
+    );
+}
+
+// ===========================================================================
+// W8f-003: runtime tracing-capture for the register DB path + login/register
+// handler-scope limitation doc.
+// ===========================================================================
+// The mail-funnel capture tests above exercise the shared send_* service fns.
+// They do NOT exercise the login/register HANDLERS' own tracing, because:
+//   - `log_in` needs a full AppState + AuthSession (axum-login session) + an
+//     argon2-hashed user row + a ban-lookup. AuthSession is constructed by the
+//     tower-sessions middleware layer, not directly instantiable in a unit test.
+//   - `register` is AuthSession-free but still needs an AppState, whose struct
+//     requires aws_sdk_s3::Client + BillingRouter + QuranStore + TranslationPool
+//     + FcmClient + WebauthnService — far too heavy and fragile to stand up here.
+// Both handlers are #[instrument(skip(state, auth, payload), ...)] so the PII
+// payload (email/password/code) never enters the span; their field logs record
+// only client_ip / user_id / user_role / device / result. The static source
+// guard above (now strengthened for the interpolation + local-binding blind
+// spots) covers the handler bodies.
+//
+// What IS callable without that fixture is the register path's DB-layer log:
+// `register` -> `user::Entity::create`. create() is its own #[instrument(...)]
+// (skipping new_user) and emits exactly one field log on the failure branch —
+// `error!("Failed to create user: {}", err)`. Driving it against an empty
+// in-memory SQLite (no `user` table) forces that branch under a capturing
+// subscriber, and we assert the input email / password / code_hash never reach
+// tracing output. This is the runtime complement to the static guard for the
+// part of the register path that is unit-testable.
+
+#[tokio::test]
+async fn tracing_capture_asserts_no_pii_in_register_db_create_path() {
+    use ruxlog::db::sea_models::user::{self, NewUser, UserRole};
+
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let guard = install_capture_subscriber(buf.clone());
+
+    // Distinctive PII values so a partial/substring leak is caught unambiguously.
+    let pii_email = "victim@example.com";
+    let pii_password = "hunter2-hunter2-register-pw!";
+    let pii_code_hash = "deadbeefcafebabe1234".to_string();
+
+    let new_user = NewUser {
+        name: "Target User".into(),
+        email: pii_email.into(),
+        password: pii_password.into(),
+        role: UserRole::User,
+    };
+
+    // Empty in-memory SQLite: no schema -> user.insert fails ->
+    // error!("Failed to create user: {}", err) fires on the test thread.
+    let db = sea_orm::Database::connect("sqlite::memory:")
+        .await
+        .expect("in-memory sqlite connects");
+    let result = user::Entity::create(&db, new_user, pii_code_hash.clone()).await;
+    assert!(
+        result.is_err(),
+        "create() must error against a schema-less DB so the failure-log branch runs"
+    );
+
+    drop(guard);
+    let captured = captured_string(&buf);
+
+    // Sentinel MUST appear — otherwise the negative asserts below are vacuous
+    // (e.g. create() started succeeding, or the log line was renamed/removed).
+    assert!(
+        captured.contains("Failed to create user"),
+        "capture sentinel missing — register DB create() did not reach its error log; got: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_email),
+        "register email leaked into user::Entity::create tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains(pii_password),
+        "register password leaked into user::Entity::create tracing output: {captured}"
+    );
+    assert!(
+        !captured.contains(&pii_code_hash),
+        "verification code hash leaked into user::Entity::create tracing output: {captured}"
+    );
+    // The opaque user_id span field is recorded ONLY on the success branch; on
+    // this failure branch it stays unset, so no PII-derived id appears either.
+    assert!(
+        !captured.contains("user_id"),
+        "failure-branch create() should not record a user_id span field: {captured}"
     );
 }
