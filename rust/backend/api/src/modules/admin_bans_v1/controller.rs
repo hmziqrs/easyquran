@@ -378,13 +378,16 @@ mod tests {
     #[tokio::test]
     async fn successful_delete_clears_l1_l2_history_and_fixed_count() {
         use crate::services::rate_limit_store;
+        use migration::{Migrator, MigratorTrait};
         use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
         async fn mem_db() -> DatabaseConnection {
             let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
             opt.max_connections(1);
             let db = Database::connect(opt).await.unwrap();
-            rate_limit_store::ensure_table(&db).await;
+            // Fixture schema comes from the real m000002 migration, not the
+            // store's duplicate ensure_table() DDL — see rate_limit_store tests.
+            Migrator::up(&db, None).await.unwrap();
             db
         }
 
@@ -464,13 +467,14 @@ mod tests {
     #[tokio::test]
     async fn failed_l2_transaction_preserves_the_active_l1_ban() {
         use crate::services::rate_limit_store;
+        use migration::{Migrator, MigratorTrait};
         use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
         async fn mem_db() -> DatabaseConnection {
             let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
             opt.max_connections(1);
             let db = Database::connect(opt).await.unwrap();
-            rate_limit_store::ensure_table(&db).await;
+            Migrator::up(&db, None).await.unwrap();
             db
         }
 
@@ -506,13 +510,14 @@ mod tests {
     #[tokio::test]
     async fn flush_after_delete_cannot_resurrect_the_row() {
         use crate::services::rate_limit_store;
+        use migration::{Migrator, MigratorTrait};
         use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
         async fn mem_db() -> DatabaseConnection {
             let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
             opt.max_connections(1);
             let db = Database::connect(opt).await.unwrap();
-            rate_limit_store::ensure_table(&db).await;
+            Migrator::up(&db, None).await.unwrap();
             db
         }
 

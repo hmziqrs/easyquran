@@ -263,6 +263,7 @@ pub async fn delete_ban_rows(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use migration::{Migrator, MigratorTrait};
     use rux_request_gate::{AbuseLimiterConfig, LimiterDecision, RateLimitStore};
     use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
@@ -279,7 +280,13 @@ mod tests {
         let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
         opt.max_connections(1);
         let db = Database::connect(opt).await.unwrap();
-        ensure_table(&db).await;
+        // Build the fixture through the REAL m000002 migration DDL, not the
+        // store's duplicate ensure_table() string. The persistence tests below
+        // must pin the canonical migration schema; if the two CREATE_TABLE
+        // copies drifted, only ensure_table (not the migration) would be
+        // exercised here, hiding the divergence. ensure_table's own drift
+        // guard is the test at the bottom of this module.
+        Migrator::up(&db, None).await.unwrap();
         db
     }
 
@@ -433,5 +440,59 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    // (name, type, notnull, dflt_value, pk) per column from PRAGMA table_info.
+    // Normalized so two CREATE_TABLE strings can be compared by their observable
+    // SQLite schema, not their whitespace.
+    async fn table_info(
+        db: &DatabaseConnection,
+    ) -> Vec<(String, String, i64, Option<String>, i64)> {
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "PRAGMA table_info(rate_limit_state)",
+                Vec::<Value>::new(),
+            ))
+            .await
+            .unwrap();
+        rows.into_iter()
+            .map(|r| {
+                (
+                    r.try_get_by_index::<String>(1).unwrap(),
+                    r.try_get_by_index::<String>(2).unwrap(),
+                    r.try_get_by_index::<i64>(3).unwrap(),
+                    r.try_get_by_index::<Option<String>>(4).ok().flatten(),
+                    r.try_get_by_index::<i64>(5).unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    // The store's runtime ensure_table() (a fallback the admin_bans live path
+    // still uses) and the m000002 migration emit the same rate_limit_state DDL
+    // from two independent CREATE_TABLE constants. The persistence tests above
+    // now build fixtures through the migration only; without this guard the two
+    // constants could drift undetected (production boot would use ensure_table,
+    // tests the migration). Pin them to identical column metadata.
+    #[tokio::test]
+    async fn ensure_table_ddl_matches_migration_ddl() {
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let runtime_db = Database::connect(opt).await.unwrap();
+        ensure_table(&runtime_db).await;
+
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let migration_db = Database::connect(opt).await.unwrap();
+        Migrator::up(&migration_db, None).await.unwrap();
+
+        let runtime_info = table_info(&runtime_db).await;
+        let migration_info = table_info(&migration_db).await;
+        assert_eq!(
+            runtime_info, migration_info,
+            "ensure_table DDL and m000002 migration DDL have drifted apart; \
+             rate_limit_state must expose identical columns in both paths"
+        );
     }
 }
