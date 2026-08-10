@@ -613,9 +613,14 @@ fn provider_required_keys(p: &str) -> &'static [&'static str] {
 /// Used only for presence checks at boot — values never logged.
 fn mail_provider_required_keys(provider: &str) -> &'static [&'static str] {
     match provider.trim() {
-        "smtp" => &["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"],
         "cloudflare" => &["CLOUDFLARE_EMAIL_ACCOUNT_ID", "CLOUDFLARE_EMAIL_API_TOKEN"],
-        _ => &[],
+        // build_mail_router's catch-all `_` arm constructs SMTP for every value
+        // that is not 'none' (rejected upstream) or 'cloudflare' — including
+        // typos like 'smptp' and unknown providers like 'postmark'. Mirror that
+        // here so an unknown provider is credential-checked as SMTP (clear boot
+        // Err when SMTP creds are missing) instead of iterating zero keys,
+        // passing the gate, and panicking inside smtp::create_connection.
+        _ => &["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"],
     }
 }
 
@@ -1483,6 +1488,31 @@ mod tests {
         // CLOUDFLARE_EMAIL_* creds intentionally unset.
         let err = WebAuthSettings::from_env().expect_err("missing CF creds must fail");
         assert!(err.contains("CLOUDFLARE_EMAIL_ACCOUNT_ID"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_treats_unknown_mail_provider_as_smtp_for_credential_check() {
+        // An unknown MAIL_PROVIDER (typo 'smptp' or e.g. 'postmark') falls into
+        // build_mail_router's catch-all SMTP arm, so the boot gate must check SMTP
+        // creds — not iterate zero keys and pass, which would panic later inside
+        // smtp::create_connection.
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smptp");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        // SMTP creds intentionally unset → must fail boot naming SMTP_HOST.
+        let err = WebAuthSettings::from_env().expect_err("typo provider must be SMTP-checked");
+        assert!(err.contains("SMTP_HOST"), "got: {err}");
+        assert!(
+            err.contains("smptp"),
+            "error must name the provider value: {err}"
+        );
         restore_env(snap);
     }
 

@@ -83,7 +83,39 @@ export async function downloadBytes(
         await reader.cancel().catch(() => {});
       }
     } else {
-      bytes = new Uint8Array(await res.arrayBuffer());
+      // No streaming body (some test fixtures, or an env without ReadableStream
+      // bodies). res.arrayBuffer() materializes the FULL response in one
+      // allocation, so enforce the ceiling before that allocation when the server
+      // reports Content-Length honestly, and cap the result afterward — both with
+      // the same `> spec.sizeBytes` semantics as the streaming path, and before
+      // verifyBytes would otherwise accept the buffer.
+      const declared = res.headers ? res.headers.get("content-length") : null;
+      if (declared !== null) {
+        const cl = Number.parseInt(declared, 10);
+        if (
+          spec.sizeBytes !== undefined &&
+          spec.sizeBytes > 0 &&
+          Number.isFinite(cl) &&
+          cl > spec.sizeBytes
+        ) {
+          controller.abort();
+          throw new Error(
+            `${spec.label ?? spec.url}: Content-Length ${cl} exceeds declared ${spec.sizeBytes} bytes`,
+          );
+        }
+      }
+      const buf = await res.arrayBuffer();
+      if (
+        spec.sizeBytes !== undefined &&
+        spec.sizeBytes > 0 &&
+        buf.byteLength > spec.sizeBytes
+      ) {
+        controller.abort();
+        throw new Error(
+          `${spec.label ?? spec.url}: body ${buf.byteLength} exceeds declared ${spec.sizeBytes} bytes`,
+        );
+      }
+      bytes = new Uint8Array(buf);
     }
 
     await verifyBytes(bytes, spec);

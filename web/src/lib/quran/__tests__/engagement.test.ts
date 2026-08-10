@@ -620,4 +620,22 @@ describe("downloadBytes", () => {
     ).rejects.toThrow(/exceeded declared 100 bytes/);
     expect(enqueued).toBeLessThan(5);
   });
+
+  it("enforces the byte ceiling on the arrayBuffer path before allocation", async () => {
+    // When res.body is absent, downloadBytes falls back to res.arrayBuffer(),
+    // which materializes the full body in one allocation. A Content-Length
+    // announcing an oversized body must be rejected BEFORE that allocation on
+    // this branch — the streaming path's pre-allocation guard does not run here.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      headers: new Headers({ "content-length": "200" }),
+      arrayBuffer: async () => new ArrayBuffer(200),
+    } as unknown as Response);
+    const { downloadBytes } = await import("$lib/workers/download");
+    await expect(
+      downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" }),
+    ).rejects.toThrow(/Content-Length 200 exceeds declared 100 bytes/);
+  });
 });
