@@ -1,17 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-
-// Mirrors routes/auth/[provider]/success/+page.svelte complete() routing decision.
-export interface SuccessRouteUser {
-  readonly is_verified: boolean;
-}
-
-export function successDestination(
-  returnTarget: string | null,
-  user: SuccessRouteUser | null,
-): string {
-  const unverified = user ? !user.is_verified : false;
-  return returnTarget ?? (unverified ? "/verify-email" : "/app");
-}
+import {
+  successDestination,
+  type SuccessRouteUser,
+} from "../success-destination";
 
 const VERIFIED: SuccessRouteUser = { is_verified: true };
 const UNVERIFIED: SuccessRouteUser = { is_verified: false };

@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { createOAuthFlow, isOAuthProvider } from "$lib/auth/oauth-flow.svelte";
   import { authState } from "$lib/auth/auth-state.svelte";
+  import { successDestination } from "./success-destination";
 
   let status = $state<"working" | "error">("working");
   let started = false;
@@ -24,8 +25,7 @@
       const flow = createOAuthFlow(provider);
       const result = await flow.finish();
       if (result.ok) {
-        const unverified = authState.user ? !authState.user.is_verified : false;
-        const dest = result.returnTarget ?? (unverified ? "/verify-email" : "/app");
+        const dest = successDestination(result.returnTarget, authState.user);
         await goto(dest);
         return;
       }
