@@ -87,6 +87,23 @@
     void catalogueStore.ensure();
   });
 
+  let detailsEl: HTMLDetailsElement | null = $state(null);
+  let revealed = false;
+
+  // Open on a non-Arabic source and bring the picked row into view, once the
+  // catalogue rows exist. Runs once per mount so user toggles are not fought.
+  $effect(() => {
+    const el = detailsEl;
+    const ready = catalogueStore.translations.length > 0;
+    if (!el || revealed || (!ready && activeTranslationId !== null)) return;
+    revealed = true;
+    if (activeTranslationId === null) return;
+    el.open = true;
+    requestAnimationFrame(() => {
+      el.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+    });
+  });
+
   function rowClass(active: boolean, disabled = false): string {
     return cn(
       "flex items-center gap-2 rounded-[7px] px-3 py-2 text-[12.5px] transition-colors",
@@ -103,7 +120,7 @@
   }
 </script>
 
-<details class="group px-1">
+<details bind:this={detailsEl} class="group px-1">
   <summary
     class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-[9px] border border-line bg-bg-2 px-3 py-2 text-[12.5px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
   >

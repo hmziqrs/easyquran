@@ -13,7 +13,8 @@
     type SurahRouteContext,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
-  import { RangeKind } from "$lib/data/quran-data";
+  import { RangeKind, type QuranData } from "$lib/data/quran-data";
+  import type { RangeEntry } from "$lib/data/quran-types";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -82,6 +83,33 @@
 
   function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
     return useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
+  }
+
+  const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
+
+  function toIndex(v: string | undefined): number | null {
+    const n = v ? Number(v) : NaN;
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  }
+
+  /** Global ayah the current route points at, used to reveal the matching row. */
+  function currentGlobal(quranData: QuranData): number | null {
+    const slug = page.params.surah;
+    if (slug) {
+      const s = quranData.surahBySlug(slug);
+      if (!s) return null;
+      const localPage = toIndex(page.params.localPage) ?? 1;
+      return quranData.surahLocalPage(s.num, localPage)?.startGlobal ?? s.startGlobal;
+    }
+    const n = toIndex(page.params.n);
+    if (n === null) return null;
+    const kind = isJuzRoute ? RangeKind.Juz : RangeKind.Page;
+    return quranData.rangeByIndex(kind, n)?.startGlobal ?? null;
+  }
+
+  function rangeRow(ranges: readonly RangeEntry[], global: number | null): number {
+    if (global === null) return -1;
+    return ranges.findIndex((r) => global >= r.startGlobal && global <= r.endGlobal);
   }
 </script>
 
@@ -156,6 +184,7 @@
                 getScrollElement={() => contentEl}
                 count={quranData.surahs.length}
                 estimateSize={56}
+                activeIndex={quranData.surahs.findIndex((s) => s.slug === page.params.surah)}
               >
                 {#snippet item(i)}
                   {@const s = quranData.surahs[i]}
@@ -191,6 +220,8 @@
                   getScrollElement={() => contentEl}
                   count={verses.length}
                   estimateSize={44}
+                  activeIndex={(quranData.surahLocalPage(cur.num, toIndex(page.params.localPage) ?? 1)
+                    ?.startAyah ?? 1) - 1}
                 >
                   {#snippet item(i)}
                     {@const n = i + 1}
@@ -232,6 +263,7 @@
                 getScrollElement={() => contentEl}
                 count={ranges.length}
                 estimateSize={44}
+                activeIndex={rangeRow(ranges, currentGlobal(quranData))}
               >
                 {#snippet item(i)}
                   {@const rg = ranges[i]}
