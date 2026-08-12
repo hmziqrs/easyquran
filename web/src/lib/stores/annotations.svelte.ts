@@ -22,7 +22,7 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       persistence.scheduleNoteWrite();
     },
 
-    get lastRead(): { num: number; n: number } | null {
+    get lastRead(): { num: number; n: number; sourceId?: string } | null {
       return core.s.lastRead;
     },
     get hasLastRead(): boolean {

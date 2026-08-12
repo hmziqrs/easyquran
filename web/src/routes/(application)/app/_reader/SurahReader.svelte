@@ -2,11 +2,10 @@
   import { onMount, tick } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
-  import { beforeNavigate, goto, invalidateAll, replaceState } from "$app/navigation";
+  import { beforeNavigate, invalidateAll, replaceState } from "$app/navigation";
   import { page as appPage } from "$app/state";
   import {
     parseKey,
-    surahAyahPathFor,
     surahLocalPagePathFor,
     surahRouteContext,
     type SurahLocalPageData,
@@ -17,6 +16,7 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
+  import { resumeToLastRead } from "$lib/reader/resume";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
@@ -617,27 +617,9 @@
   }
 
   async function continueReading(): Promise<void> {
-    const lastRead = reader.lastRead;
-    if (!lastRead) return;
-    try {
-      const quranData = await loadQuranData();
-      const surah = quranData.surahByNum(lastRead.num);
-      const targetPage = quranData.surahLocalPageForAyah(lastRead.num, lastRead.n);
-      if (!surah || !targetPage) return;
-      const resumeCtx = lastRead.sourceId ? surahRouteContext(lastRead.sourceId) : routeContext;
-      reader.openVerse(lastRead.num, lastRead.n, lastRead.sourceId);
-      await goto(
-        publicHref(
-          readerHrefFor(
-            copy.locale,
-            surahAyahPathFor(resumeCtx, surah, targetPage.localPage, lastRead.n),
-          ),
-        ),
-        { keepFocus: true },
-      );
-    } catch {
-      loadFailed = true;
-    }
+    if (!reader.hasLastRead) return;
+    const ok = await resumeToLastRead(routeContext);
+    if (!ok && reader.hasLastRead) loadFailed = true;
   }
 
   beforeNavigate(() => {

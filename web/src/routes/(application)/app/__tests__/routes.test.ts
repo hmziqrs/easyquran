@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   globalPagePathFor,
   juzPathFor,
+  resumeCtxFor,
   surahAyahPath,
   surahAyahPathFor,
   surahLocalPagePath,
@@ -14,7 +15,6 @@ import {
   translationJuzPath,
   translationSegmentsFromId,
   translationSurahPath,
-  type SurahRouteContext,
 } from "$lib/data/quran";
 
 const ROUTE_LITERALS = ["t", "page", "juz"] as const;
@@ -282,10 +282,6 @@ describe("continueReading resume uses the last-read verse's own source, not the 
   const currentRouteTranslation = surahRouteContext("ms.basmeih");
 
   type LastRead = { num: number; n: number; sourceId?: string };
-
-  function resumeCtxFor(lastRead: LastRead, currentCtx: SurahRouteContext): SurahRouteContext {
-    return lastRead.sourceId ? surahRouteContext(lastRead.sourceId) : currentCtx;
-  }
 
   it("resume into a translation source keeps /t/<lang>/<translator> even when the current route is arabic", () => {
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };

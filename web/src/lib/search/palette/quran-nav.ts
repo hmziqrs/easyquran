@@ -49,9 +49,9 @@ export function ayahHref(
  * "continue reading" and for revealing the row it lands on.
  */
 export const openVerse =
-  (surah: number, ayah: number): (() => void) =>
+  (surah: number, ayah: number, sourceId?: string): (() => void) =>
   () =>
-    reader.openVerse(surah, ayah);
+    reader.openVerse(surah, ayah, sourceId);
 
 export const surahDetail = (surah: {
   transliteration: string;

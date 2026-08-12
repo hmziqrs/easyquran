@@ -69,5 +69,9 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       persistence.writeNow();
     },
+    clearReadingPosition(): void {
+      core.s.lastRead = null;
+      persistence.writeNow();
+    },
   };
 }

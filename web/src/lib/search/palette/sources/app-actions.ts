@@ -1,3 +1,4 @@
+import { resumeCtxFor } from "$lib/data/quran";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { reader } from "$lib/stores/reader.svelte";
 import { PaletteGroups } from "../groups";
@@ -39,7 +40,7 @@ function continueReading(query: PaletteQuery): PaletteEntry | null {
   if (!lastRead) return null;
   const surah = query.quranData.surahByNum(lastRead.num);
   if (!surah) return null;
-  const href = ayahHref(query.routeContext, query.quranData, lastRead.num, lastRead.n);
+  const href = ayahHref(resumeCtxFor(lastRead, query.routeContext), query.quranData, lastRead.num, lastRead.n);
   if (!href) return null;
 
   const score = query.parsed.isEmpty ? 0 : scoreFields(CONTINUE_KEYWORDS, query.parsed.text);
@@ -54,7 +55,7 @@ function continueReading(query: PaletteQuery): PaletteEntry | null {
     icon: "continuous",
     score,
     href,
-    run: openVerse(lastRead.num, lastRead.n),
+    run: openVerse(lastRead.num, lastRead.n, lastRead.sourceId),
     dedupeKey: `ayah:${lastRead.num}:${lastRead.n}`,
   };
 }

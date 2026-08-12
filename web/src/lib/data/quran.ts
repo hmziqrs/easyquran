@@ -107,6 +107,11 @@ export const routeContextFromParams = (
   return lang && translator ? { kind: "translation", lang, translator } : { kind: "arabic" };
 };
 
+export const resumeCtxFor = (
+  lastRead: { sourceId?: string } | null,
+  currentCtx: SurahRouteContext,
+): SurahRouteContext => (lastRead?.sourceId ? surahRouteContext(lastRead.sourceId) : currentCtx);
+
 export const surahPathFor = (
   ctx: SurahRouteContext,
   surah: string | Pick<CatalogEntry, "slug">,

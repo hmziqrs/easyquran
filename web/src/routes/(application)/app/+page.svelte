@@ -10,21 +10,25 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
+  import { resumeToLastRead } from "$lib/reader/resume";
 
   let { data } = $props();
   const copy = getReaderUiCopy();
 
   onMount(() => {
     reader.hydrate();
-    const num = reader.lastRead?.num ?? 1;
-    void loadQuranData().then((quranData) => {
-      const surah = quranData.surahByNum(num) ?? quranData.surahs[0]!;
-      const sourceId = readerSource.sourceId;
-      const ctx = sourceId
-        ? surahRouteContext(sourceId)
-        : { kind: "arabic" as const };
-      return goto(publicHref(readerHrefFor(copy.locale, surahPathFor(ctx, surah))), {
-        replaceState: true,
+    void resumeToLastRead({ kind: "arabic" }, { replaceState: true }).then((resumed) => {
+      if (resumed) return;
+      void loadQuranData().then((quranData) => {
+        const surah = quranData.surahs[0]!;
+        const sourceId = readerSource.sourceId;
+        const ctx = sourceId
+          ? surahRouteContext(sourceId)
+          : { kind: "arabic" as const };
+        return goto(
+          publicHref(readerHrefFor(copy.locale, surahPathFor(ctx, surah))),
+          { replaceState: true },
+        );
       });
     });
   });

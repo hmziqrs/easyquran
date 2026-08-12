@@ -28,6 +28,7 @@ export interface ReaderApi {
   setCurrent(num: number): void;
   openVerse(num: number, n: number, sourceId?: string): void;
   markRead(num: number, n: number, sourceId?: string): void;
+  clearReadingPosition(): void;
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -96,6 +97,7 @@ export function createReader(): ReaderApi {
     setCurrent: (num: number) => session.setCurrent(num),
     openVerse: (num: number, n: number, sourceId?: string) => session.openVerse(num, n, sourceId),
     markRead: (num: number, n: number, sourceId?: string) => session.markRead(num, n, sourceId),
+    clearReadingPosition: () => session.clearReadingPosition(),
 
     get arabicSizePx() {
       return settings.arabicSizePx;
