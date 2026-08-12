@@ -1,0 +1,56 @@
+{
+  "note": "Per-page localization budgets, enforced by scripts/audit-i18n-chunks.ts after pnpm build. maxMessages counts compiled Paraglide message bodies a page downloads; maxGzip is the gzipped size of the chunks carrying them. Lowering a number is always allowed. Raising one needs a reason in the PR: it means a page started paying for copy it does not render. See docs/i18n-bundle-plan.md.",
+  "surfaces": [
+    {
+      "id": "marketing-landing",
+      "match": [
+        "index.html",
+        "ar/index.html"
+      ],
+      "maxMessages": 109,
+      "maxGzip": 7913
+    },
+    {
+      "id": "marketing-about",
+      "match": [
+        "about.html"
+      ],
+      "maxMessages": 109,
+      "maxGzip": 7913
+    },
+    {
+      "id": "marketing-faq",
+      "match": [
+        "faq.html"
+      ],
+      "maxMessages": 109,
+      "maxGzip": 7913
+    },
+    {
+      "id": "marketing-contact",
+      "match": [
+        "contact.html"
+      ],
+      "maxMessages": 109,
+      "maxGzip": 7913
+    },
+    {
+      "id": "marketing-legal",
+      "match": [
+        "privacy.html",
+        "terms.html"
+      ],
+      "maxMessages": 109,
+      "maxGzip": 7913
+    },
+    {
+      "id": "reader",
+      "match": [
+        "ar/app/**",
+        "ar/app.html"
+      ],
+      "maxMessages": 195,
+      "maxGzip": 11014
+    }
+  ]
+}
