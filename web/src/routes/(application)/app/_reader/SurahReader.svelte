@@ -137,7 +137,10 @@
   function markAnchorRead(anchor: ViewportAnchor | null | undefined): void {
     if (!userScrolled || anchor?.kind !== "verse") return;
     const { num, n } = parseKey(anchor.verseKey);
-    if (num === initial.surah.num) reader.markRead(num, n, sourceId);
+    if (num === initial.surah.num) {
+      reader.markRead(num, n, sourceId);
+      reader.setLastReadAnchor({ verseKey: anchor.verseKey, localPage: anchor.localPage, ratio: anchor.ratio });
+    }
   }
 
   function measurePage(localPage: number): Attachment<HTMLElement> {
@@ -356,11 +359,34 @@
     const saved =
       parseHistoryState(appPage.state.surahReader, initial.surah.num) ??
       reloadPositionState(initial);
-    if (!saved) return;
+    if (saved) {
+      suppressScroll = true;
+      try {
+        await restoreHistoryFrom(saved);
+        await nextFrame();
+      } finally {
+        suppressScroll = false;
+      }
+      return;
+    }
+    const pending = reader.consumePendingAnchor();
+    if (!pending || parseKey(pending.verseKey).num !== initial.surah.num) return;
+    const anchor: ViewportAnchor = {
+      kind: "verse",
+      localPage: pending.localPage,
+      verseKey: pending.verseKey,
+      viewportPoint: viewportMarker(),
+      ratio: pending.ratio,
+    };
     suppressScroll = true;
     try {
-      await restoreHistoryFrom(saved);
       await nextFrame();
+      await nextFrame();
+      restoreAnchor(anchor);
+      await document.fonts.ready;
+      await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
+      restoreAnchor(anchor);
+      stableAnchor = captureAnchor();
     } finally {
       suppressScroll = false;
     }

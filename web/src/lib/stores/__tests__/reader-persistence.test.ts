@@ -142,6 +142,21 @@ describe("createReaderPersistence scheduling", () => {
     persistence.dispose();
   });
 
+  it("scheduleAnchorWrite() only writes after the trailing debounce", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    core.s.lastReadAnchor = { verseKey: "2:255", localPage: 3, ratio: 0.5 };
+    persistence.scheduleAnchorWrite();
+    vi.advanceTimersByTime(299);
+    expect(read()).toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(read()).toMatchObject({
+      lastReadAnchor: { verseKey: "2:255", localPage: 3, ratio: 0.5 },
+    });
+    persistence.dispose();
+  });
+
   it("round-trips lastReadAnchor, recents, and progress through localStorage", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);

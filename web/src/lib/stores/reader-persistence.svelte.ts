@@ -27,6 +27,7 @@ import {
 import { applyReaderPresentation } from "./reader-presentation";
 
 const STORAGE_KEY = "easyquran.reader";
+const ANCHOR_PERSIST_DEBOUNCE_MS = 300;
 
 export function decodeReader(raw: unknown): Partial<Persisted> {
   const stored = asObject(raw);
@@ -122,12 +123,15 @@ export interface ReaderPersistence {
   writeNow(): void;
   scheduleNoteWrite(): void;
   flushNoteWrite(): void;
+  scheduleAnchorWrite(): void;
+  flushAnchorWrite(): void;
   readonly hydrated: boolean;
   dispose(): void;
 }
 
 export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
   const noteWriter = trailingDebounce(() => writeBlob(), NOTE_PERSIST_DEBOUNCE_MS);
+  const anchorWriter = trailingDebounce(() => writeBlob(), ANCHOR_PERSIST_DEBOUNCE_MS);
   let hydrated = false;
   let dirty = false;
   let teardowns: Array<() => void> = [];
@@ -158,7 +162,12 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
           applyReaderPresentation(core.s.mode, core.s.fontSize);
         }),
       );
-      teardowns.push(onPageHide(() => noteWriter.flush()));
+      teardowns.push(
+        onPageHide(() => {
+          noteWriter.flush();
+          anchorWriter.flush();
+        }),
+      );
       if (dirty) {
         dirty = false;
         writeBlob();
@@ -166,6 +175,7 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
     },
     writeNow() {
       noteWriter.cancel();
+      anchorWriter.cancel();
       writeBlob();
     },
     scheduleNoteWrite() {
@@ -174,8 +184,15 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
     flushNoteWrite() {
       noteWriter.flush();
     },
+    scheduleAnchorWrite() {
+      anchorWriter.schedule();
+    },
+    flushAnchorWrite() {
+      anchorWriter.flush();
+    },
     dispose() {
       noteWriter.flush();
+      anchorWriter.flush();
       for (const teardown of teardowns) teardown();
       teardowns = [];
     },

@@ -148,6 +148,18 @@ describe("createReader — behaviour", () => {
     expect(r.lastRead).toEqual({ num: 31, n: 5 });
   });
 
+  it("setLastReadAnchor / pendingAnchor / openVerse clears the anchor", () => {
+    const r = createReader();
+    r.setLastReadAnchor({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
+    expect(r.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
+    r.openVerse(2, 255);
+    expect(r.lastReadAnchor).toBeNull();
+    r.setPendingAnchor({ verseKey: "1:1", localPage: 1, ratio: 0 });
+    expect(r.pendingAnchor).toEqual({ verseKey: "1:1", localPage: 1, ratio: 0 });
+    expect(r.consumePendingAnchor()).toEqual({ verseKey: "1:1", localPage: 1, ratio: 0 });
+    expect(r.pendingAnchor).toBeNull();
+  });
+
   it("two createReader() instances are isolated", () => {
     const a = createReader();
     const b = createReader();

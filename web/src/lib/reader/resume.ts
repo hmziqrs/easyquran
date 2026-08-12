@@ -15,6 +15,7 @@ export async function resumeToLastRead(
 ): Promise<boolean> {
   const lastRead = reader.lastRead;
   if (!lastRead) return false;
+  const anchor = reader.lastReadAnchor;
   try {
     const quranData = await loadQuranData();
     const surah = quranData.surahByNum(lastRead.num);
@@ -22,6 +23,7 @@ export async function resumeToLastRead(
     if (!surah || !targetPage) return false;
     const resumeCtx = resumeCtxFor(lastRead, currentCtx);
     reader.openVerse(lastRead.num, lastRead.n, lastRead.sourceId);
+    if (anchor) reader.setPendingAnchor(anchor);
     await goto(
       publicHref(
         readerHrefFor(

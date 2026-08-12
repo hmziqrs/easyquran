@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
 import type { VerseKey } from "$lib/data/quran";
-import type { BrowseMode, ReaderCore } from "./reader-core.svelte";
+import type { BrowseMode, LastReadAnchor, ReaderCore } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
 
 export function createReaderSession(core: ReaderCore, persistence: ReaderPersistence) {
@@ -60,6 +60,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.browse = "surah";
       core.s.openNote = null;
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
+      core.s.lastReadAnchor = null;
       persistence.writeNow();
       if (browser) window.scrollTo(0, 0);
     },
@@ -71,7 +72,24 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
     },
     clearReadingPosition(): void {
       core.s.lastRead = null;
+      core.s.lastReadAnchor = null;
+      core.s.pendingAnchor = null;
       persistence.writeNow();
+    },
+    setLastReadAnchor(anchor: LastReadAnchor | null): void {
+      core.s.lastReadAnchor = anchor;
+      persistence.scheduleAnchorWrite();
+    },
+    get pendingAnchor(): LastReadAnchor | null {
+      return core.s.pendingAnchor;
+    },
+    setPendingAnchor(anchor: LastReadAnchor | null): void {
+      core.s.pendingAnchor = anchor;
+    },
+    consumePendingAnchor(): LastReadAnchor | null {
+      const anchor = core.s.pendingAnchor;
+      core.s.pendingAnchor = null;
+      return anchor;
     },
   };
 }
