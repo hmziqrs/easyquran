@@ -1,3 +1,4 @@
+import { JUZ_ALIASES, PAGE_ALIASES, SURAH_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
 import { hasKeyword, isBareNumber, referenceNumbers } from "../query";
 import {
@@ -12,10 +13,6 @@ import {
   surahHref,
 } from "../quran-nav";
 import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
-
-export const SURAH_ALIASES = ["s", "sura", "surah", "surat", "chapter"] as const;
-export const JUZ_ALIASES = ["juz", "juzz", "juzu", "jooz", "para", "sipara", "siparah"] as const;
-export const PAGE_ALIASES = ["page", "pg", "p", "safha", "safhah"] as const;
 
 const inRange = (n: number, max: number): boolean => Number.isInteger(n) && n >= 1 && n <= max;
 

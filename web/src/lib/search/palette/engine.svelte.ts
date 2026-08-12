@@ -26,6 +26,8 @@ export interface PaletteEngineInput {
 
 export interface PaletteEngine {
   readonly ready: boolean;
+  /** True when the Quran catalogue could not be fetched for this open. */
+  readonly catalogueFailed: boolean;
   readonly searching: boolean;
   /** Ids of async sources that failed for the current query. */
   readonly failedSources: readonly string[];
@@ -44,6 +46,7 @@ export function createPaletteEngine(input: PaletteEngineInput): PaletteEngine {
   let asyncEntries = $state<PaletteEntry[]>([]);
   let searching = $state(false);
   let failedSources = $state<string[]>([]);
+  let catalogueFailed = $state(false);
 
   const parsed = $derived(parseQuery(input.query()));
   const paletteQuery = $derived.by<PaletteQuery | null>(() => {
@@ -65,11 +68,14 @@ export function createPaletteEngine(input: PaletteEngineInput): PaletteEngine {
   // palette opens rather than on every page load.
   $effect(() => {
     if (!input.open() || quranData) return;
+    // Retried on the next open, since `loadQuranData` drops its cached failure.
+    catalogueFailed = false;
     void loadQuranData()
       .then((data) => {
         quranData = data;
       })
       .catch((error: unknown) => {
+        catalogueFailed = true;
         console.warn("[palette] catalogue unavailable:", error);
       });
   });
@@ -115,6 +121,9 @@ export function createPaletteEngine(input: PaletteEngineInput): PaletteEngine {
   return {
     get ready() {
       return quranData !== null;
+    },
+    get catalogueFailed() {
+      return catalogueFailed;
     },
     get searching() {
       return searching;

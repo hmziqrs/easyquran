@@ -1,8 +1,8 @@
+import { JUZ_ALIASES, PAGE_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
 import { hasKeyword } from "../query";
 import { JUZ_COUNT, MUSHAF_PAGE_COUNT, juzHref, pageHref } from "../quran-nav";
 import type { PaletteEntry, PaletteSource } from "../types";
-import { JUZ_ALIASES, PAGE_ALIASES } from "./quran-reference";
 
 const SOURCE_ID = "quran.ranges";
 

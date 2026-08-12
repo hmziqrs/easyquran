@@ -1,10 +1,10 @@
 import type { CatalogEntry } from "$lib/data/quran-types";
+import { SURAH_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
 import { arabicTermsFor, referenceNumbers, stripTrailingRef, termsFor } from "../query";
 import { ayahHref, openVerse, surahDetail, surahHref } from "../quran-nav";
 import { byScore, scoreArabic, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
-import { SURAH_ALIASES } from "./quran-reference";
 
 const SOURCE_ID = "quran.surahs";
 

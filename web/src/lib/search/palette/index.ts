@@ -46,6 +46,6 @@ export {
   unregisterPaletteSource,
   type PaletteSection,
 } from "./registry";
-export { parseQuery } from "./query";
+export { parseQuery, residualText } from "./query";
 export { resolveHref } from "./href";
 export type { PaletteEntry, PaletteGroup, PaletteQuery, PaletteSource, ParsedQuery } from "./types";

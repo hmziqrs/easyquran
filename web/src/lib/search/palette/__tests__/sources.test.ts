@@ -19,6 +19,7 @@ import {
 import { quranRangesSource } from "../sources/quran-ranges";
 import { quranReferenceSource } from "../sources/quran-reference";
 import { quranSurahsSource } from "../sources/quran-surahs";
+import { quranTextSource } from "../sources/quran-text";
 import { siteRoutesSource } from "../sources/site-routes";
 import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
 
@@ -156,6 +157,54 @@ describe("quran.surahs source", () => {
   });
 });
 
+describe("Arabic-Indic and Persian digits", () => {
+  it("reads a verse reference written in Arabic-Indic digits", () => {
+    const [entry] = run(quranReferenceSource, "٢:٢٥٥");
+    expect(entry?.label).toBe("Al-Baqarah 2:255");
+    expect(entry?.href).toBe("/app/al-baqarah/page/41#ayah-2-255");
+  });
+
+  it("reads keyword references in Arabic-Indic and Persian digits", () => {
+    expect(labels(run(quranReferenceSource, "juz ٥"))).toEqual(["Juz 5"]);
+    expect(labels(run(quranReferenceSource, "juz ۵"))).toEqual(["Juz 5"]);
+    expect(labels(run(quranReferenceSource, "page ١٠٠"))).toEqual(["Page 100"]);
+  });
+
+  it("treats a bare Arabic-Indic number as ambiguous, like an ASCII one", () => {
+    expect(labels(run(quranReferenceSource, "٥"))).toEqual(labels(run(quranReferenceSource, "5")));
+  });
+
+  it("accepts the Arabic keyword spellings", () => {
+    expect(labels(run(quranReferenceSource, "سورة ١٨"))).toEqual(["18. Al-Kahf"]);
+    expect(labels(run(quranReferenceSource, "جزء ٥"))).toEqual(["Juz 5"]);
+    expect(labels(run(quranReferenceSource, "صفحة ١٠٠"))).toEqual(["Page 100"]);
+  });
+
+  it("strips an Arabic-Indic verse number when matching a surah name", () => {
+    const entries = run(quranSurahsSource, "baqarah ٢٥٥");
+    expect(entries[0]?.label).toBe("Al-Baqarah 2:255");
+  });
+});
+
+describe("quran.text source gating", () => {
+  it("sits out queries that are nothing but a coordinate", () => {
+    for (const raw of ["2:255", "juz 5", "page 100", "surah 18", "112", "٢:٢٥٥"]) {
+      expect(quranTextSource.enabled?.(query(raw)), raw).toBe(false);
+    }
+  });
+
+  it("runs for real free text, with or without a keyword", () => {
+    for (const raw of ["الرحمن", "kahf", "baqarah 255"]) {
+      expect(quranTextSource.enabled?.(query(raw)), raw).toBe(true);
+    }
+  });
+
+  it("stays out of queries too short to be meaningful", () => {
+    expect(quranTextSource.enabled?.(query("ال"))).toBe(false);
+    expect(quranTextSource.enabled?.(query(""))).toBe(false);
+  });
+});
+
 describe("quran.ranges source", () => {
   it("offers a browsable list for a bare juz or page keyword", () => {
     expect(labels(run(quranRangesSource, "juz"))).toEqual([
@@ -256,6 +305,19 @@ describe("registry", () => {
       },
     });
     expect(collectSyncEntries(query("kahf")).length).toBeGreaterThan(0);
+  });
+
+  it("drops a duplicate id even when the entries claim different targets", () => {
+    const entry = (dedupeKey: string): PaletteEntry => ({
+      id: "same-id",
+      sourceId: "x",
+      groupId: PaletteGroups.JumpTo.id,
+      label: dedupeKey,
+      icon: "book",
+      score: 1,
+      dedupeKey,
+    });
+    expect(dedupeEntries([entry("ayah:2:255"), entry("ayah:2:256")])).toHaveLength(1);
   });
 
   it("drops later entries that point where an earlier one already goes", () => {

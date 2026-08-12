@@ -8,7 +8,9 @@ import {
   searchHitSurah,
   searchHitText,
 } from "$lib/quran/search/types";
+import { QURAN_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
+import { residualText } from "../query";
 import { ayahHref, openVerse } from "../quran-nav";
 import type { PaletteEntry, PaletteSource } from "../types";
 
@@ -25,7 +27,12 @@ export const quranTextSource: PaletteSource = {
   groups: [PaletteGroups.QuranText],
   limit: LIMIT,
 
-  enabled: ({ parsed }) => parsed.text.length >= MIN_QUERY_LEN,
+  /**
+   * Needs real free text, not a coordinate: `2:255`, `juz 5` and `112` are
+   * already answered exactly by the catalogue sources, and sending them to the
+   * worker only burns a round-trip per keystroke to match nothing.
+   */
+  enabled: ({ parsed }) => residualText(parsed, QURAN_ALIASES).length >= MIN_QUERY_LEN,
 
   async search(query, signal) {
     const response = await quranSearch(query.parsed.text, { limit: query.limit });

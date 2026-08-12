@@ -30,10 +30,6 @@ export function paletteSources(): PaletteSource[] {
   return [...sources.values()];
 }
 
-export function paletteGroup(id: string): PaletteGroup | undefined {
-  return groups.get(id);
-}
-
 export function paletteGroups(): PaletteGroup[] {
   return [...groups.values()].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
@@ -105,12 +101,17 @@ export async function collectAsyncEntries(
  * arrive in display order so the earlier, more specific one survives.
  */
 export function dedupeEntries(entries: readonly PaletteEntry[]): PaletteEntry[] {
-  const seen = new Set<string>();
+  const seenTargets = new Set<string>();
+  const seenIds = new Set<string>();
   const out: PaletteEntry[] = [];
   for (const entry of entries) {
-    const key = entry.dedupeKey ?? entry.id;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // Ids are also enforced: two entries sharing one would render as two rows
+    // with the same `Command` value, and keyboard selection would pick either.
+    if (seenIds.has(entry.id)) continue;
+    const target = entry.dedupeKey ?? entry.id;
+    if (seenTargets.has(target)) continue;
+    seenIds.add(entry.id);
+    seenTargets.add(target);
     out.push(entry);
   }
   return out;

@@ -2,7 +2,27 @@ import { normalizeArabic } from "$lib/quran/search/normalize";
 import type { ParsedQuery } from "./types";
 
 const LEADING_WORD = /^([\p{L}][\p{L}'’-]*)/u;
-const TRAILING_REF = /(\d{1,4})(?:\s*[:.\-\s]\s*(\d{1,4}))?\s*$/;
+
+/**
+ * Digits as readers actually encounter them in a mushaf: ASCII, Arabic-Indic
+ * (`٠-٩`) and Extended Arabic-Indic / Persian (`۰-۹`). The reader renders verse
+ * numbers in Arabic-Indic, so a pasted or Arabic-keyboard `٢:٢٥٥` has to parse
+ * exactly like `2:255`.
+ */
+const DIGIT = "0-9\u0660-\u0669\u06f0-\u06f9";
+const TRAILING_REF = new RegExp(
+  `([${DIGIT}]{1,4})(?:\\s*[:.\\-\\s]\\s*([${DIGIT}]{1,4}))?\\s*$`,
+);
+const BARE_NUMBER = new RegExp(`^[${DIGIT}]{1,4}$`);
+
+/** Folds Arabic-Indic and Persian digits onto ASCII so `Number()` can read them. */
+export function foldDigits(text: string): string {
+  return text.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (d) => {
+    const code = d.codePointAt(0)!;
+    const base = code >= 0x06f0 ? 0x06f0 : 0x0660;
+    return String(code - base);
+  });
+}
 
 /**
  * Tokenizes a raw palette query once for all sources. Deliberately dumb about
@@ -19,8 +39,8 @@ export function parseQuery(raw: string): ParsedQuery {
   const ref = TRAILING_REF.exec(text);
   const numbers: number[] = [];
   if (ref) {
-    numbers.push(Number(ref[1]));
-    if (ref[2] !== undefined) numbers.push(Number(ref[2]));
+    numbers.push(Number(foldDigits(ref[1]!)));
+    if (ref[2] !== undefined) numbers.push(Number(foldDigits(ref[2])));
   }
 
   return {
@@ -71,5 +91,15 @@ export function referenceNumbers(
 
 /** True when the whole query is just a number — ambiguous between domains. */
 export function isBareNumber(parsed: ParsedQuery): boolean {
-  return /^\d{1,4}$/.test(parsed.text);
+  return BARE_NUMBER.test(parsed.text);
+}
+
+/**
+ * The free text left after removing a recognized keyword and a trailing numeric
+ * reference. Empty means the query is nothing but a coordinate (`2:255`,
+ * `juz 5`, `112`), which lets expensive full-text sources sit out a query they
+ * could only answer with noise.
+ */
+export function residualText(parsed: ParsedQuery, aliases: readonly string[]): string {
+  return stripTrailingRef(termsFor(parsed, aliases));
 }

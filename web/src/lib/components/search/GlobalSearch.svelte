@@ -46,6 +46,8 @@
       commandPalette.toggle();
       return;
     }
+    // `isComposing` keeps an IME's own "/" from hijacking the page.
+    if (e.isComposing) return;
     if (e.key !== "/" || commandPalette.open || e.metaKey || e.ctrlKey || e.altKey) return;
     const target = e.target as HTMLElement | null;
     if (target?.isContentEditable || EDITABLE.test(target?.tagName ?? "")) return;
@@ -115,7 +117,11 @@
   />
 
   <Cmd.List>
-    {#if !engine.ready}
+    {#if engine.catalogueFailed}
+      <Cmd.Empty forceMount>
+        The Quran catalogue could not be loaded. Check your connection and reopen search.
+      </Cmd.Empty>
+    {:else if !engine.ready}
       <Cmd.Loading>Loading the Quran catalogue…</Cmd.Loading>
     {:else if engine.searching}
       <Cmd.Loading>Searching the Quran text…</Cmd.Loading>
