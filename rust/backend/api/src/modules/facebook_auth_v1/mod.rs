@@ -3,11 +3,12 @@ pub mod service;
 pub mod validator;
 
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{get, post},
     Router,
 };
 
-use crate::AppState;
+use crate::{config, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -16,4 +17,5 @@ pub fn routes() -> Router<AppState> {
         .route("/exchange", post(controller::facebook_exchange))
         .route("/token", post(controller::facebook_token))
         .route("/user", get(controller::facebook_user_info))
+        .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))
 }

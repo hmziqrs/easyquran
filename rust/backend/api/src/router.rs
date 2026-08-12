@@ -60,15 +60,27 @@ pub fn router(state: AppState) -> Router<AppState> {
             "/auth/v1",
             auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         );
-        router = router.nest("/auth/google/v1", google_auth_v1::routes());
+        router = router.nest(
+            "/auth/google/v1",
+            google_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+        );
         router = router
             .nest("/email_verification/v1", email_verification_v1::routes())
             .nest("/forgot_password/v1", forgot_password_v1::routes());
         router = router.nest("/passkey/v1", passkey_v1::routes());
         router = router
-            .nest("/auth/facebook/v1", facebook_auth_v1::routes())
-            .nest("/auth/github/v1", github_auth_v1::routes())
-            .nest("/auth/apple/v1", apple_auth_v1::routes());
+            .nest(
+                "/auth/facebook/v1",
+                facebook_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            )
+            .nest(
+                "/auth/github/v1",
+                github_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            )
+            .nest(
+                "/auth/apple/v1",
+                apple_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            );
     }
 
     router = router.nest("/user/v1", user_v1::routes());

@@ -964,8 +964,9 @@ user data; login/logout await page/data/metadata purge acknowledgement; OPFS/off
 ### W8d — OAuth and passkeys
 
 1. Web OAuth supports Google, Apple, Facebook, and GitHub through existing
-   `/api/auth/{provider}/v1/login|callback|exchange` routes. Mobile `/token` endpoints remain
-   outside web flow; GitHub remains web-only.
+   `/api/auth/{provider}/v1/login|callback|exchange` routes. Native clients use provider-local
+   `/api/auth/{provider}/v1/token` endpoints, which verify provider credentials and establish the
+   same cookie session without entering the browser OAuth flow.
 2. Implement `/auth/{provider}/success` and `/auth/{provider}/failure`. Extend backend callbacks
    to accept provider cancellation/error query shapes and redirect failures to the allowlisted
    frontend failure path with an opaque error code only; API messages, provider payloads, code,

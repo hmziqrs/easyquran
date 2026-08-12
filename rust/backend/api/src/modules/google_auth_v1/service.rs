@@ -39,6 +39,10 @@ pub struct GoogleIdTokenClaims {
     #[serde(default)]
     pub email_verified: Option<bool>,
     #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub picture: Option<String>,
+    #[serde(default)]
     pub nonce: Option<String>,
 }
 
@@ -181,6 +185,7 @@ fn verify_id_token_with_keys_core(
         })?;
 
     let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
     validation.set_audience(expected_aud);
     validation.set_issuer(expected_iss);
 
@@ -404,6 +409,24 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
     }
 
     #[test]
+    fn id_token_profile_claims_are_available_after_verification() {
+        let mut claims = valid_claims();
+        claims["name"] = serde_json::json!("Aisha Khan");
+        claims["picture"] = serde_json::json!("https://profiles.google.test/aisha.jpg");
+        let token = sign_token(&claims, Some(TEST_KID));
+
+        let verified =
+            verify_id_token_with_keys(&token, &test_keys(), TEST_AUD, &GOOGLE_ISSUERS, None)
+                .unwrap();
+
+        assert_eq!(verified.name.as_deref(), Some("Aisha Khan"));
+        assert_eq!(
+            verified.picture.as_deref(),
+            Some("https://profiles.google.test/aisha.jpg")
+        );
+    }
+
+    #[test]
     fn id_token_rejected_when_tampered() {
         let token = sign_token(&valid_claims(), Some(TEST_KID));
         let parts: Vec<&str> = token.rsplitn(2, '.').collect();
@@ -429,6 +452,26 @@ JX3Efq+lIpLs6bXvFyKzuRc=\n-----END PRIVATE KEY-----";
             None,
         );
         assert!(result.is_err(), "wrong-audience token must be rejected");
+    }
+
+    #[test]
+    fn id_token_rejected_when_audience_is_missing() {
+        let mut claims = valid_claims();
+        claims.as_object_mut().unwrap().remove("aud");
+        let token = sign_token(&claims, Some(TEST_KID));
+        let result =
+            verify_id_token_with_keys(&token, &test_keys(), TEST_AUD, &GOOGLE_ISSUERS, None);
+        assert!(result.is_err(), "missing-audience token must be rejected");
+    }
+
+    #[test]
+    fn id_token_rejected_when_issuer_is_missing() {
+        let mut claims = valid_claims();
+        claims.as_object_mut().unwrap().remove("iss");
+        let token = sign_token(&claims, Some(TEST_KID));
+        let result =
+            verify_id_token_with_keys(&token, &test_keys(), TEST_AUD, &GOOGLE_ISSUERS, None);
+        assert!(result.is_err(), "missing-issuer token must be rejected");
     }
 
     #[test]

@@ -2,9 +2,9 @@ pub mod controller;
 pub mod service;
 pub mod validator;
 
-use axum::{routing::get, Router};
+use axum::{extract::DefaultBodyLimit, routing::get, Router};
 
-use crate::AppState;
+use crate::{config, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -14,6 +14,11 @@ pub fn routes() -> Router<AppState> {
             "/exchange",
             axum::routing::post(controller::google_exchange),
         )
+        .route(
+            "/token/nonce",
+            axum::routing::post(controller::google_token_nonce),
+        )
         .route("/token", axum::routing::post(controller::google_token))
         .route("/user", get(controller::google_user_info))
+        .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))
 }
