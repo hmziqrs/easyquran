@@ -23,9 +23,8 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.web
       args:
-        PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL}
-        PUBLIC_QURAN_API_BASE: ${PUBLIC_QURAN_API_BASE}
-        INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
+        # PUBLIC_* are runtime $env/dynamic/public (NOT build-baked) and are set
+        # in web.environment below. VERSION is the only real build arg.
         VERSION: ${VERSION:-dev}
     image: ${PROJECT:-easyquran}/web:latest
     container_name: ${PROJECT:-easyquran}_web
@@ -33,13 +32,18 @@ services:
       HOST: "0.0.0.0"
       PORT: "8080"
       ORIGIN: https://${DOMAIN}
-      INTERNAL_QURAN_API_BASE: ${INTERNAL_QURAN_API_BASE}
+      # Co-located invariant: web + api share one Docker network. Server-side
+      # translation SSR hits the api container directly (bypassing the edge) and
+      # sends INTERNAL_QURAN_API_TOKEN on this base only.
+      INTERNAL_QURAN_API_BASE: http://api:8888/quran
       # Server-only: proves trusted Docker-internal SSR to the API identity gate.
       # Compose interpolates this from .env; never expose under a PUBLIC_ var.
       INTERNAL_QURAN_API_TOKEN: ${INTERNAL_QURAN_API_TOKEN}
+      # Browser-facing API base, derived from DOMAIN. Read at runtime via
+      # $env/dynamic/public (NOT build-baked), so these live here, not in build args.
+      PUBLIC_API_BASE_URL: https://${DOMAIN}/api
+      PUBLIC_QURAN_API_BASE: https://${DOMAIN}/api/quran
       QURAN_SSR_CACHE_DIR: /app/cache/quran-ssr
-      QURAN_SSR_CACHE_TTL_MS: ${QURAN_SSR_CACHE_TTL_MS:-604800000}
-      QURAN_SSR_CACHE_BUDGET_BYTES: ${QURAN_SSR_CACHE_BUDGET_BYTES:-268435456}
     depends_on:
       api:
         condition: service_healthy
@@ -64,11 +68,11 @@ services:
         aliases: [web]
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${PROXY_NETWORK}"
+      - "traefik.docker.network=${PROXY_NETWORK:-dokploy-network}"
       - "traefik.http.routers.web.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.web.entrypoints=${HTTPS_ENTRYPOINT}"
+      - "traefik.http.routers.web.entrypoints=${HTTPS_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.web.tls=true"
-      - "traefik.http.routers.web.tls.certresolver=${ACME_RESOLVER}"
+      - "traefik.http.routers.web.tls.certresolver=${ACME_RESOLVER:-letsencrypt}"
       - "traefik.http.routers.web.middlewares=easyquran-web-compress@docker"
       - "traefik.http.services.web.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.easyquran-web-compress.compress=true"
@@ -88,6 +92,27 @@ services:
       PORT: "8888"
       DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
       RUST_LOG: ${RUST_LOG:-info}
+      # Topology invariants (literal — must NOT be overridable to an insecure
+      # value): this stack always runs co-located behind Cloudflare->Traefik.
+      RUST_ENV: production
+      # Verified client IP behind Cloudflare->Traefik. Origin ingress MUST be
+      # restricted to Cloudflare ranges (see deploy/README.md) — the api trusts
+      # this header, so only the network path can keep it unforgeable.
+      IP_SOURCE: CfConnectingIp
+      # S3 dummies + MAIL=none satisfy the unconditional boot gate
+      # (ObjectStorageConfig::from_env .expect()s on the four required S3 keys).
+      # Interpolated, NOT literal: set the real value in .env (Dokploy env tab)
+      # to wire media/auth and it overrides cleanly. The reader never touches S3.
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCOUNT_ID: ${S3_ACCOUNT_ID:-local}
+      S3_BUCKET: ${S3_BUCKET:-easyquran-assets}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-devkey}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-devsecret}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://localhost:9000}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://r2.easyquran.fyi}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-none}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@easyquran.fyi}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-EasyQuran}
     volumes:
       - api_data:/app/data
       # Immutable Quran sources (read-only). 1:1 with the /app/quran ENV paths in
@@ -104,11 +129,11 @@ services:
       start_period: 15s
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${PROXY_NETWORK}"
+      - "traefik.docker.network=${PROXY_NETWORK:-dokploy-network}"
       - "traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`) && !PathPrefix(`/api/healthz`)"
-      - "traefik.http.routers.api.entrypoints=${HTTPS_ENTRYPOINT}"
+      - "traefik.http.routers.api.entrypoints=${HTTPS_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.api.tls=true"
-      - "traefik.http.routers.api.tls.certresolver=${ACME_RESOLVER}"
+      - "traefik.http.routers.api.tls.certresolver=${ACME_RESOLVER:-letsencrypt}"
       - "traefik.http.routers.api.priority=100"
       - "traefik.http.routers.api.middlewares=strip-api@docker"
       - "traefik.http.services.api.loadbalancer.server.port=8888"
@@ -118,7 +143,7 @@ services:
 
 networks:
   proxy:
-    name: ${PROXY_NETWORK}
+    name: ${PROXY_NETWORK:-dokploy-network}
     external: true
 
 volumes:

@@ -14,11 +14,29 @@ const ARABIC_ONLY_HELPERS = /\bsurahPath\b|\bsurahLocalPagePath\b|\bsurahAyahPat
 const HAND_BUILT_APP_NAV = /\/app\/(?!\$\{string\})/;
 const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
 
-const components = import.meta.glob("../../../**/*.svelte", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+/**
+ * Everything that can produce reader navigation: route components, shared
+ * components, and the global-search palette sources. `$lib/server` is excluded
+ * on purpose — prerendered Arabic-only output is the one legitimate caller of
+ * the Arabic-only helpers. Glob options must be inline object literals.
+ */
+const components = {
+  ...(import.meta.glob("../../../**/*.svelte", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+  ...(import.meta.glob("../../../../lib/components/**/*.svelte", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+  ...(import.meta.glob("../../../../lib/search/**/*.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+};
 
 function stripComments(src: string): string {
   return src
@@ -45,7 +63,7 @@ describe("reader navigation regression guard", () => {
     expect(typeof surahRouteContext).toBe("function");
   });
 
-  it("no .svelte under src/routes references the Arabic-only path helpers directly", () => {
+  it("no component or palette source references the Arabic-only path helpers directly", () => {
     for (const [path, src] of Object.entries(components)) {
       expect(
         src,
@@ -62,7 +80,7 @@ describe("reader navigation regression guard", () => {
 });
 
 describe("route components never hand-build /app/ navigation literals", () => {
-  it("no .svelte under src/routes hand-builds a /app/ url used by href/goto/resolve", () => {
+  it("no component or palette source hand-builds a /app/ url used by href/goto/resolve", () => {
     for (const [path, src] of Object.entries(components)) {
       expect(
         handBuiltAppNavHits(src),
@@ -84,7 +102,7 @@ describe("route components never hand-build /app/ navigation literals", () => {
 
   it("the nav-signal scope ignores non-navigation /app/ uses (seo path, comments)", () => {
     expect(handBuiltAppNavHits('<Seo path="/app/juz" />')).toEqual([]);
-    expect(handBuiltAppNavHits('<Seo path={`/app/page/${n}`} />')).toEqual([]);
+    expect(handBuiltAppNavHits("<Seo path={`/app/page/${n}`} />")).toEqual([]);
     expect(handBuiltAppNavHits('// href="/app/foo" was the old route')).toEqual([]);
     expect(handBuiltAppNavHits('/* <a href="/app/bar">legacy</a> */')).toEqual([]);
     expect(handBuiltAppNavHits('const url = "https://example.com/app/baz";')).toEqual([]);

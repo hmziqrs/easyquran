@@ -102,9 +102,10 @@
       role="dialog"
       aria-modal="false"
       aria-label="Settings"
-      class="max-h-[min(80vh,640px)] w-[288px] overflow-y-auto rounded-xl border border-line-2 bg-bg-1/95 p-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
+      class="flex max-h-[min(80vh,640px)] w-[288px] flex-col overflow-hidden rounded-xl border border-line-2 bg-bg-1/95 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >
-      <div class="mb-3 flex items-center justify-between">
+      <div class="overflow-y-auto overflow-x-hidden p-3.5">
+      <div class="mb-3 flex items-center justify-between gap-2">
         <span class="font-mono text-xs uppercase tracking-wide text-fg-3">Theme</span>
         <button
           type="button"
@@ -115,7 +116,7 @@
         >
       </div>
 
-      <div class="grid gap-3.5">
+      <div class="grid grid-cols-1 gap-3.5">
         <div>
           <div class="mb-1.5 text-xs text-fg-3">Mode</div>
           <div class="flex gap-1.5">
@@ -259,6 +260,7 @@
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   {/if}

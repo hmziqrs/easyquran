@@ -11,12 +11,6 @@ COPY web/ ./web/
 COPY db/quran/tanzil/arabic/quran-uthmani.sqlite ./db/quran/tanzil/arabic/quran-uthmani.sqlite
 RUN sed -i '/db\/quran\/tanzil\/translations/d' pnpm-workspace.yaml
 
-ARG PUBLIC_API_BASE_URL=https://easyquran.fyi/api
-ARG PUBLIC_QURAN_API_BASE=https://easyquran.fyi/api/quran
-ARG INTERNAL_API_BASE_URL=http://api:8888
-ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
-ENV PUBLIC_QURAN_API_BASE=${PUBLIC_QURAN_API_BASE}
-ENV INTERNAL_API_BASE_URL=${INTERNAL_API_BASE_URL}
 ENV PUBLIC_ENV=prod
 
 ARG VERSION=dev
