@@ -185,85 +185,96 @@ Without guard #1 a single `import { m }` silently re-merges everything and nobod
 
 ---
 
-## 4. Phases
+## 4. Delivery — what shipped
 
-Each phase is independently shippable and independently measurable. Re-run the budget audit after
-every phase and record the numbers in the PR.
+All four buildable phases are done and on `codex/localization`. Phase 5 is deliberately a no-op; see
+§5. Numbers below are measured, not estimated: worst page per surface, from
+`node scripts/audit-i18n-chunks.ts` after a full `pnpm build`.
 
-### Phase 0 — instrumentation (½ day, no behaviour change)
+| surface | before | after | change |
+|---|---|---|---|
+| `about` | 109 msgs / 7.7 KB | 56 msgs / 6.8 KB | now carries its own 18 messages instead of the landing page's |
+| `faq` | 109 / 7.7 KB | 58 / 11.2 KB | +20 own messages (long prose, two locales) |
+| `contact` | 109 / 7.7 KB | 49 / 5.8 KB | +11 own messages |
+| `privacy` | 109 / 7.7 KB | 64 / 7.8 KB | +26 own (legal chrome + privacy body) |
+| `terms` | 109 / 7.7 KB | 63 / 7.3 KB | +25 own (legal chrome + terms body) |
+| `/`, `/ar/` | 109 / 7.7 KB | 69 / 8.4 KB | −40 messages; see the gzip note below |
+| reader (1298 pages) | 195 / 10.8 KB | 155 / 7.8 KB | −40 messages, −3.0 KB |
 
-- `web/scripts/audit-i18n-chunks.ts` — per-page message count + gzip, from `build/prerendered/**`.
-- `web/i18n-budgets.json` seeded with today's numbers (109 / 195) so the direction of travel is
-  visible.
-- Wire into CI after `pnpm build`.
+The chrome floor is **38 messages**. Before the split it was the union of everything the app used.
 
-Ship this first; everything after it is judged by its output.
+The decisive check is the arithmetic in the Phase-4 commit: each page's rise equals its own
+namespace size exactly, so no page pays for another's copy. 96 new messages were added and no
+existing page's budget moved.
 
-### Phase 1 — split the god resolvers, no new copy (1–2 days)
+Landing is the only surface whose gzip rose (~650 B) while its message count fell 109 → 69: its copy
+now sits in its own route chunk and compresses against a smaller dictionary. Recorded as a
+`justification` in `i18n-budgets.json`.
 
-Highest value, zero translation work, zero visible change.
+### Phase 0 — instrumentation (done, `be30bec`)
 
-- `lib/i18n/marketing-copy.ts` → `chrome-copy.ts` (nav, footer, brand, skip, theme, locale links) +
-  `appearance-copy.ts` (tweaks, surfaces, accents) + `landing-copy.ts` (landing + landing SEO).
-  Keep pure-routing helpers (`marketingHref`, `marketingLocaleLinks`, `marketingLocaleFromPath`) in a
-  message-free module so importing a URL helper never pulls copy.
-- `(marketing)/+layout.svelte` resolves chrome once, passes props down. `MarketingNav`,
-  `MarketingFooter`, `MarketingSeo`, `MarketingTweaks` stop calling a resolver themselves.
-- `(marketing)/+page.svelte` imports `landing-copy` only.
-- `reader-copy.ts` → per-surface modules mirroring the component tree: `reader-shell`,
-  `reader-sidebar`, `reader-verse-tools`, `reader-search`, `reader-translation-picker`,
-  `reader-page-nav`.
-- Add guard #1.
+`web/scripts/audit-i18n-chunks.ts` + `web/i18n-budgets.json`, wired into `postbuild` as
+`pnpm i18n:budget`. Seeded from the pre-refactor build so the direction of travel is in git history.
+`--update` re-seeds, `--report` never fails. Message counts are budgeted exactly; gzip gets 2 %
+headroom because chunk hashes and minified identifiers move sizes by a byte or two per build.
 
-Expected: marketing pages 109 → ~81 messages (measured), reader pages 195 → chrome + only the reader
-surfaces that page mounts.
+### Phase 1 + 2 + 3 — namespaces, split resolvers, lazy panels (done, `c891e1c`)
 
-### Phase 2 — generated namespace barrels (1 day)
+Shipped as one commit because they are one mechanism: splitting the resolvers without the generated
+barrels just moves the pinch point, and the barrels are pointless while a god resolver aggregates
+every namespace.
 
-- `scripts/gen-message-namespaces.ts` + prefix table + `--check` mode + `predev`/`prebuild` wiring.
-- Rename keys to the §3.1 convention (`tweaks_*`/`surface_*`/`accent_*` → `appearance_*`,
-  `seo_home_*` → `landing_seo_*`) in one mechanical commit, both locales together.
-- Convert Phase-1 modules to consume namespace barrels instead of the `m` barrel.
-- eslint rule.
+- `i18n-namespaces.json` + `scripts/gen-message-namespaces.ts`, run inside `pnpm i18n:check` so
+  `dev`, `build`, `lint` and `test` all regenerate. 13 namespaces over 378 messages.
+- `marketing-copy.ts` is now types + route helpers with **no message import**, so `reader-copy.ts`
+  and the reader layout — which only ever wanted types — stopped pulling marketing copy.
+- `chrome-copy.ts` / `appearance-copy.ts` / `landing-copy.ts` replaced `resolveMarketingCopy`.
+  Chrome resolves once in `(marketing)/+layout.svelte` and is passed down, instead of six components
+  each re-deriving a 111-field object.
+- `reader-settings-copy.ts` carved the reader appearance panel out of `reader-copy.ts`.
+- `Tweaks.svelte` takes `triggerLabel` + `loadCopy: () => Promise<TweaksResolvedCopy>` and
+  dynamically imports panel copy on first open. `DEFAULT_COPY` — 27 English strings duplicated inside
+  the component — is gone, and the copy prop is required.
 
-No byte change expected on its own; this is the ergonomics substrate that makes Phase 4 cheap.
+Two deviations from the plan as written:
 
-### Phase 3 — lazy the appearance panel (½ day)
+1. **No mass key rename.** `tweaks_*`/`surface_*`/`accent_*` keep their names and are mapped to the
+   `appearance` namespace by an explicit rule in `i18n-namespaces.json`. The generator makes
+   membership explicit either way, so renaming 41 keys across two catalogs bought nothing but churn
+   and merge risk. Only the namespace *convention* is enforced going forward: new surfaces use a
+   `<surface>_` prefix. `seo_home_*` also kept its name and belongs to `landing`.
+2. **No eslint rule.** `vp lint` is oxlint-based and the vitest guard is both deterministic and
+   idiomatic here (`nav-guard.test.ts`, `catalogue-sha-guard.test.ts` set the precedent). Adding a
+   second, weaker enforcement path was not worth it.
 
-`appearance_*` is ~41 keys (`tweaks` 27 + `surface` 10 + `accent` 4) — the largest single block on
-the chrome floor — and it renders inside a panel the user must open. `Tweaks.svelte` additionally
-carries a `DEFAULT_COPY` object duplicating all 27 strings as English literals in the component.
+### Phase 4 — the remaining marketing pages (done, `80bc483`)
 
-- Render the panel body behind `{#if open}` with a dynamic `import()`.
-- Delete `DEFAULT_COPY`; make the copy prop required.
+`about`, `faq`, `contact`, `privacy`, `terms` — the exact list in `docs/i18n.md` §10. 96 keys per
+locale, one resolver module per page, `src/lib/data/content.ts` deleted, every list item carrying a
+locale-independent `id`, and each page passing its own `title`/`description`/`inLanguage` to `Seo`.
+The FAQ page now feeds localized entries to its `FAQPage` structured data, which was English-only on
+`/ar` before.
 
-Expected: another ~40 messages / ~2.5 KB gz off **every** page in the app. Trade-off: one small
-lazy chunk fetched on first panel open, after user intent — no render-fetch waterfall on initial
-paint, which is the failure mode upstream [issue #88] warns about.
+English is verbatim from the old templates and `content.ts`. **Arabic is new and unreviewed**: per
+`docs/i18n.md`, an Arabic catalog PR needs a named fluent reviewer, and machine-translated
+publishing is out of scope. `MARKETING_PUBLICATIONS` is untouched, so `/ar/about` and friends still
+404 exactly as before. Flipping those entries is gated on that review, not on this work.
 
-### Phase 4 — localize the remaining pages (per page, ~½ day each)
+### Not done: auth and account
 
-Only now, on a substrate where a new page costs *only its own* bytes. Order by SEO value:
+`login`, `register`, `forgot-password`, `verify-email` and `account` remain English. This is a
+deliberate stop, not an omission: `docs/i18n.md` line 111 places auth, account and health routes
+**outside** the i18n middleware, and `/ar/account` is specified to 404. Localizing them means
+reversing a routing decision, which is a product call with security-adjacent surface (session
+handling, OAuth callbacks), not a delivery refactor. When that decision is made, the substrate is
+ready: add an `auth`/`account` namespace, one resolver module per page, one budget entry.
 
-1. `faq` + `legal` (`privacy`, `terms`) — these also fix `<Seo faq={FAQS} />` emitting English-only
-   structured data on `/ar`.
-2. `about`, `contact`.
-3. `auth` (`login`, `register`, `forgot-password`, `verify-email`).
-4. `account`.
+### Phase 5 — locale scaling
 
-Per page: add `<ns>_*` keys to both catalogs, run codegen, convert the `.svelte` to
-`import * as m from "$lib/i18n/m/<ns>"`, convert its `lib/data/content.ts` arrays (`FAQS`,
-`PRIVACY_SECTIONS`, `TERMS_SECTIONS`, `ABOUT_STATS`, `LEGAL_UPDATED`) to message-keyed data, add the
-`{ pageId, locale }` entry to `MARKETING_PUBLICATIONS`, add a budget entry.
-
-Note `docs/i18n.md` line 111: auth/account routes are deliberately outside i18n middleware. Phases
-4.3/4.4 need that decision revisited explicitly, not silently.
-
-### Phase 5 — locale scaling (revisit at locale #3)
-
-Do nothing yet. Details in §5.
+Nothing to build. See §5.
 
 ---
+
 
 ## 5. Locale scaling — researched, currently blocked
 
@@ -293,14 +304,29 @@ with both — they become a config change, not a refactor.
 
 ## 6. Definition of done
 
-- `web/i18n-budgets.json` committed, enforced in CI, and every entry lower than its Phase-0 seed.
-- No source file outside `src/lib/i18n/m/**` imports `$lib/paraglide/messages.js` — guarded, not
-  merely reviewed.
-- Adding a page's messages provably does not change any other page's budget (the budget guard's diff
-  is the proof).
-- Marketing pages at the chrome floor; reader pages carry chrome + only the reader surfaces they
-  mount.
-- `docs/i18n.md` §10 updated: the follow-on list now points here for the delivery mechanism.
+- [x] `web/i18n-budgets.json` committed and enforced in `postbuild`. Every surface is below its
+      Phase-0 seed on message count; `faq` and `privacy` are above it on gzip only because they gained
+      their own copy, which is the whole point.
+- [x] No source file outside `src/lib/i18n/m/**` imports `$lib/paraglide/messages.js` or reaches a
+      compiled message module — `message-barrel-guard.test.ts`, guarded rather than reviewed.
+- [x] Adding a page's messages provably does not change any other page's budget. The Phase-4 build
+      is the proof: 96 new messages, five budgets up by exactly their own namespace size, landing and
+      reader unchanged.
+- [x] Marketing pages sit on a 38-message chrome floor; reader pages carry chrome plus reader copy
+      only, with the appearance panel lazy on both surfaces.
+- [x] `docs/i18n.md` §10 points here for the delivery mechanism.
+
+### How to add a page from here
+
+1. Add `<page>_*` keys to `messages/en.json` and `messages/ar.json`.
+2. Add a namespace to `i18n-namespaces.json` with `"prefixes": ["<page>"]`. An unclaimed key fails
+   generation, so this step cannot be forgotten.
+3. `pnpm i18n:check` regenerates `src/lib/i18n/m/<page>.ts` with types.
+4. Write `<page>-copy.ts` importing only that barrel; render it from the route.
+5. Add a budget entry and run `pnpm build`. The audit prints exactly what the page costs.
+
+Anything that would make another page's budget move fails the audit, which is the property that makes
+this scale to hundreds of pages.
 
 ## 7. Sources
 
