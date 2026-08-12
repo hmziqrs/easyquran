@@ -39,6 +39,7 @@ export interface Prefs {
   surface: SurfaceId;
   accent: AccentId;
   custom: CustomSeeds;
+  instantResume: boolean;
 }
 
 type PrefPatch = Partial<Prefs>;
@@ -56,7 +57,7 @@ function cleanCustom(raw: unknown): CustomSeeds {
 }
 
 function load(): Prefs {
-  const base: Prefs = { ...DEFAULTS, custom: {} };
+  const base: Prefs = { ...DEFAULTS, instantResume: false, custom: {} };
   if (!browser) return base;
   const stored = asObject(readJSON(STORAGE_KEY));
   const surface = stored?.surface;
@@ -66,11 +67,12 @@ function load(): Prefs {
     surface: SURFACES.some((s) => s.id === surface) ? (surface as SurfaceId) : base.surface,
     accent: ACCENTS.some((a) => a.id === accent) ? (accent as AccentId) : base.accent,
     custom: cleanCustom(stored?.custom),
+    instantResume: stored?.instantResume === true,
   };
 }
 
 class PrefsStore {
-  #prefs = $state<Prefs>({ ...DEFAULTS, custom: {} });
+  #prefs = $state<Prefs>({ ...DEFAULTS, instantResume: false, custom: {} });
   #hydrated = false;
 
   hydrate(): void {
@@ -90,6 +92,9 @@ class PrefsStore {
   }
   get accent(): AccentId {
     return this.#prefs.accent;
+  }
+  get instantResume(): boolean {
+    return this.#prefs.instantResume;
   }
   get custom(): Readonly<CustomSeeds> {
     return this.#prefs.custom;
@@ -144,6 +149,9 @@ class PrefsStore {
     const { accent: _dropped, ...rest } = this.#prefs.custom;
     this.set({ accent, custom: rest });
   }
+  setInstantResume(value: boolean): void {
+    this.set({ instantResume: value });
+  }
   toggleTheme(): void {
     this.set({ theme: this.#prefs.theme === "dark" ? "light" : "dark" });
   }
@@ -160,7 +168,7 @@ class PrefsStore {
   }
 
   reset(): void {
-    this.set({ ...DEFAULTS, custom: {} });
+    this.set({ ...DEFAULTS, instantResume: false, custom: {} });
   }
 }
 
