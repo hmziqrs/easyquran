@@ -1,8 +1,12 @@
+use std::sync::LazyLock;
+use std::time::{Duration, SystemTime};
+
 use chrono::Utc;
 use jsonwebtoken::{
     decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
 use serde::Deserialize;
+use tokio::sync::RwLock;
 use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
@@ -13,6 +17,16 @@ const APPLE_AUTH_URL: &str = "https://appleid.apple.com/auth/authorize";
 const APPLE_TOKEN_URL: &str = "https://appleid.apple.com/auth/token";
 const APPLE_JWKS_URL: &str = "https://appleid.apple.com/auth/keys";
 const APPLE_ISSUER: &str = "https://appleid.apple.com";
+const APPLE_JWKS_MAX_BYTES: usize = 64 * 1024;
+const APPLE_JWKS_TTL: Duration = Duration::from_secs(3600);
+
+struct CachedAppleJwks {
+    fetched_at: SystemTime,
+    keys: Vec<AppleJwkKey>,
+}
+
+static APPLE_JWKS_CACHE: LazyLock<RwLock<Option<CachedAppleJwks>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 pub struct AppleConfig {
     pub client_id: String,
@@ -20,6 +34,34 @@ pub struct AppleConfig {
     pub key_id: String,
     pub redirect_uri: String,
     pub private_key_pem: String,
+}
+
+pub fn apple_token_audiences(primary: &str, extras: Option<&str>) -> Vec<String> {
+    let mut audiences = Vec::new();
+    for audience in
+        std::iter::once(primary).chain(extras.into_iter().flat_map(|value| value.split(',')))
+    {
+        let audience = audience.trim();
+        if !audience.is_empty() && !audiences.iter().any(|existing| existing == audience) {
+            audiences.push(audience.to_string());
+        }
+    }
+    audiences
+}
+
+#[allow(clippy::result_large_err)]
+pub fn load_apple_token_audiences() -> Result<Vec<String>, ErrorResponse> {
+    let primary = std::env::var("APPLE_CLIENT_ID").map_err(|_| {
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("APPLE_CLIENT_ID not configured")
+    })?;
+    let extras = std::env::var("APPLE_MOBILE_CLIENT_IDS").ok();
+    let audiences = apple_token_audiences(&primary, extras.as_deref());
+    if audiences.is_empty() {
+        return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("APPLE_CLIENT_ID not configured"));
+    }
+    Ok(audiences)
 }
 
 #[allow(clippy::result_large_err)]
@@ -198,7 +240,7 @@ struct AppleJwkSet {
 #[allow(clippy::result_large_err)]
 pub async fn verify_apple_id_token(
     id_token: &str,
-    expected_aud: &str,
+    expected_aud: &[&str],
     expected_nonce: Option<&str>,
 ) -> Result<AppleIdTokenClaims, ErrorResponse> {
     let header = decode_header(id_token).map_err(|e| {
@@ -211,16 +253,29 @@ pub async fn verify_apple_id_token(
             .with_message("Unsupported Apple id_token algorithm"));
     }
 
-    let keys = fetch_apple_jwks(http_client_for_jwks()?).await?;
-    let signing_key = header
+    let keys = fetch_apple_jwks().await?;
+    let signing_key = match header
         .kid
         .as_deref()
         .and_then(|kid| keys.iter().find(|k| k.kid.as_deref() == Some(kid)))
-        .ok_or_else(|| {
-            warn!("No matching Apple signing key for id_token kid");
-            ErrorResponse::new(ErrorCode::InvalidToken)
-                .with_message("Untrusted Apple id_token signer")
-        })?;
+        .cloned()
+    {
+        Some(key) => key,
+        None => {
+            warn!("Apple id_token kid not in cached JWKS; forcing one refresh");
+            let refreshed = fetch_apple_jwks_bypass_cache().await?;
+            header
+                .kid
+                .as_deref()
+                .and_then(|kid| refreshed.iter().find(|key| key.kid.as_deref() == Some(kid)))
+                .cloned()
+                .ok_or_else(|| {
+                    warn!("No matching Apple signing key for id_token kid");
+                    ErrorResponse::new(ErrorCode::InvalidToken)
+                        .with_message("Untrusted Apple id_token signer")
+                })?
+        }
+    };
 
     let decoding_key =
         DecodingKey::from_rsa_components(&signing_key.n, &signing_key.e).map_err(|e| {
@@ -229,9 +284,7 @@ pub async fn verify_apple_id_token(
                 .with_message("Invalid Apple signing key")
         })?;
 
-    let mut validation = Validation::new(Algorithm::RS256);
-    validation.set_audience(&[expected_aud]);
-    validation.set_issuer(&[APPLE_ISSUER]);
+    let validation = apple_id_token_validation(expected_aud);
 
     let token_data =
         decode::<AppleIdTokenClaims>(id_token, &decoding_key, &validation).map_err(|e| {
@@ -256,6 +309,14 @@ pub async fn verify_apple_id_token(
     Ok(token_data.claims)
 }
 
+fn apple_id_token_validation(expected_aud: &[&str]) -> Validation {
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
+    validation.set_audience(expected_aud);
+    validation.set_issuer(&[APPLE_ISSUER]);
+    validation
+}
+
 fn http_client_for_jwks() -> Result<reqwest::Client, ErrorResponse> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -269,18 +330,31 @@ fn http_client_for_jwks() -> Result<reqwest::Client, ErrorResponse> {
         })
 }
 
-async fn fetch_apple_jwks(http_client: reqwest::Client) -> Result<Vec<AppleJwkKey>, ErrorResponse> {
+async fn fetch_apple_jwks() -> Result<Vec<AppleJwkKey>, ErrorResponse> {
+    {
+        let guard = APPLE_JWKS_CACHE.read().await;
+        if let Some(cached) = guard.as_ref() {
+            let fresh = SystemTime::now()
+                .duration_since(cached.fetched_at)
+                .map(|elapsed| elapsed < APPLE_JWKS_TTL)
+                .unwrap_or(false);
+            if fresh {
+                return Ok(cached.keys.clone());
+            }
+        }
+    }
+
+    fetch_apple_jwks_bypass_cache().await
+}
+
+async fn fetch_apple_jwks_bypass_cache() -> Result<Vec<AppleJwkKey>, ErrorResponse> {
+    let http_client = http_client_for_jwks()?;
     let resp = http_client.get(APPLE_JWKS_URL).send().await.map_err(|e| {
         error!(error = ?e, "Failed to fetch Apple JWKS");
         ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
     })?;
 
     let status = resp.status();
-    let bytes = resp.bytes().await.map_err(|e| {
-        error!(error = ?e, "Failed to read Apple JWKS body");
-        ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
-    })?;
-
     if !status.is_success() {
         error!(status = %status, "Apple JWKS endpoint returned non-2xx");
         return Err(
@@ -288,10 +362,68 @@ async fn fetch_apple_jwks(http_client: reqwest::Client) -> Result<Vec<AppleJwkKe
         );
     }
 
+    if resp
+        .content_length()
+        .is_some_and(|length| length > APPLE_JWKS_MAX_BYTES as u64)
+    {
+        error!("Apple JWKS content length exceeded size limit");
+        return Err(
+            ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
+        );
+    }
+
+    let mut resp = resp;
+    let mut bytes = Vec::with_capacity(4096);
+    while let Some(chunk) = resp.chunk().await.map_err(|e| {
+        error!(error = ?e, "Failed to read Apple JWKS body");
+        ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
+    })? {
+        if bytes.len().saturating_add(chunk.len()) > APPLE_JWKS_MAX_BYTES {
+            error!("Apple JWKS response exceeded size limit");
+            return Err(ErrorResponse::new(ErrorCode::ExternalServiceError)
+                .with_message("JWKS fetch failed"));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+
     let parsed: AppleJwkSet = serde_json::from_slice(&bytes).map_err(|e| {
         error!(error = ?e, "Failed to parse Apple JWKS JSON");
         ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("Malformed JWKS")
     })?;
 
-    Ok(parsed.keys)
+    let keys = parsed.keys;
+    let mut guard = APPLE_JWKS_CACHE.write().await;
+    *guard = Some(CachedAppleJwks {
+        fetched_at: SystemTime::now(),
+        keys: keys.clone(),
+    });
+
+    Ok(keys)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mobile_audiences_include_primary_and_trimmed_unique_extras() {
+        let audiences = apple_token_audiences(
+            "web.service.id",
+            Some(" com.easyquran.ios,com.easyquran.macos,com.easyquran.ios "),
+        );
+
+        assert_eq!(
+            audiences,
+            vec!["web.service.id", "com.easyquran.ios", "com.easyquran.macos"]
+        );
+    }
+
+    #[test]
+    fn id_token_validation_requires_identity_claims() {
+        let validation = apple_id_token_validation(&["com.easyquran.ios"]);
+
+        assert!(["exp", "iss", "aud", "sub"]
+            .iter()
+            .all(|claim| validation.required_spec_claims.contains(*claim)));
+    }
 }

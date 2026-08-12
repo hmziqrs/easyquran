@@ -1,6 +1,9 @@
+use base64::prelude::*;
 use oauth2::PkceCodeVerifier;
+use rand::Rng;
 use serde::Deserialize;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -10,17 +13,103 @@ use tracing::{error, warn};
 use crate::error::{ErrorCode, ErrorResponse};
 
 const STATE_TTL_SECS: u64 = 600;
+pub const NATIVE_TOKEN_NONCE_TTL_SECS: u64 = STATE_TTL_SECS;
+const MAX_NATIVE_NONCES: usize = 10_000;
 
 type StateMap = HashMap<String, (String, Instant)>;
 
 static OAUTH_STATES: OnceLock<Mutex<StateMap>> = OnceLock::new();
+static NATIVE_NONCES: OnceLock<Mutex<NativeNonceMap>> = OnceLock::new();
+
+type NativeNonceMap = HashMap<String, (NativeTokenProvider, Instant)>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeTokenProvider {
+    Google,
+    Apple,
+}
+
+pub struct NativeTokenChallenge {
+    pub nonce: String,
+    pub provider_nonce: String,
+}
 
 fn oauth_states() -> &'static Mutex<StateMap> {
     OAUTH_STATES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn native_nonces() -> &'static Mutex<NativeNonceMap> {
+    NATIVE_NONCES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn reap_stale(map: &mut StateMap) {
     map.retain(|_, (_, at)| at.elapsed().as_secs() < STATE_TTL_SECS);
+}
+
+fn reap_stale_native_nonces(map: &mut NativeNonceMap) {
+    map.retain(|_, (_, at)| at.elapsed().as_secs() < NATIVE_TOKEN_NONCE_TTL_SECS);
+}
+
+pub fn issue_native_token_challenge(
+    provider: NativeTokenProvider,
+) -> Result<NativeTokenChallenge, ErrorResponse> {
+    let mut bytes = [0_u8; 32];
+    rand::rng().fill(&mut bytes);
+    let nonce = BASE64_URL_SAFE_NO_PAD.encode(bytes);
+    let provider_nonce = match provider {
+        NativeTokenProvider::Google => nonce.clone(),
+        NativeTokenProvider::Apple => hex::encode(Sha256::digest(nonce.as_bytes())),
+    };
+
+    let mut map = native_nonces().lock().map_err(|e| {
+        error!(error = %e, "Native token nonce map poisoned");
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Failed to issue sign-in challenge")
+    })?;
+    reap_stale_native_nonces(&mut map);
+    if map.len() >= MAX_NATIVE_NONCES {
+        if let Some(oldest) = map
+            .iter()
+            .min_by_key(|(_, (_, issued_at))| *issued_at)
+            .map(|(key, _)| key.clone())
+        {
+            map.remove(&oldest);
+        }
+    }
+    map.insert(provider_nonce.clone(), (provider, Instant::now()));
+
+    Ok(NativeTokenChallenge {
+        nonce,
+        provider_nonce,
+    })
+}
+
+pub fn consume_native_token_nonce(
+    provider: NativeTokenProvider,
+    provider_nonce: Option<&str>,
+) -> Result<(), ErrorResponse> {
+    let provider_nonce = provider_nonce
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(invalid_native_nonce)?;
+    let stored = {
+        let mut map = native_nonces().lock().map_err(|e| {
+            error!(error = %e, "Native token nonce map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Failed to verify sign-in challenge")
+        })?;
+        reap_stale_native_nonces(&mut map);
+        map.remove(provider_nonce)
+    };
+
+    match stored {
+        Some((stored_provider, _)) if stored_provider == provider => Ok(()),
+        _ => Err(invalid_native_nonce()),
+    }
+}
+
+fn invalid_native_nonce() -> ErrorResponse {
+    warn!("Invalid, expired, provider-mismatched, or consumed native token nonce");
+    ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid sign-in challenge")
 }
 
 fn state_key(session_id: &str, state_secret: &str) -> String {
@@ -100,4 +189,36 @@ pub fn consume_oauth_state(
         },
         nonce: parsed.n,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn google_challenge_nonce_is_consumed_once() {
+        let challenge = issue_native_token_challenge(NativeTokenProvider::Google).unwrap();
+
+        consume_native_token_nonce(NativeTokenProvider::Google, Some(&challenge.provider_nonce))
+            .unwrap();
+
+        assert!(
+            consume_native_token_nonce(
+                NativeTokenProvider::Google,
+                Some(&challenge.provider_nonce)
+            )
+            .is_err(),
+            "replayed challenge must fail"
+        );
+    }
+
+    #[test]
+    fn apple_challenge_returns_sha256_provider_nonce() {
+        let challenge = issue_native_token_challenge(NativeTokenProvider::Apple).unwrap();
+
+        assert_eq!(
+            challenge.provider_nonce,
+            hex::encode(Sha256::digest(challenge.nonce.as_bytes()))
+        );
+    }
 }

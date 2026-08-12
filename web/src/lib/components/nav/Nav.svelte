@@ -9,6 +9,7 @@
   import { authState } from "$lib/auth/auth-state.svelte";
   import { Icon } from "$lib/components/icon";
   import { Brand } from "$lib/components/brand";
+  import { SearchTrigger } from "$lib/components/search";
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import type {
     BrandResolvedCopy,
@@ -170,16 +171,7 @@
           <span class="hidden sm:inline">{copy.offlineLabel}</span>
         </span>
       {/if}
-      <a
-        href={publicHref(searchHref)}
-        aria-label={copy.searchQuran}
-        title={copy.searchQuran}
-        inert={open || undefined}
-        aria-hidden={open || undefined}
-        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        <Icon name="search" size={18} title={copy.searchQuran} />
-      </a>
+      <SearchTrigger label={copy.searchQuran} inert={open} />
       <a
         href={publicHref(accountHref)}
         aria-label={accountLabel}

@@ -19,7 +19,7 @@
     type SearchHit,
     type SearchResponse,
   } from "$lib/quran/search/types";
-  import SearchResultText from "./SearchResultText.svelte";
+  import { HighlightedArabic } from "$lib/components/text";
 
   interface SearchState {
     result: SearchResponse;
@@ -122,7 +122,7 @@
             {/if}
           </span>
           {#if text}
-            <SearchResultText {text} highlights={r.highlights} />
+            <HighlightedArabic {text} highlights={r.highlights} />
           {:else}
             <span class="text-sm text-fg-3">{copy.search.openSurah}</span>
           {/if}

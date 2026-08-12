@@ -12,6 +12,7 @@
   import { offline } from "$lib/offline/offline-store.svelte";
   import { APP_READY } from "$lib/offline/messages";
   import { NotificationToast } from "$lib/components/notifications";
+  import { GlobalSearch } from "$lib/components/search";
   import { DownloadBar, UpdateToast } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
   import { startServiceWorker } from "$lib/boot/service-worker";
@@ -133,4 +134,5 @@
 <NotificationToast />
 <UpdateToast />
 <DownloadBar />
+<GlobalSearch />
 {@render children()}

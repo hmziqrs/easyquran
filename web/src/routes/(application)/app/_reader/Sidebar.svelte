@@ -20,7 +20,7 @@
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { cn } from "$lib/utils";
-  import { tick, type Snippet } from "svelte";
+  import type { Snippet } from "svelte";
   import {
     Sidebar,
     SidebarHeader,
@@ -40,29 +40,10 @@
   const sidebar = useSidebar();
   const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
-  let inputEl: HTMLInputElement | null = $state(null);
   let contentEl: HTMLDivElement | null = $state(null);
 
   function oninput(e: Event) {
     reader.setQuery((e.currentTarget as HTMLInputElement).value);
-  }
-  async function focusSearch(): Promise<void> {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      await tick();
-      if (inputEl) {
-        inputEl.focus();
-        inputEl.select();
-        return;
-      }
-      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
-    }
-  }
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      if (!sidebar.openMobile) sidebar.setOpenMobile(true);
-      void focusSearch();
-    }
   }
   function onItemClick() {
     reader.clearQuery();
@@ -130,7 +111,6 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} />
 
 {#snippet navRow(
   href: string,
@@ -157,7 +137,6 @@
     >
       <Icon name="search" size={15} class="flex-none text-fg-3" />
       <Input
-        bind:ref={inputEl}
         type="text"
         value={reader.query}
         {oninput}
