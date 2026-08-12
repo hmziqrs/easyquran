@@ -1,22 +1,23 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { fly, fade } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { page } from "$app/state";
-  import { NAV_LINKS, type NavLink } from "$lib/config/site";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { online } from "$lib/offline/online.svelte";
-  import { cn } from "$lib/utils";
-  import { Button } from "$lib/components/ui/button";
-  import { Brand } from "$lib/components/brand";
+  import { authState } from "$lib/auth/auth-state.svelte";
   import { Icon } from "$lib/components/icon";
+  import { Brand } from "$lib/components/brand";
 
   const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   let open = $state(false);
   let toggleBtn: HTMLButtonElement | undefined = $state();
-  let drawerEl: HTMLDivElement | undefined = $state();
+  let panelEl: HTMLDivElement | undefined = $state();
 
-  function isActive(href: string) {
-    return href === "/app" ? page.url.pathname.startsWith("/app") : page.url.pathname === href;
-  }
+  onMount(() => {
+    authState.hydrate();
+  });
 
   $effect(() => {
     void page.url.pathname;
@@ -27,13 +28,16 @@
   $effect(() => {
     const isOpen = open;
     if (isOpen) {
-      const first = drawerEl?.querySelector<HTMLElement>(FOCUSABLE);
+      const first = panelEl?.querySelector<HTMLElement>(FOCUSABLE);
       first?.focus();
     } else if (wasOpen) {
       toggleBtn?.focus();
     }
     wasOpen = isOpen;
   });
+
+  let accountHref = $derived(authState.authenticated ? "/account" : "/auth/login");
+  let accountLabel = $derived(authState.authenticated ? "Account" : "Sign in");
 
   function toggle() {
     open = !open;
@@ -44,9 +48,9 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") open = false;
   }
-  function onDrawerKeydown(e: KeyboardEvent) {
-    if (e.key !== "Tab" || !drawerEl) return;
-    const focusables = Array.from(drawerEl.querySelectorAll<HTMLElement>(FOCUSABLE));
+  function onPanelKeydown(e: KeyboardEvent) {
+    if (e.key !== "Tab" || !panelEl) return;
+    const focusables = Array.from(panelEl.querySelectorAll<HTMLElement>(FOCUSABLE));
     if (focusables.length === 0) return;
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
@@ -62,34 +66,14 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#snippet navLink(p: NavLink, padding: string, onclick?: () => void)}
-  {@const active = isActive(p.href)}
-  <a
-    href={p.href}
-    aria-current={active ? "page" : undefined}
-    class={cn(
-      "rounded-md text-sm transition-colors",
-      padding,
-      active ? "bg-bg-2 text-fg" : "text-fg-2 hover:bg-bg-2 hover:text-fg",
-    )}
-    {onclick}>{p.label}</a
-  >
-{/snippet}
-
 <nav
   aria-label="Primary"
   class="sticky top-0 z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150"
 >
-  <div class="mx-auto flex h-[60px] max-w-[1180px] items-center gap-6 px-6 sm:px-7">
+  <div class="flex h-[60px] items-center gap-4 px-5 sm:px-7 lg:px-10">
     <span class="mr-auto" inert={open || undefined} aria-hidden={open || undefined}>
       <Brand />
     </span>
-
-    <div class="hidden items-center gap-0.5 md:flex">
-      {#each NAV_LINKS as p (p.href)}
-        {@render navLink(p, "px-3 py-1.5 duration-150")}
-      {/each}
-    </div>
 
     <div class="flex items-center gap-2">
       {#if online.hydrated && !online.online}
@@ -104,34 +88,35 @@
           <span class="hidden sm:inline">Offline</span>
         </span>
       {/if}
-      <button
-        type="button"
-        onclick={() => prefs.toggleTheme()}
-        aria-label="Toggle theme"
-        inert={open || undefined}
-        aria-hidden={open || undefined}
-        class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg"
-      >
-        <Icon name={prefs.theme === "dark" ? "sun" : "moon"} size={16} />
-      </button>
-      <Button
-        variant="accent"
-        size="sm"
+      <a
         href="/app"
-        class="hidden sm:inline-flex"
+        aria-label="Search the Qur'an"
+        title="Search the Qur'an"
         inert={open || undefined}
         aria-hidden={open || undefined}
+        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        Open the app
-      </Button>
+        <Icon name="search" size={18} title="Search the Qur'an" />
+      </a>
+      <a
+        href={accountHref}
+        aria-label={accountLabel}
+        title={accountLabel}
+        inert={open || undefined}
+        aria-hidden={open || undefined}
+        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <Icon name="user" size={18} title={accountLabel} />
+      </a>
       <button
         type="button"
         onclick={toggle}
         aria-expanded={open}
-        aria-controls="mobile-menu"
-        aria-label="Menu"
+        aria-controls="site-panel"
+        aria-label={open ? "Close panel" : "Open panel"}
+        title={open ? "Close panel" : "Open panel"}
         bind:this={toggleBtn}
-        class="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg md:hidden"
+        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
       </button>
@@ -142,32 +127,49 @@
 {#if open}
   <button
     type="button"
-    aria-label="Close menu"
+    aria-label="Close panel"
     tabindex="-1"
-    class="fixed inset-0 top-[60px] z-40 cursor-default bg-bg/40 backdrop-blur-sm md:hidden"
+    class="fixed inset-0 top-[60px] z-40 cursor-default bg-bg/40 backdrop-blur-sm"
+    transition:fade={{ duration: 150 }}
     onclick={close}
   ></button>
   <div
-    id="mobile-menu"
+    id="site-panel"
     role="dialog"
     aria-modal="true"
-    aria-label="Mobile"
+    aria-label="Site panel"
     tabindex="-1"
-    bind:this={drawerEl}
-    onkeydown={onDrawerKeydown}
-    class="fixed inset-x-0 top-[60px] z-50 border-b border-line bg-bg/95 backdrop-blur-xl md:hidden"
+    bind:this={panelEl}
+    onkeydown={onPanelKeydown}
+    transition:fly={{ x: 360, duration: 220, easing: cubicOut }}
+    class="fixed bottom-0 right-0 top-[60px] z-50 flex w-[340px] max-w-[88vw] flex-col border-l border-line bg-bg/95 backdrop-blur-xl"
   >
-    <div class="mx-auto max-w-[1180px] px-6 py-3 sm:px-7">
-      <div class="grid gap-1">
-        {#each NAV_LINKS as p (p.href)}
-          {@render navLink(p, "px-3 py-2.5", close)}
-        {/each}
-      </div>
-      <div class="mt-2 border-t border-line pt-3">
-        <Button variant="accent" size="sm" href="/app" class="w-full justify-center">
-          Open the app
-        </Button>
-      </div>
+    <div class="flex flex-col gap-6 p-5 sm:p-6">
+      <section class="flex flex-col gap-3">
+        <h2 class="eyebrow mb-0">Appearance</h2>
+        <button
+          type="button"
+          onclick={() => prefs.toggleTheme()}
+          aria-label="Toggle theme"
+          class="flex w-full items-center justify-between rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-sm text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg"
+        >
+          <span class="inline-flex items-center gap-2.5">
+            <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={16} />
+            Theme
+          </span>
+          <span class="text-xs capitalize text-fg-3">{prefs.theme}</span>
+        </button>
+      </section>
+
+      {#if online.hydrated && !online.online}
+        <p
+          class="flex items-center gap-2 rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-xs text-fg-3"
+          role="status"
+        >
+          <span class="inline-block size-1.5 rounded-full bg-pop" aria-hidden="true"></span>
+          You are offline — cached content only.
+        </p>
+      {/if}
     </div>
   </div>
 {/if}
