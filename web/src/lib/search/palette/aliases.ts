@@ -7,15 +7,7 @@
  * normalize the keyword, so both `سورة` and the ta-marbuta-less `سوره` are
  * listed explicitly.
  */
-export const SURAH_ALIASES = [
-  "s",
-  "sura",
-  "surah",
-  "surat",
-  "chapter",
-  "سورة",
-  "سوره",
-] as const;
+export const SURAH_ALIASES = ["s", "sura", "surah", "surat", "chapter", "سورة", "سوره"] as const;
 
 export const JUZ_ALIASES = [
   "juz",

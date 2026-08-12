@@ -1,5 +1,6 @@
 <script lang="ts">
   import { commandPalette } from "$lib/stores/command-palette.svelte";
+  import { loadPalette } from "./palette-loader";
   import { Icon } from "$lib/components/icon";
   import { cn } from "$lib/utils";
 
@@ -13,6 +14,8 @@
 <button
   type="button"
   onclick={() => commandPalette.show()}
+  onpointerenter={() => void loadPalette()}
+  onfocus={() => void loadPalette()}
   aria-label={label}
   aria-keyshortcuts="Meta+K Control+K"
   title={`${label} (⌘K)`}

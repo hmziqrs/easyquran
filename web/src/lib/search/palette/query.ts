@@ -10,9 +10,7 @@ const LEADING_WORD = /^([\p{L}][\p{L}'’-]*)/u;
  * exactly like `2:255`.
  */
 const DIGIT = "0-9\u0660-\u0669\u06f0-\u06f9";
-const TRAILING_REF = new RegExp(
-  `([${DIGIT}]{1,4})(?:\\s*[:.\\-\\s]\\s*([${DIGIT}]{1,4}))?\\s*$`,
-);
+const TRAILING_REF = new RegExp(`([${DIGIT}]{1,4})(?:\\s*[:.\\-\\s]\\s*([${DIGIT}]{1,4}))?\\s*$`);
 const BARE_NUMBER = new RegExp(`^[${DIGIT}]{1,4}$`);
 
 /** Folds Arabic-Indic and Persian digits onto ASCII so `Number()` can read them. */
