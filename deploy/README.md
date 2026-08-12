@@ -36,8 +36,9 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 ```bash
 git clone <repo> /opt/easyquran && cd /opt/easyquran
 cp deploy/.env.example .env
-$EDITOR .env                 # DOMAIN, COOKIE_KEY (openssl rand -hex 32), PROXY_NETWORK…
-# your external Traefik must already own the PROXY_NETWORK (e.g. `web`).
+$EDITOR .env                 # DOMAIN, COOKIE_KEY, FIELD_ENC_KEY, INTERNAL_QURAN_API_TOKEN, ALLOWED_ORIGINS
+# Proxy topology defaults to stock Dokploy (PROXY_NETWORK/HTTPS_ENTRYPOINT/ACME_RESOLVER
+# in docker-compose.yml) — override in .env only if your Traefik is non-stock.
 docker compose up -d --build
 ```
 
@@ -99,14 +100,20 @@ brotli/gzip is offered; translated SSR goes cold → warm through the disk cache
 the API exposes Quran pool metrics; an unknown URL returns the branded 404; and
 the offline pack + manifest are served correctly. Exits non-zero on any hard failure.
 
-## The dual API URL
+## API URL resolution
 
-| Surface | Var | Value |
+All four used to be env vars. With web+api co-located on one Docker network they
+collapse: the internal base is a hardcoded invariant, the public bases derive
+from `DOMAIN`, and the unused `INTERNAL_API_BASE_URL` is deleted.
+
+| Surface | Where set | Value |
 |---|---|---|
-| Browser | `PUBLIC_API_BASE_URL` | `https://easyquran.fyi/api` (baked into the bundle) |
-| Browser Quran | `PUBLIC_QURAN_API_BASE` | `https://easyquran.fyi/api/quran` (baked into the bundle) |
-| Node Quran SSR | `INTERNAL_QURAN_API_BASE` | `http://api:8888/quran` (runtime-private) |
-| Other server work | `INTERNAL_API_BASE_URL` | `http://api:8888` (runtime-private) |
+| Browser | `PUBLIC_API_BASE_URL` in compose | `https://${DOMAIN}/api` (runtime `$env/dynamic/public`, derived from `DOMAIN`) |
+| Browser Quran | `PUBLIC_QURAN_API_BASE` in compose | `https://${DOMAIN}/api/quran` (runtime, derived) |
+| SSR Quran | `INTERNAL_QURAN_API_BASE` in compose | `http://api:8888/quran` (co-located invariant, literal) |
+
+`PUBLIC_*` are read at runtime via `$env/dynamic/public` (not build-baked), so
+they live in the web container's `environment:`, not in build args.
 
 ## Ingress identity contract (W2)
 
@@ -282,3 +289,14 @@ mail with SPF+DKIM pass.
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
 - VPS needs ≥2 GB RAM for the Rust build (add swap on smaller boxes).
+- Env normalization: the production `.env` is intentionally minimal (5 required
+  vars — see `deploy/.env.example`). Everything else is a co-location invariant
+  hardcoded in `docker-compose.yml` (`RUST_ENV`, `IP_SOURCE`,
+  `INTERNAL_QURAN_API_BASE`), an interpolated compose default overridable via
+  `.env` (the `S3_*` dummies, `MAIL_*`, proxy topology, all `QURAN_*` tuning), or
+  a code default. `S3_*` / `MAIL_PROVIDER` set in the Dokploy env tab override
+  the compose dummies when media/auth are wired — no compose edit needed.
+- `just docker-up prod` (root `.env`, no local override) boots the api with
+  `RUST_ENV=production` and so fails closed unless the root `.env` carries real
+  `COOKIE_KEY` / `FIELD_ENC_KEY` / `INTERNAL_QURAN_API_TOKEN` / `ALLOWED_ORIGINS`.
+  Use the Dokploy flow for production; use `just docker-up local` for local dev.
