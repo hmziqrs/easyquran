@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
     Json,
 };
@@ -22,7 +22,7 @@ use crate::{
 use super::{
     service::{
         build_apple_authorize_url, exchange_apple_code, load_apple_config,
-        mint_apple_client_secret, verify_apple_id_token,
+        load_apple_token_audiences, mint_apple_client_secret, verify_apple_id_token,
     },
     validator::{AppleCallbackQuery, AppleExchangeRequest, AppleTokenRequest},
 };
@@ -133,37 +133,70 @@ pub async fn apple_exchange(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id, result))]
+#[instrument(skip(headers), fields(result))]
+pub async fn apple_token_nonce(headers: HeaderMap) -> Result<impl IntoResponse, ErrorResponse> {
+    oauth::ensure_native_token_request(&headers)?;
+    let challenge = oauth::issue_native_token_challenge(oauth::NativeTokenProvider::Apple)?;
+    tracing::Span::current().record("result", "success");
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "nonce": challenge.nonce,
+            "providerNonce": challenge.provider_nonce,
+            "expiresIn": oauth::NATIVE_TOKEN_NONCE_TTL_SECS
+        })),
+    ))
+}
+
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
 pub async fn apple_token(
     State(state): State<AppState>,
     mut auth: AuthSession,
+    headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<AppleTokenRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Apple mobile token sign-in");
 
-    let cfg = load_apple_config()?;
+    oauth::ensure_native_token_request(&headers)?;
 
-    // No OIDC nonce: the native Sign in with Apple flow never bound one, unlike the web code flow.
-    let claims = verify_apple_id_token(&payload.identity_token, &cfg.client_id, None)
+    let audiences = load_apple_token_audiences()?;
+    let allowed_audiences: Vec<&str> = audiences.iter().map(String::as_str).collect();
+
+    // Verify signature and identity claims before atomically consuming signed one-time nonce.
+    let claims = verify_apple_id_token(&payload.identity_token, &allowed_audiences, None)
         .await
         .map_err(|e| {
             warn!(error = ?e, "Apple mobile identity_token verification failed");
             tracing::Span::current().record("result", "invalid_token");
             e
         })?;
+    oauth::consume_native_token_nonce(oauth::NativeTokenProvider::Apple, claims.nonce.as_deref())?;
 
-    let email = claims.email.clone().ok_or_else(|| {
-        warn!("Apple id_token carried no email; cannot create/link account");
-        ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Apple did not provide an email address")
-    })?;
+    if claims.sub.trim().is_empty() {
+        warn!("Apple id_token carried an empty subject");
+        return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+            .with_message("Invalid Apple identity token"));
+    }
+
+    let email = claims
+        .email
+        .clone()
+        .filter(|value| !value.trim().is_empty());
+    let name = "Apple User".to_string();
+    let provider_profile = json!({
+        "name": &name,
+        "email": &email,
+        "picture": serde_json::Value::Null,
+    });
 
     let user = oauth::find_or_create_user_for_oauth(
         &state,
         oauth::OAuthProvider::Apple,
         &claims.sub,
         email,
-        "Apple User".to_string(),
+        name,
         claims.is_email_verified(),
     )
     .await?;
@@ -175,9 +208,11 @@ pub async fn apple_token(
 
     Ok((
         StatusCode::OK,
+        session_rotated_headers(true),
         Json(json!({
             "success": true,
             "user": user,
+            "providerProfile": provider_profile,
             "message": "Successfully authenticated with Apple"
         })),
     ))
@@ -217,14 +252,17 @@ async fn finish_apple_code(
     )
     .await?;
 
-    let claims =
-        verify_apple_id_token(&token_resp.id_token, &cfg.client_id, nonce.as_deref()).await?;
+    let claims = verify_apple_id_token(
+        &token_resp.id_token,
+        &[cfg.client_id.as_str()],
+        nonce.as_deref(),
+    )
+    .await?;
 
-    let email = claims.email.clone().ok_or_else(|| {
-        warn!("Apple id_token carried no email; cannot create/link account");
-        ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Apple did not provide an email address")
-    })?;
+    let email = claims
+        .email
+        .clone()
+        .filter(|value| !value.trim().is_empty());
 
     let email_verified = claims.is_email_verified();
     let name = "Apple User".to_string();
@@ -241,4 +279,16 @@ async fn finish_apple_code(
 
     oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Apple).await?;
     Ok(user)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::modules::auth_v1::controller::{session_rotated_headers, SESSION_ROTATED};
+
+    #[test]
+    fn token_login_rotation_header_is_present() {
+        let headers = session_rotated_headers(true);
+
+        assert_eq!(headers.get(SESSION_ROTATED).unwrap(), "1");
+    }
 }

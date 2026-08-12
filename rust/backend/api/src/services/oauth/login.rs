@@ -57,7 +57,7 @@ pub async fn find_or_create_user_for_oauth(
     state: &AppState,
     provider: OAuthProvider,
     provider_user_id: &str,
-    email: String,
+    email: Option<String>,
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
@@ -76,15 +76,16 @@ pub async fn find_or_create_user_for_oauth(
         return Ok(user);
     }
 
+    let email = email
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            warn!("OAuth provider returned no email for an unlinked identity");
+            ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                .with_message("The provider did not provide an email address")
+        })?;
+    ensure_verified_oauth_email(email_verified)?;
+
     if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
-        if !email_verified {
-            warn!(
-                user_id = existing.id,
-                "Refusing to link OAuth account: IdP email is not verified"
-            );
-            return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-                .with_message("Unable to link this account"));
-        }
         info!(
             user_id = existing.id,
             "Linking OAuth account to existing user"
@@ -97,12 +98,6 @@ pub async fn find_or_create_user_for_oauth(
         )
         .await?;
         return Ok(existing);
-    }
-
-    if !email_verified {
-        warn!("Refusing to create account from OAuth: IdP email is not verified");
-        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("The provider has not verified this email address"));
     }
 
     info!("Creating new user from OAuth account");
@@ -127,6 +122,15 @@ pub async fn find_or_create_user_for_oauth(
     link_identity(&state.sea_db, user.id, provider.as_str(), provider_user_id).await?;
     tracing::Span::current().record("user_id", user.id);
     Ok(user)
+}
+
+fn ensure_verified_oauth_email(email_verified: bool) -> Result<(), ErrorResponse> {
+    if !email_verified {
+        warn!("Refusing OAuth login: IdP email is not verified");
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("The provider has not verified this email address"));
+    }
+    Ok(())
 }
 
 async fn link_identity(
@@ -190,4 +194,16 @@ pub fn generate_oauth_nonce() -> String {
     let mut bytes = [0u8; 16];
     rand::rng().fill(&mut bytes);
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unverified_email_cannot_link_or_create_oauth_account() {
+        let result = ensure_verified_oauth_email(false);
+
+        assert!(result.is_err(), "unverified email must not link or create");
+    }
 }

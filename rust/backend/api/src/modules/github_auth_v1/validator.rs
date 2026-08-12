@@ -26,9 +26,7 @@ pub struct GitHubCallbackQuery {
 impl GitHubCallbackQuery {
     /// GitHub signalled cancellation or an error (`?error=access_denied`, etc.).
     pub fn is_error(&self) -> bool {
-        self.error.is_some()
-            || self.error_description.is_some()
-            || self.error_uri.is_some()
+        self.error.is_some() || self.error_description.is_some() || self.error_uri.is_some()
     }
 
     pub fn code(&self) -> Result<String, crate::error::ErrorResponse> {
@@ -75,12 +73,22 @@ pub struct GitHubExchangeRequest {
     pub state: String,
 }
 
+// Native GitHub OAuth flow: the app obtains a user access token and posts it here.
+#[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct GitHubTokenRequest {
+    #[validate(length(min = 1, max = 16384))]
+    pub access_token: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubUserInfo {
     pub id: i64,
     pub login: String,
     pub name: Option<String>,
     pub email: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,5 +167,37 @@ mod tests {
     fn rejects_empty_query() {
         let query = empty();
         assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn token_request_accepts_bounded_access_token() {
+        let request = GitHubTokenRequest {
+            access_token: "github-user-token".to_string(),
+        };
+
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn token_request_rejects_empty_or_oversized_access_token() {
+        let empty = GitHubTokenRequest {
+            access_token: String::new(),
+        };
+        let oversized = GitHubTokenRequest {
+            access_token: "x".repeat(16385),
+        };
+
+        assert!(empty.validate().is_err());
+        assert!(oversized.validate().is_err());
+    }
+
+    #[test]
+    fn token_request_rejects_unknown_fields() {
+        let result = serde_json::from_value::<GitHubTokenRequest>(serde_json::json!({
+            "access_token": "github-user-token",
+            "unexpected": true
+        }));
+
+        assert!(result.is_err());
     }
 }

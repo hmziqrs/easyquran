@@ -79,10 +79,11 @@ pub struct FacebookExchangeRequest {
     pub state: String,
 }
 
-// Mobile (Facebook Login SDK) flow: the app obtains a user access_token natively and posts it here — no web redirect/code exchange round-trip.
+// Mobile Facebook Login flow: app obtains a user access token and posts it here.
 #[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(deny_unknown_fields)]
 pub struct FacebookTokenRequest {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, max = 16384))]
     pub access_token: String,
 }
 
@@ -91,6 +92,18 @@ pub struct FacebookUserInfo {
     pub id: String,
     pub email: Option<String>,
     pub name: Option<String>,
+    #[serde(default)]
+    pub picture: Option<FacebookPicture>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FacebookPicture {
+    pub data: FacebookPictureData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FacebookPictureData {
+    pub url: String,
 }
 
 #[cfg(test)]
@@ -170,5 +183,34 @@ mod tests {
     fn rejects_empty_query() {
         let query = empty();
         assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_unknown_identity_fields() {
+        let request = serde_json::from_value::<FacebookTokenRequest>(serde_json::json!({
+            "access_token": "facebook-user-access-token",
+            "email": "attacker-controlled@example.com"
+        }));
+
+        assert!(request.is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_empty_token() {
+        let request: FacebookTokenRequest = serde_json::from_value(serde_json::json!({
+            "access_token": ""
+        }))
+        .unwrap();
+
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_oversized_token() {
+        let request = FacebookTokenRequest {
+            access_token: "x".repeat(16385),
+        };
+
+        assert!(request.validate().is_err());
     }
 }

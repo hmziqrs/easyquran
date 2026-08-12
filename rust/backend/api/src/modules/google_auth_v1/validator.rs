@@ -28,9 +28,7 @@ pub struct GoogleCallbackQuery {
 impl GoogleCallbackQuery {
     /// Provider signalled cancellation or an error (`?error=access_denied`, etc.).
     pub fn is_error(&self) -> bool {
-        self.error.is_some()
-            || self.error_description.is_some()
-            || self.error_reason.is_some()
+        self.error.is_some() || self.error_description.is_some() || self.error_reason.is_some()
     }
 
     /// Success-shape authorization code; errors if this is not a success-shape callback.
@@ -79,11 +77,16 @@ pub struct GoogleExchangeRequest {
     pub state: String,
 }
 
-// Mobile (Google Sign-In SDK) flow: the app obtains a Google id_token natively and posts it here — no web redirect/code/state round-trip.
+// Mobile Google Sign-In flow: id_token proves identity; optional access_token lets the backend
+// fetch current profile claims from Google UserInfo without trusting client-supplied profile data.
 #[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(deny_unknown_fields)]
 pub struct GoogleTokenRequest {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, max = 16384))]
     pub id_token: String,
+    #[serde(default)]
+    #[validate(length(min = 1, max = 16384))]
+    pub access_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,7 +112,11 @@ mod tests {
         }
     }
 
-    fn error_shape(error: Option<&str>, desc: Option<&str>, reason: Option<&str>) -> GoogleCallbackQuery {
+    fn error_shape(
+        error: Option<&str>,
+        desc: Option<&str>,
+        reason: Option<&str>,
+    ) -> GoogleCallbackQuery {
         GoogleCallbackQuery {
             code: None,
             state: None,
@@ -167,5 +174,63 @@ mod tests {
             error_reason: None,
         };
         assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_accepts_google_access_token() {
+        let request: GoogleTokenRequest = serde_json::from_value(serde_json::json!({
+            "id_token": "signed-google-id-token",
+            "access_token": "google-user-access-token"
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.access_token.as_deref(),
+            Some("google-user-access-token")
+        );
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn mobile_token_request_keeps_access_token_optional() {
+        let request: GoogleTokenRequest = serde_json::from_value(serde_json::json!({
+            "id_token": "signed-google-id-token"
+        }))
+        .unwrap();
+
+        assert_eq!(request.access_token, None);
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_empty_access_token() {
+        let request: GoogleTokenRequest = serde_json::from_value(serde_json::json!({
+            "id_token": "signed-google-id-token",
+            "access_token": ""
+        }))
+        .unwrap();
+
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_client_supplied_identity() {
+        let request = serde_json::from_value::<GoogleTokenRequest>(serde_json::json!({
+            "id_token": "signed-google-id-token",
+            "email": "attacker-controlled@example.com",
+            "name": "Attacker Controlled"
+        }));
+
+        assert!(request.is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_oversized_id_token() {
+        let request = GoogleTokenRequest {
+            id_token: "x".repeat(16385),
+            access_token: None,
+        };
+
+        assert!(request.validate().is_err());
     }
 }

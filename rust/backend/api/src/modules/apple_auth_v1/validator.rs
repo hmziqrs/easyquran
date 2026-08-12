@@ -71,10 +71,11 @@ pub struct AppleExchangeRequest {
     pub state: String,
 }
 
-// Mobile (native Sign in with Apple) flow: the app obtains an identity_token natively and posts it here — no web redirect/code/state round-trip.
+// Mobile Sign in with Apple flow: app obtains a signed identity token and posts it here.
 #[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(deny_unknown_fields)]
 pub struct AppleTokenRequest {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, max = 16384))]
     pub identity_token: String,
 }
 
@@ -164,5 +165,34 @@ mod tests {
             error_description: None,
         };
         assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_unknown_identity_fields() {
+        let request = serde_json::from_value::<AppleTokenRequest>(serde_json::json!({
+            "identity_token": "signed-apple-identity-token",
+            "email": "attacker-controlled@example.com"
+        }));
+
+        assert!(request.is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_empty_token() {
+        let request: AppleTokenRequest = serde_json::from_value(serde_json::json!({
+            "identity_token": ""
+        }))
+        .unwrap();
+
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn mobile_token_request_rejects_oversized_token() {
+        let request = AppleTokenRequest {
+            identity_token: "x".repeat(16385),
+        };
+
+        assert!(request.validate().is_err());
     }
 }

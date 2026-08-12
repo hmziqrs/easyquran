@@ -1,6 +1,8 @@
+use std::sync::LazyLock;
+
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
     Json,
 };
@@ -27,6 +29,19 @@ use super::{
     service::{get_google_oauth_client, verify_google_id_token, GoogleIdTokenClaims},
     validator::{GoogleCallbackQuery, GoogleExchangeRequest, GoogleTokenRequest, GoogleUserInfo},
 };
+
+const GOOGLE_USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_USERINFO_MAX_BYTES: usize = 64 * 1024;
+static GOOGLE_USERINFO_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
+    LazyLock::new(|| {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(15))
+            .pool_idle_timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|error| error.to_string())
+    });
 
 #[debug_handler]
 #[instrument(skip(_state, session), fields(result))]
@@ -196,13 +211,33 @@ pub async fn google_exchange(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id, result))]
+#[instrument(skip(headers), fields(result))]
+pub async fn google_token_nonce(headers: HeaderMap) -> Result<impl IntoResponse, ErrorResponse> {
+    oauth::ensure_native_token_request(&headers)?;
+    let challenge = oauth::issue_native_token_challenge(oauth::NativeTokenProvider::Google)?;
+    tracing::Span::current().record("result", "success");
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "nonce": challenge.nonce,
+            "providerNonce": challenge.provider_nonce,
+            "expiresIn": oauth::NATIVE_TOKEN_NONCE_TTL_SECS
+        })),
+    ))
+}
+
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
 pub async fn google_token(
     State(state): State<AppState>,
     mut auth: AuthSession,
+    headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<GoogleTokenRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Google mobile token sign-in");
+
+    oauth::ensure_native_token_request(&headers)?;
 
     // Native Google SDKs mint id_tokens whose `aud` is the Android/iOS client ID, not the web
     // client — accept every configured audience so a device-issued token verifies here too.
@@ -222,7 +257,7 @@ pub async fn google_token(
     }
     let allowed_auds: Vec<&str> = allowed_auds.iter().map(String::as_str).collect();
 
-    // No OIDC nonce: the mobile SDK flow never bound one, unlike the web code flow at /callback.
+    // Verify signature and identity claims before atomically consuming signed one-time nonce.
     let claims = verify_google_id_token(&payload.id_token, &allowed_auds, None)
         .await
         .map_err(|e| {
@@ -230,23 +265,21 @@ pub async fn google_token(
             tracing::Span::current().record("result", "invalid_token");
             e
         })?;
+    oauth::consume_native_token_nonce(oauth::NativeTokenProvider::Google, claims.nonce.as_deref())?;
 
-    // The id_token carries no display name (the web flow gets one from the userinfo endpoint, which
-    // needs an access_token we don't have); derive one from the email so the record isn't blank.
-    let local_part = claims.email.split('@').next().unwrap_or("");
-    let name = if local_part.is_empty() {
-        "Google User".to_string()
+    let user_info = if let Some(access_token) = payload.access_token.as_deref() {
+        let provider_profile = fetch_google_user_info(access_token).await?;
+        reconcile_google_user_info(&claims, provider_profile)?
     } else {
-        local_part.to_string()
-    };
-    let user_info = GoogleUserInfo {
-        id: claims.sub,
-        email: claims.email,
-        name,
-        picture: None,
-        verified_email: claims.email_verified.unwrap_or(false),
+        let token_profile = google_user_info_from_claims(&claims);
+        reconcile_google_user_info(&claims, token_profile)?
     };
 
+    let provider_profile = json!({
+        "name": &user_info.name,
+        "email": &user_info.email,
+        "picture": &user_info.picture,
+    });
     let user = find_or_create_user(&state, user_info).await?;
     tracing::Span::current().record("user_id", user.id);
 
@@ -257,9 +290,11 @@ pub async fn google_token(
 
     Ok((
         StatusCode::OK,
+        session_rotated_headers(true),
         Json(json!({
             "success": true,
             "user": user,
+            "providerProfile": provider_profile,
             "message": "Successfully authenticated with Google"
         })),
     ))
@@ -292,25 +327,18 @@ async fn finish_google_login(
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("GOOGLE_CLIENT_ID not configured")
     })?;
-    let id_claims: Option<GoogleIdTokenClaims> =
+    let id_claims =
         match verify_google_id_token(id_token, &[client_id.as_str()], expected_nonce).await {
-            Ok(claims) => Some(claims),
+            Ok(claims) => claims,
             Err(err) => {
                 warn!(error = ?err, "id_token verification failed; rejecting login");
                 return Err(err);
             }
         };
 
-    let user_info = fetch_google_user_info(&state.http_client, access_token).await?;
+    let provider_profile = fetch_google_user_info(access_token).await?;
     info!("Retrieved user info from Google");
-
-    if let Some(claims) = &id_claims {
-        if claims.sub != user_info.id || claims.email != user_info.email {
-            warn!("id_token/userinfo identity mismatch — rejecting login");
-            return Err(ErrorResponse::new(ErrorCode::InvalidToken)
-                .with_message("OAuth identity verification failed"));
-        }
-    }
+    let user_info = reconcile_google_user_info(&id_claims, provider_profile)?;
 
     let user = find_or_create_user(state, user_info).await?;
     tracing::Span::current().record("user_id", user.id);
@@ -320,12 +348,93 @@ async fn finish_google_login(
     Ok(user)
 }
 
-async fn fetch_google_user_info(
+fn google_user_info_from_claims(claims: &GoogleIdTokenClaims) -> GoogleUserInfo {
+    let fallback_name = claims
+        .email
+        .split('@')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Google User");
+    let name = claims
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback_name)
+        .to_string();
+    let picture = claims
+        .picture
+        .as_deref()
+        .map(str::trim)
+        .filter(|picture| !picture.is_empty())
+        .map(str::to_string);
+
+    GoogleUserInfo {
+        id: claims.sub.clone(),
+        email: claims.email.clone(),
+        name,
+        picture,
+        verified_email: claims.email_verified.unwrap_or(false),
+    }
+}
+
+fn reconcile_google_user_info(
+    claims: &GoogleIdTokenClaims,
+    mut user_info: GoogleUserInfo,
+) -> Result<GoogleUserInfo, ErrorResponse> {
+    if claims.sub.trim().is_empty()
+        || claims.email.trim().is_empty()
+        || claims.email_verified != Some(true)
+        || user_info.id.trim().is_empty()
+        || user_info.email.trim().is_empty()
+        || !user_info.verified_email
+    {
+        warn!("Google returned incomplete or unverified identity claims");
+        return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+            .with_message("OAuth identity verification failed"));
+    }
+
+    if claims.sub != user_info.id || claims.email != user_info.email {
+        warn!("id_token/userinfo identity mismatch — rejecting login");
+        return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+            .with_message("OAuth identity verification failed"));
+    }
+
+    let token_profile = google_user_info_from_claims(claims);
+    if user_info.name.trim().is_empty() {
+        user_info.name = token_profile.name;
+    }
+    if user_info
+        .picture
+        .as_deref()
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        user_info.picture = token_profile.picture;
+    }
+
+    Ok(user_info)
+}
+
+fn google_userinfo_http_client() -> Result<&'static reqwest::Client, ErrorResponse> {
+    GOOGLE_USERINFO_HTTP_CLIENT.as_ref().map_err(|error| {
+        error!(error = %error, "Failed to build Google UserInfo HTTP client");
+        ErrorResponse::new(ErrorCode::ExternalServiceError)
+            .with_message("Failed to fetch user info from Google")
+    })
+}
+
+async fn fetch_google_user_info(access_token: &str) -> Result<GoogleUserInfo, ErrorResponse> {
+    let http_client = google_userinfo_http_client()?;
+    fetch_google_user_info_from_url(http_client, GOOGLE_USERINFO_URL, access_token).await
+}
+
+async fn fetch_google_user_info_from_url(
     http_client: &reqwest::Client,
+    url: &str,
     access_token: &str,
 ) -> Result<GoogleUserInfo, ErrorResponse> {
-    http_client
-        .get("https://www.googleapis.com/oauth2/v2/userinfo")
+    let mut response = http_client
+        .get(url)
         .bearer_auth(access_token)
         .send()
         .await
@@ -333,20 +442,60 @@ async fn fetch_google_user_info(
             error!(error = ?e, "Failed to fetch user info from Google");
             ErrorResponse::new(ErrorCode::ExternalServiceError)
                 .with_message("Failed to fetch user info from Google")
-        })?
-        .json()
-        .await
-        .map_err(|e| {
-            error!(error = ?e, "Failed to parse user info from Google");
-            ErrorResponse::new(ErrorCode::ExternalServiceError)
-                .with_message("Failed to parse user info from Google")
-        })
+        })?;
+
+    let status = response.status();
+    if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+        warn!(status = %status, "Google rejected UserInfo access token");
+        return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+            .with_message("Google access token is invalid or expired"));
+    }
+    if !status.is_success() {
+        error!(status = %status, "Google UserInfo endpoint returned non-2xx");
+        return Err(ErrorResponse::new(ErrorCode::ExternalServiceError)
+            .with_message("Failed to fetch user info from Google"));
+    }
+
+    if response
+        .content_length()
+        .is_some_and(|length| length > GOOGLE_USERINFO_MAX_BYTES as u64)
+    {
+        error!("Google UserInfo content length exceeded size limit");
+        return Err(ErrorResponse::new(ErrorCode::ExternalServiceError)
+            .with_message("Failed to fetch user info from Google"));
+    }
+
+    let mut body = Vec::with_capacity(GOOGLE_USERINFO_MAX_BYTES.min(4096));
+    while let Some(chunk) = response.chunk().await.map_err(|e| {
+        error!(error = ?e, "Failed to read Google user info");
+        ErrorResponse::new(ErrorCode::ExternalServiceError)
+            .with_message("Failed to fetch user info from Google")
+    })? {
+        if body.len().saturating_add(chunk.len()) > GOOGLE_USERINFO_MAX_BYTES {
+            error!("Google UserInfo response exceeded size limit");
+            return Err(ErrorResponse::new(ErrorCode::ExternalServiceError)
+                .with_message("Failed to fetch user info from Google"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+
+    serde_json::from_slice(&body).map_err(|e: serde_json::Error| {
+        error!(error = ?e, "Failed to parse user info from Google");
+        ErrorResponse::new(ErrorCode::ExternalServiceError)
+            .with_message("Failed to parse user info from Google")
+    })
 }
 
 async fn find_or_create_user(
     state: &AppState,
     user_info: GoogleUserInfo,
 ) -> Result<user::Model, ErrorResponse> {
+    if !user_info.verified_email {
+        warn!("Refusing Google login: IdP email is not verified");
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Google has not verified this email address"));
+    }
+
     if let Some(existing_user) =
         user::Entity::find_by_google_id(&state.sea_db, user_info.id.clone()).await?
     {
@@ -360,16 +509,6 @@ async fn find_or_create_user(
     if let Some(existing_user) =
         user::Entity::find_by_email(&state.sea_db, user_info.email.clone()).await?
     {
-        // Gate on verified_email — else an unverified Google account hijacks the victim's existing account.
-        if !user_info.verified_email {
-            warn!(
-                user_id = existing_user.id,
-                "Refusing to link Google account: IdP email is not verified"
-            );
-            return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-                .with_message("Unable to link this Google account"));
-        }
-
         info!(
             user_id = existing_user.id,
             "Linking Google account to existing user"
@@ -390,13 +529,6 @@ async fn find_or_create_user(
         return Ok(existing_user);
     }
 
-    // Same gate on create — without it an unverified email squats a new account at the victim's address.
-    if !user_info.verified_email {
-        warn!("Refusing to create account from Google: IdP email is not verified");
-        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-            .with_message("Google has not verified this email address"));
-    }
-
     info!("Creating new user from Google account");
     user::Entity::create_from_google(
         &state.sea_db,
@@ -409,7 +541,199 @@ async fn find_or_create_user(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::modules::auth_v1::controller::{session_rotated_headers, SESSION_ROTATED};
+    use axum::http::header::ORIGIN;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn mobile_claims() -> GoogleIdTokenClaims {
+        GoogleIdTokenClaims {
+            sub: "google-sub-123".to_string(),
+            email: "aisha@example.com".to_string(),
+            email_verified: Some(true),
+            name: Some("Aisha Khan".to_string()),
+            picture: Some("https://profiles.google.test/aisha.jpg".to_string()),
+            nonce: None,
+        }
+    }
+
+    #[test]
+    fn id_token_profile_is_used_when_access_token_is_absent() {
+        let claims = mobile_claims();
+
+        let profile = google_user_info_from_claims(&claims);
+
+        assert_eq!(profile.name, "Aisha Khan");
+        assert_eq!(
+            profile.picture.as_deref(),
+            Some("https://profiles.google.test/aisha.jpg")
+        );
+    }
+
+    #[test]
+    fn userinfo_subject_mismatch_is_rejected() {
+        let claims = mobile_claims();
+        let user_info = GoogleUserInfo {
+            id: "different-google-sub".to_string(),
+            email: claims.email.clone(),
+            name: "Aisha Khan".to_string(),
+            picture: None,
+            verified_email: true,
+        };
+
+        let result = reconcile_google_user_info(&claims, user_info);
+
+        assert!(
+            result.is_err(),
+            "mismatched Google subject must be rejected"
+        );
+    }
+
+    #[test]
+    fn userinfo_email_mismatch_is_rejected() {
+        let claims = mobile_claims();
+        let user_info = GoogleUserInfo {
+            id: claims.sub.clone(),
+            email: "different@example.com".to_string(),
+            name: "Aisha Khan".to_string(),
+            picture: None,
+            verified_email: true,
+        };
+
+        let result = reconcile_google_user_info(&claims, user_info);
+
+        assert!(result.is_err(), "mismatched Google email must be rejected");
+    }
+
+    #[test]
+    fn unverified_id_token_email_is_rejected() {
+        let mut claims = mobile_claims();
+        claims.email_verified = Some(false);
+        let user_info = google_user_info_from_claims(&claims);
+
+        let result = reconcile_google_user_info(&claims, user_info);
+
+        assert!(result.is_err(), "unverified Google email must be rejected");
+    }
+
+    #[test]
+    fn unverified_userinfo_email_is_rejected() {
+        let claims = mobile_claims();
+        let mut user_info = google_user_info_from_claims(&claims);
+        user_info.verified_email = false;
+
+        let result = reconcile_google_user_info(&claims, user_info);
+
+        assert!(
+            result.is_err(),
+            "unverified UserInfo email must be rejected"
+        );
+    }
+
+    #[test]
+    fn native_token_request_rejects_browser_origin() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ORIGIN, "https://easyquran.fyi".parse().unwrap());
+
+        let result = oauth::ensure_native_token_request(&headers);
+
+        assert!(
+            result.is_err(),
+            "browser-origin token exchange must be rejected"
+        );
+    }
+
+    #[test]
+    fn native_token_request_accepts_missing_origin() {
+        let result = oauth::ensure_native_token_request(&HeaderMap::new());
+
+        assert!(
+            result.is_ok(),
+            "native requests do not send an Origin header"
+        );
+    }
+
+    #[tokio::test]
+    async fn userinfo_request_uses_bearer_token_and_decodes_profile() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/userinfo"))
+            .and(header("authorization", "Bearer fake-google-access-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "google-sub-123",
+                "email": "aisha@example.com",
+                "name": "Aisha Khan",
+                "picture": "https://profiles.google.test/aisha.jpg",
+                "verified_email": true
+            })))
+            .mount(&server)
+            .await;
+        let client = google_userinfo_http_client().unwrap();
+
+        let result = fetch_google_user_info_from_url(
+            client,
+            &format!("{}/userinfo", server.uri()),
+            "fake-google-access-token",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.name, "Aisha Khan");
+    }
+
+    #[tokio::test]
+    async fn userinfo_unauthorized_response_is_invalid_token() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/userinfo"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let client = google_userinfo_http_client().unwrap();
+
+        let error = fetch_google_user_info_from_url(
+            client,
+            &format!("{}/userinfo", server.uri()),
+            "expired-google-access-token",
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::InvalidToken);
+    }
+
+    #[tokio::test]
+    async fn userinfo_redirect_is_not_followed() {
+        let target = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/leak-target"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&target)
+            .await;
+
+        let source = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/userinfo"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("location", format!("{}/leak-target", target.uri())),
+            )
+            .mount(&source)
+            .await;
+        let client = google_userinfo_http_client().unwrap();
+
+        let error = fetch_google_user_info_from_url(
+            client,
+            &format!("{}/userinfo", source.uri()),
+            "must-not-cross-redirect",
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::ExternalServiceError);
+    }
 
     // W8B-003: regression guard that the rotation header is emitted on the
     // success path of a session-rotating endpoint (login / OAuth exchange).
