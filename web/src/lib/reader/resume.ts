@@ -6,29 +6,30 @@ import { publicHref } from "$lib/i18n/public-href";
 import { getLocale } from "$lib/paraglide/runtime.js";
 import type { UiLocale } from "$lib/i18n/locales";
 import { reader } from "$lib/stores/reader.svelte";
+import type { LastReadAnchor } from "$lib/stores/reader-core.svelte";
 
-export type ResumeOptions = { replaceState?: boolean };
+export type ResumeOptions = { replaceState?: boolean; anchor?: LastReadAnchor | null };
 
-export async function resumeToLastRead(
+export async function resumeToVerse(
+  num: number,
+  n: number,
+  sourceId: string | undefined,
   currentCtx: SurahRouteContext,
   options: ResumeOptions = {},
 ): Promise<boolean> {
-  const lastRead = reader.lastRead;
-  if (!lastRead) return false;
-  const anchor = reader.lastReadAnchor;
   try {
     const quranData = await loadQuranData();
-    const surah = quranData.surahByNum(lastRead.num);
-    const targetPage = quranData.surahLocalPageForAyah(lastRead.num, lastRead.n);
+    const surah = quranData.surahByNum(num);
+    const targetPage = quranData.surahLocalPageForAyah(num, n);
     if (!surah || !targetPage) return false;
-    const resumeCtx = resumeCtxFor(lastRead, currentCtx);
-    reader.openVerse(lastRead.num, lastRead.n, lastRead.sourceId);
-    if (anchor) reader.setPendingAnchor(anchor);
+    const resumeCtx = resumeCtxFor(sourceId !== undefined ? { sourceId } : null, currentCtx);
+    reader.openVerse(num, n, sourceId);
+    if (options.anchor) reader.setPendingAnchor(options.anchor);
     await goto(
       publicHref(
         readerHrefFor(
           getLocale() as UiLocale,
-          surahAyahPathFor(resumeCtx, surah, targetPage.localPage, lastRead.n),
+          surahAyahPathFor(resumeCtx, surah, targetPage.localPage, n),
         ),
       ),
       {
@@ -40,4 +41,16 @@ export async function resumeToLastRead(
   } catch {
     return false;
   }
+}
+
+export async function resumeToLastRead(
+  currentCtx: SurahRouteContext,
+  options: ResumeOptions = {},
+): Promise<boolean> {
+  const lastRead = reader.lastRead;
+  if (!lastRead) return false;
+  return resumeToVerse(lastRead.num, lastRead.n, lastRead.sourceId, currentCtx, {
+    ...options,
+    anchor: reader.lastReadAnchor,
+  });
 }

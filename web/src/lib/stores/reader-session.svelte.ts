@@ -1,7 +1,17 @@
 import { browser } from "$app/environment";
 import type { VerseKey } from "$lib/data/quran";
-import type { BrowseMode, LastReadAnchor, ReaderCore } from "./reader-core.svelte";
+import type { BrowseMode, LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
+
+const RECENTS_CAP = 8;
+
+function pushRecent(s: ReaderCore["s"], num: number, n: number, sourceId?: string): void {
+  const key = `${sourceId ?? "ar"}:${num}`;
+  const rest = s.recents.filter((r) => `${r.sourceId ?? "ar"}:${r.num}` !== key);
+  const entry: RecentsEntry =
+    sourceId !== undefined ? { num, n, sourceId, ts: Date.now() } : { num, n, ts: Date.now() };
+  s.recents = [entry, ...rest].slice(0, RECENTS_CAP);
+}
 
 export function createReaderSession(core: ReaderCore, persistence: ReaderPersistence) {
   return {
@@ -61,6 +71,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.openNote = null;
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       core.s.lastReadAnchor = null;
+      pushRecent(core.s, num, n, sourceId);
       persistence.writeNow();
       if (browser) window.scrollTo(0, 0);
     },
@@ -68,12 +79,14 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       const current = core.s.lastRead;
       if (current?.num === num && current.n === n && current.sourceId === sourceId) return;
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
+      pushRecent(core.s, num, n, sourceId);
       persistence.writeNow();
     },
     clearReadingPosition(): void {
       core.s.lastRead = null;
       core.s.lastReadAnchor = null;
       core.s.pendingAnchor = null;
+      core.s.recents = [];
       persistence.writeNow();
     },
     setLastReadAnchor(anchor: LastReadAnchor | null): void {

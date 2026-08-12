@@ -1,6 +1,6 @@
 import type { VerseKey } from "$lib/data/quran";
 import { peekQuranData } from "$lib/data/quran-data-client";
-import type { LastReadAnchor, ReaderCore } from "./reader-core.svelte";
+import type { LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
 
 export function createAnnotations(core: ReaderCore, persistence: ReaderPersistence) {
@@ -36,6 +36,9 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
     },
     get lastReadAnchor(): LastReadAnchor | null {
       return core.s.lastReadAnchor;
+    },
+    get recentReads(): readonly RecentsEntry[] {
+      return core.s.recents;
     },
   };
 }

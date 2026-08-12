@@ -1,6 +1,6 @@
 import type { VerseKey } from "$lib/data/quran";
 import { createAnnotations } from "./annotations.svelte";
-import { type BrowseMode, type LastReadAnchor, type ReaderMode, createReaderCore } from "./reader-core.svelte";
+import { type BrowseMode, type LastReadAnchor, type ReaderMode, type RecentsEntry, createReaderCore } from "./reader-core.svelte";
 import { createReaderPersistence } from "./reader-persistence.svelte";
 import { createReaderSession } from "./reader-session.svelte";
 import { createReaderSettings } from "./reader-settings.svelte";
@@ -48,6 +48,7 @@ export interface ReaderApi {
   readonly pendingAnchor: LastReadAnchor | null;
   setPendingAnchor(anchor: LastReadAnchor | null): void;
   consumePendingAnchor(): LastReadAnchor | null;
+  readonly recentReads: readonly RecentsEntry[];
   versesFor(num: number): string[];
   seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
   refreshFromWorker(num: number): Promise<void>;
@@ -142,6 +143,9 @@ export function createReader(): ReaderApi {
     },
     setPendingAnchor: (anchor: LastReadAnchor | null) => session.setPendingAnchor(anchor),
     consumePendingAnchor: () => session.consumePendingAnchor(),
+    get recentReads() {
+      return annotations.recentReads;
+    },
 
     versesFor: (num: number) => verseCache.versesFor(num),
     seedAyahs: (ayahs) => verseCache.seedAyahs(ayahs),

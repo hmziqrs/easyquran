@@ -13,7 +13,7 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
-  import { resumeToLastRead } from "$lib/reader/resume";
+  import { resumeToLastRead, resumeToVerse } from "$lib/reader/resume";
 
   let { data } = $props();
   const copy = getReaderUiCopy();
@@ -92,6 +92,28 @@
         </label>
       </div>
     </Card>
+    {@const others = reader.recentReads.filter((r) => r.num !== lr.num || r.sourceId !== lr.sourceId)}
+    {#if others.length > 0}
+      <div class="mt-6 max-w-xl">
+        <p class="text-xs font-medium uppercase tracking-wide text-fg-3">Recent</p>
+        <div class="mt-1 flex flex-col divide-y divide-line rounded-lg border border-line bg-bg-1">
+          {#each others as r (r.num + ":" + r.n + ":" + (r.sourceId ?? ""))}
+            {@const rsurah = quranData?.surahByNum(r.num)}
+            <button
+              type="button"
+              class="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-2"
+              onclick={() => resumeToVerse(r.num, r.n, r.sourceId, { kind: "arabic" })}
+            >
+              <span class="text-sm font-medium text-fg">{rsurah?.name ?? `Surah ${r.num}`}</span>
+              <span class="text-sm text-fg-2">{r.num}:{r.n}</span>
+              {#if sourceLabel(r.sourceId)}
+                <span class="ml-auto text-xs text-fg-3">{sourceLabel(r.sourceId)}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
   {:else}
     <Card class="max-w-xl">
       <h2 class="text-2xl font-semibold text-fg">Start reading</h2>

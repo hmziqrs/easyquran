@@ -160,6 +160,25 @@ describe("createReader — behaviour", () => {
     expect(r.pendingAnchor).toBeNull();
   });
 
+  it("openVerse/markRead push per-surah recents (dedup, move-to-front, clear)", () => {
+    const r = createReader();
+    r.openVerse(2, 5);
+    r.openVerse(2, 255);
+    r.openVerse(36, 1);
+    expect(r.recentReads[0]).toEqual({ num: 36, n: 1, ts: expect.any(Number) });
+    expect(r.recentReads.find((x) => x.num === 2)?.n).toBe(255);
+    expect(r.recentReads.length).toBe(2);
+    r.clearReadingPosition();
+    expect(r.recentReads).toEqual([]);
+  });
+
+  it("openVerse caps recents at the limit", () => {
+    const r = createReader();
+    for (let i = 1; i <= 10; i++) r.openVerse(i, 1);
+    expect(r.recentReads.length).toBeLessThanOrEqual(8);
+    expect(r.recentReads[0]?.num).toBe(10);
+  });
+
   it("two createReader() instances are isolated", () => {
     const a = createReader();
     const b = createReader();
