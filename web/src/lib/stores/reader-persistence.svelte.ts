@@ -1,11 +1,11 @@
 import {
+  asArray,
   asBooleanRecord,
   asLiteral,
   asNullableObject,
   asNumber,
   asObject,
   asStringRecord,
-  isFutureSchema,
   onPageHide,
   onStorageKey,
   readJSON,
@@ -16,19 +16,19 @@ import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
   NOTE_PERSIST_DEBOUNCE_MS,
-  READER_SCHEMA_VERSION,
   SURAH_COUNT,
   READER_MODE_VALUES,
   type Persisted,
   type ReaderCore,
   type ReaderMode,
+  type RecentsEntry,
+  type SurahProgress,
 } from "./reader-core.svelte";
 import { applyReaderPresentation } from "./reader-presentation";
 
 const STORAGE_KEY = "easyquran.reader";
 
 export function decodeReader(raw: unknown): Partial<Persisted> {
-  if (isFutureSchema(raw, READER_SCHEMA_VERSION)) return {};
   const stored = asObject(raw);
   if (!stored) return {};
 
@@ -61,6 +61,47 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
       out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
   }
 
+  const anchorKind = asNullableObject(stored.lastReadAnchor);
+  if (anchorKind === "null") {
+    out.lastReadAnchor = null;
+  } else if (anchorKind === "object") {
+    const a = asObject(stored.lastReadAnchor)!;
+    const verseKey = typeof a.verseKey === "string" ? a.verseKey : undefined;
+    const localPage = asNumber(a.localPage, 1, Number.POSITIVE_INFINITY);
+    const ratio = asNumber(a.ratio, 0, 1);
+    if (verseKey && localPage !== undefined && ratio !== undefined)
+      out.lastReadAnchor = { verseKey, localPage, ratio };
+  }
+
+  if (Array.isArray(stored.recents)) {
+    out.recents = asArray<RecentsEntry>(stored.recents, (item) => {
+      const e = asObject(item);
+      if (!e) return undefined;
+      const num = asNumber(e.num, 1, SURAH_COUNT);
+      const n = asNumber(e.n, 1, Number.POSITIVE_INFINITY);
+      const ts = asNumber(e.ts, 0, Number.POSITIVE_INFINITY);
+      if (num === undefined || n === undefined || ts === undefined) return undefined;
+      const sourceId = typeof e.sourceId === "string" ? e.sourceId : undefined;
+      return sourceId !== undefined ? { num, n, sourceId, ts } : { num, n, ts };
+    });
+  }
+
+  const progressObj = asObject(stored.progress);
+  if (progressObj) {
+    const progress: Record<number, SurahProgress> = {};
+    for (const [k, v] of Object.entries(progressObj)) {
+      const num = Number(k);
+      if (!Number.isInteger(num) || num < 1) continue;
+      const entry = asObject(v);
+      if (!entry) continue;
+      const furthestAyah = asNumber(entry.furthestAyah, 1, Number.POSITIVE_INFINITY);
+      const ts = asNumber(entry.ts, 0, Number.POSITIVE_INFINITY);
+      if (furthestAyah !== undefined && ts !== undefined)
+        progress[num] = { furthestAyah, ts };
+    }
+    out.progress = progress;
+  }
+
   return out;
 }
 
@@ -71,6 +112,9 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
   if (p.bookmarks !== undefined) s.bookmarks = p.bookmarks;
   if (p.notes !== undefined) s.notes = p.notes;
   if (p.lastRead !== undefined) s.lastRead = p.lastRead;
+  if (p.lastReadAnchor !== undefined) s.lastReadAnchor = p.lastReadAnchor;
+  if (p.recents !== undefined) s.recents = p.recents;
+  if (p.progress !== undefined) s.progress = p.progress;
 }
 
 export interface ReaderPersistence {
@@ -93,8 +137,8 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       dirty = true;
       return;
     }
-    const { v, current, fontSize, mode, bookmarks, notes, lastRead } = core.s;
-    writeJSON(STORAGE_KEY, { v, current, fontSize, mode, bookmarks, notes, lastRead });
+    const { v, current, fontSize, mode, bookmarks, notes, lastRead, lastReadAnchor, recents, progress } = core.s;
+    writeJSON(STORAGE_KEY, { v, current, fontSize, mode, bookmarks, notes, lastRead, lastReadAnchor, recents, progress });
   }
 
   return {

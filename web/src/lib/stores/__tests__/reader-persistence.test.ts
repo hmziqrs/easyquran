@@ -33,8 +33,8 @@ describe("decodeReader", () => {
     });
   });
 
-  it("discards a blob whose explicit version is in the future", () => {
-    expect(decodeReader({ v: 99, current: 2 })).toEqual({});
+  it("decodes a future-version blob tolerantly (known fields kept, never wiped)", () => {
+    expect(decodeReader({ v: 99, current: 2 })).toEqual({ current: 2 });
     expect(decodeReader({ v: "2" })).toEqual({});
   });
 
@@ -81,6 +81,45 @@ describe("decodeReader", () => {
     expect(decodeReader("nope")).toEqual({});
     expect(decodeReader(undefined)).toEqual({});
   });
+
+  it("upgrades a v1 blob keeping user data; new fields absent until defaulted on hydrate", () => {
+    const out = decodeReader({
+      v: 1,
+      current: 2,
+      bookmarks: { "2:255": true },
+      lastRead: { num: 2, n: 255, sourceId: "uthmani" },
+    });
+    expect(out).toEqual({
+      current: 2,
+      bookmarks: { "2:255": true },
+      lastRead: { num: 2, n: 255, sourceId: "uthmani" },
+    });
+    expect(out.lastReadAnchor).toBeUndefined();
+    expect(out.recents).toBeUndefined();
+    expect(out.progress).toBeUndefined();
+  });
+
+  it("decodes lastReadAnchor null / valid / rejects garbage", () => {
+    expect(decodeReader({ lastReadAnchor: null }).lastReadAnchor).toBeNull();
+    expect(
+      decodeReader({ lastReadAnchor: { verseKey: "1:1", localPage: 1, ratio: 0 } }).lastReadAnchor,
+    ).toEqual({ verseKey: "1:1", localPage: 1, ratio: 0 });
+    expect(
+      decodeReader({ lastReadAnchor: { verseKey: 1, localPage: 1, ratio: 0 } }).lastReadAnchor,
+    ).toBeUndefined();
+    expect(
+      decodeReader({ lastReadAnchor: { verseKey: "1:1", localPage: 1, ratio: 2 } }).lastReadAnchor,
+    ).toBeUndefined();
+  });
+
+  it("drops malformed recents entries and progress keys, not the whole blob", () => {
+    const out = decodeReader({
+      recents: [{ num: 2, n: 255, ts: 1 }, { num: "x", n: 1, ts: 1 }, "nope"],
+      progress: { "2": { furthestAyah: 5, ts: 1 }, bad: { furthestAyah: 1, ts: 1 } },
+    });
+    expect(out.recents).toEqual([{ num: 2, n: 255, ts: 1 }]);
+    expect(out.progress).toEqual({ 2: { furthestAyah: 5, ts: 1 } });
+  });
 });
 
 describe("createReaderPersistence scheduling", () => {
@@ -100,6 +139,26 @@ describe("createReaderPersistence scheduling", () => {
     core.s.current = 7;
     persistence.writeNow();
     expect(read()).toMatchObject({ v: READER_SCHEMA_VERSION, current: 7 });
+    persistence.dispose();
+  });
+
+  it("round-trips lastReadAnchor, recents, and progress through localStorage", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    core.s.lastReadAnchor = { verseKey: "2:255", localPage: 3, ratio: 0.5 };
+    core.s.recents = [{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }];
+    core.s.progress = { 2: { furthestAyah: 255, ts: 1000 } };
+    persistence.writeNow();
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Record<string, unknown>;
+    expect(stored.v).toBe(READER_SCHEMA_VERSION);
+    expect(stored.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
+    expect(stored.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
+    expect(stored.progress).toEqual({ "2": { furthestAyah: 255, ts: 1000 } });
+    const decoded = decodeReader(stored);
+    expect(decoded.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
+    expect(decoded.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
+    expect(decoded.progress).toEqual({ 2: { furthestAyah: 255, ts: 1000 } });
     persistence.dispose();
   });
 

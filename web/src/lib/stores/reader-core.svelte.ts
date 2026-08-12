@@ -10,6 +10,22 @@ export const BrowseMode = {
 export type BrowseMode = (typeof BrowseMode)[keyof typeof BrowseMode];
 export type ReaderMode = "verse" | "reading";
 
+export interface LastReadAnchor {
+  verseKey: string;
+  localPage: number;
+  ratio: number;
+}
+export interface RecentsEntry {
+  num: number;
+  n: number;
+  sourceId?: string;
+  ts: number;
+}
+export interface SurahProgress {
+  furthestAyah: number;
+  ts: number;
+}
+
 export interface Persisted {
   v: number;
   current: number;
@@ -18,6 +34,9 @@ export interface Persisted {
   bookmarks: Record<VerseKey, boolean>;
   notes: Record<VerseKey, string>;
   lastRead: { num: number; n: number; sourceId?: string } | null;
+  lastReadAnchor: LastReadAnchor | null;
+  recents: RecentsEntry[];
+  progress: Record<number, SurahProgress>;
 }
 
 export interface ReaderState extends Persisted {
@@ -26,7 +45,7 @@ export interface ReaderState extends Persisted {
   openNote: VerseKey | null;
 }
 
-export const READER_SCHEMA_VERSION = 1;
+export const READER_SCHEMA_VERSION = 2;
 
 export const ARABIC_FONT_MIN = 22;
 export const ARABIC_FONT_MAX = 56;
@@ -44,6 +63,9 @@ export const READER_DEFAULTS: ReaderState = {
   bookmarks: {},
   notes: {},
   lastRead: null,
+  lastReadAnchor: null,
+  recents: [],
+  progress: {},
   query: "",
   browse: BrowseMode.Surah,
   openNote: null,

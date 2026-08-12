@@ -58,3 +58,13 @@ export function asNumberRecord(raw: unknown, min: number, max: number): Record<s
   }
   return out;
 }
+
+export function asArray<T>(raw: unknown, decodeItem: (item: unknown) => T | undefined): T[] {
+  if (!Array.isArray(raw)) return [];
+  const out: T[] = [];
+  for (const item of raw) {
+    const decoded = decodeItem(item);
+    if (decoded !== undefined) out.push(decoded);
+  }
+  return out;
+}
