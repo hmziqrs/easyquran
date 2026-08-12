@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Tweaks } from "$lib/components/tweaks";
+  import { getLocale } from "$lib/paraglide/runtime.js";
+  import { DEFAULT_UI_LOCALE, isUiLocale } from "$lib/i18n/locales";
   import { VARIANTS, type VariantKind } from "./_variants/registry";
   import { cn } from "$lib/utils";
 
@@ -15,6 +17,12 @@
     "rounded-md px-2.5 py-1 text-xs transition-colors duration-150 border";
   const tabOn = "border-accent bg-accent-soft text-fg";
   const tabOff = "border-transparent text-fg-3 hover:text-fg";
+
+  const loadTweaksCopy = async () => {
+    const { resolveAppearanceCopy } = await import("$lib/i18n/appearance-copy");
+    const locale = getLocale();
+    return resolveAppearanceCopy(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
+  };
 </script>
 
 <svelte:head>
@@ -53,4 +61,4 @@
   <main id="main" tabindex="-1" class="flex-1">{@render children()}</main>
 </div>
 
-<Tweaks />
+<Tweaks triggerLabel="Customize appearance" loadCopy={loadTweaksCopy} />

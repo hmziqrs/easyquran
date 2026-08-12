@@ -82,6 +82,13 @@
 
     return () => observer.disconnect();
   });
+
+  // Dynamic import on purpose: the reader appearance panel owns ~34 messages that nothing renders
+  // until the user opens the panel. See docs/i18n-bundle-plan.md.
+  const loadReaderSettingsCopy = async () => {
+    const { getReaderSettingsCopy } = await import("$lib/i18n/reader-settings-copy");
+    return getReaderSettingsCopy(copy.locale);
+  };
 </script>
 
 <svelte:head>
@@ -111,7 +118,7 @@
   >{@render children()}</main>
   <Footer owner={data.owner} year={data.year} copy={copy.footer} links={footerLinks} />
 </div>
-<Tweaks copy={copy.settings} />
+<Tweaks triggerLabel={copy.appearanceTrigger} loadCopy={loadReaderSettingsCopy} />
 
 <style>
   :global(body:has([data-reader-root]) > a[href="#main"]) {

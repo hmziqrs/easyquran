@@ -6,14 +6,40 @@ function source(path: string): string {
 }
 
 describe("marketing localization boundaries", () => {
-  it("uses generated Paraglide messages only inside resolver functions", () => {
+  it("keeps marketing-copy free of messages so type-only importers stay copy-free", () => {
     const copySource = source("../marketing-copy.ts");
-    const firstResolver = copySource.indexOf("export function marketingFooterLinks");
 
-    expect(copySource).toContain('from "$lib/paraglide/messages.js"');
+    expect(copySource).not.toContain("$lib/paraglide");
+    expect(copySource).not.toContain("$lib/i18n/m/");
     expect(copySource).not.toMatch(/messages\/(?:en|ar)\.json/);
-    expect(copySource.slice(0, firstResolver)).not.toMatch(/\bm\.[a-z0-9_]+\s*\(/i);
-    expect(copySource).toContain("{ locale }");
+  });
+
+  it("resolves each namespace from its own generated barrel", () => {
+    const chrome = source("../chrome-copy.ts");
+    const appearance = source("../appearance-copy.ts");
+    const landing = source("../landing-copy.ts");
+
+    expect(chrome).toContain('from "$lib/i18n/m/chrome"');
+    expect(chrome).not.toContain('from "$lib/i18n/m/landing"');
+    expect(chrome).not.toContain('from "$lib/i18n/m/appearance"');
+    expect(appearance).toContain('from "$lib/i18n/m/appearance"');
+    expect(appearance).not.toContain('from "$lib/i18n/m/chrome"');
+    expect(landing).toContain('from "$lib/i18n/m/landing"');
+    expect(landing).not.toContain('from "$lib/i18n/m/chrome"');
+    for (const module of [chrome, appearance, landing]) {
+      expect(module).toContain("{ locale }");
+    }
+  });
+
+  it("loads both appearance panels lazily", () => {
+    const marketingTweaks = source("../../../routes/(marketing)/_components/MarketingTweaks.svelte");
+    const readerLayout = source("../../../routes/(application)/app/+layout.svelte");
+    const tweaks = source("../../components/tweaks/Tweaks.svelte");
+
+    expect(marketingTweaks).toContain('await import("$lib/i18n/appearance-copy")');
+    expect(readerLayout).toContain('await import("$lib/i18n/reader-settings-copy")');
+    expect(tweaks).toContain("loadCopy");
+    expect(tweaks).not.toContain("DEFAULT_COPY");
   });
 
   it("keeps shared chrome independent from Paraglide runtime", () => {

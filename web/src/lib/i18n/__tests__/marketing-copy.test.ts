@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
+import { resolveAppearanceCopy } from "$lib/i18n/appearance-copy";
+import { marketingFooterLinks, resolveChromeCopy } from "$lib/i18n/chrome-copy";
+import { resolveLandingCopy, resolveLandingSeoCopy } from "$lib/i18n/landing-copy";
 import {
-  marketingFooterLinks,
   marketingHomeHref,
   marketingLocaleFromPath,
   marketingLocaleLinks,
   marketingReaderHomeHref,
-  resolveMarketingCopy,
 } from "$lib/i18n/marketing-copy";
 
 function readJson(path: string): Record<string, string> {
@@ -39,33 +40,49 @@ describe("marketing message catalogs", () => {
   });
 });
 
-describe("marketing copy resolver", () => {
+describe("marketing copy resolvers", () => {
   it("resolves each locale explicitly without leaking prior calls", () => {
-    const english = resolveMarketingCopy("en");
-    const arabic = resolveMarketingCopy("ar");
-    const englishAgain = resolveMarketingCopy("en");
+    const english = resolveChromeCopy("en");
+    const arabic = resolveChromeCopy("ar");
+    const englishLanding = resolveLandingCopy("en");
+    const arabicLanding = resolveLandingCopy("ar");
+    const englishLandingAgain = resolveLandingCopy("en");
 
     expect(english.direction).toBe("ltr");
     expect(arabic.direction).toBe("rtl");
-    expect(arabic.landing.heroTitle).not.toBe(english.landing.heroTitle);
-    expect(englishAgain.landing.heroTitle).toBe(english.landing.heroTitle);
+    expect(arabicLanding.heroTitle).not.toBe(englishLanding.heroTitle);
+    expect(englishLandingAgain.heroTitle).toBe(englishLanding.heroTitle);
+    expect(resolveLandingSeoCopy("ar").title).not.toBe(resolveLandingSeoCopy("en").title);
   });
 
   it("keeps stable structural IDs across locales", () => {
-    const english = resolveMarketingCopy("en");
-    const arabic = resolveMarketingCopy("ar");
+    const english = resolveLandingCopy("en");
+    const arabic = resolveLandingCopy("ar");
 
-    expect(arabic.landing.values.map((item) => item.id)).toEqual(
-      english.landing.values.map((item) => item.id),
-    );
-    expect(arabic.landing.roadmap.map((item) => item.id)).toEqual(
-      english.landing.roadmap.map((item) => item.id),
-    );
+    expect(arabic.values.map((item) => item.id)).toEqual(english.values.map((item) => item.id));
+    expect(arabic.roadmap.map((item) => item.id)).toEqual(english.roadmap.map((item) => item.id));
+  });
+
+  it("keeps the appearance panel out of the chrome resolver", () => {
+    const chrome = resolveChromeCopy("en");
+
+    expect(chrome.appearanceTrigger).toBe("Customize appearance");
+    // Exact key set, so a namespace merged back into chrome fails here rather than silently
+    // reappearing in every page's bundle.
+    expect(Object.keys(chrome).sort()).toEqual([
+      "appearanceTrigger",
+      "brand",
+      "direction",
+      "footer",
+      "locale",
+      "nav",
+      "skipToContent",
+    ]);
   });
 
   it("uses typed parameterized messages for control labels", () => {
-    const english = resolveMarketingCopy("en").tweaks;
-    const arabic = resolveMarketingCopy("ar").tweaks;
+    const english = resolveAppearanceCopy("en");
+    const arabic = resolveAppearanceCopy("ar");
 
     expect(english.colourInputLabel("Background")).toBe("Background colour");
     expect(arabic.colourInputLabel("الخلفية")).toBe("لون الخلفية");

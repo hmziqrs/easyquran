@@ -9,50 +9,41 @@
   import { cn } from "$lib/utils";
   import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
-  const DEFAULT_COPY: TweaksResolvedCopy = {
-    settings: "Settings",
-    theme: "Theme",
-    closePanel: "Close appearance panel",
-    mode: "Mode",
-    surface: "Surface",
-    accent: "Accent",
-    customColours: "Custom colours",
-    clear: "clear",
-    seedNames: { bg: "Background", accent: "Accent", pop: "Pop" },
-    colourLabel: "colour",
-    accentOptionLabel: (name) => `Accent: ${name}`,
-    colourInputLabel: (name) => `${name} colour`,
-    preset: "preset",
-    resetToPresetLabel: (name) => `Reset ${name} to preset`,
-    toggleStatusLabel: (name, status) => `${name} ${status}`,
-    derivedColours:
-      "Surfaces, hairlines and text steps are derived from the background; the soft washes from the accent.",
-    copied: "Copied",
-    copyCss: "Copy CSS",
-    reset: "Reset",
-    dataPrivacy: "Data & privacy",
-    analytics: "Analytics",
-    performance: "Performance",
-    on: "on",
-    off: "off",
-    performanceReload:
-      "Reloads the page to apply — Firebase Performance can only be switched at startup",
-    customizeAppearance: "Customize appearance",
-    themeNames: { dark: "Dark", light: "Light" },
-    surfaces: {
-      ink: { label: "Ink", note: "Neutral near-black / paper white. The default." },
-      paper: { label: "Paper", note: "Warm sepia — closest to a printed mushaf." },
-      slate: { label: "Slate", note: "Cool blue-grey, slightly softer contrast." },
-      mocha: { label: "Mocha", note: "Deep espresso browns, low glare at night." },
-      contrast: { label: "Contrast", note: "Pure black / pure white — maximum legibility." },
-    },
-    accents: { emerald: "Teal", gold: "Gold", azure: "Azure", plum: "Plum" },
-  };
-
   let {
-    copy = DEFAULT_COPY,
+    triggerLabel,
+    loadCopy,
     showReaderTools = true,
-  }: { copy?: TweaksResolvedCopy; showReaderTools?: boolean } = $props();
+  }: {
+    /** Rendered on the closed trigger, so it is the only appearance string a page eagerly needs. */
+    triggerLabel: string;
+    /**
+     * Resolves the panel copy on first open. Deliberately a loader, not a value: the appearance
+     * panel owns ~40 messages that nothing renders until the user asks for it, and eagerly
+     * resolving them put every one of those strings in every page's bundle.
+     * See docs/i18n-bundle-plan.md.
+     */
+    loadCopy: () => Promise<TweaksResolvedCopy>;
+    showReaderTools?: boolean;
+  } = $props();
+
+  let copy = $state<TweaksResolvedCopy>();
+  let copyRequest: Promise<void> | undefined;
+
+  function ensureCopy(): void {
+    copyRequest ??= loadCopy().then((resolved) => {
+      copy = resolved;
+    });
+  }
+
+  async function toggle(): Promise<void> {
+    if (open) {
+      open = false;
+      return;
+    }
+    ensureCopy();
+    await copyRequest;
+    open = true;
+  }
 
   let open = $state(false);
   let triggerButton = $state<HTMLButtonElement>();
@@ -141,7 +132,7 @@
 <svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
 <div class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3">
-  {#if open}
+  {#if open && copy}
     <div
       id="tweaks-panel"
       bind:this={panelEl}
@@ -320,8 +311,8 @@
   <button
     type="button"
     bind:this={triggerButton}
-    onclick={() => (open = !open)}
-    aria-label={copy.customizeAppearance}
+    onclick={toggle}
+    aria-label={triggerLabel}
     aria-expanded={open}
     aria-controls="tweaks-panel"
     class="flex size-10 items-center justify-center rounded-full border border-line-2 bg-bg-1/95 text-fg-2 shadow-lg backdrop-blur transition-colors hover:text-fg"

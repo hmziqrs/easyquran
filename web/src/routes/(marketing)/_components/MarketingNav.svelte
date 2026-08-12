@@ -1,24 +1,23 @@
 <script lang="ts">
   import { Nav } from "$lib/components/nav";
+  import type { ChromeResolvedCopy } from "$lib/i18n/chrome-copy";
   import {
     marketingHomeHref,
     marketingLocaleLinks,
     marketingReaderHomeHref,
-    resolveMarketingCopy,
     type MarketingLocale,
   } from "$lib/i18n/marketing-copy";
 
-  let { locale }: { locale: MarketingLocale } = $props();
+  let { locale, chrome }: { locale: MarketingLocale; chrome: ChromeResolvedCopy } = $props();
 
-  const copy = $derived(resolveMarketingCopy(locale));
   const localeLinks = $derived(marketingLocaleLinks(locale));
 </script>
 
 <Nav
-  copy={copy.nav}
-  brandCopy={copy.brand}
+  copy={chrome.nav}
+  brandCopy={chrome.brand}
   brandHomeHref={marketingHomeHref(locale)}
   searchHref={marketingReaderHomeHref(locale)}
   {localeLinks}
-  direction={copy.direction}
+  direction={chrome.direction}
 />

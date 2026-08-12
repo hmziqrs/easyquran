@@ -7,32 +7,33 @@
         "index.html",
         "ar/index.html"
       ],
-      "maxMessages": 109,
-      "maxGzip": 7913
+      "maxMessages": 69,
+      "maxGzip": 8564,
+      "justification": "gzip is 651 B above the pre-split baseline while message count fell 109 -> 69: the landing copy now lives in its own route chunk instead of a shared one, so it compresses against a smaller dictionary. Every other page dropped 4.3 KB gzip, so the trade is strongly net-positive."
     },
     {
       "id": "marketing-about",
       "match": [
         "about.html"
       ],
-      "maxMessages": 109,
-      "maxGzip": 7913
+      "maxMessages": 38,
+      "maxGzip": 3474
     },
     {
       "id": "marketing-faq",
       "match": [
         "faq.html"
       ],
-      "maxMessages": 109,
-      "maxGzip": 7913
+      "maxMessages": 38,
+      "maxGzip": 3474
     },
     {
       "id": "marketing-contact",
       "match": [
         "contact.html"
       ],
-      "maxMessages": 109,
-      "maxGzip": 7913
+      "maxMessages": 38,
+      "maxGzip": 3474
     },
     {
       "id": "marketing-legal",
@@ -40,8 +41,8 @@
         "privacy.html",
         "terms.html"
       ],
-      "maxMessages": 109,
-      "maxGzip": 7913
+      "maxMessages": 38,
+      "maxGzip": 3474
     },
     {
       "id": "reader",
@@ -49,8 +50,8 @@
         "ar/app/**",
         "ar/app.html"
       ],
-      "maxMessages": 195,
-      "maxGzip": 11014
+      "maxMessages": 155,
+      "maxGzip": 8027
     }
   ]
 }
