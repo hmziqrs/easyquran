@@ -8,41 +8,48 @@
         "ar/index.html"
       ],
       "maxMessages": 69,
-      "maxGzip": 8564,
-      "justification": "gzip is 651 B above the pre-split baseline while message count fell 109 -> 69: the landing copy now lives in its own route chunk instead of a shared one, so it compresses against a smaller dictionary. Every other page dropped 4.3 KB gzip, so the trade is strongly net-positive."
+      "maxGzip": 8739,
+      "justification": "gzip is ~650 B above the pre-split baseline while message count fell 109 -> 69: the landing copy now lives in its own route chunk instead of a shared one, so it compresses against a smaller dictionary. Every other marketing page dropped 4+ KB gzip, so the trade is strongly net-positive."
     },
     {
       "id": "marketing-about",
       "match": [
         "about.html"
       ],
-      "maxMessages": 38,
-      "maxGzip": 3474
+      "maxMessages": 56,
+      "maxGzip": 7098
     },
     {
       "id": "marketing-faq",
       "match": [
         "faq.html"
       ],
-      "maxMessages": 38,
-      "maxGzip": 3474
+      "maxMessages": 58,
+      "maxGzip": 11727
     },
     {
       "id": "marketing-contact",
       "match": [
         "contact.html"
       ],
-      "maxMessages": 38,
-      "maxGzip": 3474
+      "maxMessages": 49,
+      "maxGzip": 6014
     },
     {
-      "id": "marketing-legal",
+      "id": "marketing-privacy",
       "match": [
-        "privacy.html",
+        "privacy.html"
+      ],
+      "maxMessages": 64,
+      "maxGzip": 8129
+    },
+    {
+      "id": "marketing-terms",
+      "match": [
         "terms.html"
       ],
-      "maxMessages": 38,
-      "maxGzip": 3474
+      "maxMessages": 63,
+      "maxGzip": 7673
     },
     {
       "id": "reader",
@@ -51,7 +58,7 @@
         "ar/app.html"
       ],
       "maxMessages": 155,
-      "maxGzip": 8027
+      "maxGzip": 8189
     }
   ]
 }

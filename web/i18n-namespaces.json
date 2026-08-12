@@ -4,23 +4,13 @@
     {
       "id": "chrome",
       "description": "Site chrome rendered on every marketing page: nav, footer, brand, skip link, locale switcher. Includes the appearance-panel trigger label, the only appearance string a page needs before the panel opens.",
-      "prefixes": [
-        "nav",
-        "footer",
-        "brand",
-        "skip",
-        "locale"
-      ],
-      "keys": [
-        "tweaks_customize_appearance"
-      ]
+      "prefixes": ["nav", "footer", "brand", "skip", "locale"],
+      "keys": ["tweaks_customize_appearance"]
     },
     {
       "id": "theme",
       "description": "Theme mode names. Shared by chrome (nav toggle) and both appearance panels.",
-      "prefixes": [
-        "theme"
-      ]
+      "prefixes": ["theme"]
     },
     {
       "id": "controls",
@@ -37,19 +27,42 @@
     {
       "id": "appearance",
       "description": "Marketing appearance panel. Lazy: only downloaded once the panel is opened.",
-      "prefixes": [
-        "tweaks",
-        "surface",
-        "accent"
-      ]
+      "prefixes": ["tweaks", "surface", "accent"]
     },
     {
       "id": "landing",
       "description": "Marketing home page, including its SEO metadata.",
-      "prefixes": [
-        "landing",
-        "seo"
-      ]
+      "prefixes": ["landing", "seo"]
+    },
+    {
+      "id": "about",
+      "description": "About page.",
+      "prefixes": ["about"]
+    },
+    {
+      "id": "faq",
+      "description": "FAQ page, including its FAQPage structured data.",
+      "prefixes": ["faq"]
+    },
+    {
+      "id": "contact",
+      "description": "Contact page.",
+      "prefixes": ["contact"]
+    },
+    {
+      "id": "legal",
+      "description": "Legal chrome shared by the privacy and terms pages.",
+      "prefixes": ["legal"]
+    },
+    {
+      "id": "privacy",
+      "description": "Privacy policy body.",
+      "prefixes": ["legal_privacy"]
+    },
+    {
+      "id": "terms",
+      "description": "Terms of service body.",
+      "prefixes": ["legal_terms"]
     },
     {
       "id": "reader-settings",
@@ -94,9 +107,7 @@
     {
       "id": "reader",
       "description": "Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.",
-      "prefixes": [
-        "reader"
-      ]
+      "prefixes": ["reader"]
     }
   ]
 }

@@ -29,6 +29,11 @@ const MESSAGE_PATTERNS = [
   /\.locale\?\?[A-Za-z_$]+\(\)\)===/g,
 ];
 
+// Message counts are deterministic, so they are budgeted exactly. Gzipped sizes move by a byte or
+// two between builds as chunk hashes and minified identifiers shift, so `--update` leaves this much
+// headroom. It is far below the size of a single message, so a real regression still fails.
+const GZIP_HEADROOM = 0.02;
+
 export interface Surface {
   id: string;
   match: string[];
@@ -63,7 +68,8 @@ function measureChunk(assetPath: string) {
       (total, pattern) => total + (text.match(pattern)?.length ?? 0),
       0,
     );
-    measurement = messages > 0 ? { messages, gzip: gzipSync(bytes).length, raw: bytes.length } : measurement;
+    measurement =
+      messages > 0 ? { messages, gzip: gzipSync(bytes).length, raw: bytes.length } : measurement;
   } catch {
     // A referenced asset that is absent from build/client is not a localization concern.
   }
@@ -110,7 +116,8 @@ export function worstPerSurface(pages: PageMeasurement[], surfaces: Surface[]) {
   return surfaces.map((surface) => {
     const matched = pages.filter((page) => matchesSurface(page.page, surface.match));
     const worst = matched.reduce<PageMeasurement | undefined>(
-      (worstSoFar, page) => (!worstSoFar || page.messages > worstSoFar.messages ? page : worstSoFar),
+      (worstSoFar, page) =>
+        !worstSoFar || page.messages > worstSoFar.messages ? page : worstSoFar,
       undefined,
     );
     return { surface, matched: matched.length, worst };
@@ -132,9 +139,7 @@ const mode = process.argv.includes("--update")
     : "verify";
 
 const pad = (value: string | number, width: number) => String(value).padEnd(width);
-console.log(
-  `[i18n-budget] ${pad("surface", 24)} ${pad("pages", 7)} ${pad("messages", 20)} gzip`,
-);
+console.log(`[i18n-budget] ${pad("surface", 24)} ${pad("pages", 7)} ${pad("messages", 20)} gzip`);
 
 const failures: string[] = [];
 for (const { surface, matched, worst } of results) {
@@ -160,7 +165,7 @@ for (const { surface, matched, worst } of results) {
 
   if (mode === "update") {
     surface.maxMessages = worst.messages;
-    surface.maxGzip = worst.gzip;
+    surface.maxGzip = Math.ceil(worst.gzip * (1 + GZIP_HEADROOM));
   }
 }
 
@@ -173,5 +178,7 @@ if (mode === "update") {
   process.exit(1);
 } else {
   const total = results.reduce((sum, entry) => sum + (entry.worst?.messages ?? 0), 0);
-  console.log(`[i18n-budget] ${results.length} surfaces within budget (${total} worst-case messages)`);
+  console.log(
+    `[i18n-budget] ${results.length} surfaces within budget (${total} worst-case messages)`,
+  );
 }

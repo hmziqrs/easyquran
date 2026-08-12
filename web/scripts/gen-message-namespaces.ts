@@ -38,7 +38,10 @@ const check = process.argv.includes("--check");
 const config = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Config;
 
 const catalogKeys = CATALOGS.flatMap((catalog) => {
-  const parsed = JSON.parse(readFileSync(join(WEB_ROOT, catalog), "utf8")) as Record<string, unknown>;
+  const parsed = JSON.parse(readFileSync(join(WEB_ROOT, catalog), "utf8")) as Record<
+    string,
+    unknown
+  >;
   return Object.keys(parsed).filter((key) => key !== "$schema");
 });
 
@@ -72,7 +75,8 @@ function prefixOwner(key: string): string | undefined {
   for (const namespace of config.namespaces) {
     for (const prefix of namespace.prefixes ?? []) {
       if (key === prefix || key.startsWith(`${prefix}_`)) {
-        if (!best || prefix.length > best.length) best = { id: namespace.id, length: prefix.length };
+        if (!best || prefix.length > best.length)
+          best = { id: namespace.id, length: prefix.length };
       }
     }
   }
@@ -136,7 +140,9 @@ try {
   // First run: nothing generated yet.
 }
 
-const stale = [...expected].filter(([file, content]) => existing.get(file) !== content).map(([f]) => f);
+const stale = [...expected]
+  .filter(([file, content]) => existing.get(file) !== content)
+  .map(([f]) => f);
 const orphaned = [...existing.keys()].filter((file) => !expected.has(file));
 
 if (check) {
@@ -156,5 +162,7 @@ if (check) {
   const summary = config.namespaces
     .map((ns) => `${ns.id}=${(membership.get(ns.id) as string[]).length}`)
     .join(" ");
-  console.log(`[i18n-ns] ${expected.size} namespaces written (${catalogKeys.length} messages): ${summary}`);
+  console.log(
+    `[i18n-ns] ${expected.size} namespaces written (${catalogKeys.length} messages): ${summary}`,
+  );
 }

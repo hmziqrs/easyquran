@@ -341,8 +341,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
   const options: { locale: UiLocale } = { locale };
   const noArgs = <Inputs>(
     message: (inputs?: Inputs, options?: { locale?: UiLocale }) => string,
-  ): string =>
-    message(undefined, options);
+  ): string => message(undefined, options);
 
   const mode = (value: BrowseMode): string => {
     switch (value) {
@@ -358,9 +357,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
   };
 
   const rangeItem = (kind: RangeKind, index: number): string =>
-    kind === "juz"
-      ? reader_juz_item({ index }, options)
-      : reader_page_item({ index }, options);
+    kind === "juz" ? reader_juz_item({ index }, options) : reader_page_item({ index }, options);
 
   return {
     locale,
@@ -550,10 +547,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       surahPageTitle: (surah, name, page, count) =>
         reader_seo_surah_page_title({ surah, name, page, count }, options),
       surahDescriptionUthmani: (name, arabic, page, count, start, end) =>
-        reader_seo_surah_description_uthmani(
-          { name, arabic, page, count, start, end },
-          options,
-        ),
+        reader_seo_surah_description_uthmani({ name, arabic, page, count, start, end }, options),
       surahDescriptionTranslation: (name, arabic, page, count, start, end) =>
         reader_seo_surah_description_translation(
           { name, arabic, page, count, start, end },

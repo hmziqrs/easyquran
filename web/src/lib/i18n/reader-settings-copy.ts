@@ -8,12 +8,7 @@ import {
   tweaks_reset_to_preset,
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
-import {
-  reader_copied,
-  reader_dark,
-  reader_light,
-  reader_theme,
-} from "$lib/i18n/m/reader";
+import { reader_copied, reader_dark, reader_light, reader_theme } from "$lib/i18n/m/reader";
 import {
   reader_accent,
   reader_accent_azure,
@@ -65,8 +60,9 @@ export type ReaderSettingsCopy = TweaksResolvedCopy & {
  */
 export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
   const options = { locale } as const;
-  const noArgs = (message: (inputs?: undefined, options?: { locale?: UiLocale }) => string): string =>
-    message(undefined, options);
+  const noArgs = (
+    message: (inputs?: undefined, options?: { locale?: UiLocale }) => string,
+  ): string => message(undefined, options);
   return {
     settings: noArgs(reader_settings),
     theme: noArgs(reader_theme),

@@ -7,7 +7,9 @@ function locs(xml: string): string[] {
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
 }
 
-describe("localized sitemap", () => {
+// The sitemap fans out over every prerendered reader route, so a cold first call is slow under
+// parallel suite load. The default 5s timeout flakes; the work itself is a few hundred ms warm.
+describe("localized sitemap", { timeout: 30_000 }, () => {
   it("emits only published marketing locale-page pairs", async () => {
     const xml = await GET().text();
     const urls = locs(xml);

@@ -32,7 +32,9 @@ describe("marketing localization boundaries", () => {
   });
 
   it("loads both appearance panels lazily", () => {
-    const marketingTweaks = source("../../../routes/(marketing)/_components/MarketingTweaks.svelte");
+    const marketingTweaks = source(
+      "../../../routes/(marketing)/_components/MarketingTweaks.svelte",
+    );
     const readerLayout = source("../../../routes/(application)/app/+layout.svelte");
     const tweaks = source("../../components/tweaks/Tweaks.svelte");
 
