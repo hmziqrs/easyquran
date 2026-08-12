@@ -21,8 +21,3 @@ class CommandPalette {
 }
 
 export const commandPalette = new CommandPalette();
-
-/** True for the platform-correct "open palette" chord (⌘K on Apple, Ctrl+K elsewhere). */
-export function isPaletteChord(e: KeyboardEvent): boolean {
-  return e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey) && !e.altKey;
-}
