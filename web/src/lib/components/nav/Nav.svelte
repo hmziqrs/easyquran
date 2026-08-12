@@ -3,26 +3,57 @@
   import { fly, fade } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { page } from "$app/state";
+  import { cn } from "$lib/utils";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { online } from "$lib/offline/online.svelte";
   import { authState } from "$lib/auth/auth-state.svelte";
   import { Icon } from "$lib/components/icon";
   import { Brand } from "$lib/components/brand";
+  import { stickyNav } from "$lib/stores/sticky-nav.svelte";
 
   const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  let { collapsible = false }: { collapsible?: boolean } = $props();
 
   let open = $state(false);
   let toggleBtn: HTMLButtonElement | undefined = $state();
   let panelEl: HTMLDivElement | undefined = $state();
 
+  let lastY = 0;
+  let ticking = false;
+
   onMount(() => {
     authState.hydrate();
   });
 
+  function onScroll() {
+    if (!collapsible || ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY;
+      if (y <= 8) {
+        stickyNav.expand();
+      } else if (open) {
+        // keep visible while the side panel is open
+      } else if (y > lastY + 5) {
+        stickyNav.collapse();
+      } else if (y < lastY - 5) {
+        stickyNav.expand();
+      }
+      lastY = y;
+      ticking = false;
+    });
+  }
+
   $effect(() => {
     void page.url.pathname;
     open = false;
+    stickyNav.expand();
+    lastY = 0;
   });
+
+  let hidden = $derived(collapsible && stickyNav.collapsed && !open);
+  let navTop = $derived(hidden ? `-${stickyNav.height}px` : "0px");
 
   let wasOpen = false;
   $effect(() => {
@@ -64,11 +95,15 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onscroll={onScroll} />
 
 <nav
   aria-label="Primary"
-  class="sticky top-0 z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150"
+  style:top={navTop}
+  class={cn(
+    "sticky z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150",
+    collapsible && "transition-[top] duration-200 ease-out",
+  )}
 >
   <div class="flex h-[60px] items-center gap-4 px-5 sm:px-7 lg:px-10">
     <span class="mr-auto" inert={open || undefined} aria-hidden={open || undefined}>

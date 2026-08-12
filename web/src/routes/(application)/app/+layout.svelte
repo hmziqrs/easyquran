@@ -13,7 +13,7 @@
     document.documentElement.dataset.readerHydrated = "true";
 
     const syncMenu = (): void => {
-      menuOpen = document.getElementById("mobile-menu") !== null;
+      menuOpen = document.getElementById("site-panel") !== null;
     };
     syncMenu();
     const observer = new MutationObserver(syncMenu);
@@ -28,7 +28,7 @@
 </svelte:head>
 
 <div class="flex min-h-screen flex-col">
-  <Nav />
+  <Nav collapsible />
   <main
     id="main"
     tabindex="-1"
