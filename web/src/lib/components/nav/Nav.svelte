@@ -9,6 +9,7 @@
   import { authState } from "$lib/auth/auth-state.svelte";
   import { Icon } from "$lib/components/icon";
   import { Brand } from "$lib/components/brand";
+  import { SearchTrigger } from "$lib/components/search";
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
 
   const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -67,7 +68,7 @@
     wasOpen = isOpen;
   });
 
-  let accountHref = $derived(authState.authenticated ? "/account" : "/auth/login");
+  let accountHref = $derived(authState.authenticated ? "/account" : "/login");
   let accountLabel = $derived(authState.authenticated ? "Account" : "Sign in");
 
   function toggle() {
@@ -123,16 +124,7 @@
           <span class="hidden sm:inline">Offline</span>
         </span>
       {/if}
-      <a
-        href="/app"
-        aria-label="Search the Qur'an"
-        title="Search the Qur'an"
-        inert={open || undefined}
-        aria-hidden={open || undefined}
-        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        <Icon name="search" size={18} title="Search the Qur'an" />
-      </a>
+      <SearchTrigger label="Search the Qur'an" inert={open} />
       <a
         href={accountHref}
         aria-label={accountLabel}

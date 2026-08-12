@@ -8,6 +8,7 @@ export * from "./card";
 export * from "./status";
 export * from "./panel";
 export * from "./nav";
+export * from "./search";
 export * from "./footer";
 export * from "./tweaks";
 export * from "./notifications";
