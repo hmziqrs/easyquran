@@ -7,6 +7,43 @@
   import { Notifications } from "$lib/components/notifications";
   import { OfflinePack } from "$lib/components/status";
   import { cn } from "$lib/utils";
+  import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
+
+  let {
+    triggerLabel,
+    loadCopy,
+    showReaderTools = true,
+  }: {
+    /** Rendered on the closed trigger, so it is the only appearance string a page eagerly needs. */
+    triggerLabel: string;
+    /**
+     * Resolves the panel copy on first open. Deliberately a loader, not a value: the appearance
+     * panel owns ~40 messages that nothing renders until the user asks for it, and eagerly
+     * resolving them put every one of those strings in every page's bundle.
+     * See docs/i18n-bundle-plan.md.
+     */
+    loadCopy: () => Promise<TweaksResolvedCopy>;
+    showReaderTools?: boolean;
+  } = $props();
+
+  let copy = $state<TweaksResolvedCopy>();
+  let copyRequest: Promise<void> | undefined;
+
+  function ensureCopy(): void {
+    copyRequest ??= loadCopy().then((resolved) => {
+      copy = resolved;
+    });
+  }
+
+  async function toggle(): Promise<void> {
+    if (open) {
+      open = false;
+      return;
+    }
+    ensureCopy();
+    await copyRequest;
+    open = true;
+  }
 
   let open = $state(false);
   let triggerButton = $state<HTMLButtonElement>();
@@ -17,13 +54,13 @@
 
   const themes: ThemeMode[] = ["dark", "light"];
 
-  const seeds: { key: keyof CustomSeeds; label: string; fallbackVar: string }[] = [
-    { key: "bg", label: "Background", fallbackVar: "--bg" },
-    { key: "accent", label: "Accent", fallbackVar: "--accent" },
-    { key: "pop", label: "Pop", fallbackVar: "--pop" },
+  const seeds: { key: keyof CustomSeeds; fallbackVar: string }[] = [
+    { key: "bg", fallbackVar: "--bg" },
+    { key: "accent", fallbackVar: "--accent" },
+    { key: "pop", fallbackVar: "--pop" },
   ];
 
-  const pill = "rounded-md border px-3 py-1 text-xs capitalize transition-colors duration-150";
+  const pill = "rounded-md border px-3 py-1 text-xs transition-colors duration-150";
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
 
@@ -94,53 +131,53 @@
 
 <svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
-<div class="fixed bottom-5 right-5 z-[1000] flex flex-col items-end gap-3">
-  {#if open}
+<div class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3">
+  {#if open && copy}
     <div
       id="tweaks-panel"
       bind:this={panelEl}
       role="dialog"
       aria-modal="false"
-      aria-label="Settings"
+      aria-label={copy.settings}
       class="flex max-h-[min(80vh,640px)] w-[288px] flex-col overflow-hidden rounded-xl border border-line-2 bg-bg-1/95 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
     >
       <div class="overflow-y-auto overflow-x-hidden p-3.5">
       <div class="mb-3 flex items-center justify-between gap-2">
-        <span class="font-mono text-xs uppercase tracking-wide text-fg-3">Theme</span>
+        <span class="font-mono text-xs uppercase tracking-wide text-fg-3">{copy.theme}</span>
         <button
           type="button"
           class="text-fg-3 transition-colors hover:text-fg"
           onclick={() => (open = false)}
           bind:this={firstControl}
-          aria-label="Close appearance panel">✕</button
+          aria-label={copy.closePanel}>✕</button
         >
       </div>
 
       <div class="grid grid-cols-1 gap-3.5">
         <div>
-          <div class="mb-1.5 text-xs text-fg-3">Mode</div>
+          <div class="mb-1.5 text-xs text-fg-3">{copy.mode}</div>
           <div class="flex gap-1.5">
             {#each themes as t (t)}
               <button
                 type="button"
                 class={pillClass(prefs.theme === t)}
-                onclick={() => prefs.setTheme(t)}>{t}</button
+                onclick={() => prefs.setTheme(t)}>{copy.themeNames[t]}</button
               >
             {/each}
           </div>
         </div>
 
         <div>
-          <div class="mb-1.5 text-xs text-fg-3">Surface</div>
+          <div class="mb-1.5 text-xs text-fg-3">{copy.surface}</div>
           <div class="flex flex-col gap-1">
             {#each SURFACES as s (s.id)}
               <button
                 type="button"
-                title={s.note}
+                title={copy.surfaces[s.id].note}
                 aria-pressed={prefs.surface === s.id}
                 onclick={() => prefs.setSurface(s.id)}
                 class={cn(
-                  "flex items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors",
+                  "flex items-center gap-2.5 rounded-lg border px-2 py-1.5 text-start transition-colors",
                   prefs.surface === s.id ? "border-accent bg-accent-soft" : "border-line hover:border-line-2",
                 )}
               >
@@ -149,8 +186,10 @@
                   style={`background:${prefs.theme === "light" ? s.lightHex : s.darkHex}`}
                 ></span>
                 <span class="min-w-0">
-                  <span class="block text-xs text-fg">{s.label}</span>
-                  <span class="block truncate text-[11px] text-fg-4">{s.note}</span>
+                  <span class="block text-xs text-fg">{copy.surfaces[s.id].label}</span>
+                  <span class="block truncate text-[11px] text-fg-4"
+                    >{copy.surfaces[s.id].note}</span
+                  >
                 </span>
               </button>
             {/each}
@@ -158,12 +197,12 @@
         </div>
 
         <div>
-          <div class="mb-1.5 text-xs text-fg-3">Accent</div>
+          <div class="mb-1.5 text-xs text-fg-3">{copy.accent}</div>
           <div class="flex flex-wrap gap-2">
             {#each ACCENTS as a (a.id)}
               <button
-                title={a.label}
-                aria-label={`Accent: ${a.label}`}
+                title={copy.accents[a.id]}
+                aria-label={copy.accentOptionLabel(copy.accents[a.id])}
                 class={cn(
                   "size-[30px] rounded-lg border-2 transition-transform",
                   prefs.accent === a.id && !prefs.custom.accent ? "scale-110 border-fg" : "border-line",
@@ -178,12 +217,12 @@
 
         <div>
           <div class="mb-1.5 flex items-center justify-between">
-            <span class="text-xs text-fg-3">Custom colours</span>
+            <span class="text-xs text-fg-3">{copy.customColours}</span>
             {#if prefs.hasCustom}
               <button
                 type="button"
                 class="text-[11px] text-fg-3 underline underline-offset-2 transition-colors hover:text-fg"
-                onclick={() => prefs.clearCustom()}>clear</button
+                onclick={() => prefs.clearCustom()}>{copy.clear}</button
               >
             {/if}
           </div>
@@ -192,19 +231,19 @@
               <div class="flex items-center gap-2">
                 <input
                   type="color"
-                  aria-label={`${s.label} colour`}
+                  aria-label={copy.colourInputLabel(copy.seedNames[s.key])}
                   value={seedValue(s.key, s.fallbackVar)}
                   oninput={(e) => prefs.setCustom(s.key, e.currentTarget.value)}
                   class="size-7 flex-none cursor-pointer rounded-md border border-line-2 bg-transparent p-0.5"
                 />
-                <span class="flex-1 text-xs text-fg-2">{s.label}</span>
+                <span class="flex-1 text-xs text-fg-2">{copy.seedNames[s.key]}</span>
                 <span class="font-mono text-[11px] text-fg-4">
-                  {prefs.custom[s.key] ?? "preset"}
+                  {prefs.custom[s.key] ?? copy.preset}
                 </span>
                 {#if prefs.custom[s.key]}
                   <button
                     type="button"
-                    aria-label={`Reset ${s.label} to preset`}
+                    aria-label={copy.resetToPresetLabel(copy.seedNames[s.key])}
                     class="text-fg-4 transition-colors hover:text-fg"
                     onclick={() => prefs.setCustom(s.key, undefined)}>✕</button
                   >
@@ -213,30 +252,28 @@
             {/each}
           </div>
           <p class="mt-1.5 text-[11px] leading-snug text-fg-4">
-            Surfaces, hairlines and text steps are derived from the background;
-            the soft washes from the accent.
+            {copy.derivedColours}
           </p>
         </div>
 
         <div class="flex gap-1.5">
           <button type="button" class={cn(pill, off, "flex-1")} onclick={copyCss}>
-            {copied ? "Copied" : "Copy CSS"}
+            {copied ? copy.copied : copy.copyCss}
           </button>
           <button type="button" class={cn(pill, off, "flex-1")} onclick={() => prefs.reset()}>
-            Reset
+            {copy.reset}
           </button>
         </div>
 
-        <hr class="border-line" />
-
-        <Notifications />
-
-        <hr class="border-line" />
-
-        <OfflinePack />
+        {#if showReaderTools}
+          <hr class="border-line" />
+          <Notifications />
+          <hr class="border-line" />
+          <OfflinePack />
+        {/if}
 
         <div>
-          <div class="mb-1.5 text-xs text-fg-3">Data &amp; privacy</div>
+          <div class="mb-1.5 text-xs text-fg-3">{copy.dataPrivacy}</div>
           <div class="flex flex-col gap-1.5">
             <button
               type="button"
@@ -244,19 +281,25 @@
               onclick={() => consent.setAnalytics(!consent.analytics)}
               class={pillClass(consent.analytics)}
             >
-              Analytics {consent.analytics ? "on" : "off"}
+              {copy.toggleStatusLabel(
+                copy.analytics,
+                consent.analytics ? copy.on : copy.off,
+              )}
             </button>
             <button
               type="button"
               aria-pressed={consent.performance}
-              title="Reloads the page to apply — Firebase Performance can only be switched at startup"
+              title={copy.performanceReload}
               onclick={() => {
                 consent.setPerformance(!consent.performance);
                 location.reload();
               }}
               class={pillClass(consent.performance)}
             >
-              Performance {consent.performance ? "on" : "off"}
+              {copy.toggleStatusLabel(
+                copy.performance,
+                consent.performance ? copy.on : copy.off,
+              )}
             </button>
           </div>
         </div>
@@ -268,8 +311,8 @@
   <button
     type="button"
     bind:this={triggerButton}
-    onclick={() => (open = !open)}
-    aria-label="Customize appearance"
+    onclick={toggle}
+    aria-label={triggerLabel}
     aria-expanded={open}
     aria-controls="tweaks-panel"
     class="flex size-10 items-center justify-center rounded-full border border-line-2 bg-bg-1/95 text-fg-2 shadow-lg backdrop-blur transition-colors hover:text-fg"

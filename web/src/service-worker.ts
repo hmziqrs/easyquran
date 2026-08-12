@@ -31,7 +31,7 @@ export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
 
 const PRECACHE = Array.from(
-  new Set([...build, ...files, "/", "/app", `${base}/quran-meta/quran-data.json`]),
+  new Set([...build, ...files, "/", "/en/app", `${base}/quran-meta/quran-data.json`]),
 );
 
 const IMMUTABLE = new Set([...build, ...files]);
@@ -308,8 +308,28 @@ async function activate(): Promise<void> {
     await setCursor(null);
   }
   await metaSet("installedVersion", version);
+  await purgeLegacyReaderPaths();
   void enforceDataBounds();
   if (priorExisted) announceTakeover();
+}
+
+function isLegacyReaderPath(url: string): boolean {
+  const pathname = new URL(url, sw.location.origin).pathname;
+  return pathname === "/app" || pathname.startsWith("/app/");
+}
+
+async function purgeLegacyReaderPaths(): Promise<void> {
+  for (const cacheName of [PAGES_CACHE, DATA_CACHE]) {
+    const cache = await caches.open(cacheName);
+    const requests = await cache.keys();
+    await Promise.all(
+      requests.filter((request) => isLegacyReaderPath(request.url)).map((request) => cache.delete(request)),
+    );
+  }
+  const dataMeta = await rawDataMetaScan();
+  await Promise.all(
+    [...dataMeta.keys()].filter(isLegacyReaderPath).map((key) => rawDataMetaDel(key)),
+  );
 }
 
 function announceTakeover(): void {

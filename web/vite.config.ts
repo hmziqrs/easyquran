@@ -1,8 +1,10 @@
 import tailwindcss from "@tailwindcss/vite";
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { quranArtifacts } from "./vite-plugin-quran";
+import { paraglideOptions } from "./paraglide.config.js";
 
 export default defineConfig({
   fmt: {},
@@ -14,6 +16,7 @@ export default defineConfig({
   plugins: lazyPlugins(() => [
     quranArtifacts(),
     tailwindcss(),
+    paraglideVitePlugin(paraglideOptions),
     sveltekit({
       version: {
         pollInterval: 5 * 60_000,

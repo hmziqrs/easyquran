@@ -1,7 +1,7 @@
 export const prerender = true;
 
 import { htmlToMarkdown } from "$lib/seo/render";
-import { MARKETING_PAGES } from "$lib/config/site";
+import { MARKETING_PAGES } from "$lib/config/site-structure";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async ({ fetch }) => {

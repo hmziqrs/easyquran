@@ -1,10 +1,12 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { surahAyahPathFor, type SurahRouteContext } from "$lib/data/quran";
+  import { routeContextFromParams, surahAyahPathFor } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { readerHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
   import type { QuranData } from "$lib/data/quran-data";
   import { quranSearch } from "$lib/quran/search";
   import {
@@ -24,26 +26,23 @@
     quranData: QuranData;
   }
 
-  const routeContext = $derived.by<SurahRouteContext>(() => {
-    const lang = page.params.lang;
-    const translator = page.params.translator;
-    if (typeof lang === "string" && typeof translator === "string") {
-      return { kind: "translation", lang, translator };
-    }
-    return { kind: "arabic" };
-  });
+  const copy = getReaderUiCopy();
+  const routeContext = $derived(routeContextFromParams(page.params));
 
   let searchPromise = $state<Promise<SearchState | null> | null>(null);
+  let isSearching = $state(false);
 
   $effect(() => {
     const query = reader.query.trim();
     if (!query) {
       searchPromise = null;
+      isSearching = false;
       return;
     }
     let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
-    searchPromise = new Promise<SearchState | null>((resolve) => {
+    isSearching = true;
+    searchPromise = new Promise<SearchState | null>((resolve, reject) => {
       timer = setTimeout(async () => {
         try {
           const [result, quranData] = await Promise.all([quranSearch(query), loadQuranData()]);
@@ -51,9 +50,13 @@
             resolve(null);
             return;
           }
+          isSearching = false;
           resolve({ result, quranData });
-        } catch {
-          resolve(null);
+        } catch (error) {
+          if (!cancelled) {
+            isSearching = false;
+            reject(error);
+          }
         }
       }, 140);
     });
@@ -64,11 +67,12 @@
   });
 
   function resultLabel(result: SearchResponse): string {
-    if (result.total === 0) return `No verses match “${result.query.trim()}”.`;
+    const query = result.query.trim();
+    if (result.total === 0) return copy.search.noVerseMatches(query);
     if (result.source === SearchProvider.Names) {
-      return `${result.total} surah${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`;
+      return copy.search.surahMatches(result.total, query);
     }
-    return `${result.total} Quran text result${result.total === 1 ? "" : "s"} matching “${result.query.trim()}”`;
+    return copy.search.textMatches(result.total, query);
   }
 
   function open(r: SearchHit, quranData: QuranData): void {
@@ -79,16 +83,23 @@
     const localPage = quranData.surahLocalPageForAyah(surah, ayah);
     if (!localPage) return;
     reader.openVerse(surah, ayah);
-    void goto(resolve(surahAyahPathFor(routeContext, entry, localPage.localPage, ayah)));
+    void goto(
+      publicHref(
+        readerHrefFor(
+          copy.locale,
+          surahAyahPathFor(routeContext, entry, localPage.localPage, ayah),
+        ),
+      ),
+    );
   }
 </script>
 
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-3" aria-busy={isSearching}>
   {#await searchPromise}
-    <div class="text-sm text-fg-2">Searching…</div>
+    <div class="text-sm text-fg-2" role="status" aria-live="polite">{copy.search.searching}</div>
   {:then state}
     {#if state}
-      <div class="text-sm text-fg-2">{resultLabel(state.result)}</div>
+      <div class="text-sm text-fg-2" role="status" aria-live="polite">{resultLabel(state.result)}</div>
       {#each state.result.results as r (searchHitKey(r))}
         {@const surah = searchHitSurah(r)}
         {@const text = searchHitText(r)}
@@ -99,20 +110,26 @@
         >
           <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
             {#if r.kind === SearchHitKind.Opener}
-              {state.quranData.surahByNum(surah)?.name ?? `Surah ${surah}`} · Surah opener
+              {copy.search.surahOpener(
+                state.quranData.surahByNum(surah)?.name ?? copy.sidebar.mode("surah"),
+              )}
             {:else}
-              {state.quranData.surahByNum(surah)?.name ?? `Surah ${surah}`} {surah}:{r.ayah.ayah}
+              {copy.search.ayah(
+                state.quranData.surahByNum(surah)?.name ?? copy.sidebar.mode("surah"),
+                surah,
+                r.ayah.ayah,
+              )}
             {/if}
           </span>
           {#if text}
             <HighlightedArabic {text} highlights={r.highlights} />
           {:else}
-            <span class="text-sm text-fg-3">Open surah →</span>
+            <span class="text-sm text-fg-3">{copy.search.openSurah}</span>
           {/if}
         </button>
       {/each}
     {/if}
   {:catch}
-    <div class="text-sm text-fg-2">Search is temporarily unavailable.</div>
+    <div class="text-sm text-fg-2" role="alert" aria-live="assertive">{copy.search.unavailable}</div>
   {/await}
 </div>

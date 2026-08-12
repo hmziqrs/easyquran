@@ -64,6 +64,7 @@
 >
   {#if translationActive}
     <span
+      lang={page.params.lang}
       dir="auto"
       class="verse-text verse-text--translation leading-[1.85] text-fg"
       style="font-size:var(--reader-translation-size, 1.0625rem)"

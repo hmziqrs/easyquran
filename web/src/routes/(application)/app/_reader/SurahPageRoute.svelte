@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { goto, replaceState } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { SITE } from "$lib/config/site";
   import { Seo } from "$lib/components";
@@ -14,6 +13,9 @@
     type SurahRouteData,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { readerHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
   import { trackReaderView } from "$lib/quran/track-view.svelte";
   import { reader } from "$lib/stores/reader.svelte";
   import ReaderShell from "./ReaderShell.svelte";
@@ -21,6 +23,7 @@
   import SurahReader from "./SurahReader.svelte";
 
   let { data }: { data: SurahRouteData } = $props();
+  const copy = getReaderUiCopy();
   const surah = $derived(data.pageData.surah);
   let scrolledPage = $state<typeof data.pageData | null>(null);
   let anchorScrolling = $state(false);
@@ -29,31 +32,44 @@
   const normalization = $derived(data.pageData.normalization);
   const routeContext = $derived(surahRouteContext(normalization.sourceId));
   const canonicalPath = $derived(surahLocalPagePathFor(routeContext, surah, activeLocalPage));
-  const pageSuffix = $derived(
-    data.pageData.pageCount > 1
-      ? ` — Page ${activeLocalPage} of ${data.pageData.pageCount}`
-      : "",
-  );
+  const canonicalPublicPath = $derived(readerHrefFor("en", canonicalPath));
+  const currentPublicPath = $derived(readerHrefFor(copy.locale, canonicalPath));
   const seoTitle = $derived(
-    `Surah ${surah.num}, ${surah.name}${pageSuffix} · EasyQuran`,
+    data.pageData.pageCount > 1
+      ? copy.seo.surahPageTitle(surah.num, surah.name, activeLocalPage, data.pageData.pageCount)
+      : copy.seo.surahTitle(surah.num, surah.name),
   );
   const isTranslation = $derived(normalization.script === QuranScript.Translation);
   const contentLanguage = $derived(
     isTranslation ? translationSegmentsFromId(normalization.sourceId).lang : "ar",
   );
   const seoDescription = $derived(
-    `Read Surah ${surah.name} (${surah.arabic}), page ${activeLocalPage} of ${data.pageData.pageCount}, ayahs ${activePage.page.startAyah}–${activePage.page.endAyah}${
-      isTranslation ? "." : ", in the Uthmani script."
-    }`,
+    isTranslation
+      ? copy.seo.surahDescriptionTranslation(
+          surah.name,
+          surah.arabic,
+          activeLocalPage,
+          data.pageData.pageCount,
+          activePage.page.startAyah,
+          activePage.page.endAyah,
+        )
+      : copy.seo.surahDescriptionUthmani(
+          surah.name,
+          surah.arabic,
+          activeLocalPage,
+          data.pageData.pageCount,
+          activePage.page.startAyah,
+          activePage.page.endAyah,
+        ),
   );
   const translationPending = $derived(isTranslation && data.pageData.ayahs.length === 0);
   const chapterLd = $derived([
     {
       "@context": "https://schema.org",
       "@type": "Chapter",
-      "@id": `${SITE.url}${canonicalPath}#chapter`,
-      url: `${SITE.url}${canonicalPath}`,
-      name: `Surah ${surah.name}`,
+      "@id": `${SITE.url}${canonicalPublicPath}#chapter`,
+      url: `${SITE.url}${canonicalPublicPath}`,
+      name: copy.seo.surahTitle(surah.num, surah.name),
       alternateName: surah.arabic,
       position: surah.num,
       inLanguage: contentLanguage,
@@ -64,7 +80,7 @@
       "@type": "Book",
       "@id": `${SITE.url}/#quran`,
       url: `${SITE.url}/`,
-      name: "The Quran",
+      name: copy.seo.quranBook,
       inLanguage: "ar",
     },
   ]);
@@ -98,7 +114,12 @@
       const quranData = await loadQuranData();
       const targetPage = quranData.surahLocalPageForAyah(surah.num, ayah);
       if (!targetPage) return;
-      const targetHref = resolve(surahAyahPathFor(routeContext, surah, targetPage.localPage, ayah));
+      const targetHref = publicHref(
+        readerHrefFor(
+          copy.locale,
+          surahAyahPathFor(routeContext, surah, targetPage.localPage, ayah),
+        ),
+      );
       if (targetPage.localPage !== data.pageData.page.localPage) {
         await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
         return;
@@ -154,7 +175,7 @@
 </script>
 
 <Seo
-  path={canonicalPath}
+  path={canonicalPublicPath}
   title={seoTitle}
   description={seoDescription}
   extraLd={chapterLd}
@@ -162,15 +183,15 @@
   inLanguage={contentLanguage}
   noindex={translationPending}
   crumbs={[
-    { name: "Home", href: "/" },
-    { name: `Surah ${surah.name}`, href: canonicalPath },
+    { name: copy.seo.home, href: "/" },
+    { name: copy.seo.breadcrumbSurah(surah.name), href: currentPublicPath },
   ]}
 />
 
 <ReaderShell>
   {#snippet header()}
     <span class="text-sm font-medium text-fg-2">
-      {surah.num}. {surah.name} · Page {activeLocalPage}/{data.pageData.pageCount}
+      {surah.num}. {surah.name} · {copy.shell.pageOf(activeLocalPage, data.pageData.pageCount)}
     </span>
     <span dir="rtl" lang="ar" class="ml-auto font-arabic text-base text-fg-3">
       {surah.arabic}

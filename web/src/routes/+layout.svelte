@@ -19,6 +19,7 @@
   import { startAnalytics } from "$lib/boot/analytics";
   import { startCrashReporting } from "$lib/boot/crash-reporting";
   import { startOfflineEngine } from "$lib/boot/offline-engine";
+  import { deLocalizeUrl } from "$lib/paraglide/runtime";
 
   let { children } = $props();
 
@@ -27,7 +28,8 @@
   let paintFrame = 0;
   let postPaintFrame = 0;
   const ensureOfflineEngine = (pathname: string): void => {
-    if (!pathname.startsWith("/app")) return;
+    const canonicalPath = deLocalizeUrl(new URL(pathname, location.origin)).pathname;
+    if (canonicalPath !== "/app" && !canonicalPath.startsWith("/app/")) return;
     if (offlineTeardown) return;
     offlineTeardown = startOfflineEngine();
   };
@@ -94,7 +96,6 @@
         "@id": `${SITE.url}/#website`,
         name: SITE.name,
         url: SITE.url,
-        inLanguage: "en",
         publisher: { "@id": `${SITE.url}/#organization` },
       },
       {

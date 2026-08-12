@@ -1,14 +1,20 @@
 export const prerender = true;
 
-import { SITE, MARKETING_PAGES } from "$lib/config/site";
+import { SITE } from "$lib/config/site";
 import {
-  globalPagePathFor,
-  juzPathFor,
-  surahLocalPagePathFor,
-  surahPathFor,
-  translationSegmentsFromId,
-  type SurahRouteContext,
-} from "$lib/data/quran";
+  quranHrefForPrerenderEntry,
+  readerPrerenderEntries,
+} from "$lib/components/i18n/reader-prerender.server";
+import { translationSegmentsFromId, type SurahRouteContext } from "$lib/data/quran";
+import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
+import { MARKETING_PUBLICATIONS, marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
+import {
+  marketingSeoLinks,
+  readerCanonicalEntryPath,
+  readerCanonicalPath,
+  type ReaderEntryPage,
+} from "$lib/i18n/seo";
+import type { QuranReaderHref } from "$lib/i18n/reader";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import rawTranslations from "$lib/data/translations.json";
 
@@ -30,7 +36,7 @@ const translations: TranslationEntry[] = (rawTranslations as readonly (readonly 
 
 function alternatesBlock(
   arabicLoc: string,
-  pathForCtx: (ctx: SurahRouteContext) => string,
+  pathForCtx: (ctx: SurahRouteContext) => QuranReaderHref,
 ): string {
   let out = `    <xhtml:link rel="alternate" hreflang="ar" href="${escape(arabicLoc)}"/>`;
   out += `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${escape(arabicLoc)}"/>`;
@@ -38,49 +44,53 @@ function alternatesBlock(
   for (const t of translations) {
     if (seen.has(t.lang)) continue;
     seen.add(t.lang);
-    const href = SITE.url + pathForCtx(t.ctx);
+    const href = SITE.url + readerCanonicalPath(pathForCtx(t.ctx));
     out += `\n    <xhtml:link rel="alternate" hreflang="${escape(t.lang)}" href="${escape(href)}"/>`;
   }
   return out;
 }
 
-function groupedUrl(arabicPath: string, pathForCtx: (ctx: SurahRouteContext) => string): string {
-  const loc = SITE.url + arabicPath;
+function groupedUrl(
+  arabicPath: QuranReaderHref,
+  pathForCtx: (ctx: SurahRouteContext) => QuranReaderHref,
+): string {
+  const loc = SITE.url + readerCanonicalPath(arabicPath);
   return `  <url>\n    <loc>${escape(loc)}</loc>\n${alternatesBlock(loc, pathForCtx)}\n  </url>`;
 }
 
-function plainUrl(path: string): string {
-  return `  <url>\n    <loc>${escape(SITE.url + path)}</loc>\n  </url>`;
+function localizedMarketingUrl(pageId: MarketingPageId, locale: UiLocale): string {
+  const links = marketingSeoLinks(pageId, locale);
+  const alternates = links.alternates
+    .map(
+      ({ hreflang, href }) =>
+        `    <xhtml:link rel="alternate" hreflang="${escape(hreflang)}" href="${escape(href)}"/>`,
+    )
+    .join("\n");
+  return `  <url>\n    <loc>${escape(links.canonical)}</loc>\n${alternates}\n  </url>`;
+}
+
+function plainReaderEntryUrl(page: ReaderEntryPage): string {
+  return `  <url>\n    <loc>${escape(SITE.url + readerCanonicalEntryPath(page))}</loc>\n  </url>`;
 }
 
 function* sitemapLines(): Generator<string> {
   yield `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n`;
-  for (const page of MARKETING_PAGES) {
-    yield plainUrl(page.href);
-    yield "\n";
-  }
-  for (const s of QURAN_DATA.surahs) {
-    yield groupedUrl(surahPathFor(ARABIC, s), (ctx) => surahPathFor(ctx, s));
-    yield "\n";
-  }
-  for (const s of QURAN_DATA.surahs) {
-    const pageCount = QURAN_DATA.surahLocalPageCount(s.num);
-    for (let localPage = 2; localPage <= pageCount; localPage += 1) {
-      yield groupedUrl(surahLocalPagePathFor(ARABIC, s, localPage), (ctx) =>
-        surahLocalPagePathFor(ctx, s, localPage),
-      );
+  for (const pageId of Object.keys(MARKETING_PUBLICATIONS) as MarketingPageId[]) {
+    for (const locale of SUPPORTED_UI_LOCALES) {
+      if (!marketingHref(pageId, locale)) continue;
+      yield localizedMarketingUrl(pageId, locale);
       yield "\n";
     }
   }
-  for (let i = 1; i <= 604; i += 1) {
-    yield groupedUrl(globalPagePathFor(ARABIC, i), (ctx) => globalPagePathFor(ctx, i));
+  for (const entry of readerPrerenderEntries(QURAN_DATA)) {
+    yield groupedUrl(quranHrefForPrerenderEntry(entry, ARABIC), (ctx) =>
+      quranHrefForPrerenderEntry(entry, ctx),
+    );
     yield "\n";
   }
-  for (let i = 1; i <= 30; i += 1) {
-    yield groupedUrl(juzPathFor(ARABIC, i), (ctx) => juzPathFor(ctx, i));
-    yield "\n";
-  }
-  yield plainUrl("/app/juz");
+  yield plainReaderEntryUrl("home");
+  yield "\n";
+  yield plainReaderEntryUrl("juz-index");
   yield "\n</urlset>";
 }
 

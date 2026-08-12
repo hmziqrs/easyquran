@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { SITE, PAGE_META, MARKETING_PAGES } from "$lib/config/site";
+  import { SITE } from "$lib/config/site";
+  import { MARKETING_PAGES } from "$lib/config/site-structure";
+  import {
+    baseEnglishPageCopy,
+    baseEnglishPageCopyForPath,
+  } from "$lib/i18n/base-english-copy";
 
   type FaqItem = { q: string; a: string };
   type Crumb = { name: string; href: string };
@@ -41,9 +46,9 @@
     crumbs?: Crumb[];
   } = $props();
 
-  const meta = $derived(Object.values(PAGE_META).find((p) => p.path === path));
+  const meta = $derived(baseEnglishPageCopyForPath(path));
   const pageTitle = $derived(title ?? meta?.title ?? SITE.name);
-  const pageDescription = $derived(description ?? meta?.description ?? SITE.tagline);
+  const pageDescription = $derived(description ?? meta?.description ?? baseEnglishPageCopy("home").description);
 
   const base = $derived(path === "/" ? "/index" : path);
   const mdHref = $derived(base + ".md");
@@ -87,7 +92,12 @@
             "@type": "BreadcrumbList",
             itemListElement: [
               { "@type": "ListItem", position: 1, name: "Home", item: `${SITE.url}/` },
-              { "@type": "ListItem", position: 2, name: current.label, item: canonical },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: baseEnglishPageCopy(current.id).label,
+                item: canonical,
+              },
             ],
           }
         : null,

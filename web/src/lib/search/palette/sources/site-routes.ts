@@ -1,6 +1,7 @@
 import type { Pathname } from "$app/types";
 import { authState } from "$lib/auth/auth-state.svelte";
-import { MARKETING_PAGES } from "$lib/config/site";
+import { MARKETING_PAGES } from "$lib/config/site-structure";
+import { baseEnglishPageCopy } from "$lib/i18n/base-english-copy";
 import { PaletteGroups } from "../groups";
 import { byScore, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteSource } from "../types";
@@ -28,7 +29,7 @@ const STATIC_ROUTES: readonly SiteRoute[] = [
   },
   ...MARKETING_PAGES.map((page) => ({
     href: page.href as Pathname,
-    label: page.label,
+    label: baseEnglishPageCopy(page.id).label,
     detail: "Page",
     keywords: [page.id],
   })),

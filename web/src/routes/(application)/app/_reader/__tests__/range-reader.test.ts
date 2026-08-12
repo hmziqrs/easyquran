@@ -52,7 +52,7 @@ vi.mock("$lib/quran/wire", () => ({
 // quranApi.readRange when the worker is not started), and real view helpers
 // (groupRangeAyahs/bodyText) run unmodified.
 vi.mock("$app/navigation", () => ({ goto: gotoSpy }));
-vi.mock("$app/paths", () => ({ resolve: (p: string) => p }));
+vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
 vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
 vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));
@@ -423,7 +423,7 @@ describe("RangeReader mount — atomic snapshot guarded by route key on a living
     let navigate!: (next: RangePageData) => void;
     mounted = mount(RangeReaderHost, {
       target,
-      props: { initial: juz30, expose: (fn) => (navigate = fn) },
+      props: { initial: juz30, expose: (fn: (next: RangePageData) => void) => (navigate = fn) },
     });
     await flushMicrotasks(20);
     // The juz 30 client read is in flight; its result has not been applied.

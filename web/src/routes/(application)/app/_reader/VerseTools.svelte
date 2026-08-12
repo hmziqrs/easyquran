@@ -5,6 +5,7 @@
   import { Icon, type IconName } from "$lib/components/icon";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { cn } from "$lib/utils";
 
   const COPY_FEEDBACK_MS = 1500;
@@ -16,6 +17,7 @@
   }: { text: string; vKey: string; onToggleNote?: () => void } = $props();
 
   const tafsir = $derived(tafsirFor(vKey));
+  const copy = getReaderUiCopy();
   const bookmarked = $derived(reader.isBookmarked(vKey));
   const noteOpen = $derived(reader.openNote === vKey);
   const hasNote = $derived(reader.getNote(vKey).length > 0);
@@ -82,29 +84,29 @@
 
     {@render verseAction({
       onclick: () => reader.toggleBookmark(vKey),
-      label: bookmarked ? "Remove bookmark" : "Bookmark",
-      ariaLabel: bookmarked ? "Remove bookmark" : "Bookmark this verse",
+      label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
+      ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
       icon: "bookmark",
       activeClass: bookmarked ? "text-pop" : undefined,
     })}
     {@render verseAction({
       onclick: onCopy,
-      label: copied ? "Copied" : "Copy",
-      ariaLabel: "Copy ayah",
+      label: copied ? copy.verse.copied : copy.verse.copy,
+      ariaLabel: copy.verse.copyAyah,
       icon: copied ? "check" : "copy",
       activeClass: copied ? "text-accent" : undefined,
     })}
     {@render verseAction({
       onclick: onShare,
-      label: sharedCopied ? "Copied" : "Share",
-      ariaLabel: "Share verse",
+      label: sharedCopied ? copy.verse.copied : copy.verse.share,
+      ariaLabel: copy.verse.shareVerse,
       icon: sharedCopied ? "check" : "share",
       activeClass: sharedCopied ? "text-accent" : undefined,
     })}
     {@render verseAction({
       onclick: () => (onToggleNote ? onToggleNote() : reader.toggleNote(vKey)),
-      label: "Note & tafsir",
-      ariaLabel: noteOpen ? "Close note and tafsir" : "Open note and tafsir",
+      label: copy.verse.noteTafsir,
+      ariaLabel: noteOpen ? copy.verse.closeNoteTafsir : copy.verse.openNoteTafsir,
       icon: "note",
       activeClass: noteOpen || hasNote ? "text-accent" : undefined,
     })}
@@ -114,22 +116,24 @@
 {#if noteOpen}
   <div class="verse-note mt-[20px] flex flex-col gap-3.5 animate-fade-up">
     <div class="flex flex-col gap-1.5 rounded-[11px] bg-bg-2 px-[18px] py-4">
-      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-pop">Tafsir</span>
+      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-pop"
+        >{copy.verse.tafsir}</span
+      >
       <span class="text-[14.5px] leading-[1.65] text-fg-2">{tafsir}</span>
     </div>
     <div class="flex flex-col gap-2">
       <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-fg-3">
-        Your note
+        {copy.verse.yourNote}
       </span>
       <Textarea
         value={reader.getNote(vKey)}
         oninput={onNote}
         rows={3}
-        aria-label="Your note"
-        placeholder="Write a reflection…"
+        aria-label={copy.verse.yourNote}
+        placeholder={copy.verse.notePlaceholder}
         class="resize-y rounded-[11px] border-line bg-bg-3 px-3.5 py-3 text-[14.5px] leading-[1.6] text-fg"
       />
-      <span class="text-[12.5px] text-fg-3">Saved on this device as you type.</span>
+      <span class="text-[12.5px] text-fg-3">{copy.verse.noteSaved}</span>
     </div>
   </div>
 {/if}

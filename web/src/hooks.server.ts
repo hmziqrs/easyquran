@@ -1,44 +1,32 @@
 import type { Handle, RequestEvent } from "@sveltejs/kit";
-import { translationIdFromSegments } from "$lib/data/quran";
+import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
-import { QURAN_DATA } from "$lib/server/quran-data";
+import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
+import { paraglideMiddleware } from "$lib/paraglide/server";
 import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
+import {
+  localizedReaderLocale,
+  parseReaderPath,
+  parseReaderRoute,
+  type ParsedReaderRoute,
+} from "$lib/server/reader-route";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
 const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
 
-function translationRouteCacheKey(event: RequestEvent): string | null {
-  const id = event.route.id;
-  if (id === null || !id.includes("/t/[lang]/[translator]")) return null;
-  const { lang, translator } = event.params;
-  if (!lang || translator === undefined) return null;
-  const sourceId = translationIdFromSegments(lang, translator);
-  if (event.params.surah) {
-    const surah = QURAN_DATA.surahBySlug(event.params.surah);
-    if (!surah) return null;
-    const localPage = event.params.localPage ? Number(event.params.localPage) : 1;
-    if (!Number.isSafeInteger(localPage) || localPage < 1) return null;
-    return diskCacheKey(sourceId, "surah", surah.num, localPage);
-  }
-  const index = Number(event.params.n);
-  if (!Number.isSafeInteger(index) || index < 1) return null;
-  return diskCacheKey(sourceId, id.includes("/juz/") ? "juz" : "page", index);
-}
-
-function htmlLangForRoute(
-  id: string | null,
-  params: Record<string, string | undefined>,
+function translationRouteCacheKey(
+  route: ParsedReaderRoute | null,
+  uiLocale: UiLocale | null,
 ): string | null {
-  if (!id) return null;
-  if (id.includes("/t/[lang]/[translator]")) {
-    const lang = params.lang;
-    return lang && /^[a-zA-Z-]+$/.test(lang) ? lang : null;
-  }
-  if (id.includes("/app/[surah]") || id.includes("/app/juz/") || id.includes("/app/page/")) {
-    return "ar";
-  }
-  return null;
+  if (!uiLocale || route?.type !== "translation") return null;
+  const base = diskCacheKey(
+    route.sourceId,
+    route.cacheKind,
+    route.index,
+    route.cacheKind === "surah" ? (route.localPage ?? 1) : undefined,
+  );
+  return `${base}__ui-${uiLocale}`;
 }
 
 function buildCsp(): string {
@@ -111,19 +99,84 @@ export function applyHeaders(response: Response, pathname: string, requestHasCoo
   }
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+interface DocumentAttributes {
+  readonly lang: string;
+  readonly dir: UiDirection;
+}
+
+function documentAttributes(
+  route: ParsedReaderRoute | null,
+  uiLocale: UiLocale | null,
+): DocumentAttributes {
+  if (route?.type === "translation") {
+    return { lang: route.contentLanguage, dir: route.contentDirection };
+  }
+  if (route?.type === "arabic") return { lang: "ar", dir: "rtl" };
+  if (uiLocale) return { lang: uiLocale, dir: uiDirection(uiLocale) };
+  return { lang: "en", dir: "ltr" };
+}
+
+function transformRootHtml(html: string, attributes: DocumentAttributes): string {
+  return html
+    .replace('lang="%lang%"', `lang="${attributes.lang}"`)
+    .replace('dir="%dir%"', `dir="${attributes.dir}"`);
+}
+
+function legacyReaderRedirect(event: RequestEvent): Response | null {
   const { pathname } = event.url;
-  const requestHasCookie = !!event.request.headers.get("cookie");
-  const key = translationRouteCacheKey(event);
+  if (!pathname.startsWith("/app") || !parseReaderPath(pathname)) return null;
+  const tail = building ? "" : `${event.url.search}${event.url.hash}`;
+  return new Response(null, {
+    status: 307,
+    headers: {
+      location: `/en${pathname}${tail}`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function noncanonicalLocalizedReaderRedirect(event: RequestEvent): Response | null {
+  const { pathname } = event.url;
+  if (
+    event.params.localPage !== "1" ||
+    !event.route.id ||
+    (!event.route.id.endsWith("/app/[surah]/page/[localPage]") &&
+      !event.route.id.endsWith("/app/[surah]/t/[lang]/[translator]/page/[localPage]")) ||
+    !pathname.endsWith("/page/1")
+  ) {
+    return null;
+  }
+  const localizedCanonical = pathname.slice(0, -"/page/1".length);
+  const canonical = localizedCanonical.replace(/^\/(?:en|ar)(?=\/app(?:\/|$))/u, "");
+  if (!parseReaderPath(canonical)) return null;
+  const tail = building ? "" : `${event.url.search}${event.url.hash}`;
+  return new Response(null, {
+    status: 308,
+    headers: { location: `${localizedCanonical}${tail}` },
+  });
+}
+
+function notFound(): Response {
+  return new Response("Not found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+async function resolveRequest(
+  event: RequestEvent,
+  resolve: Parameters<Handle>[0]["resolve"],
+  uiLocale: UiLocale | null,
+  readerRoute: ParsedReaderRoute | null,
+  requestHasCookie: boolean,
+): Promise<Response> {
+  const key = translationRouteCacheKey(readerRoute, uiLocale);
   const cacheable =
     event.request.method === "GET" && !event.isDataRequest && key !== null && !requestHasCookie;
-  const langOverride = htmlLangForRoute(event.route.id, event.params);
-  const resolveOpts = langOverride
-    ? {
-        transformPageChunk: ({ html }: { html: string }) =>
-          html.replace(/<html([^>]*) lang="en"/, `<html$1 lang="${langOverride}"`),
-      }
-    : undefined;
+  const attributes = documentAttributes(readerRoute, uiLocale);
+  const resolveOpts = {
+    transformPageChunk: ({ html }: { html: string }) => transformRootHtml(html, attributes),
+  };
 
   if (cacheable) {
     const hit = await getCachedHtml(key);
@@ -135,7 +188,6 @@ export const handle: Handle = async ({ event, resolve }) => {
           "x-easyquran-quran-cache": "hit",
         },
       });
-      applyHeaders(response, pathname);
       return response;
     }
     const response = await resolve(event, resolveOpts);
@@ -155,11 +207,47 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     response.headers.set("server-timing", 'quran_ssr_cache;desc="miss"');
     response.headers.set("x-easyquran-quran-cache", "miss");
-    applyHeaders(response, pathname, requestHasCookie);
     return response;
   }
 
-  const response = await resolve(event, resolveOpts);
+  return resolve(event, resolveOpts);
+}
+
+function isLocalizedMarketingPath(pathname: string): boolean {
+  return pathname === "/" || pathname === "/ar" || pathname === "/ar/";
+}
+
+export const handle: Handle = async ({ event, resolve }) => {
+  const { pathname } = event.url;
+  const requestHasCookie = !!event.request.headers.get("cookie");
+  let response = legacyReaderRedirect(event);
+
+  if (!response) {
+    const readerLocale = localizedReaderLocale(pathname);
+    const useI18n = readerLocale !== null || isLocalizedMarketingPath(pathname);
+    const noncanonicalRedirect = readerLocale ? noncanonicalLocalizedReaderRedirect(event) : null;
+    if (noncanonicalRedirect) {
+      response = noncanonicalRedirect;
+    } else if (readerLocale && !parseReaderRoute(event.route.id, event.params)) {
+      response = notFound();
+    } else if (useI18n) {
+      response = await paraglideMiddleware(event.request, async ({ request, locale }) => {
+        if (!isUiLocale(locale)) return notFound();
+        event.request = request;
+        const readerRoute = readerLocale ? parseReaderRoute(event.route.id, event.params) : null;
+        return resolveRequest(event, resolve, locale, readerRoute, requestHasCookie);
+      });
+    } else {
+      response = await resolveRequest(
+        event,
+        resolve,
+        null,
+        parseReaderRoute(event.route.id, event.params),
+        requestHasCookie,
+      );
+    }
+  }
+
   applyHeaders(response, pathname, requestHasCookie);
   return response;
 };

@@ -2,11 +2,13 @@
   import { onMount, type Snippet } from "svelte";
   import { SidebarProvider, SidebarInset, SidebarTrigger } from "$lib/components/ui/sidebar";
   import { Container } from "$lib/components";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import AppSidebar from "./Sidebar.svelte";
 
   let { header, children }: { header: Snippet; children: Snippet } = $props();
   let mounted = $state(false);
+  const copy = getReaderUiCopy();
 
   let headerTop = $derived(stickyNav.collapsed ? "0px" : `${stickyNav.height}px`);
 
@@ -15,6 +17,7 @@
   });
 </script>
 
+<section lang={copy.locale} dir={copy.direction} data-reader-shell>
 <SidebarProvider open={false}>
   {#if mounted}
     <AppSidebar />
@@ -27,7 +30,7 @@
     >
       <div class="flex w-full items-center gap-3 px-5 sm:px-7 lg:px-10">
         {#if mounted}
-          <SidebarTrigger />
+          <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
         {/if}
         {@render header()}
       </div>
@@ -38,3 +41,4 @@
     </Container>
   </SidebarInset>
 </SidebarProvider>
+</section>

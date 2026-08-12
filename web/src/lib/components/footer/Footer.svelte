@@ -1,23 +1,27 @@
 <script lang="ts">
-  import { NAV_LINKS, SITE } from "$lib/config/site";
+  import { SITE } from "$lib/config/site";
   import { Icon } from "$lib/components/icon";
   import { externalLinkAttrs } from "$lib/utils";
   import type { OwnerPublic } from "$lib/types/owner";
+  import type {
+    FooterResolvedCopy,
+    MarketingFooterLinks,
+  } from "$lib/i18n/marketing-copy";
+  import { publicHref } from "$lib/i18n/public-href";
 
-  let { owner, year }: { owner: OwnerPublic; year: number } = $props();
+  let {
+    owner,
+    year,
+    copy,
+    links,
+  }: {
+    owner: OwnerPublic;
+    year: number;
+    copy: FooterResolvedCopy;
+    links: MarketingFooterLinks;
+  } = $props();
 
   const brand = SITE.name.toLowerCase();
-
-  const companyLinks = NAV_LINKS.filter((p) => p.href !== "/app");
-  const productLinks: { href: string; label: string }[] = [
-    { href: "/app", label: "Read the Qur'an" },
-    { href: "/app", label: "Bookmarks" },
-    { href: "/", label: "What's inside" },
-  ];
-  const legalLinks: { href: string; label: string }[] = [
-    { href: "/privacy", label: "Privacy Policy" },
-    { href: "/terms", label: "Terms of Service" },
-  ];
 
   const colHeading = "eyebrow mb-0";
   const link = "text-[14.5px] text-fg-2 transition-colors hover:text-fg";
@@ -32,17 +36,19 @@
         <div class="flex items-center gap-2.5">
           <span
             class="flex size-7 items-center justify-center rounded-[9px] bg-accent font-arabic text-[16px] leading-none text-accent-fg"
+            lang="ar"
+            dir="rtl"
             aria-hidden="true">ق</span
           >
           <span class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{brand}</span>
         </div>
         <p class="max-w-[30ch] text-[14.5px] leading-relaxed text-fg-2">
-          {SITE.footerBlurb}
+          {copy.blurb}
         </p>
         <div class="flex items-center gap-2">
           <a
             href={owner.x}
-            aria-label="EasyQuran on X"
+            aria-label={copy.socialX}
             {...externalLinkAttrs(owner.x, { me: true })}
             class="inline-flex size-8 items-center justify-center rounded-lg border border-line-2 text-fg-3 transition-colors hover:border-line-3 hover:text-fg"
           >
@@ -51,49 +57,53 @@
         </div>
       </div>
 
-      <nav aria-label="Product" class="flex flex-col gap-2.5">
-        <h2 class={colHeading}>Product</h2>
+      <nav aria-label={copy.productLabel} class="flex flex-col gap-2.5">
+        <h2 class={colHeading}>{copy.productHeading}</h2>
         <ul class="grid gap-2.5">
-          {#each productLinks as p (p.label)}
-            <li><a class={link} href={p.href}>{p.label}</a></li>
+          {#each links.product as p (p.id)}
+            <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
           {/each}
         </ul>
       </nav>
 
-      <nav aria-label="Company" class="flex flex-col gap-2.5">
-        <h2 class={colHeading}>Company</h2>
-        <ul class="grid gap-2.5">
-          {#each companyLinks as p (p.href)}
-            <li><a class={link} href={p.href}>{p.label}</a></li>
-          {/each}
-        </ul>
-      </nav>
+      {#if links.company.length > 0}
+        <nav aria-label={copy.companyLabel} class="flex flex-col gap-2.5">
+          <h2 class={colHeading}>{copy.companyHeading}</h2>
+          <ul class="grid gap-2.5">
+            {#each links.company as p (p.id)}
+              <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
+            {/each}
+          </ul>
+        </nav>
+      {/if}
 
-      <nav aria-label="Legal" class="flex flex-col gap-2.5">
-        <h2 class={colHeading}>Legal</h2>
-        <ul class="grid gap-2.5">
-          {#each legalLinks as p (p.label)}
-            <li><a class={link} href={p.href}>{p.label}</a></li>
-          {/each}
-        </ul>
-      </nav>
+      {#if links.legal.length > 0}
+        <nav aria-label={copy.legalLabel} class="flex flex-col gap-2.5">
+          <h2 class={colHeading}>{copy.legalHeading}</h2>
+          <ul class="grid gap-2.5">
+            {#each links.legal as p (p.id)}
+              <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
+            {/each}
+          </ul>
+        </nav>
+      {/if}
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-5 pb-11">
       <span class="text-[13.5px] text-fg-3">
-        © {year} {brand}. Built by
+        © {year} {brand}. {copy.builtBy}
         <a
           class="text-fg-2 underline underline-offset-2 hover:text-fg"
           href={SITE.makerUrl}
           {...externalLinkAttrs(SITE.makerUrl)}>oxlabs.dev</a
-        > · a project by
+        > · {copy.projectBy}
         <a
           class="text-fg-2 underline underline-offset-2 hover:text-fg"
           href={SITE.ownerUrl}
           {...externalLinkAttrs(SITE.ownerUrl)}>hmziq.rs</a
         >.
       </span>
-      <span dir="rtl" class="font-arabic text-[17px] leading-none text-fg-3">
+      <span lang="ar" dir="rtl" class="font-arabic text-[17px] leading-none text-fg-3">
         وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ
       </span>
     </div>

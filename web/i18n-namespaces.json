@@ -1,0 +1,113 @@
+{
+  "note": "Namespace membership for generated message barrels (scripts/gen-message-namespaces.ts). A namespace is the unit of download: every message in one namespace ships together, and a namespace imported by a single route subtree gets its own chunk instead of being hoisted into a shared one. `prefixes` claims keys by `<prefix>_` prefix; `keys` claims exact keys and wins over prefixes. Every catalog key must be claimed exactly once or generation fails. See docs/i18n-bundle-plan.md.",
+  "namespaces": [
+    {
+      "id": "chrome",
+      "description": "Site chrome rendered on every marketing page: nav, footer, brand, skip link, locale switcher. Includes the appearance-panel trigger label, the only appearance string a page needs before the panel opens.",
+      "prefixes": ["nav", "footer", "brand", "skip", "locale"],
+      "keys": ["tweaks_customize_appearance"]
+    },
+    {
+      "id": "theme",
+      "description": "Theme mode names. Shared by chrome (nav toggle) and both appearance panels.",
+      "prefixes": ["theme"]
+    },
+    {
+      "id": "controls",
+      "description": "Parameterized control labels shared by the marketing and reader appearance panels.",
+      "keys": [
+        "tweaks_accent_option",
+        "tweaks_colour_input",
+        "tweaks_colour_label",
+        "tweaks_preset",
+        "tweaks_reset_to_preset",
+        "tweaks_toggle_status"
+      ]
+    },
+    {
+      "id": "appearance",
+      "description": "Marketing appearance panel. Lazy: only downloaded once the panel is opened.",
+      "prefixes": ["tweaks", "surface", "accent"]
+    },
+    {
+      "id": "landing",
+      "description": "Marketing home page, including its SEO metadata.",
+      "prefixes": ["landing", "seo"]
+    },
+    {
+      "id": "about",
+      "description": "About page.",
+      "prefixes": ["about"]
+    },
+    {
+      "id": "faq",
+      "description": "FAQ page, including its FAQPage structured data.",
+      "prefixes": ["faq"]
+    },
+    {
+      "id": "contact",
+      "description": "Contact page.",
+      "prefixes": ["contact"]
+    },
+    {
+      "id": "legal",
+      "description": "Legal chrome shared by the privacy and terms pages.",
+      "prefixes": ["legal"]
+    },
+    {
+      "id": "privacy",
+      "description": "Privacy policy body.",
+      "prefixes": ["legal_privacy"]
+    },
+    {
+      "id": "terms",
+      "description": "Terms of service body.",
+      "prefixes": ["legal_terms"]
+    },
+    {
+      "id": "reader-settings",
+      "description": "Reader appearance panel. Lazy: only downloaded once the panel is opened.",
+      "keys": [
+        "reader_accent",
+        "reader_accent_azure",
+        "reader_accent_colour",
+        "reader_accent_gold",
+        "reader_accent_plum",
+        "reader_accent_reset",
+        "reader_accent_teal",
+        "reader_analytics",
+        "reader_background",
+        "reader_clear",
+        "reader_close_appearance",
+        "reader_copy_css",
+        "reader_custom_colours",
+        "reader_data_privacy",
+        "reader_mode",
+        "reader_off",
+        "reader_on",
+        "reader_performance",
+        "reader_performance_reload",
+        "reader_pop",
+        "reader_reset",
+        "reader_settings",
+        "reader_surface",
+        "reader_surface_contrast",
+        "reader_surface_contrast_note",
+        "reader_surface_ink",
+        "reader_surface_ink_note",
+        "reader_surface_mocha",
+        "reader_surface_mocha_note",
+        "reader_surface_paper",
+        "reader_surface_paper_note",
+        "reader_surface_slate",
+        "reader_surface_slate_note",
+        "reader_theme_derived_note"
+      ]
+    },
+    {
+      "id": "reader",
+      "description": "Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.",
+      "prefixes": ["reader"]
+    }
+  ]
+}

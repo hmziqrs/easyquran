@@ -6,6 +6,7 @@ node_modules
 .wrangler
 .svelte-kit
 build
+web/src/lib/paraglide/
 
 .DS_Store
 Thumbs.db
