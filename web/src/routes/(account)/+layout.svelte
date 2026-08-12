@@ -8,7 +8,7 @@
 
   onMount(() => {
     installPurgeHook(authState);
-    authState.hydrate();
+    authState.hydrate({ force: true });
   });
 </script>
 

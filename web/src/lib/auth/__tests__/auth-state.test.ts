@@ -33,9 +33,12 @@ const PROFILE = {
   oauth_provider: null,
 };
 
+const HINT_KEY = "eq.auth.session-hint";
+
 beforeEach(() => {
   envMock.browser = true;
   clientMock.getUser.mockReset();
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -73,8 +76,9 @@ describe("AuthState.probe single-flight", () => {
 });
 
 describe("AuthState hydrate after mount", () => {
-  it("issues a probe when browser=true", async () => {
+  it("issues a probe when browser=true and the session hint is present", async () => {
     envMock.browser = true;
+    localStorage.setItem(HINT_KEY, "1");
     clientMock.getUser.mockResolvedValue({ kind: "anonymous" });
     const state = createAuthState(asClient);
     state.hydrate();
@@ -96,12 +100,73 @@ describe("AuthState hydrate after mount", () => {
   });
 
   it("hydrate is idempotent: a second call does not re-probe", async () => {
+    localStorage.setItem(HINT_KEY, "1");
     clientMock.getUser.mockResolvedValue({ kind: "anonymous" });
     const state = createAuthState(asClient);
     state.hydrate();
     state.hydrate();
     await state.probe();
     expect(state.hydrated).toBe(true);
+  });
+});
+
+describe("AuthState session hint gates the hydrate probe", () => {
+  it("skips the probe and settles anonymous when no hint exists", () => {
+    clientMock.getUser.mockResolvedValue({ kind: "anonymous" });
+    const state = createAuthState(asClient);
+    state.hydrate();
+    expect(clientMock.getUser).not.toHaveBeenCalled();
+    expect(state.status).toBe("anonymous");
+    expect(state.hydrated).toBe(true);
+  });
+
+  it("force:true probes even without a hint", async () => {
+    clientMock.getUser.mockResolvedValue({ kind: "authenticated", user: PROFILE });
+    const state = createAuthState(asClient);
+    state.hydrate({ force: true });
+    await state.probe();
+    expect(clientMock.getUser).toHaveBeenCalledTimes(1);
+    expect(state.status).toBe("authenticated");
+  });
+
+  it("an authenticated probe writes the hint so the next load probes again", async () => {
+    clientMock.getUser.mockResolvedValue({ kind: "authenticated", user: PROFILE });
+    await createAuthState(asClient).probe();
+    expect(localStorage.getItem(HINT_KEY)).toBe("1");
+
+    clientMock.getUser.mockClear();
+    const next = createAuthState(asClient);
+    next.hydrate();
+    expect(clientMock.getUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stale hint self-heals: an anonymous probe clears it", async () => {
+    localStorage.setItem(HINT_KEY, "1");
+    clientMock.getUser.mockResolvedValue({ kind: "anonymous" });
+    await createAuthState(asClient).probe();
+    expect(localStorage.getItem(HINT_KEY)).toBeNull();
+  });
+
+  it("an unknown probe leaves the hint untouched (transport failure is not a logout)", async () => {
+    localStorage.setItem(HINT_KEY, "1");
+    clientMock.getUser.mockResolvedValue({ kind: "unknown" });
+    await createAuthState(asClient).probe();
+    expect(localStorage.getItem(HINT_KEY)).toBe("1");
+  });
+
+  it("setUser writes the hint on login and clears it on sign-out", () => {
+    const state = createAuthState(asClient);
+    state.setUser(PROFILE);
+    expect(localStorage.getItem(HINT_KEY)).toBe("1");
+    state.setUser(null);
+    expect(localStorage.getItem(HINT_KEY)).toBeNull();
+  });
+
+  it("reset (logout) clears the hint", () => {
+    localStorage.setItem(HINT_KEY, "1");
+    const state = createAuthState(asClient);
+    state.reset();
+    expect(localStorage.getItem(HINT_KEY)).toBeNull();
   });
 });
 

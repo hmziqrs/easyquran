@@ -5,6 +5,20 @@ import {
   type SessionProbeResult,
   type UserProfile,
 } from "$lib/auth/auth-client";
+import { readRaw, removeRaw, writeRaw } from "$lib/storage/safe-storage";
+
+/**
+ * Client-side "this browser has signed in before" marker. Public reader pages
+ * mount `Nav`, so an unguarded `hydrate()` fires `GET /api/user/v1/get` on every
+ * cold load — a guaranteed 401 for the anonymous majority. The hint gates that
+ * probe; it is a UX hint only and never grants access (the session cookie is
+ * still the sole authority, and a stale hint self-heals on the next 401).
+ */
+const SESSION_HINT_KEY = "eq.auth.session-hint";
+
+function hasSessionHint(): boolean {
+  return readRaw("local", SESSION_HINT_KEY) === "1";
+}
 
 export type AuthStatus = "unknown" | "anonymous" | "authenticated";
 
@@ -83,15 +97,25 @@ class AuthState {
     return this.#probeInFlight;
   }
 
-  hydrate(): void {
+  /**
+   * `force` skips the session-hint gate: auth/account routes must resolve the
+   * real session even when the hint is missing (cleared storage, a session
+   * established outside this browser's storage, a first load after this landed).
+   */
+  hydrate(opts: { force?: boolean } = {}): void {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
+    if (!opts.force && !hasSessionHint()) {
+      this.#status = "anonymous";
+      return;
+    }
     void this.probe();
   }
 
   setUser(user: UserProfile | null): void {
     this.#user = user;
     this.#status = user ? "authenticated" : "anonymous";
+    this.#writeHint(user !== null);
   }
 
   setTwoFaPending(pending: boolean): void {
@@ -114,6 +138,12 @@ class AuthState {
     this.#twoFaPending = false;
     this.#probeInFlight = null;
     this.#hydrated = false;
+    this.#writeHint(false);
+  }
+
+  #writeHint(present: boolean): void {
+    if (present) writeRaw("local", SESSION_HINT_KEY, "1");
+    else removeRaw("local", SESSION_HINT_KEY);
   }
 
   #applyProbe(result: SessionProbeResult): void {
@@ -121,10 +151,12 @@ class AuthState {
       this.#status = "authenticated";
       this.#user = result.user;
       this.#twoFaPending = false;
+      this.#writeHint(true);
     } else if (result.kind === "anonymous") {
       this.#status = "anonymous";
       this.#user = null;
       this.#twoFaPending = false;
+      this.#writeHint(false);
     }
   }
 }
