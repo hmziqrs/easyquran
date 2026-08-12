@@ -1,6 +1,7 @@
 <script lang="ts">
   import { surahMeta, type SurahLocalPageData } from "$lib/data/quran";
   import { Icon } from "$lib/components/icon";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
 
   let {
@@ -19,6 +20,7 @@
     onBigger: () => void;
   } = $props();
 
+  const copy = getReaderUiCopy();
   const badge = $derived(String(initial.surah.num).padStart(3, "0"));
 </script>
 
@@ -34,7 +36,7 @@
     </div>
     <div class="flex min-w-0 flex-col gap-1.5">
       <span class="text-xs font-semibold uppercase tracking-[0.1em] text-accent">
-        Surah {initial.surah.num} · Page {visibleLocalPage} of {initial.pageCount}
+        {copy.shell.surahPage(initial.surah.num, visibleLocalPage, initial.pageCount)}
       </span>
       <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
         <h1 class="text-[32px] font-semibold tracking-[-0.025em]">
@@ -53,12 +55,12 @@
       <div
         class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
         role="group"
-        aria-label="Arabic text size"
+        aria-label={copy.shell.arabicTextSizeLabel}
       >
         <button
           type="button"
           onclick={onSmaller}
-          aria-label="Smaller Arabic text"
+          aria-label={copy.shell.smallerArabicTextLabel}
           class="flex h-[26px] w-7 items-center justify-center rounded-md text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
         >
           A&minus;
@@ -66,14 +68,18 @@
         <button
           type="button"
           onclick={onBigger}
-          aria-label="Larger Arabic text"
+          aria-label={copy.shell.largerArabicTextLabel}
           class="flex h-[26px] w-7 items-center justify-center rounded-md text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
         >
           A+
         </button>
       </div>
 
-      <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" role="group" aria-label="Reading mode">
+      <div
+        class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1"
+        role="group"
+        aria-label={copy.shell.readingModeLabel}
+      >
         <button
           type="button"
           aria-pressed={reader.isVerseMode}
@@ -81,8 +87,8 @@
           class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
         >
           <Icon name="rows" size={13} />
-          <span class="hidden sm:inline">Ayah-by-Ayah</span>
-          <span class="sm:hidden">Ayahs</span>
+          <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
+          <span class="sm:hidden">{copy.shell.ayahs}</span>
         </button>
         <button
           type="button"
@@ -91,7 +97,7 @@
           class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-bg-3 aria-pressed:text-fg text-fg-3 hover:text-fg"
         >
           <Icon name="continuous" size={13} />
-          <span>Reading</span>
+          <span>{copy.shell.reading}</span>
         </button>
       </div>
     </div>

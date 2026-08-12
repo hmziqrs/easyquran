@@ -52,7 +52,7 @@ vi.mock("$lib/quran/wire", () => ({
 // quranApi.readRange when the worker is not started), and real view helpers
 // (groupRangeAyahs/bodyText) run unmodified.
 vi.mock("$app/navigation", () => ({ goto: gotoSpy }));
-vi.mock("$app/paths", () => ({ resolve: (p: string) => p }));
+vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
 vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
 vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));

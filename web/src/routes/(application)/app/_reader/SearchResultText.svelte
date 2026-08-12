@@ -6,7 +6,7 @@
   const segments = $derived(highlightSegments(text, highlights));
 </script>
 
-<span dir="rtl" class="font-arabic text-[26px] leading-[2] text-fg">
+<span lang="ar" dir="rtl" class="font-arabic text-[26px] leading-[2] text-fg">
   {#each segments as segment (`${segment.start}:${segment.end}:${segment.highlighted}`)}
     {#if segment.highlighted}
       <mark class="rounded-sm bg-accent-soft text-inherit">{segment.text}</mark>

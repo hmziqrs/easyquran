@@ -6,16 +6,22 @@
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",
+    "prebuild": "pnpm i18n:check",
     "postbuild": "node scripts/gen-offline-pack.ts",
     "audit:arabic": "node scripts/audit-arabic-digest.ts",
     "preview": "vp preview",
     "start": "bun server.ts",
     "prepare": "svelte-kit sync || echo ''",
+    "i18n:compile": "node scripts/compile-i18n.mjs",
+    "i18n:check": "node scripts/check-i18n.mjs && pnpm i18n:compile",
+    "precheck": "pnpm i18n:check",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.worker.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "prelint": "pnpm i18n:check",
     "lint": "vp lint --deny-warnings",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
+    "pretest": "pnpm i18n:check",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -33,6 +39,8 @@
     "tailwind-variants": "^3.2.2"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "2.23.2",
+    "@inlang/plugin-message-format": "4.4.1",
     "@internationalized/date": "^3.12.2",
     "@lucide/svelte": "^1.27.0",
     "@sveltejs/adapter-node": "^5.5.7",

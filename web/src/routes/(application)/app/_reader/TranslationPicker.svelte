@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { resolve } from "$app/paths";
+  import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import {
     SourceKind,
     surahLocalPagePathFor,
@@ -12,6 +12,9 @@
     type SurahRouteContext,
   } from "$lib/data/quran";
   import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { readerHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
   import { noteTranslationChosen } from "$lib/quran/engagement";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { useSidebar } from "$lib/components/ui/sidebar";
@@ -73,14 +76,15 @@
   }
 
   const sidebar = useSidebar();
-  const position = $derived(positionOf(page.url.pathname));
+  const copy = getReaderUiCopy();
+  const position = $derived(positionOf(deLocalizeUrl(page.url).pathname));
   const activeTranslationId = $derived(
     position && position.lang
       ? translationIdFromSegments(position.lang, position.translator ?? "")
       : null,
   );
   const isArabicActive = $derived(activeTranslationId === null);
-  const summary = $derived(activeTranslationId ?? "Arabic");
+  const summary = $derived(activeTranslationId ?? copy.sources.arabic);
   const arabicHref = $derived(hrefFor(position, SourceKind.Arabic));
 
   onMount(() => {
@@ -122,10 +126,11 @@
 
 <details bind:this={detailsEl} class="group px-1">
   <summary
+    title={copy.sources.source}
     class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-[9px] border border-line bg-bg-2 px-3 py-2 text-[12.5px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
   >
     <span class="flex min-w-0 items-center gap-2">
-      <span class="text-[10.5px] uppercase tracking-wide text-fg-4">Source</span>
+      <span class="text-[10.5px] uppercase tracking-wide text-fg-4">{copy.sources.source}</span>
       <span class="truncate font-medium text-fg">{summary}</span>
     </span>
     <Icon
@@ -135,22 +140,27 @@
     />
   </summary>
 
-  <ul class="mt-1 flex max-h-[220px] flex-col gap-0.5 overflow-y-auto py-0.5">
+  <ul
+    class="mt-1 flex max-h-[220px] flex-col gap-0.5 overflow-y-auto py-0.5"
+    aria-label={copy.sources.source}
+  >
     <li>
       {#if arabicHref}
         <a
-          href={resolve(arabicHref)}
+          href={publicHref(readerHrefFor(copy.locale, arabicHref))}
           data-sveltekit-preload-data="hover"
           aria-current={isArabicActive ? "page" : undefined}
+          aria-label={copy.sources.arabic}
+          title={copy.sources.arabic}
           onclick={() => onSelect(SourceKind.Arabic)}
           class={rowClass(isArabicActive)}
         >
-          <span class="truncate">Arabic</span>
-          <span class="ml-auto text-[10.5px] text-fg-4">Original</span>
+          <span class="truncate">{copy.sources.arabic}</span>
+          <span class="ml-auto text-[10.5px] text-fg-4">{copy.sources.original}</span>
         </a>
       {:else}
         <span class={rowClass(false, true)}>
-          <span class="truncate">Arabic</span>
+          <span class="truncate">{copy.sources.arabic}</span>
         </span>
       {/if}
     </li>
@@ -163,7 +173,7 @@
       <li>
         {#if href}
           <a
-            href={resolve(href)}
+            href={publicHref(readerHrefFor(copy.locale, href))}
             data-sveltekit-preload-data="hover"
             aria-current={active ? "page" : undefined}
             onclick={() => onSelect(target)}
@@ -171,7 +181,7 @@
           >
             <span class="truncate">{t.language}{t.translator ? ` · ${t.translator}` : ""}</span>
             {#if preferred && !active}
-              <span class="ml-auto text-[10.5px] text-fg-4">default</span>
+              <span class="ml-auto text-[10.5px] text-fg-4">{copy.sources.default}</span>
             {/if}
           </a>
         {:else}
@@ -181,7 +191,9 @@
         {/if}
       </li>
     {:else}
-      <li class="px-3 py-2 text-[12px] text-fg-3">No translations available yet.</li>
+      <li class="px-3 py-2 text-[12px] text-fg-3" role="status">
+        {copy.sources.noTranslations}
+      </li>
     {/each}
   </ul>
 </details>

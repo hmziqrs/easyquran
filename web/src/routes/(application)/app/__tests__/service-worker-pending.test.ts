@@ -41,8 +41,12 @@ vi.mock("../../../../lib/workers/idb", () => ({
 }));
 
 vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
-vi.mock("$lib/data/quran", () => ({ translationIdFromSegments: () => "en.test" }));
-vi.mock("$lib/server/quran-data", () => ({ QURAN_DATA: {} }));
+vi.mock("$lib/data/quran", () => ({
+  translationIdFromSegments: (lang: string, translator: string) => `${lang}.${translator}`,
+}));
+vi.mock("$lib/server/quran-data", () => ({
+  QURAN_DATA: { rangeByIndex: () => ({ startGlobal: 1, endGlobal: 2 }) },
+}));
 
 const { disk } = vi.hoisted(() => ({
   disk: {
@@ -400,7 +404,7 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
       request,
       url,
       route: { id: "/(application)/app/t/[lang]/[translator]/juz/[n]" },
-      params: { lang: "en", translator: "test", n: "5" },
+      params: { lang: "en", translator: "sahih", n: "5" },
       isDataRequest: opts.isDataRequest ?? false,
     };
     const args: HandleCall = {
@@ -413,7 +417,7 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
   it("never reads from the disk cache when the request carries a cookie", async () => {
     disk.cachedHtml = "<html>cached anonymous</html>";
     const res = await runHandle(
-      { pathname: "/app/t/en/test/juz/5", cookie: "ruxlog.sid=abc" },
+      { pathname: "/en/app/t/en/sahih/juz/5", cookie: "ruxlog.sid=abc" },
       new Response("<html>fresh anonymous</html>", {
         headers: { "content-type": "text/html" },
       }),
@@ -426,7 +430,7 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
   it("serves the disk cache hit for an anonymous request", async () => {
     disk.cachedHtml = "<html>cached anonymous</html>";
     const res = await runHandle(
-      { pathname: "/app/t/en/test/juz/5" },
+      { pathname: "/en/app/t/en/sahih/juz/5" },
       new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } }),
     );
     expect(disk.reads).toBe(1);
@@ -436,7 +440,7 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
   it("never writes the disk cache when the request carries a cookie", async () => {
     disk.cachedHtml = null;
     await runHandle(
-      { pathname: "/app/t/en/test/juz/5", cookie: "ruxlog.sid=abc" },
+      { pathname: "/en/app/t/en/sahih/juz/5", cookie: "ruxlog.sid=abc" },
       new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } }),
     );
     expect(disk.writes).toHaveLength(0);
@@ -446,24 +450,24 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
     disk.cachedHtml = null;
     const res = new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } });
     stubHeader(res.headers, "set-cookie", "sid=rotated; HttpOnly");
-    await runHandle({ pathname: "/app/t/en/test/juz/5" }, res);
+    await runHandle({ pathname: "/en/app/t/en/sahih/juz/5" }, res);
     expect(disk.writes).toHaveLength(0);
   });
 
   it("writes the disk cache for an anonymous, non-session-setting document", async () => {
     disk.cachedHtml = null;
     await runHandle(
-      { pathname: "/app/t/en/test/juz/5" },
+      { pathname: "/en/app/t/en/sahih/juz/5" },
       new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } }),
     );
-    expect(disk.writes).toEqual(["k"]);
+    expect(disk.writes).toEqual(["k__ui-en"]);
   });
 
   it("marks a cookie-bearing __data.json response private, no-store and bypasses the disk cache", async () => {
     disk.cachedHtml = "<html>cached</html>";
     const res = await runHandle(
       {
-        pathname: "/app/t/en/test/juz/5/__data.json",
+        pathname: "/en/app/t/en/sahih/juz/5/__data.json",
         cookie: "ruxlog.sid=abc",
         isDataRequest: true,
       },

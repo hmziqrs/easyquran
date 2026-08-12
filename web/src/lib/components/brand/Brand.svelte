@@ -1,13 +1,19 @@
 <script lang="ts">
   import { cn } from "$lib/utils";
   import { SITE } from "$lib/config/site";
-  let { class: className = "", href = "/" }: { class?: string; href?: string } = $props();
+  import { publicHref } from "$lib/i18n/public-href";
+
+  let {
+    class: className = "",
+    homeHref = "/",
+    homeLabel = `${SITE.name} · home`,
+  }: { class?: string; homeHref?: `/${string}`; homeLabel?: string } = $props();
 </script>
 
 <a
   class={cn("group inline-flex items-center gap-2.5", className)}
-  {href}
-  aria-label={`${SITE.name} · home`}
+  href={publicHref(homeHref)}
+  aria-label={homeLabel}
 >
   <span
     class="size-2.5 rotate-45 rounded-[2px] bg-accent shadow-[0_0_0_3px_var(--accent-soft)] transition-transform duration-[400ms] ease-out group-hover:rotate-[135deg]"

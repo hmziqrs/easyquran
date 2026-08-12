@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { resolve } from "$app/paths";
   import { BrowseMode, reader } from "$lib/stores/reader.svelte";
   import {
     globalPagePathFor,
@@ -17,6 +16,9 @@
   import type { RangeEntry } from "$lib/data/quran-types";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { readerHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
   import { cn } from "$lib/utils";
   import { tick, type Snippet } from "svelte";
   import {
@@ -34,6 +36,7 @@
   import TranslationPicker from "./TranslationPicker.svelte";
 
   const BROWSE = [BrowseMode.Surah, BrowseMode.Ayah, BrowseMode.Juz, BrowseMode.Page] as const;
+  const copy = getReaderUiCopy();
   const sidebar = useSidebar();
   const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
@@ -75,14 +78,28 @@
     });
   }
 
-  const routeCtx = $derived<SurahRouteContext>(routeContextFromParams(page.params));
-
-  function surahHref(slug: string): `/app/${string}` {
-    return surahPathFor(routeCtx, slug);
+  function browseLabel(browse: BrowseMode): string {
+    switch (browse) {
+      case BrowseMode.Surah:
+        return copy.sidebar.mode(browse);
+      case BrowseMode.Ayah:
+        return copy.sidebar.mode(browse);
+      case BrowseMode.Juz:
+        return copy.sidebar.mode(browse);
+      case BrowseMode.Page:
+        return copy.sidebar.mode(browse);
+    }
   }
 
-  function rangeHref(useJuz: boolean, index: number): `/app/${string}` {
-    return useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
+  const routeCtx = $derived<SurahRouteContext>(routeContextFromParams(page.params));
+
+  function surahHref(slug: string): `/${string}` {
+    return readerHrefFor(copy.locale, surahPathFor(routeCtx, slug));
+  }
+
+  function rangeHref(useJuz: boolean, index: number): `/${string}` {
+    const quranHref = useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
+    return readerHrefFor(copy.locale, quranHref);
   }
 
   const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
@@ -115,7 +132,13 @@
 
 <svelte:window onkeydown={onKey} />
 
-{#snippet navRow(href: string, isActive: boolean | undefined, ariaCurrent: "page" | undefined, cls: string, body: Snippet<[]>)}
+{#snippet navRow(
+  href: string,
+  isActive: boolean | undefined,
+  ariaCurrent: "page" | undefined,
+  cls: string,
+  body: Snippet,
+)}
   <SidebarMenuItem>
     <SidebarMenuButton isActive={isActive} aria-current={ariaCurrent} class={cls}>
       {#snippet child({ props })}
@@ -138,15 +161,15 @@
         type="text"
         value={reader.query}
         {oninput}
-        placeholder="Search surah, number or Arabic…"
-        aria-label="Search surahs and ayahs"
+        placeholder={copy.sidebar.searchPlaceholder}
+        aria-label={copy.sidebar.searchLabel}
         class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none focus-visible:border-0 focus-visible:ring-0 placeholder:text-fg-3"
       />
       {#if reader.hasQuery}
         <button
           type="button"
           onclick={() => reader.clearQuery()}
-          aria-label="Clear search"
+          aria-label={copy.sidebar.clearSearch}
           class="flex-none text-fg-3 transition-colors hover:text-fg"
         >
           <Icon name="x" size={15} />
@@ -154,7 +177,11 @@
       {/if}
     </div>
 
-    <div class="grid grid-cols-4 gap-1 rounded-[10px] bg-bg-2 p-1" role="group" aria-label="Browse">
+    <div
+      class="grid grid-cols-4 gap-1 rounded-[10px] bg-bg-2 p-1"
+      role="group"
+      aria-label={copy.sidebar.browseLabel}
+    >
       {#each BROWSE as b (b)}
         <button
           type="button"
@@ -165,7 +192,7 @@
             reader.browseMode === b ? "bg-bg-3 text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
           )}
         >
-          {b}
+          {browseLabel(b)}
         </button>
       {/each}
     </div>
@@ -174,7 +201,9 @@
   <SidebarContent bind:ref={contentEl}>
     {#if dataPromise}
       {#await dataPromise}
-        <p class="px-4 py-3 text-sm text-fg-3">Loading Quran navigation…</p>
+        <p class="px-4 py-3 text-sm text-fg-3" aria-live="polite">
+          {copy.sidebar.loadingNavigation}
+        </p>
       {:then quranData}
         {@const current = quranData.surahBySlug(page.params.surah as string)}
         {#if reader.browseSurah}
@@ -199,7 +228,7 @@
                     </span>
                   {/snippet}
                   {@render navRow(
-                    resolve(surahHref(s.slug)),
+                    publicHref(surahHref(s.slug)),
                     active,
                     active ? "page" : undefined,
                     "h-auto items-start gap-3 px-3.5 py-3",
@@ -239,7 +268,12 @@
                         </span>
                       {/snippet}
                       {@render navRow(
-                        resolve(surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n)),
+                        publicHref(
+                          readerHrefFor(
+                            copy.locale,
+                            surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n),
+                          ),
+                        ),
                         undefined,
                         undefined,
                         "h-auto gap-3 px-3.5 py-2.5",
@@ -268,15 +302,15 @@
                 {#snippet item(i)}
                   {@const rg = ranges[i]}
                   {@const { num, n } = parseKey(rg.first)}
-                  {@const href = resolve(rangeHref(reader.browseJuz, rg.index))}
+                  {@const href = publicHref(rangeHref(reader.browseJuz, rg.index))}
                   {#snippet body()}
                     <span
                       class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
                     >
-                      {reader.browseJuz ? "Juz" : "Pg"} {rg.index}
+                      {copy.sidebar.rangeItem(reader.browseJuz ? "juz" : "page", rg.index)}
                     </span>
                     <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-                      {quranData.surahByNum(num)?.name ?? `Surah ${num}`} {num}:{n}
+                      {quranData.surahByNum(num)?.name ?? `${copy.sidebar.mode("surah")} ${num}`} {num}:{n}
                     </span>
                   {/snippet}
                   {@render navRow(href, undefined, undefined, "h-auto gap-3 px-3.5 py-2.5", body)}
@@ -287,13 +321,13 @@
           {/key}
         {/if}
       {:catch}
-        <p class="px-4 py-3 text-sm text-fg-3">Quran navigation could not be loaded.</p>
+        <p class="px-4 py-3 text-sm text-fg-3" role="alert">{copy.sidebar.navigationError}</p>
       {/await}
     {/if}
   </SidebarContent>
 
   <SidebarFooter>
     <TranslationPicker />
-    <span class="px-1 text-[11px] text-fg-3">Tip: press Ctrl+K to search</span>
+    <span class="px-1 text-[11px] text-fg-3">{copy.sidebar.tip}</span>
   </SidebarFooter>
 </Sidebar>

@@ -3,7 +3,6 @@
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
   import { beforeNavigate, goto, invalidateAll, replaceState } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { page as appPage } from "$app/state";
   import {
     parseKey,
@@ -15,6 +14,9 @@
     type SurahLink,
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
+  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { readerHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
@@ -63,6 +65,8 @@
     onVisiblePage?: (pageData: SurahLocalPageData) => void;
   } = $props();
 
+  const copy = getReaderUiCopy();
+
   let loadedPages = $state.raw<SurahLocalPageData[]>([]);
   const pages = $derived.by(() => {
     const byPage = new Map<number, SurahLocalPageData>();
@@ -106,8 +110,11 @@
   const isTranslationSource = $derived(routeContext.kind !== "arabic");
   const routeKey = $derived(`${sourceId}:${initial.surah.num}:${initial.page.localPage}`);
   let lastRouteKey: string | null = null;
-  function pagePathFor(localPage: number): `/app/${string}` {
-    return surahLocalPagePathFor(routeContext, initial.surah, localPage);
+  function pagePathFor(localPage: number): `/${string}` {
+    return readerHrefFor(
+      copy.locale,
+      surahLocalPagePathFor(routeContext, initial.surah, localPage),
+    );
   }
   const renderedPageNumbers = $derived.by(
     () =>
@@ -508,7 +515,7 @@
     const pageData = pages.find((item) => item.page.localPage === localPage);
     if (pageData) onVisiblePage?.(pageData);
     markAnchorRead(anchor !== undefined ? anchor : captureAnchor());
-    writeHistoryState(resolve(pagePathFor(localPage)), localPage);
+    writeHistoryState(publicHref(pagePathFor(localPage)), localPage);
   }
 
   function updateVisiblePage(anchor: ViewportAnchor | null = null): void {
@@ -619,9 +626,15 @@
       if (!surah || !targetPage) return;
       const resumeCtx = lastRead.sourceId ? surahRouteContext(lastRead.sourceId) : routeContext;
       reader.openVerse(lastRead.num, lastRead.n, lastRead.sourceId);
-      await goto(resolve(surahAyahPathFor(resumeCtx, surah, targetPage.localPage, lastRead.n)), {
-        keepFocus: true,
-      });
+      await goto(
+        publicHref(
+          readerHrefFor(
+            copy.locale,
+            surahAyahPathFor(resumeCtx, surah, targetPage.localPage, lastRead.n),
+          ),
+        ),
+        { keepFocus: true },
+      );
     } catch {
       loadFailed = true;
     }
@@ -694,15 +707,20 @@
 />
 
 <div class="reader-stack flex flex-col gap-4">
+  {#if clientMounted && initial.ayahs.length === 0 && !loadFailed && quran.status !== "error"}
+    <span class="sr-only" role="status" aria-live="polite">{copy.shell.opening}</span>
+  {/if}
+
   {#if reader.hasLastRead}
     <button
       type="button"
       onclick={continueReading}
+      aria-label={copy.shell.continueReading(reader.lastReadRef)}
       class="flex items-center gap-3 rounded-[12px] bg-accent-soft px-[18px] py-[13px] text-left transition-[filter] duration-150 hover:brightness-[0.98]"
     >
       <Icon name="play" size={15} class="flex-none text-accent" />
-      <span class="text-sm text-accent">Continue reading — {reader.lastReadRef}</span>
-      <span class="ml-auto text-[13px] text-accent/75">Jump <span aria-hidden="true">→</span></span>
+      <span class="text-sm text-accent">{copy.shell.continueReading(reader.lastReadRef)}</span>
+      <span class="ml-auto text-[13px] text-accent">{copy.shell.jump} <span aria-hidden="true">→</span></span>
     </button>
   {/if}
 
@@ -733,7 +751,7 @@
               {@attach measurePage(pageData.page.localPage)}
             >
               <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
-                {initial.surah.name}, page {pageData.page.localPage} of {initial.pageCount}
+                {copy.shell.surahPageTitle(initial.surah.name, pageData.page.localPage, initial.pageCount)}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
                 <p dir="rtl" lang="ar" class="surah-opener py-3 text-center font-arabic text-fg-3">
@@ -764,7 +782,9 @@
       </TooltipProvider>
     </div>
 
-    <span class="sr-only" aria-live="polite">Page {visibleLocalPage} of {initial.pageCount}</span>
+    <span class="sr-only" aria-live="polite">
+      {copy.shell.pageOf(visibleLocalPage, initial.pageCount)}
+    </span>
 
     {#if clientMounted && (loadFailed || workerDegraded || apiDegraded || quran.status === "error")}
       <div
@@ -773,26 +793,27 @@
       >
         <span>
           {#if loadFailed && initial.ayahs.length === 0}
-            This translation couldn't be loaded right now.
+            {copy.shell.translationUnavailable}
           {:else if loadFailed && failedPage !== null}
-            Page {failedPage} couldn't be loaded right now. You can keep reading this page.
+            {copy.shell.pageUnavailable(failedPage)}
           {:else if workerDegraded}
-            Local offline copy unavailable — serving from the network.
+            {copy.shell.offlineCopyUnavailable}
           {:else if apiDegraded}
-            Network is slow or unavailable — showing available content.
+            {copy.shell.networkUnavailable}
           {:else if quran.status === "error"}
-            Offline data could not start. You can keep reading this page or use the page links.
+            {copy.shell.offlineDataUnavailable}
           {:else}
-            More ayahs are unavailable right now. You can keep reading this page or use the page links.
+            {copy.shell.moreAyahsUnavailable}
           {/if}
         </span>
         {#if loadFailed && (initial.ayahs.length === 0 || failedPage !== null)}
           <button
             type="button"
             onclick={retryDegradedPage}
+            aria-label={copy.shell.retry}
             class="shrink-0 rounded-full border border-line px-3 py-1 text-xs text-fg transition-colors hover:bg-bg-1"
           >
-            Retry
+            {copy.shell.retry}
           </button>
         {/if}
       </div>
