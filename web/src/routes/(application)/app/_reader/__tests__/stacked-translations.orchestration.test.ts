@@ -301,6 +301,30 @@ describe("createStackedTranslations", () => {
     ctrl.dispose();
   });
 
+  it("recovers a cold-failed extra once the background OPFS download warms (bounded retry)", async () => {
+    vi.useFakeTimers();
+    try {
+      stackedTranslations.setIds(["en.sahih"]);
+      workerStub.readRange
+        .mockRejectedValueOnce(new Error("cold miss"))
+        .mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+          Promise.resolve(rangeText(id, f, t)),
+        );
+      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+      ctrl.sync();
+      await flush();
+      expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
+
+      await vi.advanceTimersByTimeAsync(1200);
+      await flush();
+      expect(stackedFor(ctrl.state, "1:1").map((x) => x.sourceId)).toEqual(["en.sahih"]);
+      expect(erroredFor(ctrl.state, "1:1")).toEqual([]);
+      ctrl.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("an in-flight fetch from the prior route cannot write into the new route's state", async () => {
     stackedTranslations.setIds(["en.sahih"]);
     const pending: Array<(value: ReturnType<typeof rangeText>) => void> = [];
