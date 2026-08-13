@@ -31,7 +31,6 @@
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import { ayahIndexValidator } from "./range-validate";
   import {
-    currentUrlLocalPage,
     parseHistoryState,
     persistReaderPosition,
     reloadPositionState,

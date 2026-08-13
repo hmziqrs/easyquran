@@ -35,7 +35,6 @@ import {
   createAccountClient,
   type AccountClient,
 } from "$lib/auth/account-client";
-import { isOAuthProvider } from "$lib/auth/oauth-flow.svelte";
 
 export interface FlowStateLike {
   transition(ctx: AuthTransitionContext): Promise<void>;

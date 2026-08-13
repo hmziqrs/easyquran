@@ -63,7 +63,7 @@
     class="absolute inset-x-0 top-0"
     style="transform:translateY({$virtualizer.getVirtualItems()[0]?.start ?? 0}px)"
   >
-    {#each $virtualizer.getVirtualItems() as row, i (row.index)}
+    {#each $virtualizer.getVirtualItems() as row (row.index)}
       <div
         use:measure
         data-index={row.index}

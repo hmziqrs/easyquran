@@ -120,8 +120,6 @@ export class PasskeyFlow {
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   passkeys = $state<ReadonlyArray<PasskeyInfo>>([]);
-  #loginOptions: PublicKeyCredentialRequestOptions | null = null;
-  #registerOptions: PublicKeyCredentialCreationOptions | null = null;
   #loginState: unknown = null;
   #registerState: unknown = null;
 
@@ -136,8 +134,6 @@ export class PasskeyFlow {
   }
 
   clearSecrets(): void {
-    this.#loginOptions = null;
-    this.#registerOptions = null;
     this.#loginState = null;
     this.#registerState = null;
   }
@@ -178,7 +174,6 @@ export class PasskeyFlow {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
       }
-      this.#loginOptions = options;
       let assertion: PublicKeyCredential | null;
       try {
         assertion = (await this.#credentials.get({
@@ -191,7 +186,6 @@ export class PasskeyFlow {
         }
         throw e;
       }
-      this.#loginOptions = null;
       if (!assertion) {
         this.cancelled = true;
         return false;
@@ -229,7 +223,6 @@ export class PasskeyFlow {
       return false;
     } finally {
       this.pending = false;
-      this.#loginOptions = null;
       this.#loginState = null;
     }
   }
@@ -263,7 +256,6 @@ export class PasskeyFlow {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
       }
-      this.#registerOptions = options;
       let credential: PublicKeyCredential | null;
       try {
         credential = (await this.#credentials.create({
@@ -276,7 +268,6 @@ export class PasskeyFlow {
         }
         throw e;
       }
-      this.#registerOptions = null;
       if (!credential) {
         this.cancelled = true;
         return false;
@@ -320,7 +311,6 @@ export class PasskeyFlow {
       return false;
     } finally {
       this.pending = false;
-      this.#registerOptions = null;
       this.#registerState = null;
     }
   }

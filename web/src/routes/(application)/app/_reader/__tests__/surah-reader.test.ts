@@ -148,7 +148,7 @@ beforeEach(() => {
   loadQuranDataStub.mockReset();
   loadQuranDataStub.mockResolvedValue({
     surahLocalPage: () => ({ startGlobal: 8, endGlobal: 14 }),
-    globalIndexOf: (s: number, a: number) => a,
+    globalIndexOf: (_s: number, a: number) => a,
     surahByNum: () => SURAH,
     surahLocalPageForAyah: () => ({ localPage: 1 }),
   });
