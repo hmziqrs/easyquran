@@ -14,15 +14,56 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
                                   → api:8888    (Host + PathPrefix /api, stripped)
 ```
 
+## Images are built on your machine, never in the deploy
+
+Both Dockerfiles are **packaging-only**: they compile nothing, install no toolchain, and make
+no network calls. Everything is built on a dev machine and COPYed in.
+
+```bash
+just images v1.2.0     # host build + both images (tags: v1.2.0 and latest)
+just push   v1.2.0     # push to $REGISTRY (default ghcr.io/hmziqrs)
+```
+
+Why: the old `Dockerfile.web` re-installed pnpm + the whole toolchain, needed CA certs added
+to `node:24-slim`, and re-ran the sqlite prerender inside the image on every build. That step
+failed repeatedly and opaquely (a bare `Exit status 1` with no error text). It is gone.
+
+Requirements on the build host (Apple Silicon → arm64 Ubuntu server, so same arch, no qemu):
+
+- `zig` + `cargo-zigbuild` (`brew install zig`, `cargo install cargo-zigbuild`)
+- `rustup target add aarch64-unknown-linux-gnu`
+- `docker login ghcr.io` once, with a PAT carrying `write:packages`
+
+What each recipe does:
+
+| recipe | host step | image step |
+| --- | --- | --- |
+| `just image-web` | `pnpm --filter web build` (PUBLIC_ENV=prod) | COPY `web/build` + `web/server.ts` (~10s) |
+| `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary |
+
+`vendored-openssl` exists only for the cross-build: `webauthn-rs` pulls `openssl-sys`
+unconditionally and pkg-config cannot resolve a target libssl when cross-compiling, so
+OpenSSL is compiled from vendored source instead. Native `cargo build` is unaffected.
+`.2.36` pins the glibc floor (Debian 12 / Ubuntu 22.04+).
+
+Registry coordinates are `${REGISTRY:-ghcr.io/hmziqrs}/easyquran-{web,api}:${VERSION:-latest}`,
+resolved identically by the justfile and `docker-compose.yml`. If the packages are private,
+the server needs `docker login ghcr.io` too (or a Dokploy registry entry) — otherwise `up`
+fails on pull.
+
 ## Files
 
-- `Dockerfile.web` / `Dockerfile.api` — the two images.
+- `Dockerfile.web` / `Dockerfile.api` — the two images, plus a
+  `Dockerfile.<name>.dockerignore` each. BuildKit prefers the per-Dockerfile ignore over the
+  root `.dockerignore`, which is what lets these builds see `web/build` and `rust/target/…`
+  (both blanket-excluded at the root) while shipping nothing else.
 - `Dockerfile.web` runs the standalone adapter-node server **on the bun runtime**
-  (`oven/bun:1.3.14-slim`), built on Node. The split is deliberate: prerendering reads the
-  sqlite corpus via `node:sqlite`, which bun does not implement, and every sqlite route is
-  `prerender = true` — so it is a build-time dependency the runtime never loads. bun holds
-  roughly half Node's resident memory under translation SSR (see `bench/`). Its persistent
-  `web_quran_cache` volume stores only translated-page HTML (7-day TTL, 256 MiB LRU budget).
+  (`oven/bun:1.3.14-slim`). The SvelteKit build still runs on Node, just on the host now:
+  prerendering reads the sqlite corpus via `node:sqlite`, which bun does not implement, and
+  every sqlite route is `prerender = true` — a build-time dependency the runtime never loads.
+  bun holds roughly half Node's resident memory under translation SSR (see `bench/`). Its
+  persistent `web_quran_cache` volume stores only translated-page HTML (7-day TTL, 256 MiB
+  LRU budget).
 - `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
@@ -39,11 +80,12 @@ cp deploy/.env.example .env
 $EDITOR .env                 # DOMAIN, COOKIE_KEY, FIELD_ENC_KEY, INTERNAL_QURAN_API_TOKEN, ALLOWED_ORIGINS
 # Proxy topology defaults to stock Dokploy (PROXY_NETWORK/HTTPS_ENTRYPOINT/ACME_RESOLVER
 # in docker-compose.yml) — override in .env only if your Traefik is non-stock.
-docker compose up -d --build
+docker login ghcr.io          # only if the packages are private
+docker compose up -d
 ```
 
-First build is slow (Rust compiles once; cached after). Verify the public Quran
-route: `curl https://easyquran.fyi/api/quran/health/ready` → `{"ready":true,…}`.
+The server builds nothing — it pulls the tags you pushed with `just push`. Verify the public
+Quran route: `curl https://easyquran.fyi/api/quran/health/ready` → `{"ready":true,…}`.
 `/healthz` is deliberately **not** on the public router — reach it from the
 Docker network (`curl http://api:8888/healthz`) or the in-container healthcheck.
 
@@ -78,19 +120,22 @@ Arabic output and immutable assets.
 
 ## Release
 
-Dokploy rebuilds automatically on every push to the tracked branch — just push.
-Tag releases for your own record:
+Dokploy no longer builds anything — a git push alone ships nothing. Releasing is:
 
 ```bash
+just push v1.0.0                  # host build → both images → registry
 git tag v1.0.0 && git push origin v1.0.0
 ```
+
+then redeploy in Dokploy (or `docker compose pull && docker compose up -d` on the box). Set
+`VERSION=v1.0.0` in the environment to pin a release instead of tracking `latest`.
 
 ### Header checklist (before each release)
 
 Run against the running web origin to confirm the delivery contract holds:
 
 ```bash
-docker compose up -d --build
+just docker-up local          # builds both images on the host, then `compose up`
 web/scripts/assert-headers.sh http://localhost:8080 http://localhost:8888
 ```
 

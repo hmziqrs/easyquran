@@ -1,0 +1,12 @@
+# Per-Dockerfile ignore (BuildKit picks <dockerfile>.dockerignore over the root one).
+# The web image ships ONLY the prebuilt adapter-node bundle, so exclude everything and
+# re-include the two paths it copies. Root .dockerignore excludes web/build; here it is
+# the whole payload.
+*
+!web/build
+!web/server.ts
+
+# Never ship secrets or source maps' sibling env files even if they land in build/.
+**/.env
+**/.env.*
+!**/.env.example

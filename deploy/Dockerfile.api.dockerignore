@@ -1,0 +1,8 @@
+# Per-Dockerfile ignore (BuildKit picks <dockerfile>.dockerignore over the root one).
+# The api image ships one cross-compiled binary; the root ignore blanket-excludes **/target,
+# so exclude everything and re-include just that path.
+*
+!rust/target/aarch64-unknown-linux-gnu/release/ruxlog
+
+**/.env
+**/.env.*

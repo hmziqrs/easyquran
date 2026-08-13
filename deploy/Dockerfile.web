@@ -1,31 +1,18 @@
-# Build stays on Node: prerendering the Arabic routes reads the sqlite corpus through
-# `node:sqlite`, which bun does not implement ("No such built-in module"). Every route that
-# touches sqlite is `prerender = true`, so the dependency is build-time only — the runtime
-# below never loads it.
-FROM node:24-slim AS build
-WORKDIR /repo
-RUN corepack enable && corepack prepare pnpm@11.15.1 --activate
-# node:24-slim ships no system CA certificates. vite-plus (Rust HTTP client) and
-# adapter-node prerender make HTTPS calls during the build that fail without them:
-# `vp build` panics / prerender hangs ~50s then exits 1.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-
-COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
-COPY patches/ ./patches/
-COPY web/ ./web/
-COPY db/quran/tanzil/arabic/quran-uthmani.sqlite ./db/quran/tanzil/arabic/quran-uthmani.sqlite
-RUN sed -i '/db\/quran\/tanzil\/translations/d' pnpm-workspace.yaml
-
-ENV PUBLIC_ENV=prod
-
-ARG VERSION=dev
-ENV BUILD_VERSION=${VERSION}
-
-RUN pnpm install && pnpm --filter web build
-
-# Runtime on bun: same adapter-node server, roughly half the resident memory of Node under
-# translation SSR (bench/ measured 211 MB vs 375 MB at 1k req/s), and it holds throughput where
-# Node folds. Pinned deliberately — bump to 1.4 once it has a stable tag.
+# EasyQuran Web — packaging only. NOTHING is compiled here.
+#
+# The SvelteKit build runs on your machine (`just image-web`, which shells out to
+# `pnpm --filter web build`), because building it inside Docker meant re-installing the
+# toolchain, re-downloading CA certs, and re-running the sqlite prerender on every image —
+# the single most fragile step in this repo. adapter-node emits a self-contained bundle
+# (`web/build`) and `server.ts` imports nothing but `node:http` + that bundle, so the image
+# is two COPYs. The output is pure JS: arch-independent, no node_modules, no network.
+#
+# Build via `just image-web` — it guarantees the artifacts exist and are fresh. A bare
+# `docker build -f deploy/Dockerfile.web .` fails on the missing `web/build` COPY, by design.
+#
+# Context = repo root, filtered by deploy/Dockerfile.web.dockerignore (BuildKit reads the
+# per-Dockerfile ignore file in preference to the root .dockerignore, which excludes
+# web/build for the api/source builds).
 FROM oven/bun:1.3.14-slim
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -33,8 +20,9 @@ ENV NODE_ENV=production \
     PORT=8080 \
     QURAN_SSR_CACHE_DIR=/app/cache/quran-ssr
 RUN mkdir -p /app/cache/quran-ssr && chown -R bun:bun /app
-COPY --from=build --chown=bun:bun /repo/web/build /app/build
-COPY --from=build --chown=bun:bun /repo/web/server.ts /app/server.ts
+
+COPY --chown=bun:bun web/build /app/build
+COPY --chown=bun:bun web/server.ts /app/server.ts
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="EasyQuran Web" \

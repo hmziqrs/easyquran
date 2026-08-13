@@ -6,8 +6,9 @@
 # file or directory". At the root they agree. Run locally with `docker compose
 # up` from the repo root.
 #
-# Build context is the repo root (context: .), so the Dockerfiles under deploy/
-# and the build-time data files under db/ resolve correctly.
+# This stack builds nothing. Images come from the registry, built and pushed from a dev
+# machine with `just images` / `just push` (see deploy/README.md → Images). Override the
+# coordinates with REGISTRY and VERSION in .env; VERSION defaults to `latest`.
 #
 # Routing (from the labels), all on DOMAIN:
 #   Host(DOMAIN) && PathPrefix(`/api`) && !PathPrefix(`/api/healthz`) → api:8888   (strip /api, priority 100)
@@ -19,14 +20,13 @@ name: ${PROJECT:-easyquran}
 
 services:
   web:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile.web
-      args:
-        # PUBLIC_* are runtime $env/dynamic/public (NOT build-baked) and are set
-        # in web.environment below. VERSION is the only real build arg.
-        VERSION: ${VERSION:-dev}
-    image: ${PROJECT:-easyquran}/web:latest
+    # No `build:` on purpose. Images are built on a developer machine (`just images`) and
+    # pushed to the registry (`just push`); this stack only ever PULLS. Building the web
+    # image from source inside Docker — toolchain install, CA certs, sqlite prerender — was
+    # the single most failure-prone step in the deploy and is gone.
+    # PUBLIC_* are runtime $env/dynamic/public (NOT build-baked) and are set in
+    # web.environment below, so a new PUBLIC_* value needs no new image.
+    image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-web:${VERSION:-latest}
     container_name: ${PROJECT:-easyquran}_web
     environment:
       HOST: "0.0.0.0"
@@ -79,12 +79,8 @@ services:
     restart: unless-stopped
 
   api:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile.api
-      args:
-        VERSION: ${VERSION:-dev}
-    image: ${PROJECT:-easyquran}/api:latest
+    # Pull-only, same as web — built by `just image-api` (cargo-zigbuild) and pushed.
+    image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-api:${VERSION:-latest}
     container_name: ${PROJECT:-easyquran}_api
     env_file: [.env]
     environment:

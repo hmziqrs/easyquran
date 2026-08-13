@@ -13,6 +13,12 @@ default = ["openapi"]
 seed-system = []
 # OpenAPI docs (utoipa + swagger UI). Serves `GET /quran/openapi.json` (§6.1).
 openapi = ["utoipa", "utoipa-swagger-ui"]
+# Cross-compiling only (`just image-api`, mac -> linux/arm64 via cargo-zigbuild). webauthn-rs
+# pulls openssl-sys unconditionally, and pkg-config cannot find a target libssl when cross-
+# compiling, so the build dies in openssl-sys. This feature makes openssl build itself from
+# vendored sources against the zig-provided target toolchain instead. OFF by default: native
+# builds (dev, CI, `cargo build`) keep using the system OpenSSL and pay none of the cost.
+vendored-openssl = ["dep:openssl", "openssl/vendored"]
 
 [dependencies]
 rux-auth = { path = "./crates/rux-auth" }
@@ -22,6 +28,9 @@ rux-webhook-crypto = { path = "./crates/rux-webhook-crypto" }
 rux-request-gate = { path = "./crates/rux-request-gate" }
 rux-provider-core = { path = "./crates/rux-provider-core" }
 rux-fcm = { path = "./crates/rux-fcm" }
+# Not used in code — declared only so the `vendored-openssl` feature above has a handle on the
+# openssl crate that webauthn-rs drags in. Optional, so default builds never link it directly.
+openssl = { version = "0.10", optional = true }
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 webauthn-rs-proto = { version = "0.5" }
 url = { version = "2.5" }
