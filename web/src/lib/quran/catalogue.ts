@@ -238,3 +238,9 @@ export function findCatalogueEntry(
     entry.kind === "translation" ? entry.entry.id === sourceId : entry.spec.id === sourceId,
   );
 }
+
+export function peekTranslationName(sourceId: string | undefined): string | null {
+  if (!sourceId) return null;
+  const entry = findCatalogueEntry(bakedTranslationCatalogue(), sourceId);
+  return entry?.kind === "translation" ? entry.entry.name : null;
+}

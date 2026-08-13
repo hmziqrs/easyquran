@@ -9,7 +9,7 @@
   import type { QuranData } from "$lib/data/quran-data";
   import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
   import { surahPathFor, surahRouteContext, type SurahRouteContext } from "$lib/data/quran";
-  import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
+  import { peekTranslationName } from "$lib/quran/catalogue";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
@@ -19,12 +19,6 @@
   const copy = getReaderUiCopy();
 
   let quranData = $state<QuranData | undefined>(peekQuranData());
-
-  function sourceLabel(sourceId: string | undefined): string {
-    if (!sourceId) return "";
-    const entry = findCatalogueEntry(bakedTranslationCatalogue(), sourceId);
-    return entry?.kind === "translation" ? entry.entry.name : "";
-  }
 
   function openSurah(num: number): void {
     reader.openVerse(num, 1);
@@ -57,7 +51,7 @@
     {@const surah = quranData?.surahByNum(lr.num)}
     {@const total = surah?.ayahCount ?? 0}
     {@const fraction = total > 0 ? Math.min(1, lr.n / total) : 0}
-    {@const label = sourceLabel(lr.sourceId)}
+    {@const label = peekTranslationName(lr.sourceId)}
     <Card class="max-w-xl">
       <p class="text-xs font-medium uppercase tracking-wide text-fg-3">Continue reading</p>
       <h2 class="mt-3 text-2xl font-semibold text-fg">
@@ -106,8 +100,8 @@
             >
               <span class="text-sm font-medium text-fg">{rsurah?.name ?? `Surah ${r.num}`}</span>
               <span class="text-sm text-fg-2">{r.num}:{r.n}</span>
-              {#if sourceLabel(r.sourceId)}
-                <span class="ml-auto text-xs text-fg-3">{sourceLabel(r.sourceId)}</span>
+              {#if peekTranslationName(r.sourceId)}
+                <span class="ml-auto text-xs text-fg-3">{peekTranslationName(r.sourceId)}</span>
               {/if}
             </button>
           {/each}
