@@ -11,6 +11,10 @@ import {
   about_intro,
   about_seo_description,
   about_seo_title,
+  about_sources_heading,
+  about_sources_lead,
+  about_sources_tail,
+  about_sources_tanzil_label,
   about_stat_free_label,
   about_stat_free_value,
   about_stat_growing_label,
@@ -38,6 +42,10 @@ export interface AboutResolvedCopy {
   creditBuiltBy: string;
   creditNote: string;
   cta: string;
+  sourcesHeading: string;
+  sourcesLead: string;
+  sourcesTanzilLabel: string;
+  sourcesTail: string;
 }
 
 /** About page copy. Imported only by the about route, so it chunks with that route. */
@@ -77,5 +85,9 @@ export function resolveAboutCopy(locale: MarketingLocale): AboutResolvedCopy {
     creditBuiltBy: about_credit_built_by(undefined, { locale }),
     creditNote: about_credit_note(undefined, { locale }),
     cta: about_cta(undefined, { locale }),
+    sourcesHeading: about_sources_heading(undefined, { locale }),
+    sourcesLead: about_sources_lead(undefined, { locale }),
+    sourcesTanzilLabel: about_sources_tanzil_label(undefined, { locale }),
+    sourcesTail: about_sources_tail(undefined, { locale }),
   };
 }

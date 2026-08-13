@@ -7,6 +7,7 @@ export const SITE = {
   makerUrl: "https://oxlabs.dev",
   owner: "hmziq.rs",
   ownerUrl: "https://hmziq.rs",
+  tanzilUrl: "https://tanzil.net",
 } as const;
 
 import { dev } from "$app/environment";

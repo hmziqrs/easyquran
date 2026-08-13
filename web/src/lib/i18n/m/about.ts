@@ -2,7 +2,7 @@
 //
 // About page.
 //
-// 18 messages. Import this barrel, never
+// 22 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { about_body_approach } from "$lib/paraglide/messages/about_body_approach.js";
@@ -17,6 +17,10 @@ export { about_heading } from "$lib/paraglide/messages/about_heading.js";
 export { about_intro } from "$lib/paraglide/messages/about_intro.js";
 export { about_seo_description } from "$lib/paraglide/messages/about_seo_description.js";
 export { about_seo_title } from "$lib/paraglide/messages/about_seo_title.js";
+export { about_sources_heading } from "$lib/paraglide/messages/about_sources_heading.js";
+export { about_sources_lead } from "$lib/paraglide/messages/about_sources_lead.js";
+export { about_sources_tail } from "$lib/paraglide/messages/about_sources_tail.js";
+export { about_sources_tanzil_label } from "$lib/paraglide/messages/about_sources_tanzil_label.js";
 export { about_stat_free_label } from "$lib/paraglide/messages/about_stat_free_label.js";
 export { about_stat_free_value } from "$lib/paraglide/messages/about_stat_free_value.js";
 export { about_stat_growing_label } from "$lib/paraglide/messages/about_stat_growing_label.js";

@@ -44,6 +44,17 @@
     {/each}
   </div>
 
+  <section class="flex flex-col gap-3 rounded-xl border border-line px-[30px] py-[26px]">
+    <h2 class="text-base font-semibold tracking-tight text-fg">{copy.sourcesHeading}</h2>
+    <p class="text-base leading-relaxed text-fg-2">
+      {copy.sourcesLead}<a
+        class="text-fg underline underline-offset-2 hover:text-accent"
+        href={SITE.tanzilUrl}
+        {...externalLinkAttrs(SITE.tanzilUrl)}>{copy.sourcesTanzilLabel}</a
+      >{copy.sourcesTail}
+    </p>
+  </section>
+
   <div class="flex flex-wrap items-center gap-5 rounded-xl border border-line px-[30px] py-[26px]">
     <p class="min-w-[220px] flex-1 text-base leading-relaxed text-fg-2">
       {copy.creditProjectBy}
