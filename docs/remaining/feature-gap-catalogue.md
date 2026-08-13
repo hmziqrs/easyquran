@@ -503,13 +503,14 @@ reconnect and metadata.
 
 - [Quran.com](https://quran.com/)
 
-**EasyQuran today:** Quran translations are multilingual, but chrome is English. Root document is
-statically `<html lang="en">`, including translated-reader routes. [`docs/i18n.md`](../i18n.md)
-already plans Paraglide, localized marketing routes, RTL, and later client-only reader chrome.
+**EasyQuran:** UI chrome is localized in `en`/`ar` and shipped — Paraglide v2, `/` + `/ar/`
+marketing routes, `/en/app/**` + `/ar/app/**` reader URLs, locale switcher, RTL base, localized
+SEO/hreflang/sitemap ([`docs/quran-system.md`](../quran-system.md) Part 2).
 
-**Remaining:** execute i18n plan; correct per-page/document `lang` and `dir`; locale selector;
-localized marketing and reader chrome; RTL audit; localized SEO/hreflang/sitemap. Keep UI locale
-independent from Quran translation source and out of reader server cache keys.
+**Remaining:** fluent Arabic review for the localized (but unpublished) `about`/`faq`/`contact`/`privacy`/`terms`
+pages; RTL polish (physical utilities, reader arrows); localized `.md`/`.txt` representations; more
+UI locales after `en`/`ar` (capacity review). Keep UI locale independent from Quran translation
+source and out of reader server cache keys.
 
 ### E01 — Native Android/iOS apps — Missing, PWA shipped · P3
 

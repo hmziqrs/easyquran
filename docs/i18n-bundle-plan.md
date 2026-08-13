@@ -1,6 +1,6 @@
 # i18n bundle plan — per-page message chunking
 
-Follow-on to `docs/i18n.md`. That document owns *what* gets localized and *which URLs exist*. This
+Follow-on to the shipped i18n system (`docs/quran-system.md` Part 2), which owns *what* gets localized and *which URLs exist*. This
 document owns *how many localized bytes each page downloads*, and the mechanism that keeps that
 number flat as pages and locales are added.
 
@@ -162,10 +162,10 @@ if output is stale).
 - **Page copy: call message functions in the component that renders them.** No page-level
   `resolveXCopy()` object. This is what lets Rolldown attribute the string to the route chunk.
 - **Shared structural components** (`Nav`, `Footer`, `Tweaks`, generic `Seo`) keep receiving resolved
-  label props — `docs/i18n.md` requires it so those components never import Paraglide directly.
+  label props — `docs/quran-system.md` (Part 2) requires it so those components never import Paraglide directly.
   Their resolver is scoped to the `chrome` / `appearance` namespace only, and is computed **once in
   the layout** and passed down, not re-derived in six components.
-- Module-level `m.*()` stays banned (`docs/i18n.md` rule); resolution happens at render/request time.
+- Module-level `m.*()` stays banned (`docs/quran-system.md` Part 1 rule); resolution happens at render/request time.
 
 ### 3.4 Guards
 
@@ -249,21 +249,21 @@ Two deviations from the plan as written:
 
 ### Phase 4 — the remaining marketing pages (done, `80bc483`)
 
-`about`, `faq`, `contact`, `privacy`, `terms` — the exact list in `docs/i18n.md` §10. 96 keys per
+`about`, `faq`, `contact`, `privacy`, `terms` — the exact list in `docs/quran-system.md` Part 6. 96 keys per
 locale, one resolver module per page, `src/lib/data/content.ts` deleted, every list item carrying a
 locale-independent `id`, and each page passing its own `title`/`description`/`inLanguage` to `Seo`.
 The FAQ page now feeds localized entries to its `FAQPage` structured data, which was English-only on
 `/ar` before.
 
 English is verbatim from the old templates and `content.ts`. **Arabic is new and unreviewed**: per
-`docs/i18n.md`, an Arabic catalog PR needs a named fluent reviewer, and machine-translated
+`docs/quran-system.md` (Part 1 hard rule), an Arabic catalog PR needs a named fluent reviewer, and machine-translated
 publishing is out of scope. `MARKETING_PUBLICATIONS` is untouched, so `/ar/about` and friends still
 404 exactly as before. Flipping those entries is gated on that review, not on this work.
 
 ### Not done: auth and account
 
 `login`, `register`, `forgot-password`, `verify-email` and `account` remain English. This is a
-deliberate stop, not an omission: `docs/i18n.md` line 111 places auth, account and health routes
+deliberate stop, not an omission: `docs/quran-system.md` (Part 2) places auth, account and health routes
 **outside** the i18n middleware, and `/ar/account` is specified to 404. Localizing them means
 reversing a routing decision, which is a product call with security-adjacent surface (session
 handling, OAuth callbacks), not a delivery refactor. When that decision is made, the substrate is
@@ -314,7 +314,7 @@ with both — they become a config change, not a refactor.
       reader unchanged.
 - [x] Marketing pages sit on a 38-message chrome floor; reader pages carry chrome plus reader copy
       only, with the appearance panel lazy on both surfaces.
-- [x] `docs/i18n.md` §10 points here for the delivery mechanism.
+- [x] `docs/quran-system.md` (Part 2, message chunking) points here for the delivery mechanism.
 
 ### How to add a page from here
 
