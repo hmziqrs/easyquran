@@ -8,14 +8,8 @@ export const QURAN_SOURCE_IDS = Object.freeze(Object.values(QuranSourceId));
 function isOneOf(values: readonly string[], value: string): boolean {
   return values.includes(value);
 }
-export const isQuranSourceId = (
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted URL/catalogue input at the boundary; unknown is the correct input contract for a parser
-  value: unknown,
-): value is QuranSourceId => {
-  // SAFETY: the QURAN_SOURCE_IDS membership check below verifies value is one of the QuranSourceId literals before this type guard returns true.
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
-  return typeof value === "string" && isOneOf(QURAN_SOURCE_IDS, value);
-};
+export const isQuranSourceId = (value: string): value is QuranSourceId =>
+  isOneOf(QURAN_SOURCE_IDS, value);
 
 export type QuranReaderSource = string;
 
@@ -30,14 +24,7 @@ export const QuranScript = {
 } as const;
 export type QuranScript = (typeof QuranScript)[keyof typeof QuranScript];
 export const QURAN_SCRIPTS = Object.freeze(Object.values(QuranScript));
-export const isQuranScript = (
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted URL/catalogue input at the boundary; unknown is the correct input contract for a parser
-  value: unknown,
-): value is QuranScript => {
-  // SAFETY: the QURAN_SCRIPTS membership check below verifies value is one of the QuranScript literals before this type guard returns true.
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
-  return typeof value === "string" && isOneOf(QURAN_SCRIPTS, value);
-};
+export const isQuranScript = (value: string): value is QuranScript => isOneOf(QURAN_SCRIPTS, value);
 
 export const OpenerKind = {
   Verse: "verse",
@@ -46,14 +33,7 @@ export const OpenerKind = {
 } as const;
 export type OpenerKind = (typeof OpenerKind)[keyof typeof OpenerKind];
 export const OPENER_KINDS = Object.freeze(Object.values(OpenerKind));
-export const isOpenerKind = (
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted catalogue input at the boundary; unknown is the correct input contract for a parser
-  value: unknown,
-): value is OpenerKind => {
-  // SAFETY: the OPENER_KINDS membership check below verifies value is one of the OpenerKind literals before this type guard returns true.
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
-  return typeof value === "string" && isOneOf(OPENER_KINDS, value);
-};
+export const isOpenerKind = (value: string): value is OpenerKind => isOneOf(OPENER_KINDS, value);
 
 export const OpenerPackaging = {
   NumberedAyah: "numbered-ayah",
@@ -64,14 +44,8 @@ export const OpenerPackaging = {
 } as const;
 export type OpenerPackaging = (typeof OpenerPackaging)[keyof typeof OpenerPackaging];
 export const OPENER_PACKAGING_VALUES = Object.freeze(Object.values(OpenerPackaging));
-export const isOpenerPackaging = (
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted catalogue input at the boundary; unknown is the correct input contract for a parser
-  value: unknown,
-): value is OpenerPackaging => {
-  // SAFETY: the OPENER_PACKAGING_VALUES membership check below verifies value is one of the OpenerPackaging literals before this type guard returns true.
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
-  return typeof value === "string" && isOneOf(OPENER_PACKAGING_VALUES, value);
-};
+export const isOpenerPackaging = (value: string): value is OpenerPackaging =>
+  isOneOf(OPENER_PACKAGING_VALUES, value);
 
 export interface PrefixCut {
   openerEndScalar: number;

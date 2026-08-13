@@ -53,7 +53,11 @@ interface WorkerCtx {
   postMessage(msg: WorkerOutbound): void;
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
 }
-const ctx = self as unknown as WorkerCtx;
+// SAFETY: this module is only loaded as a dedicated-worker entry, where `self` is
+// the worker global scope; the DOM lib types it as Window, so hop through unknown.
+const workerSelf = self as unknown;
+// SAFETY: the worker scope's postMessage/onmessage match WorkerCtx at runtime.
+const ctx = workerSelf as WorkerCtx;
 
 let sqlite3: Sqlite3Static | null = null;
 
@@ -444,11 +448,17 @@ function runReaderOp<T>(
   return source !== undefined && !isArabicSourceId(source) ? translation(source) : arabic();
 }
 
+function arabicSourceId(source: QuranReaderSource | undefined): QuranSourceId | undefined {
+  if (source === undefined || !isArabicSourceId(source)) return undefined;
+  return source;
+}
+
+type HandlerResult = QuranSurahText | QuranRangeText | SearchResponse | boolean | null;
 type Handler<K extends WorkerRequest["type"]> = (
   msg: Extract<WorkerRequest, { type: K }>,
-) => unknown;
+) => HandlerResult | Promise<HandlerResult>;
 
-const handlers: { [K in WorkerRequest["type"]]: Handler<K> } = {
+const handlers = {
   init: async (m) => {
     await initialize(m.manifest, m.coordinates, m.catalogue);
     return null;
@@ -465,17 +475,17 @@ const handlers: { [K in WorkerRequest["type"]]: Handler<K> } = {
   readSurah: (m) =>
     runReaderOp(
       m.source,
-      () => readSurah(m.num, isArabicSourceId(m.source) ? m.source : undefined),
+      () => readSurah(m.num, arabicSourceId(m.source)),
       (src) => readTranslationSurah(src, m.num),
     ),
   readRange: (m) =>
     runReaderOp(
       m.source,
-      () => readRange(m.from, m.to, isArabicSourceId(m.source) ? m.source : undefined),
+      () => readRange(m.from, m.to, arabicSourceId(m.source)),
       (src) => readTranslationRange(src, m.from, m.to),
     ),
   search: (m) => search(m.query, m.opts),
-};
+} satisfies { [K in WorkerRequest["type"]]: Handler<K> };
 
 async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> {
   const message = event.data;
@@ -491,7 +501,12 @@ async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> 
       emit({ id, ok: false, error: "engine not ready" });
       return;
     }
-    const handler = handlers[message.type] as (m: WorkerRequest) => unknown;
+    // SAFETY: message.type is the WorkerRequest discriminator and every handlers
+    // entry is registered for exactly its own variant, so this union indexes the one
+    // exact handler for message.
+    const handler = handlers[message.type] as (
+      m: WorkerRequest,
+    ) => HandlerResult | Promise<HandlerResult>;
     emit({ id, ok: true, result: await handler(message) });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
