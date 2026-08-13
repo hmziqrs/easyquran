@@ -3,6 +3,8 @@
   import { afterNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { routeContextFromParams, type SurahRouteContext } from "$lib/data/quran";
+  import { uiDirection, type UiLocale } from "$lib/i18n/locales";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { authState } from "$lib/auth/auth-state.svelte";
   import { commandPalette } from "$lib/stores/command-palette.svelte";
   import { reader } from "$lib/stores/reader.svelte";
@@ -18,6 +20,9 @@
 
   registerBuiltinPaletteSources();
 
+  // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
+  const locale = getLocale() as UiLocale;
+  const direction = uiDirection(locale);
   const routeContext = $derived<SurahRouteContext>(routeContextFromParams(page.params));
 
   const engine = createPaletteEngine({
@@ -90,6 +95,8 @@
   bind:open={commandPalette.open}
   bind:value={selected}
   shouldFilter={false}
+  lang={locale}
+  dir={direction}
   label="Global search"
   loop
 >

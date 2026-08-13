@@ -104,7 +104,7 @@ describe("server localized reader integration", () => {
     expect(keys[0]).toContain("__en.sahih__surah__1__1__ui-en");
     expect(keys[1]).toContain("__en.sahih__surah__1__1__ui-ar");
     expect(await enResponse.text()).toContain('<html lang="en" dir="ltr">');
-    expect(await arResponse.text()).toContain('<html lang="en" dir="ltr">');
+    expect(await arResponse.text()).toContain('<html lang="ar" dir="rtl">');
     expect(enResponse.headers.get("x-easyquran-quran-cache")).toBe("miss");
     expect(arResponse.headers.get("x-easyquran-quran-cache")).toBe("miss");
   });
@@ -133,7 +133,7 @@ describe("server localized reader integration", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it("keeps Arabic source document language independent from English UI locale", async () => {
+  it("uses English document chrome for an English UI over Arabic Quran content", async () => {
     const response = await handle({
       event: requestEvent("/en/app/al-fatihah", "/(application)/app/[surah]", {
         surah: "al-fatihah",
@@ -142,10 +142,23 @@ describe("server localized reader integration", () => {
     });
 
     const html = await response.text();
-    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain('<html lang="en" dir="ltr">');
     expect(html).not.toContain("%lang%");
     expect(html).not.toContain("%dir%");
     expect(cache.get).not.toHaveBeenCalled();
+  });
+
+  it("uses English document chrome for an English UI over RTL translation content", async () => {
+    const response = await handle({
+      event: requestEvent(
+        "/en/app/al-fatihah/t/ur/jalandhry",
+        "/(application)/app/[surah]/t/[lang]/[translator]",
+        { surah: "al-fatihah", lang: "ur", translator: "jalandhry" },
+      ),
+      resolve: htmlResolve(),
+    });
+
+    expect(await response.text()).toContain('<html lang="en" dir="ltr">');
   });
 
   it("never lets explicit translated page one hit or write the root cache entry", async () => {

@@ -112,14 +112,7 @@ interface DocumentAttributes {
   readonly dir: UiDirection;
 }
 
-function documentAttributes(
-  route: ParsedReaderRoute | null,
-  uiLocale: UiLocale | null,
-): DocumentAttributes {
-  if (route?.type === "translation") {
-    return { lang: route.contentLanguage, dir: route.contentDirection };
-  }
-  if (route?.type === "arabic") return { lang: "ar", dir: "rtl" };
+function documentAttributes(uiLocale: UiLocale | null): DocumentAttributes {
   if (uiLocale) return { lang: uiLocale, dir: uiDirection(uiLocale) };
   return { lang: "en", dir: "ltr" };
 }
@@ -181,7 +174,7 @@ async function resolveRequest(
   const key = translationRouteCacheKey(readerRoute, uiLocale);
   const cacheable =
     event.request.method === "GET" && !event.isDataRequest && key !== null && !requestHasCookie;
-  const attributes = documentAttributes(readerRoute, uiLocale);
+  const attributes = documentAttributes(uiLocale);
   const resolveOpts = {
     transformPageChunk: ({ html }: { html: string }) => transformRootHtml(html, attributes),
   };

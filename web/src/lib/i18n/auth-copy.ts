@@ -34,9 +34,12 @@ import {
   auth_continue_with_provider,
   auth_close,
 } from "$lib/i18n/m/auth";
+import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { getLocale } from "$lib/paraglide/runtime.js";
 
 export interface AuthCopy {
+  locale: UiLocale;
+  direction: UiDirection;
   dialogTitle: string;
   dialogDescription: string;
   close: string;
@@ -73,8 +76,11 @@ export interface AuthCopy {
   hidePasswordAria: string;
 }
 
-export function getAuthCopy(locale = getLocale()): AuthCopy {
+// SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
+export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCopy {
   return {
+    locale,
+    direction: uiDirection(locale),
     dialogTitle: auth_dialog_title(undefined, { locale }),
     dialogDescription: auth_dialog_description(undefined, { locale }),
     close: auth_close(undefined, { locale }),

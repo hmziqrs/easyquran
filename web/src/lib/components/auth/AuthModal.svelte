@@ -42,6 +42,8 @@
     />
     <DialogPrimitive.Content
       data-slot="auth-dialog"
+      lang={copy.locale}
+      dir={copy.direction}
       class="fixed left-1/2 top-[10vh] z-[91] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 overflow-hidden rounded-xl border border-line-2 bg-bg-elev shadow-2xl outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
     >
       <DialogPrimitive.Title class="sr-only">{copy.dialogTitle}</DialogPrimitive.Title>

@@ -18,9 +18,8 @@
     showReaderTools = true,
   }: {
     /**
-     * UI locale of the surrounding chrome. The panel anchors and lays out from this, never from the
-     * inherited document direction: Arabic reader routes set `<html dir="rtl">` for the *content*,
-     * which would otherwise flip an English panel to the left edge with right-aligned text.
+     * UI locale of the surrounding chrome. This portal owns its direction so its placement and
+     * alignment stay correct even if a parent reader passage has a different content direction.
      */
     locale: UiLocale;
     /** Rendered on the closed trigger, so it is the only appearance string a page eagerly needs. */
