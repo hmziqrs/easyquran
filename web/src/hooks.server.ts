@@ -43,7 +43,10 @@ function buildCsp(): string {
     "https://firebase.googleapis.com",
     "https://firebaseinstallations.googleapis.com",
     "https://firebaseremoteconfig.googleapis.com",
+    "https://firebaselogging.googleapis.com",
     "https://firebaselogging-pa.googleapis.com",
+    "https://fcmregistrations.googleapis.com",
+    "https://play.google.com",
     "https://www.google-analytics.com",
     "https://www.google.com",
   ];
