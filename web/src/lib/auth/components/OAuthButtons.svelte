@@ -5,6 +5,9 @@
   import { createPasskeyFlow } from "$lib/auth/passkey-flow.svelte";
   import type { OAuthProvider } from "$lib/auth/oauth-flow.svelte";
   import OAuthIcon from "./OAuthIcon.svelte";
+  import { getAuthCopy } from "$lib/i18n/auth-copy";
+
+  const copy = getAuthCopy();
 
   type Props = {
     onPasskeySuccess?: () => void | Promise<void>;
@@ -36,7 +39,7 @@
       oauth.github.lastErrorCode,
   );
   const socialError = $derived(
-    oauthErrorCode ? "Couldn't start sign-in. Please try again." : passkey.genericError,
+    oauthErrorCode ? copy.oauthError : passkey.genericError,
   );
 
   async function begin(provider: OAuthProvider): Promise<void> {
@@ -50,10 +53,10 @@
   }
 </script>
 
-<section aria-label="More sign-in options" class="flex flex-col gap-3">
+<section aria-label={copy.moreSignInOptionsAria} class="flex flex-col gap-3">
   <div class="flex items-center gap-3" aria-hidden="true">
     <span class="h-px flex-1 bg-line-2"></span>
-    <span class="eyebrow">Or continue with</span>
+    <span class="eyebrow">{copy.orContinueWith}</span>
     <span class="h-px flex-1 bg-line-2"></span>
   </div>
 
@@ -74,7 +77,7 @@
         onclick={() => begin(p.id)}
       >
         <OAuthIcon provider={p.id} size={16} class="absolute left-[18px] top-1/2 -translate-y-1/2" />
-        <span>{oauth[p.id].pending ? "Please wait…" : `Continue with ${p.label}`}</span>
+        <span>{oauth[p.id].pending ? copy.pleaseWait : copy.continueWithProvider(p.label)}</span>
       </Button>
     {/each}
     {#if passkey.supported}
@@ -92,7 +95,7 @@
           class="absolute left-[18px] top-1/2 -translate-y-1/2"
           aria-hidden="true"
         />
-        <span>{passkey.pending ? "Please wait…" : "Continue with passkey"}</span>
+        <span>{passkey.pending ? copy.pleaseWait : copy.continueWithPasskey}</span>
       </Button>
     {/if}
   </div>

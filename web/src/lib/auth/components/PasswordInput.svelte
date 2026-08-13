@@ -3,6 +3,9 @@
   import EyeIcon from "phosphor-svelte/lib/EyeIcon";
   import EyeSlashIcon from "phosphor-svelte/lib/EyeSlashIcon";
   import AuthField from "./AuthField.svelte";
+  import { getAuthCopy } from "$lib/i18n/auth-copy";
+
+  const copy = getAuthCopy();
 
   type Props = {
     id: string;
@@ -44,7 +47,7 @@
   {#snippet trailing()}
     <button
       type="button"
-      aria-label={visible ? "Hide password" : "Show password"}
+      aria-label={visible ? copy.hidePasswordAria : copy.showPasswordAria}
       class="inline-flex h-8 w-8 items-center justify-center rounded-md text-fg-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       onclick={() => (visible = !visible)}
     >

@@ -4,6 +4,9 @@
   import PasswordInput from "./PasswordInput.svelte";
   import { Icon } from "$lib/components/icon";
   import type { RegisterFlow } from "$lib/auth/flows.svelte";
+  import { getAuthCopy } from "$lib/i18n/auth-copy";
+
+  const copy = getAuthCopy();
 
   type Props = {
     flow: RegisterFlow;
@@ -26,9 +29,9 @@
 
 {#if flow.step === "totp"}
   <AuthForm
-    heading="Two-factor code"
-    subheading="Enter the 6-digit code from your authenticator app to finish signing in."
-    submitLabel="Continue"
+    heading={copy.totpHeading}
+    subheading={copy.totpSubheading}
+    submitLabel={copy.continue}
     pending={flow.login.pending}
     serverError={flow.login.genericError}
     {variant}
@@ -36,7 +39,7 @@
   >
     <AuthField
       id="register-totp"
-      label="Authentication code"
+      label={copy.fieldAuthenticationCode}
       inputmode="numeric"
       autocomplete="one-time-code"
       maxlength={6}
@@ -45,15 +48,15 @@
     />
     {#snippet footer()}
       <button type="button" class="text-accent hover:underline" onclick={() => flow.login.cancelTotp()}>
-        Use a different account
+        {copy.useDifferentAccount}
       </button>
     {/snippet}
   </AuthForm>
 {:else}
   <AuthForm
-    heading="Create your account"
-    subheading="A free account syncs your bookmarks, notes and reading place across devices."
-    submitLabel="Create account"
+    heading={copy.registerHeading}
+    subheading={copy.registerSubheading}
+    submitLabel={copy.createAccount}
     pending={flow.pending}
     serverError={flow.genericError}
     {variant}
@@ -61,9 +64,9 @@
   >
     <AuthField
       id="register-name"
-      label="Display name"
+      label={copy.fieldDisplayName}
       autocomplete="name"
-      placeholder="Your name"
+      placeholder={copy.displayNamePlaceholder}
       bind:value={flow.name}
       error={flow.fieldErrors.name}
     >
@@ -71,10 +74,10 @@
     </AuthField>
     <AuthField
       id="register-email"
-      label="Email"
+      label={copy.fieldEmail}
       type="email"
       autocomplete="email"
-      placeholder="you@example.com"
+      placeholder={copy.emailPlaceholder}
       bind:value={flow.email}
       error={flow.fieldErrors.email}
     >
@@ -82,16 +85,16 @@
     </AuthField>
     <PasswordInput
       id="register-password"
-      label="Password"
+      label={copy.fieldPassword}
       autocomplete="new-password"
       minlength={12}
-      placeholder="At least 12 characters"
+      placeholder={copy.passwordMinPlaceholder}
       bind:value={flow.password}
       error={flow.fieldErrors.password}
     />
     <PasswordInput
       id="register-confirm"
-      label="Confirm password"
+      label={copy.fieldConfirmPassword}
       autocomplete="new-password"
       minlength={12}
       bind:value={flow.confirmPassword}
@@ -99,8 +102,8 @@
     />
     {#snippet footer()}
       <span>
-        Already have an account?
-        <a href="/login" class="text-accent hover:underline">Sign in</a>
+        {copy.haveAccountPrompt}
+        <a href="/login" class="text-accent hover:underline">{copy.signIn}</a>
       </span>
     {/snippet}
   </AuthForm>

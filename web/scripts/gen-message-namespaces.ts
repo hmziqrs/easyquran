@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 
 const WEB_ROOT = resolve(import.meta.dirname, "..");
 const CONFIG_PATH = join(WEB_ROOT, "i18n-namespaces.json");
-const CATALOGS = ["messages/en.json", "messages/reader/en.json"];
+const CATALOGS = ["messages/en.json", "messages/reader/en.json", "messages/auth/en.json"];
 const OUT_DIR = join(WEB_ROOT, "src/lib/i18n/m");
 const MESSAGE_MODULE_BASE = "$lib/paraglide/messages";
 

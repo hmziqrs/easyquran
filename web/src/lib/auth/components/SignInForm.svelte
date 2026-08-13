@@ -4,6 +4,9 @@
   import PasswordInput from "./PasswordInput.svelte";
   import { Icon } from "$lib/components/icon";
   import type { LoginFlow } from "$lib/auth/flows.svelte";
+  import { getAuthCopy } from "$lib/i18n/auth-copy";
+
+  const copy = getAuthCopy();
 
   type Props = {
     flow: LoginFlow;
@@ -22,9 +25,9 @@
 
 {#if flow.step === "totp"}
   <AuthForm
-    heading="Two-factor code"
-    subheading="Enter the 6-digit code from your authenticator app to finish signing in."
-    submitLabel="Continue"
+    heading={copy.totpHeading}
+    subheading={copy.totpSubheading}
+    submitLabel={copy.continue}
     pending={flow.pending}
     serverError={flow.genericError}
     {variant}
@@ -32,7 +35,7 @@
   >
     <AuthField
       id="signin-totp"
-      label="Authentication code"
+      label={copy.fieldAuthenticationCode}
       inputmode="numeric"
       autocomplete="one-time-code"
       maxlength={6}
@@ -41,15 +44,15 @@
     />
     {#snippet footer()}
       <button type="button" class="text-accent hover:underline" onclick={() => flow.cancelTotp()}>
-        Use a different account
+        {copy.useDifferentAccount}
       </button>
     {/snippet}
   </AuthForm>
 {:else}
   <AuthForm
-    heading="Sign in"
-    subheading="Welcome back. Sign in to sync your bookmarks and reading progress."
-    submitLabel="Sign in"
+    heading={copy.signIn}
+    subheading={copy.signInSubheading}
+    submitLabel={copy.signIn}
     pending={flow.pending}
     serverError={flow.genericError}
     {variant}
@@ -57,10 +60,10 @@
   >
     <AuthField
       id="signin-email"
-      label="Email"
+      label={copy.fieldEmail}
       type="email"
       autocomplete="email"
-      placeholder="you@example.com"
+      placeholder={copy.emailPlaceholder}
       bind:value={flow.email}
       error={flow.fieldErrors.email}
     >
@@ -68,20 +71,20 @@
     </AuthField>
     <PasswordInput
       id="signin-password"
-      label="Password"
+      label={copy.fieldPassword}
       autocomplete="current-password"
-      placeholder="Your password"
+      placeholder={copy.passwordPlaceholder}
       bind:value={flow.password}
       error={flow.fieldErrors.password}
     />
     {#snippet footer()}
       <span>
-        Forgot your password?
-        <a href="/forgot-password" class="text-accent hover:underline">Reset it</a>
+        {copy.forgotPasswordPrompt}
+        <a href="/forgot-password" class="text-accent hover:underline">{copy.resetPasswordLink}</a>
       </span>
       <span>
-        No account?
-        <a href="/register" class="text-accent hover:underline">Create one</a>
+        {copy.noAccountPrompt}
+        <a href="/register" class="text-accent hover:underline">{copy.createOneLink}</a>
       </span>
     {/snippet}
   </AuthForm>

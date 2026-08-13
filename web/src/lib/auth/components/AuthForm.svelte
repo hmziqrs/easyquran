@@ -3,6 +3,9 @@
   import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
   import { cn } from "$lib/utils";
   import type { Snippet } from "svelte";
+  import { getAuthCopy } from "$lib/i18n/auth-copy";
+
+  const copy = getAuthCopy();
 
   type Props = {
     heading: string;
@@ -71,7 +74,7 @@
   </div>
 
   <Button type="submit" variant="accent" size="lg" disabled={pending} class="mt-1 w-full">
-    {pending ? "Please wait…" : submitLabel}
+    {pending ? copy.pleaseWait : submitLabel}
   </Button>
 
   {#if footer}

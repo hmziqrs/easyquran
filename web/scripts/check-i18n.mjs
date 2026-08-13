@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const LOCALES = ["en", "ar"];
-const DOMAINS = ["messages", "messages/reader"];
+const DOMAINS = ["messages", "messages/reader", "messages/auth"];
 
 const readCatalog = async (domain, locale) => {
   const path = new URL(`../${domain}/${locale}.json`, import.meta.url);

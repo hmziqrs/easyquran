@@ -108,6 +108,11 @@
       "id": "reader",
       "description": "Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.",
       "prefixes": ["reader"]
+    },
+    {
+      "id": "auth",
+      "description": "Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.",
+      "prefixes": ["auth"]
     }
   ]
 }
