@@ -38,6 +38,7 @@
     "@tanstack/svelte-virtual": "^3.13.35",
     "bits-ui": "^2.18.1",
     "clsx": "^2.1.1",
+    "es-toolkit": "^1.50.0",
     "firebase": "^12.16.0",
     "tailwind-merge": "^3.6.0",
     "tailwind-variants": "^3.2.2"
