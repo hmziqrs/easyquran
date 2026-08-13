@@ -1,0 +1,128 @@
+# Audit — Web Cache API + OPFS
+
+> Status: audit findings, verified against source (commit `ea5fc28` on master, 2026-08-13).
+> Architecture verdict: **implemented properly** — hard rules intact, core algorithms correct; defects are localized medium/low cache-efficiency and state-reporting gaps. No critical or high risk to Quran data integrity.
+> Only claims re-proved from code + MDN are recorded. Every item carries file:line evidence.
+
+Eight dimensions reviewed (`cache-routing`, `cache-lifecycle`, `cache-eviction`, `cache-isolation`, `opfs-crash-safety`, `opfs-pointer-integrity`, `opfs-retention`, `opfs-storage-fallback`); each actionable finding was adversarially verified. One claim was REFUTED (listed at the end). No critical/high finding survived.
+
+---
+
+## Strengths
+
+- **Hard rule intact across all eight dimensions.** No SHA-256/content-hash over Quran data anywhere — `verifyBytes` (`web/src/lib/workers/download.ts:24-33`) is size-only (`buf.byteLength !== spec.sizeBytes`); every cache/meta key is id-derived (`data:` prefix, `${tag}:${id}`, `${id}.sqlite`, `packId`), never hash-derived. Grep of `service-worker.ts`, `lib/workers/`, `lib/offline/` found no `digest`/`crypto.subtle`/hash-import over Quran bytes.
+- **OPFS promotion is crash-safe and the staged content validator is the real gate.** `writeOpfsFile` (`opfs-cache.ts:225-240`) closes the stream in a `finally` before the temp is read back (`:372`) and validated (`:374`); `assertStagedQuranBytes` (`quran.worker.ts:154-166`) opens bytes via `sqlite3_deserialize` with `SQLITE_DESERIALIZE_READONLY` and checks count === 6236, coordinates, a text probe, and surah/ayah range + `globalIndex` contiguity — all strictly before `writePointer` (`:391`), the sole promotion gate. A partially-written DB can never become active.
+- **`StagedValidationRejection` is re-thrown** (`opfs-cache.ts:50-61`, re-thrown at `:322`) so a content rejection NEVER silently falls back to IDB; only OPFS-mechanical failures fall through, and the IDB path re-runs `runStagedValidator` (`:423`) before put.
+- **Fetch handler is structurally correct.** `event.respondWith` is invoked synchronously in every branch before any await (`service-worker.ts:409-453`); every `cache.put` is guarded by `res.ok && isCacheable` and clones before storing (`:461/:482/:527/:569/:690/:283`); `Response.error()`, opaque (status 0 → `ok` false), and consumed-body responses are never stored; no double-clone waste.
+- **Precache is atomic** (`service-worker.ts:274-298`): on ANY failure the catch runs `await caches.delete(APP_CACHE)` then `throw err`, so install fails with no half-cache; `activate` (`:304-316`) awaits `sw.clients.claim()` BEFORE any fetch is served.
+- **`computeEvictions` math is correct.** Break condition `remaining <= CAP_COUNT && totalBytes <= CAP_BYTES && r.used >= cutoff` verified against 15-artifact/200MiB and 13-artifact/100MiB examples and 13 test cases; pinned exclusion filters `!pinned.has(id)` BEFORE ranking (`PINNED_ARABIC = [TanzilUthmani]`); TTL direction correct (`used == cutoff` KEPT).
+- **Purge isolation verified end-to-end.** `purgeUserCachesHandler` (`:180-191`) deletes ONLY `PAGES_CACHE`/`DATA_CACHE`/data-meta; `APP_CACHE`, OPFS Quran DBs, and `eq-pack-*` are never referenced; ACK is posted on the transferred `MessagePort` only after the deletes complete, with try/catch so a missing port never throws.
+- **`moveOpfsFile` feature-detects `FileSystemFileHandle.move()`** (`opfs-cache.ts:242-258`) and falls back to getFile → `writeOpfsFile(toName)` → `removeEntry(fromName)`; the fallback's non-atomicity is recovered by the legacy-adoption path (`:348-365`) which re-runs `verifyBytes` + `stagedValidator` before any pointer on next boot.
+
+---
+
+## Defects
+
+### Medium
+
+**M1. IDB put failure silently misreported as a successful cache** — `web/src/lib/workers/opfs-cache.ts:424`
+*Evidence.* `createIdbStore.put` (`storage.ts:58-66`) wraps `idbPut` in `try { ... return true; } catch { return false; }`. `ensureIdbArtifact` calls `await store.put(spec.id, spec.id, bytes)` at `:424` with **no left-hand side** — the boolean is discarded — then unconditionally returns `{ bytes, store: "idb", downloaded: true }` at `:426`. The OPFS path throws on every write/verify failure (`:377/:387/:395/:397`); the IDB path does not. Per MDN a readwrite IDB tx hitting `QuotaExceededError` aborts atomically, so `idbPut` genuinely fails to store.
+*Failure scenario.* Origin under storage pressure → `QuotaExceededError` on the put → `put` resolves `false` (bytes never persisted) → caller treats artifact as cached. `listIdbArtifacts`/`listCachedArtifacts` won't list it (nothing stored), so cache state diverges from the reported store; next session cache-misses and re-downloads. `stampLastUsed` (`:425`) also writes a `lastUsed` record for an artifact that does not exist, which `runPrune` never pairs nor clears.
+*Suggested fix.* Await the put boolean and, on `false`, throw (honest contract) or return `store:"session"`/`downloaded:true`. Never return `store:"idb"` when the put failed.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction/error
+
+**M2. `listOpfsArtifacts` deletes in-flight download temps (race with `ensureOpfsArtifact`)** — `web/src/lib/workers/opfs-cache.ts:447-448`
+*Evidence.* `filterSourceFiles` (`:133-135`) classifies EVERY `.sqlite.tmp` as `abandonedTemps` with no age/ownership check; `listOpfsArtifacts` removes them fire-and-forget: `void Promise.all(abandonedTemps.map((f) => removeOpfsFile(f.tag, f.name))).catch(() => {})` (`:447-448`). `ensureOpfsArtifact` writes its temp at `:371`, reads it back at `:372`, throws at `:373` if missing, validates at `:374`, and only renames at `:390` (`moveOpfsFile` opens the temp with `dir.getFileHandle(fromName)` at `:246`, which throws `NotFoundError` once removed). The temp must survive multiple real async I/O awaits. The worker allows interleaving (`ctx.onmessage` is fire-and-forget, `quran.worker.ts:507-509`); `pruneTranslations` is reachable mid-download via `:328`/`:487`; `pruneInFlight` (`opfs-retention.ts:73-81`) dedupes only prune-vs-prune; `pendingTranslationRunners` dedupes only same-sourceId.
+*Failure scenario.* User opens translation X (`ensureArtifact(X)` suspended at `writeOpfsFile('X.sqlite.tmp')`); a second message completes translation Y and fires `void pruneTranslations(...)` → `listCachedArtifacts` → `listOpfsArtifacts` → removes `X.sqlite.tmp` → `ensureArtifact(X)` resumes and throws "staged temp unreadable" (`:373`) or `NotFoundError` inside `moveOpfsFile`. Download fails and must be retried. Active file and pointer are never touched — no corruption, no stale serve — but intermittent, user-visible download failure under multi-translation navigation. Self-healing on next access.
+*Suggested fix.* Track a `Set<sourceId>` with an in-flight staging write (add on entry, clear in `finally`) and skip those temps in `filterSourceFiles`; or only sweep temps older than a sentinel (mtime > N s). Alternatively serialize `listCachedArtifacts`/prune against the download queue.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system
+
+---
+
+### Low
+
+**L1. Byte budget silently disabled when `Content-Length` is absent** — `web/src/service-worker.ts:114` *(CONFIRMED)*
+*Evidence.* `responseSize` (`:114-121`): `const cl = res.headers.get('content-length'); if (cl) { ... return n; } return 0;`. `recordDataEntry` (`:155-159`) propagates `sizeBytes = responseSize(res)`; `enforceDataBoundsInner` (`:210-220`) computes `totalBytes` from `sizeBytes` and breaks on `count <= DATA_MAX && totalBytes <= DATA_BUDGET_BYTES`. Grep found NO body-measurement fallback anywhere in the file.
+*Failure scenario.* A `__data.json` response served chunked/streamed (no `Content-Length` — common under HTTP/2 streaming, compression proxies, or Bun adapter-node for larger payloads) records `sizeBytes=0`; `totalBytes` stays 0 regardless of entry count, so the byte-cap is trivially satisfied and eviction is driven solely by count (`DATA_MAX=400`). For translation pages whose `__data.json` can be hundreds of KB, the cache can grow past the intended 32MiB. Test blind spot: `responseWith()` (`service-worker-data-cache.test.ts:115-120`) hard-codes `content-length`, so the byte-cap test proves only the header-present path.
+*Suggested fix.* `sizeBytes = Number(cl) || (await res.clone().arrayBuffer()).byteLength`, recorded at put time; or clamp per-entry size to a non-zero minimum.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Length — not guaranteed (chunked TE, optional under HTTP/2); https://developer.mozilla.org/en-US/docs/Web/API/Cache
+
+**L2. `touchRecency` read-modify-write is unserialized — LRU corruption** — `web/src/service-worker.ts:583` *(CONFIRMED)*
+*Evidence.* `touchRecency` (`:583-588`): `const recency = (await metaGet('recency')) || {}; recency[key] = Date.now(); await metaSet('recency', recency);` — two yield points, no lock. `idb.ts:40-69` opens a SEPARATE transaction per op; no transaction spans the read-modify-write; two readwrite puts are serialized by IDB but both based on the stale snapshot — last writer wins. `serializeDataMeta` (`:123-128`) exists for the data-meta path and is absent for recency — confirming oversight. `handleNavigation` calls `touchRecency` from three branches (`:485/:493/:503`); `trimPages` (`:711-716`) scores by `recency[key] ?? 0` and evicts `scored.slice(0, reqs.length - PAGES_MAX)`.
+*Failure scenario.* Rapid successive (or multi-tab) navigations A then B: both read `{k1:t1}`, A writes `{k1:t1,kA:tA}`, B writes `{k1:t1,kB:tB}` — `kA` lost. `trimPages` scores the just-visited page A as `0`, sorts it oldest, evicts it first. Self-healing (next visit re-adds recency); impact is cache-efficiency only, not data integrity.
+*Suggested fix.* Route `touchRecency` through a `serializeRecency` lock analogous to `serializeDataMeta`, or store per-key recency records.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent — SW single-threaded but async, fetch events interleave at awaits; https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API
+
+**L3. Three page-cache deletion paths leave orphan entries in the recency map** — `web/src/service-worker.ts:182`
+*Evidence.* `purgeUserCachesHandler` (`:182`) `await caches.delete(PAGES_CACHE)` — no `metaSet('recency', {})`. `purgeLegacyReaderPaths` (`:327-331`) meta cleanup (`:333-336`) only scans `DATA_META_PREFIX`. `handleNavigation` stale purge (`:501`) `await pages.delete(req).catch(()=>{})` — no recency cleanup. Only `trimPages` (`:717-723`) cleans recency.
+*Failure scenario.* Over a long session the single `recency` record accumulates hundreds of keys for pages no longer cached. Not a bound violation (`trimPages` iterates `cache.keys()` and ignores orphan recency keys), but each `touchRecency` read-modify-write (deserialize → mutate → serialize the whole object) gets progressively slower and IDB bloats. Asymmetry with `purgeAllDataMeta` indicates oversight.
+*Suggested fix.* After `caches.delete(PAGES_CACHE)`, also `await metaSet('recency', {})`; in `purgeLegacyReaderPaths`, filter/rewrite recency for deleted page keys alongside data-meta cleanup.
+
+**L4. Exact-root `/quran` and `/_quran` are not in the bypass list** — `web/src/service-worker.ts:414-415`
+*Evidence.* `:414` `if (url.pathname.startsWith("/quran/")) return;` and `:415` `if (url.pathname.startsWith("/_quran/")) return;` — a pathname of exactly `/quran` or `/_quran` matches neither, bypasses none of `:414-428`, and hits `:450-452` `event.respondWith(swrApp(req))`, whose `swrApp` (`:564-581`) puts into `APP_CACHE` on `res.ok && isCacheable`.
+*Failure scenario.* Design intent (`docs/quran-system.md:32,95`) marks both roots BYPASS. A GET to the exact root that returns 200 would be stored in `eq-app-${version}`, mixing API/gateway bytes with the app shell. Low impact today (the app always fetches subpaths per `lib/quran/environment.ts:8-9`; the gateway requires `/tanzil/` per `hooks.server.ts:90`, so bare roots 404 and `res.ok` is false) — but one new root route away from silently caching Quran-delivery bytes.
+*Suggested fix.* `if (url.pathname === "/quran" || url.pathname.startsWith("/quran/")) return;` and likewise for `/_quran`, or anchor with `/^\/quran(\/|$)/`.
+
+**L5. Pack fallback `ignoreSearch:true` can collide query-distinct `__data.json` keys** — `web/src/service-worker.ts:556`
+*Evidence.* `:554-557` `const packHit = await caches.match(new Request(key), { cacheName: packName, ignoreSearch: true });` where `key = normalizeDataKey(req.url)`; `normalizeDataKey` (`:40-50`) retains every query param except `x-sveltekit-*` and `mode`. Pack entries are populated path-style via `offline-store.svelte.ts:228-231`.
+*Failure scenario.* Offline + active pack, a request to a route whose `__data.json` varies by a retained query param (e.g. `/app/search/__data.json?q=foo` vs `?q=bar`) collapses onto the single pathname-only pack entry, serving the wrong body. Reader/juz/surah routes are path-keyed so unaffected; needs a query-varied route in the pack, last-resort only. (cache-isolation independently reviewed this path and judged it SAFE today because `gen-offline-pack.ts:34-39` produces path-only keys with no query variants — residual risk is a future query-varied route entering the manifest.)
+*Suggested fix.* Constrain the fallback to path-only keys, or drop `ignoreSearch` and store pack entries under the same normalized key the live handler uses.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/Cache/match
+
+**L6. Controlled-but-unreloaded tabs never ACK the new version, stalling `pruneOldAppCaches` (cache leak)** — `web/src/service-worker.ts:397`
+*Evidence.* `maybeFinalizeHandoff` (`:387-400`): `const allAcked = live.every((c) => acks[c.id] === version); if (!allAcked) return; await pruneOldAppCaches();`. `web/src/routes/+layout.svelte:49-57`: `const hadControllerAtBoot = Boolean(navigator.serviceWorker?.controller); const onControllerChange = () => { if (!hadControllerAtBoot) postAppReady(); };` — a tab that booted under the OLD SW does NOT call `postAppReady()` on takeover. The OLD SW already recorded `ack:${id} = oldVersion` (`onAppReady`, `:379-382`), so the new SW reads a stale ack.
+*Failure scenario.* Two tabs on v1; user updates in tab A; v2 activates, `clients.claim()` takes over both, `UPDATE_TAKEOVER` broadcast. Tab A reloads → `ack:A = v2`. Tab B's reload guard was armed by `PREPARE_RELOAD` over BroadcastChannel — if that message was dropped (tab B had not run `update.hydrate()` when broadcast; BroadcastChannel does not buffer for late constructors), tab B never reloads, stays live under v2 with `ack:B = v1`. `allAcked` false → `pruneOldAppCaches` never runs → `eq-app-v1` retained until tab B closes. Safe (never premature deletion), but a cache-size leak.
+*Suggested fix.* Drop the `!hadControllerAtBoot` gate and always `postMessage(APP_READY)` on `controllerchange`; or have the SW clear stale acks (value !== version) before the `allAcked` check.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/Clients/claim ; https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/controllerchange
+
+**L7. `hasTranslation` reports stale "cached" for evicted translations** — `web/src/lib/workers/quran.worker.ts:328`
+*Evidence.* `:328` and `:487` both fire-and-forget `pruneTranslations` WITHOUT calling `refreshCachedTranslationIds()`. `refreshCachedTranslationIds` (`:347-353`) runs only once at boot (`:226`). `cachedTranslationIds` (`:76`) is only added to (`:351/:359`) or cleared on boot (`:350`); no path removes an id on eviction. `hasTranslationCached` (`:344`) = `translationDbs.has(sourceId) || cachedTranslationIds.has(sourceId)`. `runPrune` (`opfs-retention.ts:130-134`) deletes bytes/pointer/lastUsed but cannot touch the in-memory Set (different module, no callback hook).
+*Failure scenario.* 13+ translations downloaded, exceeding `CAP_COUNT=12`; a new download triggers `pruneTranslations` → evicts oldest (say `en.sahih`) → UI queries `hasTranslation` for `en.sahih` → returns `true` (stale) → shows cached → on open, `fetchTranslationRunner` finds pointer gone and transparently re-downloads. Misleading cache-status UI + surprise re-download; self-heals only on worker restart.
+*Suggested fix.* After `runPrune` returns a non-empty evicted list, `cachedTranslationIds.delete(id)` for each (and close/drop from `translationDbs`); or simply `await refreshCachedTranslationIds()` after prune.
+
+**L8. OPFS→IDB fallback re-downloads bytes already fetched** — `web/src/lib/workers/opfs-cache.ts:327`
+*Evidence.* `ensureOpfsArtifact` `:370` `const bytes = await downloadBytes(...)` then `:371` `writeOpfsFile(temp)`; on throw, `:375` removes temp and rethrows. `ensureArtifact` `:321-324` catches non-`StagedValidationRejection` and falls through to `return ensureIdbArtifact(...)` (`:327`), whose body re-runs `const bytes = await downloadBytes(...)` at `:422`. Test `opfs-cache.test.ts:850-888` forces this (breakNextPointerPut after temp→active move) and asserts `store==="idb"` with `setFetchPayload` re-served.
+*Failure scenario.* User near quota: large DB downloads fully, `writeOpfsFile` throws `QuotaExceededError`, fallback re-downloads the entire file into IDB. Bandwidth and wait-time double on the low-storage path; first fetched bytes wasted. Validation is already correct (both paths run `runStagedValidator`) — purely a wasted-fetch issue.
+*Suggested fix.* Throw a carrier error carrying `bytes` from `ensureOpfsArtifact`; let `ensureIdbArtifact` accept pre-fetched bytes to skip its own `downloadBytes`.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system — OPFS shares origin quota with IDB, so OPFS quota failure typically predicts an IDB constraint too.
+
+**L9. `createOpfsStore.put` leaks `FileSystemWritableFileStream` when `write()` throws (dead code, but exported)** — `web/src/lib/workers/storage.ts:38`
+*Evidence.* `storage.ts:38-40` `const writable = await fh.createWritable(); await writable.write(bytes); await writable.close();` — no try/finally. Compare `opfs-cache.ts:234-239` `writeOpfsFile`: `try { await writable.write(bytes); } finally { await writable.close(); }`. Grep across `web/` shows `createOpfsStore` has zero callers — production routes through `writeOpfsFile`.
+*Failure scenario.* If `createOpfsStore` is wired back into a production path and `write()` throws (quota mid-write), the stream is never closed: data commits only on `close()` and the unclosed handle holds OPFS resources. No current production impact (dead code), but the exported API is a latent footgun.
+*Suggested fix.* Mirror `writeOpfsFile`'s try/finally, or delete `createOpfsStore` if confirmed legacy.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/FileSystemWritableFileStream/close
+
+**L10. `idbGet` omits `tx.onabort`/`tx.onerror` and can hang on a transaction-level abort** — `web/src/lib/workers/idb.ts:45`
+*Evidence.* `idb.ts:45-50` wires only `req.onsuccess`/`req.onerror`; no `tx.onabort`/`tx.onerror`. Same gap in cursor scans `readAllPointers` (`opfs-cache.ts:204-206`, oncomplete+onerror only) and `listIdbArtifacts` (`opfs-cache.ts:474-476`). Contrast `runTxVoid` (`idb.ts:31-38`) which wires `tx.onabort`.
+*Failure scenario.* Browser evicts origin data mid-read (non-persisted origin under pressure; `persist()` requested but may be denied) or an internal abort fires on the tx — `tx.onabort` not wired, `req.onerror` does not fire for a tx-level abort, so the promise hangs indefinitely and the await never resolves; the worker stalls on that source.
+*Suggested fix.* Wire `tx.onabort`/`tx.onerror` in `idbGet` to reject via `idbError(tx.error, "get")`; add the same to the two cursor scans.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction/abort_event
+
+---
+
+### Info
+
+**I1. Hardcoded `IDB_VERSION=1` + `storeName` parameter is a version-evolution trap** — `web/src/lib/workers/idb.ts:2`
+*Evidence.* `idb.ts:2` `export const IDB_VERSION = 1;`; `:12-16` `onupgradeneeded` creates the store only if missing. The version is a module constant, not derived from the stores requested. Safe today: every dbName maps to exactly one storeName (`(easyquran-quran, artifacts)`, `(easyquran-pointers, opfsPointers)`, `(easyquran-meta, lastUsed)`, `(easyquran-sw-meta, meta)` — `idb.test.ts:208-223`).
+*Failure scenario.* A future change adds a second store to an existing db (e.g. `metadata` alongside `artifacts` in `easyquran-quran`): `openIdb("easyquran-quran", "metadata")` at v1 finds the db already at v1, `onupgradeneeded` does not fire, the store is never created, first tx throws `NotFoundError`.
+*Suggested fix.* Pin one-store-per-db as a documented invariant (drop `storeName`), or compute `IDB_VERSION` from a per-db store registry so a new store forces a bump.
+*MDN.* https://developer.mozilla.org/en-US/docs/Web/API/IDBOpenDBRequest/upgradeneeded_event
+
+---
+
+## Refuted (checked, dropped)
+
+- **Navigation returns HTTP 5xx to the user instead of falling back to cached page** (`cache-routing`, `web/src/service-worker.ts:488`). The two-branch logic is spec-correct NetworkFirst: `fetch` RESOLVED (any HTTP status incl. 5xx) → server reachable → return authoritative response (`:488`); `fetch` REJECTED → `network = null` (`:477`) → genuine network failure → offline cache ladder (`:490-509`). The ladder is an OFFLINE fallback, not an HTTP-error fallback. The suggested fix (`if (network && network.ok) return network;`) would serve stale cached pages on 404/401/403/429, which is worse. No project document describes an HTTP-error fallback ladder; the only "Reader fallback ladder" (`docs/quran-system.md:106`) describes Worker data fetching, a different subsystem.
+
+---
+
+## Coverage gaps / what this audit did NOT verify
+
+- **Read-only static analysis only** — no git/build/test commands run, no browser/CI execution.
+- **Real-browser behavior not verified:** `Cache.match` Vary-header behavior for `__data.json` (no `ignoreVary` set); `FileSystemFileHandle.move()` atomicity and `removeEntry`-vs-open-writable-stream ordering across Chrome/Edge/Safari/Firefox (MDN marks these newer/non-cross-browser; the code feature-detects and falls back, but the fallback was verified by control-flow reasoning, not executed).
+- **Production transport not inspected:** whether `__data.json` / navigation responses actually omit `Content-Length` (depends on Bun adapter-node, HTTP/2, compression proxies — would activate L1); actual `__data.json` payload sizes and whether the data cache grows past 32MiB in practice.
+- **Real IDB runtime not exercised:** quota-eviction timing, transaction interleaving (the code self-heals via `enforceDataBounds` reconciliation and `dbAvailable` flagging, but not run against a real IDB); concurrent `cache.put` vs `cache.delete` races in `enforceDataBounds` (`serializeDataMeta` serializes IDB meta only, not Cache operations — reasoned speculatively, out of scope).
+- **Whether any production `__data.json` route varies by a retained query param** (would activate L5; cache-isolation judged it safe today because pack keys are path-only by construction).
+- **No test coverage for the ack/handoff flow** (`lib/offline/__tests__/` covers only the `UpdateStore` reload guard; service-worker tests mock idb and do not exercise `maybeFinalizeHandoff`/`pruneOldAppCaches`).
+- **No performance benchmarking, no browser-matrix testing, no quota-exceeded runtime behavior.**
+
