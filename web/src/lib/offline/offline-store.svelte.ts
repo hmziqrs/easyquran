@@ -41,12 +41,12 @@ function decodeOfflineManifest(raw: unknown): OfflineManifest | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.pack !== "string") return null;
-  if (typeof o.bytes !== "number" || !Number.isFinite(o.bytes as number)) return null;
-  if (typeof o.entries !== "number" || !Number.isFinite(o.entries as number)) return null;
+  if (typeof o.bytes !== "number" || !Number.isFinite(o.bytes)) return null;
+  if (typeof o.entries !== "number" || !Number.isFinite(o.entries)) return null;
   return {
     pack: o.pack,
-    bytes: o.bytes as number,
-    entries: o.entries as number,
+    bytes: o.bytes,
+    entries: o.entries,
     ...(typeof o.appVersion === "string" ? { appVersion: o.appVersion } : {}),
   };
 }
