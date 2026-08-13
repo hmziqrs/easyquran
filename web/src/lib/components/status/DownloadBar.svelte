@@ -36,13 +36,14 @@
   const visible = $derived(quran.download != null && quran.status !== "ready" && quran.status !== "error");
   const frac = $derived(overallFraction());
   const pct = $derived(frac == null ? 0 : Math.round(frac * 100));
-  const label = $derived(
-    quran.download
-      ? isArabicSourceId(quran.download.script)
-        ? SCRIPT_LABELS[sourceProfile(quran.download.script).script]
-        : SCRIPT_LABELS[QuranScript.Translation]
-      : "",
-  );
+  function downloadLabel(): string {
+    const script = quran.download?.script;
+    if (script === undefined) return "";
+    if (isArabicSourceId(script)) return SCRIPT_LABELS[sourceProfile(script).script];
+    return SCRIPT_LABELS[QuranScript.Translation];
+  }
+
+  const label = $derived(downloadLabel());
 </script>
 
 {#if visible}

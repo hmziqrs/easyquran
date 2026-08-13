@@ -38,6 +38,12 @@ import {
   type TranslationFetcher,
 } from "$lib/server/quran-translation-page";
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
   QURAN_DATA.globalIndexOf(surah, ayah) === globalIndex;
 
@@ -427,8 +433,7 @@ describe("translation route loaders", () => {
 
   beforeAll(() => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
-      const url =
-        input instanceof URL ? input.toString() : typeof input === "string" ? input : input.url;
+      const url = requestUrl(input);
       return url.endsWith("/sources")
         ? new Response(JSON.stringify(SOURCES_PAYLOAD), {
             status: 200,

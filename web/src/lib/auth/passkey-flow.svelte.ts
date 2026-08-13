@@ -94,6 +94,17 @@ function toPasskeyInfo(view: CredentialView): PasskeyInfo {
 
 type NavigatorCredentials = CredentialsContainer | undefined;
 
+/**
+ * Server options may omit authenticatorSelection entirely. An array is never a valid value for it,
+ * so it is dropped rather than forwarded to the authenticator.
+ */
+function authenticatorSelectionOf(raw: unknown): {
+  authenticatorSelection?: AuthenticatorSelectionCriteria;
+} {
+  if (Array.isArray(raw) || typeof raw !== "object" || !raw) return {};
+  return { authenticatorSelection: raw as AuthenticatorSelectionCriteria };
+}
+
 function resolveCredentials(inject?: CredentialsContainer): NavigatorCredentials {
   if (inject) return inject;
   if (typeof navigator === "undefined") return undefined;
@@ -401,7 +412,7 @@ export class PasskeyFlow {
       },
       pubKeyCredParams: this.#decodeParams(raw.pubKeyCredParams),
       ...(Array.isArray(raw.excludeCredentials) ? { excludeCredentials: this.#decodeCredentialDescriptors(raw.excludeCredentials) } : {}),
-      ...(Array.isArray(raw.authenticatorSelection) ? {} : typeof raw.authenticatorSelection === "object" && raw.authenticatorSelection ? { authenticatorSelection: raw.authenticatorSelection as AuthenticatorSelectionCriteria } : {}),
+      ...authenticatorSelectionOf(raw.authenticatorSelection),
       ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
       ...(typeof raw.attestation === "string" ? { attestation: raw.attestation as AttestationConveyancePreference } : {}),
     };

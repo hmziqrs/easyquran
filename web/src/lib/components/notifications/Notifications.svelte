@@ -9,16 +9,16 @@
     else await notifications.subscribe();
   }
 
+  function toggleLabel(): string {
+    if (notifications.busy) return "Working…";
+    if (notifications.subscribed) return "Disable";
+    if (notifications.permission === "denied") return "Blocked";
+    if (notifications.supported === false) return "Unsupported";
+    return "Enable";
+  }
+
   let disabled = $derived(!notifications.subscribed && !notifications.canSubscribe);
-  let label = $derived(
-    notifications.busy
-      ? "Working…"
-      : notifications.subscribed
-        ? "Disable"
-        : notifications.permission === "denied"
-          ? "Blocked"
-          : (notifications.supported === false ? "Unsupported" : "Enable"),
-  );
+  let label = $derived(toggleLabel());
 </script>
 
 <div class="grid gap-1.5">

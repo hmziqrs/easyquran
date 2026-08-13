@@ -40,40 +40,33 @@ export interface TerminateResult {
   readonly isCurrent: boolean;
 }
 
+/** First key present as a string, in preference order. Wire rows spell fields snake_case or camelCase. */
+function firstString(source: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") return value;
+  }
+  return undefined;
+}
+
+// id is the numeric i32 audit-row id on the wire; tolerate a numeric string
+// (never require a string id — the backend sends a number).
+function decodeSessionId(value: unknown): string | null {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string" && value.length > 0) return value;
+  return null;
+}
+
 function decodeSession(raw: unknown): SessionInfo | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  // id is the numeric i32 audit-row id on the wire; tolerate a numeric string
-  // (never require a string id — the backend sends a number).
-  const id =
-    typeof o.id === "number"
-      ? String(o.id)
-      : typeof o.id === "string" && o.id.length > 0
-        ? o.id
-        : null;
+  const id = decodeSessionId(o.id);
   if (id === null) return null;
   // Backend row fields: device, last_seen (snake_case) + isCurrent (camelCase,
   // server-derived). Tolerate optional camelCase variants for robustness.
-  const lastSeenAt =
-    typeof o.last_seen === "string"
-      ? o.last_seen
-      : typeof o.lastSeenAt === "string"
-        ? o.lastSeenAt
-        : undefined;
-  const userAgent =
-    typeof o.device === "string"
-      ? o.device
-      : typeof o.user_agent === "string"
-        ? o.user_agent
-        : typeof o.userAgent === "string"
-          ? o.userAgent
-          : undefined;
-  const createdAt =
-    typeof o.created_at === "string"
-      ? o.created_at
-      : typeof o.createdAt === "string"
-        ? o.createdAt
-        : undefined;
+  const lastSeenAt = firstString(o, "last_seen", "lastSeenAt");
+  const userAgent = firstString(o, "device", "user_agent", "userAgent");
+  const createdAt = firstString(o, "created_at", "createdAt");
   return {
     id,
     isCurrent: o.is_current === true || o.isCurrent === true,
@@ -83,11 +76,17 @@ function decodeSession(raw: unknown): SessionInfo | null {
   };
 }
 
+function sessionRows(raw: unknown, envelope: Record<string, unknown>): unknown[] {
+  if (Array.isArray(envelope.data)) return envelope.data;
+  if (Array.isArray(raw)) return raw;
+  return [];
+}
+
 export function decodeSessionList(raw: unknown): SessionInfo[] {
   if (!raw || typeof raw !== "object") return [];
   const o = raw as Record<string, unknown>;
   // Real envelope is { data: [...], total, page }. Accept a bare array too.
-  const arr = Array.isArray(o.data) ? o.data : Array.isArray(raw) ? raw : [];
+  const arr = sessionRows(raw, o);
   const out: SessionInfo[] = [];
   for (const entry of arr) {
     const s = decodeSession(entry);

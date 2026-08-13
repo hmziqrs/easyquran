@@ -51,7 +51,10 @@ function readAppVersion(): string | null {
 }
 
 const pairs = listDataFiles(BUILD).map((file) => ({ file, key: routeKey(file) }));
-pairs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+pairs.sort((a, b) => {
+  if (a.key < b.key) return -1;
+  return a.key > b.key ? 1 : 0;
+});
 
 const legacyReader = pairs.find(
   ({ key }) => key === "/app/__data.json" || key.startsWith("/app/"),

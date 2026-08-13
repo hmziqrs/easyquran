@@ -21,6 +21,14 @@ import { sourceProfile } from "./view/source-profiles";
 
 export type AyahCoordinateValidator = (globalIndex: number, surah: number, ayah: number) => boolean;
 
+/** First candidate that is actually an array. Payload envelopes spell the same list several ways. */
+function firstArray(...candidates: unknown[]): unknown[] | null {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return null;
+}
+
 function asRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
 }
@@ -150,6 +158,15 @@ function decodeHighlights(
   return out;
 }
 
+/**
+ * `null` = legitimately absent, `undefined` = malformed for this opener kind, which makes the
+ * whole record invalid. An opener-less Surah must carry an explicitly null openerText.
+ */
+function decodeOpenerText(openerKind: OpenerKind, value: unknown): string | null | undefined {
+  if (openerKind === OpenerKind.None) return value === null ? null : undefined;
+  return typeof value === "string" ? value : undefined;
+}
+
 function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
   const rec = asRecord(raw);
   if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
@@ -170,14 +187,7 @@ function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
   ) {
     return null;
   }
-  const openerText =
-    rec.openerKind === OpenerKind.None
-      ? rec.openerText === null
-        ? null
-        : undefined
-      : typeof rec.openerText === "string"
-        ? rec.openerText
-        : undefined;
+  const openerText = decodeOpenerText(rec.openerKind, rec.openerText);
   if (openerText === undefined) return null;
   return {
     surah,
@@ -343,11 +353,7 @@ function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
 export function decodeSourcesPayload(rawBody: unknown): SourceCatalogueEntry[] | null {
   const data = asRecord(unwrapEnvelope(rawBody));
   if (!data) return null;
-  const list = Array.isArray(data.scripts)
-    ? data.scripts
-    : Array.isArray(data.sources)
-      ? data.sources
-      : null;
+  const list = firstArray(data.scripts, data.sources);
   if (!list) return null;
   const out: SourceCatalogueEntry[] = [];
   for (const item of list) {

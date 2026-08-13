@@ -34,15 +34,17 @@ function hasEncodedControlCharacter(value: string): boolean {
   return false;
 }
 
+/** Earliest of two `indexOf` results, where -1 means "not found". -1 only if both are absent. */
+function earliestIndex(a: number, b: number): number {
+  if (a < 0) return b;
+  if (b < 0) return a;
+  return Math.min(a, b);
+}
+
 function splitHref(value: string): { pathname: string; suffix: string } {
   const queryIndex = value.indexOf("?");
   const fragmentIndex = value.indexOf("#");
-  const suffixIndex =
-    queryIndex < 0
-      ? fragmentIndex
-      : fragmentIndex < 0
-        ? queryIndex
-        : Math.min(queryIndex, fragmentIndex);
+  const suffixIndex = earliestIndex(queryIndex, fragmentIndex);
 
   if (suffixIndex < 0) return { pathname: value, suffix: "" };
   return { pathname: value.slice(0, suffixIndex), suffix: value.slice(suffixIndex) };

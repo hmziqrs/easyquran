@@ -18,10 +18,16 @@ import type { QuranReaderHref } from "$lib/i18n/reader";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import rawTranslations from "$lib/data/translations.json";
 
+const XML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&apos;",
+});
+
 const escape = (value: string) =>
-  value.replace(/[&<>"']/g, (c) =>
-    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&apos;",
-  );
+  value.replace(/[&<>"']/g, (c) => XML_ENTITIES[c] ?? c);
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 

@@ -26,15 +26,13 @@
     else await offline.enable();
   }
 
-  let label = $derived(
-    offline.busy && !working
-      ? "Working…"
-      : offline.status === "error"
-        ? "Retry"
-        : offline.activePack
-          ? "Remove offline"
-          : "Download for offline",
-  );
+  function packLabel(): string {
+    if (offline.busy && !working) return "Working…";
+    if (offline.status === "error") return "Retry";
+    return offline.activePack ? "Remove offline" : "Download for offline";
+  }
+
+  let label = $derived(packLabel());
 </script>
 
 <section class="grid gap-1.5">

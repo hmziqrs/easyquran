@@ -132,11 +132,13 @@ if (pages.length === 0) {
 }
 
 const results = worstPerSurface(pages, budgets.surfaces);
-const mode = process.argv.includes("--update")
-  ? "update"
-  : process.argv.includes("--report")
-    ? "report"
-    : "verify";
+function cliMode(): "update" | "report" | "verify" {
+  if (process.argv.includes("--update")) return "update";
+  if (process.argv.includes("--report")) return "report";
+  return "verify";
+}
+
+const mode = cliMode();
 
 const pad = (value: string | number, width: number) => String(value).padEnd(width);
 console.log(`[i18n-budget] ${pad("surface", 24)} ${pad("pages", 7)} ${pad("messages", 20)} gzip`);

@@ -74,34 +74,34 @@
     about: { "@id": `${SITE.url}/#organization` },
   });
 
-  const breadcrumbLd = $derived(
-    crumbs && crumbs.length
-      ? {
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          itemListElement: crumbs.map((c, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            name: c.name,
-            item: `${SITE.url}${c.href}`,
-          })),
-        }
-      : path !== "/" && current
-        ? {
-            "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: `${SITE.url}/` },
-              {
-                "@type": "ListItem",
-                position: 2,
-                name: baseEnglishPageCopy(current.id).label,
-                item: canonical,
-              },
-            ],
-          }
-        : null,
-  );
+  const listItem = (position: number, name: string, item: string) => ({
+    "@type": "ListItem",
+    position,
+    name,
+    item,
+  });
+
+  const breadcrumbList = (itemListElement: ReturnType<typeof listItem>[]) => ({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement,
+  });
+
+  /** Explicit crumbs win; otherwise a non-home page gets an implicit Home > page trail. */
+  function buildBreadcrumbLd(): ReturnType<typeof breadcrumbList> | null {
+    if (crumbs && crumbs.length) {
+      return breadcrumbList(crumbs.map((c, i) => listItem(i + 1, c.name, `${SITE.url}${c.href}`)));
+    }
+    if (path !== "/" && current) {
+      return breadcrumbList([
+        listItem(1, "Home", `${SITE.url}/`),
+        listItem(2, baseEnglishPageCopy(current.id).label, canonical),
+      ]);
+    }
+    return null;
+  }
+
+  const breadcrumbLd = $derived(buildBreadcrumbLd());
 
   const faqLd = $derived(
     faq && faq.length

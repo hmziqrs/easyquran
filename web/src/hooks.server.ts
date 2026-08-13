@@ -29,12 +29,12 @@ function translationRouteCacheKey(
   return `${base}__ui-${uiLocale}`;
 }
 
+function withTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
 function buildCsp(): string {
-  const api = QURAN.apiBase
-    ? QURAN.apiBase.endsWith("/")
-      ? QURAN.apiBase
-      : QURAN.apiBase + "/"
-    : "";
+  const api = QURAN.apiBase ? withTrailingSlash(QURAN.apiBase) : "";
   const connectSrc = [
     "'self'",
     "https://*.firebaseio.com",

@@ -3,6 +3,14 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { loadQuranData, resetQuranDataForTests } from "$lib/data/quran-data-client";
 
+function requestUrl(input: string | URL | Request): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+
+
 const snapshot = readFileSync(
   path.resolve(process.cwd(), "static/quran-meta/quran-data.json"),
   "utf8",
@@ -22,7 +30,7 @@ describe("browser Quran data loader", () => {
 
   it("fetches the one immutable snapshot at most once, on demand", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url = requestUrl(input);
       const found = url.endsWith("quran-data.json");
       return new Response(found ? snapshot : "not found", {
         status: found ? 200 : 404,

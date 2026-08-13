@@ -125,12 +125,11 @@ function alignMatchToDisplay(
 
     const before = previous[index];
     const after = next[index];
-    const boundary =
-      after !== undefined
-        ? display.starts[after]!
-        : before !== undefined
-          ? display.ends[before]!
-          : 0;
+    // Collapse to the nearest surviving neighbour: the next word's start, else the previous
+    // word's end, else the very beginning.
+    let boundary = 0;
+    if (after !== undefined) boundary = display.starts[after]!;
+    else if (before !== undefined) boundary = display.ends[before]!;
     starts.push(boundary);
     ends.push(boundary);
   }
