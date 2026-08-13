@@ -112,8 +112,8 @@
     wasOpen = isOpen;
   });
 
-  let accountHref = $derived(
-    (authState.authenticated ? "/account" : "/login") as `/${string}`,
+  let accountHref: "/account" | "/login" = $derived(
+    authState.authenticated ? "/account" : "/login",
   );
   let accountLabel = $derived(authState.authenticated ? copy.account : copy.signIn);
   let panelOffset = $derived(direction === "rtl" ? -360 : 360);
