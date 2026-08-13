@@ -78,11 +78,13 @@ function translation(
 function surahRoute(slug: string, localPage: number): ArabicReaderRoute | null {
   const surah = QURAN_DATA.surahBySlug(slug);
   if (!surah || !QURAN_DATA.surahLocalPage(surah.num, localPage)) return null;
+  if (localPage > 1) {
+    return { type: "arabic", cacheKind: "surah", index: surah.num, localPage };
+  }
   return {
     type: "arabic",
     cacheKind: "surah",
     index: surah.num,
-    ...(localPage > 1 ? { localPage } : {}),
   };
 }
 
@@ -95,6 +97,17 @@ function translationSurahRoute(
   const surah = QURAN_DATA.surahBySlug(slug);
   const source = translation(lang, translator);
   if (!surah || !source || !QURAN_DATA.surahLocalPage(surah.num, localPage)) return null;
+  if (localPage > 1) {
+    return {
+      type: "translation",
+      sourceId: source.sourceId,
+      contentLanguage: source.metadata.language,
+      contentDirection: source.metadata.direction,
+      cacheKind: "surah",
+      index: surah.num,
+      localPage,
+    };
+  }
   return {
     type: "translation",
     sourceId: source.sourceId,
@@ -102,7 +115,6 @@ function translationSurahRoute(
     contentDirection: source.metadata.direction,
     cacheKind: "surah",
     index: surah.num,
-    ...(localPage > 1 ? { localPage } : {}),
   };
 }
 
@@ -111,6 +123,12 @@ function rangeRoute(kind: "page" | "juz", value: string): ArabicReaderRoute | nu
   const rangeKind = kind === "juz" ? RangeKind.Juz : RangeKind.Page;
   if (index === null || !QURAN_DATA.rangeByIndex(rangeKind, index)) return null;
   return { type: "arabic", cacheKind: kind, index };
+}
+
+function rangeKindFromSegment(segment: string): "page" | "juz" | null {
+  if (segment === "page") return "page";
+  if (segment === "juz") return "juz";
+  return null;
 }
 
 function translationRangeRoute(
@@ -152,7 +170,9 @@ export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
 
   match = /^\/app\/t\/([^/]+)\/([^/]+)\/(page|juz)\/([^/]+)$/u.exec(pathname);
   if (match) {
-    return translationRangeRoute(match[1]!, match[2]!, match[3] as "page" | "juz", match[4]!);
+    const kind = rangeKindFromSegment(match[3]!);
+    if (!kind) return null;
+    return translationRangeRoute(match[1]!, match[2]!, kind, match[4]!);
   }
 
   match = /^\/app\/([^/]+)\/page\/([^/]+)$/u.exec(pathname);
@@ -162,7 +182,10 @@ export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
   }
 
   match = /^\/app\/(page|juz)\/([^/]+)$/u.exec(pathname);
-  if (match) return rangeRoute(match[1] as "page" | "juz", match[2]!);
+  if (match) {
+    const kind = rangeKindFromSegment(match[1]!);
+    return kind ? rangeRoute(kind, match[2]!) : null;
+  }
 
   match = /^\/app\/([^/]+)$/u.exec(pathname);
   return match ? surahRoute(match[1]!, 1) : null;
@@ -186,14 +209,14 @@ export function parseReaderRoute(
   const marker = "/app";
   const markerIndex = routeId.indexOf(marker);
   if (markerIndex < 0) return null;
-  const shape = routeId.slice(markerIndex);
+  const routePattern = routeId.slice(markerIndex);
   const surah = requiredParam(params, "surah", SURAH_SEGMENT);
   const lang = requiredParam(params, "lang", CONTENT_LANGUAGE_SEGMENT);
   const translator = requiredParam(params, "translator", TRANSLATOR_SEGMENT);
   const localPage = requiredParam(params, "localPage", POSITIVE_INTEGER);
   const n = requiredParam(params, "n", POSITIVE_INTEGER);
 
-  switch (shape) {
+  switch (routePattern) {
     case "/app":
       return parseReaderPath("/app");
     case "/app/juz":

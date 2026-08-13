@@ -1,9 +1,11 @@
 import { SvelteMap } from "svelte/reactivity";
 
-export function observeMapSize(map: SvelteMap<number, string[]>): {
+interface MapSizeObserver {
   reads: () => number;
   dispose: () => void;
-} {
+}
+
+export function observeMapSize(map: SvelteMap<number, string[]>): MapSizeObserver {
   let count = 0;
   const cleanup = $effect.root(() => {
     $effect(() => {

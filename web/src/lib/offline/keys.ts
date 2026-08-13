@@ -1,7 +1,7 @@
 const RESOLVE_BASE = "http://easyquran.local";
 
 export function normalizeDataKey(url: string | URL): string {
-  const u = typeof url === "string" ? new URL(url, RESOLVE_BASE) : url;
+  const u = new URL(url, RESOLVE_BASE);
   const params = new URLSearchParams();
   for (const [key, value] of u.searchParams) {
     if (key.startsWith("x-sveltekit-")) continue;

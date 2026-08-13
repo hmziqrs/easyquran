@@ -5,7 +5,7 @@ const SURAH_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[.-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
-const READER_SHAPES = [
+const READER_ROUTE_PATTERNS = [
   new RegExp("^/app$", "u"),
   new RegExp("^/app/juz$", "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
@@ -22,18 +22,18 @@ const READER_SHAPES = [
   ),
 ];
 
-function isReaderShape(pathname: string): boolean {
+function isReaderRoute(pathname: string): boolean {
   return (
     pathname.length <= 256 &&
     !pathname.includes("%") &&
     !pathname.includes("//") &&
-    READER_SHAPES.some((pattern) => pattern.test(pathname))
+    READER_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname))
   );
 }
 
 function localizedReaderTuple(rawPathname: string, candidatePathname: string): boolean {
   const match = /^\/(en|ar)(\/app(?:\/.*)?)$/u.exec(rawPathname);
-  return !!match && match[2] === candidatePathname && isReaderShape(candidatePathname);
+  return !!match && match[2] === candidatePathname && isReaderRoute(candidatePathname);
 }
 
 export const reroute: Reroute = ({ url }) => {

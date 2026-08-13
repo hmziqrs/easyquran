@@ -64,7 +64,7 @@ class MockBC {
   }
 }
 
-function setServiceWorker(value: object | null): void {
+function setServiceWorker(value: Partial<ServiceWorkerContainer> | null): void {
   const nav = navigator as unknown as { serviceWorker?: unknown };
   if (value === null) {
     try {
