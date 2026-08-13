@@ -4,6 +4,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { authState } from "$lib/auth/auth-state.svelte";
+  import { authModal } from "$lib/auth/auth-modal.svelte";
   import { createLogoutFlow } from "$lib/auth/flows.svelte";
   import { createPasskeyFlow } from "$lib/auth/passkey-flow.svelte";
   import { accountClient, type SessionInfo } from "$lib/auth/account-client";
@@ -133,7 +134,7 @@
         Sign in to manage your profile, sessions, and security.
       </p>
     </div>
-    <Button variant="accent" size="lg" onclick={() => goto(ANONYMOUS_CTA_HREF)}>Sign in</Button>
+    <Button variant="accent" size="lg" onclick={() => authModal.show("login")}>Sign in</Button>
     <p class="text-center text-sm text-fg-2">
       No account? <a href={REGISTER_HREF} class="text-accent hover:underline">Create one</a>
     </p>

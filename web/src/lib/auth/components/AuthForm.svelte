@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
+  import { cn } from "$lib/utils";
   import type { Snippet } from "svelte";
 
   type Props = {
@@ -10,6 +11,7 @@
     pending?: boolean;
     serverError?: string | null;
     successNotice?: string | null;
+    variant?: "page" | "modal";
     onsubmit: () => void | Promise<void>;
     children?: Snippet;
     footer?: Snippet;
@@ -22,10 +24,18 @@
     pending = false,
     serverError = null,
     successNotice = null,
+    variant = "page",
     onsubmit,
     children,
     footer,
   }: Props = $props();
+
+  let headingClass = $derived(
+    variant === "modal"
+      ? "text-[22px] font-semibold leading-tight tracking-[-0.01em]"
+      : "text-[28px] font-semibold leading-tight tracking-[-0.02em]",
+  );
+  let subheadingClass = $derived(variant === "modal" ? "text-[14px] text-fg-2" : "text-[15px] text-fg-2");
 
   let formEl: HTMLFormElement | null = $state(null);
 
@@ -40,9 +50,9 @@
 
 <form bind:this={formEl} onsubmit={handleSubmit} class="flex flex-col gap-5" novalidate>
   <div class="flex flex-col gap-2">
-    <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em]">{heading}</h1>
+    <h1 class={headingClass}>{heading}</h1>
     {#if subheading}
-      <p class="text-[15px] leading-relaxed text-fg-2">{subheading}</p>
+      <p class={cn("leading-relaxed", subheadingClass)}>{subheading}</p>
     {/if}
   </div>
 

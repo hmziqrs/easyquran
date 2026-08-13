@@ -13,6 +13,7 @@
   import { APP_READY } from "$lib/offline/messages";
   import { NotificationToast } from "$lib/components/notifications";
   import { GlobalSearch } from "$lib/components/search";
+  import { AuthModalShell } from "$lib/components/auth";
   import { DownloadBar, UpdateToast } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
   import { startServiceWorker } from "$lib/boot/service-worker";
@@ -135,4 +136,5 @@
 <UpdateToast />
 <DownloadBar />
 <GlobalSearch />
+<AuthModalShell />
 {@render children()}
