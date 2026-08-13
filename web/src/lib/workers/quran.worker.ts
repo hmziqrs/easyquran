@@ -210,6 +210,13 @@ async function bootArabic(
     if (!persistent) database.close();
   }
 
+  // Sweep orphan .sqlite.tmp files BEFORE flipping ready: while ready is false
+  // no readTranslation can have started an ensureArtifact stage, so no temp here
+  // is in flight (the worker processes messages concurrently via void
+  // handleMessage, so this must hold before any staging can start). The prune
+  // path no longer deletes temps (it raced in-flight staging), so this boot
+  // sweep is the sole temp-cleanup owner.
+  await sweepAbandonedTemps();
   ready = true;
   status("ready");
 }
@@ -229,10 +236,6 @@ async function initialize(
   try {
     await bootPromise;
     await refreshCachedTranslationIds();
-    // Safe by construction: at boot no ensureArtifact can be in flight, so this
-    // is the only place orphan .sqlite.tmp files are swept (the prune path no
-    // longer deletes temps, which raced in-flight staging).
-    await sweepAbandonedTemps();
   } finally {
     bootPromise = null;
   }
