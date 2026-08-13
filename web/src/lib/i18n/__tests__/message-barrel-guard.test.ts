@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vite-plus/test";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -46,7 +47,7 @@ describe("message barrel boundaries", () => {
 
     expect(
       offenders.map((file) => relative(SRC, file)),
-      "import a namespace from $lib/i18n/m/* instead — see docs/i18n-bundle-plan.md",
+      "import a namespace from $lib/i18n/m/* instead — see docs/quran-system.md (Part 2, Message chunking)",
     ).toEqual([]);
   });
 

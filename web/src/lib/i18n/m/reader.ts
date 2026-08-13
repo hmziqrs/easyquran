@@ -3,7 +3,7 @@
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
 // 137 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
 export { reader_appearance } from "$lib/paraglide/messages/reader_appearance.js";

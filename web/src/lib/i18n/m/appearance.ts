@@ -3,7 +3,7 @@
 // Marketing appearance panel. Lazy: only downloaded once the panel is opened.
 //
 // 34 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { accent_azure_label } from "$lib/paraglide/messages/accent_azure_label.js";
 export { accent_emerald_label } from "$lib/paraglide/messages/accent_emerald_label.js";

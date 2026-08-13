@@ -3,7 +3,7 @@
 // Theme mode names. Shared by chrome (nav toggle) and both appearance panels.
 //
 // 2 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { theme_dark } from "$lib/paraglide/messages/theme_dark.js";
 export { theme_light } from "$lib/paraglide/messages/theme_light.js";

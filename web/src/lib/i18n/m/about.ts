@@ -3,7 +3,7 @@
 // About page.
 //
 // 18 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { about_body_approach } from "$lib/paraglide/messages/about_body_approach.js";
 export { about_body_sources } from "$lib/paraglide/messages/about_body_sources.js";

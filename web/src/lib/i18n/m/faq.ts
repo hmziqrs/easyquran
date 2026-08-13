@@ -3,7 +3,7 @@
 // FAQ page, including its FAQPage structured data.
 //
 // 20 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { faq_account_answer } from "$lib/paraglide/messages/faq_account_answer.js";
 export { faq_account_question } from "$lib/paraglide/messages/faq_account_question.js";

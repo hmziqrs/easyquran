@@ -3,7 +3,7 @@
 // Parameterized control labels shared by the marketing and reader appearance panels.
 //
 // 6 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { tweaks_accent_option } from "$lib/paraglide/messages/tweaks_accent_option.js";
 export { tweaks_colour_input } from "$lib/paraglide/messages/tweaks_colour_input.js";

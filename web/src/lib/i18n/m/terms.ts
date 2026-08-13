@@ -3,7 +3,7 @@
 // Terms of service body.
 //
 // 21 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { legal_terms_acceptance_body } from "$lib/paraglide/messages/legal_terms_acceptance_body.js";
 export { legal_terms_acceptance_heading } from "$lib/paraglide/messages/legal_terms_acceptance_heading.js";

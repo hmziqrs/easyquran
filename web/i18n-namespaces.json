@@ -1,5 +1,5 @@
 {
-  "note": "Namespace membership for generated message barrels (scripts/gen-message-namespaces.ts). A namespace is the unit of download: every message in one namespace ships together, and a namespace imported by a single route subtree gets its own chunk instead of being hoisted into a shared one. `prefixes` claims keys by `<prefix>_` prefix; `keys` claims exact keys and wins over prefixes. Every catalog key must be claimed exactly once or generation fails. See docs/i18n-bundle-plan.md.",
+  "note": "Namespace membership for generated message barrels (scripts/gen-message-namespaces.ts). A namespace is the unit of download: every message in one namespace ships together, and a namespace imported by a single route subtree gets its own chunk instead of being hoisted into a shared one. `prefixes` claims keys by `<prefix>_` prefix; `keys` claims exact keys and wins over prefixes. Every catalog key must be claimed exactly once or generation fails. See docs/quran-system.md (Part 2, Message chunking).",
   "namespaces": [
     {
       "id": "chrome",

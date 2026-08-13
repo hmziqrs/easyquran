@@ -3,7 +3,7 @@
 // Reader appearance panel. Lazy: only downloaded once the panel is opened.
 //
 // 34 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_accent } from "$lib/paraglide/messages/reader_accent.js";
 export { reader_accent_azure } from "$lib/paraglide/messages/reader_accent_azure.js";

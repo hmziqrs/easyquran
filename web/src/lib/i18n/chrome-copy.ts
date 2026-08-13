@@ -1,12 +1,3 @@
-import type {
-  BrandResolvedCopy,
-  FooterResolvedCopy,
-  MarketingDirection,
-  MarketingFooterLinks,
-  MarketingLocale,
-  NavResolvedCopy,
-} from "$lib/i18n/marketing-copy";
-import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
 import { footerLinksFor, type FooterLinkLabels } from "$lib/i18n/footer-links";
 import {
   brand_home_label,
@@ -47,11 +38,20 @@ import {
   tweaks_customize_appearance,
 } from "$lib/i18n/m/chrome";
 import { theme_dark, theme_light } from "$lib/i18n/m/theme";
+import type {
+  BrandResolvedCopy,
+  FooterResolvedCopy,
+  MarketingDirection,
+  MarketingFooterLinks,
+  MarketingLocale,
+  NavResolvedCopy,
+} from "$lib/i18n/marketing-copy";
+import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
 
 /**
  * Site chrome: the copy every marketing page renders. This is the localization floor — everything
  * else must live in a per-page namespace so a page never downloads copy it does not render.
- * See docs/i18n-bundle-plan.md.
+ * See docs/quran-system.md (Part 2, Message chunking).
  */
 export interface ChromeResolvedCopy {
   locale: MarketingLocale;

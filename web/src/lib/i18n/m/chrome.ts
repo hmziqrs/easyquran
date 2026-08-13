@@ -3,7 +3,7 @@
 // Site chrome rendered on every marketing page: nav, footer, brand, skip link, locale switcher. Includes the appearance-panel trigger label, the only appearance string a page needs before the panel opens.
 //
 // 38 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { brand_home_label } from "$lib/paraglide/messages/brand_home_label.js";
 export { footer_about } from "$lib/paraglide/messages/footer_about.js";

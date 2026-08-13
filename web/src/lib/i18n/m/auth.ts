@@ -3,7 +3,7 @@
 // Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.
 //
 // 34 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { auth_close } from "$lib/paraglide/messages/auth_close.js";
 export { auth_continue } from "$lib/paraglide/messages/auth_continue.js";

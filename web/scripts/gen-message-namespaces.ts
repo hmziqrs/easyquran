@@ -119,7 +119,7 @@ function render(namespace: NamespaceConfig, keys: string[]): string {
     `// ${namespace.description}`,
     `//`,
     `// ${keys.length} message${keys.length === 1 ? "" : "s"}. Import this barrel, never`,
-    `// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.`,
+    `// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).`,
     ``,
     exports,
     ``,

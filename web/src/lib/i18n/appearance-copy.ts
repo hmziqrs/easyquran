@@ -1,4 +1,3 @@
-import type { MarketingLocale, TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 import {
   accent_azure_label,
   accent_emerald_label,
@@ -44,11 +43,12 @@ import {
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
 import { theme_dark, theme_light } from "$lib/i18n/m/theme";
+import type { MarketingLocale, TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 /**
  * Marketing appearance panel copy. Loaded lazily when the panel opens — it is the largest single
  * block of chrome copy and nothing renders it until the user asks for it.
- * See docs/i18n-bundle-plan.md.
+ * See docs/quran-system.md (Part 2, Message chunking).
  */
 export function resolveAppearanceCopy(locale: MarketingLocale): TweaksResolvedCopy {
   return {

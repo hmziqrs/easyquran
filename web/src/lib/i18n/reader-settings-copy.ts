@@ -1,5 +1,4 @@
 import type { UiLocale } from "$lib/i18n/locales";
-import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 import {
   tweaks_accent_option,
   tweaks_colour_input,
@@ -45,6 +44,7 @@ import {
   reader_surface_slate_note,
   reader_theme_derived_note,
 } from "$lib/i18n/m/reader-settings";
+import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
   readonly background: string;
@@ -56,7 +56,7 @@ export type ReaderSettingsCopy = TweaksResolvedCopy & {
 
 /**
  * Reader appearance panel copy. Loaded on first panel open, never eagerly: it is ~34 messages that
- * nothing renders until the user opens the panel. See docs/i18n-bundle-plan.md.
+ * nothing renders until the user opens the panel. See docs/quran-system.md (Part 2, Message chunking).
  */
 export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
   const options = { locale } as const;

@@ -3,7 +3,7 @@
 // Privacy policy body.
 //
 // 22 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { legal_privacy_accounts_body } from "$lib/paraglide/messages/legal_privacy_accounts_body.js";
 export { legal_privacy_accounts_heading } from "$lib/paraglide/messages/legal_privacy_accounts_heading.js";

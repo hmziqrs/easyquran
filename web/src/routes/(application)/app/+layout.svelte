@@ -61,7 +61,7 @@
   });
 
   // Dynamic import on purpose: the reader appearance panel owns ~34 messages that nothing renders
-  // until the user opens the panel. See docs/i18n-bundle-plan.md.
+  // until the user opens the panel. See docs/quran-system.md (Part 2, Message chunking).
   const loadReaderSettingsCopy = async () => {
     const { getReaderSettingsCopy } = await import("$lib/i18n/reader-settings-copy");
     return getReaderSettingsCopy(copy.locale);

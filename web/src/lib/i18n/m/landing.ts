@@ -3,7 +3,7 @@
 // Marketing home page, including its SEO metadata.
 //
 // 31 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/i18n-bundle-plan.md.
+// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { landing_badge } from "$lib/paraglide/messages/landing_badge.js";
 export { landing_coming } from "$lib/paraglide/messages/landing_coming.js";
