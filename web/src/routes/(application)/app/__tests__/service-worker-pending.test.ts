@@ -285,6 +285,9 @@ describe("W7 handleData evicts an old pending cached entry and its metadata", ()
     const stored = await cache.match(new Request(dataUrl(7)));
     expect(stored).toBeDefined();
     expect(isPending(stored!)).toBe(false);
+    // recordDataEntry runs as a background write inside handleData; let it settle
+    // before asserting the metadata landed.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(await readDataMeta(dataKey(7))).toBeDefined();
   });
 });

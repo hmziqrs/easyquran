@@ -46,14 +46,16 @@
 
     const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
 
-    const hadControllerAtBoot = Boolean(navigator.serviceWorker?.controller);
     const postAppReady = (): void => {
       const ctrl = navigator.serviceWorker?.controller;
       if (ctrl) ctrl.postMessage({ type: APP_READY });
     };
     postAppReady();
+    // Always re-ACK on controllerchange: a tab booted under the old SW is taken
+    // over by a new one without reloading, and must ACK the new version so
+    // maybeFinalizeHandoff can prune old app caches.
     const onControllerChange = (): void => {
-      if (!hadControllerAtBoot) postAppReady();
+      postAppReady();
     };
     navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
     cleanups.push(() => navigator.serviceWorker?.removeEventListener("controllerchange", onControllerChange));

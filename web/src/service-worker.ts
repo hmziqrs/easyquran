@@ -66,10 +66,7 @@ export function isCacheable(res: Response): boolean {
   return true;
 }
 
-let dbAvailable = true;
-
 function db(): Promise<IDBDatabase> {
-  if (!dbAvailable) return Promise.reject(new Error("idb unavailable"));
   return openIdb(META_DB, META_STORE);
 }
 
@@ -85,17 +82,13 @@ async function metaGet<T>(key: string): Promise<T | undefined> {
 async function metaSet(key: string, value: unknown): Promise<void> {
   try {
     await idbPut(await db(), META_STORE, value, key);
-  } catch {
-    dbAvailable = false;
-  }
+  } catch {}
 }
 
 async function metaDel(key: string): Promise<void> {
   try {
     await idbDelete(await db(), META_STORE, key);
-  } catch {
-    dbAvailable = false;
-  }
+  } catch {}
 }
 
 async function metaScan<T>(prefix: string): Promise<Record<string, T>> {
@@ -118,19 +111,28 @@ function dataMetaId(key: string): string {
   return `${DATA_META_PREFIX}${key}`;
 }
 
-function responseSize(res: Response): number {
-  const cl = res.headers.get("content-length");
-  if (cl) {
-    const n = Number(cl);
-    if (Number.isFinite(n) && n >= 0) return n;
+async function measureResponseSize(res: Response): Promise<number> {
+  // Measure the decompressed body, never trust Content-Length: prerendered
+  // __data.json is served precompressed, so the header reflects the encoded
+  // (or absent) size while the cache stores the full decoded body.
+  try {
+    return (await res.clone().arrayBuffer()).byteLength;
+  } catch {
+    return 0;
   }
-  return 0;
 }
 
 let dataMetaLock: Promise<void> = Promise.resolve();
 function serializeDataMeta(fn: () => Promise<void>): Promise<void> {
   const next = dataMetaLock.then(fn, fn);
   dataMetaLock = next.catch(() => undefined);
+  return next;
+}
+
+let recencyLock: Promise<void> = Promise.resolve();
+function serializeRecency(fn: () => Promise<void>): Promise<void> {
+  const next = recencyLock.then(fn, fn);
+  recencyLock = next.catch(() => undefined);
   return next;
 }
 
@@ -159,8 +161,8 @@ async function rawDataMetaScan(): Promise<Map<string, DataMetaEntry>> {
   return new Map(Object.entries(obj));
 }
 
-export function recordDataEntry(key: string, res: Response): Promise<void> {
-  const sizeBytes = responseSize(res);
+export async function recordDataEntry(key: string, res: Response): Promise<void> {
+  const sizeBytes = await measureResponseSize(res);
   const lastUsed = Date.now();
   return serializeDataMeta(() => rawDataMetaSet({ key, lastUsed, sizeBytes }));
 }
@@ -189,6 +191,7 @@ export async function purgeUserCachesHandler(port?: MessagePort): Promise<void> 
     await caches.delete(PAGES_CACHE);
     await caches.delete(DATA_CACHE);
     await purgeAllDataMeta();
+    await serializeRecency(() => metaSet("recency", {}));
   } catch {}
   if (port) {
     try {
@@ -341,6 +344,17 @@ async function purgeLegacyReaderPaths(): Promise<void> {
   await Promise.all(
     [...dataMeta.keys()].filter((url) => isLegacyReaderPath(url)).map((key) => rawDataMetaDel(key)),
   );
+  await serializeRecency(async () => {
+    const recency = (await metaGet<Record<string, number>>("recency")) || {};
+    let changed = false;
+    for (const key of Object.keys(recency)) {
+      if (isLegacyReaderPath(key)) {
+        delete recency[key];
+        changed = true;
+      }
+    }
+    if (changed) await metaSet("recency", recency);
+  });
 }
 
 function announceTakeover(): void {
@@ -425,8 +439,8 @@ sw.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  if (url.pathname.startsWith("/quran/")) return;
-  if (url.pathname.startsWith("/_quran/")) return;
+  if (url.pathname === "/quran" || url.pathname.startsWith("/quran/")) return;
+  if (url.pathname === "/_quran" || url.pathname.startsWith("/_quran/")) return;
   if (url.hostname.endsWith("r2.easyquran.fyi")) return;
   if (url.pathname === "/firebase-config.js") return;
   if (url.pathname.includes("/translations/")) return;
@@ -567,7 +581,6 @@ export async function handleData(req: Request): Promise<Response> {
     if (await caches.has(packName)) {
       const packHit = await caches.match(new Request(key), {
         cacheName: packName,
-        ignoreSearch: true,
       });
       if (packHit) return packHit;
     }
@@ -596,9 +609,11 @@ async function swrApp(req: Request): Promise<Response> {
 
 async function touchRecency(rawUrl: string): Promise<void> {
   const key = normalizeDataKey(rawUrl);
-  const recency = (await metaGet<Record<string, number>>("recency")) || {};
-  recency[key] = Date.now();
-  await metaSet("recency", recency);
+  return serializeRecency(async () => {
+    const recency = (await metaGet<Record<string, number>>("recency")) || {};
+    recency[key] = Date.now();
+    await metaSet("recency", recency);
+  });
 }
 
 let maintenanceInFlight = false;
@@ -726,20 +741,22 @@ async function trimPages(): Promise<void> {
   const cache = await caches.open(PAGES_CACHE);
   const reqs = await cache.keys();
   if (reqs.length <= PAGES_MAX) return;
-  const recency = (await metaGet<Record<string, number>>("recency")) || {};
-  const scored = reqs.map((req) => ({
-    req,
-    last: recency[normalizeDataKey(req.url)] ?? 0,
-  }));
-  scored.sort((a, b) => a.last - b.last);
-  const evict = scored.slice(0, reqs.length - PAGES_MAX);
-  const nextRecency = { ...recency };
-  for (const { req } of evict) {
-    await cache.delete(req).catch(() => {});
-    const key = normalizeDataKey(req.url);
-    delete nextRecency[key];
-  }
-  await metaSet("recency", nextRecency);
+  await serializeRecency(async () => {
+    const recency = (await metaGet<Record<string, number>>("recency")) || {};
+    const scored = reqs.map((req) => ({
+      req,
+      last: recency[normalizeDataKey(req.url)] ?? 0,
+    }));
+    scored.sort((a, b) => a.last - b.last);
+    const evict = scored.slice(0, reqs.length - PAGES_MAX);
+    const nextRecency = { ...recency };
+    for (const { req } of evict) {
+      await cache.delete(req).catch(() => {});
+      const key = normalizeDataKey(req.url);
+      delete nextRecency[key];
+    }
+    await metaSet("recency", nextRecency);
+  });
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the url field of an untrusted push JSON payload; this fn validates it before use

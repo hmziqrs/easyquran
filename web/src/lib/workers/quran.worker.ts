@@ -45,6 +45,7 @@ import {
   ensureArtifact,
   listCachedArtifacts,
   QURAN_ROW_COUNT,
+  sweepAbandonedTemps,
   type StagedValidator,
 } from "./opfs-cache";
 import { pruneTranslations } from "./opfs-retention";
@@ -228,6 +229,10 @@ async function initialize(
   try {
     await bootPromise;
     await refreshCachedTranslationIds();
+    // Safe by construction: at boot no ensureArtifact can be in flight, so this
+    // is the only place orphan .sqlite.tmp files are swept (the prune path no
+    // longer deletes temps, which raced in-flight staging).
+    await sweepAbandonedTemps();
   } finally {
     bootPromise = null;
   }
@@ -302,6 +307,19 @@ function evictTranslationDbs(): void {
   }
 }
 
+function forgetTranslations(ids: readonly string[]): void {
+  for (const id of ids) {
+    cachedTranslationIds.delete(id);
+    const database = translationDbs.get(id);
+    if (database) {
+      translationDbs.delete(id);
+      try {
+        database.close();
+      } catch {}
+    }
+  }
+}
+
 async function translationRunner(sourceId: string): Promise<QuranQueryRunner> {
   const cached = translationDbs.get(sourceId);
   if (cached) {
@@ -329,7 +347,13 @@ async function fetchTranslationRunner(sourceId: string): Promise<QuranQueryRunne
         validate: stagedQuranValidator(),
       });
       if (artifact.downloaded) {
-        void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
+        void pruneTranslations({
+          pinnedArabicIds: PINNED_ARABIC,
+          catalogue: storedCatalogue,
+        }).then(
+          (r) => forgetTranslations(r.evicted),
+          () => {},
+        );
       }
       evictTranslationDbs();
       const database = openReadOnly(artifact.bytes);
@@ -494,7 +518,13 @@ async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> 
     if (message.type === "init") {
       await handlers.init(message);
       emit({ id, ok: true, result: null });
-      void pruneTranslations({ pinnedArabicIds: PINNED_ARABIC, catalogue: storedCatalogue });
+      void pruneTranslations({
+        pinnedArabicIds: PINNED_ARABIC,
+        catalogue: storedCatalogue,
+      }).then(
+        (r) => forgetTranslations(r.evicted),
+        () => {},
+      );
       return;
     }
     if (!ready) {

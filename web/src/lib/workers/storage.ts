@@ -37,8 +37,11 @@ export function createOpfsStore(rootDir: string): ByteStore {
       const dir = await tagDir(tag, true);
       const fh = await dir.getFileHandle(key, { create: true });
       const writable = await fh.createWritable();
-      await writable.write(bytes);
-      await writable.close();
+      try {
+        await writable.write(bytes);
+      } finally {
+        await writable.close();
+      }
       return true;
     },
   };
