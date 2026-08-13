@@ -14,10 +14,39 @@ export function openIdb(dbName: string, storeName: string): Promise<IDBDatabase>
           req.result.createObjectStore(storeName);
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // One-store-per-db invariant: a second store added to an existing db at
+        // the pinned IDB_VERSION never fires onupgradeneeded, so a missing store
+        // here is a hard error rather than a silent NotFound later.
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.close();
+          reject(
+            idbError(
+              new DOMException(`IDB store "${storeName}" missing in ${dbName}`, "NotFoundError"),
+              "open",
+            ),
+          );
+          return;
+        }
+        // Evict the cached connection if it is force-closed (origin eviction) or
+        // a version change is requested elsewhere, so the next call reopens.
+        db.onclose = () => {
+          idbConnections.delete(cacheKey);
+        };
+        db.onversionchange = () => {
+          db.close();
+          idbConnections.delete(cacheKey);
+        };
+        resolve(db);
+      };
       req.onerror = () => reject(idbError(req.error, "open"));
     });
     idbConnections.set(cacheKey, p);
+    // A rejected open (e.g. missing store) must not latch the cache forever.
+    void p.catch(() => {
+      idbConnections.delete(cacheKey);
+    });
   }
   return p;
 }

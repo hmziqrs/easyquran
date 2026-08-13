@@ -47,6 +47,16 @@ export class StagedValidationRejection extends Error {
   }
 }
 
+export class OpfsFallbackBytes extends Error {
+  readonly bytes: Uint8Array<ArrayBuffer>;
+  constructor(bytes: Uint8Array<ArrayBuffer>, cause: unknown) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(`OPFS persist failed; carrying fetched bytes for IDB fallback: ${msg}`);
+    this.name = "OpfsFallbackBytes";
+    this.bytes = bytes;
+  }
+}
+
 async function runStagedValidator(
   validate: StagedValidator | undefined,
   bytes: Uint8Array<ArrayBuffer>,
@@ -330,6 +340,13 @@ export async function ensureArtifact(
       return await ensureOpfsArtifact(spec, dl, progress, options.validate);
     } catch (err) {
       if (err instanceof StagedValidationRejection) throw err;
+      if (err instanceof OpfsFallbackBytes) {
+        console.warn(
+          `[opfs-cache] OPFS persist failed for ${spec.id}, retrying in IDB with fetched bytes:`,
+          err,
+        );
+        return ensureIdbArtifact(spec, dl, progress, options.validate, err.bytes);
+      }
       console.warn(`[opfs-cache] OPFS unavailable for ${spec.id}, falling back:`, err);
     }
   }
@@ -375,43 +392,43 @@ async function ensureOpfsArtifact(
   }
 
   const temp = tempFileName(spec.id);
-  let staged: Uint8Array<ArrayBuffer> | null = null;
+  const bytes = await downloadBytes(dl, progress);
   try {
-    const bytes = await downloadBytes(dl, progress);
     await writeOpfsFile(spec.id, temp, bytes);
-    staged = await readOpfsFile(spec.id, temp);
+    const staged = await readOpfsFile(spec.id, temp);
     if (!staged) throw new Error(`[opfs-cache] ${spec.id}: staged temp unreadable`);
     await runStagedValidator(validate, staged, spec);
+
+    const decision = decidePromotion({
+      oldPointer: pointer,
+      newActiveFile: active,
+      validationOk: true,
+    });
+    if (!decision.commitPointer) {
+      await removeOpfsFile(spec.id, temp);
+      throw new Error(`[opfs-cache] ${spec.id}: staged DB rejected`);
+    }
+
+    await moveOpfsFile(spec.id, temp, active);
+    await writePointer({ sourceId: spec.id, activeFile: active });
+
+    const reopened = await readOpfsFile(spec.id, active);
+    if (!reopened) {
+      throw new Error(`[opfs-cache] ${spec.id}: active file missing after switch`);
+    }
+    await verifyBytes(reopened, dl);
+
+    if (decision.removeOldFile && decision.oldFile) {
+      await removeOpfsFile(spec.id, decision.oldFile);
+    }
+
+    await stampLastUsed(spec.id);
+    return { bytes: staged, store: "opfs", downloaded: true };
   } catch (err) {
     await removeOpfsFile(spec.id, temp);
-    throw err;
+    if (err instanceof StagedValidationRejection) throw err;
+    throw new OpfsFallbackBytes(bytes, err);
   }
-
-  const decision = decidePromotion({
-    oldPointer: pointer,
-    newActiveFile: active,
-    validationOk: true,
-  });
-  if (!decision.commitPointer) {
-    await removeOpfsFile(spec.id, temp);
-    throw new Error(`[opfs-cache] ${spec.id}: staged DB rejected`);
-  }
-
-  await moveOpfsFile(spec.id, temp, active);
-  await writePointer({ sourceId: spec.id, activeFile: active });
-
-  const reopened = await readOpfsFile(spec.id, active);
-  if (!reopened) {
-    throw new Error(`[opfs-cache] ${spec.id}: active file missing after switch`);
-  }
-  await verifyBytes(reopened, dl);
-
-  if (decision.removeOldFile && decision.oldFile) {
-    await removeOpfsFile(spec.id, decision.oldFile);
-  }
-
-  await stampLastUsed(spec.id);
-  return { bytes: staged ?? reopened, store: "opfs", downloaded: true };
 }
 
 async function ensureIdbArtifact(
@@ -419,6 +436,7 @@ async function ensureIdbArtifact(
   dl: DownloadSpec,
   progress: ProgressFn | undefined,
   validate: StagedValidator | undefined,
+  prefetched?: Uint8Array<ArrayBuffer>,
 ): Promise<CachedArtifact> {
   const store = createIdbStore(QURAN_DB, QURAN_STORE);
   const cached = await store.get(spec.id, spec.id);
@@ -429,9 +447,10 @@ async function ensureIdbArtifact(
       return { bytes: cached, store: "idb", downloaded: false };
     } catch {}
   }
-  const bytes = await downloadBytes(dl, progress);
+  const bytes = prefetched ?? (await downloadBytes(dl, progress));
   await runStagedValidator(validate, bytes, spec);
-  await store.put(spec.id, spec.id, bytes);
+  const persisted = await store.put(spec.id, spec.id, bytes);
+  if (!persisted) return { bytes, store: "session", downloaded: true };
   await stampLastUsed(spec.id);
   return { bytes, store: "idb", downloaded: true };
 }
@@ -440,7 +459,7 @@ async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
   const out: CachedArtifactInfo[] = [];
   if (!hasOpfs()) return out;
   const [files, pointers] = await Promise.all([listOpfsTree(), readAllPointers()]);
-  const { sources, abandonedTemps } = filterSourceFiles({ pointers, files });
+  const { sources } = filterSourceFiles({ pointers, files });
   for (const s of sources) {
     let sizeBytes = 0;
     try {
@@ -453,9 +472,6 @@ async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
       sizeBytes = (await fh.getFile()).size;
     } catch {}
     out.push({ id: s.id, store: "opfs", tag: s.tag, sizeBytes });
-  }
-  if (abandonedTemps.length > 0) {
-    void Promise.all(abandonedTemps.map((f) => removeOpfsFile(f.tag, f.name))).catch(() => {});
   }
   return out;
 }
