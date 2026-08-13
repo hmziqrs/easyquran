@@ -45,6 +45,7 @@
   } from "./viewport-anchor";
   import ReaderHeader from "./ReaderHeader.svelte";
   import ReaderPageNav from "./ReaderPageNav.svelte";
+  import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
   import VerseRow from "./VerseRow.svelte";
 
   let {
@@ -795,36 +796,15 @@
     </span>
 
     {#if clientMounted && (loadFailed || workerDegraded || apiDegraded || quran.status === "error")}
-      <div
-        role="status"
-        class="flex items-center justify-between gap-3 border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9"
-      >
-        <span>
-          {#if loadFailed && initial.ayahs.length === 0}
-            {copy.shell.translationUnavailable}
-          {:else if loadFailed && failedPage !== null}
-            {copy.shell.pageUnavailable(failedPage)}
-          {:else if workerDegraded}
-            {copy.shell.offlineCopyUnavailable}
-          {:else if apiDegraded}
-            {copy.shell.networkUnavailable}
-          {:else if quran.status === "error"}
-            {copy.shell.offlineDataUnavailable}
-          {:else}
-            {copy.shell.moreAyahsUnavailable}
-          {/if}
-        </span>
-        {#if loadFailed && (initial.ayahs.length === 0 || failedPage !== null)}
-          <button
-            type="button"
-            onclick={retryDegradedPage}
-            aria-label={copy.shell.retry}
-            class="shrink-0 rounded-full border border-line px-3 py-1 text-xs text-fg transition-colors hover:bg-bg-1"
-          >
-            {copy.shell.retry}
-          </button>
-        {/if}
-      </div>
+      <ReaderStatusBanner
+        {loadFailed}
+        {workerDegraded}
+        {apiDegraded}
+        quranStatusError={quran.status === "error"}
+        initialEmpty={initial.ayahs.length === 0}
+        {failedPage}
+        onRetry={retryDegradedPage}
+      />
     {/if}
 
     <ReaderPageNav
