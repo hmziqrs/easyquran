@@ -30,7 +30,7 @@
   type Target = "arabic" | { id: string; lang: string; translator: string };
 
   function toNum(s: string | undefined): number {
-    const n = s ? Number(s) : NaN;
+    const n = s ? Number(s) : Number.NaN;
     return Number.isSafeInteger(n) && n > 0 ? n : 1;
   }
 

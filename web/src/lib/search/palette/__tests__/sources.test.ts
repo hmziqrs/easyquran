@@ -26,7 +26,7 @@ import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
 const DATA_PATH = [
   path.resolve(process.cwd(), "static/quran-meta/quran-data.json"),
   path.resolve(process.cwd(), "web/static/quran-meta/quran-data.json"),
-].find(existsSync);
+].find((candidate) => existsSync(candidate));
 if (!DATA_PATH) throw new Error("missing quran-data.json fixture");
 const QURAN: QuranData = createQuranData(JSON.parse(readFileSync(DATA_PATH, "utf8")));
 

@@ -52,7 +52,7 @@ export function diskCacheKey(sourceId: string, kind: DiskCacheKind, a: number, b
   // removed by a later deploy. Quran source identity remains `sourceId`; this is not data versioning.
   const parts = [`build-${appBuildId}`, sourceId, kind, String(a)];
   if (b !== undefined) parts.push(String(b));
-  return parts.map(sanitizeComponent).join("__");
+  return parts.map((part) => sanitizeComponent(part)).join("__");
 }
 
 export class QuranDiskCache {

@@ -8,7 +8,7 @@ const roots = [
   path.resolve(process.cwd(), "web/static/quran-meta"),
   path.resolve(process.cwd(), "build/client/quran-meta"),
 ];
-const dataPath = roots.map((root) => path.join(root, "quran-data.json")).find(existsSync);
+const dataPath = roots.map((root) => path.join(root, "quran-data.json")).find((candidate) => existsSync(candidate));
 if (!dataPath) throw new Error("[quran-data] missing quran-data.json");
 
 export const QURAN_DATA = createQuranData(JSON.parse(readFileSync(dataPath, "utf8")));

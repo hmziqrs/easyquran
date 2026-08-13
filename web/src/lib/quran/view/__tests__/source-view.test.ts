@@ -168,7 +168,7 @@ describe("canonical web search corpus", () => {
     });
     const hits = [...result.results, ...all.results, ...last.results];
     expect(hits.filter((hit) => hit.kind === SearchHitKind.Opener)).toHaveLength(112);
-    expect(hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map(searchHitKey)).toEqual([
+    expect(hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map((hit) => searchHitKey(hit))).toEqual([
       "1:1",
       "27:30",
     ]);

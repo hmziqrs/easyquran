@@ -251,7 +251,7 @@ function rowsToRangeText(
       globalIndex: row.globalIndex,
       text: row.text,
     })),
-    normalizations: uniq(rows.map((row) => row.surah)).map(normalize),
+    normalizations: uniq(rows.map((row) => row.surah)).map((surah) => normalize(surah)),
   };
 }
 

@@ -30,7 +30,7 @@ describe("UI locale registry", () => {
       },
     });
     expect(Object.isFrozen(UI_LOCALES)).toBe(true);
-    expect(Object.values(UI_LOCALES).every(Object.isFrozen)).toBe(true);
+    expect(Object.values(UI_LOCALES).every((value) => Object.isFrozen(value))).toBe(true);
     expect(Object.isFrozen(SUPPORTED_UI_LOCALES)).toBe(true);
   });
 

@@ -88,7 +88,7 @@
   const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
 
   function toIndex(v: string | undefined): number | null {
-    const n = v ? Number(v) : NaN;
+    const n = v ? Number(v) : Number.NaN;
     return Number.isSafeInteger(n) && n > 0 ? n : null;
   }
 

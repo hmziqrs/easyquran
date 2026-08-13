@@ -329,7 +329,7 @@ async function purgeLegacyReaderPaths(): Promise<void> {
   }
   const dataMeta = await rawDataMetaScan();
   await Promise.all(
-    [...dataMeta.keys()].filter(isLegacyReaderPath).map((key) => rawDataMetaDel(key)),
+    [...dataMeta.keys()].filter((url) => isLegacyReaderPath(url)).map((key) => rawDataMetaDel(key)),
   );
 }
 

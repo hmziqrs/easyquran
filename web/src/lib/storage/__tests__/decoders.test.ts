@@ -31,7 +31,7 @@ describe("asNumber", () => {
   it("rejects out-of-range, non-finite, and non-numbers", () => {
     expect(asNumber(0, 1, 10)).toBeUndefined();
     expect(asNumber(11, 1, 10)).toBeUndefined();
-    expect(asNumber(NaN, 1, 10)).toBeUndefined();
+    expect(asNumber(Number.NaN, 1, 10)).toBeUndefined();
     expect(asNumber(Infinity, 1, 10)).toBeUndefined();
     expect(asNumber("3", 1, 10)).toBeUndefined();
   });

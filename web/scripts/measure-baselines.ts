@@ -87,7 +87,7 @@ const ROUTES = [
   "juz/30.html",
 ];
 
-const perRoute = ROUTES.map(measureRoute);
+const perRoute = ROUTES.map((route) => measureRoute(route));
 
 function listReaderHtml(): string[] {
   if (!existsSync(APP)) return [];
