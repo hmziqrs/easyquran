@@ -18,7 +18,7 @@
     "i18n:namespaces:check": "node scripts/gen-message-namespaces.ts --check",
     "i18n:check": "node scripts/check-i18n.mjs && pnpm i18n:compile && pnpm i18n:namespaces",
     "precheck": "pnpm i18n:check",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.worker.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.worker.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "prelint": "pnpm i18n:check",
     "lint": "vp lint --deny-warnings",

@@ -50,6 +50,12 @@
   });
 </script>
 
+<!--
+  Verses are a deliberate tab stop: focusing one reveals its tools (bookmark, note, copy), which is
+  the only keyboard path to them. Reviewed exception, not an oversight — revisit if the tools ever
+  get their own focusable controls.
+-->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <li
   id={ayahId}
   data-verse-key={vKey}
