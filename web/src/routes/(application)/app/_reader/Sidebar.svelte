@@ -197,7 +197,7 @@
                 activeIndex={quranData.surahs.findIndex((s) => s.slug === page.params.surah)}
               >
                 {#snippet item(i)}
-                  {@const s = quranData.surahs[i]}
+                  {@const s = quranData.surahs[i]!}
                   {@const active = page.params.surah === s.slug}
                   {#snippet body()}
                     <span class="flex min-w-0 flex-1 flex-col gap-1">
@@ -281,7 +281,7 @@
                 activeIndex={rangeRow(ranges, currentGlobal(quranData))}
               >
                 {#snippet item(i)}
-                  {@const rg = ranges[i]}
+                  {@const rg = ranges[i]!}
                   {@const { num, n } = parseKey(rg.first)}
                   {@const href = publicHref(rangeHref(reader.browseJuz, rg.index))}
                   {#snippet body()}

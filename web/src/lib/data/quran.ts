@@ -148,8 +148,10 @@ export const globalPagePathFor = (ctx: SurahRouteContext, globalPage: number): `
 export const juzPathFor = (ctx: SurahRouteContext, n: number): `/app/${string}` =>
   ctx.kind === "arabic" ? `/app/juz/${n}` : translationJuzPath(ctx.lang, ctx.translator, n);
 
+const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+
 export const toArabicDigits = (n: number | string): string =>
-  String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
+  String(n).replace(/[0-9]/g, (d) => ARABIC_DIGITS[+d] ?? d);
 
 export const surahMeta = (s: Pick<CatalogEntry, "place" | "ayahCount">): string =>
   `${s.place === "meccan" ? "Meccan" : "Medinan"} · ${s.ayahCount} verses`;

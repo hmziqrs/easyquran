@@ -24,7 +24,7 @@ interface OfflineManifest {
 function extractPackId(packPath: unknown): string | null {
   if (typeof packPath !== "string") return null;
   const match = /pack\.([A-Za-z0-9_-]+)\.json$/u.exec(packPath);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 function decodeMirror(raw: unknown): PackMirror | null {
@@ -221,7 +221,10 @@ class OfflineStore {
       const keys = Object.keys(entries);
       let staged = 0;
       for (const key of keys) {
-        const body = bodies[entries[key]];
+        const bodyIndex = entries[key];
+        const body = bodyIndex === undefined ? undefined : bodies[bodyIndex];
+        // A malformed pack must fail staging, never cache an empty response over a Quran route.
+        if (body === undefined) throw new Error(`pack entry ${key} has no body`);
         await cache.put(
           new Request(key),
           new Response(body, { headers: { "content-type": "application/json" } }),

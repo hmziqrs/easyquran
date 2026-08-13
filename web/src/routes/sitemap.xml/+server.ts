@@ -35,7 +35,7 @@ type TranslationEntry = { lang: string; ctx: SurahRouteContext };
 
 const translations: TranslationEntry[] = (rawTranslations as readonly (readonly string[])[]).map(
   (row) => {
-    const { lang, translator } = translationSegmentsFromId(row[0]);
+    const { lang, translator } = translationSegmentsFromId(row[0] ?? "");
     return { lang, ctx: { kind: "translation", lang, translator } };
   },
 );

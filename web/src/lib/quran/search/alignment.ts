@@ -40,9 +40,10 @@ function alignRange(
   for (let i = 1; i <= matchLength; i++) {
     for (let j = 1; j <= displayLength; j++) {
       const equal = match[matchRange.start + i - 1] === display[displayRange.start + j - 1];
-      const diagonal = costs[(i - 1) * width + j - 1] + (equal ? 0 : 1);
-      const deleted = costs[(i - 1) * width + j] + 1;
-      const inserted = costs[i * width + j - 1] + 1;
+      // Every index below is inside the (matchLength+1)*width grid by loop invariant.
+      const diagonal = costs[(i - 1) * width + j - 1]! + (equal ? 0 : 1);
+      const deleted = costs[(i - 1) * width + j]! + 1;
+      const inserted = costs[i * width + j - 1]! + 1;
       costs[i * width + j] = Math.min(diagonal, deleted, inserted);
     }
   }
@@ -57,9 +58,9 @@ function alignRange(
       alignedDisplay[matchRange.start + i - 1] = displayRange.start + j - 1;
       i--;
       j--;
-    } else if (i > 0 && current === costs[(i - 1) * width + j] + 1) {
+    } else if (i > 0 && current === costs[(i - 1) * width + j]! + 1) {
       i--;
-    } else if (j > 0 && current === costs[i * width + j - 1] + 1) {
+    } else if (j > 0 && current === costs[i * width + j - 1]! + 1) {
       j--;
     } else {
       alignedDisplay[matchRange.start + i - 1] = displayRange.start + j - 1;

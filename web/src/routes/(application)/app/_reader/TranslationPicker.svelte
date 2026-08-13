@@ -42,6 +42,7 @@
       if (segs[0] === "page") return segs[1] ? { kind: "globalPage", n: toNum(segs[1]) } : null;
       if (segs[0] === "juz") return segs[1] ? { kind: "juz", n: toNum(segs[1]) } : null;
       const slug = segs[0];
+      if (!slug) return null;
       if (segs[1] === "page" && segs[2]) return { kind: "surah", slug, localPage: toNum(segs[2]) };
       return { kind: "surah", slug, localPage: 1 };
     }
@@ -51,6 +52,7 @@
     const rest = segs.slice(tIdx + 3);
     if (tIdx === 1) {
       const slug = segs[0];
+      if (!slug) return null;
       if (rest[0] === "page" && rest[1])
         return { kind: "surah", slug, localPage: toNum(rest[1]), lang, translator };
       return { kind: "surah", slug, localPage: 1, lang, translator };

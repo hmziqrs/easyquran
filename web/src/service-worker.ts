@@ -258,7 +258,7 @@ async function pool<T>(
       const i = next;
       next++;
       if (i >= items.length) return;
-      await worker(items[i], i);
+      await worker(items[i]!, i);
     }
   }
   const runners: Promise<void>[] = [];

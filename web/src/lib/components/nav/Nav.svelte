@@ -7,6 +7,7 @@
   import { prefs } from "$lib/stores/prefs.svelte";
   import { online } from "$lib/offline/online.svelte";
   import { authState } from "$lib/auth/auth-state.svelte";
+  import { authModal } from "$lib/auth/auth-modal.svelte";
   import { Icon } from "$lib/components/icon";
   import { Brand } from "$lib/components/brand";
   import { SearchTrigger } from "$lib/components/search";
@@ -122,6 +123,13 @@
   function close() {
     open = false;
   }
+  function onAccountClick(e: MouseEvent): void {
+    if (authState.authenticated) return;
+    if (e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    authModal.show("login");
+  }
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") open = false;
   }
@@ -129,8 +137,9 @@
     if (e.key !== "Tab" || !panelEl) return;
     const focusables = Array.from(panelEl.querySelectorAll<HTMLElement>(FOCUSABLE));
     if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
+    // `focusables.length === 0` already returned above, so both ends exist.
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
     if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
       last.focus();
@@ -176,6 +185,7 @@
         title={accountLabel}
         inert={open || undefined}
         aria-hidden={open || undefined}
+        onclick={onAccountClick}
         class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <Icon name="user" size={18} title={accountLabel} />
