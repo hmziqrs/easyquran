@@ -81,7 +81,12 @@
     }
     const effective = untrack(() => stackedTranslations.ids);
     if (!moreParamMatches(url, effective)) {
-      replaceState(withMoreParam(url, effective), page.state);
+      try {
+        replaceState(withMoreParam(url, effective), page.state);
+      } catch {
+        // dev-only: layout effects can run before the SvelteKit router initializes on a cold
+        // load; the next navigation re-runs this effect and syncs the URL.
+      }
     }
   });
 
