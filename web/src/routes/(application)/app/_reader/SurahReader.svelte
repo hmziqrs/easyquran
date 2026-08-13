@@ -46,6 +46,7 @@
   import ReaderHeader from "./ReaderHeader.svelte";
   import ReaderPageNav from "./ReaderPageNav.svelte";
   import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
+  import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
 
   let {
@@ -79,10 +80,7 @@
   });
   let readerPages: HTMLElement | null = $state(null);
   const loadingPages = new SvelteSet<number>();
-  let loadFailed = $state(false);
-  let failedPage = $state<number | null>(null);
-  let workerDegraded = $state(false);
-  let apiDegraded = $state(false);
+  const degradation = new ReaderDegradationState();
   let initialRetryInFlight = false;
   let clientMounted = $state(false);
   let activeLocalPage = $state<number | null>(null);
@@ -434,9 +432,9 @@
       return;
     }
     loadingPages.add(localPage);
-    // Do NOT blanket-clear loadFailed here: an adjacent-page load must not hide
-    // an already-failed page's inline retry. Failure clears only on this page's
-    // own success (below) or on route change.
+    // Do NOT blanket-clear degradation.loadFailed here: an adjacent-page load must
+    // not hide an already-failed page's inline retry. Failure clears only on this
+    // page's own success (below) or on route change.
     const readRouteKey = routeKey;
     try {
       const quranData = await loadQuranData();
@@ -451,8 +449,7 @@
         isTranslationSource ? sourceId : undefined,
         (status: ReadTierStatus) => {
           if (readRouteKey !== routeKey) return;
-          workerDegraded = !!status.workerFailure;
-          apiDegraded = !!status.apiFailure;
+          degradation.applyTierStatus(status);
         },
       );
       if (readRouteKey !== routeKey) return;
@@ -473,15 +470,11 @@
       await preserveViewport(() => {
         loadedPages = [...loadedPages, pageData];
       });
-      if (failedPage === localPage) {
-        failedPage = null;
-        loadFailed = false;
-      }
+      degradation.clearIfMatches(localPage);
       if (clientMounted) writeHistoryState();
     } catch {
       if (readRouteKey === routeKey) {
-        loadFailed = true;
-        failedPage = localPage;
+        degradation.markPageFailed(localPage);
       }
     } finally {
       loadingPages.delete(localPage);
@@ -508,9 +501,9 @@
   function retryDegradedPage(): void {
     if (initial.ayahs.length === 0) {
       void retryInitialPage();
-    } else if (failedPage !== null) {
-      loadFailed = false;
-      void loadPage(failedPage);
+    } else if (degradation.failedPage !== null) {
+      degradation.loadFailed = false;
+      void loadPage(degradation.failedPage);
     }
   }
 
@@ -646,7 +639,7 @@
   async function continueReading(): Promise<void> {
     if (!reader.hasLastRead) return;
     const ok = await resumeToLastRead(routeContext);
-    if (!ok && reader.hasLastRead) loadFailed = true;
+    if (!ok && reader.hasLastRead) degradation.loadFailed = true;
   }
 
   beforeNavigate(() => {
@@ -661,10 +654,7 @@
   $effect(() => {
     const key = routeKey;
     if (lastRouteKey !== null && lastRouteKey !== key) {
-      workerDegraded = false;
-      apiDegraded = false;
-      loadFailed = false;
-      failedPage = null;
+      degradation.reset();
     }
     lastRouteKey = key;
   });
@@ -716,7 +706,7 @@
 />
 
 <div class="reader-stack flex flex-col gap-4">
-  {#if clientMounted && initial.ayahs.length === 0 && !loadFailed && quran.status !== "error"}
+  {#if clientMounted && initial.ayahs.length === 0 && !degradation.loadFailed && quran.status !== "error"}
     <span class="sr-only" role="status" aria-live="polite">{copy.shell.opening}</span>
   {/if}
 
@@ -795,14 +785,14 @@
       {copy.shell.pageOf(visibleLocalPage, initial.pageCount)}
     </span>
 
-    {#if clientMounted && (loadFailed || workerDegraded || apiDegraded || quran.status === "error")}
+    {#if clientMounted && (degradation.loadFailed || degradation.workerDegraded || degradation.apiDegraded || quran.status === "error")}
       <ReaderStatusBanner
-        {loadFailed}
-        {workerDegraded}
-        {apiDegraded}
+        loadFailed={degradation.loadFailed}
+        workerDegraded={degradation.workerDegraded}
+        apiDegraded={degradation.apiDegraded}
         quranStatusError={quran.status === "error"}
         initialEmpty={initial.ayahs.length === 0}
-        {failedPage}
+        failedPage={degradation.failedPage}
         onRetry={retryDegradedPage}
       />
     {/if}
