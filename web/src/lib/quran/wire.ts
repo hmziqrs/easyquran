@@ -170,10 +170,15 @@ function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
   ) {
     return null;
   }
-  const openerText = rec.openerText;
-  if (rec.openerKind === OpenerKind.None ? openerText !== null : typeof openerText !== "string") {
-    return null;
-  }
+  const openerText =
+    rec.openerKind === OpenerKind.None
+      ? rec.openerText === null
+        ? null
+        : undefined
+      : typeof rec.openerText === "string"
+        ? rec.openerText
+        : undefined;
+  if (openerText === undefined) return null;
   return {
     surah,
     sourceId: rec.sourceId,
@@ -181,7 +186,7 @@ function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
     sourceProfile: rec.sourceProfile,
     packaging: rec.packaging,
     openerKind: rec.openerKind,
-    openerText: openerText as string | null,
+    openerText,
     openerEndScalar,
     bodyStartScalar,
   };
@@ -190,7 +195,10 @@ function decodeSurahNormalization(raw: unknown): SurahNormalization | null {
 export function decodeQuranSurahText(raw: unknown): QuranSurahText | null {
   const rec = asRecord(raw);
   if (!rec || !isQuranSourceId(rec.sourceId) || !isQuranScript(rec.script)) return null;
-  if (!Array.isArray(rec.verses) || !rec.verses.every((verse) => typeof verse === "string")) {
+  if (
+    !Array.isArray(rec.verses) ||
+    !rec.verses.every((verse): verse is string => typeof verse === "string")
+  ) {
     return null;
   }
   const normalization = decodeSurahNormalization(rec.normalization);
@@ -204,7 +212,7 @@ export function decodeQuranSurahText(raw: unknown): QuranSurahText | null {
   return {
     sourceId: rec.sourceId,
     script: rec.script,
-    verses: rec.verses.slice() as string[],
+    verses: rec.verses.slice(),
     normalization,
   };
 }
@@ -275,7 +283,8 @@ function decodeTranslationCatalogueEntry(
     typeof rec.languageCode === "string" && rec.languageCode.length > 0 ? rec.languageCode : null;
   const direction = rec.direction === "rtl" || rec.direction === "ltr" ? rec.direction : null;
   const name = typeof rec.name === "string" && rec.name.length > 0 ? rec.name : null;
-  const translatorValid = rec.translator === null || typeof rec.translator === "string";
+  const translator =
+    rec.translator === null || typeof rec.translator === "string" ? rec.translator : undefined;
   const sizeBytes = positiveInteger(rec.sizeBytes);
   const downloadUrl =
     typeof rec.downloadUrl === "string" && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
@@ -285,7 +294,7 @@ function decodeTranslationCatalogueEntry(
     !languageCode ||
     !direction ||
     !name ||
-    !translatorValid ||
+    translator === undefined ||
     sizeBytes === null ||
     !downloadUrl
   ) {
@@ -297,7 +306,7 @@ function decodeTranslationCatalogueEntry(
     languageCode,
     direction,
     name,
-    translator: rec.translator as string | null,
+    translator,
     sizeBytes,
     downloadUrl,
   };
@@ -380,7 +389,10 @@ export function decodeTranslationSurahText(raw: unknown): QuranSurahText | null 
   const sourceId =
     typeof rec.sourceId === "string" && rec.sourceId.length > 0 ? rec.sourceId : null;
   if (!sourceId || rec.script !== QuranScript.Translation) return null;
-  if (!Array.isArray(rec.verses) || !rec.verses.every((verse) => typeof verse === "string")) {
+  if (
+    !Array.isArray(rec.verses) ||
+    !rec.verses.every((verse): verse is string => typeof verse === "string")
+  ) {
     return null;
   }
   const normalization = decodeTranslationNormalization(rec.normalization);
@@ -388,7 +400,7 @@ export function decodeTranslationSurahText(raw: unknown): QuranSurahText | null 
   return {
     sourceId,
     script: QuranScript.Translation,
-    verses: rec.verses.slice() as string[],
+    verses: rec.verses.slice(),
     normalization,
   };
 }
