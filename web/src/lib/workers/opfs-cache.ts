@@ -516,9 +516,12 @@ export async function listCachedArtifacts(): Promise<CachedArtifactInfo[]> {
 }
 
 export async function deleteCachedArtifact(id: string, tag: string): Promise<void> {
+  // Eviction removes the active file, pointer, and IDB record only. The staging
+  // temp is intentionally left: deleting it here would race an in-flight
+  // ensureArtifact stage of the same id (runPrune evicting X while X is being
+  // re-staged). Orphan temps are reclaimed by the once-per-boot sweepAbandonedTemps.
   if (hasOpfs()) {
     await removeOpfsFile(tag, activeFileName(id));
-    await removeOpfsFile(tag, tempFileName(id));
   }
   await clearPointer(id);
   try {
