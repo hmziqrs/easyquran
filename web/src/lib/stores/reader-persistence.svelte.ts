@@ -120,7 +120,7 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
 }
 
 export interface ReaderPersistence {
-  hydrate(): void;
+  hydrate(modeOverride?: ReaderMode): void;
   writeNow(): void;
   scheduleNoteWrite(): void;
   flushNoteWrite(): void;
@@ -150,12 +150,15 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
     get hydrated() {
       return hydrated;
     },
-    hydrate() {
+    hydrate(modeOverride?: ReaderMode) {
       if (hydrated) return;
       hydrated = true;
       const stored = decodeReader(readJSON(STORAGE_KEY));
       if (dirty) stored.current = undefined;
       applyPersisted(core.s, stored);
+      const adoptedMode =
+        modeOverride && modeOverride !== core.s.mode ? modeOverride : null;
+      if (adoptedMode) core.s.mode = adoptedMode;
       applyReaderPresentation(core.s.mode, core.s.fontSize);
       teardowns.push(
         onStorageKey(STORAGE_KEY, () => {
@@ -169,7 +172,7 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
           anchorWriter.flush();
         }),
       );
-      if (dirty) {
+      if (dirty || adoptedMode) {
         dirty = false;
         writeBlob();
       }

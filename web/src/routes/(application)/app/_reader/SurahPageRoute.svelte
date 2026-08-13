@@ -18,6 +18,7 @@
   import { publicHref } from "$lib/i18n/public-href";
   import { trackReaderView } from "$lib/quran/track-view.svelte";
   import { reader } from "$lib/stores/reader.svelte";
+  import { withModeParam } from "$lib/reader/mode-param";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
   import SurahReader from "./SurahReader.svelte";
@@ -125,7 +126,7 @@
         return;
       }
       if (page.url.href !== new URL(targetHref, page.url).href) {
-        replaceState(targetHref, page.state);
+        replaceState(withModeParam(targetHref, reader.mode, page.url), page.state);
       }
       const row = await ayahRow(ayah);
       if (!row) {

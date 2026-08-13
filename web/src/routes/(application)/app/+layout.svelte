@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { page } from "$app/state";
+  import { replaceState } from "$app/navigation";
   import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
   import { Nav } from "$lib/components/nav";
   import { Footer } from "$lib/components/footer";
@@ -13,6 +14,7 @@
   import type { LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { reader } from "$lib/stores/reader.svelte";
+  import { modeParamMatches, parseModeParam, withModeParam } from "$lib/reader/mode-param";
 
   let { data, children } = $props();
   let menuOpen = $state(false);
@@ -35,7 +37,7 @@
   const footerLinks = $derived(footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref));
 
   onMount(() => {
-    reader.hydrate();
+    reader.hydrate(parseModeParam(page.url) ?? undefined);
     document.documentElement.dataset.readerHydrated = "true";
 
     const syncMenu = (): void => {
@@ -46,6 +48,16 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    const url = page.url;
+    const current = untrack(() => reader.mode);
+    const param = parseModeParam(url);
+    if (param && param !== current) reader.setMode(param);
+    if (!modeParamMatches(url, current)) {
+      replaceState(withModeParam(url, current), page.state);
+    }
   });
 
   // Dynamic import on purpose: the reader appearance panel owns ~34 messages that nothing renders

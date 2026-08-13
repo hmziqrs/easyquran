@@ -26,6 +26,7 @@
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { withModeParam } from "$lib/reader/mode-param";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import { ayahIndexValidator } from "./range-validate";
@@ -286,6 +287,7 @@
     void preserveViewport(() => {
       virtualCenterPage = visibleLocalPage;
       reader.setMode(mode);
+      replaceState(withModeParam(appPage.url, mode), appPage.state);
     }, true);
   }
 
@@ -334,9 +336,10 @@
     localPage = visibleLocalPage,
   ): void {
     const snapshot = historySnapshot(localPage);
-    const target = typeof url === "string" ? url : url.href;
+    const next = withModeParam(url, reader.mode, window.location.href);
+    const target = next.href;
     if (target !== lastWrittenUrl || localPage !== lastWrittenPage) {
-      replaceState(url, {
+      replaceState(next, {
         ...appPage.state,
         surahReader: snapshot,
       });

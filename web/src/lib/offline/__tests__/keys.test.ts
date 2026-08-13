@@ -14,6 +14,15 @@ describe("normalizeDataKey", () => {
     ).toBe("/app/al-kahf/__data.json?verse=50");
   });
 
+  it("strips the reader-only `mode` presentation param (identical HTML per mode)", () => {
+    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?mode=reading&verse=50")).toBe(
+      "/app/al-kahf/__data.json?verse=50",
+    );
+    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?mode=verse")).toBe(
+      "/app/al-kahf/__data.json",
+    );
+  });
+
   it("preserves the pathname and a trailing slash", () => {
     expect(normalizeDataKey("https://h/app/juz/?x=1")).toBe("/app/juz/?x=1");
   });

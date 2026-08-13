@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import { Button, Card, Seo } from "$lib/components";
   import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
   import { reader } from "$lib/stores/reader.svelte";
@@ -14,6 +15,7 @@
   import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { resumeToLastRead, resumeToVerse } from "$lib/reader/resume";
+  import { parseModeParam } from "$lib/reader/mode-param";
 
   let { data } = $props();
   const copy = getReaderUiCopy();
@@ -32,7 +34,7 @@
   }
 
   onMount(() => {
-    reader.hydrate();
+    reader.hydrate(parseModeParam(page.url) ?? undefined);
     prefs.hydrate();
     if (prefs.instantResume && reader.hasLastRead) {
       void resumeToLastRead({ kind: "arabic" }, { replaceState: true });

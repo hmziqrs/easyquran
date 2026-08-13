@@ -20,7 +20,14 @@
           if (c.bg) d.style.setProperty("--bg", c.bg);
           if (c.accent) d.style.setProperty("--accent", c.accent);
           if (c.pop) d.style.setProperty("--pop", c.pop);
-          if (r.mode === "verse" || r.mode === "reading") d.dataset.readerMode = r.mode;
+          var qm = new URLSearchParams(location.search).get("mode");
+          var rm =
+            qm === "verse" || qm === "reading"
+              ? qm
+              : r.mode === "verse" || r.mode === "reading"
+                ? r.mode
+                : null;
+          if (rm) d.dataset.readerMode = rm;
           if (typeof r.fontSize === "number" && r.fontSize >= 22 && r.fontSize <= 56) {
             d.style.setProperty("--reader-arabic-size", r.fontSize + "px");
           }

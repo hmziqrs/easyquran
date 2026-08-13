@@ -11,7 +11,7 @@ export { BrowseMode } from "./reader-core.svelte";
 export type { ReaderMode } from "./reader-core.svelte";
 
 export interface ReaderApi {
-  hydrate(): void;
+  hydrate(modeOverride?: ReaderMode): void;
   dispose(): void;
   readonly query: string;
   readonly hasQuery: boolean;
@@ -67,7 +67,7 @@ export function createReader(): ReaderApi {
   const share = createReaderShare();
 
   return {
-    hydrate: () => persistence.hydrate(),
+    hydrate: (modeOverride?: ReaderMode) => persistence.hydrate(modeOverride),
     dispose: () => persistence.dispose(),
 
     get query() {
