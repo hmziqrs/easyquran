@@ -15,6 +15,7 @@ import {
   classifyAuthError,
   GENERIC_TRY_AGAIN,
   isVerifiedOnlyError,
+  NETWORK_ERROR,
   RESET_SUCCESS,
   TWO_FA_NEXT,
   VERIFY_EMAIL_NEXT,
@@ -71,6 +72,29 @@ function isTotpRequired(data: unknown): { totpToken: string } | null {
   return { totpToken };
 }
 
+interface CredentialFailure {
+  readonly genericError: string | null;
+  readonly fieldErrors: Readonly<Record<string, string>>;
+}
+
+// Shared by LoginFlow/RegisterFlow: same credential-error->form-state mapping in both.
+function credentialFailure(
+  status: number,
+  error: AuthErrorEnvelope | null,
+  fields: ReadonlyArray<string>,
+): CredentialFailure {
+  if (status === 0) {
+    return { genericError: NETWORK_ERROR, fieldErrors: {} };
+  }
+  const c = classifyAuthError(status, error, fields);
+  if (c.kind === "credential") {
+    return { genericError: CREDENTIAL_FAILURE, fieldErrors: {} };
+  } else if (c.kind === "field") {
+    return { genericError: null, fieldErrors: c.fieldErrors };
+  }
+  return { genericError: c.message, fieldErrors: {} };
+}
+
 export class LoginFlow {
   readonly client: AuthClient;
   readonly state: FlowStateLike;
@@ -117,22 +141,9 @@ export class LoginFlow {
   }
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
-    if (status === 0) {
-      this.genericError = "Network error. Check your connection and try again.";
-      this.fieldErrors = {};
-      return;
-    }
-    const c = classifyAuthError(status, error, LOGIN_FIELDS);
-    this.fieldErrors = c.fieldErrors;
-    if (c.kind === "credential") {
-      this.genericError = CREDENTIAL_FAILURE;
-      this.fieldErrors = {};
-    } else if (c.kind === "field") {
-      this.genericError = null;
-    } else {
-      this.genericError = c.message;
-      this.fieldErrors = {};
-    }
+    const f = credentialFailure(status, error, LOGIN_FIELDS);
+    this.genericError = f.genericError;
+    this.fieldErrors = f.fieldErrors;
   }
 
   async submitCredentials(): Promise<boolean> {
@@ -257,22 +268,9 @@ export class RegisterFlow {
   }
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
-    if (status === 0) {
-      this.genericError = "Network error. Check your connection and try again.";
-      this.fieldErrors = {};
-      return;
-    }
-    const c = classifyAuthError(status, error, REGISTER_FIELDS);
-    this.fieldErrors = c.fieldErrors;
-    if (c.kind === "credential") {
-      this.genericError = CREDENTIAL_FAILURE;
-      this.fieldErrors = {};
-    } else if (c.kind === "field") {
-      this.genericError = null;
-    } else {
-      this.genericError = c.message;
-      this.fieldErrors = {};
-    }
+    const f = credentialFailure(status, error, REGISTER_FIELDS);
+    this.genericError = f.genericError;
+    this.fieldErrors = f.fieldErrors;
   }
 
   async submit(): Promise<boolean> {
@@ -380,7 +378,7 @@ export class VerifyEmailFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
         } else if (res.status === 401) {
           this.genericError = "Your session expired. Please log in again.";
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
@@ -396,7 +394,7 @@ export class VerifyEmailFlow {
       this.successMessage = ACCOUNT_EXISTS_RESEND;
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.resendPending = false;
@@ -416,7 +414,7 @@ export class VerifyEmailFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
         } else if (res.status === 401) {
           this.genericError = "Your session expired. Please log in again.";
           this.fieldErrors = {};
@@ -439,7 +437,7 @@ export class VerifyEmailFlow {
       await this.state.probe();
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -487,7 +485,7 @@ export class ForgotPasswordFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
           return false;
         }
         const c = classifyAuthError(res.status, res.error, FORGOT_REQUEST_FIELDS);
@@ -506,7 +504,7 @@ export class ForgotPasswordFlow {
       this.successMessage = ACCOUNT_EXISTS_RESET;
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -526,7 +524,7 @@ export class ForgotPasswordFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
           return false;
         }
         const c = classifyAuthError(res.status, res.error, FORGOT_VERIFY_FIELDS);
@@ -548,7 +546,7 @@ export class ForgotPasswordFlow {
       this.genericError = null;
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -577,7 +575,7 @@ export class ForgotPasswordFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
           return false;
         }
         const c = classifyAuthError(res.status, res.error, RESET_FIELDS);
@@ -593,7 +591,7 @@ export class ForgotPasswordFlow {
       this.genericError = RESET_SUCCESS;
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -642,7 +640,7 @@ export class TwoFactorFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -668,7 +666,7 @@ export class TwoFactorFlow {
       this.step = "verify";
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -687,7 +685,7 @@ export class TwoFactorFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -714,7 +712,7 @@ export class TwoFactorFlow {
       this.step = "enabled";
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -733,7 +731,7 @@ export class TwoFactorFlow {
       });
       if (!res.ok) {
         if (res.status === 0) {
-          this.genericError = "Network error. Check your connection and try again.";
+          this.genericError = NETWORK_ERROR;
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -760,7 +758,7 @@ export class TwoFactorFlow {
       this.step = "disabled";
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
@@ -799,7 +797,7 @@ export class LogoutFlow {
       this.anonymous = probe?.kind === "anonymous";
       return true;
     } catch {
-      this.genericError = "Network error. Check your connection and try again.";
+      this.genericError = NETWORK_ERROR;
       return false;
     } finally {
       this.pending = false;
