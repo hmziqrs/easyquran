@@ -747,7 +747,7 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     expect(ids).not.toContain(spec.id);
   });
 
-  it("deleteCachedArtifact clears the pointer, active file, and any temp", async () => {
+  it("deleteCachedArtifact clears the pointer and active file; the boot sweep owns temp cleanup", async () => {
     const spec = makeSpec(16);
     setFetchPayload(PAYLOAD(16));
     await ensureArtifact(spec);
@@ -755,8 +755,12 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
 
     await deleteCachedArtifact(spec.id, spec.id);
     expect(await readSeed(spec.id, activeFileName(spec.id), env.root)).toBeNull();
-    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
     expect(await readPointerViaExport(spec.id)).toBeNull();
+    // Eviction must not touch a staging temp (would race an in-flight stage of
+    // the same id during runPrune); the boot sweep reclaims it instead.
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).not.toBeNull();
+    await sweepAbandonedTemps();
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
   });
 });
 
