@@ -21,7 +21,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.worker.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "prelint": "pnpm i18n:check",
-    "lint": "vp lint -D no-nested-ternary -D unicorn/no-nested-ternary -D no-shadow -D prefer-promise-reject-errors --deny-warnings",
+    "lint": "vp lint --deny-warnings",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "pretest": "pnpm i18n:check",

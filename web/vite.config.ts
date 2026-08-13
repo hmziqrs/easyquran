@@ -10,7 +10,20 @@ export default defineConfig({
   fmt: {},
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
-    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    rules: {
+      "vite-plus/prefer-vite-plus-imports": "error",
+      // Readability: a `?:` inside another `?:` is always a named function with early returns,
+      // a lookup table, or a first-match helper instead. See AGENTS.MD.
+      "no-nested-ternary": "error",
+      "unicorn/no-nested-ternary": "error",
+      // Correctness: a shadowed binding silently rebinds the outer name on any later edit.
+      "no-shadow": "error",
+      // Correctness: IndexedDB's `tx.error` is nullable, so a raw reject drops the reason.
+      "prefer-promise-reject-errors": "error",
+      // Correctness: `arr.map(fn)` hands fn the index as a second argument.
+      "unicorn/no-array-callback-reference": "error",
+      "unicorn/prefer-number-properties": "error",
+    },
     options: { typeAware: true, typeCheck: true },
   },
   plugins: lazyPlugins(() => [
