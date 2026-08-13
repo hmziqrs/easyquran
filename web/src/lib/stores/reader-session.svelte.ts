@@ -13,6 +13,14 @@ function pushRecent(s: ReaderCore["s"], num: number, n: number, sourceId?: strin
   s.recents = [entry, ...rest].slice(0, RECENTS_CAP);
 }
 
+function recordProgress(s: ReaderCore["s"], num: number, n: number): void {
+  const prev = s.progress[num];
+  s.progress[num] = {
+    furthestAyah: prev ? Math.max(prev.furthestAyah, n) : n,
+    ts: Date.now(),
+  };
+}
+
 export function createReaderSession(core: ReaderCore, persistence: ReaderPersistence) {
   return {
     get query(): string {
@@ -72,6 +80,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       core.s.lastReadAnchor = null;
       pushRecent(core.s, num, n, sourceId);
+      recordProgress(core.s, num, n);
       persistence.writeNow();
       if (browser) window.scrollTo(0, 0);
     },
@@ -80,6 +89,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       if (current?.num === num && current.n === n && current.sourceId === sourceId) return;
       core.s.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
       pushRecent(core.s, num, n, sourceId);
+      recordProgress(core.s, num, n);
       persistence.writeNow();
     },
     clearReadingPosition(): void {
@@ -87,6 +97,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.lastReadAnchor = null;
       core.s.pendingAnchor = null;
       core.s.recents = [];
+      core.s.progress = {};
       persistence.writeNow();
     },
     setLastReadAnchor(anchor: LastReadAnchor | null): void {

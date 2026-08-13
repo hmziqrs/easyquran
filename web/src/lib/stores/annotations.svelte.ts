@@ -40,5 +40,11 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
     get recentReads(): readonly RecentsEntry[] {
       return core.s.recents;
     },
+    progressFor(num: number): number | null {
+      const entry = core.s.progress[num];
+      if (!entry) return null;
+      const total = peekQuranData()?.surahByNum(num)?.ayahCount ?? 0;
+      return total > 0 ? Math.min(1, entry.furthestAyah / total) : null;
+    },
   };
 }

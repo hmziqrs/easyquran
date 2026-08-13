@@ -49,6 +49,7 @@ export interface ReaderApi {
   setPendingAnchor(anchor: LastReadAnchor | null): void;
   consumePendingAnchor(): LastReadAnchor | null;
   readonly recentReads: readonly RecentsEntry[];
+  progressFor(num: number): number | null;
   versesFor(num: number): string[];
   seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
   refreshFromWorker(num: number): Promise<void>;
@@ -146,6 +147,7 @@ export function createReader(): ReaderApi {
     get recentReads() {
       return annotations.recentReads;
     },
+    progressFor: (num: number) => annotations.progressFor(num),
 
     versesFor: (num: number) => verseCache.versesFor(num),
     seedAyahs: (ayahs) => verseCache.seedAyahs(ayahs),

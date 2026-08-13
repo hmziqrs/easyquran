@@ -50,7 +50,7 @@
     {@const lr = reader.lastRead!}
     {@const surah = quranData?.surahByNum(lr.num)}
     {@const total = surah?.ayahCount ?? 0}
-    {@const fraction = total > 0 ? Math.min(1, lr.n / total) : 0}
+    {@const fraction = reader.progressFor(lr.num) ?? (total > 0 ? Math.min(1, lr.n / total) : 0)}
     {@const label = peekTranslationName(lr.sourceId)}
     <Card class="max-w-xl">
       <p class="text-xs font-medium uppercase tracking-wide text-fg-3">Continue reading</p>

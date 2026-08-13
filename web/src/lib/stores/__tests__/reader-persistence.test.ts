@@ -9,6 +9,7 @@ vi.mock("$app/environment", () => ({
 
 import { createReaderCore, READER_SCHEMA_VERSION } from "../reader-core.svelte";
 import { createReaderPersistence, decodeReader } from "../reader-persistence.svelte";
+import { createReader } from "../reader.svelte";
 
 const KEY = "easyquran.reader";
 
@@ -175,6 +176,15 @@ describe("createReaderPersistence scheduling", () => {
     expect(decoded.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
     expect(decoded.progress).toEqual({ 2: { furthestAyah: 255, ts: 1000 } });
     persistence.dispose();
+  });
+
+  it("markRead records a per-surah high-water progress", () => {
+    const r = createReader();
+    r.hydrate();
+    r.markRead(1, 5);
+    r.markRead(1, 2);
+    const blob = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
+    expect(blob.progress["1"].furthestAyah).toBe(5);
   });
 
   it("scheduleNoteWrite() only writes after the trailing debounce", () => {
