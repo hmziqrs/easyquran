@@ -84,9 +84,9 @@ function repoFileLinks(
 ): { label: string; target: string; path: string }[] {
   const out: { label: string; target: string; path: string }[] = [];
   for (const m of text.matchAll(MD_LINK)) {
-    const target = m[2].trim();
+    const target = m[2]!.trim();
     if (/^(?:https?:|mailto:|#)/.test(target)) continue;
-    out.push({ label: m[1], target, path: resolve(base, target) });
+    out.push({ label: m[1]!, target, path: resolve(base, target) });
   }
   return out;
 }

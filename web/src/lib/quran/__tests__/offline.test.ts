@@ -160,7 +160,7 @@ describe("bootOfflineEngine boot sequence", () => {
 
     // Validated catalogue was pushed to the worker through provideCatalogue.
     expect(provideCatalogueMock).toHaveBeenCalledTimes(1);
-    const pushed = provideCatalogueMock.mock.calls[0][0] as unknown[];
+    const pushed = provideCatalogueMock.mock.calls[0]![0]! as unknown[];
     expect(pushed.length).toBeGreaterThan(0);
     // Source-label upgrade from baked→api is covered by the W10a manifest
     // tests; here we only assert the refresh path ran without aborting boot.
@@ -185,7 +185,7 @@ describe("bootOfflineEngine boot sequence", () => {
 
     // Worker still started from baked data; refresh failure did not abort boot.
     expect(startMock).toHaveBeenCalledTimes(1);
-    expect((startMock.mock.calls[0][0] as { source: string }).source).toBe("baked");
+    expect((startMock.mock.calls[0]![0]! as { source: string }).source).toBe("baked");
     // Baked state survives the metadata outage — no error, baked source.
     // catalogueStore falls back to baked and may re-publish it, but the source
     // label (driven by the manifest) stays baked because resolveManifest fell

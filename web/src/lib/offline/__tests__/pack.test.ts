@@ -7,7 +7,7 @@ function buildPack(map: Record<string, string>): string {
   const bodies: string[] = [];
   for (const key of keys) {
     entries[key] = bodies.length;
-    bodies.push(map[key]);
+    bodies.push(map[key]!);
   }
   return JSON.stringify({ version: 1, entries, bodies });
 }
@@ -34,7 +34,7 @@ describe("decodePack", () => {
       "/app/al-kahf/__data.json",
       "/app/juz/30/__data.json",
     ]);
-    expect(pack.bodies[pack.entries["/app/al-kahf/__data.json"]]).toBe('{"node":1}');
+    expect(pack.bodies[pack.entries["/app/al-kahf/__data.json"]!]).toBe('{"node":1}');
   });
 
   it("rejects an unsupported version", () => {

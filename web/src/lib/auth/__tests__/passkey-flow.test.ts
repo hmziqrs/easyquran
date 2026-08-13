@@ -218,8 +218,8 @@ describe("PasskeyFlow login success", () => {
       { method: string; body: Record<string, unknown> },
     ];
     expect(finishCall[0]).toBe("/passkey/v1/login/finish");
-    expect(finishCall[1].method).toBe("POST");
-    const body = finishCall[1].body;
+    expect(finishCall[1]!.method).toBe("POST");
+    const body = finishCall[1]!.body;
     expect(body.authentication_state).toEqual(LOGIN_STATE);
     const cred = body.credential as Record<string, unknown>;
     expect(cred.rawId).toBeTypeOf("string");
@@ -260,16 +260,16 @@ describe("PasskeyFlow register", () => {
     expect(state.transition).toHaveBeenCalledWith({ kind: "passkey" });
     expect(state.probe).toHaveBeenCalled();
     expect(flow.passkeys).toHaveLength(1);
-    expect(flow.passkeys[0].id).toBe("cred-2");
-    expect(flow.passkeys[0].label).toBe("MacBook");
+    expect(flow.passkeys[0]!.id).toBe("cred-2");
+    expect(flow.passkeys[0]!.label).toBe("MacBook");
 
     const finishCall = client.unsafeRequest.mock.calls[1] as [
       string,
       { method: string; body: Record<string, unknown> },
     ];
     expect(finishCall[0]).toBe("/passkey/v1/register/finish");
-    expect(finishCall[1].method).toBe("POST");
-    const body = finishCall[1].body;
+    expect(finishCall[1]!.method).toBe("POST");
+    const body = finishCall[1]!.body;
     expect(body.registration_state).toEqual(REGISTER_STATE);
     expect(body.device_type).toBe("MacBook");
     expect(body.transports).toEqual(["internal"]);
@@ -325,11 +325,11 @@ describe("PasskeyFlow list", () => {
 
     const call = client.unsafeRequest.mock.calls[0] as [string, { method: string }];
     expect(call[0]).toBe("/passkey/v1/list");
-    expect(call[1].method).toBe("POST");
+    expect(call[1]!.method).toBe("POST");
     expect(res).not.toBeNull();
     expect(res).toHaveLength(2);
-    expect(res?.[0].id).toBe("cred-2");
-    expect(res?.[1].id).toBe("cred-9");
+    expect(res?.[0]!.id).toBe("cred-2");
+    expect(res?.[1]!.id).toBe("cred-9");
     expect(flow.passkeys).toHaveLength(2);
   });
 
@@ -377,9 +377,9 @@ describe("PasskeyFlow remove", () => {
       { method: string; body: Record<string, unknown> },
     ];
     expect(removeCall[0]).toBe("/passkey/v1/remove");
-    expect(removeCall[1].method).toBe("POST");
-    expect(removeCall[1].body.credential_id).toBe("cred-2");
-    expect(removeCall[1].body.id).toBeUndefined();
+    expect(removeCall[1]!.method).toBe("POST");
+    expect(removeCall[1]!.body.credential_id).toBe("cred-2");
+    expect(removeCall[1]!.body.id).toBeUndefined();
     expect(flow.passkeys).toHaveLength(0);
   });
 

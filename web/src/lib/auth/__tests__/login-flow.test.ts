@@ -77,9 +77,9 @@ describe("LoginFlow credentials", () => {
     expect(state.transition).toHaveBeenCalledWith({ kind: "login" });
     const transitionOrder = (
       state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0];
+      .mock.invocationCallOrder[0]!;
     expect(transitionOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
     expect(state.setTwoFaPending).toHaveBeenCalledWith(false);
@@ -149,12 +149,12 @@ describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
     expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
     const refreshOrder = (
       client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const transitionOrder = (
       state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0];
+      .mock.invocationCallOrder[0]!;
     expect(refreshOrder).toBeLessThan(transitionOrder);
     expect(refreshOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
@@ -189,12 +189,12 @@ describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
     expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
     const refreshOrder = (
       client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const transitionOrder = (
       state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0];
+      .mock.invocationCallOrder[0]!;
     expect(refreshOrder).toBeLessThan(transitionOrder);
     expect(refreshOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);

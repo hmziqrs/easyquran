@@ -17,7 +17,7 @@ describe("installPurgeHook", () => {
     const state = fakeState();
     installPurgeHook(state as never);
     expect(state.setOnAuthTransition).toHaveBeenCalledTimes(1);
-    const hook = state.setOnAuthTransition.mock.calls[0][0] as (ctx: unknown) => Promise<void>;
+    const hook = state.setOnAuthTransition.mock.calls[0]![0]! as (ctx: unknown) => Promise<void>;
     void hook({ kind: "login" });
     expect(purgeUserCaches).toHaveBeenCalled();
   });

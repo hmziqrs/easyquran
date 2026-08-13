@@ -61,14 +61,14 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
     expect(flow.anonymous).toBe(true);
 
     const clearOrder = (client.clearCsrf as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0];
+      .mock.invocationCallOrder[0]!;
     const transitionOrder = (
       state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0];
+    ).mock.invocationCallOrder[0]!;
     const resetOrder = (state.reset as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     const probeOrder = (state.probe as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     expect(clearOrder).toBeLessThan(transitionOrder);
     expect(transitionOrder).toBeLessThan(resetOrder);
     expect(resetOrder).toBeLessThan(probeOrder);

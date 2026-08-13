@@ -456,7 +456,7 @@ describe("translation route loaders", () => {
     for (let g = from; g <= to; g++) {
       const key = QURAN_DATA.verseKeyAtGlobal(g);
       if (!key) throw new Error(`no verse at global ${g}`);
-      const [surah, ayah] = key.split(":").map(Number);
+      const [surah, ayah] = key.split(":").map(Number) as [number, number];
       surahNums.add(surah);
       ayahs.push({ key, surah, ayah, globalIndex: g, text: `v-${g}` });
     }

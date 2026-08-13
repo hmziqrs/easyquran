@@ -112,9 +112,9 @@ describe("fetchSourceCatalogue", () => {
     const out = await mod.fetchSourceCatalogue();
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ kind: "translation" });
-    if (out[0].kind === "translation") {
-      expect(out[0].entry.downloadUrl).toBe(TRANSLATION_LOCAL_URL);
-      expect(out[0].entry.sizeBytes).toBe(SQ_NAHI_SIZE);
+    if (out[0]!.kind === "translation") {
+      expect(out[0]!.entry.downloadUrl).toBe(TRANSLATION_LOCAL_URL);
+      expect(out[0]!.entry.sizeBytes).toBe(SQ_NAHI_SIZE);
     }
   });
 
@@ -124,9 +124,9 @@ describe("fetchSourceCatalogue", () => {
     decode.mockReturnValue([arabic]);
     const out = await mod.fetchSourceCatalogue();
     expect(out).toHaveLength(1);
-    if (out[0].kind === "arabic") {
-      expect(out[0].spec.downloadUrl).toBe(ARABIC_LOCAL_URL);
-      expect(out[0].spec.sizeBytes).toBe(1);
+    if (out[0]!.kind === "arabic") {
+      expect(out[0]!.spec.downloadUrl).toBe(ARABIC_LOCAL_URL);
+      expect(out[0]!.spec.sizeBytes).toBe(1);
     }
   });
 
@@ -323,6 +323,6 @@ describe("translationCatalogue helper", () => {
     ];
     const out = mod.translationCatalogue(entries);
     expect(out).toHaveLength(1);
-    expect(out[0].id).toBe("x");
+    expect(out[0]!.id).toBe("x");
   });
 });

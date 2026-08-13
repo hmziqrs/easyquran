@@ -50,21 +50,21 @@ describe("decodeSessionList isCurrent decode", () => {
       page: 1,
     });
     expect(list).toHaveLength(2);
-    expect(list[0].id).toBe("1");
-    expect(list[0].isCurrent).toBe(true);
-    expect(list[0].userAgent).toBe("MacBook/Safari");
-    expect(list[0].lastSeenAt).toBe("2026-01-01T00:00:00Z");
-    expect(list[1].id).toBe("2");
-    expect(list[1].isCurrent).toBe(false);
+    expect(list[0]!.id).toBe("1");
+    expect(list[0]!.isCurrent).toBe(true);
+    expect(list[0]!.userAgent).toBe("MacBook/Safari");
+    expect(list[0]!.lastSeenAt).toBe("2026-01-01T00:00:00Z");
+    expect(list[1]!.id).toBe("2");
+    expect(list[1]!.isCurrent).toBe(false);
   });
 
   it("tolerates snake_case is_current + numeric-string id", () => {
     const list = decodeSessionList({
       data: [{ id: "42", is_current: true, last_seen: "2026-02-01T00:00:00Z" }],
     });
-    expect(list[0].id).toBe("42");
-    expect(list[0].isCurrent).toBe(true);
-    expect(list[0].lastSeenAt).toBe("2026-02-01T00:00:00Z");
+    expect(list[0]!.id).toBe("42");
+    expect(list[0]!.isCurrent).toBe(true);
+    expect(list[0]!.lastSeenAt).toBe("2026-02-01T00:00:00Z");
   });
 
   it("drops entries missing any id, keeps numeric + string ids", () => {

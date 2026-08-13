@@ -122,9 +122,9 @@ describe("TwoFactorFlow verify (rotates only on success)", () => {
     expect(res).toBe(true);
     expect(state.transition).toHaveBeenCalledWith({ kind: "two-fa-verify" });
     const tOrder = (state.transition as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     const sOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     expect(tOrder).toBeLessThan(sOrder);
     expect(state.setUser).toHaveBeenCalledWith(ENABLED);
     expect(flow.setupData).toBeNull();

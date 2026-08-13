@@ -43,7 +43,7 @@ function wireChunk(from: number, to: number) {
   const bySurah = new Set<number>();
   for (let g = from; g <= to; g++) {
     const verseKey = QURAN_DATA.verseKeyAtGlobal(g)!;
-    const [surah, ayah] = verseKey.split(":").map(Number);
+    const [surah, ayah] = verseKey.split(":").map(Number) as [number, number];
     ayahs.push({ key: verseKey, surah, ayah, globalIndex: g, text: `t${g}` });
     bySurah.add(surah);
   }
