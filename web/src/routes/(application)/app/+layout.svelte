@@ -19,7 +19,8 @@
   const copy = getReaderUiCopy();
   const canonicalReaderHref = $derived.by<QuranReaderHref>(() => {
     const canonical = deLocalizeUrl(page.url);
-    return `${canonical.pathname}${canonical.search}${canonical.hash}` as QuranReaderHref;
+    const pathname = canonical.pathname.replace(/\/+$/, "") || "/";
+    return `${pathname}${canonical.search}${canonical.hash}` as QuranReaderHref;
   });
   const currentReaderHref = $derived(readerHrefFor(copy.locale, canonicalReaderHref));
   const localeLinks = $derived.by<LocaleLink[]>(() =>

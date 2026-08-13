@@ -4,6 +4,7 @@ export const paraglideOptions = {
   outdir: "./src/lib/paraglide",
   strategy: ["url", "baseLocale"],
   emitTsDeclarations: true,
+  outputStructure: "message-modules",
   urlPatterns: [
     {
       pattern: "/",
