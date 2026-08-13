@@ -42,6 +42,7 @@ function buildCsp(): string {
     "https://firestore.googleapis.com",
     "https://firebase.googleapis.com",
     "https://firebaseinstallations.googleapis.com",
+    "https://firebaseremoteconfig.googleapis.com",
     "https://firebaselogging-pa.googleapis.com",
     "https://www.google-analytics.com",
     "https://www.google.com",
