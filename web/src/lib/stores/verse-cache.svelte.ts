@@ -42,7 +42,8 @@ export function createVerseCache(core: ReaderCore) {
           sub = new Map<number, string>();
           core.verseTextBySurah.set(num, sub);
         }
-        source.verses.forEach((text, index) => sub!.set(index + 1, text));
+        const target = sub;
+        source.verses.forEach((text, index) => target.set(index + 1, text));
         core.verseVersionBySurah.set(num, (core.verseVersionBySurah.get(num) ?? 0) + 1);
       } catch {}
     },

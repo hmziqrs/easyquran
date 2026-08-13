@@ -93,11 +93,12 @@ function progressEmitter(spec: DownloadableSpec): (loaded: number, total: number
 }
 
 function openReadOnly(bytes: Uint8Array): Database {
-  const database = new sqlite3!.oo1.DB();
-  const flags =
-    sqlite3!.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3!.capi.SQLITE_DESERIALIZE_READONLY;
-  const pointer = sqlite3!.wasm.allocFromTypedArray(bytes);
-  const result = sqlite3!.capi.sqlite3_deserialize(
+  if (!sqlite3) throw new Error("[quran-worker] sqlite3 not initialized before open");
+  const s = sqlite3;
+  const database = new s.oo1.DB();
+  const flags = s.capi.SQLITE_DESERIALIZE_FREEONCLOSE | s.capi.SQLITE_DESERIALIZE_READONLY;
+  const pointer = s.wasm.allocFromTypedArray(bytes);
+  const result = s.capi.sqlite3_deserialize(
     database,
     "main",
     pointer,
@@ -105,8 +106,8 @@ function openReadOnly(bytes: Uint8Array): Database {
     bytes.byteLength,
     flags,
   );
-  if (result !== sqlite3!.capi.SQLITE_OK) {
-    sqlite3!.wasm.dealloc(pointer);
+  if (result !== s.capi.SQLITE_OK) {
+    s.wasm.dealloc(pointer);
     throw new Error(`sqlite3_deserialize failed: rc=${result}`);
   }
   return database;
