@@ -1,3 +1,4 @@
+import { uniq } from "es-toolkit";
 import {
   QuranSourceId,
   type QuranReaderSource,
@@ -31,5 +32,5 @@ export const DEFAULT_QURAN_SOURCE_PLAN: ArabicQuranSourcePlan = Object.freeze({
 export function plannedSourceIds<P extends QuranSourcePlan>(
   plan: P,
 ): (P["reader"] | P["search"]["match"] | P["search"]["display"])[] {
-  return [...new Set([plan.reader, plan.search.match, plan.search.display])];
+  return uniq([plan.reader, plan.search.match, plan.search.display]);
 }

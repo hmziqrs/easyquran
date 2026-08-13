@@ -1,3 +1,5 @@
+import { clamp } from "es-toolkit";
+
 export interface Rgb {
   r: number;
   g: number;
@@ -22,10 +24,10 @@ export function parseHex(hex: string): Rgb | null {
   };
 }
 
-const clamp = (n: number): number => Math.max(0, Math.min(255, Math.round(n)));
+const toChannel = (n: number): number => clamp(Math.round(n), 0, 255);
 
 export function toHex({ r, g, b }: Rgb): string {
-  const p = (n: number) => clamp(n).toString(16).padStart(2, "0");
+  const p = (n: number) => toChannel(n).toString(16).padStart(2, "0");
   return `#${p(r)}${p(g)}${p(b)}`;
 }
 
@@ -53,7 +55,7 @@ const BLACK: Rgb = { r: 0, g: 0, b: 0 };
 const shift = (c: Rgb, t: number): Rgb => (t >= 0 ? mix(c, WHITE, t) : mix(c, BLACK, -t));
 
 const rgba = ({ r, g, b }: Rgb, a: number): string =>
-  `rgba(${clamp(r)}, ${clamp(g)}, ${clamp(b)}, ${a})`;
+  `rgba(${toChannel(r)}, ${toChannel(g)}, ${toChannel(b)}, ${a})`;
 
 function backgroundTokens(seed: Rgb): Record<string, string> {
   const light = isLight(seed);

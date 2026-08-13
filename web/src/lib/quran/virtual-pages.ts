@@ -1,3 +1,5 @@
+import { clamp } from "es-toolkit";
+
 export const SURAH_PAGE_WINDOW_SIZE = 5;
 
 export function virtualPageWindow(
@@ -12,6 +14,6 @@ export function virtualPageWindow(
     0,
   );
   const before = Math.floor(size / 2);
-  const start = Math.max(0, Math.min(focusIndex - before, pages.length - size));
+  const start = clamp(focusIndex - before, 0, pages.length - size);
   return pages.slice(start, start + size);
 }

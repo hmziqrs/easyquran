@@ -1,3 +1,4 @@
+import { groupBy } from "es-toolkit";
 import type { PaletteEntry, PaletteGroup, PaletteQuery, PaletteSource } from "./types";
 
 export const DEFAULT_SOURCE_LIMIT = 7;
@@ -132,14 +133,11 @@ const topScore = (entries: readonly PaletteEntry[]): number =>
  * empty query (every score 0) lays the groups out in their designed order.
  */
 export function sectionsFor(entries: readonly PaletteEntry[]): PaletteSection[] {
-  const byGroup = new Map<string, PaletteEntry[]>();
-  for (const entry of entries) {
-    const bucket = byGroup.get(entry.groupId);
-    if (bucket) bucket.push(entry);
-    else byGroup.set(entry.groupId, [entry]);
-  }
+  const byGroup = groupBy(entries, (entry) => entry.groupId);
   return paletteGroups()
-    .filter((group) => byGroup.has(group.id))
-    .map((group) => ({ group, entries: byGroup.get(group.id)! }))
+    .flatMap((group) => {
+      const grouped = byGroup[group.id];
+      return grouped ? [{ group, entries: grouped }] : [];
+    })
     .sort((a, b) => topScore(b.entries) - topScore(a.entries) || a.group.order - b.group.order);
 }

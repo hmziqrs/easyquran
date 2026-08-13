@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { sumBy } from "es-toolkit";
 import path from "node:path";
 import { version as appBuildId } from "$app/environment";
 
@@ -142,7 +143,7 @@ export class QuranDiskCache {
       evictions: this.#evictions,
       errors: this.#errors,
       entries: entries.length,
-      bytes: entries.reduce((total, entry) => total + entry.size, 0),
+      bytes: sumBy(entries, (entry) => entry.size),
     };
   }
 

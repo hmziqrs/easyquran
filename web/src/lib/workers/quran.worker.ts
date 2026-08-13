@@ -1,4 +1,5 @@
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import { uniq } from "es-toolkit";
 import {
   isArabicSourceId,
   OpenerKind,
@@ -250,7 +251,7 @@ function rowsToRangeText(
       globalIndex: row.globalIndex,
       text: row.text,
     })),
-    normalizations: [...new Set(rows.map((row) => row.surah))].map(normalize),
+    normalizations: uniq(rows.map((row) => row.surah)).map(normalize),
   };
 }
 

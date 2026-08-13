@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sumBy } from "es-toolkit";
   import { quran } from "$lib/stores/quran.svelte";
   import { QURAN } from "$lib/config/site";
   import { isArabicSourceId, QuranScript } from "$lib/data/quran-types";
@@ -13,7 +14,7 @@
   };
 
   const sizeOf = new Map(QURAN.scripts.map((s) => [s.id, s.sizeBytes]));
-  const totalBytes = QURAN.scripts.reduce((sum, s) => sum + s.sizeBytes, 0);
+  const totalBytes = sumBy(QURAN.scripts, (s) => s.sizeBytes);
 
   function overallFraction(): number | null {
     const d = quran.download;

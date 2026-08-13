@@ -1,3 +1,4 @@
+import { clamp } from "es-toolkit";
 import type { CanonicalQuranRow } from "../sql.ts";
 import { OpenerKind } from "../../data/quran-types.ts";
 import type { QuranSourceView } from "../view/source-view.ts";
@@ -139,8 +140,8 @@ export function searchCanonicalCorpus(
   opts: SearchOpts = {},
 ): { total: number; limit: number; offset: number; results: SearchHit[] } {
   const normalized = normalizeArabic(query);
-  const limit = Math.max(0, Math.min(opts.limit ?? DEFAULT_LIMIT, MAX_LIMIT));
-  const offset = Math.max(0, Math.min(opts.offset ?? DEFAULT_OFFSET, MAX_OFFSET));
+  const limit = clamp(opts.limit ?? DEFAULT_LIMIT, 0, MAX_LIMIT);
+  const offset = clamp(opts.offset ?? DEFAULT_OFFSET, 0, MAX_OFFSET);
   if (!isEligibleQuery(normalized)) return { total: 0, limit, offset, results: [] };
 
   const matching = units.filter((unit) => unit.matchNorm.includes(normalized));

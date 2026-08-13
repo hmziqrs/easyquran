@@ -1,3 +1,5 @@
+import { clamp } from "es-toolkit";
+
 export type ViewportAnchor =
   | {
       kind: "verse";
@@ -55,7 +57,7 @@ function closestVerse(section: HTMLElement, marker: number): HTMLElement | null 
 }
 
 function anchorRatio(marker: number, rect: DOMRect): number {
-  return Math.min(1, Math.max(0, (marker - rect.top) / Math.max(rect.height, 1)));
+  return clamp((marker - rect.top) / Math.max(rect.height, 1), 0, 1);
 }
 
 export function captureViewportAnchor(container: HTMLElement | null): ViewportAnchor | null {
