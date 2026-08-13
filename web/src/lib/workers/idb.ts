@@ -1,3 +1,4 @@
+import { idbError } from "./idb-error";
 export const IDB_VERSION = 1;
 
 const idbConnections = new Map<string, Promise<IDBDatabase>>();
@@ -14,7 +15,7 @@ export function openIdb(dbName: string, storeName: string): Promise<IDBDatabase>
         }
       };
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onerror = () => reject(idbError(req.error, "open"));
     });
     idbConnections.set(cacheKey, p);
   }
@@ -31,8 +32,8 @@ export function runTxVoid(
     const tx = db.transaction(store, mode);
     fn(tx.objectStore(store));
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(idbError(tx.error, "transaction"));
+    tx.onabort = () => reject(idbError(tx.error, "transaction abort"));
   });
 }
 
@@ -45,7 +46,7 @@ export async function idbGet<T>(
     const tx = db.transaction(store, "readonly");
     const req = tx.objectStore(store).get(key);
     req.onsuccess = () => resolve(req.result as T | undefined);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(idbError(req.error, "get"));
   });
 }
 
@@ -88,7 +89,7 @@ export async function idbScan<T>(
       }
       cursor.continue();
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(idbError(request.error, "request"));
   });
   return out;
 }

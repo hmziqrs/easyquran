@@ -1,6 +1,7 @@
 import type { SourceCatalogueEntry, TranslationCatalogueEntry } from "$lib/data/quran-types";
 import { deleteCachedArtifact, listCachedArtifacts } from "./opfs-cache";
 import { idbDelete, idbPut, openIdb } from "./idb";
+import { idbError } from "./idb-error";
 
 const META_DB = "easyquran-meta";
 const META_STORE = "lastUsed";
@@ -37,7 +38,7 @@ async function readLastUsedMap(): Promise<Map<string, number>> {
         cur.continue();
       };
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(idbError(tx.error, "transaction"));
     });
   } catch {}
   return out;

@@ -3,6 +3,7 @@ import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "
 import { createIdbStore, hasOpfs, openIdb } from "./storage";
 import { idbDelete, idbGet, runTxVoid } from "./idb";
 import { stampLastUsed } from "./opfs-retention";
+import { idbError } from "./idb-error";
 
 export const ROOT_DIR = "easyquran";
 export const QURAN_DB = "easyquran-quran";
@@ -200,7 +201,7 @@ async function readAllPointers(): Promise<Map<string, ActivePointer>> {
         cur.continue();
       };
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(idbError(tx.error, "transaction"));
     });
   } catch {}
   return out;
@@ -470,7 +471,7 @@ async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
         cur.continue();
       };
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(idbError(tx.error, "transaction"));
     });
   } catch (err) {
     console.warn("[opfs-cache] IDB listing failed:", err);
