@@ -105,14 +105,15 @@ function request<T>(
   build: (id: number) => WorkerRequest,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
-  if (!worker) return Promise.reject(new Error("quran worker not started"));
+  const activeWorker = worker;
+  if (!activeWorker) return Promise.reject(new Error("quran worker not started"));
   const id = ++seq;
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       if (pending.delete(id)) reject(new Error("quran worker request timed out"));
     }, timeoutMs);
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    worker!.postMessage(build(id));
+    activeWorker.postMessage(build(id));
   });
 }
 
