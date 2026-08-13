@@ -27,7 +27,7 @@
   const link = "text-[14.5px] text-fg-2 transition-colors hover:text-fg";
 </script>
 
-<footer class="border-t border-line bg-bg-2">
+<footer class="border-t border-line bg-bg-elev">
   <div class="mx-auto max-w-[1180px] px-6 sm:px-7">
     <div
       class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-9"

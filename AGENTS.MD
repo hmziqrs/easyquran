@@ -16,4 +16,4 @@ Load relevant context ONLY when working on that area:
 
 Do NOT preload all context every session. Load on-demand based on files touched.
 
-
+Always commit to the current branch unless I say otherwise.
