@@ -31,3 +31,5 @@ rust/**/target/
 
 .commandcode
 .cache
+.claude/skills
+.agents/skills
