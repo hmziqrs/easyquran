@@ -44,6 +44,9 @@ export function createStackedTranslations(
   let lastFrom = -1;
   let lastTo = -1;
   const metaCache = new Map<string, TranslationCatalogueEntry>();
+  const ERROR_RETRY_DELAYS_MS: readonly number[] = [1200, 4000, 9000];
+  const retryAttempts = new Map<string, number>();
+  const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   function metaFor(id: string): TranslationCatalogueEntry | undefined {
     const cached = metaCache.get(id);
@@ -95,15 +98,45 @@ export function createStackedTranslations(
         if (disposed || startGen !== gen) return;
         if (!metaFor(id)) {
           setStatus(id, "error");
+          scheduleErrorRetry(id, fromVal, toVal, validator);
           return;
         }
         mergeRange(id, range.ayahs);
         setStatus(id, "ready");
+        clearErrorRetry(id);
       })
       .catch(() => {
         if (disposed || startGen !== gen) return;
         setStatus(id, "error");
+        scheduleErrorRetry(id, fromVal, toVal, validator);
       });
+  }
+
+  function scheduleErrorRetry(
+    id: string,
+    fromVal: number,
+    toVal: number,
+    validator: AyahCoordinateValidator,
+  ): void {
+    const attempt = retryAttempts.get(id) ?? 0;
+    const delay = ERROR_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) return;
+    retryAttempts.set(id, attempt + 1);
+    const startGen = gen;
+    const timer = setTimeout(() => {
+      retryTimers.delete(id);
+      if (disposed || startGen !== gen) return;
+      if (untrack(() => status.get(id)) !== "error") return;
+      fetchExtra(id, fromVal, toVal, validator);
+    }, delay);
+    retryTimers.set(id, timer);
+  }
+
+  function clearErrorRetry(id: string): void {
+    const timer = retryTimers.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    retryTimers.delete(id);
+    retryAttempts.delete(id);
   }
 
   function sync(): void {
@@ -120,12 +153,17 @@ export function createStackedTranslations(
       order = extras;
       const pruned = untrack(() => {
         const next = new Map(status);
+        const dropped: string[] = [];
         for (const id of next.keys()) {
-          if (!extras.includes(id)) next.delete(id);
+          if (!extras.includes(id)) {
+            next.delete(id);
+            dropped.push(id);
+          }
         }
-        return next;
+        return { next, dropped };
       });
-      status = pruned;
+      status = pruned.next;
+      for (const id of pruned.dropped) clearErrorRetry(id);
     }
 
     if (route !== prevRoute) {
@@ -133,6 +171,7 @@ export function createStackedTranslations(
       gen++;
       byVerse = new Map();
       status = new Map();
+      for (const id of retryTimers.keys()) clearErrorRetry(id);
     }
 
     const validator = opts.validator();
@@ -169,6 +208,7 @@ export function createStackedTranslations(
     dispose(): void {
       disposed = true;
       gen++;
+      for (const id of retryTimers.keys()) clearErrorRetry(id);
     },
   };
 }
