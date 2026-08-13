@@ -29,6 +29,7 @@
     type RangeRouteKey,
   } from "$lib/quran/worker-client";
   import { ReadChainError } from "$lib/quran/fetch";
+  import { ayahIndexValidator } from "./range-validate";
 
   let { data }: { data: RangePageData } = $props();
   const copy = getReaderUiCopy();
@@ -94,12 +95,10 @@
     readStatus = "loading";
     try {
       const quranData = await loadQuranData();
-      const validate = (globalIndex: number, surah: number, ayah: number): boolean =>
-        quranData.globalIndexOf(surah, ayah) === globalIndex;
       const range = await quranWorker.readRange(
         serverData.startGlobal,
         serverData.endGlobal,
-        validate,
+        ayahIndexValidator(quranData),
         sourceId ?? undefined,
       );
       const byNum = new Map<number, SurahLink>();

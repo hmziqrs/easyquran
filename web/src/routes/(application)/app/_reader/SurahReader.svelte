@@ -28,6 +28,7 @@
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
+  import { ayahIndexValidator } from "./range-validate";
   import {
     currentUrlLocalPage,
     parseHistoryState,
@@ -445,7 +446,7 @@
       const range = await quranWorker.readRange(
         pageDataRange.startGlobal,
         pageDataRange.endGlobal,
-        (globalIndex, surah, ayah) => quranData.globalIndexOf(surah, ayah) === globalIndex,
+        ayahIndexValidator(quranData),
         isTranslationSource ? sourceId : undefined,
         (status: ReadTierStatus) => {
           if (readRouteKey !== routeKey) return;
