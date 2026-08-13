@@ -162,7 +162,14 @@ export function marketingDirection(locale: MarketingLocale): MarketingDirection 
 }
 
 export function marketingHomeHref(locale: MarketingLocale): "/" | "/ar/" {
-  return marketingHref("home", locale) as "/" | "/ar/";
+  const href = marketingHref("home", locale);
+  // Every UiLocale is currently published for "home" (MARKETING_PUBLICATIONS.home), so this
+  // never fires today — it exists so an unpublished locale fails loudly instead of a `null`
+  // silently flowing through as a truthy href string.
+  if (href === null) {
+    throw new Error(`marketingHomeHref: "home" is not published for locale "${locale}"`);
+  }
+  return href as "/" | "/ar/";
 }
 
 export function marketingReaderHomeHref(locale: MarketingLocale): "/en/app" | "/ar/app" {
