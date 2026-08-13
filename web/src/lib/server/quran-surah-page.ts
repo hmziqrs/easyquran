@@ -1,7 +1,9 @@
-import { surahLocalPagePath } from "$lib/data/quran";
 import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "$lib/data/quran-types";
-import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
+import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
+import { surahRouteNav } from "$lib/server/quran-page-shape";
 import { readRangeText } from "$lib/server/quran-sqlite";
+
+const ARABIC_CTX = { kind: "arabic" } as const;
 
 export function readSurahLocalPageData(
   surah: CatalogEntry,
@@ -33,18 +35,5 @@ export function readSurahRouteData(
 ): SurahRouteData | undefined {
   const pageData = readSurahLocalPageData(surah, localPage);
   if (!pageData) return undefined;
-  const pageCount = pageData.pageCount;
-  return {
-    pageData,
-    previousPage:
-      localPage > 1
-        ? { localPage: localPage - 1, href: surahLocalPagePath(surah, localPage - 1) }
-        : null,
-    nextPage:
-      localPage < pageCount
-        ? { localPage: localPage + 1, href: surahLocalPagePath(surah, localPage + 1) }
-        : null,
-    previousSurah: surah.num > 1 ? toSurahLink(QURAN_DATA.surahByNum(surah.num - 1)!) : null,
-    nextSurah: surah.num < 114 ? toSurahLink(QURAN_DATA.surahByNum(surah.num + 1)!) : null,
-  };
+  return { pageData, ...surahRouteNav(ARABIC_CTX, surah, localPage, pageData.pageCount) };
 }

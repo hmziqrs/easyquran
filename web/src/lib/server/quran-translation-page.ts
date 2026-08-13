@@ -1,14 +1,14 @@
 import { error } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
-import { RangeKind } from "$lib/data/quran-data";
-import { translationIdFromSegments, translationSurahPath } from "$lib/data/quran";
+import { translationIdFromSegments } from "$lib/data/quran";
 import type {
   Ayah,
   CatalogEntry,
   QuranRangeText,
   RangePageData,
   SurahLocalPageData,
+  SurahRouteContext,
   SurahRouteData,
   SurahNormalization,
 } from "$lib/data/quran-types";
@@ -22,7 +22,8 @@ import {
 } from "$lib/quran/fetch";
 import { fetchRangeChunks, type RangeJsonFetcher } from "$lib/quran/range-fetch";
 import { decodeTranslationRangeText, type AyahCoordinateValidator } from "$lib/quran/wire";
-import { QURAN_DATA, toSurahLink, toSurahRenderMetadata } from "$lib/server/quran-data";
+import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
+import { requireRangeEntry, surahRouteNav, toRangePageData } from "$lib/server/quran-page-shape";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -175,25 +176,8 @@ export async function loadTranslationSurahRouteData(
     ayahs,
     normalization,
   };
-  return {
-    pageData,
-    previousPage:
-      localPage > 1
-        ? {
-            localPage: localPage - 1,
-            href: translationSurahPath(surah.slug, lang, translator, localPage - 1),
-          }
-        : null,
-    nextPage:
-      localPage < pageCount
-        ? {
-            localPage: localPage + 1,
-            href: translationSurahPath(surah.slug, lang, translator, localPage + 1),
-          }
-        : null,
-    previousSurah: surah.num > 1 ? toSurahLink(QURAN_DATA.surahByNum(surah.num - 1)!) : null,
-    nextSurah: surah.num < 114 ? toSurahLink(QURAN_DATA.surahByNum(surah.num + 1)!) : null,
-  };
+  const ctx: SurahRouteContext = { kind: "translation", lang, translator };
+  return { pageData, ...surahRouteNav(ctx, surah, localPage, pageCount) };
 }
 
 export async function loadTranslationRangeData(
@@ -203,9 +187,7 @@ export async function loadTranslationRangeData(
   translator: string,
   fetcher: TranslationFetcher,
 ): Promise<RangePageData> {
-  const rangeKind = kind === "juz" ? RangeKind.Juz : RangeKind.Page;
-  const entry = QURAN_DATA.rangeByIndex(rangeKind, index);
-  if (!entry) throw error(404, `Unknown ${kind}: ${index}`);
+  const entry = requireRangeEntry(kind, index);
   const sourceId = translationIdFromSegments(lang, translator);
   await requireTranslationSource(sourceId, lang, translator);
   let ayahs: Ayah[];
@@ -223,17 +205,5 @@ export async function loadTranslationRangeData(
     ayahs = [];
     normalizations = [];
   }
-  const surahNums = new Set(ayahs.map((ayah) => ayah.surah));
-  return {
-    kind,
-    index,
-    label: `${kind === "juz" ? "Juz" : "Page"} ${index}`,
-    startGlobal: entry.startGlobal,
-    endGlobal: entry.endGlobal,
-    first: entry.first,
-    last: entry.last,
-    ayahs,
-    normalizations,
-    surahs: [...surahNums].map((num) => toSurahLink(QURAN_DATA.surahByNum(num)!)),
-  };
+  return toRangePageData(kind, index, entry, ayahs, normalizations);
 }

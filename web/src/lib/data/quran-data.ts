@@ -79,7 +79,8 @@ export interface QuranData {
   sajdaAt(surah: number, ayah: number): SajdaEntry | undefined;
 }
 
-const EXPECTED_SURAHS = 114;
+export const SURAH_COUNT = 114;
+const EXPECTED_SURAHS = SURAH_COUNT;
 const EXPECTED_AYAHS = 6236;
 const EXPECTED_RANGE_COUNTS: Readonly<Record<RangeKind, number>> = Object.freeze({
   [RangeKind.Page]: 604,
