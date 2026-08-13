@@ -4,6 +4,7 @@
   import { externalLinkAttrs } from "$lib/utils";
   import type { OwnerPublic } from "$lib/types/owner";
   import type {
+    FooterLink,
     FooterResolvedCopy,
     MarketingFooterLinks,
   } from "$lib/i18n/marketing-copy";
@@ -57,35 +58,25 @@
         </div>
       </div>
 
-      <nav aria-label={copy.productLabel} class="flex flex-col gap-2.5">
-        <h2 class={colHeading}>{copy.productHeading}</h2>
-        <ul class="grid gap-2.5">
-          {#each links.product as p (p.id)}
-            <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
-          {/each}
-        </ul>
-      </nav>
-
-      {#if links.company.length > 0}
-        <nav aria-label={copy.companyLabel} class="flex flex-col gap-2.5">
-          <h2 class={colHeading}>{copy.companyHeading}</h2>
+      {#snippet linkColumn(heading: string, ariaLabel: string, items: FooterLink[])}
+        <nav aria-label={ariaLabel} class="flex flex-col gap-2.5">
+          <h2 class={colHeading}>{heading}</h2>
           <ul class="grid gap-2.5">
-            {#each links.company as p (p.id)}
+            {#each items as p (p.id)}
               <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
             {/each}
           </ul>
         </nav>
+      {/snippet}
+
+      {@render linkColumn(copy.productHeading, copy.productLabel, links.product)}
+
+      {#if links.company.length > 0}
+        {@render linkColumn(copy.companyHeading, copy.companyLabel, links.company)}
       {/if}
 
       {#if links.legal.length > 0}
-        <nav aria-label={copy.legalLabel} class="flex flex-col gap-2.5">
-          <h2 class={colHeading}>{copy.legalHeading}</h2>
-          <ul class="grid gap-2.5">
-            {#each links.legal as p (p.id)}
-              <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
-            {/each}
-          </ul>
-        </nav>
+        {@render linkColumn(copy.legalHeading, copy.legalLabel, links.legal)}
       {/if}
     </div>
 
