@@ -292,6 +292,9 @@ importers:
       '@lucide/svelte':
         specifier: ^1.27.0
         version: 1.27.0(svelte@5.56.8)
+      '@oxlint/plugins':
+        specifier: 1.73.0
+        version: 1.73.0
       '@sveltejs/adapter-node':
         specifier: ^5.5.7
         version: 5.5.7(@sveltejs/kit@2.70.1(@sveltejs/vite-plugin-svelte@7.2.0(@voidzero-dev/vite-plus-core@0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@6.0.3))(svelte@5.56.8))(@voidzero-dev/vite-plus-core@0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@6.0.3))(svelte@5.56.8)(typescript@6.0.3))
@@ -313,6 +316,9 @@ importers:
       happy-dom:
         specifier: ^20.11.1
         version: 20.11.1
+      oxlint-plugin-anti-slop:
+        specifier: github:dmmulroy/anti-slop#9b80d9a5c317d3af94d88a577bdbde4d9a45f7be
+        version: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/9b80d9a5c317d3af94d88a577bdbde4d9a45f7be
       phosphor-svelte:
         specifier: ^3.1.0
         version: 3.1.0(@voidzero-dev/vite-plus-core@0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@6.0.3))(svelte@5.56.8)
@@ -1178,6 +1184,10 @@ packages:
 
   '@oxlint/plugins@1.73.0':
     resolution: {integrity: sha512-OhgMQeMmZA0dcFcX4/priaJZWdFECxiClgq6mRX6aatZEcV9PbKC3P3/v8U1hVjviT1i5U+vR8lAtBV6m4FXAA==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
+  '@oxlint/plugins@1.78.0':
+    resolution: {integrity: sha512-Ypt8KeRYw+4jUtlPirfcHWMrn5ms12VrrFPD+Mds477/7tJxG1Kcz2Yrg2nVcTQEUx/GdlhS+BUg1kmxNm04Ug==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@polka/url@1.0.0-next.29':
@@ -2365,6 +2375,10 @@ packages:
         optional: true
       vite-plus:
         optional: true
+
+  oxlint-plugin-anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/9b80d9a5c317d3af94d88a577bdbde4d9a45f7be:
+    resolution: {gitHosted: true, integrity: sha512-UBG9uBX0+gv6MWo21nbQG5OPK2RA1nApiPmAyGQWXnueo/ewYrHNkzmkmQYzZ0a/lScfeqfpELj1hTqet/QuCQ==, tarball: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/9b80d9a5c317d3af94d88a577bdbde4d9a45f7be}
+    version: 0.1.0
 
   oxlint-tsgolint@0.24.0:
     resolution: {integrity: sha512-giCk5sEvG02d5tzPmFMX3hem8ndzEEu1xvGYS5OwNfO2WGl6ZVxt5LjE0yiMDoz94INI7XkXwgFAQiydPvVHDw==}
@@ -3561,6 +3575,8 @@ snapshots:
 
   '@oxlint/plugins@1.73.0': {}
 
+  '@oxlint/plugins@1.78.0': {}
+
   '@polka/url@1.0.0-next.29': {}
 
   '@protobufjs/aspromise@1.1.2': {}
@@ -4495,6 +4511,10 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.58.0
       svelte: 5.56.8
       vite-plus: 0.2.5(@types/node@26.1.1)(@voidzero-dev/vite-plus-core@0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@6.0.3))(esbuild@0.28.1)(happy-dom@20.11.1)(jiti@2.7.0)(svelte@5.56.8)(tsx@4.23.1)(typescript@6.0.3)
+
+  oxlint-plugin-anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/9b80d9a5c317d3af94d88a577bdbde4d9a45f7be:
+    dependencies:
+      '@oxlint/plugins': 1.78.0
 
   oxlint-tsgolint@0.24.0:
     optionalDependencies:
