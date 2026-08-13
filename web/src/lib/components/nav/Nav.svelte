@@ -47,7 +47,6 @@
     copy = DEFAULT_COPY,
     brandCopy = DEFAULT_BRAND_COPY,
     brandHomeHref = "/",
-    searchHref = "/app",
     localeLinks = [],
     direction = "ltr",
   }: {
@@ -55,7 +54,6 @@
     copy?: NavResolvedCopy;
     brandCopy?: BrandResolvedCopy;
     brandHomeHref?: `/${string}`;
-    searchHref?: `/${string}`;
     localeLinks?: LocaleLink[];
     direction?: MarketingDirection;
   } = $props();

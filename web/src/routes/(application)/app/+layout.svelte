@@ -70,7 +70,6 @@
     copy={copy.nav}
     brandCopy={{ homeLabel: copy.nav.homeLabel(SITE.name) }}
     brandHomeHref={currentReaderHref}
-    searchHref={currentReaderHref}
     {localeLinks}
     direction={copy.direction}
   />

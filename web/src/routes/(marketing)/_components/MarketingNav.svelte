@@ -4,7 +4,6 @@
   import {
     marketingHomeHref,
     marketingLocaleLinks,
-    marketingReaderHomeHref,
     type MarketingLocale,
   } from "$lib/i18n/marketing-copy";
 
@@ -17,7 +16,6 @@
   copy={chrome.nav}
   brandCopy={chrome.brand}
   brandHomeHref={marketingHomeHref(locale)}
-  searchHref={marketingReaderHomeHref(locale)}
   {localeLinks}
   direction={chrome.direction}
 />
