@@ -44,21 +44,7 @@ export const RangeKind = {
 } as const;
 export type RangeKind = (typeof RangeKind)[keyof typeof RangeKind];
 
-type SurahRow = readonly [string, string, string, string, string, number, number, number, number];
-type SajdaRow = readonly [number, number, number];
-
 export type QuranDataSource = readonly [digest: string, sourceVersion: string, license: string];
-
-interface QuranDataSnapshot {
-  readonly [QuranDataRoot.Source]: QuranDataSource;
-  readonly [QuranDataRoot.Surahs]: readonly SurahRow[];
-  readonly [QuranDataRoot.Page]: readonly number[];
-  readonly [QuranDataRoot.Juz]: readonly number[];
-  readonly [QuranDataRoot.Ruku]: readonly number[];
-  readonly [QuranDataRoot.HizbQuarter]: readonly number[];
-  readonly [QuranDataRoot.Manzil]: readonly number[];
-  readonly [QuranDataRoot.Sajdas]: readonly SajdaRow[];
-}
 
 export interface QuranData {
   readonly source: QuranDataSource;
@@ -144,7 +130,7 @@ function bismillahOf(num: number): Bismillah {
   return Bismillah.EmbeddedPrefix;
 }
 
-function decodeDeltas(deltas: readonly number[]): readonly number[] {
+function decodeDeltas(deltas: readonly unknown[]): readonly number[] {
   if (deltas.length === 0 || deltas[0] !== 1) fail("range series must start at global ayah 1");
   const starts = [deltas[0]];
   for (let i = 1; i < deltas.length; i += 1) {
@@ -159,19 +145,20 @@ export function createQuranData(
   raw: unknown,
 ): QuranData {
   if (!Array.isArray(raw) || raw.length !== 8) fail("snapshot root must have eight fields");
-  // SAFETY: the Array.isArray guard above proved raw is an array; QuranDataSnapshot indexes it by the QuranDataRoot numeric keys, which the eight-field length check guarantees are in range.
-  const snapshot = raw as QuranDataSnapshot;
+  const snapshot: readonly unknown[] = raw;
   const source = sourceOf(snapshot[QuranDataRoot.Source]);
-  const rows = snapshot[QuranDataRoot.Surahs];
-  if (!Array.isArray(rows) || rows.length !== EXPECTED_SURAHS) {
-    fail(`expected ${EXPECTED_SURAHS} Surah rows, got ${Array.isArray(rows) ? rows.length : 0}`);
+  const rawRows = snapshot[QuranDataRoot.Surahs];
+  if (!Array.isArray(rawRows) || rawRows.length !== EXPECTED_SURAHS) {
+    fail(
+      `expected ${EXPECTED_SURAHS} Surah rows, got ${Array.isArray(rawRows) ? rawRows.length : 0}`,
+    );
   }
+  const rows: readonly unknown[] = rawRows;
 
   let startGlobal = 1;
   const surahs = rows.map((rawRow, i) => {
     if (!Array.isArray(rawRow) || rawRow.length !== 9) fail(`invalid row for Surah ${i + 1}`);
-    // SAFETY: the Array.isArray guard above proved rawRow is an array; the nine-element length check matches the SurahRow tuple arity.
-    const row = rawRow as SurahRow;
+    const row: readonly unknown[] = rawRow;
     const num = i + 1;
     const ayahCount = integer(row[SurahField.AyahCount], `Surah ${num} ayah count`, 1);
     const entry: CatalogEntry = Object.freeze({
@@ -226,13 +213,12 @@ export function createQuranData(
   });
   const starts = new Map<RangeKind, readonly number[]>();
   for (const kind of Object.values(RangeKind)) {
-    // SAFETY: rootByKind[kind] is one of the QuranDataRoot enum values (0-7), every one of which is a numeric key of QuranDataSnapshot.
-    const rawSeries = snapshot[rootByKind[kind] as keyof QuranDataSnapshot];
+    const rawSeries = snapshot[rootByKind[kind]];
     if (!Array.isArray(rawSeries) || rawSeries.length !== RANGE_COUNTS[kind]) {
       fail(`expected ${RANGE_COUNTS[kind]} ${kind} ranges`);
     }
-    // SAFETY: the Array.isArray check above proved rawSeries is an array; decodeDeltas re-validates each element via integer().
-    const decoded = decodeDeltas(rawSeries as readonly number[]);
+    const series: readonly unknown[] = rawSeries;
+    const decoded = decodeDeltas(series);
     if (decoded.at(-1)! > coordinates.rowCount) fail(`${kind} starts past the Quran`);
     starts.set(kind, decoded);
   }
@@ -344,14 +330,18 @@ export function createQuranData(
     },
     sajdas() {
       if (sajdaCache) return sajdaCache;
-      const sajdaRows = snapshot[QuranDataRoot.Sajdas];
-      if (!Array.isArray(sajdaRows) || sajdaRows.length !== 15) fail("expected 15 sajda markers");
+      const rawSajdaRows = snapshot[QuranDataRoot.Sajdas];
+      if (!Array.isArray(rawSajdaRows) || rawSajdaRows.length !== 15) {
+        fail("expected 15 sajda markers");
+      }
+      const sajdaRows: readonly unknown[] = rawSajdaRows;
       sajdaCache = Object.freeze(
-        sajdaRows.map((row, index) => {
-          if (!Array.isArray(row) || row.length !== 3) fail(`invalid sajda row ${index + 1}`);
-          const surah = row[SajdaField.Surah];
-          const ayah = row[SajdaField.Ayah];
-          const kindCode = row[SajdaField.KindCode];
+        sajdaRows.map((rawRow, index) => {
+          if (!Array.isArray(rawRow) || rawRow.length !== 3) fail(`invalid sajda row ${index + 1}`);
+          const row: readonly unknown[] = rawRow;
+          const surah = integer(row[SajdaField.Surah], `sajda ${index + 1} surah`, 1);
+          const ayah = integer(row[SajdaField.Ayah], `sajda ${index + 1} ayah`, 1);
+          const kindCode = integer(row[SajdaField.KindCode], `sajda ${index + 1} kind`, 0);
           const globalIndex = data.globalIndexOf(surah, ayah);
           if (!globalIndex || (kindCode !== 0 && kindCode !== 1)) {
             fail(`invalid sajda row ${index + 1}`);

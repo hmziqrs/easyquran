@@ -9,7 +9,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 const ALLOWED_ARTIFACTS = new Set<string>([
   "tanzil/arabic/quran-uthmani.sqlite",
   "tanzil/arabic/quran-simple-clean.sqlite",
-  ...(rawTranslations as readonly unknown[]).map((row) => {
+  ...rawTranslations.map((row) => {
     if (!Array.isArray(row) || typeof row[TRANSLATION_FILE_PATH] !== "string") {
       throw new Error("[quran-artifact] malformed baked translation catalogue");
     }

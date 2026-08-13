@@ -34,7 +34,7 @@ interface BakedTranslation {
 }
 
 const BAKED_TRANSLATIONS = new Map<string, BakedTranslation>();
-for (const row of rawTranslations as readonly unknown[]) {
+for (const row of rawTranslations) {
   if (!Array.isArray(row)) continue;
   const id = row[0];
   const language = row[2];

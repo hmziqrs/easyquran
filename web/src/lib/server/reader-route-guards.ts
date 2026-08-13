@@ -1,5 +1,5 @@
 import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import type { CatalogEntry } from "$lib/data/quran-types";
+import type { Ayah, CatalogEntry } from "$lib/data/quran-types";
 import { QURAN_DATA } from "$lib/server/quran-data";
 // Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
 // `RANGE_COUNTS`, so no route hard-codes 604/30.
@@ -44,7 +44,7 @@ export function requireLocalPageBeyondFirst(raw: string, canonical: `/app/${stri
  */
 export function markTranslationPending(
   setHeaders: (headers: Record<string, string>) => void,
-  ayahs: readonly unknown[],
+  ayahs: readonly Ayah[],
 ): void {
   if (ayahs.length > 0) return;
   setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });

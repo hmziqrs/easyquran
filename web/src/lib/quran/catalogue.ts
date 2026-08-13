@@ -72,7 +72,7 @@ function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
     throw new Error(`[catalogue] row ${index + 1}: bad filePath`);
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0)
     throw new Error(`[catalogue] row ${index + 1}: bad sizeBytes`);
-  return [
+  const row: TranslationRow = [
     id,
     language,
     languageCode,
@@ -81,7 +81,8 @@ function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
     translator,
     filePath,
     sizeBytes,
-  ] as TranslationRow;
+  ];
+  return row;
 }
 
 interface DecodedTranslation {
@@ -90,7 +91,7 @@ interface DecodedTranslation {
 }
 
 function decodeBakedTranslations(): DecodedTranslation[] {
-  return (rawTranslations as readonly unknown[]).map((raw, index) => {
+  return rawTranslations.map((raw, index) => {
     const row = decodeTranslationRow(raw, index);
     const entry: TranslationCatalogueEntry = {
       id: row[TranslationField.Id],
