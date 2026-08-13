@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 // quran.worker.ts statically imports resolveSourceProfile, so the mock must be
 // in place before the worker module first loads. Default to the real resolver;
 // the profile-mismatch test flips the override to a short row count.
+// SAFETY: the override starts unset; null is a valid member of the union
+// ({ canonicalRowCount: number } | null) and each test assigns the object shape before reading .value.
 const profileOverride = vi.hoisted(() => ({ value: null as { canonicalRowCount: number } | null }));
 vi.mock("$lib/quran/view/source-profiles", async (importOriginal) => {
   const actual = await importOriginal<typeof import("$lib/quran/view/source-profiles")>();

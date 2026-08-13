@@ -12,10 +12,10 @@ import { consumeReturnTarget, setReturnTarget } from "$lib/auth/return-target";
 
 export type OAuthProvider = "google" | "apple" | "facebook" | "github";
 
-const PROVIDERS: ReadonlySet<OAuthProvider> = new Set(["google", "apple", "facebook", "github"]);
+const PROVIDERS: ReadonlySet<string> = new Set<OAuthProvider>(["google", "apple", "facebook", "github"]);
 
-export function isOAuthProvider(v: unknown): v is OAuthProvider {
-  return typeof v === "string" && PROVIDERS.has(v as OAuthProvider);
+export function isOAuthProvider(v: string): v is OAuthProvider {
+  return PROVIDERS.has(v);
 }
 
 export interface OAuthFinishResult {

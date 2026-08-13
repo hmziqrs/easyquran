@@ -16,9 +16,9 @@ export function loadQuranData(): Promise<QuranData> {
       loadedData = createQuranData(await response.json());
       return loadedData;
     })
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       if (dataPromise === request) dataPromise = undefined;
-      throw error;
+      throw cause;
     });
   dataPromise = request;
   return request;

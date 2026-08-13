@@ -5,7 +5,7 @@ import { readerHrefFor } from "$lib/i18n/reader";
 import { readerEntryPath } from "$lib/i18n/seo";
 import { QURAN_DATA } from "$lib/server/quran-data";
 
-export function load(): { readerPrerenderHrefs: PublicHref[] } {
+export function load() {
   return {
     readerPrerenderHrefs: readerPrerenderHrefs(
       QURAN_DATA,

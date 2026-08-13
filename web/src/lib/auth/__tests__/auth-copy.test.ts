@@ -11,7 +11,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 function env(over: Partial<AuthErrorEnvelope> = {}): AuthErrorEnvelope {
-  return over as AuthErrorEnvelope;
+  return over;
 }
 
 describe("extractFieldErrors", () => {

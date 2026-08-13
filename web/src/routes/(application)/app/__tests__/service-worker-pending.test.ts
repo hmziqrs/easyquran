@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 vi.mock("$service-worker", () => ({
   base: "",
+  // SAFETY: $service-worker mock; build is typed string[] but stays empty because no test enumerates built assets.
   build: [] as string[],
+  // SAFETY: $service-worker mock; files is typed string[] but stays empty because no test enumerates static files.
   files: [] as string[],
   version: "test-v1",
 }));
@@ -12,30 +14,30 @@ const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unkno
 vi.mock("../../../../lib/workers/idb", () => ({
   IDB_VERSION: 1,
   openIdb: async (db: string, store: string) => ({ db, store }),
-  idbGet: async (h: { db: string; store: string }, store: string, key: unknown) =>
-    memIdb.get(`${h.db} ${store}`)?.get(key as string),
+  idbGet: async (h: { db: string; store: string }, store: string, key: string) =>
+    memIdb.get(`${h.db} ${store}`)?.get(key),
   idbPut: async (
     h: { db: string; store: string },
     store: string,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mock mirrors the real idbPut opaque value boundary; values are heterogeneous service-worker metadata never inspected by this mock.
     value: unknown,
-    key?: unknown,
+    key?: string,
   ) => {
     const k = `${h.db} ${store}`;
     if (!memIdb.has(k)) memIdb.set(k, new Map());
-    if (key !== undefined) memIdb.get(k)!.set(key as string, value);
+    if (key !== undefined) memIdb.get(k)!.set(key, value);
   },
-  idbDelete: async (h: { db: string; store: string }, store: string, key: unknown) => {
-    memIdb.get(`${h.db} ${store}`)?.delete(key as string);
+  idbDelete: async (h: { db: string; store: string }, store: string, key: string) => {
+    memIdb.get(`${h.db} ${store}`)?.delete(key);
   },
   idbScan: async (h: { db: string; store: string }, store: string, prefix: string) => {
-    const out: Record<string, unknown> = {};
     const storeMap = memIdb.get(`${h.db} ${store}`);
-    if (storeMap) {
-      for (const [k, v] of storeMap) {
-        if (typeof k === "string" && k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
-      }
+    if (!storeMap) return {};
+    const entries: Array<[string, unknown]> = [];
+    for (const [k, v] of storeMap) {
+      if (k.startsWith(prefix)) entries.push([k.slice(prefix.length), v]);
     }
-    return out;
+    return Object.fromEntries(entries);
   },
   runTxVoid: async () => {},
 }));
@@ -51,8 +53,10 @@ vi.mock("$lib/server/quran-data", () => ({
 const { disk } = vi.hoisted(() => ({
   disk: {
     diskCacheKey: () => "k",
+    // SAFETY: cachedHtml is mutated between string and null across tests, so it is typed string | null; initialized null and reset in beforeEach.
     cachedHtml: null as string | null,
     reads: 0,
+    // SAFETY: writes collects cache keys pushed across tests, so it is typed string[]; initialized empty and reset via .length = 0.
     writes: [] as string[],
   },
 }));
@@ -95,17 +99,17 @@ class FakeCache {
   readonly entries = new Map<string, Response>();
 
   async match(req: Request | string): Promise<Response | undefined> {
-    const key = typeof req === "string" ? req : new URL(req.url, "https://easyquran.fyi").pathname;
+    const key = req instanceof Request ? new URL(req.url, "https://easyquran.fyi").pathname : req;
     return this.entries.get(key);
   }
 
   async put(req: Request | string, res: Response): Promise<void> {
-    const key = typeof req === "string" ? req : new URL(req.url, "https://easyquran.fyi").pathname;
+    const key = req instanceof Request ? new URL(req.url, "https://easyquran.fyi").pathname : req;
     this.entries.set(key, res);
   }
 
   async delete(req: Request | string): Promise<boolean> {
-    const key = typeof req === "string" ? req : new URL(req.url, "https://easyquran.fyi").pathname;
+    const key = req instanceof Request ? new URL(req.url, "https://easyquran.fyi").pathname : req;
     return this.entries.delete(key);
   }
 
@@ -407,9 +411,12 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
       params: { lang: "en", translator: "sahih", n: "5" },
       isDataRequest: opts.isDataRequest ?? false,
     };
+    const resolveStub: HandleCall["resolve"] = () => Promise.resolve(resolveResponse);
     const args: HandleCall = {
+      // SAFETY: `event` is a partial RequestEvent carrying exactly the fields handle() reads (request/url/route/params/isDataRequest); widened through unknown because the real RequestEvent carries ~20 more members (locals/getClientAddress/platform/...) the handler never touches, so no single assertion compiles.
+      // eslint-disable-next-line anti-slop/no-chained-type-assertions -- RequestEvent is a large SvelteKit interface the partial fake cannot structurally satisfy; collapse-to-one assertion does not compile, and widening handle()'s signature is out of this file's scope.
       event: event as unknown as HandleCall["event"],
-      resolve: (() => Promise.resolve(resolveResponse)) as unknown as HandleCall["resolve"],
+      resolve: resolveStub,
     };
     return Promise.resolve(handle(args));
   }

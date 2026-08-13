@@ -28,35 +28,51 @@ export interface ClassifiedError {
   readonly message: string;
 }
 
-type FieldErrorContext = Record<string, unknown>;
+// Wire shape of an auth-error `context` payload. A field's value may be a plain
+// message string, a list of `{ message }` entries (validator-style), or one such
+// object. The payload may also nest the map under an `errors` key.
+interface ErrorContextNode {
+  readonly message?: unknown;
+  readonly errors?: unknown;
+}
+type FieldErrorContextValue =
+  | string
+  | (string | ErrorContextNode)[]
+  | ErrorContextNode;
+type FieldErrorContext = Readonly<Record<string, FieldErrorContextValue>>;
+type FieldErrors = Record<string, string>;
 
-function pickFieldMessage(value: unknown): string | null {
+/* eslint-disable anti-slop/no-runtime-typeof -- pickFieldMessage is the JSON I/O-boundary parser for auth-error context values; typeof is the only way to discriminate string vs array vs object representations of parsed network data before any field is read */
+function pickFieldMessage(value: FieldErrorContextValue | undefined): string | null {
   if (typeof value === "string" && value.trim()) return value;
   if (Array.isArray(value)) {
     for (const entry of value) {
       if (typeof entry === "string" && entry.trim()) return entry;
       if (entry && typeof entry === "object") {
-        const obj = entry as Record<string, unknown>;
-        const msg = obj.message;
+        const msg = entry.message;
         if (typeof msg === "string" && msg.trim()) return msg;
       }
     }
   } else if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    const msg = obj.message;
+    const msg = value.message;
     if (typeof msg === "string" && msg.trim()) return msg;
   }
   return null;
 }
+/* eslint-enable anti-slop/no-runtime-typeof */
 
 export function extractFieldErrors(
   error: AuthErrorEnvelope | null,
   fields: ReadonlyArray<string>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
+) {
+  // SAFETY: an empty object literal satisfies Record<string, string> (zero key/value pairs), so this cast only names the accumulator's concrete type
+  const out = {} as FieldErrors;
   if (!error?.context) return out;
+  // SAFETY: error.context is the parsed JSON body of an auth-error response (truthy after the guard); treated as an opaque field map whose values are narrowed by pickFieldMessage before any string is read
   const root = error.context as FieldErrorContext;
+  // SAFETY: the typeof guard proved the chosen branch is a non-null object; the auth API contract defines it as a field-keyed error map, and each value is re-validated by pickFieldMessage
   const bucket = (
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON boundary: typeof proves root.errors is an object map before we treat it as the field bucket
     root.errors && typeof root.errors === "object" ? root.errors : root
   ) as FieldErrorContext;
   for (const field of fields) {
@@ -91,7 +107,7 @@ export function isRateLimited(error: AuthErrorEnvelope | null, status: number): 
   if (status === 429) return true;
   return (
     (error?.type != null && RATE_LIMIT_TYPES.has(error.type)) ||
-    typeof error?.retry_after === "number"
+    error?.retry_after !== undefined
   );
 }
 
@@ -104,7 +120,7 @@ export function classifyAuthError(
     return { kind: "transport", fieldErrors: {}, message: NETWORK_ERROR };
   }
   if (isRateLimited(error, status)) {
-    const seconds = typeof error?.retry_after === "number" ? error.retry_after : undefined;
+    const seconds = error?.retry_after;
     return {
       kind: "rate-limit",
       fieldErrors: {},

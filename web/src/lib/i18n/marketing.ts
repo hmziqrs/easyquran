@@ -20,7 +20,9 @@ export const MARKETING_PUBLICATIONS = Object.freeze({
   terms: ENGLISH_ONLY,
 } as const satisfies Readonly<Record<MarketingPageId, readonly UiLocale[]>>);
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- exported runtime type guard; accepts opaque page IDs (URL params, user input) and parses via Object.hasOwn below.
 export function isMarketingPageId(value: unknown): value is MarketingPageId {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- first parse step of the guard: discriminate strings before the Object.hasOwn lookup.
   return typeof value === "string" && Object.hasOwn(MARKETING_PATHS, value);
 }
 
@@ -42,5 +44,6 @@ export function marketingHref(pageId: MarketingPageId, locale: UiLocale): Market
   if (!localized.startsWith("/") || localized.startsWith("//") || /[?#]/.test(localized)) {
     throw new Error(`Invalid localized marketing href: ${localized}`);
   }
+  // SAFETY: the startsWith("/") + not-"//" + no-`?#` regex checks above prove `localized` is a canonical marketing path with no query/fragment, matching MarketingHref.
   return localized as MarketingHref;
 }

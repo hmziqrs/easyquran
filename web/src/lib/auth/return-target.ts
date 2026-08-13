@@ -2,8 +2,8 @@ import { browser } from "$app/environment";
 
 const KEY = "eq:oauth-return";
 
-function isInternalPath(p: unknown): p is string {
-  if (typeof p !== "string" || p.length === 0) return false;
+function isInternalPath(p: string | null): p is string {
+  if (p === null || p.length === 0) return false;
   if (!p.startsWith("/")) return false;
   if (p.startsWith("//")) return false;
   if (p.includes("\\")) return false;

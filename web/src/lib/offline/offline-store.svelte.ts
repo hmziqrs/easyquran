@@ -21,34 +21,50 @@ interface OfflineManifest {
   appVersion?: string;
 }
 
-function extractPackId(packPath: unknown): string | null {
-  if (typeof packPath !== "string") return null;
+function extractPackId(packPath: string): string | null {
   const match = /pack\.([A-Za-z0-9_-]+)\.json$/u.exec(packPath);
   return match?.[1] ?? null;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary decoder: raw is the untyped JSON value read back from localStorage; this function IS the parser that validates it.
 function decodeMirror(raw: unknown): PackMirror | null {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- localStorage JSON boundary: typeof-object is the only honest way to discriminate a non-null object before per-field validation.
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  // SAFETY: preceding null/typeof-object/!Array.isArray guards proved raw is a non-null object with unknown JSON fields.
+  // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- localStorage JSON bag; each field is validated by name below before use.
   const obj = raw as Record<string, unknown>;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- localStorage JSON field check: packId must be a string.
   if (typeof obj.packId !== "string") return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- localStorage JSON field check: entries must be a number.
   if (typeof obj.entries !== "number") return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- localStorage JSON field check: bytes must be a number.
   if (typeof obj.bytes !== "number") return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- localStorage JSON field check: savedAt must be a number.
   if (typeof obj.savedAt !== "number") return null;
   return { packId: obj.packId, entries: obj.entries, bytes: obj.bytes, savedAt: obj.savedAt };
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary decoder: raw is the untyped manifest JSON from fetch; this function IS the parser that validates it.
 function decodeOfflineManifest(raw: unknown): OfflineManifest | null {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch JSON boundary: typeof-object discriminates a non-null object before per-field validation.
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  // SAFETY: preceding null/typeof-object/!Array.isArray guards proved raw is a non-null object with unknown JSON fields.
+  // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- fetch JSON bag; each field is validated by name below before use.
   const o = raw as Record<string, unknown>;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch JSON field check: pack must be a string.
   if (typeof o.pack !== "string") return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch JSON field check: bytes must be a finite number.
   if (typeof o.bytes !== "number" || !Number.isFinite(o.bytes)) return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch JSON field check: entries must be a finite number.
   if (typeof o.entries !== "number" || !Number.isFinite(o.entries)) return null;
-  return {
+  const manifest: OfflineManifest = {
     pack: o.pack,
     bytes: o.bytes,
     entries: o.entries,
-    ...(typeof o.appVersion === "string" ? { appVersion: o.appVersion } : {}),
   };
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch JSON field check: optional appVersion must be a string when present.
+  if (typeof o.appVersion === "string") manifest.appVersion = o.appVersion;
+  return manifest;
 }
 
 class OfflineStore {

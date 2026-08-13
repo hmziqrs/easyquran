@@ -3,11 +3,18 @@ export const QuranSourceId = {
   TanzilSimpleClean: "simple-clean",
 } as const;
 export type QuranSourceId = (typeof QuranSourceId)[keyof typeof QuranSourceId];
+// SAFETY: Object.values on the `as const` QuranSourceId map yields ("uthmani" | "simple-clean")[]; casting to its readonly form is a covariance-only widening, not a value change.
 export const QURAN_SOURCE_IDS = Object.freeze(
   Object.values(QuranSourceId),
 ) as readonly QuranSourceId[];
-export const isQuranSourceId = (value: unknown): value is QuranSourceId =>
-  typeof value === "string" && QURAN_SOURCE_IDS.includes(value as QuranSourceId);
+export const isQuranSourceId = (
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted URL/catalogue input at the boundary; unknown is the correct input contract for a parser
+  value: unknown,
+): value is QuranSourceId => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
+  // SAFETY: the QURAN_SOURCE_IDS.includes() membership check below verifies value is one of the QuranSourceId literals before it is asserted as one.
+  return typeof value === "string" && QURAN_SOURCE_IDS.includes(value as QuranSourceId);
+};
 
 export type QuranReaderSource = string;
 
@@ -21,9 +28,16 @@ export const QuranScript = {
   Translation: "translation",
 } as const;
 export type QuranScript = (typeof QuranScript)[keyof typeof QuranScript];
+// SAFETY: Object.values on the `as const` QuranScript map yields the literal-union array; casting to its readonly form is a covariance-only widening, not a value change.
 export const QURAN_SCRIPTS = Object.freeze(Object.values(QuranScript)) as readonly QuranScript[];
-export const isQuranScript = (value: unknown): value is QuranScript =>
-  typeof value === "string" && QURAN_SCRIPTS.includes(value as QuranScript);
+export const isQuranScript = (
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted URL/catalogue input at the boundary; unknown is the correct input contract for a parser
+  value: unknown,
+): value is QuranScript => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
+  // SAFETY: the QURAN_SCRIPTS.includes() membership check below verifies value is one of the QuranScript literals before it is asserted as one.
+  return typeof value === "string" && QURAN_SCRIPTS.includes(value as QuranScript);
+};
 
 export const OpenerKind = {
   Verse: "verse",
@@ -31,9 +45,16 @@ export const OpenerKind = {
   None: "none",
 } as const;
 export type OpenerKind = (typeof OpenerKind)[keyof typeof OpenerKind];
+// SAFETY: Object.values on the `as const` OpenerKind map yields the literal-union array; casting to its readonly form is a covariance-only widening, not a value change.
 export const OPENER_KINDS = Object.freeze(Object.values(OpenerKind)) as readonly OpenerKind[];
-export const isOpenerKind = (value: unknown): value is OpenerKind =>
-  typeof value === "string" && OPENER_KINDS.includes(value as OpenerKind);
+export const isOpenerKind = (
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted catalogue input at the boundary; unknown is the correct input contract for a parser
+  value: unknown,
+): value is OpenerKind => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
+  // SAFETY: the OPENER_KINDS.includes() membership check below verifies value is one of the OpenerKind literals before it is asserted as one.
+  return typeof value === "string" && OPENER_KINDS.includes(value as OpenerKind);
+};
 
 export const OpenerPackaging = {
   NumberedAyah: "numbered-ayah",
@@ -43,11 +64,18 @@ export const OpenerPackaging = {
   Absent: "absent",
 } as const;
 export type OpenerPackaging = (typeof OpenerPackaging)[keyof typeof OpenerPackaging];
+// SAFETY: Object.values on the `as const` OpenerPackaging map yields the literal-union array; casting to its readonly form is a covariance-only widening, not a value change.
 export const OPENER_PACKAGING_VALUES = Object.freeze(
   Object.values(OpenerPackaging),
 ) as readonly OpenerPackaging[];
-export const isOpenerPackaging = (value: unknown): value is OpenerPackaging =>
-  typeof value === "string" && OPENER_PACKAGING_VALUES.includes(value as OpenerPackaging);
+export const isOpenerPackaging = (
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- exported type guard that validates untrusted catalogue input at the boundary; unknown is the correct input contract for a parser
+  value: unknown,
+): value is OpenerPackaging => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard body: typeof string is the only runtime primitive test for an unknown value
+  // SAFETY: the OPENER_PACKAGING_VALUES.includes() membership check below verifies value is one of the OpenerPackaging literals before it is asserted as one.
+  return typeof value === "string" && OPENER_PACKAGING_VALUES.includes(value as OpenerPackaging);
+};
 
 export interface PrefixCut {
   openerEndScalar: number;

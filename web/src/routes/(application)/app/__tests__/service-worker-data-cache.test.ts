@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 vi.mock("$service-worker", () => ({
   base: "",
+  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
   build: [] as string[],
+  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
   files: [] as string[],
   version: "test-v1",
 }));
@@ -14,27 +16,37 @@ const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unkno
 vi.mock("../../../../lib/workers/idb", () => ({
   IDB_VERSION: 1,
   openIdb: async (db: string, store: string) => ({ db, store }),
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbGet; key mirrors the opaque IndexedDB key contract (callers live in service-worker.ts, outside this cluster)
   idbGet: async (h: { db: string; store: string }, store: string, key: unknown) =>
+    // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
     memIdb.get(`${h.db} ${store}`)?.get(key as string),
   idbPut: async (
     h: { db: string; store: string },
     store: string,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbPut; value is the opaque IDB payload stored verbatim by the SW
     value: unknown,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbPut; key mirrors the opaque IndexedDB string key contract
     key?: unknown,
   ) => {
     const k = `${h.db} ${store}`;
     if (!memIdb.has(k)) memIdb.set(k, new Map());
-    if (key !== undefined) memIdb.get(k)!.set(key as string, value);
+    if (key !== undefined) {
+      // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
+      memIdb.get(k)!.set(key as string, value);
+    }
   },
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbDelete; key mirrors the opaque IndexedDB key contract
   idbDelete: async (h: { db: string; store: string }, store: string, key: unknown) => {
+    // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
     memIdb.get(`${h.db} ${store}`)?.delete(key as string);
   },
   idbScan: async (h: { db: string; store: string }, store: string, prefix: string) => {
+    // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- idbScan returns deserialized IDB values of unknown shape; the SW re-parses per consumer
     const out: Record<string, unknown> = {};
     const storeMap = memIdb.get(`${h.db} ${store}`);
     if (storeMap) {
       for (const [k, v] of storeMap) {
-        if (typeof k === "string" && k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
+        if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
       }
     }
     return out;
@@ -63,17 +75,17 @@ class FakeCache {
   readonly entries = new Map<string, Response>();
 
   async match(req: Request | string): Promise<Response | undefined> {
-    const key = typeof req === "string" ? req : normalizeDataKey(req.url);
+    const key = req instanceof Request ? normalizeDataKey(req.url) : req;
     return this.entries.get(key);
   }
 
   async put(req: Request | string, res: Response): Promise<void> {
-    const key = typeof req === "string" ? req : normalizeDataKey(req.url);
+    const key = req instanceof Request ? normalizeDataKey(req.url) : req;
     this.entries.set(key, res);
   }
 
   async delete(req: Request | string): Promise<boolean> {
-    const key = typeof req === "string" ? req : normalizeDataKey(req.url);
+    const key = req instanceof Request ? normalizeDataKey(req.url) : req;
     return this.entries.delete(key);
   }
 
@@ -174,6 +186,7 @@ describe("eq-data-v1 metadata is one record per normalized key", () => {
     expect(entry).toBeDefined();
     expect(entry?.key).toBe(dataKey(1));
     expect(entry?.sizeBytes).toBe(128);
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- lastUsed is a deserialized metadata timestamp; typeof verifies its persisted shape is a number, no parse seam in this in-memory mock
     expect(typeof entry?.lastUsed).toBe("number");
   });
 

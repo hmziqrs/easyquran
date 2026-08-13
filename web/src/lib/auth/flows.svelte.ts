@@ -55,15 +55,26 @@ const RESET_FIELDS = ["password", "confirm_password"] as const;
 const TWO_FA_VERIFY_FIELDS = ["code"] as const;
 const TWO_FA_DISABLE_FIELDS = ["code"] as const;
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- data is an opaque HTTP response body (res.data from unsafeRequest<unknown>); decodeUserProfile parses/validates it inside.
 function decodeUser(data: unknown): UserProfile | null {
   return decodeUserProfile(data);
 }
 
+interface TotpRequiredPayload {
+  readonly status?: unknown;
+  readonly totp_token?: unknown;
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- data is an opaque HTTP response body (res.data from unsafeRequest<unknown>); this fn is the parser for the totp_required shape.
 function isTotpRequired(data: unknown): { totpToken: string } | null {
-  if (!data || typeof data !== "object") return null;
-  const o = data as Record<string, unknown>;
+  if (!data) return null;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing an opaque HTTP body to "object" before reading fields; genuine runtime discrimination at the I/O boundary.
+  if (typeof data !== "object") return null;
+  // SAFETY: data is a non-null object (narrowed above); reading known totp-response fields, each validated before use.
+  const o = data as TotpRequiredPayload;
   if (o.status !== "totp_required") return null;
   const totpToken = o.totp_token;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing an opaque JSON field to string; the value is then truthiness-checked.
   if (typeof totpToken !== "string" || !totpToken) return null;
   return { totpToken };
 }
@@ -441,6 +452,10 @@ export class VerifyEmailFlow {
   }
 }
 
+interface ForgotPasswordVerifyPayload {
+  readonly reset_token?: unknown;
+}
+
 export class ForgotPasswordFlow {
   readonly client: AuthClient;
   readonly state: FlowStateLike;
@@ -531,7 +546,9 @@ export class ForgotPasswordFlow {
         }
         return false;
       }
-      const data = res.data as Record<string, unknown> | null;
+      // SAFETY: res.data is the verify endpoint JSON body; narrowing to read reset_token, which is validated as a string below before use.
+      const data = res.data as ForgotPasswordVerifyPayload | null;
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing an opaque JSON field to string at the I/O boundary.
       const token = data && typeof data.reset_token === "string" ? data.reset_token : null;
       if (!token) {
         this.genericError = GENERIC_TRY_AGAIN;
@@ -601,6 +618,12 @@ export interface TwoFactorSetupData {
   readonly backupCodes: ReadonlyArray<string>;
 }
 
+interface TwoFactorSetupPayload {
+  readonly secret?: unknown;
+  readonly otpauth_url?: unknown;
+  readonly backup_codes?: unknown;
+}
+
 export class TwoFactorFlow {
   readonly client: AuthClient;
   readonly state: FlowStateLike;
@@ -645,9 +668,13 @@ export class TwoFactorFlow {
         }
         return false;
       }
-      const data = res.data as Record<string, unknown> | null;
+      // SAFETY: res.data is the 2fa/setup JSON body; narrowing to read secret/otpauth_url/backup_codes, each validated before use (secret/otpauth_url as strings, backup_codes via Array.isArray + string filter).
+      const data = res.data as TwoFactorSetupPayload | null;
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing an opaque JSON field to string at the I/O boundary.
       const secret = data && typeof data.secret === "string" ? data.secret : null;
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing an opaque JSON field to string at the I/O boundary.
       const otpauthUrl = data && typeof data.otpauth_url === "string" ? data.otpauth_url : null;
+      // SAFETY: Array.isArray confirmed data.backup_codes is an array; element type cast to unknown because each element is validated as a string by the filter below.
       const backupCodes =
         data && Array.isArray(data.backup_codes) ? (data.backup_codes as unknown[]) : [];
       if (!secret || !otpauthUrl) {
@@ -657,6 +684,7 @@ export class TwoFactorFlow {
       this.#setup = {
         secret,
         otpauthUrl,
+        // eslint-disable-next-line anti-slop/no-runtime-typeof -- type-guard predicate over opaque backup-code array elements; each element validated before inclusion.
         backupCodes: backupCodes.filter((c): c is string => typeof c === "string"),
       };
       this.step = "verify";
@@ -847,7 +875,8 @@ export function createLogoutFlow(deps: FlowDeps = {}): LogoutFlow {
 
 const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = ["google", "apple", "facebook", "github"];
 
-export function createOAuthFlows(deps: OAuthFlowDeps = {}): Record<OAuthProvider, OAuthFlow> {
+export function createOAuthFlows(deps: OAuthFlowDeps = {}) {
+  // SAFETY: {} starts empty but the loop below assigns an OAuthFlow for every provider in OAUTH_PROVIDERS before return, so the record is complete at every key.
   const out = {} as Record<OAuthProvider, OAuthFlow>;
   for (const provider of OAUTH_PROVIDERS) {
     out[provider] = createOAuthFlow(provider, deps);

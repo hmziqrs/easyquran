@@ -40,13 +40,14 @@ export {
 export type Surah = LoadedSurah;
 
 export const verseKey = (surah: number, ayah: number): VerseKey => `${surah}:${ayah}`;
-export const parseKey = (key: VerseKey): { num: number; n: number } => {
+export const parseKey = (key: VerseKey) => {
   const m = /^(\d+):(\d+)$/.exec(key);
   if (!m) return { num: 1, n: 1 };
   return { num: +m[1]!, n: +m[2]! };
 };
 
 export const surahPath = (surah: string | Pick<CatalogEntry, "slug">): `/app/${string}` => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
   return `/app/${slug}`;
 };
@@ -55,6 +56,7 @@ export const surahLocalPagePath = (
   surah: string | Pick<CatalogEntry, "slug">,
   localPage: number,
 ): `/app/${string}` => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
   return localPage > 1 ? `/app/${slug}/page/${localPage}` : `/app/${slug}`;
 };
@@ -68,7 +70,7 @@ export const surahAyahPath = (
 export const translationIdFromSegments = (lang: string, translator: string): string =>
   translator === "" ? lang : `${lang}.${translator}`;
 
-export const translationSegmentsFromId = (id: string): { lang: string; translator: string } => {
+export const translationSegmentsFromId = (id: string) => {
   const dot = id.indexOf(".");
   if (dot < 0) return { lang: id, translator: "" };
   return { lang: id.slice(0, dot), translator: id.slice(dot + 1) };
@@ -116,6 +118,7 @@ export const surahPathFor = (
   ctx: SurahRouteContext,
   surah: string | Pick<CatalogEntry, "slug">,
 ): `/app/${string}` => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
   return ctx.kind === "arabic"
     ? surahPath(slug)
@@ -127,6 +130,7 @@ export const surahLocalPagePathFor = (
   surah: string | Pick<CatalogEntry, "slug">,
   localPage: number,
 ): `/app/${string}` => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
   return ctx.kind === "arabic"
     ? surahLocalPagePath(slug, localPage)

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 vi.mock("$service-worker", () => ({
   base: "",
+  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
   build: [] as string[],
+  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
   files: [] as string[],
   version: "test-v1",
 }));
@@ -13,27 +15,37 @@ const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unkno
 vi.mock("../../../../lib/workers/idb", () => ({
   IDB_VERSION: 1,
   openIdb: async (db: string, store: string) => ({ db, store }),
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbGet; key mirrors the opaque IndexedDB key contract (callers live in service-worker.ts, outside this cluster)
   idbGet: async (h: { db: string; store: string }, _store: string, key: unknown) =>
+    // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
     memIdb.get(`${h.db} ${h.store}`)?.get(key as string),
   idbPut: async (
     h: { db: string; store: string },
     _store: string,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbPut; value is the opaque IDB payload stored verbatim by the SW
     value: unknown,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbPut; key mirrors the opaque IndexedDB string key contract
     key?: unknown,
   ) => {
     const k = `${h.db} ${h.store}`;
     if (!memIdb.has(k)) memIdb.set(k, new Map());
-    if (key !== undefined) memIdb.get(k)!.set(key as string, value);
+    if (key !== undefined) {
+      // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
+      memIdb.get(k)!.set(key as string, value);
+    }
   },
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks lib/workers/idb idbDelete; key mirrors the opaque IndexedDB key contract
   idbDelete: async (h: { db: string; store: string }, _store: string, key: unknown) => {
+    // SAFETY: the SW only ever passes string data keys; the inner memIdb map is string-keyed
     memIdb.get(`${h.db} ${h.store}`)?.delete(key as string);
   },
   idbScan: async (h: { db: string; store: string }, _store: string, prefix: string) => {
+    // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- idbScan returns deserialized IDB values of unknown shape; the SW re-parses per consumer
     const out: Record<string, unknown> = {};
     const storeMap = memIdb.get(`${h.db} ${h.store}`);
     if (storeMap) {
       for (const [k, v] of storeMap) {
-        if (typeof k === "string" && k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
+        if (k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
       }
     }
     return out;
@@ -52,12 +64,12 @@ class FakeCache {
   puts = 0;
 
   async match(req: Request | string): Promise<Response | undefined> {
-    const key = typeof req === "string" ? req : new URL(req.url).pathname;
+    const key = req instanceof Request ? new URL(req.url).pathname : req;
     return this.entries.get(key);
   }
   async put(req: Request | string, res: Response): Promise<void> {
     this.puts++;
-    const key = typeof req === "string" ? req : new URL(req.url).pathname;
+    const key = req instanceof Request ? new URL(req.url).pathname : req;
     this.entries.set(key, res);
   }
   async delete(_req: Request | string): Promise<boolean> {
@@ -100,6 +112,7 @@ class FakeFetchEvent extends Event {
     super("fetch");
     this.request = request;
   }
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks FetchEvent.respondWith; captures whatever response promise the SW handler resolves with
   respondWith(r: unknown): void {
     this.respondWithCalled = true;
     this.response = r;

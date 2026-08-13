@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 vi.mock("$service-worker", () => ({
   base: "",
+  // SAFETY: $service-worker mock; build is typed string[] but stays empty because no test enumerates built assets.
   build: [] as string[],
+  // SAFETY: $service-worker mock; files is typed string[] but stays empty because no test enumerates static files.
   files: [] as string[],
   version: "test-v1",
 }));
@@ -12,30 +14,30 @@ const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unkno
 vi.mock("../../../../lib/workers/idb", () => ({
   IDB_VERSION: 1,
   openIdb: async (db: string, store: string) => ({ db, store }),
-  idbGet: async (h: { db: string; store: string }, store: string, key: unknown) =>
-    memIdb.get(`${h.db} ${store}`)?.get(key as string),
+  idbGet: async (h: { db: string; store: string }, store: string, key: string) =>
+    memIdb.get(`${h.db} ${store}`)?.get(key),
   idbPut: async (
     h: { db: string; store: string },
     store: string,
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mock mirrors the real idbPut opaque value boundary; values are heterogeneous service-worker metadata never inspected by this mock.
     value: unknown,
-    key?: unknown,
+    key?: string,
   ) => {
     const k = `${h.db} ${store}`;
     if (!memIdb.has(k)) memIdb.set(k, new Map());
-    if (key !== undefined) memIdb.get(k)!.set(key as string, value);
+    if (key !== undefined) memIdb.get(k)!.set(key, value);
   },
-  idbDelete: async (h: { db: string; store: string }, store: string, key: unknown) => {
-    memIdb.get(`${h.db} ${store}`)?.delete(key as string);
+  idbDelete: async (h: { db: string; store: string }, store: string, key: string) => {
+    memIdb.get(`${h.db} ${store}`)?.delete(key);
   },
   idbScan: async (h: { db: string; store: string }, store: string, prefix: string) => {
-    const out: Record<string, unknown> = {};
     const storeMap = memIdb.get(`${h.db} ${store}`);
-    if (storeMap) {
-      for (const [k, v] of storeMap) {
-        if (typeof k === "string" && k.startsWith(prefix)) out[k.slice(prefix.length)] = v;
-      }
+    if (!storeMap) return {};
+    const entries: Array<[string, unknown]> = [];
+    for (const [k, v] of storeMap) {
+      if (k.startsWith(prefix)) entries.push([k.slice(prefix.length), v]);
     }
-    return out;
+    return Object.fromEntries(entries);
   },
   runTxVoid: async () => {},
 }));
@@ -54,17 +56,17 @@ class FakeCache {
   readonly entries = new Map<string, Response>();
 
   async match(req: Request | string): Promise<Response | undefined> {
-    const key = typeof req === "string" ? req : new URL(req.url, ORIGIN).pathname;
+    const key = req instanceof Request ? new URL(req.url, ORIGIN).pathname : req;
     return this.entries.get(key);
   }
 
   async put(req: Request | string, res: Response): Promise<void> {
-    const key = typeof req === "string" ? req : new URL(req.url, ORIGIN).pathname;
+    const key = req instanceof Request ? new URL(req.url, ORIGIN).pathname : req;
     this.entries.set(key, res);
   }
 
   async delete(req: Request | string): Promise<boolean> {
-    const key = typeof req === "string" ? req : new URL(req.url, ORIGIN).pathname;
+    const key = req instanceof Request ? new URL(req.url, ORIGIN).pathname : req;
     return this.entries.delete(key);
   }
 
@@ -120,22 +122,24 @@ function successResponse(size = 64): Response {
 }
 
 interface FakePort {
-  postMessage(msg: unknown): void;
+  postMessage(msg: { type: string }): void;
   close(): void;
   onmessage: ((ev: { data: unknown }) => void) | null;
   start(): void;
 }
 
-function fakePort(): { port: MessagePort; messages: unknown[] } {
+function fakePort() {
   const messages: unknown[] = [];
   const port: FakePort = {
-    postMessage: (msg: unknown) => {
+    postMessage: (msg: { type: string }) => {
       messages.push(msg);
     },
     close: () => {},
     onmessage: null,
     start: () => {},
   };
+  // SAFETY: FakePort implements the MessagePort surface this SUT exercises (postMessage/close/onmessage/start); widened through unknown because MessagePort is a DOM interface with ~15 members/overloads the fake deliberately omits, so no single assertion compiles.
+  // eslint-disable-next-line anti-slop/no-chained-type-assertions -- MessagePort's full DOM member/overload set cannot be structurally replicated by the fake double; collapse-to-one assertion does not compile, and widening purgeUserCachesHandler's signature is out of this file's scope.
   return { port: port as unknown as MessagePort, messages };
 }
 
@@ -181,6 +185,7 @@ describe("W8a purgeUserCachesHandler deletes pages, data, and W6 metadata, then 
     await purgeUserCachesHandler(port);
 
     expect(messages).toHaveLength(1);
+    // SAFETY: messages has length 1 (asserted above); messages[0] is the PURGE_ACK object purgeUserCachesHandler posted, which always carries a `type` field.
     expect((messages[0] as { type: string }).type).toBe(PURGE_ACK);
     expect(fakeCaches.caches.has(PAGES_CACHE)).toBe(false);
     expect(fakeCaches.caches.has(DATA_CACHE)).toBe(false);
@@ -219,16 +224,14 @@ describe("W8a purgeUserCachesHandler deletes pages, data, and W6 metadata, then 
     const { port, messages } = fakePort();
     await purgeUserCachesHandler(port);
     expect(messages).toHaveLength(1);
+    // SAFETY: messages has length 1 (asserted above); messages[0] is the PURGE_ACK object purgeUserCachesHandler posted, which always carries a `type` field.
     expect((messages[0] as { type: string }).type).toBe(PURGE_ACK);
   });
 });
 
 describe("W8a purgeUserCaches client helper", () => {
   function installFakeMessageChannel(): void {
-    vi.stubGlobal("MessageChannel", function MessageChannel(): {
-      port1: FakePort;
-      port2: FakePort;
-    } {
+    vi.stubGlobal("MessageChannel", function MessageChannel() {
       const port1: FakePort = {
         postMessage: () => {},
         close: () => {},
@@ -236,7 +239,7 @@ describe("W8a purgeUserCaches client helper", () => {
         start: () => {},
       };
       const port2: FakePort = {
-        postMessage: (msg: unknown) => {
+        postMessage: (msg: { type: string }) => {
           port1.onmessage?.({ data: msg });
         },
         close: () => {},
@@ -247,15 +250,17 @@ describe("W8a purgeUserCaches client helper", () => {
     });
   }
 
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- stubs navigator.serviceWorker.controller for varied fake-controller shapes (postMessage arity differs per test); the SUT reads it via the real ServiceWorker type, not this local annotation.
   function stubController(controller: unknown): void {
     vi.stubGlobal("navigator", { serviceWorker: { controller } });
   }
 
   it("posts PURGE_USER_CACHES on the controller with a transferred port and resolves on ack", async () => {
     installFakeMessageChannel();
-    let sent: { msg: unknown; port: FakePort | null } | null = null;
+    let sent: { msg: { type: string }; port: FakePort | null } | null = null;
     const controller = {
-      postMessage(msg: unknown, transfer: unknown[]): void {
+      postMessage(msg: { type: string }, transfer: unknown[]): void {
+        // SAFETY: purgeUserCaches transfers port2 from installFakeMessageChannel, which is a FakePort instance in this test.
         sent = { msg, port: (transfer[0] as FakePort) ?? null };
       },
     };
@@ -265,7 +270,7 @@ describe("W8a purgeUserCaches client helper", () => {
     await flush(5);
 
     expect(sent).not.toBeNull();
-    expect((sent!.msg as { type: string }).type).toBe(PURGE_USER_CACHES);
+    expect(sent!.msg.type).toBe(PURGE_USER_CACHES);
     expect(sent!.port).not.toBeNull();
 
     sent!.port!.postMessage({ type: PURGE_ACK });

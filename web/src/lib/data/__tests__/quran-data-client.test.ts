@@ -5,6 +5,7 @@ import { loadQuranData, resetQuranDataForTests } from "$lib/data/quran-data-clie
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 function requestUrl(input: string | URL | Request): string {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | URL | Request) handed in by the fetch mock; no parse seam here, typeof is the correct runtime primitive test
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
   return input.url;

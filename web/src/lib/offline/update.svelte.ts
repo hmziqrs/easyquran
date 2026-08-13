@@ -39,7 +39,7 @@ class UpdateStore {
 
     if (readRaw("session", RELOAD_GUARD) === "1") this.#reloadArmed = true;
 
-    if (typeof BroadcastChannel !== "undefined") {
+    if ("BroadcastChannel" in globalThis) {
       this.#channel = new BroadcastChannel(UPDATE_BROADCAST_CHANNEL);
       this.#channel.addEventListener("message", (event) => {
         if (event.data?.type === PREPARE_RELOAD) this.#armReloadGuard();

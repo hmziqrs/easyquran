@@ -113,9 +113,9 @@ interface FakeDB {
 interface FakeReq {
   result: unknown;
   error: DOMException | null;
-  onsuccess: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-  onupgradeneeded: ((ev: unknown) => void) | null;
+  onsuccess: ((req: FakeReq) => void) | null;
+  onerror: ((req: FakeReq) => void) | null;
+  onupgradeneeded: ((req: FakeReq) => void) | null;
 }
 interface FakeCursor {
   key: unknown;
@@ -124,28 +124,39 @@ interface FakeCursor {
 }
 interface FakeStoreHandle {
   data: Map<unknown, unknown>;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- fakes IDBObjectStore.get; key is an opaque IDB valid key and the real callers live in production opfs-cache.ts
   get(key: unknown): FakeReq;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- fakes IDBObjectStore.put; value/key are opaque structured-clone data and the real callers live in production opfs-cache.ts
   put(value: unknown, key?: unknown): FakeReq;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- fakes IDBObjectStore.delete; key is an opaque IDB valid key
   delete(key: unknown): FakeReq;
   openCursor(): FakeReq;
 }
 interface FakeTx {
   aborted: boolean;
   error: DOMException | null;
-  oncomplete: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-  onabort: ((ev: unknown) => void) | null;
+  oncomplete: ((tx: FakeTx) => void) | null;
+  onerror: ((tx: FakeTx) => void) | null;
+  onabort: ((tx: FakeTx) => void) | null;
   objectStore(name: string): FakeStoreHandle;
   abort(): void;
 }
 
+interface FakeIdbFactory {
+  open(name: string, version: number): FakeReq;
+}
+
 interface FakeEnv {
   root: FakeDirHandle;
-  idb: IDBFactory;
+  idb: FakeIdbFactory;
   reset: () => void;
 }
 
-const fakeSingleton: { env: FakeEnv | null } = { env: null };
+interface FakeSingleton {
+  env: FakeEnv | null;
+}
+
+const fakeSingleton: FakeSingleton = { env: null };
 
 function buildFakes(): FakeEnv {
   const root = new FakeDirHandle("root");
@@ -166,7 +177,7 @@ function buildFakes(): FakeEnv {
     track: (req: FakeReq) => void,
     release: (req: FakeReq) => void,
   ): FakeStoreHandle {
-    function opReq(result: unknown, mutate: () => void): FakeReq {
+    function opReq<T>(result: T, mutate: () => void): FakeReq {
       mutate();
       const req: FakeReq = {
         result,
@@ -283,7 +294,7 @@ function buildFakes(): FakeEnv {
     return db;
   }
 
-  const idb = {
+  const idb: FakeIdbFactory = {
     open(name: string, _version: number): FakeReq {
       let db = dbByName.get(name);
       const isNew = !db;
@@ -308,7 +319,7 @@ function buildFakes(): FakeEnv {
 
   const env: FakeEnv = {
     root,
-    idb: idb as unknown as IDBFactory,
+    idb,
     reset: () => {
       root.dirs.clear();
       root.files.clear();
@@ -323,12 +334,14 @@ function buildFakes(): FakeEnv {
 function installFakes(): FakeEnv {
   if (!fakeSingleton.env) fakeSingleton.env = buildFakes();
   const env = fakeSingleton.env;
+  // SAFETY: globalThis.indexedDB is a real runtime global in the test env; cast exposes the slot to install the fake IDB factory.
   (globalThis as { indexedDB: unknown }).indexedDB = env.idb;
   Object.defineProperty(globalThis.navigator, "storage", {
     value: { getDirectory: async () => env.root },
     configurable: true,
     writable: true,
   });
+  // SAFETY: globalThis.fetch is a real runtime global; cast exposes the slot to install the default test stub.
   (globalThis as { fetch: unknown }).fetch = async () => ({
     ok: true,
     status: 200,
@@ -340,6 +353,7 @@ function installFakes(): FakeEnv {
 }
 
 function setFetchPayload(bytes: Uint8Array): void {
+  // SAFETY: globalThis.fetch is a real runtime global; cast exposes the slot to install the payload stub.
   (globalThis as { fetch: unknown }).fetch = async () => ({
     ok: true,
     status: 200,
@@ -349,6 +363,7 @@ function setFetchPayload(bytes: Uint8Array): void {
 }
 
 function setFetchError(message: string): void {
+  // SAFETY: globalThis.fetch is a real runtime global; cast exposes the slot to install the throwing stub.
   (globalThis as { fetch: unknown }).fetch = async () => {
     throw new Error(message);
   };
@@ -383,11 +398,20 @@ async function readPointerViaExport(sourceId: string): Promise<ActivePointer | n
   return readPointer(sourceId);
 }
 
+// Test-only reinterpreter: openIdb() runs against the faked globalThis.indexedDB,
+// so the typed IDBDatabase it returns is actually a FakeDB at runtime. One
+// SAFETY-justified assertion (no chain, no intermediate widening).
+function reinterpretAs<T>(value: Awaited<ReturnType<typeof openIdb>>): T {
+  // SAFETY: the faked indexedDB.open returns a FakeDB; openIdb's IDBDatabase
+  // return type hides that fake shape. T is always FakeDB at the call site.
+  return value as T;
+}
+
 async function breakNextPointerPut(): Promise<() => void> {
   // Wrap the pointer store so the next readwrite `put` (the commit-phase
   // writePointer) throws synchronously inside runTxVoid's executor, rejecting
   // the commit. `get` (readPointer) stays intact, and other DBs are untouched.
-  const pointerDb = (await openIdb(POINTER_DB, POINTER_STORE)) as unknown as FakeDB;
+  const pointerDb = reinterpretAs<FakeDB>(await openIdb(POINTER_DB, POINTER_STORE));
   const origTransaction = pointerDb.transaction.bind(pointerDb);
   pointerDb.transaction = (store: string, mode: IDBTransactionMode): FakeTx => {
     const tx = origTransaction(store, mode);
@@ -395,6 +419,8 @@ async function breakNextPointerPut(): Promise<() => void> {
     const origObjectStore = tx.objectStore.bind(tx);
     tx.objectStore = (): FakeStoreHandle => {
       const handle = origObjectStore(store);
+      // SAFETY: the override only needs to throw on the next put call; the
+      // arrow's never-returning body is assignable to FakeStoreHandle["put"].
       handle.put = ((..._args: unknown[]) => {
         throw new Error("commit writePointer boom");
       }) as FakeStoreHandle["put"];
@@ -561,15 +587,19 @@ describe("filterSourceFiles", () => {
 
 describe("ensureArtifact crash-safe OPFS flow", () => {
   let env: ReturnType<typeof installFakes>;
+  // SAFETY: globalThis.fetch is a real runtime global; cast snapshots it for afterEach restore.
   const realFetch = (globalThis as { fetch?: unknown }).fetch;
 
   beforeEach(() => {
     env = installFakes();
   });
   afterEach(() => {
+    // SAFETY: globalThis.fetch is a real runtime global; cast restores the snapshot.
     (globalThis as { fetch?: unknown }).fetch = realFetch;
+    // SAFETY: navigator.storage is optional at runtime; cast exposes it for conditional teardown.
     const nav = globalThis.navigator as { storage?: unknown } | undefined;
     if (nav) delete nav.storage;
+    // SAFETY: globalThis.indexedDB is set by installFakes; cast exposes it for teardown.
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 
@@ -598,6 +628,7 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
 
     let fetched = 0;
+    // SAFETY: globalThis.fetch is a real runtime global; cast exposes the slot to install the counting stub.
     (globalThis as { fetch: unknown }).fetch = async () => {
       fetched += 1;
       return { ok: true, status: 200, body: null, arrayBuffer: async () => new ArrayBuffer(0) };
@@ -735,15 +766,19 @@ describe("W10c a valid corpus stays byte-identical and re-readable through each 
   // pre-corrupting it in setup) and assert the bytes come back unchanged after
   // each failure, and that a follow-up read still serves it.
   let env: ReturnType<typeof installFakes>;
+  // SAFETY: globalThis.fetch is a real runtime global; cast snapshots it for afterEach restore.
   const realFetch = (globalThis as { fetch?: unknown }).fetch;
 
   beforeEach(() => {
     env = installFakes();
   });
   afterEach(() => {
+    // SAFETY: globalThis.fetch is a real runtime global; cast restores the snapshot.
     (globalThis as { fetch?: unknown }).fetch = realFetch;
+    // SAFETY: navigator.storage is optional at runtime; cast exposes it for conditional teardown.
     const nav = globalThis.navigator as { storage?: unknown } | undefined;
     if (nav) delete nav.storage;
+    // SAFETY: globalThis.indexedDB is set by installFakes; cast exposes it for teardown.
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 
@@ -754,6 +789,7 @@ describe("W10c a valid corpus stays byte-identical and re-readable through each 
     await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
 
     let fetched = 0;
+    // SAFETY: globalThis.fetch is a real runtime global; cast exposes the slot to install the counting stub.
     (globalThis as { fetch: unknown }).fetch = async () => {
       fetched += 1;
       return { ok: true, status: 200, body: null, arrayBuffer: async () => new ArrayBuffer(0) };
@@ -891,8 +927,10 @@ describe("W10c a valid corpus stays byte-identical and re-readable through each 
 describe("pointer round-trip through the pointer store", () => {
   beforeEach(() => installFakes());
   afterEach(() => {
+    // SAFETY: navigator.storage is optional at runtime; cast exposes it for conditional teardown.
     const nav = globalThis.navigator as { storage?: unknown } | undefined;
     if (nav) delete nav.storage;
+    // SAFETY: globalThis.indexedDB is set by installFakes; cast exposes it for teardown.
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 

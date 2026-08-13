@@ -94,19 +94,34 @@ function fail(message: string): never {
   throw new Error(`[quran-data] ${message}`);
 }
 
-function integer(value: unknown, label: string, min = 0): number {
+function integer(
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates untrusted JSON snapshot fields before they enter the domain
+  value: unknown,
+  label: string,
+  min = 0,
+): number {
+  // SAFETY: by short-circuit evaluation, (value as number) is only reached when Number.isSafeInteger(value) is true, so value is provably a number here.
   if (!Number.isSafeInteger(value) || (value as number) < min) {
     fail(`${label} must be an integer >= ${min}`);
   }
+  // SAFETY: the Number.isSafeInteger guard above passed (and fail() threw otherwise); value is now provably a finite integer.
   return value as number;
 }
 
-function nonemptyString(value: unknown, label: string): string {
+function nonemptyString(
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates untrusted JSON snapshot strings before they enter the domain
+  value: unknown,
+  label: string,
+): string {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- boundary-parser body: typeof string is the runtime test that distinguishes a string primitive from other JSON value kinds
   if (typeof value !== "string" || value.length === 0) fail(`${label} must be a non-empty string`);
   return value;
 }
 
-function sourceOf(raw: unknown): QuranDataSource {
+function sourceOf(
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates the untrusted JSON snapshot source triple before it enters the domain
+  raw: unknown,
+): QuranDataSource {
   if (!Array.isArray(raw) || raw.length !== 3) fail("source must have three fields");
   const source = [
     nonemptyString(raw[0], "source digest"),
@@ -139,9 +154,13 @@ function decodeDeltas(deltas: readonly number[]): readonly number[] {
   return Object.freeze(starts);
 }
 
-export function createQuranData(raw: unknown): QuranData {
+export function createQuranData(
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- public boundary parser: consumes the raw untrusted JSON snapshot and validates every field before constructing the domain model
+  raw: unknown,
+): QuranData {
   if (!Array.isArray(raw) || raw.length !== 8) fail("snapshot root must have eight fields");
-  const snapshot = raw as unknown as QuranDataSnapshot;
+  // SAFETY: the Array.isArray guard above proved raw is an array; QuranDataSnapshot indexes it by the QuranDataRoot numeric keys, which the eight-field length check guarantees are in range.
+  const snapshot = raw as QuranDataSnapshot;
   const source = sourceOf(snapshot[QuranDataRoot.Source]);
   const rows = snapshot[QuranDataRoot.Surahs];
   if (!Array.isArray(rows) || rows.length !== EXPECTED_SURAHS) {
@@ -151,7 +170,8 @@ export function createQuranData(raw: unknown): QuranData {
   let startGlobal = 1;
   const surahs = rows.map((rawRow, i) => {
     if (!Array.isArray(rawRow) || rawRow.length !== 9) fail(`invalid row for Surah ${i + 1}`);
-    const row = rawRow as unknown as SurahRow;
+    // SAFETY: the Array.isArray guard above proved rawRow is an array; the nine-element length check matches the SurahRow tuple arity.
+    const row = rawRow as SurahRow;
     const num = i + 1;
     const ayahCount = integer(row[SurahField.AyahCount], `Surah ${num} ayah count`, 1);
     const entry: CatalogEntry = Object.freeze({
@@ -206,10 +226,12 @@ export function createQuranData(raw: unknown): QuranData {
   });
   const starts = new Map<RangeKind, readonly number[]>();
   for (const kind of Object.values(RangeKind)) {
+    // SAFETY: rootByKind[kind] is one of the QuranDataRoot enum values (0-7), every one of which is a numeric key of QuranDataSnapshot.
     const rawSeries = snapshot[rootByKind[kind] as keyof QuranDataSnapshot];
     if (!Array.isArray(rawSeries) || rawSeries.length !== RANGE_COUNTS[kind]) {
       fail(`expected ${RANGE_COUNTS[kind]} ${kind} ranges`);
     }
+    // SAFETY: the Array.isArray check above proved rawSeries is an array; decodeDeltas re-validates each element via integer().
     const decoded = decodeDeltas(rawSeries as readonly number[]);
     if (decoded.at(-1)! > coordinates.rowCount) fail(`${kind} starts past the Quran`);
     starts.set(kind, decoded);

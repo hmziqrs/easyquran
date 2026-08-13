@@ -18,9 +18,13 @@ describe("verseKey / parseKey", () => {
   });
 
   it("returns a safe {1,1} sentinel for malformed keys instead of NaN", () => {
+    // SAFETY: deliberately bypassing the VerseKey brand to feed a malformed key; the literal is the exact invalid input under test.
     expect(parseKey("not-a-key" as never)).toEqual({ num: 1, n: 1 });
+    // SAFETY: deliberately bypassing the VerseKey brand to feed a malformed key; the literal is the exact invalid input under test.
     expect(parseKey("2" as never)).toEqual({ num: 1, n: 1 });
+    // SAFETY: deliberately bypassing the VerseKey brand to feed a malformed key; the literal is the exact invalid input under test.
     expect(parseKey("2:" as never)).toEqual({ num: 1, n: 1 });
+    // SAFETY: deliberately bypassing the VerseKey brand to feed a malformed key; the literal is the exact invalid input under test.
     expect(parseKey(":5" as never)).toEqual({ num: 1, n: 1 });
   });
 });

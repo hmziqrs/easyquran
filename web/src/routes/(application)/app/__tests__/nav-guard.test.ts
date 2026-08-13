@@ -21,16 +21,19 @@ const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
  * the Arabic-only helpers. Glob options must be inline object literals.
  */
 const components = {
+  // SAFETY: import.meta.glob with {query:'?raw', import:'default', eager:true} yields Record<string,string> of raw module sources
   ...(import.meta.glob("../../../**/*.svelte", {
     query: "?raw",
     import: "default",
     eager: true,
   }) as Record<string, string>),
+  // SAFETY: same glob invariant — raw eager default imports are string module sources
   ...(import.meta.glob("../../../../lib/components/**/*.svelte", {
     query: "?raw",
     import: "default",
     eager: true,
   }) as Record<string, string>),
+  // SAFETY: same glob invariant — raw eager default imports are string module sources
   ...(import.meta.glob("../../../../lib/search/**/*.ts", {
     query: "?raw",
     import: "default",
@@ -55,12 +58,12 @@ function handBuiltAppNavHits(src: string): string[] {
 
 describe("reader navigation regression guard", () => {
   it("the centralized route-aware helpers are exported from $lib/data/quran", () => {
-    expect(typeof surahPathFor).toBe("function");
-    expect(typeof surahLocalPagePathFor).toBe("function");
-    expect(typeof surahAyahPathFor).toBe("function");
-    expect(typeof globalPagePathFor).toBe("function");
-    expect(typeof juzPathFor).toBe("function");
-    expect(typeof surahRouteContext).toBe("function");
+    expect(surahPathFor).toBeInstanceOf(Function);
+    expect(surahLocalPagePathFor).toBeInstanceOf(Function);
+    expect(surahAyahPathFor).toBeInstanceOf(Function);
+    expect(globalPagePathFor).toBeInstanceOf(Function);
+    expect(juzPathFor).toBeInstanceOf(Function);
+    expect(surahRouteContext).toBeInstanceOf(Function);
   });
 
   it("no component or palette source references the Arabic-only path helpers directly", () => {
