@@ -64,8 +64,8 @@ function load(): Prefs {
   const accent = stored?.accent;
   return {
     theme: asLiteral(stored?.theme, ["dark", "light"] as const) ?? base.theme,
-    surface: SURFACES.some((s) => s.id === surface) ? (surface as SurfaceId) : base.surface,
-    accent: ACCENTS.some((a) => a.id === accent) ? (accent as AccentId) : base.accent,
+    surface: SURFACES.find((s) => s.id === surface)?.id ?? base.surface,
+    accent: ACCENTS.find((a) => a.id === accent)?.id ?? base.accent,
     custom: cleanCustom(stored?.custom),
     instantResume: stored?.instantResume === true,
   };
