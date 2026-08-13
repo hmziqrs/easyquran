@@ -5,6 +5,10 @@
 FROM node:24-slim AS build
 WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@11.15.1 --activate
+# node:24-slim ships no system CA certificates. vite-plus (Rust HTTP client) and
+# adapter-node prerender make HTTPS calls during the build that fail without them:
+# `vp build` panics / prerender hangs ~50s then exits 1.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY patches/ ./patches/
