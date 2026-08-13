@@ -11,7 +11,7 @@
   import { footerLinksFor } from "$lib/i18n/footer-links";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
-  import type { LocaleLink } from "$lib/i18n/marketing-copy";
+  import { marketingHomeHref, type LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { reader } from "$lib/stores/reader.svelte";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
@@ -125,7 +125,7 @@
     collapsible
     copy={copy.nav}
     brandCopy={{ homeLabel: copy.nav.homeLabel(SITE.name) }}
-    brandHomeHref={currentReaderHref}
+    brandHomeHref={marketingHomeHref(copy.locale)}
     {localeLinks}
     direction={copy.direction}
   />

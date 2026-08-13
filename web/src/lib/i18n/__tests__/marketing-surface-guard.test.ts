@@ -70,4 +70,11 @@ describe("marketing localization boundaries", () => {
     expect(landing).toContain("marketingReaderHomeHref(locale)");
     expect(landing).not.toMatch(/href=["']\/(?:en|ar)?\/?app/);
   });
+
+  it("routes reader logo links to localized marketing home", () => {
+    const readerLayout = source("../../../routes/(application)/app/+layout.svelte");
+
+    expect(readerLayout).toContain('brandHomeHref={marketingHomeHref(copy.locale)}');
+    expect(readerLayout).not.toContain("brandHomeHref={currentReaderHref}");
+  });
 });
