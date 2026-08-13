@@ -1,7 +1,8 @@
-import { error, redirect } from "@sveltejs/kit";
+import { error } from "@sveltejs/kit";
 import { surahLocalPagePath } from "$lib/data/quran";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahRouteData } from "$lib/server/quran-surah-page";
+import { requireLocalPageBeyondFirst, requireSurah } from "$lib/server/reader-route-guards";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;
@@ -16,13 +17,8 @@ export function entries() {
 }
 
 export const load: PageServerLoad = ({ params }) => {
-  const surah = QURAN_DATA.surahBySlug(params.surah);
-  if (!surah) throw error(404, `Unknown surah: ${params.surah}`);
-  const localPage = Number(params.localPage);
-  if (!Number.isSafeInteger(localPage) || localPage < 1) {
-    throw error(404, `Unknown Surah page: ${params.localPage}`);
-  }
-  if (localPage === 1) throw redirect(308, surahLocalPagePath(surah, 1));
+  const surah = requireSurah(params.surah);
+  const localPage = requireLocalPageBeyondFirst(params.localPage, surahLocalPagePath(surah, 1));
   const data = readSurahRouteData(surah, localPage);
   if (!data) throw error(404, `Unknown Surah page: ${params.localPage}`);
   return data;

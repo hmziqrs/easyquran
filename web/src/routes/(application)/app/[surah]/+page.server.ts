@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahRouteData } from "$lib/server/quran-surah-page";
+import { requireSurah } from "$lib/server/reader-route-guards";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;
@@ -10,9 +11,8 @@ export function entries() {
 }
 
 export const load: PageServerLoad = ({ params }) => {
-  const cat = QURAN_DATA.surahBySlug(params.surah);
-  if (!cat) {
-    throw error(404, `Unknown surah: ${params.surah}`);
-  }
-  return readSurahRouteData(cat, 1)!;
+  const surah = requireSurah(params.surah);
+  const data = readSurahRouteData(surah, 1);
+  if (!data) throw error(404, `Unknown surah: ${params.surah}`);
+  return data;
 };

@@ -1,24 +1,13 @@
-import { error } from "@sveltejs/kit";
-import { translationIdFromSegments } from "$lib/data/quran";
-import { findCatalogueEntry, resolveSourceCatalogue } from "$lib/quran/catalogue";
 import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
+import { markTranslationPending, requireRangeIndex } from "$lib/server/reader-route-guards";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = false;
 
 export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
-  const index = Number(params.n);
-  if (!Number.isInteger(index) || index < 1 || index > 604) {
-    throw error(404, `Unknown page: ${params.n}`);
-  }
-  const sourceId = translationIdFromSegments(params.lang, params.translator);
-  const catalogue = await resolveSourceCatalogue();
-  if (catalogue.length > 0 && !findCatalogueEntry(catalogue, sourceId)) {
-    throw error(404, `Unknown translation: ${params.lang}.${params.translator}`);
-  }
+  const index = requireRangeIndex("page", params.n);
+  // The unknown-translation 404 lives in loadTranslationRangeData, which gates every translated load.
   const data = await loadTranslationRangeData("page", index, params.lang, params.translator, fetch);
-  if (data.ayahs.length === 0) {
-    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
-  }
+  markTranslationPending(setHeaders, data.ayahs);
   return data;
 };

@@ -1,17 +1,14 @@
 import { error } from "@sveltejs/kit";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
+import { markTranslationPending, requireSurah } from "$lib/server/reader-route-guards";
 import type { PageServerLoad } from "./$types";
 
 export const prerender = false;
 
 export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
-  const surah = QURAN_DATA.surahBySlug(params.surah);
-  if (!surah) throw error(404, `Unknown surah: ${params.surah}`);
+  const surah = requireSurah(params.surah);
   const data = await loadTranslationSurahRouteData(surah, 1, params.lang, params.translator, fetch);
   if (!data) throw error(404, `Unknown Surah page: 1`);
-  if (data.pageData.ayahs.length === 0) {
-    setHeaders({ "x-eq-translation-pending": "1", "x-robots-tag": "noindex, follow" });
-  }
+  markTranslationPending(setHeaders, data.pageData.ayahs);
   return data;
 };

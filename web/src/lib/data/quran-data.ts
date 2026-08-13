@@ -82,7 +82,7 @@ export interface QuranData {
 export const SURAH_COUNT = 114;
 const EXPECTED_SURAHS = SURAH_COUNT;
 const EXPECTED_AYAHS = 6236;
-const EXPECTED_RANGE_COUNTS: Readonly<Record<RangeKind, number>> = Object.freeze({
+export const RANGE_COUNTS: Readonly<Record<RangeKind, number>> = Object.freeze({
   [RangeKind.Page]: 604,
   [RangeKind.Juz]: 30,
   [RangeKind.Ruku]: 556,
@@ -207,8 +207,8 @@ export function createQuranData(raw: unknown): QuranData {
   const starts = new Map<RangeKind, readonly number[]>();
   for (const kind of Object.values(RangeKind)) {
     const rawSeries = snapshot[rootByKind[kind] as keyof QuranDataSnapshot];
-    if (!Array.isArray(rawSeries) || rawSeries.length !== EXPECTED_RANGE_COUNTS[kind]) {
-      fail(`expected ${EXPECTED_RANGE_COUNTS[kind]} ${kind} ranges`);
+    if (!Array.isArray(rawSeries) || rawSeries.length !== RANGE_COUNTS[kind]) {
+      fail(`expected ${RANGE_COUNTS[kind]} ${kind} ranges`);
     }
     const decoded = decodeDeltas(rawSeries as readonly number[]);
     if (decoded.at(-1)! > coordinates.rowCount) fail(`${kind} starts past the Quran`);
