@@ -2,7 +2,6 @@ import {
   asArray,
   asBooleanRecord,
   asLiteral,
-  asNullableObject,
   asNumber,
   asObject,
   asStringRecord,
@@ -50,28 +49,30 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
   const notesObj = asObject(stored.notes);
   if (notesObj) out.notes = asStringRecord(notesObj);
 
-  const lrKind = asNullableObject(stored.lastRead);
-  if (lrKind === "null") {
+  if (stored.lastRead === null) {
     out.lastRead = null;
-  } else if (lrKind === "object") {
-    const lr = asObject(stored.lastRead)!;
-    const num = asNumber(lr.num, -Infinity, Infinity);
-    const n = asNumber(lr.n, -Infinity, Infinity);
-    const sourceId = typeof lr.sourceId === "string" ? lr.sourceId : undefined;
-    if (num !== undefined && n !== undefined)
-      out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
+  } else {
+    const lr = asObject(stored.lastRead);
+    if (lr) {
+      const num = asNumber(lr.num, -Infinity, Infinity);
+      const n = asNumber(lr.n, -Infinity, Infinity);
+      const sourceId = typeof lr.sourceId === "string" ? lr.sourceId : undefined;
+      if (num !== undefined && n !== undefined)
+        out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
+    }
   }
 
-  const anchorKind = asNullableObject(stored.lastReadAnchor);
-  if (anchorKind === "null") {
+  if (stored.lastReadAnchor === null) {
     out.lastReadAnchor = null;
-  } else if (anchorKind === "object") {
-    const a = asObject(stored.lastReadAnchor)!;
-    const verseKey = typeof a.verseKey === "string" ? a.verseKey : undefined;
-    const localPage = asNumber(a.localPage, 1, Number.POSITIVE_INFINITY);
-    const ratio = asNumber(a.ratio, 0, 1);
-    if (verseKey && localPage !== undefined && ratio !== undefined)
-      out.lastReadAnchor = { verseKey, localPage, ratio };
+  } else {
+    const a = asObject(stored.lastReadAnchor);
+    if (a) {
+      const verseKey = typeof a.verseKey === "string" ? a.verseKey : undefined;
+      const localPage = asNumber(a.localPage, 1, Number.POSITIVE_INFINITY);
+      const ratio = asNumber(a.ratio, 0, 1);
+      if (verseKey && localPage !== undefined && ratio !== undefined)
+        out.lastReadAnchor = { verseKey, localPage, ratio };
+    }
   }
 
   if (Array.isArray(stored.recents)) {
