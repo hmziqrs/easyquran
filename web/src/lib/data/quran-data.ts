@@ -46,6 +46,18 @@ export type RangeKind = (typeof RangeKind)[keyof typeof RangeKind];
 
 export type QuranDataSource = readonly [digest: string, sourceVersion: string, license: string];
 
+interface QuranDataJsonObject {
+  readonly [key: string]: QuranDataJson;
+}
+
+type QuranDataJson =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly QuranDataJson[]
+  | QuranDataJsonObject;
+
 export interface QuranData {
   readonly source: QuranDataSource;
   readonly surahs: readonly CatalogEntry[];
@@ -80,34 +92,21 @@ function fail(message: string): never {
   throw new Error(`[quran-data] ${message}`);
 }
 
-function integer(
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates untrusted JSON snapshot fields before they enter the domain
-  value: unknown,
-  label: string,
-  min = 0,
-): number {
-  // SAFETY: by short-circuit evaluation, (value as number) is only reached when Number.isSafeInteger(value) is true, so value is provably a number here.
-  if (!Number.isSafeInteger(value) || (value as number) < min) {
+function integer(value: QuranDataJson | undefined, label: string, min = 0): number {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- Quran JSON number discriminator at this boundary parser
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min) {
     fail(`${label} must be an integer >= ${min}`);
   }
-  // SAFETY: the Number.isSafeInteger guard above passed (and fail() threw otherwise); value is now provably a finite integer.
-  return value as number;
+  return value;
 }
 
-function nonemptyString(
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates untrusted JSON snapshot strings before they enter the domain
-  value: unknown,
-  label: string,
-): string {
+function nonemptyString(value: QuranDataJson | undefined, label: string): string {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- boundary-parser body: typeof string is the runtime test that distinguishes a string primitive from other JSON value kinds
   if (typeof value !== "string" || value.length === 0) fail(`${label} must be a non-empty string`);
   return value;
 }
 
-function sourceOf(
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser: validates the untrusted JSON snapshot source triple before it enters the domain
-  raw: unknown,
-): QuranDataSource {
+function sourceOf(raw: QuranDataJson | undefined): QuranDataSource {
   if (!Array.isArray(raw) || raw.length !== 3) fail("source must have three fields");
   const source = [
     nonemptyString(raw[0], "source digest"),
@@ -121,7 +120,7 @@ function sourceOf(
 function placeOf(code: number): Place {
   if (code === 0) return "meccan";
   if (code === 1) return "medinan";
-  return fail(`unknown place code ${code}`);
+  return fail(`invalid place code ${code}`);
 }
 
 function bismillahOf(num: number): Bismillah {
@@ -130,9 +129,10 @@ function bismillahOf(num: number): Bismillah {
   return Bismillah.EmbeddedPrefix;
 }
 
-function decodeDeltas(deltas: readonly unknown[]): readonly number[] {
-  if (deltas.length === 0 || deltas[0] !== 1) fail("range series must start at global ayah 1");
-  const starts = [deltas[0]];
+function decodeDeltas(deltas: readonly QuranDataJson[]): readonly number[] {
+  const first = deltas[0];
+  if (deltas.length === 0 || first !== 1) fail("range series must start at global ayah 1");
+  const starts = [first];
   for (let i = 1; i < deltas.length; i += 1) {
     const delta = integer(deltas[i], `range delta ${i}`, 1);
     starts.push(starts[i - 1]! + delta);
@@ -140,12 +140,9 @@ function decodeDeltas(deltas: readonly unknown[]): readonly number[] {
   return Object.freeze(starts);
 }
 
-export function createQuranData(
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- public boundary parser: consumes the raw untrusted JSON snapshot and validates every field before constructing the domain model
-  raw: unknown,
-): QuranData {
+export function createQuranData(raw: QuranDataJson): QuranData {
   if (!Array.isArray(raw) || raw.length !== 8) fail("snapshot root must have eight fields");
-  const snapshot: readonly unknown[] = raw;
+  const snapshot: readonly QuranDataJson[] = raw;
   const source = sourceOf(snapshot[QuranDataRoot.Source]);
   const rawRows = snapshot[QuranDataRoot.Surahs];
   if (!Array.isArray(rawRows) || rawRows.length !== EXPECTED_SURAHS) {
@@ -153,12 +150,12 @@ export function createQuranData(
       `expected ${EXPECTED_SURAHS} Surah rows, got ${Array.isArray(rawRows) ? rawRows.length : 0}`,
     );
   }
-  const rows: readonly unknown[] = rawRows;
+  const rows: readonly QuranDataJson[] = rawRows;
 
   let startGlobal = 1;
   const surahs = rows.map((rawRow, i) => {
     if (!Array.isArray(rawRow) || rawRow.length !== 9) fail(`invalid row for Surah ${i + 1}`);
-    const row: readonly unknown[] = rawRow;
+    const row: readonly QuranDataJson[] = rawRow;
     const num = i + 1;
     const ayahCount = integer(row[SurahField.AyahCount], `Surah ${num} ayah count`, 1);
     const entry: CatalogEntry = Object.freeze({
@@ -217,7 +214,7 @@ export function createQuranData(
     if (!Array.isArray(rawSeries) || rawSeries.length !== RANGE_COUNTS[kind]) {
       fail(`expected ${RANGE_COUNTS[kind]} ${kind} ranges`);
     }
-    const series: readonly unknown[] = rawSeries;
+    const series: readonly QuranDataJson[] = rawSeries;
     const decoded = decodeDeltas(series);
     if (decoded.at(-1)! > coordinates.rowCount) fail(`${kind} starts past the Quran`);
     starts.set(kind, decoded);
@@ -334,11 +331,11 @@ export function createQuranData(
       if (!Array.isArray(rawSajdaRows) || rawSajdaRows.length !== 15) {
         fail("expected 15 sajda markers");
       }
-      const sajdaRows: readonly unknown[] = rawSajdaRows;
+      const sajdaRows: readonly QuranDataJson[] = rawSajdaRows;
       sajdaCache = Object.freeze(
         sajdaRows.map((rawRow, index) => {
           if (!Array.isArray(rawRow) || rawRow.length !== 3) fail(`invalid sajda row ${index + 1}`);
-          const row: readonly unknown[] = rawRow;
+          const row: readonly QuranDataJson[] = rawRow;
           const surah = integer(row[SajdaField.Surah], `sajda ${index + 1} surah`, 1);
           const ayah = integer(row[SajdaField.Ayah], `sajda ${index + 1} ayah`, 1);
           const kindCode = integer(row[SajdaField.KindCode], `sajda ${index + 1} kind`, 0);
