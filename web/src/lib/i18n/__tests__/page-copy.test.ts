@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vite-plus/test";
+
 import { resolveAboutCopy } from "$lib/i18n/about-copy";
 import { resolveContactCopy } from "$lib/i18n/contact-copy";
 import { resolveFaqCopy } from "$lib/i18n/faq-copy";
 import { resolvePrivacyCopy, resolvePrivacySummary } from "$lib/i18n/privacy-copy";
 import { resolveTermsCopy } from "$lib/i18n/terms-copy";
+import { describe, expect, it } from "vite-plus/test";
 
 function source(path: string): string {
   return readFileSync(new URL(path, import.meta.url), "utf8");

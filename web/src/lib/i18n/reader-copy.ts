@@ -1,6 +1,5 @@
-import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
-import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
 import type { FooterLinkLabels } from "$lib/i18n/footer-links";
+import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import {
   footer_about,
   footer_blurb,
@@ -160,6 +159,7 @@ import {
   reader_unsupported,
   reader_your_note,
 } from "$lib/i18n/m/reader";
+import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
 import { getLocale } from "$lib/paraglide/runtime.js";
 
 type BrowseMode = "surah" | "ayah" | "juz" | "page";

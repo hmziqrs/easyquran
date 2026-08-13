@@ -1,3 +1,4 @@
+import { createAccountClient, type AccountClient } from "$lib/auth/account-client";
 import {
   authClient,
   decodeUserProfile,
@@ -6,8 +7,6 @@ import {
   type SessionProbeResult,
   type UserProfile,
 } from "$lib/auth/auth-client";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import {
   ACCOUNT_EXISTS_RESEND,
   ACCOUNT_EXISTS_RESET,
@@ -20,6 +19,8 @@ import {
   TWO_FA_NEXT,
   VERIFY_EMAIL_NEXT,
 } from "$lib/auth/auth-copy";
+import { authState } from "$lib/auth/auth-state.svelte";
+import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import {
   createOAuthFlow,
   type OAuthFlow,
@@ -31,10 +32,6 @@ import {
   type PasskeyFlow,
   type PasskeyFlowDeps,
 } from "$lib/auth/passkey-flow.svelte";
-import {
-  createAccountClient,
-  type AccountClient,
-} from "$lib/auth/account-client";
 
 export interface FlowStateLike {
   transition(ctx: AuthTransitionContext): Promise<void>;
@@ -848,16 +845,9 @@ export function createLogoutFlow(deps: FlowDeps = {}): LogoutFlow {
   return new LogoutFlow(deps.client ?? authClient, deps.state ?? authState);
 }
 
-const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = [
-  "google",
-  "apple",
-  "facebook",
-  "github",
-];
+const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = ["google", "apple", "facebook", "github"];
 
-export function createOAuthFlows(
-  deps: OAuthFlowDeps = {},
-): Record<OAuthProvider, OAuthFlow> {
+export function createOAuthFlows(deps: OAuthFlowDeps = {}): Record<OAuthProvider, OAuthFlow> {
   const out = {} as Record<OAuthProvider, OAuthFlow>;
   for (const provider of OAUTH_PROVIDERS) {
     out[provider] = createOAuthFlow(provider, deps);

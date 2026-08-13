@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
 
-import { createPasskeyFlow, type PasskeyFlowStateLike } from "$lib/auth/passkey-flow.svelte";
 import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import { createPasskeyFlow, type PasskeyFlowStateLike } from "$lib/auth/passkey-flow.svelte";
 
 const PROFILE: UserProfile = {
   id: 5,
@@ -186,9 +186,7 @@ describe("PasskeyFlow login cancellation is benign", () => {
   it("does not call /login/finish after cancellation", async () => {
     const client = mockClient();
     client.unsafeRequest.mockResolvedValueOnce(ok(fakeLoginBegin()));
-    const creds = fakeCredentialsGet(() =>
-      Promise.reject(new DOMException("abort", "AbortError")),
-    );
+    const creds = fakeCredentialsGet(() => Promise.reject(new DOMException("abort", "AbortError")));
     const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
     await flow.login();
     const paths = (client.unsafeRequest.mock.calls as [string, unknown][]).map(([p]) => p);

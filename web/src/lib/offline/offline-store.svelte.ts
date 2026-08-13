@@ -1,7 +1,7 @@
 import { browser } from "$app/environment";
-import { readJSON, writeJSON } from "$lib/storage";
-import { decodePack } from "$lib/offline/pack";
 import { clearActivePack, getActivePack, setActivePack } from "$lib/offline/meta";
+import { decodePack } from "$lib/offline/pack";
+import { readJSON, writeJSON } from "$lib/storage";
 
 const MIRROR_KEY = "easyquran.offline.pack";
 

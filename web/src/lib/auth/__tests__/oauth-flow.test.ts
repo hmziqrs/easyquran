@@ -2,8 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
 
-import { createOAuthFlow, OAUTH_START_FAILED, type OAuthFlowStateLike, type OAuthProvider } from "$lib/auth/oauth-flow.svelte";
 import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import {
+  createOAuthFlow,
+  OAUTH_START_FAILED,
+  type OAuthFlowStateLike,
+  type OAuthProvider,
+} from "$lib/auth/oauth-flow.svelte";
 import { consumeReturnTarget, getReturnTarget } from "$lib/auth/return-target";
 
 const PROFILE: UserProfile = {

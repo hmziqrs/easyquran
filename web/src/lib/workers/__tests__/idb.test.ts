@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { idbDelete, idbGet, idbPut, openIdb, runTxVoid } from "$lib/workers/idb";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 interface FakeTx {
   aborted: boolean;

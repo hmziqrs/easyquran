@@ -1,4 +1,5 @@
 import type { CatalogEntry } from "$lib/data/quran-types";
+
 import { SURAH_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
 import { arabicTermsFor, referenceNumbers, stripTrailingRef, termsFor } from "../query";

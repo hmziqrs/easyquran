@@ -12,8 +12,8 @@
 //   node scripts/audit-i18n-chunks.ts --report   # print every surface, never fail
 
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { gzipSync } from "node:zlib";
 import { join, relative, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 
 const WEB_ROOT = resolve(import.meta.dirname, "..");
 const CLIENT_DIR = join(WEB_ROOT, "build/client");

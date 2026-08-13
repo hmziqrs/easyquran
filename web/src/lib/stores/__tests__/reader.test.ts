@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vite-plus/test";
 import { flushSync } from "svelte";
+import { describe, it, expect } from "vite-plus/test";
+
 import { createReader, type ReaderApi } from "../reader.svelte";
 import { observeVersesFor } from "./reader-reactivity.probe.svelte";
 

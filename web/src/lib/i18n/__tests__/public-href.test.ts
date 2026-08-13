@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
 import { publicHref } from "$lib/i18n/public-href";
+import { describe, expect, it } from "vite-plus/test";
 
 describe("public localized href resolution", () => {
   it("keeps bounded origin-relative localized paths intact", () => {

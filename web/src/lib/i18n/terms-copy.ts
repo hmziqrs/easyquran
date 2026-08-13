@@ -1,6 +1,5 @@
 import type { LegalPageCopy } from "$lib/i18n/legal-copy";
 import { resolveLegalChrome } from "$lib/i18n/legal-copy";
-import type { MarketingLocale } from "$lib/i18n/marketing-copy";
 import {
   legal_terms_acceptance_body,
   legal_terms_acceptance_heading,
@@ -24,6 +23,7 @@ import {
   legal_terms_use_body,
   legal_terms_use_heading,
 } from "$lib/i18n/m/terms";
+import type { MarketingLocale } from "$lib/i18n/marketing-copy";
 
 /** Terms of service copy. Imported only by the terms route. */
 export function resolveTermsCopy(locale: MarketingLocale): LegalPageCopy {

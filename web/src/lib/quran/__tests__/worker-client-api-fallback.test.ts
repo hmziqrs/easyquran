@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { LOCAL_BOOT_BUDGET_MS } from "$lib/quran/fetch";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
-import { LOCAL_BOOT_BUDGET_MS } from "$lib/quran/fetch";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({
   QURAN: { apiBase: "https://api.test/quran" },

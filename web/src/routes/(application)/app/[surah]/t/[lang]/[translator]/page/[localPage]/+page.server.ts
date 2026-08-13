@@ -1,4 +1,3 @@
-import { error } from "@sveltejs/kit";
 import { translationSurahPath } from "$lib/data/quran";
 import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
 import {
@@ -6,6 +5,8 @@ import {
   requireLocalPageBeyondFirst,
   requireSurah,
 } from "$lib/server/reader-route-guards";
+import { error } from "@sveltejs/kit";
+
 import type { PageServerLoad } from "./$types";
 
 export const prerender = false;

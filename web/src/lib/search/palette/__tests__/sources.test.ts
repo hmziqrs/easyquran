@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
-import { createQuranData, type QuranData } from "$lib/data/quran-data";
 import { surahRouteContext, type SurahRouteContext } from "$lib/data/quran";
+import { createQuranData, type QuranData } from "$lib/data/quran-data";
+
 import { PaletteGroups } from "../groups";
 import { parseQuery } from "../query";
 import {

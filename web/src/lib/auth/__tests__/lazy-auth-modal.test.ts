@@ -10,10 +10,7 @@ const LAZY = "AuthModal.svelte";
 const basename = (path: string): string => path.split("/").pop() ?? path;
 
 const referrers = Object.entries(sources).filter(
-  ([path, src]) =>
-    basename(path) !== LAZY &&
-    !path.includes("__tests__") &&
-    src.includes(LAZY),
+  ([path, src]) => basename(path) !== LAZY && !path.includes("__tests__") && src.includes(LAZY),
 );
 
 describe("auth modal stays out of the initial bundle", () => {
@@ -41,20 +38,13 @@ describe("auth modal stays out of the initial bundle", () => {
     );
     expect(entry, "AuthModalShell.svelte should exist").toBeDefined();
     const imports = (entry![1].match(/^\s*import\s.*$/gm) ?? []).join("\n");
-    for (const heavy of [
-      "bits-ui",
-      "/flows.svelte",
-      "AuthModal.svelte",
-      "$lib/auth/components",
-    ]) {
+    for (const heavy of ["bits-ui", "/flows.svelte", "AuthModal.svelte", "$lib/auth/components"]) {
       expect(imports, `AuthModalShell.svelte must not import ${heavy}`).not.toContain(heavy);
     }
   });
 
   it("auth field inputs render at h-11 to match the submit button", () => {
-    const field = Object.entries(sources).find(
-      ([path]) => basename(path) === "AuthField.svelte",
-    );
+    const field = Object.entries(sources).find(([path]) => basename(path) === "AuthField.svelte");
     expect(field, "AuthField.svelte should exist").toBeDefined();
     expect(field![1], "AuthField must pass h-11 to its Input").toContain("h-11");
   });

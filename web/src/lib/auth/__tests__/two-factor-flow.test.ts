@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import { createTwoFactorFlow } from "$lib/auth/flows.svelte";
 import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import { createTwoFactorFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
 const PROFILE: UserProfile = {

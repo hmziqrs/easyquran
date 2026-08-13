@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { QuranSourceId } from "$lib/data/quran-types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const hasTranslation = vi.fn<(source: string) => Promise<boolean>>();
 const ensureTranslation = vi.fn<(source: string) => Promise<void>>();

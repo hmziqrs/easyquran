@@ -1,6 +1,7 @@
 export const prerender = true;
 
 import { htmlToMarkdown, pagePath, textVariantEntries } from "$lib/seo/render";
+
 import type { RequestHandler } from "./$types";
 
 export const entries = textVariantEntries;

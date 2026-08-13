@@ -1,6 +1,9 @@
 import { QURAN } from "$lib/config/site";
 import { isArabicSourceId } from "$lib/data/quran-types";
 import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "$lib/data/quran-types";
+
+import { fetchJsonWithTimeout, MalformedDataError } from "./fetch";
+import { fetchRangeChunks } from "./range-fetch";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
 import {
@@ -12,8 +15,6 @@ import {
   unwrapEnvelope,
   type AyahCoordinateValidator,
 } from "./wire";
-import { fetchJsonWithTimeout, MalformedDataError } from "./fetch";
-import { fetchRangeChunks } from "./range-fetch";
 
 function requireBase(): string {
   if (!QURAN.apiBase) throw new Error("quran api base not configured (PUBLIC_QURAN_API_BASE)");

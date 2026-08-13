@@ -1,6 +1,7 @@
 import type { SurahRouteContext } from "$lib/data/quran";
 import type { QuranData } from "$lib/data/quran-data";
 import { loadQuranData } from "$lib/data/quran-data-client";
+
 import { parseQuery } from "./query";
 import {
   DEFAULT_SOURCE_LIMIT,

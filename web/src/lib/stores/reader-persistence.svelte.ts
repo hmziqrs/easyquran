@@ -11,6 +11,7 @@ import {
   trailingDebounce,
   writeJSON,
 } from "$lib/storage";
+
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -98,8 +99,7 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
       if (!entry) continue;
       const furthestAyah = asNumber(entry.furthestAyah, 1, Number.POSITIVE_INFINITY);
       const ts = asNumber(entry.ts, 0, Number.POSITIVE_INFINITY);
-      if (furthestAyah !== undefined && ts !== undefined)
-        progress[num] = { furthestAyah, ts };
+      if (furthestAyah !== undefined && ts !== undefined) progress[num] = { furthestAyah, ts };
     }
     out.progress = progress;
   }
@@ -142,8 +142,30 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       dirty = true;
       return;
     }
-    const { v, current, fontSize, mode, bookmarks, notes, lastRead, lastReadAnchor, recents, progress } = core.s;
-    writeJSON(STORAGE_KEY, { v, current, fontSize, mode, bookmarks, notes, lastRead, lastReadAnchor, recents, progress });
+    const {
+      v,
+      current,
+      fontSize,
+      mode,
+      bookmarks,
+      notes,
+      lastRead,
+      lastReadAnchor,
+      recents,
+      progress,
+    } = core.s;
+    writeJSON(STORAGE_KEY, {
+      v,
+      current,
+      fontSize,
+      mode,
+      bookmarks,
+      notes,
+      lastRead,
+      lastReadAnchor,
+      recents,
+      progress,
+    });
   }
 
   return {
@@ -156,8 +178,7 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       const stored = decodeReader(readJSON(STORAGE_KEY));
       if (dirty) stored.current = undefined;
       applyPersisted(core.s, stored);
-      const adoptedMode =
-        modeOverride && modeOverride !== core.s.mode ? modeOverride : null;
+      const adoptedMode = modeOverride && modeOverride !== core.s.mode ? modeOverride : null;
       if (adoptedMode) core.s.mode = adoptedMode;
       applyReaderPresentation(core.s.mode, core.s.fontSize);
       teardowns.push(

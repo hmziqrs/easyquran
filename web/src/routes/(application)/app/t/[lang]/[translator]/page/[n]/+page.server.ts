@@ -1,5 +1,6 @@
 import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
 import { markTranslationPending, requireRangeIndex } from "$lib/server/reader-route-guards";
+
 import type { PageServerLoad } from "./$types";
 
 export const prerender = false;

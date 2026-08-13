@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vite-plus/test";
+import type { UiLocale } from "$lib/i18n/locales";
 import {
   MARKETING_PATHS,
   MARKETING_PUBLICATIONS,
@@ -9,7 +9,7 @@ import {
   type MarketingPageId,
   type MarketingPath,
 } from "$lib/i18n/marketing";
-import type { UiLocale } from "$lib/i18n/locales";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 const PAGE_IDS = ["home", "about", "faq", "contact", "privacy", "terms"] as const;
 

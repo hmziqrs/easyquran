@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { DownloadableSpec } from "$lib/data/quran-types";
+import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "$lib/workers/download";
+import { openIdb } from "$lib/workers/idb";
 import {
   ACTIVE_SUFFIX,
   activeFileName,
@@ -21,9 +23,7 @@ import {
   writePointer,
   type ActivePointer,
 } from "$lib/workers/opfs-cache";
-import type { DownloadableSpec } from "$lib/data/quran-types";
-import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "$lib/workers/download";
-import { openIdb } from "$lib/workers/idb";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const SPEC_ID = "en.sahih";
 function makeSpec(sizeBytes: number, id: string = SPEC_ID): DownloadableSpec {

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
-import { reroute } from "../../../hooks";
 import { parseReaderPath, parseReaderRoute } from "$lib/server/reader-route";
+import { describe, expect, it } from "vite-plus/test";
+
+import { reroute } from "../../../hooks";
 
 describe("localized reader semantic route parser", () => {
   it("accepts every canonical Arabic reader shape using Quran-data bounds", () => {

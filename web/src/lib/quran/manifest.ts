@@ -1,5 +1,6 @@
 import { QURAN } from "$lib/config/site";
 import type { ArtifactSpec } from "$lib/data/quran-types";
+
 import { FETCH_TIMEOUT_MS, fetchWithTimeout } from "./fetch";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "./source-plan";
 import { resolveSourceProfile } from "./view/source-profiles";

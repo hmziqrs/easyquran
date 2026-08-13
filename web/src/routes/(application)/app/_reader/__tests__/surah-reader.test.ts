@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { SurahLocalPageData } from "$lib/data/quran";
 import { mount, unmount } from "svelte";
 import type { Component, ComponentProps } from "svelte";
-import type { SurahLocalPageData } from "$lib/data/quran";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 // ---- hoisted doubles -------------------------------------------------------
 const {
@@ -69,9 +69,10 @@ function flushMicrotasks(n = 12): Promise<void> {
 
 const SURAH = { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة" };
 
-function pageData(opts: { localPage?: number; ayahs?: number; pageCount?: number } = {}):
-  // SurahLocalPageData with a minimal valid shape.
-  Record<string, unknown> {
+function pageData(
+  opts: { localPage?: number; ayahs?: number; pageCount?: number } = {},
+): // SurahLocalPageData with a minimal valid shape.
+Record<string, unknown> {
   const localPage = opts.localPage ?? 1;
   const count = opts.ayahs ?? 0;
   return {
@@ -222,9 +223,7 @@ describe("SurahReader W7 single-page empty recovery", () => {
     const empty = pageData({ ayahs: 0, pageCount: 1 });
     // Block invalidateAll so initialRetryInFlight stays true across triggers.
     let resolveInvalidate!: () => void;
-    invalidateAllSpy.mockReturnValue(
-      new Promise<void>((r) => (resolveInvalidate = r)),
-    );
+    invalidateAllSpy.mockReturnValue(new Promise<void>((r) => (resolveInvalidate = r)));
 
     mount(SurahReader, { target, props: propsFor(empty) });
     await flushMicrotasks();
@@ -491,9 +490,7 @@ describe("SurahReader W7 degradation state lifecycle", () => {
 
     flushRaf();
     await flushMicrotasks(20);
-    expect(next.querySelector('[role="status"]')?.textContent ?? "").toMatch(
-      /local offline copy/i,
-    );
+    expect(next.querySelector('[role="status"]')?.textContent ?? "").toMatch(/local offline copy/i);
   });
 
   // W7-R2-4: regression for the round-1 loadFailed-scoping fix — a successful

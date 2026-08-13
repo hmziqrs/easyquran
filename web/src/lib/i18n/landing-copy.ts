@@ -1,8 +1,3 @@
-import type {
-  LandingResolvedCopy,
-  MarketingLocale,
-  MarketingSeoCopy,
-} from "$lib/i18n/marketing-copy";
 import {
   landing_badge,
   landing_coming,
@@ -36,6 +31,11 @@ import {
   seo_home_image_alt,
   seo_home_title,
 } from "$lib/i18n/m/landing";
+import type {
+  LandingResolvedCopy,
+  MarketingLocale,
+  MarketingSeoCopy,
+} from "$lib/i18n/marketing-copy";
 
 /** Marketing home page copy. Imported only by the landing route, so it chunks with that route. */
 export function resolveLandingCopy(locale: MarketingLocale): LandingResolvedCopy {

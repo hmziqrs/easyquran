@@ -1,15 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { loadQuranData, resetQuranDataForTests } from "$lib/data/quran-data-client";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 function requestUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
   return input.url;
 }
-
-
 
 const snapshot = readFileSync(
   path.resolve(process.cwd(), "static/quran-meta/quran-data.json"),

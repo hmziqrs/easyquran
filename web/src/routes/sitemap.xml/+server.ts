@@ -1,22 +1,22 @@
 export const prerender = true;
 
-import { SITE } from "$lib/config/site";
 import {
   quranHrefForPrerenderEntry,
   readerPrerenderEntries,
 } from "$lib/components/i18n/reader-prerender.server";
+import { SITE } from "$lib/config/site";
 import { translationSegmentsFromId, type SurahRouteContext } from "$lib/data/quran";
+import rawTranslations from "$lib/data/translations.json";
 import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
 import { MARKETING_PUBLICATIONS, marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
+import type { QuranReaderHref } from "$lib/i18n/reader";
 import {
   marketingSeoLinks,
   readerCanonicalEntryPath,
   readerCanonicalPath,
   type ReaderEntryPage,
 } from "$lib/i18n/seo";
-import type { QuranReaderHref } from "$lib/i18n/reader";
 import { QURAN_DATA } from "$lib/server/quran-data";
-import rawTranslations from "$lib/data/translations.json";
 
 const XML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
   "&": "&amp;",
@@ -26,8 +26,7 @@ const XML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
   "'": "&apos;",
 });
 
-const escape = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => XML_ENTITIES[c] ?? c);
+const escape = (value: string) => value.replace(/[&<>"']/g, (c) => XML_ENTITIES[c] ?? c);
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 

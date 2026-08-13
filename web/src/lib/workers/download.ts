@@ -105,11 +105,7 @@ export async function downloadBytes(
         }
       }
       const buf = await res.arrayBuffer();
-      if (
-        spec.sizeBytes !== undefined &&
-        spec.sizeBytes > 0 &&
-        buf.byteLength > spec.sizeBytes
-      ) {
+      if (spec.sizeBytes !== undefined && spec.sizeBytes > 0 && buf.byteLength > spec.sizeBytes) {
         controller.abort();
         throw new Error(
           `${spec.label ?? spec.url}: body ${buf.byteLength} exceeds declared ${spec.sizeBytes} bytes`,

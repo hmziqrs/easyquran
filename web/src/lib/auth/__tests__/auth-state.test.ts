@@ -17,8 +17,8 @@ vi.mock("$lib/auth/auth-client", () => ({
   createAuthClient: () => clientMock,
 }));
 
-import { createAuthState } from "$lib/auth/auth-state.svelte";
 import type { AuthClient } from "$lib/auth/auth-client";
+import { createAuthState } from "$lib/auth/auth-state.svelte";
 
 const asClient = clientMock as unknown as AuthClient;
 

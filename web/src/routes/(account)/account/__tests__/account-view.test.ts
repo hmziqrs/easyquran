@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+
 import {
   ACCOUNT_PATH,
   ANONYMOUS_CTA_HREF,

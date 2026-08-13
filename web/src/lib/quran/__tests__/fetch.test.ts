@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   classifyApiFailure,
   classifyWorkerFailure,
@@ -10,6 +9,7 @@ import {
   MalformedDataError,
   ReadChainError,
 } from "$lib/quran/fetch";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 function mockAbortAwareFetch(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {

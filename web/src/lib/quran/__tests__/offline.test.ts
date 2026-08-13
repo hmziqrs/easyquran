@@ -6,7 +6,6 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-
 // Hoisted shared doubles. The boot engine imports a singleton quran store and
 // a singleton catalogueStore, so each test resets modules to get a fresh pair.
 const {
@@ -127,9 +126,7 @@ describe("bootOfflineEngine boot sequence", () => {
   it("refreshes the catalogue through the worker once validated metadata arrives", async () => {
     const scriptsBody = {
       data: {
-        scripts: [
-          { id: "uthmani", sizeBytes: 1, downloadUrl: "/_quran/scripts/uthmani.sqlite" },
-        ],
+        scripts: [{ id: "uthmani", sizeBytes: 1, downloadUrl: "/_quran/scripts/uthmani.sqlite" }],
       },
     };
     const sourcesBody = {
@@ -145,8 +142,7 @@ describe("bootOfflineEngine boot sequence", () => {
               name: "Efendi Nahi",
               translator: "Hasan Efendi Nahi",
               sizeBytes: 1175552,
-              downloadUrl:
-                "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite",
+              downloadUrl: "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite",
             },
           },
         ],

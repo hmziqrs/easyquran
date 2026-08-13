@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vite-plus/test";
+import type { QuranCoordinateRow } from "$lib/quran/sql";
 import {
   isCanonicalAyahCoordinate,
   validateCanonicalCoordinates,
 } from "$lib/quran/view/canonical-coordinates";
-import type { QuranCoordinateRow } from "$lib/quran/sql";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { describe, expect, it } from "vite-plus/test";
 
 const CANONICAL_QURAN_COORDINATES = QURAN_DATA.coordinates;
 

@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
 import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 afterEach(() => {
   document.body.innerHTML = "";

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
 import { detectEmbeddedPrefix, scalarSlice } from "$lib/quran/view/source-view";
+import { describe, expect, it } from "vite-plus/test";
 
 const REFERENCE = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
 const MULK_1 = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ تَبَـٰرَكَ ٱلَّذِى بِيَدِهِ ٱلْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَىْءٍ قَدِيرٌ";

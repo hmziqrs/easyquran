@@ -1,4 +1,3 @@
-import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 import {
   DEFAULT_UI_LOCALE,
   SUPPORTED_UI_LOCALES,
@@ -10,6 +9,7 @@ import {
   type UiDirection,
   type UiLocale,
 } from "$lib/i18n/locales";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 describe("UI locale registry", () => {
   it("contains only reviewed English and Arabic metadata", () => {

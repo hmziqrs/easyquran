@@ -56,11 +56,11 @@ pairs.sort((a, b) => {
   return a.key > b.key ? 1 : 0;
 });
 
-const legacyReader = pairs.find(
-  ({ key }) => key === "/app/__data.json" || key.startsWith("/app/"),
-);
+const legacyReader = pairs.find(({ key }) => key === "/app/__data.json" || key.startsWith("/app/"));
 if (legacyReader) {
-  throw new Error(`[offline] legacy unprefixed reader artifact leaked into build: ${legacyReader.key}`);
+  throw new Error(
+    `[offline] legacy unprefixed reader artifact leaked into build: ${legacyReader.key}`,
+  );
 }
 
 const entries: Record<string, number> = {};

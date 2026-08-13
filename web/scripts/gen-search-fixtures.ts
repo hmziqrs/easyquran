@@ -1,20 +1,21 @@
-import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+
 import type { QuranSourceId } from "../src/lib/data/quran-types.ts";
-import { DEFAULT_QURAN_SOURCE_PLAN } from "../src/lib/quran/source-plan.ts";
-import { createNodeQueryRunner } from "../src/lib/server/quran-node-query-runner.ts";
 import {
   buildCanonicalSearchCorpus,
   searchCanonicalCorpus,
 } from "../src/lib/quran/search/corpus.ts";
 import { DEFAULT_LIMIT, normalizeArabic, scalarLength } from "../src/lib/quran/search/normalize.ts";
 import { SearchHitKind } from "../src/lib/quran/search/types.ts";
+import { DEFAULT_QURAN_SOURCE_PLAN } from "../src/lib/quran/source-plan.ts";
 import { registeredSourceProfiles, sourceProfile } from "../src/lib/quran/view/source-profiles.ts";
-import { scalarSlice } from "../src/lib/quran/view/source-view.ts";
 import { loadQuranSource, readAllSourceRows } from "../src/lib/quran/view/source-runtime.ts";
+import { scalarSlice } from "../src/lib/quran/view/source-view.ts";
 import { QURAN_DATA } from "../src/lib/server/quran-data.ts";
+import { createNodeQueryRunner } from "../src/lib/server/quran-node-query-runner.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(scriptDir, "..");

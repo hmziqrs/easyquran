@@ -1,4 +1,5 @@
 import { browser } from "$app/environment";
+
 import type { ReaderMode } from "./reader-core.svelte";
 
 export function applyReaderPresentation(mode: ReaderMode, fontSize: number): void {

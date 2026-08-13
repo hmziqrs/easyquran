@@ -1,4 +1,5 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
+
 import type { QuranQueryRunner, SqlRow, SqlValue } from "$lib/quran/sql";
 
 export function createNodeQueryRunner(database: DatabaseSync): QuranQueryRunner {

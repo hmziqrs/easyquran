@@ -1,9 +1,10 @@
 import type { DownloadableSpec } from "$lib/data/quran-types";
+
 import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "./download";
-import { createIdbStore, hasOpfs, openIdb } from "./storage";
 import { idbDelete, idbGet, runTxVoid } from "./idb";
-import { stampLastUsed } from "./opfs-retention";
 import { idbError } from "./idb-error";
+import { stampLastUsed } from "./opfs-retention";
+import { createIdbStore, hasOpfs, openIdb } from "./storage";
 
 export const ROOT_DIR = "easyquran";
 export const QURAN_DB = "easyquran-quran";

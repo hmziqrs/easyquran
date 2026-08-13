@@ -1,4 +1,3 @@
-import { canonicalOpenerKind } from "$lib/quran/view/canonical";
 import {
   Bismillah,
   type CanonicalQuranCoordinates,
@@ -9,6 +8,7 @@ import {
   type SurahLocalPage,
   type VerseKey,
 } from "$lib/data/quran-types";
+import { canonicalOpenerKind } from "$lib/quran/view/canonical";
 
 export const QuranDataRoot = {
   Source: 0,

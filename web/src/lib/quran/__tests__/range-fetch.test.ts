@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
 import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
 import { MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "$lib/quran/fetch";
@@ -8,6 +7,7 @@ import {
   stitchRangeChunks,
   type RangeJsonFetcher,
 } from "$lib/quran/range-fetch";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 function norm(surah: number): SurahNormalization {
   return {
@@ -317,40 +317,43 @@ describe("five oversized juz through the shared range path", () => {
     return { ayahs: list, normalizations: [...bySurah.values()] };
   }
 
-  it.each(JUZ)("juz %i chunks to <=2 cap-sized requests and stitches contiguously", async (juz, from, to) => {
-    void juz;
-    const count = to - from + 1;
-    expect(count).toBeGreaterThan(RESPONSE_CAP); // sanity: this juz is oversized
+  it.each(JUZ)(
+    "juz %i chunks to <=2 cap-sized requests and stitches contiguously",
+    async (juz, from, to) => {
+      void juz;
+      const count = to - from + 1;
+      expect(count).toBeGreaterThan(RESPONSE_CAP); // sanity: this juz is oversized
 
-    const bounds = planRangeChunks(from, to);
-    const bodies = bounds.map(([f, t]) => ({ data: contiguousChunk(f, t) }));
-    const f = fetcherReturning(...bodies);
+      const bounds = planRangeChunks(from, to);
+      const bodies = bounds.map(([f, t]) => ({ data: contiguousChunk(f, t) }));
+      const f = fetcherReturning(...bodies);
 
-    const result = await fetchRangeChunks({
-      base: "https://x/api",
-      source: "en.x",
-      from,
-      to,
-      decode: decoder,
-      fetchImpl: f,
-    });
+      const result = await fetchRangeChunks({
+        base: "https://x/api",
+        source: "en.x",
+        from,
+        to,
+        decode: decoder,
+        fetchImpl: f,
+      });
 
-    // Out-of-cap request chunks to at most 2, each at most RESPONSE_CAP wide.
-    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls).toHaveLength(bounds.length);
-    expect(bounds.length).toBeLessThanOrEqual(2);
-    for (const [bf, bt] of bounds) {
-      expect(bt - bf + 1).toBeLessThanOrEqual(RESPONSE_CAP);
-    }
+      // Out-of-cap request chunks to at most 2, each at most RESPONSE_CAP wide.
+      const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls).toHaveLength(bounds.length);
+      expect(bounds.length).toBeLessThanOrEqual(2);
+      for (const [bf, bt] of bounds) {
+        expect(bt - bf + 1).toBeLessThanOrEqual(RESPONSE_CAP);
+      }
 
-    // Stitched result covers [from,to] exactly and contiguously.
-    expect(result.ayahs).toHaveLength(count);
-    expect(result.ayahs[0]!.globalIndex).toBe(from);
-    expect(result.ayahs.at(-1)!.globalIndex).toBe(to);
-    for (let i = 1; i < result.ayahs.length; i++) {
-      expect(result.ayahs[i]!.globalIndex).toBe(result.ayahs[i - 1]!.globalIndex + 1);
-    }
-  });
+      // Stitched result covers [from,to] exactly and contiguously.
+      expect(result.ayahs).toHaveLength(count);
+      expect(result.ayahs[0]!.globalIndex).toBe(from);
+      expect(result.ayahs.at(-1)!.globalIndex).toBe(to);
+      for (let i = 1; i < result.ayahs.length; i++) {
+        expect(result.ayahs[i]!.globalIndex).toBe(result.ayahs[i - 1]!.globalIndex + 1);
+      }
+    },
+  );
 
   it("merges byte-equivalent normalization when the chunk split falls inside one surah", async () => {
     // Force the planner's split point to land inside surah 1: both chunks
@@ -362,11 +365,18 @@ describe("five oversized juz through the shared range path", () => {
     expect(bounds).toHaveLength(2);
     const oneSurahAyahs = (a: number, b: number): Ayah[] => {
       const out: Ayah[] = [];
-      for (let g = a; g <= b; g++) out.push({ key: `1:${g}`, surah: 1, ayah: g, globalIndex: g, text: `t${g}` });
+      for (let g = a; g <= b; g++)
+        out.push({ key: `1:${g}`, surah: 1, ayah: g, globalIndex: g, text: `t${g}` });
       return out;
     };
-    const a: QuranRangeText = { ayahs: oneSurahAyahs(bounds[0]![0], bounds[0]![1]), normalizations: [norm(1)] };
-    const b: QuranRangeText = { ayahs: oneSurahAyahs(bounds[1]![0], bounds[1]![1]), normalizations: [norm(1)] };
+    const a: QuranRangeText = {
+      ayahs: oneSurahAyahs(bounds[0]![0], bounds[0]![1]),
+      normalizations: [norm(1)],
+    };
+    const b: QuranRangeText = {
+      ayahs: oneSurahAyahs(bounds[1]![0], bounds[1]![1]),
+      normalizations: [norm(1)],
+    };
     const f = fetcherReturning({ data: a }, { data: b });
 
     const result = await fetchRangeChunks({

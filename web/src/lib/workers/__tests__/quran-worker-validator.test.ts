@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-import type { QuranCoordinateRow } from "$lib/quran/sql";
 import { QuranSourceId } from "$lib/data/quran-types";
+import type { QuranCoordinateRow } from "$lib/quran/sql";
 import { QURAN_ROW_COUNT } from "$lib/workers/opfs-cache";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 // quran.worker.ts statically imports resolveSourceProfile, so the mock must be
 // in place before the worker module first loads. Default to the real resolver;
@@ -78,9 +78,9 @@ describe("assertStagedQuranContent content checks", () => {
     profileOverride.value = { canonicalRowCount: QURAN_ROW_COUNT - 1 };
     try {
       const validate = await realValidator();
-      expect(() =>
-        validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.TanzilUthmani),
-      ).toThrow(/profile row count mismatch/);
+      expect(() => validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.TanzilUthmani)).toThrow(
+        /profile row count mismatch/,
+      );
     } finally {
       profileOverride.value = null;
     }

@@ -7,6 +7,7 @@ import {
   readJSON,
   writeJSON,
 } from "$lib/storage";
+
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,

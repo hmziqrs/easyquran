@@ -1,5 +1,6 @@
-import { runOne, runQuery, type CanonicalQuranRow, type QuranQueryRunner } from "../sql.ts";
 import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
+
+import { runOne, runQuery, type CanonicalQuranRow, type QuranQueryRunner } from "../sql.ts";
 import { validateCanonicalCoordinates } from "./canonical-coordinates.ts";
 import type { QuranSourceProfile } from "./source-profiles.ts";
 import { createQuranSourceView, type QuranSourceView } from "./source-view.ts";

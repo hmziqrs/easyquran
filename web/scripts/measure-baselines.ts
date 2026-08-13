@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, statSync, existsSync, readdirSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { gzipSync, brotliCompressSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { gzipSync, brotliCompressSync } from "node:zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.resolve(__dirname, "..", "build");

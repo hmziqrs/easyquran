@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
 import { decodePack } from "$lib/offline/pack";
+import { describe, expect, it } from "vite-plus/test";
 
 function buildPack(map: Record<string, string>): string {
   const keys = Object.keys(map).sort();

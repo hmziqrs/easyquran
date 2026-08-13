@@ -4,6 +4,7 @@ import type {
   QuranReaderSource,
   SourceCatalogueEntry,
 } from "$lib/data/quran-types";
+
 import type { ResolvedManifest } from "./manifest";
 import type { SearchOpts } from "./search/types";
 

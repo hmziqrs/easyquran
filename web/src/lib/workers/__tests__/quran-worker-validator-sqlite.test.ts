@@ -1,7 +1,7 @@
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { QuranSourceId } from "$lib/data/quran-types";
 import { QURAN_ROW_COUNT } from "$lib/workers/opfs-cache";
+import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 // These tests exercise the REAL SQLite-opening validator path:
 // assertStagedQuranBytes -> openReadOnly (sqlite3_deserialize) -> wasm query runner
@@ -52,7 +52,7 @@ function serializeAfter(setup: (db: Database) => void): Uint8Array {
 function serializeQuranDb(rows: readonly BuildRow[]): Uint8Array {
   return serializeAfter((db) => {
     db.exec('CREATE TABLE quran_text ("index" INTEGER, sura INTEGER, aya INTEGER, text TEXT)');
-    const stmt = db.prepare('INSERT INTO quran_text VALUES (?,?,?,?)');
+    const stmt = db.prepare("INSERT INTO quran_text VALUES (?,?,?,?)");
     try {
       for (const r of rows) {
         stmt.bind([r.index, r.sura, r.aya, ""]);
@@ -106,7 +106,9 @@ beforeAll(async () => {
 
 describe("assertStagedQuranBytes real SQLite-opening path", () => {
   it("accepts a valid staged Tanzil DB for an Arabic source", () => {
-    expect(() => worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani)).not.toThrow();
+    expect(() =>
+      worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani),
+    ).not.toThrow();
   });
 
   it("accepts a valid staged DB for a translation source (profile check skipped)", () => {
@@ -158,9 +160,9 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
   it("rejects an Arabic source whose profile row count disagrees", () => {
     profileOverride.value = { canonicalRowCount: QURAN_ROW_COUNT - 1 };
     try {
-      expect(() =>
-        worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani),
-      ).toThrow(/profile row count mismatch/);
+      expect(() => worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani)).toThrow(
+        /profile row count mismatch/,
+      );
     } finally {
       profileOverride.value = null;
     }

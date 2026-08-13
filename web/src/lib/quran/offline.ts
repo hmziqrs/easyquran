@@ -1,10 +1,11 @@
 import { QURAN } from "$lib/config/site";
+import { loadQuranData } from "$lib/data/quran-data-client";
+import { quran } from "$lib/stores/quran.svelte";
+
 import { bakedTranslationCatalogue } from "./catalogue";
+import { catalogueStore } from "./catalogue-store.svelte";
 import { ManifestSource, resolveManifest, type ResolvedManifest } from "./manifest";
 import { quranWorker } from "./worker-client";
-import { quran } from "$lib/stores/quran.svelte";
-import { loadQuranData } from "$lib/data/quran-data-client";
-import { catalogueStore } from "./catalogue-store.svelte";
 
 function bakedManifest(): ResolvedManifest {
   return { scripts: QURAN.scripts, source: ManifestSource.Baked };

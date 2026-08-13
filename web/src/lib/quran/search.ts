@@ -1,8 +1,8 @@
 import { QURAN } from "$lib/config/site";
-import { loadQuranData } from "$lib/data/quran-data-client";
 import { verseKey } from "$lib/data/quran";
+import { loadQuranData } from "$lib/data/quran-data-client";
+
 import { quranApi } from "./api-client";
-import { quranWorker } from "./worker-client";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";
 import {
   SearchHitKind,
@@ -11,6 +11,7 @@ import {
   type SearchOpts,
   type SearchResponse,
 } from "./search/types";
+import { quranWorker } from "./worker-client";
 
 async function nameNumberFallback(query: string, opts: SearchOpts): Promise<SearchResponse> {
   const catalog = await loadQuranData();

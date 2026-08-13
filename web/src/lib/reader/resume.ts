@@ -1,12 +1,12 @@
 import { goto } from "$app/navigation";
 import { resumeCtxFor, surahAyahPathFor, type SurahRouteContext } from "$lib/data/quran";
 import { loadQuranData } from "$lib/data/quran-data-client";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { publicHref } from "$lib/i18n/public-href";
-import { getLocale } from "$lib/paraglide/runtime.js";
 import type { UiLocale } from "$lib/i18n/locales";
-import { reader } from "$lib/stores/reader.svelte";
+import { publicHref } from "$lib/i18n/public-href";
+import { readerHrefFor } from "$lib/i18n/reader";
+import { getLocale } from "$lib/paraglide/runtime.js";
 import type { LastReadAnchor } from "$lib/stores/reader-core.svelte";
+import { reader } from "$lib/stores/reader.svelte";
 
 export type ResumeOptions = { replaceState?: boolean; anchor?: LastReadAnchor | null };
 

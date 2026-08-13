@@ -1,8 +1,10 @@
 import { clamp } from "es-toolkit";
-import type { CanonicalQuranRow } from "../sql.ts";
+
 import { OpenerKind } from "../../data/quran-types.ts";
+import type { CanonicalQuranRow } from "../sql.ts";
 import type { QuranSourceView } from "../view/source-view.ts";
 import { scalarToUtf16Index } from "../view/source-view.ts";
+import { alignSearchText } from "./alignment.ts";
 import {
   DEFAULT_LIMIT,
   DEFAULT_OFFSET,
@@ -11,7 +13,6 @@ import {
   isEligibleQuery,
   normalizeArabic,
 } from "./normalize.ts";
-import { alignSearchText } from "./alignment.ts";
 import { SearchHitKind, type Highlight, type SearchHit, type SearchOpts } from "./types.ts";
 
 interface SearchUnitBase {

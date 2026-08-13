@@ -1,4 +1,5 @@
 import type { Database, SqlValue as WasmSqlValue } from "@sqlite.org/sqlite-wasm";
+
 import type { QuranQueryRunner, SqlRow, SqlValue } from "./sql.ts";
 
 export function createWasmQueryRunner(database: Database): QuranQueryRunner {

@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { env } from "$env/dynamic/private";
 import { RangeKind } from "$lib/data/quran-data";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
@@ -6,6 +5,7 @@ import type { Ayah } from "$lib/data/quran-types";
 import { RESPONSE_CAP } from "$lib/quran/fetch";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/private", () => ({
   env: { INTERNAL_QURAN_API_BASE: "https://api.test", INTERNAL_QURAN_API_TOKEN: undefined },
@@ -141,11 +141,14 @@ describe("SSR translation range per-chunk coordinate validation", () => {
     const entry = QURAN_DATA.rangeByIndex(RangeKind.Juz, 1)!;
     const body = wireChunkBadCoordinate(entry.startGlobal, entry.endGlobal);
 
-    const fetcher = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ data: { ayahs: body.ayahs, normalizations: body.normalizations } }),
-    } as Response));
+    const fetcher = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: { ayahs: body.ayahs, normalizations: body.normalizations } }),
+        }) as Response,
+    );
 
     const result = await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
 

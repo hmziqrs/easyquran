@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
+import { ReadChainError } from "$lib/quran/fetch";
 import type { ResolvedManifest } from "$lib/quran/manifest";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
-import { ReadChainError } from "$lib/quran/fetch";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   siteConfig: { apiBase: "https://api.test/quran" },

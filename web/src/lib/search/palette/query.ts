@@ -1,4 +1,5 @@
 import { normalizeArabic } from "$lib/quran/search/normalize";
+
 import type { ParsedQuery } from "./types";
 
 const LEADING_WORD = /^([\p{L}][\p{L}'’-]*)/u;

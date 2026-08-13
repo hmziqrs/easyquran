@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+
 import { GET } from "../+server";
 
 vi.mock("$env/dynamic/public", () => ({ env: {} }));

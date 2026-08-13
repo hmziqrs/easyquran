@@ -1,5 +1,5 @@
-import { RangeKind } from "$lib/data/quran-data";
 import { translationIdFromSegments } from "$lib/data/quran";
+import { RangeKind } from "$lib/data/quran-data";
 import rawTranslations from "$lib/data/translations.json";
 import { isUiLocale, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { QURAN_DATA } from "$lib/server/quran-data";

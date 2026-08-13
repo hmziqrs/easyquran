@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+
 import {
   LOCAL_QURAN_ARTIFACT_BASE,
   QURAN_ARTIFACT_DELIVERY_BASE,

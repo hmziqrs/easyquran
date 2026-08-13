@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
+
 import { trailingDebounce } from "../debounce";
 
 describe("trailingDebounce", () => {

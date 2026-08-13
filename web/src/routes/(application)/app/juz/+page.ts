@@ -1,5 +1,6 @@
 import { asset } from "$app/paths";
 import { createQuranData, RangeKind } from "$lib/data/quran-data";
+
 import type { PageLoad } from "./$types";
 
 export const prerender = true;

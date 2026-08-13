@@ -1,6 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { mount, unmount } from "svelte";
-import type { Component } from "svelte";
+import type { Ayah, RangePageData, SurahLink, SurahNormalization } from "$lib/data/quran-types";
 import {
   createRangeReaderCoordinator,
   equalRangeKey,
@@ -8,12 +6,10 @@ import {
   rangeRouteKey,
   type RangeDisplaySnapshot,
 } from "$lib/quran/worker-client";
-import type {
-  Ayah,
-  RangePageData,
-  SurahLink,
-  SurahNormalization,
-} from "$lib/data/quran-types";
+import { mount, unmount } from "svelte";
+import type { Component } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import RangeReader from "../RangeReader.svelte";
 import RangeReaderHost from "./RangeReaderHost.svelte";
 

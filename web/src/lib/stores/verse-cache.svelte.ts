@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import { parseKey, type VerseKey } from "$lib/data/quran";
+
 import type { ReaderCore } from "./reader-core.svelte";
 
 export function createVerseCache(core: ReaderCore) {

@@ -1,7 +1,8 @@
 import { browser } from "$app/environment";
-import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
-import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
 import { registerServiceWorker } from "$lib/boot/service-worker";
+import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
+
+import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
 
 export type PermissionState = "granted" | "denied" | "default" | "unsupported";
 

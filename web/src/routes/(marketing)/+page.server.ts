@@ -1,5 +1,6 @@
-import quranDataRaw from "../../../static/quran-meta/quran-data.json";
 import { createQuranData } from "$lib/data/quran-data";
+
+import quranDataRaw from "../../../static/quran-meta/quran-data.json";
 
 export interface SurahCard {
   num: number;

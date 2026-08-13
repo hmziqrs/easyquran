@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ActivePack } from "$lib/offline/meta";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { metaMock } = vi.hoisted(() => ({
   metaMock: {

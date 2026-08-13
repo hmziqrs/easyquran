@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import type { Analytics, ConsentSettings, AnalyticsCallOptions } from "firebase/analytics";
+
 import { isConfigured, initApp, ANALYTICS_DEBUG } from "./index";
 
 let analytics: Analytics | null = null;

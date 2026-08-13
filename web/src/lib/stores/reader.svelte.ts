@@ -1,6 +1,13 @@
 import type { VerseKey } from "$lib/data/quran";
+
 import { createAnnotations } from "./annotations.svelte";
-import { type BrowseMode, type LastReadAnchor, type ReaderMode, type RecentsEntry, createReaderCore } from "./reader-core.svelte";
+import {
+  type BrowseMode,
+  type LastReadAnchor,
+  type ReaderMode,
+  type RecentsEntry,
+  createReaderCore,
+} from "./reader-core.svelte";
 import { createReaderPersistence } from "./reader-persistence.svelte";
 import { createReaderSession } from "./reader-session.svelte";
 import { createReaderSettings } from "./reader-settings.svelte";

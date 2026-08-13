@@ -1,25 +1,27 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+
 import {
   type QuranSourceId as QuranSourceIdValue,
   type QuranRangeText,
   type QuranSurahText,
 } from "$lib/data/quran-types";
-import type { QuranQueryRunner } from "$lib/quran/sql";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "$lib/quran/source-plan";
+import type { QuranQueryRunner } from "$lib/quran/sql";
+import {
+  resolveSourceProfile,
+  sourceProfile,
+  type QuranSourceProfile,
+} from "$lib/quran/view/source-profiles";
 import {
   loadQuranSource,
   readSourceRange,
   readSourceSurah,
   type LoadedQuranSource,
 } from "$lib/quran/view/source-runtime";
-import {
-  resolveSourceProfile,
-  sourceProfile,
-  type QuranSourceProfile,
-} from "$lib/quran/view/source-profiles";
+import { QURAN_DATA } from "$lib/server/quran-data";
+
 import { createNodeQueryRunner } from "./quran-node-query-runner";
 
 function findSourcePath(profile: QuranSourceProfile): string {

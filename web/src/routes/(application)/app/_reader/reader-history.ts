@@ -1,5 +1,6 @@
 import type { SurahLocalPageData } from "$lib/data/quran";
 import { asObject, readRaw, writeRaw } from "$lib/storage";
+
 import type { ViewportAnchor } from "./viewport-anchor";
 
 export interface SurahReaderHistoryState {

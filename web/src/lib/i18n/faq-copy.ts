@@ -1,4 +1,3 @@
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 import {
   faq_account_answer,
   faq_account_question,
@@ -21,6 +20,7 @@ import {
   faq_translations_answer,
   faq_translations_question,
 } from "$lib/i18n/m/faq";
+import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 
 export interface FaqEntry {
   /** Stable across locales: DOM keys and structured-data order must not depend on translation. */

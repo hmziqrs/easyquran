@@ -5,22 +5,14 @@ import {
   type AuthClient,
   type UserProfile,
 } from "$lib/auth/auth-client";
+import type { SessionProbeResult } from "$lib/auth/auth-client";
 import { authState } from "$lib/auth/auth-state.svelte";
 import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
-import type { SessionProbeResult } from "$lib/auth/auth-client";
-import {
-  consumeReturnTarget,
-  setReturnTarget,
-} from "$lib/auth/return-target";
+import { consumeReturnTarget, setReturnTarget } from "$lib/auth/return-target";
 
 export type OAuthProvider = "google" | "apple" | "facebook" | "github";
 
-const PROVIDERS: ReadonlySet<OAuthProvider> = new Set([
-  "google",
-  "apple",
-  "facebook",
-  "github",
-]);
+const PROVIDERS: ReadonlySet<OAuthProvider> = new Set(["google", "apple", "facebook", "github"]);
 
 export function isOAuthProvider(v: unknown): v is OAuthProvider {
   return typeof v === "string" && PROVIDERS.has(v as OAuthProvider);
@@ -159,14 +151,6 @@ export class OAuthFlow {
   }
 }
 
-export function createOAuthFlow(
-  provider: OAuthProvider,
-  deps: OAuthFlowDeps = {},
-): OAuthFlow {
-  return new OAuthFlow(
-    provider,
-    deps.client ?? authClient,
-    deps.state ?? authState,
-    deps.navigate,
-  );
+export function createOAuthFlow(provider: OAuthProvider, deps: OAuthFlowDeps = {}): OAuthFlow {
+  return new OAuthFlow(provider, deps.client ?? authClient, deps.state ?? authState, deps.navigate);
 }

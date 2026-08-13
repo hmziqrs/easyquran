@@ -1,5 +1,3 @@
-import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { uniq } from "es-toolkit";
 import {
   isArabicSourceId,
   OpenerKind,
@@ -14,6 +12,7 @@ import {
   type SourceCatalogueEntry,
   type SurahNormalization,
 } from "$lib/data/quran-types";
+import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import {
   runOne,
   runQuery,
@@ -22,15 +21,10 @@ import {
   type QuranCoordinateRow,
   type QuranQueryRunner,
 } from "$lib/quran/sql";
-import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
-import {
-  ensureArtifact,
-  listCachedArtifacts,
-  QURAN_ROW_COUNT,
-  type StagedValidator,
-} from "./opfs-cache";
-import { pruneTranslations } from "./opfs-retention";
+import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import { uniq } from "es-toolkit";
+
 import type { ResolvedManifest } from "../quran/manifest";
 import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
@@ -39,6 +33,7 @@ import {
   type CanonicalSearchUnit,
 } from "../quran/search/corpus";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "../quran/search/types";
+import { resolveSourceProfile } from "../quran/view/source-profiles";
 import {
   loadQuranSource,
   readAllSourceRows,
@@ -46,7 +41,13 @@ import {
   readSourceSurah,
   type LoadedQuranSource,
 } from "../quran/view/source-runtime";
-import { resolveSourceProfile } from "../quran/view/source-profiles";
+import {
+  ensureArtifact,
+  listCachedArtifacts,
+  QURAN_ROW_COUNT,
+  type StagedValidator,
+} from "./opfs-cache";
+import { pruneTranslations } from "./opfs-retention";
 
 interface WorkerCtx {
   postMessage(msg: WorkerOutbound): void;

@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
-import type { ConsentSettings } from "firebase/analytics";
 import { asObject, readJSON, writeJSON } from "$lib/storage";
+import type { ConsentSettings } from "firebase/analytics";
 
 const STORAGE_KEY = "easyquran.consent";
 

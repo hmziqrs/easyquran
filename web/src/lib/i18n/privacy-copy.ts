@@ -1,6 +1,5 @@
 import type { LegalPageCopy } from "$lib/i18n/legal-copy";
 import { resolveLegalChrome } from "$lib/i18n/legal-copy";
-import type { MarketingLocale } from "$lib/i18n/marketing-copy";
 import {
   legal_privacy_accounts_body,
   legal_privacy_accounts_heading,
@@ -25,6 +24,7 @@ import {
   legal_privacy_seo_title,
   legal_privacy_summary,
 } from "$lib/i18n/m/privacy";
+import type { MarketingLocale } from "$lib/i18n/marketing-copy";
 
 /** Privacy policy copy. Imported only by the privacy route, so the terms body never reaches it. */
 export function resolvePrivacyCopy(locale: MarketingLocale): LegalPageCopy {

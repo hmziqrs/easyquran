@@ -9,8 +9,8 @@ export const SITE = {
   ownerUrl: "https://hmziq.rs",
 } as const;
 
-import { env } from "$env/dynamic/public";
 import { dev } from "$app/environment";
+import { env } from "$env/dynamic/public";
 import {
   QuranDataEnvironment,
   resolveQuranArtifactBase,

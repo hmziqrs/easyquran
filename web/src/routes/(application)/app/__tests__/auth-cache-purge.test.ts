@@ -40,6 +40,7 @@ vi.mock("../../../../lib/workers/idb", () => ({
   runTxVoid: async () => {},
 }));
 
+import { PURGE_ACK, PURGE_USER_CACHES, purgeUserCaches } from "../../../../lib/offline/messages";
 import {
   DATA_CACHE,
   PAGES_CACHE,
@@ -48,7 +49,6 @@ import {
   recordDataEntry,
   scanDataMeta,
 } from "../../../../service-worker";
-import { PURGE_ACK, PURGE_USER_CACHES, purgeUserCaches } from "../../../../lib/offline/messages";
 
 class FakeCache {
   readonly entries = new Map<string, Response>();

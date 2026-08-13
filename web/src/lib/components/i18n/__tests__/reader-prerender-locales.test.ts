@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from "vite-plus/test";
 import {
   quranHrefForPrerenderEntry,
   readerPrerenderEntries,
   readerPrerenderHrefs,
 } from "$lib/components/i18n/reader-prerender.server";
+import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
 import { SUPPORTED_UI_LOCALES } from "$lib/i18n/locales";
 import { readerHrefFor } from "$lib/i18n/reader";
 import { readerEntryPath } from "$lib/i18n/seo";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { mount, unmount } from "svelte";
-import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
 

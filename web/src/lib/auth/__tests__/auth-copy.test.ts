@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
 import {
   ACCOUNT_EXISTS_RESET,
   CREDENTIAL_FAILURE,
@@ -8,7 +8,7 @@ import {
   isTransportFailure,
   VERIFY_EMAIL_NEXT,
 } from "$lib/auth/auth-copy";
-import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
+import { describe, expect, it } from "vite-plus/test";
 
 function env(over: Partial<AuthErrorEnvelope> = {}): AuthErrorEnvelope {
   return over as AuthErrorEnvelope;
@@ -72,11 +72,10 @@ describe("classifyAuthError", () => {
   });
 
   it("401 -> uniform credential copy, no field leak", () => {
-    const c = classifyAuthError(
-      401,
-      env({ type: "AUTH_001", message: "user id 7 not found" }),
-      ["email", "password"],
-    );
+    const c = classifyAuthError(401, env({ type: "AUTH_001", message: "user id 7 not found" }), [
+      "email",
+      "password",
+    ]);
     expect(c.kind).toBe("credential");
     expect(c.message).toBe(CREDENTIAL_FAILURE);
     expect(c.fieldErrors).toEqual({});

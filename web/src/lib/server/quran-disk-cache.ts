@@ -1,7 +1,8 @@
 import { promises as fs } from "node:fs";
-import { sumBy } from "es-toolkit";
 import path from "node:path";
+
 import { version as appBuildId } from "$app/environment";
+import { sumBy } from "es-toolkit";
 
 const KINDS = ["surah", "page", "juz"] as const;
 export type DiskCacheKind = (typeof KINDS)[number];

@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vite-plus/test";
 import {
   runOne,
   runQuery,
@@ -6,6 +5,7 @@ import {
   type QuranQueryRunner,
   type SqlValue,
 } from "$lib/quran/sql";
+import { describe, expect, it } from "vite-plus/test";
 
 const query: QuranQuery<number> = {
   sql: "SELECT value FROM fixture WHERE id = ?",

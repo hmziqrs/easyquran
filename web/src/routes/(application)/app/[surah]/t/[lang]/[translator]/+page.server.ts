@@ -1,6 +1,7 @@
-import { error } from "@sveltejs/kit";
 import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
 import { markTranslationPending, requireSurah } from "$lib/server/reader-route-guards";
+import { error } from "@sveltejs/kit";
+
 import type { PageServerLoad } from "./$types";
 
 export const prerender = false;

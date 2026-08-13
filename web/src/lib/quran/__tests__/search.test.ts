@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { SearchProvider } from "$lib/quran/search/types";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "https://api.test/quran" } }));
 

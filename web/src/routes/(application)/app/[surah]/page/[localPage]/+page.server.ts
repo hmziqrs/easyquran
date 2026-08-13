@@ -1,8 +1,9 @@
-import { error } from "@sveltejs/kit";
 import { surahLocalPagePath } from "$lib/data/quran";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahRouteData } from "$lib/server/quran-surah-page";
 import { requireLocalPageBeyondFirst, requireSurah } from "$lib/server/reader-route-guards";
+import { error } from "@sveltejs/kit";
+
 import type { PageServerLoad } from "./$types";
 
 export const prerender = true;

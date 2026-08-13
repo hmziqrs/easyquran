@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import type { FirebasePerformance, PerformanceTrace } from "firebase/performance";
+
 import { isConfigured, initApp } from "./index";
 
 let perf: FirebasePerformance | null = null;

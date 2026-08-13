@@ -1,4 +1,3 @@
-import { getLocale } from "$lib/paraglide/runtime.js";
 import {
   auth_create_account,
   auth_create_one_link,
@@ -35,6 +34,7 @@ import {
   auth_continue_with_provider,
   auth_close,
 } from "$lib/i18n/m/auth";
+import { getLocale } from "$lib/paraglide/runtime.js";
 
 export interface AuthCopy {
   dialogTitle: string;
@@ -105,7 +105,8 @@ export function getAuthCopy(locale = getLocale()): AuthCopy {
     oauthError: auth_oauth_error(undefined, { locale }),
     moreSignInOptionsAria: auth_more_sign_in_options_aria(undefined, { locale }),
     orContinueWith: auth_or_continue_with(undefined, { locale }),
-    continueWithProvider: (provider: string) => auth_continue_with_provider({ provider }, { locale }),
+    continueWithProvider: (provider: string) =>
+      auth_continue_with_provider({ provider }, { locale }),
     continueWithPasskey: auth_continue_with_passkey(undefined, { locale }),
     showPasswordAria: auth_show_password_aria(undefined, { locale }),
     hidePasswordAria: auth_hide_password_aria(undefined, { locale }),

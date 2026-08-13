@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vite-plus/test";
 import { flushSync } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
+import { describe, it, expect } from "vite-plus/test";
+
 import { observeMapSize } from "./reactive.probe.svelte";
 
 describe("probe", () => {

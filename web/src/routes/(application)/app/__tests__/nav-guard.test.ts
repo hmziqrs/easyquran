@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vite-plus/test";
 import {
   globalPagePathFor,
   juzPathFor,
@@ -9,6 +8,7 @@ import {
   surahRouteContext,
   translationIdFromSegments,
 } from "$lib/data/quran";
+import { describe, expect, it } from "vite-plus/test";
 
 const ARABIC_ONLY_HELPERS = /\bsurahPath\b|\bsurahLocalPagePath\b|\bsurahAyahPath\b/;
 const HAND_BUILT_APP_NAV = /\/app\/(?!\$\{string\})/;

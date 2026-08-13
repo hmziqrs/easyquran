@@ -1,5 +1,4 @@
 import { browser } from "$app/environment";
-import type { MessagePayload } from "firebase/messaging";
 import { isConfigured } from "$lib/firebase";
 import { track } from "$lib/firebase/analytics";
 import {
@@ -15,6 +14,7 @@ import {
   type PermissionState,
 } from "$lib/firebase/messaging";
 import { asObject, asString, readJSON, writeJSON } from "$lib/storage";
+import type { MessagePayload } from "firebase/messaging";
 
 const STORAGE_KEY = "easyquran.fcm";
 

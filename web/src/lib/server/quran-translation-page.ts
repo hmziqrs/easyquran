@@ -1,4 +1,3 @@
-import { error } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
 import { translationIdFromSegments } from "$lib/data/quran";
@@ -24,6 +23,7 @@ import { fetchRangeChunks, type RangeJsonFetcher } from "$lib/quran/range-fetch"
 import { decodeTranslationRangeText, type AyahCoordinateValidator } from "$lib/quran/wire";
 import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { requireRangeEntry, surahRouteNav, toRangePageData } from "$lib/server/quran-page-shape";
+import { error } from "@sveltejs/kit";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 

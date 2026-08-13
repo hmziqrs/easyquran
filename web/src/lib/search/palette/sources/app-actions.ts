@@ -1,6 +1,7 @@
 import { resumeCtxFor } from "$lib/data/quran";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { reader } from "$lib/stores/reader.svelte";
+
 import { PaletteGroups } from "../groups";
 import { ayahHref, openVerse } from "../quran-nav";
 import { byScore, scoreFields } from "../scoring";
@@ -40,7 +41,12 @@ function continueReading(query: PaletteQuery): PaletteEntry | null {
   if (!lastRead) return null;
   const surah = query.quranData.surahByNum(lastRead.num);
   if (!surah) return null;
-  const href = ayahHref(resumeCtxFor(lastRead, query.routeContext), query.quranData, lastRead.num, lastRead.n);
+  const href = ayahHref(
+    resumeCtxFor(lastRead, query.routeContext),
+    query.quranData,
+    lastRead.num,
+    lastRead.n,
+  );
   if (!href) return null;
 
   const score = query.parsed.isEmpty ? 0 : scoreFields(CONTINUE_KEYWORDS, query.parsed.text);

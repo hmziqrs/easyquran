@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vite-plus/test";
+
 import { QuranSourceId } from "$lib/data/quran-types";
 import { decodeScript } from "$lib/quran/wire";
+import { describe, expect, it } from "vite-plus/test";
 
 function read(rel: string): string {
   return readFileSync(path.resolve(process.cwd(), rel), "utf8");

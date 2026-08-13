@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
 import { SURAH_PAGE_WINDOW_SIZE, virtualPageWindow } from "$lib/quran/virtual-pages";
+import { describe, expect, it } from "vite-plus/test";
 
 describe("Surah page virtual window", () => {
   it("keeps all pages until the bounded window is exceeded", () => {

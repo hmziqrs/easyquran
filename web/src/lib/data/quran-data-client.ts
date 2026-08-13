@@ -1,4 +1,5 @@
 import { asset } from "$app/paths";
+
 import { createQuranData, type QuranData } from "./quran-data";
 
 const QURAN_DATA_URL = "/quran-meta/quran-data.json" as const;

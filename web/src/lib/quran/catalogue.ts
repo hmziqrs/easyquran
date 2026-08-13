@@ -5,6 +5,7 @@ import {
   type TranslationDirection,
 } from "$lib/data/quran-types";
 import { fetchWithTimeout } from "$lib/quran/fetch";
+
 import rawTranslations from "../data/translations.json";
 import {
   type BakedArtifactEntry,

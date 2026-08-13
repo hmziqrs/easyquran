@@ -1,5 +1,5 @@
-import { SvelteMap } from "svelte/reactivity";
 import type { VerseKey } from "$lib/data/quran";
+import { SvelteMap } from "svelte/reactivity";
 
 export const BrowseMode = {
   Surah: "surah",

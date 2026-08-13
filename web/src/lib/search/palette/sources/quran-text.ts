@@ -8,6 +8,7 @@ import {
   searchHitSurah,
   searchHitText,
 } from "$lib/quran/search/types";
+
 import { QURAN_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
 import { residualText } from "../query";

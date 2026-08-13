@@ -166,7 +166,10 @@ describe("createReaderPersistence scheduling", () => {
     core.s.recents = [{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }];
     core.s.progress = { 2: { furthestAyah: 255, ts: 1000 } };
     persistence.writeNow();
-    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Record<string, unknown>;
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Record<
+      string,
+      unknown
+    >;
     expect(stored.v).toBe(READER_SCHEMA_VERSION);
     expect(stored.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
     expect(stored.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);

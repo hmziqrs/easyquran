@@ -32,9 +32,10 @@ vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
   return { ...original, getCachedHtml: cache.get, setCachedHtml: cache.set };
 });
 
+import { parseReaderPath, parseReaderRoute } from "$lib/server/reader-route";
+
 import { reroute } from "../../../hooks";
 import { handle } from "../../../hooks.server";
-import { parseReaderPath, parseReaderRoute } from "$lib/server/reader-route";
 
 const ROUTE_ID = "/(application)/app/[surah]/t/[lang]/[translator]";
 const PARAMS = { surah: "al-fatihah", lang: "en", translator: "sahih.int" };

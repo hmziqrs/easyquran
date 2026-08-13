@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { describe, expect, it } from "vite-plus/test";
 
 function findRepoRoot(): string {
   let dir = process.cwd();
@@ -33,10 +34,7 @@ function sentences(text: string): string[] {
 function translatedSsgClaims(text: string): string[] {
   return sentences(text).filter(
     (s) =>
-      TRANSLATED_MARKER.test(s) &&
-      SSG_MARKER.test(s) &&
-      !NEGATION.test(s) &&
-      !ARABIC_SCOPE.test(s),
+      TRANSLATED_MARKER.test(s) && SSG_MARKER.test(s) && !NEGATION.test(s) && !ARABIC_SCOPE.test(s),
   );
 }
 
@@ -45,7 +43,9 @@ function translatedSsgClaims(text: string): string[] {
 const BARE_APP_GLOB = /\/app\/\*\*(?!\*)/;
 
 function bareAppPrerenderClaims(text: string): string[] {
-  return sentences(text).filter((s) => BARE_APP_GLOB.test(s) && SSG_MARKER.test(s) && !NEGATION.test(s));
+  return sentences(text).filter(
+    (s) => BARE_APP_GLOB.test(s) && SSG_MARKER.test(s) && !NEGATION.test(s),
+  );
 }
 
 // W9 divergence #7 — unsupported artifact-safety claim. A sentence affirmatively
@@ -138,9 +138,9 @@ describe("docs divergence guard (W9)", () => {
     expect(translatedSsgClaims("The /app/t/** family is prerendered.")).toHaveLength(1);
     expect(translatedSsgClaims("Translated pages are prerendered.")).toHaveLength(1);
 
-    expect(
-      translatedSsgClaims("Translated pages render SSR + disk-TTL. Never SSG."),
-    ).toHaveLength(0);
+    expect(translatedSsgClaims("Translated pages render SSR + disk-TTL. Never SSG.")).toHaveLength(
+      0,
+    );
     expect(translatedSsgClaims("Arabic = SSG. Translated pages = SSR on Bun.")).toHaveLength(0);
     expect(translatedSsgClaims("no /app/t/** path may be described as SSG.")).toHaveLength(0);
 
@@ -148,11 +148,17 @@ describe("docs divergence guard (W9)", () => {
     expect(bareAppPrerenderClaims("/app/<surah> is prerendered.")).toHaveLength(0);
 
     // Banned artifact-safety claims (W9 #7).
-    expect(artifactSafetyClaims("Remote catalogue metadata selects Quran bytes for each download.")).toHaveLength(1);
-    expect(artifactSafetyClaims("The remote catalogue determines the delivery path.")).toHaveLength(1);
+    expect(
+      artifactSafetyClaims("Remote catalogue metadata selects Quran bytes for each download."),
+    ).toHaveLength(1);
+    expect(artifactSafetyClaims("The remote catalogue determines the delivery path.")).toHaveLength(
+      1,
+    );
     expect(artifactSafetyClaims("Remote metadata controls delivery.")).toHaveLength(1);
     expect(artifactSafetyClaims("A partially written DB becomes active.")).toHaveLength(1);
-    expect(artifactSafetyClaims("Partially-written databases can become active before validation.")).toHaveLength(1);
+    expect(
+      artifactSafetyClaims("Partially-written databases can become active before validation."),
+    ).toHaveLength(1);
 
     // Legitimate W10 wording — must NOT trip.
     expect(
@@ -171,6 +177,8 @@ describe("docs divergence guard (W9)", () => {
         "Downloads stage into an id-scoped temp file before the {sourceId, activeFile} pointer switches atomically.",
       ),
     ).toHaveLength(0);
-    expect(artifactSafetyClaims("The web's baked catalogue is a flat positional array.")).toHaveLength(0);
+    expect(
+      artifactSafetyClaims("The web's baked catalogue is a flat positional array."),
+    ).toHaveLength(0);
   });
 });

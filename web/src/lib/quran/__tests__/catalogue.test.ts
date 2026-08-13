@@ -1,5 +1,5 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { QuranSourceId, SourceCatalogueEntry } from "$lib/data/quran-types";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { site, decode, track, consentState } = vi.hoisted(() => ({
   site: {

@@ -1,3 +1,5 @@
+import type { FirstAyahRow } from "$lib/quran/sql";
+
 import type { PrefixCut, SurahNormalization } from "../../data/quran-types.ts";
 import {
   OpenerKind,
@@ -5,7 +7,6 @@ import {
   type OpenerKind as OpenerKindValue,
   type OpenerPackaging as OpenerPackagingValue,
 } from "../../data/quran-types.ts";
-import type { FirstAyahRow } from "$lib/quran/sql";
 import { canonicalOpenerKind } from "./canonical.ts";
 import type { QuranSourceProfile } from "./source-profiles.ts";
 

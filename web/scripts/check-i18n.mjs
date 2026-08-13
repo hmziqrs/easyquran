@@ -23,9 +23,7 @@ const signature = (value, structural = false, complex = false) => {
   if (typeof value === "string") {
     if (structural) return ["literal", value];
     if (complex) return ["text"];
-    const parameters = [
-      ...value.matchAll(/\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}/gu),
-    ]
+    const parameters = [...value.matchAll(/\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}/gu)]
       .map((match) => match[1])
       .sort();
     return ["text", parameters];

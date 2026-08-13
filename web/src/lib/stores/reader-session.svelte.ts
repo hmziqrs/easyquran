@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import type { VerseKey } from "$lib/data/quran";
+
 import type { BrowseMode, LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
 

@@ -1,6 +1,7 @@
-import { error } from "@sveltejs/kit";
 import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { readSurahVerses } from "$lib/server/quran-sqlite";
+import { error } from "@sveltejs/kit";
+
 import { LANDING_VARIANTS, isVariantId } from "../../_variants/registry";
 import type { PageServerLoad } from "./$types";
 

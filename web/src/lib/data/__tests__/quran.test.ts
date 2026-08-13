@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vite-plus/test";
 import {
   parseKey,
   surahAyahPath,
@@ -10,6 +9,7 @@ import {
 import { RangeKind } from "$lib/data/quran-data";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
+import { describe, expect, it } from "vite-plus/test";
 
 describe("verseKey / parseKey", () => {
   it("round-trips a surah:ayah key", () => {

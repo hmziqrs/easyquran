@@ -9,8 +9,8 @@ const { track, consentState } = vi.hoisted(() => ({
 vi.mock("$lib/firebase/analytics", () => ({ track }));
 vi.mock("$lib/stores/consent.svelte", () => ({ consent: consentState }));
 
-import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import { RangeKind } from "$lib/data/quran-data";
+import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import { MalformedDataError } from "$lib/quran/fetch";
 import { fetchRangeChunks } from "$lib/quran/range-fetch";
 import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";

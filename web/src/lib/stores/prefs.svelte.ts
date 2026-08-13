@@ -7,8 +7,8 @@ import {
   type SurfaceId,
   type ThemeMode,
 } from "$lib/config/site";
-import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
 import { asLiteral, asObject, readJSON, writeJSON } from "$lib/storage";
+import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
 
 const STORAGE_KEY = "easyquran.prefs";
 

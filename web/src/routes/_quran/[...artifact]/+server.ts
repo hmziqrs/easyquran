@@ -1,7 +1,8 @@
-import { error } from "@sveltejs/kit";
-import type { RequestHandler } from "./$types";
 import rawTranslations from "$lib/data/translations.json";
 import { QURAN_R2_UPSTREAM_BASE } from "$lib/quran/environment";
+import { error } from "@sveltejs/kit";
+
+import type { RequestHandler } from "./$types";
 
 const TRANSLATION_FILE_PATH = 6;
 const IMMUTABLE = "public, max-age=31536000, immutable";

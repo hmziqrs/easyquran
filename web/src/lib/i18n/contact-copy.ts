@@ -1,4 +1,3 @@
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 import {
   contact_email_body,
   contact_email_title,
@@ -12,6 +11,7 @@ import {
   contact_x_body,
   contact_x_title,
 } from "$lib/i18n/m/contact";
+import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 
 export interface ContactResolvedCopy {
   seo: MarketingSeoCopy;

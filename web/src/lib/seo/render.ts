@@ -1,7 +1,7 @@
-import TurndownService from "turndown";
 import { SITE } from "$lib/config/site";
 import { MARKETING_PAGES } from "$lib/config/site-structure";
 import { baseEnglishPageCopy } from "$lib/i18n/base-english-copy";
+import TurndownService from "turndown";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -50,12 +50,10 @@ function mdVariantUrl(href: string): string {
 }
 
 export function renderLlmsIndex(): string {
-  const pageLines = MARKETING_PAGES.map(
-    (p) => {
-      const copy = baseEnglishPageCopy(p.id);
-      return `- [${copy.label}](${mdVariantUrl(p.href)}): ${copy.description}`;
-    },
-  );
+  const pageLines = MARKETING_PAGES.map((p) => {
+    const copy = baseEnglishPageCopy(p.id);
+    return `- [${copy.label}](${mdVariantUrl(p.href)}): ${copy.description}`;
+  });
   return (
     [
       `# ${SITE.domain}`,

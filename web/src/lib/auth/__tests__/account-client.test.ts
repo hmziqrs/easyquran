@@ -91,7 +91,12 @@ describe("AccountClient.listSessions", () => {
   it("GETs /auth/v1/sessions/list and decodes isCurrent from the {data} envelope", async () => {
     const client = mockClient();
     client.get.mockResolvedValueOnce(
-      ok({ data: [{ id: 1, isCurrent: true }, { id: 2, isCurrent: false }] }),
+      ok({
+        data: [
+          { id: 1, isCurrent: true },
+          { id: 2, isCurrent: false },
+        ],
+      }),
     );
     const ac = createAccountClient(client);
     const res = await ac.listSessions();

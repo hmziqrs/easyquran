@@ -1,9 +1,9 @@
-// Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
-// `RANGE_COUNTS`, so no route hard-codes 604/30.
-import { error, redirect } from "@sveltejs/kit";
 import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
 import type { CatalogEntry } from "$lib/data/quran-types";
 import { QURAN_DATA } from "$lib/server/quran-data";
+// Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
+// `RANGE_COUNTS`, so no route hard-codes 604/30.
+import { error, redirect } from "@sveltejs/kit";
 
 export function requireSurah(slug: string): CatalogEntry {
   const surah = QURAN_DATA.surahBySlug(slug);

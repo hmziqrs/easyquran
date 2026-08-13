@@ -1,10 +1,12 @@
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
 import type { Plugin } from "vite";
+
+import rawTranslations from "./src/lib/data/translations.json";
 import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment";
 import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
-import rawTranslations from "./src/lib/data/translations.json";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";

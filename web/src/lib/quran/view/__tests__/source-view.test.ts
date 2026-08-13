@@ -1,22 +1,23 @@
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vite-plus/test";
-import searchFixtures from "$lib/quran/search/__fixtures__/queries.json";
-import prefixFixtures from "$lib/quran/view/__fixtures__/prefix-cuts.json";
+
 import {
   OpenerKind,
   OpenerPackaging,
   QuranSourceId,
   type QuranSourceId as QuranSourceIdValue,
 } from "$lib/data/quran-types";
+import searchFixtures from "$lib/quran/search/__fixtures__/queries.json";
 import { buildCanonicalSearchCorpus, searchCanonicalCorpus } from "$lib/quran/search/corpus";
 import { normalizeArabic, scalarLength } from "$lib/quran/search/normalize";
 import { SearchHitKind, searchHitKey } from "$lib/quran/search/types";
-import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
+import prefixFixtures from "$lib/quran/view/__fixtures__/prefix-cuts.json";
 import { sourceProfile } from "$lib/quran/view/source-profiles";
-import { packagingCounts, scalarSlice, scalarToUtf16Index } from "$lib/quran/view/source-view";
 import { loadQuranSource, readAllSourceRows } from "$lib/quran/view/source-runtime";
+import { packagingCounts, scalarSlice, scalarToUtf16Index } from "$lib/quran/view/source-view";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
+import { describe, expect, it } from "vite-plus/test";
 
 function load(sourceId: QuranSourceIdValue) {
   const profile = sourceProfile(sourceId);
@@ -168,10 +169,9 @@ describe("canonical web search corpus", () => {
     });
     const hits = [...result.results, ...all.results, ...last.results];
     expect(hits.filter((hit) => hit.kind === SearchHitKind.Opener)).toHaveLength(112);
-    expect(hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map((hit) => searchHitKey(hit))).toEqual([
-      "1:1",
-      "27:30",
-    ]);
+    expect(
+      hits.filter((hit) => hit.kind === SearchHitKind.Ayah).map((hit) => searchHitKey(hit)),
+    ).toEqual(["1:1", "27:30"]);
   });
 
   it("does not match across the storage-only opener/body boundary", () => {

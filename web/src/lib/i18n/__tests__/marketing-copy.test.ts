@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vite-plus/test";
+
 import { resolveAppearanceCopy } from "$lib/i18n/appearance-copy";
 import { marketingFooterLinks, resolveChromeCopy } from "$lib/i18n/chrome-copy";
 import { resolveLandingCopy, resolveLandingSeoCopy } from "$lib/i18n/landing-copy";
@@ -9,6 +9,7 @@ import {
   marketingLocaleLinks,
   marketingReaderHomeHref,
 } from "$lib/i18n/marketing-copy";
+import { describe, expect, it } from "vite-plus/test";
 
 function readJson(path: string): Record<string, string> {
   return JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as Record<string, string>;

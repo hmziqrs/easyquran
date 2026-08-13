@@ -4,9 +4,8 @@ import {
   type AuthClient,
   type UserProfile,
 } from "$lib/auth/auth-client";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import type { SessionProbeResult } from "$lib/auth/auth-client";
+import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
 import {
   GENERIC_TRY_AGAIN,
   NETWORK_ERROR,
@@ -14,7 +13,8 @@ import {
   classifyAuthError,
   isVerifiedOnlyError,
 } from "$lib/auth/auth-copy";
-import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
+import { authState } from "$lib/auth/auth-state.svelte";
+import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 
 export interface PasskeyInfo {
   readonly id: string;
@@ -316,10 +316,9 @@ export class PasskeyFlow {
   }
 
   async list(): Promise<ReadonlyArray<PasskeyInfo> | null> {
-    const res = await this.client.unsafeRequest<{ data?: unknown }>(
-      "/passkey/v1/list",
-      { method: "POST" },
-    );
+    const res = await this.client.unsafeRequest<{ data?: unknown }>("/passkey/v1/list", {
+      method: "POST",
+    });
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) return null;
       return null;
@@ -330,10 +329,10 @@ export class PasskeyFlow {
 
   async remove(id: string): Promise<boolean> {
     if (!id) return false;
-    const res = await this.client.unsafeRequest<{ message?: string }>(
-      "/passkey/v1/remove",
-      { method: "POST", body: { credential_id: id } },
-    );
+    const res = await this.client.unsafeRequest<{ message?: string }>("/passkey/v1/remove", {
+      method: "POST",
+      body: { credential_id: id },
+    });
     if (!res.ok) {
       this.fail(res.status, res.error);
       return false;
@@ -374,8 +373,12 @@ export class PasskeyFlow {
       challenge: challengeBuf,
       ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
       ...(typeof raw.rpId === "string" ? { rpId: raw.rpId } : {}),
-      ...(Array.isArray(raw.allowCredentials) ? { allowCredentials: this.#decodeCredentialDescriptors(raw.allowCredentials) } : {}),
-      ...(typeof raw.userVerification === "string" ? { userVerification: raw.userVerification as UserVerificationRequirement } : {}),
+      ...(Array.isArray(raw.allowCredentials)
+        ? { allowCredentials: this.#decodeCredentialDescriptors(raw.allowCredentials) }
+        : {}),
+      ...(typeof raw.userVerification === "string"
+        ? { userVerification: raw.userVerification as UserVerificationRequirement }
+        : {}),
     };
     return out;
   }
@@ -401,10 +404,14 @@ export class PasskeyFlow {
         displayName: typeof u.displayName === "string" ? u.displayName : "",
       },
       pubKeyCredParams: this.#decodeParams(raw.pubKeyCredParams),
-      ...(Array.isArray(raw.excludeCredentials) ? { excludeCredentials: this.#decodeCredentialDescriptors(raw.excludeCredentials) } : {}),
+      ...(Array.isArray(raw.excludeCredentials)
+        ? { excludeCredentials: this.#decodeCredentialDescriptors(raw.excludeCredentials) }
+        : {}),
       ...authenticatorSelectionOf(raw.authenticatorSelection),
       ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
-      ...(typeof raw.attestation === "string" ? { attestation: raw.attestation as AttestationConveyancePreference } : {}),
+      ...(typeof raw.attestation === "string"
+        ? { attestation: raw.attestation as AttestationConveyancePreference }
+        : {}),
     };
     return out;
   }
@@ -442,7 +449,9 @@ export class PasskeyFlow {
       out.push({
         type: "public-key",
         id,
-        ...(Array.isArray(o.transports) ? { transports: o.transports as AuthenticatorTransport[] } : {}),
+        ...(Array.isArray(o.transports)
+          ? { transports: o.transports as AuthenticatorTransport[] }
+          : {}),
       });
     }
     return out;
@@ -461,7 +470,9 @@ export class PasskeyFlow {
       type: cred.type,
       response: {
         clientDataJSON: bufferToB64u(response.clientDataJSON),
-        ...(response.authenticatorData ? { authenticatorData: bufferToB64u(response.authenticatorData) } : {}),
+        ...(response.authenticatorData
+          ? { authenticatorData: bufferToB64u(response.authenticatorData) }
+          : {}),
         ...(response.signature ? { signature: bufferToB64u(response.signature) } : {}),
         ...(response.userHandle ? { userHandle: bufferToB64u(response.userHandle) } : {}),
       },
@@ -495,9 +506,5 @@ export class PasskeyFlow {
 }
 
 export function createPasskeyFlow(deps: PasskeyFlowDeps = {}): PasskeyFlow {
-  return new PasskeyFlow(
-    deps.client ?? authClient,
-    deps.state ?? authState,
-    deps.credentials,
-  );
+  return new PasskeyFlow(deps.client ?? authClient, deps.state ?? authState, deps.credentials);
 }

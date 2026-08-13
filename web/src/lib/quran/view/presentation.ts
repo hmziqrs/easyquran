@@ -4,6 +4,7 @@ import {
   type QuranSurahText,
   type SurahNormalization,
 } from "$lib/data/quran-types";
+
 import { bodyText } from "./source-view.ts";
 
 export function headerText(normalization: SurahNormalization): string | null {

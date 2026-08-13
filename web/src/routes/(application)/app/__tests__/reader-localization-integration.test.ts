@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
 import { surahAyahPathFor, surahLocalPagePathFor } from "$lib/data/quran";
 import { readerHrefFor } from "$lib/i18n/reader";
 import { deLocalizeUrl } from "$lib/paraglide/runtime";
+import { describe, expect, it } from "vite-plus/test";
 
 const TRANSLATION = {
   kind: "translation",
@@ -11,10 +11,7 @@ const TRANSLATION = {
 
 function switchUiLocale(href: string, locale: "en" | "ar"): string {
   const canonical = deLocalizeUrl(new URL(href, "https://easyquran.fyi"));
-  return readerHrefFor(
-    locale,
-    `${canonical.pathname}${canonical.search}${canonical.hash}`,
-  );
+  return readerHrefFor(locale, `${canonical.pathname}${canonical.search}${canonical.hash}`);
 }
 
 describe("reader UI locale navigation", () => {
@@ -27,9 +24,7 @@ describe("reader UI locale navigation", () => {
     const canonical = `${ayahUrl.pathname}${ayahUrl.search}${ayahUrl.hash}`;
     const arabicUi = readerHrefFor("ar", canonical);
 
-    expect(arabicUi).toBe(
-      "/ar/app/ar-rum/t/en/dr.mustafa.khattab/page/7?view=reading#ayah-30-12",
-    );
+    expect(arabicUi).toBe("/ar/app/ar-rum/t/en/dr.mustafa.khattab/page/7?view=reading#ayah-30-12");
     expect(switchUiLocale(arabicUi, "en")).toBe(
       "/en/app/ar-rum/t/en/dr.mustafa.khattab/page/7?view=reading#ayah-30-12",
     );

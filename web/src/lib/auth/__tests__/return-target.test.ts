@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   clearReturnTarget,
   consumeReturnTarget,
   getReturnTarget,
   setReturnTarget,
 } from "$lib/auth/return-target";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 afterEach(() => {
   sessionStorage.clear();

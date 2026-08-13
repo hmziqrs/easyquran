@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  successDestination,
-  type SuccessRouteUser,
-} from "../success-destination";
+
+import { successDestination, type SuccessRouteUser } from "../success-destination";
 
 const VERIFIED: SuccessRouteUser = { is_verified: true };
 const UNVERIFIED: SuccessRouteUser = { is_verified: false };

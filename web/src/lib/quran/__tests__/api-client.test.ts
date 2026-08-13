@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
 import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({
   QURAN: { apiBase: "https://api.test/quran" },

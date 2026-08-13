@@ -1,4 +1,5 @@
 import type { QuranReaderSource } from "$lib/data/quran-types";
+
 import { noteReaderView } from "./engagement";
 
 export function trackReaderView(deps: {

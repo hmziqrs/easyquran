@@ -1,4 +1,3 @@
-import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 import {
   globalPagePathFor,
   juzPathFor,
@@ -14,6 +13,7 @@ import {
   type LocalizedReaderHref,
   type QuranReaderHref,
 } from "$lib/i18n/reader";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 const VALID_READER_HREFS = [
   "/app",

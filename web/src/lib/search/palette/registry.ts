@@ -1,4 +1,5 @@
 import { groupBy } from "es-toolkit";
+
 import type { PaletteEntry, PaletteGroup, PaletteQuery, PaletteSource } from "./types";
 
 export const DEFAULT_SOURCE_LIMIT = 7;

@@ -36,7 +36,12 @@ export function decodePack(text: string): Pack {
   }
 
   for (const [key, value] of Object.entries(entries)) {
-    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value >= bodies.length) {
+    if (
+      typeof value !== "number" ||
+      !Number.isInteger(value) ||
+      value < 0 ||
+      value >= bodies.length
+    ) {
       fail(`pack entry "${key}" has invalid index`);
     }
   }

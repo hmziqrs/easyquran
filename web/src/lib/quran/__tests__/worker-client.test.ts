@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
 import type { ResolvedManifest } from "$lib/quran/manifest";
-import { quranWorker } from "$lib/quran/worker-client";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
+import { quranWorker } from "$lib/quran/worker-client";
+import { QURAN_DATA } from "$lib/server/quran-data";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
 

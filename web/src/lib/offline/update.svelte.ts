@@ -1,7 +1,6 @@
 import { browser } from "$app/environment";
 import { updated } from "$app/state";
 import { registerServiceWorker } from "$lib/boot/service-worker";
-import { readRaw, removeRaw, writeRaw } from "$lib/storage";
 import {
   PREPARE_RELOAD,
   PREPARE_RELOAD_EVENT,
@@ -10,6 +9,7 @@ import {
   UPDATE_BROADCAST_CHANNEL,
   UPDATE_TAKEOVER,
 } from "$lib/offline/messages";
+import { readRaw, removeRaw, writeRaw } from "$lib/storage";
 
 const RELOAD_GUARD = "easyquran.reload-guard";
 const PAINT_KEY = "easyquran.update.waiting";

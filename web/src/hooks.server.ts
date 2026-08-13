@@ -1,4 +1,3 @@
-import type { Handle, RequestEvent } from "@sveltejs/kit";
 import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
@@ -10,6 +9,7 @@ import {
   parseReaderRoute,
   type ParsedReaderRoute,
 } from "$lib/server/reader-route";
+import type { Handle, RequestEvent } from "@sveltejs/kit";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 

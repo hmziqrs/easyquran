@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
 import { normalizeDataKey } from "$lib/offline/keys";
+import { describe, expect, it } from "vite-plus/test";
 
 describe("normalizeDataKey", () => {
   it("strips only the x-sveltekit-* reserved params", () => {

@@ -2,6 +2,7 @@
 /// <reference lib="webworker" />
 
 import { base, build, files, version } from "$service-worker";
+
 import {
   SKIP_WAITING,
   APP_READY,
@@ -324,7 +325,9 @@ async function purgeLegacyReaderPaths(): Promise<void> {
     const cache = await caches.open(cacheName);
     const requests = await cache.keys();
     await Promise.all(
-      requests.filter((request) => isLegacyReaderPath(request.url)).map((request) => cache.delete(request)),
+      requests
+        .filter((request) => isLegacyReaderPath(request.url))
+        .map((request) => cache.delete(request)),
     );
   }
   const dataMeta = await rawDataMetaScan();

@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import { createRegisterFlow } from "$lib/auth/flows.svelte";
 import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import { createRegisterFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
 const UNVERIFIED: UserProfile = {
@@ -190,9 +190,7 @@ describe("RegisterFlow register->login->verification", () => {
     flow.confirmPassword = "different-password";
     const res = await flow.submit();
     expect(res).toBe(false);
-    expect(flow.fieldErrors.confirm_password).toBe(
-      "Password and confirm password do not match",
-    );
+    expect(flow.fieldErrors.confirm_password).toBe("Password and confirm password do not match");
     expect(flow.step).toBe("form");
     expect(client.unsafeRequest).not.toHaveBeenCalled();
   });

@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from "vite-plus/test";
 import {
   marketingSeoLinks,
   readerCanonicalEntryPath,
@@ -6,6 +5,7 @@ import {
   readerCanonicalUrl,
   readerEntryPath,
 } from "$lib/i18n/seo";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
 

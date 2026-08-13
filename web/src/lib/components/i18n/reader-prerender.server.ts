@@ -5,8 +5,8 @@ import {
   surahPathFor,
   type SurahRouteContext,
 } from "$lib/data/quran";
-import type { QuranReaderHref } from "$lib/i18n/reader";
 import type { PublicHref } from "$lib/i18n/public-href";
+import type { QuranReaderHref } from "$lib/i18n/reader";
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 

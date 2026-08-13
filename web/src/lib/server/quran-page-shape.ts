@@ -1,8 +1,3 @@
-// Shared shape builders for the four SSR loaders (Arabic/translation × surah-page/range). They
-// differ only in where the ayah text comes from; the navigation and range envelope around it are
-// identical, so they live here once. Route hrefs go through the ctx-aware `*For` helpers, which
-// keeps translation context on every generated link.
-import { error } from "@sveltejs/kit";
 import { surahLocalPagePathFor } from "$lib/data/quran";
 import { RangeKind, SURAH_COUNT } from "$lib/data/quran-data";
 import type {
@@ -16,6 +11,11 @@ import type {
   SurahRouteContext,
 } from "$lib/data/quran-types";
 import { QURAN_DATA, toSurahLink } from "$lib/server/quran-data";
+// Shared shape builders for the four SSR loaders (Arabic/translation × surah-page/range). They
+// differ only in where the ayah text comes from; the navigation and range envelope around it are
+// identical, so they live here once. Route hrefs go through the ctx-aware `*For` helpers, which
+// keeps translation context on every generated link.
+import { error } from "@sveltejs/kit";
 
 export interface SurahRouteNav {
   previousPage: SurahLocalPageLink | null;

@@ -1,13 +1,24 @@
-import tailwindcss from "@tailwindcss/vite";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import adapter from "@sveltejs/adapter-node";
 import { sveltekit } from "@sveltejs/kit/vite";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
-import { quranArtifacts } from "./vite-plugin-quran";
+
 import { paraglideOptions } from "./paraglide.config.js";
+import { quranArtifacts } from "./vite-plugin-quran";
 
 export default defineConfig({
-  fmt: {},
+  fmt: {
+    // Width: Oxfmt default — 100, not Prettier's 80 (TS is longer under annotations).
+    printWidth: 100,
+    tabWidth: 2,
+    semi: true,
+    singleQuote: false,
+    trailingComma: "all",
+    // Determinism: stable import + Tailwind class order across edits.
+    sortImports: {},
+    sortTailwindcss: {},
+  },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {

@@ -1,3 +1,4 @@
+import { QURAN } from "$lib/config/site";
 import { isArabicSourceId } from "$lib/data/quran-types";
 import type {
   Ayah,
@@ -10,9 +11,8 @@ import type {
   SurahLink,
   SurahNormalization,
 } from "$lib/data/quran-types";
-import { QURAN } from "$lib/config/site";
+
 import { quranApi } from "./api-client";
-import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
 import {
   classifyApiFailure,
   classifyWorkerFailure,
@@ -25,6 +25,7 @@ import type { ResolvedManifest } from "./manifest";
 import type { WorkerEvent, WorkerOutbound, WorkerRequest, WorkerStatus } from "./protocol";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
+import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
 import {
   decodeQuranRangeText,
   decodeQuranSurahText,

@@ -67,6 +67,7 @@ vi.mock("$lib/server/quran-disk-cache", () => ({
   },
 }));
 
+import { applyHeaders, handle } from "../../../../hooks.server";
 import {
   DATA_CACHE,
   deleteDataMeta,
@@ -77,7 +78,6 @@ import {
   readDataMeta,
   recordDataEntry,
 } from "../../../../service-worker";
-import { applyHeaders, handle } from "../../../../hooks.server";
 
 // happy-dom enforces forbidden header names — it drops `cookie` on Request
 // construction and `set-cookie` on Response construction (getSetCookie() too) —

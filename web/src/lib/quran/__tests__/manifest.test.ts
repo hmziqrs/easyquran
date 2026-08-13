@@ -36,7 +36,9 @@ const ARABIC_R2_URL = "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqli
 const ARABIC_LOCAL_URL = "/_quran/tanzil/arabic/quran-uthmani.sqlite";
 const ARABIC_SIZE = 2885632;
 
-function scriptSpec(overrides: Partial<{ id: string; sizeBytes: number; downloadUrl: string }> = {}) {
+function scriptSpec(
+  overrides: Partial<{ id: string; sizeBytes: number; downloadUrl: string }> = {},
+) {
   return {
     id: overrides.id ?? "uthmani",
     sizeBytes: overrides.sizeBytes ?? ARABIC_SIZE,
@@ -104,13 +106,13 @@ describe("resolveManifest API -> baked fallback contract", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         data: {
-          scripts: [
-            scriptSpec({ downloadUrl: "https://r2.easyquran.fyi/evil/uthmani.sqlite" }),
-          ],
+          scripts: [scriptSpec({ downloadUrl: "https://r2.easyquran.fyi/evil/uthmani.sqlite" })],
         },
       }),
     );
-    decode.mockReturnValue([scriptSpec({ downloadUrl: "https://r2.easyquran.fyi/evil/uthmani.sqlite" })]);
+    decode.mockReturnValue([
+      scriptSpec({ downloadUrl: "https://r2.easyquran.fyi/evil/uthmani.sqlite" }),
+    ]);
     const out = await mod.resolveManifest();
     expect(out.source).toBe("baked");
   });
@@ -129,7 +131,9 @@ describe("resolveManifest API -> baked fallback contract", () => {
       jsonResponse({
         data: {
           scripts: [
-            scriptSpec({ downloadUrl: "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite" }),
+            scriptSpec({
+              downloadUrl: "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
+            }),
           ],
         },
       }),

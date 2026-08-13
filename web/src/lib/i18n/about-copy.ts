@@ -1,4 +1,3 @@
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 import {
   about_body_approach,
   about_body_sources,
@@ -19,6 +18,7 @@ import {
   about_stat_script_label,
   about_stat_script_value,
 } from "$lib/i18n/m/about";
+import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
 
 export interface AboutStat {
   /** Stable across locales so the DOM key never depends on translated text. */
