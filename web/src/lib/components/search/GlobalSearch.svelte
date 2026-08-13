@@ -8,6 +8,7 @@
    * chunk instead of weighing down first paint.
    */
   import type { Component } from "svelte";
+  import { page } from "$app/state";
   import { commandPalette } from "$lib/stores/command-palette.svelte";
   import { loadPalette } from "./palette-loader";
   import type { HotkeyHandle } from "$lib/hotkeys.svelte";
@@ -51,9 +52,19 @@
       }, { meta: { name: "Open command palette" } });
       slashHandle = slash;
 
+      const resume = registerHotkey("`", (event) => {
+        if (event.isComposing) return;
+        void Promise.all([import("$lib/reader/resume"), import("$lib/data/quran")]).then(
+          ([{ resumeToLastRead }, { routeContextFromParams }]) => {
+            void resumeToLastRead(routeContextFromParams(page.params));
+          },
+        );
+      }, { meta: { name: "Continue reading" } });
+
       cleanup = () => {
         modK.unregister();
         slash.unregister();
+        resume.unregister();
       };
     });
 
