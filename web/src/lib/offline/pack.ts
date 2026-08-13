@@ -29,14 +29,14 @@ export function decodePack(text: string): Pack {
   if (!Array.isArray(rawBodies)) fail("pack bodies is not an array");
 
   const entries = rawEntries as Record<string, unknown>;
-  const bodies = rawBodies as unknown[];
+  const bodies = rawBodies;
 
   for (let i = 0; i < bodies.length; i++) {
     if (typeof bodies[i] !== "string") fail(`pack body ${i} is not a string`);
   }
 
   for (const [key, value] of Object.entries(entries)) {
-    if (!Number.isInteger(value) || (value as number) < 0 || (value as number) >= bodies.length) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value >= bodies.length) {
       fail(`pack entry "${key}" has invalid index`);
     }
   }
