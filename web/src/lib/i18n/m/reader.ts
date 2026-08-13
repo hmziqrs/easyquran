@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 137 messages. Import this barrel, never
+// 151 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -130,6 +130,20 @@ export { reader_sign_in } from "$lib/paraglide/messages/reader_sign_in.js";
 export { reader_site_panel } from "$lib/paraglide/messages/reader_site_panel.js";
 export { reader_smaller_arabic_text } from "$lib/paraglide/messages/reader_smaller_arabic_text.js";
 export { reader_source } from "$lib/paraglide/messages/reader_source.js";
+export { reader_stacked_clear } from "$lib/paraglide/messages/reader_stacked_clear.js";
+export { reader_stacked_count } from "$lib/paraglide/messages/reader_stacked_count.js";
+export { reader_stacked_error } from "$lib/paraglide/messages/reader_stacked_error.js";
+export { reader_stacked_full } from "$lib/paraglide/messages/reader_stacked_full.js";
+export { reader_stacked_loading } from "$lib/paraglide/messages/reader_stacked_loading.js";
+export { reader_stacked_move_down } from "$lib/paraglide/messages/reader_stacked_move_down.js";
+export { reader_stacked_move_up } from "$lib/paraglide/messages/reader_stacked_move_up.js";
+export { reader_stacked_none_selected } from "$lib/paraglide/messages/reader_stacked_none_selected.js";
+export { reader_stacked_open } from "$lib/paraglide/messages/reader_stacked_open.js";
+export { reader_stacked_primary_badge } from "$lib/paraglide/messages/reader_stacked_primary_badge.js";
+export { reader_stacked_remove } from "$lib/paraglide/messages/reader_stacked_remove.js";
+export { reader_stacked_search_placeholder } from "$lib/paraglide/messages/reader_stacked_search_placeholder.js";
+export { reader_stacked_selected } from "$lib/paraglide/messages/reader_stacked_selected.js";
+export { reader_stacked_title } from "$lib/paraglide/messages/reader_stacked_title.js";
 export { reader_staging_offline_pack } from "$lib/paraglide/messages/reader_staging_offline_pack.js";
 export { reader_storage } from "$lib/paraglide/messages/reader_storage.js";
 export { reader_surah_page } from "$lib/paraglide/messages/reader_surah_page.js";

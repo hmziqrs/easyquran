@@ -8,8 +8,8 @@ const META_DB = "easyquran-meta";
 const META_STORE = "lastUsed";
 
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const CAP_COUNT = 12;
-const CAP_BYTES = 128 * 1024 * 1024;
+const CAP_COUNT = 128;
+const CAP_BYTES = 256 * 1024 * 1024;
 
 export async function stampLastUsed(id: string, when: number = Date.now()): Promise<void> {
   try {
@@ -64,6 +64,7 @@ function buildSizeLookup(
 
 export interface PruneOptions {
   readonly pinnedArabicIds: readonly string[];
+  readonly pinnedTranslationIds?: readonly string[];
   readonly catalogue?: readonly (TranslationCatalogueEntry | SourceCatalogueEntry)[];
 }
 
@@ -123,7 +124,8 @@ async function runPrune(opts: PruneOptions): Promise<PruneResult> {
 
   const lastUsed = await readLastUsedMap();
   const sizeFor = buildSizeLookup(opts.catalogue);
-  const evictIds = computeEvictions(artifacts, lastUsed, sizeFor, Date.now(), opts.pinnedArabicIds);
+  const pinned = [...opts.pinnedArabicIds, ...(opts.pinnedTranslationIds ?? [])];
+  const evictIds = computeEvictions(artifacts, lastUsed, sizeFor, Date.now(), pinned);
   if (evictIds.length === 0) return { evicted: Object.freeze([]) };
 
   const tagById = new Map(artifacts.map((a) => [a.id, a.tag]));

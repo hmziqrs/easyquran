@@ -147,6 +147,20 @@ import {
   reader_site_panel,
   reader_smaller_arabic_text,
   reader_source,
+  reader_stacked_clear,
+  reader_stacked_count,
+  reader_stacked_error,
+  reader_stacked_full,
+  reader_stacked_loading,
+  reader_stacked_move_down,
+  reader_stacked_move_up,
+  reader_stacked_none_selected,
+  reader_stacked_open,
+  reader_stacked_primary_badge,
+  reader_stacked_remove,
+  reader_stacked_search_placeholder,
+  reader_stacked_selected,
+  reader_stacked_title,
   reader_staging_offline_pack,
   reader_storage,
   reader_surah_page,
@@ -326,6 +340,22 @@ export interface ReaderUiCopy {
     ) => string;
     readonly breadcrumbSurah: (name: string) => string;
     readonly quranBook: string;
+  };
+  readonly stacked: {
+    readonly title: string;
+    readonly searchPlaceholder: string;
+    readonly selected: string;
+    readonly clear: string;
+    readonly count: (n: number, max: number) => string;
+    readonly full: (max: number) => string;
+    readonly moveUp: string;
+    readonly moveDown: string;
+    readonly remove: string;
+    readonly primaryBadge: string;
+    readonly open: string;
+    readonly loading: string;
+    readonly error: string;
+    readonly noneSelected: string;
   };
 }
 
@@ -547,6 +577,22 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
         ),
       breadcrumbSurah: (name) => reader_seo_breadcrumb_surah({ name }, options),
       quranBook: noArgs(reader_quran_book),
+    },
+    stacked: {
+      title: noArgs(reader_stacked_title),
+      searchPlaceholder: noArgs(reader_stacked_search_placeholder),
+      selected: noArgs(reader_stacked_selected),
+      clear: noArgs(reader_stacked_clear),
+      count: (n, max) => reader_stacked_count({ n, max }, options),
+      full: (max) => reader_stacked_full({ max }, options),
+      moveUp: noArgs(reader_stacked_move_up),
+      moveDown: noArgs(reader_stacked_move_down),
+      remove: noArgs(reader_stacked_remove),
+      primaryBadge: noArgs(reader_stacked_primary_badge),
+      open: noArgs(reader_stacked_open),
+      loading: noArgs(reader_stacked_loading),
+      error: noArgs(reader_stacked_error),
+      noneSelected: noArgs(reader_stacked_none_selected),
     },
   };
 }

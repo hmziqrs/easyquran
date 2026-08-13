@@ -14,7 +14,12 @@
   import type { LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { reader } from "$lib/stores/reader.svelte";
+  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { modeParamMatches, parseModeParam, withModeParam } from "$lib/reader/mode-param";
+  import { moreParamMatches, parseMoreParam, withMoreParam } from "$lib/reader/more-param";
+  import { quranWorker } from "$lib/quran/worker-client";
+  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { translationIdFromSegments } from "$lib/data/quran";
 
   let { data, children } = $props();
   let menuOpen = $state(false);
@@ -37,9 +42,13 @@
     })),
   );
   const footerLinks = $derived(footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref));
+  const knownMoreIds = (ids: readonly string[]): string[] =>
+    ids.filter((id) => catalogueStore.translations.some((entry) => entry.id === id));
 
   onMount(() => {
     reader.hydrate(parseModeParam(page.url) ?? undefined);
+    const moreIds = knownMoreIds(parseMoreParam(page.url));
+    if (moreIds.length) stackedTranslations.setIds(moreIds);
     document.documentElement.dataset.readerHydrated = "true";
 
     const syncMenu = (): void => {
@@ -60,6 +69,34 @@
     if (!modeParamMatches(url, current)) {
       replaceState(withModeParam(url, current), page.state);
     }
+  });
+
+  $effect(() => {
+    const url = page.url;
+    const parsed = parseMoreParam(url);
+    if (parsed.length > 0) {
+      const ids = untrack(() => stackedTranslations.ids);
+      const known = knownMoreIds(parsed);
+      if (known.length && !moreParamMatches(url, ids)) stackedTranslations.setIds(known);
+    }
+    const effective = untrack(() => stackedTranslations.ids);
+    if (!moreParamMatches(url, effective)) {
+      replaceState(withMoreParam(url, effective), page.state);
+    }
+  });
+
+  $effect(() => {
+    const ids = stackedTranslations.ids;
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    const primary = lang && translator ? translationIdFromSegments(lang, translator) : null;
+    const pinned = primary ? [primary, ...ids] : [...ids];
+    void quranWorker.setPinnedTranslations(pinned).catch(() => {
+      void quranWorker
+        .whenReady()
+        .then(() => quranWorker.setPinnedTranslations(pinned))
+        .catch(() => {});
+    });
   });
 
   // Dynamic import on purpose: the reader appearance panel owns ~34 messages that nothing renders

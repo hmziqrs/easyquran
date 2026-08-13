@@ -244,6 +244,11 @@ export const quranWorker = {
   ensureTranslation(source: QuranReaderSource): Promise<void> {
     return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(() => undefined);
   },
+  setPinnedTranslations(ids: readonly string[]): Promise<void> {
+    return request<null>((id) => ({ id, type: "setPinnedTranslations", ids })).then(
+      () => undefined,
+    );
+  },
 
   whenReady(): Promise<void> {
     if (isReady) return Promise.resolve();

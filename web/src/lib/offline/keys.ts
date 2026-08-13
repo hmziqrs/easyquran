@@ -6,6 +6,7 @@ export function normalizeDataKey(url: string | URL): string {
   for (const [key, value] of u.searchParams) {
     if (key.startsWith("x-sveltekit-")) continue;
     if (key === "mode") continue;
+    if (key === "more") continue;
     params.append(key, value);
   }
   const search = params.size > 0 ? `?${params.toString()}` : "";

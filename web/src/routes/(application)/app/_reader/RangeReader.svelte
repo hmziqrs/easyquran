@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import {
@@ -14,6 +14,13 @@
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { trackReaderView } from "$lib/quran/track-view.svelte";
   import VerseRow from "./VerseRow.svelte";
+  import {
+    createStackedTranslations,
+    erroredFor,
+    loadingFor,
+    stackedFor,
+  } from "./stacked-translations.svelte";
+  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
   import { bodyText } from "$lib/quran/view/source-view";
@@ -35,6 +42,34 @@
   const copy = getReaderUiCopy();
 
   const coord = createRangeReaderCoordinator();
+  let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
+  const stackedController = createStackedTranslations({
+    from: () => data.startGlobal,
+    to: () => data.endGlobal,
+    validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
+    primarySourceId: () => {
+      const lang = page.params.lang;
+      const translator = page.params.translator;
+      return lang && translator ? translationIdFromSegments(lang, translator) : null;
+    },
+    catalogue: () => catalogueStore.translations,
+    routeKey: () => `${data.kind}:${data.index}`,
+  });
+  const stackedAnnouncement = $derived.by(() => {
+    const st = stackedController.state;
+    if (st.order.some((id) => st.status.get(id) === "error")) return copy.stacked.error;
+    if (st.order.some((id) => st.status.get(id) === "loading")) return copy.stacked.loading;
+    return "";
+  });
+  $effect(() => stackedController.sync());
+  onDestroy(() => stackedController.dispose());
+  onMount(() => {
+    void loadQuranData()
+      .then((qd) => {
+        stackedQuranData = qd;
+      })
+      .catch(() => {});
+  });
   let readStatus = $state<"ready" | "loading" | "offline" | "error">("loading");
   // Intentional SSR snapshot; the route-keyed pre-effect installs later prop updates.
   // svelte-ignore state_referenced_locally
@@ -162,6 +197,7 @@
   data-source-kind={isArabic ? "arabic" : "translation"}
   aria-busy={readStatus === "loading"}
 >
+  <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
   {#each groups as g (g.surah.num)}
     <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
       <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-9">
@@ -185,7 +221,15 @@
       <TooltipProvider delayDuration={300}>
         <ol class="ayah-list flex list-none flex-col p-0">
           {#each g.ayahs as a (a.key)}
-            <VerseRow text={bodyText(a.text, a.ayah, g.normalization)} n={a.ayah} vKey={a.key} />
+            <VerseRow
+              text={bodyText(a.text, a.ayah, g.normalization)}
+              n={a.ayah}
+              vKey={a.key}
+              stacked={stackedFor(stackedController.state, a.key)}
+              stackedPending={loadingFor(stackedController.state, a.key)}
+              stackedErrored={erroredFor(stackedController.state, a.key)}
+              stackedErrorLabel={copy.stacked.error}
+            />
           {/each}
         </ol>
       </TooltipProvider>

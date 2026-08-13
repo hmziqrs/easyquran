@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
   import { beforeNavigate, invalidateAll, replaceState } from "$app/navigation";
@@ -20,6 +20,7 @@
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
+  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
   import type { ReadTierStatus } from "$lib/quran/fetch";
   import { virtualPageWindow } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
@@ -49,6 +50,12 @@
   import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
+  import {
+    createStackedTranslations,
+    erroredFor,
+    loadingFor,
+    stackedFor,
+  } from "./stacked-translations.svelte";
 
   let {
     initial,
@@ -110,6 +117,30 @@
   const isTranslationSource = $derived(routeContext.kind !== "arabic");
   const routeKey = $derived(`${sourceId}:${initial.surah.num}:${initial.page.localPage}`);
   let lastRouteKey: string | null = null;
+  let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
+  const stackedController = createStackedTranslations({
+    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
+    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
+    primarySourceId: () => (isTranslationSource ? sourceId : null),
+    catalogue: () => catalogueStore.translations,
+    routeKey: () => `${sourceId}:${initial.surah.num}`,
+  });
+  const stackedAnnouncement = $derived.by(() => {
+    const st = stackedController.state;
+    if (st.order.some((id) => st.status.get(id) === "error")) return copy.stacked.error;
+    if (st.order.some((id) => st.status.get(id) === "loading")) return copy.stacked.loading;
+    return "";
+  });
+  $effect(() => stackedController.sync());
+  onDestroy(() => stackedController.dispose());
+  onMount(() => {
+    void loadQuranData()
+      .then((qd) => {
+        stackedQuranData = qd;
+      })
+      .catch(() => {});
+  });
   function pagePathFor(localPage: number): `/${string}` {
     return readerHrefFor(
       copy.locale,
@@ -741,6 +772,7 @@
       onBigger={() => changeFontSize(() => reader.bigger())}
     />
 
+    <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
     <div
       {@attach captureReaderPages}
       class="reader-pages"
@@ -772,6 +804,10 @@
                     n={ayah.ayah}
                     vKey={ayah.key}
                     onToggleNote={() => toggleNote(ayah.key)}
+                    stacked={stackedFor(stackedController.state, ayah.key)}
+                    stackedPending={loadingFor(stackedController.state, ayah.key)}
+                    stackedErrored={erroredFor(stackedController.state, ayah.key)}
+                    stackedErrorLabel={copy.stacked.error}
                   />
                 {/each}
               </ol>

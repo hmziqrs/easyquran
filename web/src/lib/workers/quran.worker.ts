@@ -3,6 +3,7 @@ import {
   OpenerKind,
   OpenerPackaging,
   QuranScript,
+  STACKED_MAX_EXTRAS,
   type CanonicalQuranCoordinates,
   type DownloadableSpec,
   type QuranRangeText,
@@ -74,12 +75,13 @@ let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
 let storedCatalogue: SourceCatalogueEntry[] = [];
 let bootPromise: Promise<void> | null = null;
-const TRANSLATION_DB_CAP = 4;
+const TRANSLATION_DB_CAP = STACKED_MAX_EXTRAS + 2;
 const translationDbs = new Map<string, Database>();
 const pendingTranslationRunners = new Map<string, Promise<QuranQueryRunner>>();
 let activeTranslationFetches = 0;
 const cachedTranslationIds = new Set<string>();
 const PINNED_ARABIC: readonly string[] = Object.freeze(plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN));
+let pinnedTranslationIds: readonly string[] = [];
 
 function emit(message: WorkerOutbound): void {
   ctx.postMessage(message);
@@ -352,6 +354,7 @@ async function fetchTranslationRunner(sourceId: string): Promise<QuranQueryRunne
       if (artifact.downloaded) {
         void pruneTranslations({
           pinnedArabicIds: PINNED_ARABIC,
+          pinnedTranslationIds,
           catalogue: storedCatalogue,
         }).then(
           (r) => forgetTranslations(r.evicted),
@@ -499,6 +502,10 @@ const handlers = {
     void ensureTranslation(m.source);
     return null;
   },
+  setPinnedTranslations: (m) => {
+    pinnedTranslationIds = m.ids;
+    return null;
+  },
   readSurah: (m) =>
     runReaderOp(
       m.source,
@@ -523,11 +530,16 @@ async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> 
       emit({ id, ok: true, result: null });
       void pruneTranslations({
         pinnedArabicIds: PINNED_ARABIC,
+        pinnedTranslationIds,
         catalogue: storedCatalogue,
       }).then(
         (r) => forgetTranslations(r.evicted),
         () => {},
       );
+      return;
+    }
+    if (message.type === "setPinnedTranslations") {
+      emit({ id, ok: true, result: handlers.setPinnedTranslations(message) });
       return;
     }
     if (!ready) {
