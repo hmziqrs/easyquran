@@ -7,10 +7,10 @@
   import { Tweaks } from "$lib/components/tweaks";
   import { SITE } from "$lib/config/site";
   import { SUPPORTED_UI_LOCALES, UI_LOCALES } from "$lib/i18n/locales";
-  import { marketingHref } from "$lib/i18n/marketing";
+  import { footerLinksFor } from "$lib/i18n/footer-links";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
-  import type { LocaleLink, MarketingFooterLinks } from "$lib/i18n/marketing-copy";
+  import type { LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { reader } from "$lib/stores/reader.svelte";
 
@@ -32,43 +32,7 @@
       current: locale === copy.locale,
     })),
   );
-  const footerLinks = $derived.by<MarketingFooterLinks>(() => {
-    const home = marketingHref("home", copy.locale)!;
-    return {
-      product: [
-        { id: "read", href: currentReaderHref, label: copy.footerLinks.readQuran },
-        { id: "bookmarks", href: currentReaderHref, label: copy.footerLinks.bookmarks },
-        {
-          id: "inside",
-          href: `${home}#today` as `/${string}`,
-          label: copy.footerLinks.whatsInside,
-        },
-      ],
-      company:
-        copy.locale === "en"
-          ? [
-              { id: "about", href: marketingHref("about", "en")!, label: copy.footerLinks.about },
-              { id: "faq", href: marketingHref("faq", "en")!, label: copy.footerLinks.faq },
-              {
-                id: "contact",
-                href: marketingHref("contact", "en")!,
-                label: copy.footerLinks.contact,
-              },
-            ]
-          : [],
-      legal:
-        copy.locale === "en"
-          ? [
-              {
-                id: "privacy",
-                href: marketingHref("privacy", "en")!,
-                label: copy.footerLinks.privacy,
-              },
-              { id: "terms", href: marketingHref("terms", "en")!, label: copy.footerLinks.terms },
-            ]
-          : [],
-    };
-  });
+  const footerLinks = $derived(footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref));
 
   onMount(() => {
     reader.hydrate();

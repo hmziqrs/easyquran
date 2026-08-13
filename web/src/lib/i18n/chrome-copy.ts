@@ -6,11 +6,8 @@ import type {
   MarketingLocale,
   NavResolvedCopy,
 } from "$lib/i18n/marketing-copy";
-import {
-  marketingDirection,
-  marketingHomeHref,
-  marketingReaderHomeHref,
-} from "$lib/i18n/marketing-copy";
+import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
+import { footerLinksFor, type FooterLinkLabels } from "$lib/i18n/footer-links";
 import {
   brand_home_label,
   footer_about,
@@ -68,34 +65,19 @@ export interface ChromeResolvedCopy {
 }
 
 export function marketingFooterLinks(locale: MarketingLocale): MarketingFooterLinks {
-  const home = marketingHomeHref(locale);
-  const reader = marketingReaderHomeHref(locale);
+  return footerLinksFor(locale, footerLinkLabels(locale), marketingReaderHomeHref(locale));
+}
 
+function footerLinkLabels(locale: MarketingLocale): FooterLinkLabels {
   return {
-    product: [
-      { id: "read", href: reader, label: footer_read_quran(undefined, { locale }) },
-      { id: "bookmarks", href: reader, label: footer_bookmarks(undefined, { locale }) },
-      {
-        id: "inside",
-        href: `${home}#today` as `/${string}`,
-        label: footer_whats_inside(undefined, { locale }),
-      },
-    ],
-    company:
-      locale === "en"
-        ? [
-            { id: "about", href: "/about", label: footer_about(undefined, { locale }) },
-            { id: "faq", href: "/faq", label: footer_faq(undefined, { locale }) },
-            { id: "contact", href: "/contact", label: footer_contact(undefined, { locale }) },
-          ]
-        : [],
-    legal:
-      locale === "en"
-        ? [
-            { id: "privacy", href: "/privacy", label: footer_privacy(undefined, { locale }) },
-            { id: "terms", href: "/terms", label: footer_terms(undefined, { locale }) },
-          ]
-        : [],
+    readQuran: footer_read_quran(undefined, { locale }),
+    bookmarks: footer_bookmarks(undefined, { locale }),
+    whatsInside: footer_whats_inside(undefined, { locale }),
+    about: footer_about(undefined, { locale }),
+    faq: footer_faq(undefined, { locale }),
+    contact: footer_contact(undefined, { locale }),
+    privacy: footer_privacy(undefined, { locale }),
+    terms: footer_terms(undefined, { locale }),
   };
 }
 

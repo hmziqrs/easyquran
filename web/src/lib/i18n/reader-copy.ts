@@ -1,5 +1,6 @@
 import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
+import type { FooterLinkLabels } from "$lib/i18n/footer-links";
 import {
   footer_about,
   footer_blurb,
@@ -256,16 +257,7 @@ export interface ReaderUiCopy {
     readonly homeLabel: (siteName: string) => string;
   };
   readonly footer: FooterResolvedCopy;
-  readonly footerLinks: {
-    readonly readQuran: string;
-    readonly bookmarks: string;
-    readonly whatsInside: string;
-    readonly about: string;
-    readonly faq: string;
-    readonly contact: string;
-    readonly privacy: string;
-    readonly terms: string;
-  };
+  readonly footerLinks: FooterLinkLabels;
   readonly offline: {
     readonly label: string;
     readonly packReady: string;
