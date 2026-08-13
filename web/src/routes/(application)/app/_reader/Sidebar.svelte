@@ -53,8 +53,10 @@
   function selectBrowse(browse: BrowseMode) {
     reader.setBrowse(browse);
     if (browse !== BrowseMode.Ayah) return;
+    const slug = page.params.surah;
+    if (!slug) return;
     void loadQuranData().then((quranData) => {
-      const current = quranData.surahBySlug(page.params.surah as string);
+      const current = quranData.surahBySlug(slug);
       if (current) void reader.refreshFromWorker(current.num);
     });
   }
@@ -184,7 +186,7 @@
           {copy.sidebar.loadingNavigation}
         </p>
       {:then quranData}
-        {@const current = quranData.surahBySlug(page.params.surah as string)}
+        {@const current = page.params.surah ? quranData.surahBySlug(page.params.surah) : undefined}
         {#if reader.browseSurah}
           <SidebarGroup>
             <SidebarGroupContent>
