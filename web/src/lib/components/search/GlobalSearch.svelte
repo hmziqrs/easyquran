@@ -77,8 +77,8 @@
 
   // Disable `/` while the palette is already open so the query can contain it.
   $effect(() => {
-    const open = commandPalette.open;
-    slashHandle?.setOptions({ enabled: !open });
+    const paletteOpen = commandPalette.open;
+    slashHandle?.setOptions({ enabled: !paletteOpen });
   });
 
   // Covers every other way the palette can be opened — the nav trigger today,

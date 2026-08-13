@@ -59,13 +59,19 @@ vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));
 vi.mock("../VerseRow.svelte", () => ({ default: verseRowStub }));
 vi.mock("$lib/components/ui/tooltip", () => ({ TooltipProvider: tooltipStub }));
 
-function ayah(surah: number, n: number, globalIndex: number): Ayah {
-  return { key: `${surah}:${n}`, surah, ayah: n, globalIndex, text: `v-${surah}-${n}` };
+function ayah(surahNum: number, n: number, globalIndex: number): Ayah {
+  return {
+    key: `${surahNum}:${n}`,
+    surah: surahNum,
+    ayah: n,
+    globalIndex,
+    text: `v-${surahNum}-${n}`,
+  };
 }
 
-function norm(surah: number, sourceId: string): SurahNormalization {
+function norm(surahNum: number, sourceId: string): SurahNormalization {
   return {
-    surah,
+    surah: surahNum,
     sourceId,
     script: "translation",
     sourceProfile: "p",

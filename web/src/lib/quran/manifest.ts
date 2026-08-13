@@ -40,14 +40,14 @@ function hasRegisteredPlan(scripts: readonly ArtifactSpec[]): boolean {
 }
 
 function validateAndLocalizeScripts(scripts: readonly ArtifactSpec[]): ArtifactSpec[] | null {
-  const baked = buildArabicBakedMap(QURAN.scripts, QURAN.artifactBase);
+  const bakedArabic = buildArabicBakedMap(QURAN.scripts, QURAN.artifactBase);
   const out: ArtifactSpec[] = [];
   for (const spec of scripts) {
     const validated = validateArtifactAgainstBaked(
       spec.id,
       spec.sizeBytes,
       spec.downloadUrl,
-      baked,
+      bakedArabic,
     );
     if (!validated) return null;
     out.push({ ...spec, sizeBytes: validated.sizeBytes, downloadUrl: validated.downloadUrl });

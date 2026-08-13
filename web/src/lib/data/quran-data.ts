@@ -295,18 +295,18 @@ export function createQuranData(raw: unknown): QuranData {
         .ranges(RangeKind.Page)
         .filter((page) => page.endGlobal >= entry.startGlobal && page.startGlobal <= surahEnd)
         .map((page, index) => {
-          const startGlobal = Math.max(page.startGlobal, entry.startGlobal);
-          const endGlobal = Math.min(page.endGlobal, surahEnd);
+          const pageStartGlobal = Math.max(page.startGlobal, entry.startGlobal);
+          const pageEndGlobal = Math.min(page.endGlobal, surahEnd);
           return Object.freeze({
             surah,
             localPage: index + 1,
             globalPage: page.index,
-            startGlobal,
-            endGlobal,
-            startAyah: startGlobal - entry.startGlobal + 1,
-            endAyah: endGlobal - entry.startGlobal + 1,
-            first: `${surah}:${startGlobal - entry.startGlobal + 1}`,
-            last: `${surah}:${endGlobal - entry.startGlobal + 1}`,
+            startGlobal: pageStartGlobal,
+            endGlobal: pageEndGlobal,
+            startAyah: pageStartGlobal - entry.startGlobal + 1,
+            endAyah: pageEndGlobal - entry.startGlobal + 1,
+            first: `${surah}:${pageStartGlobal - entry.startGlobal + 1}`,
+            last: `${surah}:${pageEndGlobal - entry.startGlobal + 1}`,
           });
         });
       const frozen = Object.freeze(pages);
