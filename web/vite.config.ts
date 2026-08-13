@@ -23,6 +23,9 @@ export default defineConfig({
       // Correctness: `arr.map(fn)` hands fn the index as a second argument.
       "unicorn/no-array-callback-reference": "error",
       "unicorn/prefer-number-properties": "error",
+      // Correctness: an unawaited promise loses its rejection and races whatever runs next.
+      "no-floating-promises": "error",
+      "no-misused-promises": "error",
     },
     options: { typeAware: true, typeCheck: true },
   },
