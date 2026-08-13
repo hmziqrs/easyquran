@@ -352,6 +352,10 @@ function isClientToSw(m: unknown): m is ClientToSwMessage {
   return !!m && typeof m === "object" && typeof (m as { type?: unknown }).type === "string";
 }
 
+function isClient(source: Client | ServiceWorker | MessagePort | null): source is Client {
+  return !!source && "id" in source;
+}
+
 sw.addEventListener("message", (event) => {
   if (!isClientToSw(event.data)) return;
   const data = event.data;
@@ -360,7 +364,7 @@ sw.addEventListener("message", (event) => {
       void sw.skipWaiting();
       return;
     case APP_READY:
-      void onAppReady(event.source as Client | null);
+      void onAppReady(isClient(event.source) ? event.source : null);
       return;
     case PURGE_USER_CACHES:
       void purgeUserCachesHandler(event.ports[0]);
@@ -526,7 +530,7 @@ export async function handleData(req: Request): Promise<Response> {
       }
       return res;
     })
-    .catch(() => null as Response | null)
+    .catch(() => null)
     .finally(() => clearTimeout(timeout));
 
   if (hit) {
@@ -563,7 +567,7 @@ async function swrApp(req: Request): Promise<Response> {
       }
       return res;
     })
-    .catch(() => null as Response | null);
+    .catch(() => null);
   if (hit) {
     void network;
     return hit;
