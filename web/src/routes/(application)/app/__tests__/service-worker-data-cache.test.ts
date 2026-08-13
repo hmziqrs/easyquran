@@ -58,10 +58,12 @@ import {
   DATA_BUDGET_BYTES,
   DATA_CACHE,
   DATA_MAX,
+  PAGES_CACHE,
   deleteDataMeta,
   enforceDataBounds,
   enforceDataBoundsInner,
   handleData,
+  handleNavigation,
   isCacheable,
   normalizeDataKey,
   purgeAllDataMeta,
@@ -395,5 +397,37 @@ describe("W8a private/no-store responses stay out of eq-data-v1", () => {
       isCacheable(new Response("x", { headers: { "cache-control": "public, max-age=60" } })),
     ).toBe(true);
     expect(isCacheable(new Response("x", { headers: { "cache-control": "no-cache" } }))).toBe(true);
+  });
+});
+
+describe("handleNavigation keys the PAGES cache by the normalized url (?more/?mode collapse)", () => {
+  it("writes the page via a query-less Request (?more/?mode never reach the cache key)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responseWith(8)));
+    const pages = await fakeCaches.open(PAGES_CACHE);
+    const putSpy = vi.spyOn(pages, "put");
+    await handleNavigation(new Request(`${ORIGIN}/app/al-baqarah?more=en.sahih&mode=verse`));
+    expect(putSpy).toHaveBeenCalledTimes(1);
+    const stored = putSpy.mock.calls[0]?.[0];
+    expect(stored).toBeInstanceOf(Request);
+    // SAFETY: toBeInstanceOf(Request) above proved the put arg is the Request overload, not the string overload
+    const storedReq = stored as Request;
+    expect(storedReq.url).not.toContain("?");
+    expect(storedReq.url).toContain("/app/al-baqarah");
+  });
+
+  it("looks the page up via the same normalized Request offline (?more/?mode combos hit one entry)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    const pages = await fakeCaches.open(PAGES_CACHE);
+    const matchSpy = vi.spyOn(pages, "match").mockResolvedValue(responseWith(8));
+    const res = await handleNavigation(
+      new Request(`${ORIGIN}/app/al-baqarah?more=ur.x&mode=reading`),
+    );
+    expect(res.ok).toBe(true);
+    expect(matchSpy).toHaveBeenCalledTimes(1);
+    const looked = matchSpy.mock.calls[0]?.[0];
+    expect(looked).toBeInstanceOf(Request);
+    // SAFETY: toBeInstanceOf(Request) above proved the match arg is the Request overload
+    const lookedReq = looked as Request;
+    expect(lookedReq.url).not.toContain("?");
   });
 });

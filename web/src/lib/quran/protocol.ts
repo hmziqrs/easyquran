@@ -29,7 +29,8 @@ export type WorkerRequest =
       manifest?: ResolvedManifest;
       coordinates?: CanonicalQuranCoordinates;
       catalogue?: SourceCatalogueEntry[];
-    };
+    }
+  | { id: number; type: "setPinnedTranslations"; ids: readonly string[] };
 
 export type WorkerResponse =
   | { id: number; ok: true; result: unknown }

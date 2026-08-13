@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
   import { toArabicDigits } from "$lib/data/quran";
+  import type { StackedTranslation } from "$lib/data/quran-types";
 
   let {
     text,
@@ -11,12 +12,20 @@
     vKey,
     isTranslation,
     onToggleNote,
+    stacked = [],
+    stackedPending = [],
+    stackedErrored = [],
+    stackedErrorLabel = "",
   }: {
     text: string;
     n: number;
     vKey: string;
     isTranslation?: boolean;
     onToggleNote?: () => void;
+    stacked?: readonly StackedTranslation[];
+    stackedPending?: readonly string[];
+    stackedErrored?: readonly string[];
+    stackedErrorLabel?: string;
   } = $props();
   let Tools = $state<
     Component<{ text: string; vKey: string; onToggleNote?: () => void }> | null
@@ -32,6 +41,20 @@
   );
   const noteOpen = $derived(reader.openNote === vKey);
   const showTools = $derived(!isDesktop || hovered || focused || noteOpen);
+
+  type ExtraRow =
+    | { kind: "skeleton"; sourceId: string }
+    | { kind: "error"; sourceId: string }
+    | { kind: "text"; t: StackedTranslation };
+  function extraRowKey(row: ExtraRow): string {
+    if (row.kind === "text") return `text-${row.t.sourceId}`;
+    return `${row.kind}-${row.sourceId}`;
+  }
+  const extraRows = $derived<ExtraRow[]>([
+    ...stackedPending.map((sourceId): ExtraRow => ({ kind: "skeleton", sourceId })),
+    ...stackedErrored.map((sourceId): ExtraRow => ({ kind: "error", sourceId })),
+    ...stacked.map((t): ExtraRow => ({ kind: "text", t })),
+  ]);
 
   onMount(() => {
     void import("./VerseTools.svelte")
@@ -88,6 +111,25 @@
     </span>
   {/if}
 
+  {#if reader.isVerseMode}
+    {#each extraRows as row (extraRowKey(row))}
+      {#if row.kind === "skeleton"}
+        <div class="verse-extra verse-extra--skeleton" aria-hidden="true"></div>
+      {:else if row.kind === "error"}
+        <span class="verse-extra verse-extra--error">{stackedErrorLabel}</span>
+      {:else}
+        <span
+          class="verse-extra"
+          dir={row.t.direction === "rtl" ? "rtl" : "auto"}
+          lang={row.t.languageCode}
+          style="font-size:var(--reader-translation-size, 1.0625rem)"
+        >
+          <span class="verse-extra-label">{row.t.translator ?? row.t.language}</span>{row.t.text}
+        </span>
+      {/if}
+    {/each}
+  {/if}
+
   {#if Tools && showTools}
     <Tools {text} {vKey} {onToggleNote} />
   {/if}
@@ -116,5 +158,30 @@
 
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-text {
     display: inline;
+  }
+
+  .verse-extra {
+    display: block;
+    border-top: 1px solid var(--line);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    text-align: start;
+  }
+
+  .verse-extra-label {
+    color: var(--fg-3);
+    font-size: 0.8rem;
+    margin-inline-end: 0.4rem;
+  }
+
+  .verse-extra--error {
+    color: var(--fg-3);
+    font-size: 0.95rem;
+  }
+
+  .verse-extra--skeleton {
+    background: var(--bg-2);
+    border-radius: 0.25rem;
+    height: 1.2rem;
   }
 </style>

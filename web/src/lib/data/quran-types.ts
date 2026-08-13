@@ -181,6 +181,27 @@ export interface Ayah {
   text: string;
 }
 
+export interface StackedTranslation {
+  readonly sourceId: string;
+  readonly translator: string | null;
+  readonly language: string;
+  readonly languageCode: string;
+  readonly direction: TranslationDirection;
+  readonly text: string;
+}
+
+export type StackedTranslationsByVerse = ReadonlyMap<VerseKey, readonly StackedTranslation[]>;
+
+export type StackedSourceState = "loading" | "ready" | "error";
+
+export interface StackedTranslationsState {
+  readonly byVerse: StackedTranslationsByVerse;
+  readonly order: readonly string[];
+  readonly status: ReadonlyMap<string, StackedSourceState>;
+}
+
+export const STACKED_MAX_EXTRAS = 5;
+
 export interface QuranRangeText {
   ayahs: Ayah[];
   normalizations: SurahNormalization[];

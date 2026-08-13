@@ -49,6 +49,7 @@ export function normalizeDataKey(url: string | URL): string {
   for (const [key, value] of u.searchParams) {
     if (key.startsWith("x-sveltekit-")) continue;
     if (key === "mode") continue;
+    if (key === "more") continue;
     params.append(key, value);
   }
   const search = params.size > 0 ? `?${params.toString()}` : "";
@@ -495,7 +496,7 @@ async function cacheFirstApp(req: Request): Promise<Response> {
   }
 }
 
-async function handleNavigation(req: Request): Promise<Response> {
+export async function handleNavigation(req: Request): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
   let network: Response | null = null;
@@ -507,9 +508,11 @@ async function handleNavigation(req: Request): Promise<Response> {
     clearTimeout(timeout);
   }
 
+  const key = normalizeDataKey(req.url);
+
   if (network && network.ok && network.type !== "opaque" && isCacheable(network)) {
     const pages = await caches.open(PAGES_CACHE);
-    await pages.put(req, network.clone()).catch(() => {});
+    await pages.put(new Request(key), network.clone()).catch(() => {});
     await touchRecency(req.url);
     return network;
   }
@@ -523,10 +526,10 @@ async function handleNavigation(req: Request): Promise<Response> {
   }
 
   const pages = await caches.open(PAGES_CACHE);
-  const pageHit = await pages.match(req);
+  const pageHit = await pages.match(new Request(key));
   if (pageHit) {
     if (!isCacheable(pageHit)) {
-      await pages.delete(req).catch(() => {});
+      await pages.delete(new Request(key)).catch(() => {});
     } else {
       await touchRecency(req.url);
       return pageHit;

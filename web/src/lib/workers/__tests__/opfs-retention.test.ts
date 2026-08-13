@@ -4,8 +4,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TTL_MS = 30 * DAY_MS;
-const CAP_COUNT = 12;
-const CAP_BYTES = 128 * 1024 * 1024;
+const CAP_COUNT = 128;
+const CAP_BYTES = 256 * 1024 * 1024;
 const MB = 1024 * 1024;
 const NOW = 1_700_000_000_000;
 const CUTOFF = NOW - TTL_MS;
@@ -58,7 +58,7 @@ describe("computeEvictions", () => {
   });
 
   it("evicts the oldest item to bring total bytes under the byte cap", () => {
-    const candidates = [cand("older", 70 * MB), cand("newer", 70 * MB)];
+    const candidates = [cand("older", 150 * MB), cand("newer", 150 * MB)];
     const lastUsed = used([
       ["older", CUTOFF],
       ["newer", CUTOFF + 1],
@@ -93,7 +93,7 @@ describe("computeEvictions", () => {
     const evicted = computeEvictions(
       [cand("zero", 0)],
       used([["zero", CUTOFF]]),
-      sized([["zero", 200 * MB]]),
+      sized([["zero", 300 * MB]]),
       NOW,
     );
     expect(evicted).toEqual(["zero"]);
@@ -115,7 +115,7 @@ describe("computeEvictions", () => {
   });
 
   it("evicts every item when one giant item alone exceeds the byte cap", () => {
-    const candidates = [cand("oldest", MB), cand("middle", MB), cand("giant", 200 * MB)];
+    const candidates = [cand("oldest", MB), cand("middle", MB), cand("giant", 300 * MB)];
     const lastUsed = used([
       ["oldest", CUTOFF],
       ["middle", CUTOFF + 1],
@@ -143,21 +143,51 @@ describe("computeEvictions", () => {
     expect(evicted).toEqual([]);
   });
 
-  it("bounds a synthetic 100-translation cache while preserving the pinned Arabic artifact", () => {
+  it("bounds a CAP_COUNT+N translation cache via the count cap while preserving the pinned Arabic artifact", () => {
     const arabicIds = ["uthmani"];
+    const overflow = 20;
+    const translationCount = CAP_COUNT + overflow;
     const candidates = [
       ...arabicIds.map((id) => cand(id, 2 * MB)),
-      ...Array.from({ length: 100 }, (_, index) => cand(`translation-${index}`, MB)),
+      ...Array.from({ length: translationCount }, (_, index) => cand(`translation-${index}`, MB)),
     ];
     const lastUsed = new Map(
       candidates.map((candidate, index) => [candidate.id, CUTOFF + index] as const),
     );
 
     const evicted = computeEvictions(candidates, lastUsed, sized([]), NOW, arabicIds);
-    const retainedTranslations = 100 - evicted.length;
+    expect(evicted.length).toBe(overflow);
+    expect(evicted).not.toContain("uthmani");
+    const retainedTranslations = translationCount - evicted.length;
     expect(retainedTranslations).toBeLessThanOrEqual(CAP_COUNT);
     expect(retainedTranslations * MB).toBeLessThanOrEqual(CAP_BYTES);
-    expect(evicted).not.toContain("uthmani");
+  });
+
+  it("evicts a stale translation extra but keeps a fresh one (TTL applies to extras equally)", () => {
+    const evicted = computeEvictions(
+      [cand("en.sahih", MB), cand("ur.jalandhry", MB)],
+      used([
+        ["en.sahih", CUTOFF - 1],
+        ["ur.jalandhry", CUTOFF + 1],
+      ]),
+      sized([]),
+      NOW,
+    );
+    expect(evicted).toEqual(["en.sahih"]);
+  });
+
+  it("never evicts a pinned selected extra even when it is the stalest and over the count cap", () => {
+    const candidates: PruneCandidate[] = [];
+    const lastUsed = new Map<string, number>();
+    for (let i = 0; i < CAP_COUNT + 5; i++) {
+      candidates.push(cand(`t${i}`, MB));
+      lastUsed.set(`t${i}`, CUTOFF + i);
+    }
+    candidates.push(cand("en.sahih", MB));
+    lastUsed.set("en.sahih", CUTOFF - 1);
+    const evicted = computeEvictions(candidates, lastUsed, sized([]), NOW, ["en.sahih"]);
+    expect(evicted).not.toContain("en.sahih");
+    expect(evicted.length).toBe(5);
   });
 });
 
