@@ -144,62 +144,206 @@ function waitForBootBudget(): Promise<void> {
   });
 }
 
+export interface ReadOptions {
+  /**
+   * Race the read API against the local worker once the worker has been silent this long.
+   * Left unset the read stays strictly sequential (local, then API).
+   */
+  readonly hedgeAfterMs?: number;
+  readonly signal?: AbortSignal;
+}
+
 interface SourceFallbackArgs<T> {
   hasLocal: () => boolean | Promise<boolean>;
   onMiss?: () => void;
   workerReq: (id: number) => WorkerRequest;
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw worker reply is opaque wire data; the decode* fn passed here (wire.ts) is the boundary parser
   decode: (raw: unknown) => T | null;
-  apiFetch: () => Promise<T>;
+  apiFetch: (signal?: AbortSignal) => Promise<T>;
   errorMessage: string;
   onStatus?: (status: ReadTierStatus) => void;
+  hedgeAfterMs?: number;
+  signal?: AbortSignal;
+}
+
+interface FallbackState {
+  workerFailure?: ReadFailure;
+  apiFailure?: ReadFailure;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- opaque rejection reason kept for the error message; narrowed with instanceof at use
+  workerError?: unknown;
+}
+
+async function attemptLocal<T>(
+  args: SourceFallbackArgs<T>,
+  state: FallbackState,
+): Promise<{ value: T } | null> {
+  let local: boolean;
+  const probe = args.hasLocal();
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
+  if (typeof probe === "boolean") {
+    local = probe;
+  } else {
+    try {
+      local = await probe;
+    } catch (e) {
+      if (!state.workerFailure) {
+        state.workerFailure = classifyWorkerFailure(e);
+        state.workerError = e;
+      }
+      return null;
+    }
+  }
+  if (!local) return null;
+  try {
+    const decoded = args.decode(await request<unknown>(args.workerReq));
+    if (decoded) return { value: decoded };
+    if (!state.workerFailure) state.workerFailure = { kind: "malformed" };
+  } catch (e) {
+    if (!state.workerFailure) {
+      state.workerFailure = classifyWorkerFailure(e);
+      state.workerError = e;
+    }
+  }
+  return null;
+}
+
+function failChain<T>(args: SourceFallbackArgs<T>, state: FallbackState): never {
+  const detail = state.workerError instanceof Error ? `: ${state.workerError.message}` : "";
+  args.onStatus?.({
+    servedBy: state.apiFailure ? "api" : "local",
+    workerFailure: state.workerFailure,
+    apiFailure: state.apiFailure,
+  });
+  throw new ReadChainError(
+    `${args.errorMessage}${detail}`,
+    state.workerFailure,
+    state.apiFailure,
+  );
+}
+
+type ReadLeg<T> =
+  | { readonly ok: true; readonly value: T; readonly servedBy: "local" | "api" }
+  | { readonly ok: false };
+
+/** Resolves with the first leg that produced a value, or `{ ok: false }` once every leg missed. */
+function firstSuccessfulLeg<T>(legs: readonly Promise<ReadLeg<T>>[]): Promise<ReadLeg<T>> {
+  return new Promise<ReadLeg<T>>((resolve) => {
+    let remaining = legs.length;
+    let done = false;
+    for (const leg of legs) {
+      void leg.then((result) => {
+        if (done) return;
+        if (result.ok) {
+          done = true;
+          resolve(result);
+          return;
+        }
+        remaining--;
+        if (remaining === 0) {
+          done = true;
+          resolve({ ok: false });
+        }
+      });
+    }
+  });
+}
+
+interface Gate {
+  readonly passed: Promise<void>;
+  open(): void;
+}
+
+function createGate(): Gate {
+  let open = (): void => {};
+  const passed = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { passed, open };
+}
+
+/**
+ * Local-first, but the API leg starts as soon as the worker either reports a miss or stays
+ * silent past the hedge budget — the worker message loop blocks while an artifact downloads,
+ * so waiting on its reply would strand the reader behind a multi-MB download.
+ */
+async function hedgedSourceFallback<T>(
+  args: SourceFallbackArgs<T>,
+  hedgeAfterMs: number,
+): Promise<T> {
+  const state: FallbackState = {};
+  const gate = createGate();
+  const apiAbort = new AbortController();
+  let hedgeTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    hedgeTimer = null;
+    gate.open();
+  }, hedgeAfterMs);
+  const clearHedgeTimer = (): void => {
+    if (hedgeTimer === null) return;
+    clearTimeout(hedgeTimer);
+    hedgeTimer = null;
+  };
+  const abortApi = (): void => apiAbort.abort();
+  const external = args.signal;
+  if (external) {
+    if (external.aborted) abortApi();
+    else external.addEventListener("abort", abortApi, { once: true });
+  }
+
+  const localLeg = (async (): Promise<ReadLeg<T>> => {
+    if (!isReady && startPromise) await waitForBootBudget();
+    const hit = await attemptLocal(args, state);
+    if (hit) return { ok: true, value: hit.value, servedBy: "local" };
+    args.onMiss?.();
+    gate.open();
+    return { ok: false };
+  })();
+
+  const apiLeg = (async (): Promise<ReadLeg<T>> => {
+    await gate.passed;
+    try {
+      const value = await args.apiFetch(apiAbort.signal);
+      return { ok: true, value, servedBy: "api" };
+    } catch (e) {
+      state.apiFailure = classifyApiFailure(e);
+      return { ok: false };
+    }
+  })();
+
+  const winner = await firstSuccessfulLeg<T>([localLeg, apiLeg]);
+  clearHedgeTimer();
+  external?.removeEventListener("abort", abortApi);
+
+  if (winner.ok && winner.servedBy === "local") {
+    apiAbort.abort();
+    args.onStatus?.({ servedBy: "local" });
+    return winner.value;
+  }
+  if (winner.ok) {
+    // The local leg keeps running on purpose: its miss is what starts the OPFS download.
+    args.onStatus?.({ servedBy: "api", workerFailure: state.workerFailure });
+    return winner.value;
+  }
+  if (state.apiFailure) {
+    const recheck = await attemptLocal(args, state);
+    if (recheck) {
+      args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
+      return recheck.value;
+    }
+  }
+  return failChain(args, state);
 }
 
 async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
-  let workerFailure: ReadFailure | undefined;
-  let apiFailure: ReadFailure | undefined;
-  let workerError: unknown;
+  const hedgeAfterMs = args.hedgeAfterMs;
+  if (hedgeAfterMs !== undefined && QURAN.apiBase) {
+    return hedgedSourceFallback(args, hedgeAfterMs);
+  }
+
+  const state: FallbackState = {};
 
   if (!isReady && startPromise) await waitForBootBudget();
 
-  const tryLocal = async (): Promise<{ value: T } | null> => {
-    let local: boolean;
-    const probe = args.hasLocal();
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
-    if (typeof probe === "boolean") {
-      local = probe;
-    } else {
-      try {
-        local = await probe;
-      } catch (e) {
-        if (!workerFailure) {
-          workerFailure = classifyWorkerFailure(e);
-          workerError = e;
-        }
-        return null;
-      }
-    }
-    if (!local) return null;
-    try {
-      const decoded = args.decode(await request<unknown>(args.workerReq));
-      if (decoded) return { value: decoded };
-      if (!workerFailure) workerFailure = { kind: "malformed" };
-    } catch (e) {
-      if (!workerFailure) {
-        workerFailure = classifyWorkerFailure(e);
-        workerError = e;
-      }
-    }
-    return null;
-  };
-
-  const fail = (): never => {
-    const detail = workerError instanceof Error ? `: ${workerError.message}` : "";
-    args.onStatus?.({ servedBy: apiFailure ? "api" : "local", workerFailure, apiFailure });
-    throw new ReadChainError(`${args.errorMessage}${detail}`, workerFailure, apiFailure);
-  };
-
-  const first = await tryLocal();
+  const first = await attemptLocal(args, state);
   if (first) {
     args.onStatus?.({ servedBy: "local" });
     return first.value;
@@ -209,20 +353,20 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
 
   if (QURAN.apiBase) {
     try {
-      const result = await args.apiFetch();
-      args.onStatus?.({ servedBy: "api", workerFailure });
+      const result = await args.apiFetch(args.signal);
+      args.onStatus?.({ servedBy: "api", workerFailure: state.workerFailure });
       return result;
     } catch (e) {
-      apiFailure = classifyApiFailure(e);
+      state.apiFailure = classifyApiFailure(e);
     }
-    const recheck = await tryLocal();
+    const recheck = await attemptLocal(args, state);
     if (recheck) {
-      args.onStatus?.({ servedBy: "local", apiFailure });
+      args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
       return recheck.value;
     }
   }
 
-  return fail();
+  return failChain(args, state);
 }
 
 export const quranWorker = {
@@ -335,6 +479,7 @@ export const quranWorker = {
     num: number,
     source?: QuranReaderSource,
     onStatus?: (status: ReadTierStatus) => void,
+    options?: ReadOptions,
   ): Promise<QuranSurahText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
     if (isArabicSourceId(reader)) {
@@ -342,9 +487,11 @@ export const quranWorker = {
         hasLocal: () => quranWorker.ready,
         workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
         decode: decodeQuranSurahText,
-        apiFetch: () => quranApi.readSurah(reader, num),
+        apiFetch: (signal) => quranApi.readSurah(reader, num, signal),
         errorMessage: `arabic surah unavailable: ${reader}/${num}`,
         onStatus,
+        hedgeAfterMs: options?.hedgeAfterMs,
+        signal: options?.signal,
       });
     }
     return withSourceFallback({
@@ -354,9 +501,11 @@ export const quranWorker = {
       },
       workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
       decode: decodeTranslationSurahText,
-      apiFetch: () => quranApi.readSurah(reader, num),
+      apiFetch: (signal) => quranApi.readSurah(reader, num, signal),
       errorMessage: `translation surah unavailable: ${reader}/${num}`,
       onStatus,
+      hedgeAfterMs: options?.hedgeAfterMs,
+      signal: options?.signal,
     });
   },
 
@@ -366,6 +515,7 @@ export const quranWorker = {
     validateCoordinate?: AyahCoordinateValidator,
     source?: QuranReaderSource,
     onStatus?: (status: ReadTierStatus) => void,
+    options?: ReadOptions,
   ): Promise<QuranRangeText> {
     const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
     if (isArabicSourceId(reader)) {
@@ -373,9 +523,11 @@ export const quranWorker = {
         hasLocal: () => quranWorker.ready,
         workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
         decode: (raw) => decodeQuranRangeText(raw, validateCoordinate),
-        apiFetch: () => quranApi.readRange(reader, from, to, undefined, validateCoordinate),
+        apiFetch: (signal) => quranApi.readRange(reader, from, to, signal, validateCoordinate),
         errorMessage: `arabic range unavailable: ${reader} ${from}-${to}`,
         onStatus,
+        hedgeAfterMs: options?.hedgeAfterMs,
+        signal: options?.signal,
       });
     }
     return withSourceFallback({
@@ -385,9 +537,11 @@ export const quranWorker = {
       },
       workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
       decode: (raw) => decodeTranslationRangeText(raw, validateCoordinate),
-      apiFetch: () => quranApi.readRange(reader, from, to, undefined, validateCoordinate),
+      apiFetch: (signal) => quranApi.readRange(reader, from, to, signal, validateCoordinate),
       errorMessage: `translation range unavailable: ${reader} ${from}-${to}`,
       onStatus,
+      hedgeAfterMs: options?.hedgeAfterMs,
+      signal: options?.signal,
     });
   },
 

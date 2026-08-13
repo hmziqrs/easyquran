@@ -2,13 +2,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 vi.mock("$app/environment", () => ({ browser: true }));
 
-const { workerStub } = vi.hoisted(() => ({
-  // eslint-disable-next-line anti-slop/no-object-as-type -- vi.fn doubles the quranWorker surface; only readRange is exercised here
-  workerStub: { readRange: vi.fn() },
-}));
+const { workerStub, workerStatusListeners } = vi.hoisted(() => {
+  const listeners = new Set<(status: string, detail?: string) => void>();
+  return {
+    workerStatusListeners: listeners,
+    // eslint-disable-next-line anti-slop/no-object-as-type -- vi.fn doubles the quranWorker surface; only readRange/onStatus are exercised here
+    workerStub: {
+      readRange: vi.fn(),
+      onStatus: vi.fn((cb: (status: string, detail?: string) => void) => {
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      }),
+    },
+  };
+});
+
+function emitWorkerStatus(status: string, detail?: string): void {
+  for (const cb of new Set(workerStatusListeners)) cb(status, detail);
+}
 vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
 
 import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
+import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
 import type { AyahCoordinateValidator } from "$lib/quran/wire";
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
 
@@ -87,6 +102,7 @@ describe("createStackedTranslations", () => {
     window.localStorage.clear();
     stackedTranslations.setIds([]);
     workerStub.readRange.mockReset();
+    workerStatusListeners.clear();
   });
   afterEach(() => stackedTranslations.setIds([]));
 
@@ -165,7 +181,14 @@ describe("createStackedTranslations", () => {
       validator: () => v,
     });
     ctrl.sync();
-    expect(workerStub.readRange).toHaveBeenCalledWith(1, 1, v, "en.sahih");
+    expect(workerStub.readRange).toHaveBeenCalledWith(
+      1,
+      1,
+      v,
+      "en.sahih",
+      undefined,
+      expect.objectContaining({ hedgeAfterMs: LOCAL_HEDGE_BUDGET_MS }),
+    );
     expect(v).not.toHaveBeenCalled();
     ctrl.dispose();
   });
@@ -177,7 +200,14 @@ describe("createStackedTranslations", () => {
     ctrl.sync();
     expect(ctrl.state.order).toEqual(["ur.jalandhry"]);
     expect(workerStub.readRange).toHaveBeenCalledTimes(1);
-    expect(workerStub.readRange).toHaveBeenCalledWith(1, 1, validator, "ur.jalandhry");
+    expect(workerStub.readRange).toHaveBeenCalledWith(
+      1,
+      1,
+      validator,
+      "ur.jalandhry",
+      undefined,
+      expect.objectContaining({ hedgeAfterMs: LOCAL_HEDGE_BUDGET_MS }),
+    );
     ctrl.dispose();
   });
 
@@ -348,5 +378,113 @@ describe("createStackedTranslations", () => {
     await flush();
     expect(ctrl.state.byVerse.size).toBe(3);
     ctrl.dispose();
+  });
+
+  it("passes the hedge budget so a cold extra is served by the read API", () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    workerStub.readRange.mockResolvedValue({ ayahs: [], normalizations: [] });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    ctrl.sync();
+    const options = workerStub.readRange.mock.calls[0]?.[5];
+    expect(options).toMatchObject({ hedgeAfterMs: LOCAL_HEDGE_BUDGET_MS });
+    // SAFETY: the toMatchObject above pins options to the ReadOptions bag passed by fetchExtra
+    expect((options as { signal?: AbortSignal } | undefined)?.signal).toBeInstanceOf(AbortSignal);
+    ctrl.dispose();
+  });
+
+  it("retries an errored extra when the worker warms up after its download lands", async () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    workerStub.readRange
+      .mockRejectedValueOnce(new Error("cold miss"))
+      .mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
+      );
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    ctrl.sync();
+    await flush();
+    expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
+
+    emitWorkerStatus("ready");
+    await flush();
+    expect(stackedFor(ctrl.state, "1:1").map((t) => t.sourceId)).toEqual(["en.sahih"]);
+    expect(erroredFor(ctrl.state, "1:1")).toEqual([]);
+    ctrl.dispose();
+  });
+
+  it("a warm-up retry never re-flips to loading (no skeleton over existing text)", async () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    workerStub.readRange.mockRejectedValue(new Error("cold miss"));
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    ctrl.sync();
+    await flush();
+
+    emitWorkerStatus("ready");
+    expect(loadingFor(ctrl.state, "1:1")).toEqual([]);
+    expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
+    await flush();
+    ctrl.dispose();
+  });
+
+  it("caps warm-up retries so a worker ready-storm cannot loop", async () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    workerStub.readRange.mockRejectedValue(new Error("cold miss"));
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    ctrl.sync();
+    await flush();
+    workerStub.readRange.mockClear();
+
+    for (let i = 0; i < 8; i++) {
+      emitWorkerStatus("ready");
+      await flush();
+    }
+    expect(workerStub.readRange.mock.calls.length).toBe(3);
+    ctrl.dispose();
+  });
+
+  it("dispose() unsubscribes from worker status", async () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    workerStub.readRange.mockRejectedValue(new Error("cold miss"));
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    ctrl.sync();
+    await flush();
+
+    ctrl.dispose();
+    workerStub.readRange.mockClear();
+    emitWorkerStatus("ready");
+    await flush();
+    expect(workerStub.readRange).not.toHaveBeenCalled();
+    expect(workerStatusListeners.size).toBe(0);
+  });
+
+  it("a failed download hands its source a fresh timed-retry budget", async () => {
+    vi.useFakeTimers();
+    try {
+      stackedTranslations.setIds(["en.sahih"]);
+      workerStub.readRange.mockRejectedValue(new Error("cold miss"));
+      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+      ctrl.sync();
+      await flush();
+
+      // Burn the whole ladder.
+      await vi.advanceTimersByTimeAsync(1200);
+      await vi.advanceTimersByTimeAsync(4000);
+      await vi.advanceTimersByTimeAsync(9000);
+      await flush();
+      workerStub.readRange.mockClear();
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(workerStub.readRange).not.toHaveBeenCalled();
+
+      emitWorkerStatus("translation-fetch-failed", "en.sahih");
+      workerStub.readRange.mockImplementation(
+        (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+          Promise.resolve(rangeText(id, f, t)),
+      );
+      emitWorkerStatus("ready");
+      await flush();
+      expect(stackedFor(ctrl.state, "1:1").map((t) => t.sourceId)).toEqual(["en.sahih"]);
+      ctrl.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

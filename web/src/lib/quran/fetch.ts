@@ -1,6 +1,10 @@
 export const FETCH_TIMEOUT_MS = 3000;
 export const RANGE_CHUNK_TIMEOUT_MS = 10_000;
 export const LOCAL_BOOT_BUDGET_MS = 1500;
+// How long a translation read waits for the local worker before racing the read API in
+// parallel. The worker message loop blocks while an artifact is staged/opened, so a cold
+// or downloading source must not hold the reader hostage.
+export const LOCAL_HEDGE_BUDGET_MS = 400;
 export const RESPONSE_CAP = 300;
 
 export async function fetchWithTimeout(

@@ -6,6 +6,8 @@ import type {
   TranslationCatalogueEntry,
   VerseKey,
 } from "$lib/data/quran-types";
+import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
+import type { WorkerStatus } from "$lib/quran/protocol";
 import { quranWorker } from "$lib/quran/worker-client";
 import type { AyahCoordinateValidator } from "$lib/quran/wire";
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
@@ -45,8 +47,13 @@ export function createStackedTranslations(
   let lastTo = -1;
   const metaCache = new Map<string, TranslationCatalogueEntry>();
   const ERROR_RETRY_DELAYS_MS: readonly number[] = [1200, 4000, 9000];
+  const WARM_RETRY_CAP = 3;
   const retryAttempts = new Map<string, number>();
   const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const warmRetries = new Map<string, number>();
+  const requestSeq = new Map<string, number>();
+  const inFlight = new Map<string, AbortController>();
+  let stopWorkerStatus: (() => void) | null = null;
 
   function metaFor(id: string): TranslationCatalogueEntry | undefined {
     const cached = metaCache.get(id);
@@ -92,10 +99,23 @@ export function createStackedTranslations(
     validator: AyahCoordinateValidator,
   ): void {
     const startGen = gen;
+    const token = (requestSeq.get(id) ?? 0) + 1;
+    requestSeq.set(id, token);
+    inFlight.get(id)?.abort();
+    const controller = new AbortController();
+    inFlight.set(id, controller);
+    const stale = (): boolean => disposed || startGen !== gen || requestSeq.get(id) !== token;
+    const settle = (): void => {
+      if (inFlight.get(id) === controller) inFlight.delete(id);
+    };
     quranWorker
-      .readRange(fromVal, toVal, validator, id)
+      .readRange(fromVal, toVal, validator, id, undefined, {
+        hedgeAfterMs: LOCAL_HEDGE_BUDGET_MS,
+        signal: controller.signal,
+      })
       .then((range) => {
-        if (disposed || startGen !== gen) return;
+        settle();
+        if (stale()) return;
         if (!metaFor(id)) {
           setStatus(id, "error");
           scheduleErrorRetry(id, fromVal, toVal, validator);
@@ -104,9 +124,11 @@ export function createStackedTranslations(
         mergeRange(id, range.ayahs);
         setStatus(id, "ready");
         clearErrorRetry(id);
+        warmRetries.delete(id);
       })
       .catch(() => {
-        if (disposed || startGen !== gen) return;
+        settle();
+        if (stale()) return;
         setStatus(id, "error");
         scheduleErrorRetry(id, fromVal, toVal, validator);
       });
@@ -139,7 +161,52 @@ export function createStackedTranslations(
     retryAttempts.delete(id);
   }
 
+  /**
+   * The worker goes back to "ready" when the last artifact download settles, so a source that
+   * exhausted its timed retries while its DB was still landing gets one more chance per warm-up.
+   * Status is deliberately left at "error" (never re-flipped to "loading"): VerseRow renders
+   * skeleton and text rows additively, so a re-flip would double-render a source that has text.
+   */
+  function retryColdExtras(): void {
+    const validator = opts.validator();
+    if (!validator) return;
+    if (lastFrom < 1 || lastTo < lastFrom) return;
+    for (const id of untrack(() => order)) {
+      if (untrack(() => status.get(id)) !== "error") continue;
+      if (inFlight.has(id)) continue;
+      const attempts = warmRetries.get(id) ?? 0;
+      if (attempts >= WARM_RETRY_CAP) continue;
+      warmRetries.set(id, attempts + 1);
+      clearErrorRetry(id);
+      fetchExtra(id, lastFrom, lastTo, validator);
+    }
+  }
+
+  function handleWorkerStatus(workerStatus: WorkerStatus, detail?: string): void {
+    if (disposed) return;
+    if (workerStatus === "translation-fetch-failed") {
+      // A failed download is followed by "ready"; hand that source a fresh timed budget.
+      if (detail !== undefined) retryAttempts.delete(detail);
+      return;
+    }
+    if (workerStatus !== "ready") return;
+    retryColdExtras();
+  }
+
+  function abortInFlight(id: string): void {
+    const controller = inFlight.get(id);
+    if (!controller) return;
+    controller.abort();
+    inFlight.delete(id);
+  }
+
+  function ensureWorkerStatusSubscription(): void {
+    if (stopWorkerStatus || disposed) return;
+    stopWorkerStatus = quranWorker.onStatus?.(handleWorkerStatus) ?? null;
+  }
+
   function sync(): void {
+    ensureWorkerStatusSubscription();
     const route = opts.routeKey();
     const fromVal = opts.from();
     const toVal = opts.to();
@@ -163,7 +230,11 @@ export function createStackedTranslations(
         return { next, dropped };
       });
       status = pruned.next;
-      for (const id of pruned.dropped) clearErrorRetry(id);
+      for (const id of pruned.dropped) {
+        clearErrorRetry(id);
+        abortInFlight(id);
+        warmRetries.delete(id);
+      }
     }
 
     if (route !== prevRoute) {
@@ -172,6 +243,7 @@ export function createStackedTranslations(
       byVerse = new Map();
       status = new Map();
       for (const id of retryTimers.keys()) clearErrorRetry(id);
+      warmRetries.clear();
     }
 
     const validator = opts.validator();
@@ -209,6 +281,12 @@ export function createStackedTranslations(
       disposed = true;
       gen++;
       for (const id of retryTimers.keys()) clearErrorRetry(id);
+      for (const controller of inFlight.values()) controller.abort();
+      inFlight.clear();
+      requestSeq.clear();
+      warmRetries.clear();
+      stopWorkerStatus?.();
+      stopWorkerStatus = null;
     },
   };
 }

@@ -175,7 +175,7 @@ describe("withSourceFallback via readSurah", () => {
     await vi.advanceTimersByTimeAsync(0);
     respondReadSurah(fake, { cached: true });
     await expect(p).resolves.toBe(DECODED_SURAH);
-    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1);
+    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1, undefined);
   });
 
   it("ensures the translation then returns the API result when not cached", async () => {
@@ -190,7 +190,7 @@ describe("withSourceFallback via readSurah", () => {
     expect(ensure.type).toBe("ensureTranslation");
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await expect(p).resolves.toBe(DECODED_SURAH);
-    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1);
+    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1, undefined);
   });
 
   it("re-checks the cache after an API failure and returns the worker result", async () => {
@@ -286,7 +286,7 @@ describe("withSourceFallback without a worker", () => {
       // SAFETY: same ReadChainError instance confirmed two assertions above
       expect((err as ReadChainError).workerFailure).toBeUndefined();
     }
-    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1);
+    expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1, undefined);
   });
 
   it("rejects without calling the API when both worker and apiBase are unavailable", async () => {
