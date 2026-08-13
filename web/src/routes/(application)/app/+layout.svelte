@@ -138,7 +138,11 @@
   >{@render children()}</main>
   <Footer owner={data.owner} year={data.year} copy={copy.footer} links={footerLinks} />
 </div>
-<Tweaks triggerLabel={copy.appearanceTrigger} loadCopy={loadReaderSettingsCopy} />
+<Tweaks
+  locale={copy.locale}
+  triggerLabel={copy.appearanceTrigger}
+  loadCopy={loadReaderSettingsCopy}
+/>
 
 <style>
   :global(body:has([data-reader-root]) > a[href="#main"]) {

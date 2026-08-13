@@ -8,13 +8,21 @@
   import { Notifications } from "$lib/components/notifications";
   import { OfflinePack } from "$lib/components/status";
   import { cn } from "$lib/utils";
+  import { uiDirection, type UiLocale } from "$lib/i18n/locales";
   import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
   let {
+    locale,
     triggerLabel,
     loadCopy,
     showReaderTools = true,
   }: {
+    /**
+     * UI locale of the surrounding chrome. The panel anchors and lays out from this, never from the
+     * inherited document direction: Arabic reader routes set `<html dir="rtl">` for the *content*,
+     * which would otherwise flip an English panel to the left edge with right-aligned text.
+     */
+    locale: UiLocale;
     /** Rendered on the closed trigger, so it is the only appearance string a page eagerly needs. */
     triggerLabel: string;
     /**
@@ -26,6 +34,8 @@
     loadCopy: () => Promise<TweaksResolvedCopy>;
     showReaderTools?: boolean;
   } = $props();
+
+  const direction = $derived(uiDirection(locale));
 
   let copy = $state<TweaksResolvedCopy>();
   let copyRequest: Promise<void> | undefined;
@@ -134,7 +144,11 @@
 
 <svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
-<div class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3">
+<div
+  lang={locale}
+  dir={direction}
+  class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3"
+>
   {#if open && copy}
     <div
       id="tweaks-panel"

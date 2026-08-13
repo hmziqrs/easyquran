@@ -63,4 +63,4 @@
   <main id="main" tabindex="-1" class="flex-1">{@render children()}</main>
 </div>
 
-<Tweaks triggerLabel="Customize appearance" loadCopy={loadTweaksCopy} />
+<Tweaks locale="en" triggerLabel="Customize appearance" loadCopy={loadTweaksCopy} />

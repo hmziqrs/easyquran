@@ -12,4 +12,4 @@
   };
 </script>
 
-<Tweaks {triggerLabel} {loadCopy} showReaderTools={false} />
+<Tweaks {locale} {triggerLabel} {loadCopy} showReaderTools={false} />
