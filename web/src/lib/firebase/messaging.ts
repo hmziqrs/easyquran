@@ -13,7 +13,7 @@ const foregroundCallbacks = new Set<(payload: MessagePayload) => void>();
 
 export function getPermissionState(): PermissionState {
   if (!browser || !("Notification" in window)) return "unsupported";
-  return Notification.permission as PermissionState;
+  return Notification.permission;
 }
 
 export async function isMessagingSupported(): Promise<boolean> {
@@ -79,7 +79,7 @@ export async function requestPermission(): Promise<PermissionState> {
   if (!browser || !("Notification" in window)) return "unsupported";
   try {
     const result = await Notification.requestPermission();
-    return result as PermissionState;
+    return result;
   } catch {
     return getPermissionState();
   }
@@ -128,7 +128,10 @@ export async function onForegroundMessage(
   };
 }
 
-async function postDeviceEndpoint(path: string, body: Record<string, unknown>): Promise<boolean> {
+async function postDeviceEndpoint(
+  path: string,
+  body: { token: string; platform?: string },
+): Promise<boolean> {
   if (!API_BASE_URL) return false;
   try {
     const res = await fetch(`${API_BASE_URL}/device/v1/${path}`, {

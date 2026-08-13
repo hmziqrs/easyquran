@@ -45,6 +45,7 @@
   }
 
   function onNote(event: Event) {
+    // SAFETY: onNote is bound only to the Textarea oninput below; currentTarget is that textarea element.
     reader.setNote(vKey, (event.currentTarget as HTMLTextAreaElement).value);
   }
 

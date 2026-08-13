@@ -32,6 +32,8 @@ const ARABIC: SurahRouteContext = { kind: "arabic" };
 
 type TranslationEntry = { lang: string; ctx: SurahRouteContext };
 
+// SAFETY: translations.json is the generated catalogue whose every row is an array of strings
+// (baked at build time); only row[0], the translation id, is read here.
 const translations: TranslationEntry[] = (rawTranslations as readonly (readonly string[])[]).map(
   (row) => {
     const { lang, translator } = translationSegmentsFromId(row[0] ?? "");
@@ -80,6 +82,8 @@ function plainReaderEntryUrl(page: ReaderEntryPage): string {
 
 function* sitemapLines(): Generator<string> {
   yield `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n`;
+  // SAFETY: MARKETING_PUBLICATIONS is an Object.freeze literal whose keys are exactly MarketingPageId
+  // (the type is derived from that object), so Object.keys enumerates that key set at runtime.
   for (const pageId of Object.keys(MARKETING_PUBLICATIONS) as MarketingPageId[]) {
     for (const locale of SUPPORTED_UI_LOCALES) {
       if (!marketingHref(pageId, locale)) continue;

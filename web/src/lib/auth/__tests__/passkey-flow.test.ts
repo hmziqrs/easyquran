@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
 
 import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
-import { createPasskeyFlow, type PasskeyFlowStateLike } from "$lib/auth/passkey-flow.svelte";
+import { createPasskeyFlow } from "$lib/auth/passkey-flow.svelte";
 
 const PROFILE: UserProfile = {
   id: 5,
@@ -19,7 +19,34 @@ const PROFILE: UserProfile = {
 const LOGIN_STATE = { opaque: "login-state-blob" };
 const REGISTER_STATE = { opaque: "register-state-blob" };
 
+type PasskeyRequestBody = {
+  authentication_state?: { opaque: string };
+  registration_state?: { opaque: string };
+  credential?: {
+    id?: string;
+    rawId?: string;
+    raw_id?: string;
+    clientDataJSON?: string;
+    response?: {
+      clientDataJSON?: string;
+      client_data_json?: string;
+      authenticatorData?: string;
+      signature?: string;
+      userHandle?: string;
+      attestationObject?: string;
+      attestation_object?: string;
+      transports?: string[];
+    };
+  };
+  device_type?: string;
+  transports?: string[];
+  credential_id?: string;
+  id?: number;
+};
+
 function mockClient() {
+  // SAFETY: hand-built AuthClient test double — the class's #private csrf members are never
+  // touched by PasskeyFlow, and every member these tests invoke is stubbed as a vi.fn().
   return {
     apiBase: "https://eq.test/api",
     unsafeRequest: vi.fn(),
@@ -28,34 +55,30 @@ function mockClient() {
     refreshCsrf: vi.fn().mockResolvedValue(undefined),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & {
+  } as AuthClient & {
     unsafeRequest: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
+    ensureAnonymousSession: ReturnType<typeof vi.fn>;
     refreshCsrf: ReturnType<typeof vi.fn>;
+    clearCsrf: ReturnType<typeof vi.fn>;
+    getUser: ReturnType<typeof vi.fn>;
   };
 }
 
-type PasskeyStateMock = PasskeyFlowStateLike & {
-  transition: ReturnType<typeof vi.fn>;
-  setUser: ReturnType<typeof vi.fn>;
-  setTwoFaPending: ReturnType<typeof vi.fn>;
-  probe: ReturnType<typeof vi.fn>;
-};
-
-function mockState(): PasskeyStateMock {
+function mockState() {
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "authenticated", user: PROFILE }),
-  } as unknown as PasskeyStateMock;
+  };
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
   return { ok: true, status: 200, data, error: null, rotated };
 }
 
-function fakeLoginBegin(challengeB64u = "AAAAAA"): unknown {
+function fakeLoginBegin(challengeB64u = "AAAAAA") {
   return {
     challenge: {
       publicKey: {
@@ -70,7 +93,7 @@ function fakeLoginBegin(challengeB64u = "AAAAAA"): unknown {
   };
 }
 
-function fakeRegisterBegin(challengeB64u = "BBBBBB"): unknown {
+function fakeRegisterBegin(challengeB64u = "BBBBBB") {
   return {
     challenge: {
       publicKey: {
@@ -107,7 +130,7 @@ function fakeAssertion() {
       signature: new Uint8Array([3]).buffer,
       userHandle: null,
     },
-  } as unknown as PublicKeyCredential;
+  };
 }
 
 function fakeAttestation() {
@@ -120,23 +143,25 @@ function fakeAttestation() {
       attestationObject: new Uint8Array([12]).buffer,
       getTransports: () => ["internal"],
     },
-  } as unknown as PublicKeyCredential;
+  };
 }
 
 function fakeCredentialsGet(getImpl: () => Promise<Credential | null>): CredentialsContainer {
   return {
-    get: vi.fn(getImpl) as unknown as CredentialsContainer["get"],
+    get: vi.fn(getImpl),
     create: vi.fn(),
     store: vi.fn(),
-  } as unknown as CredentialsContainer;
+    preventSilentAccess: vi.fn(),
+  };
 }
 
 function fakeCredentialsCreate(createImpl: () => Promise<Credential | null>): CredentialsContainer {
   return {
     get: vi.fn(),
-    create: vi.fn(createImpl) as unknown as CredentialsContainer["create"],
+    create: vi.fn(createImpl),
     store: vi.fn(),
-  } as unknown as CredentialsContainer;
+    preventSilentAccess: vi.fn(),
+  };
 }
 
 afterEach(() => {
@@ -189,6 +214,7 @@ describe("PasskeyFlow login cancellation is benign", () => {
     const creds = fakeCredentialsGet(() => Promise.reject(new DOMException("abort", "AbortError")));
     const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
     await flow.login();
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
     const paths = (client.unsafeRequest.mock.calls as [string, unknown][]).map(([p]) => p);
     expect(paths).toContain("/passkey/v1/login/begin");
     expect(paths).not.toContain("/passkey/v1/login/finish");
@@ -211,19 +237,20 @@ describe("PasskeyFlow login success", () => {
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
     expect(state.setTwoFaPending).toHaveBeenCalledWith(false);
 
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
     const finishCall = client.unsafeRequest.mock.calls[1] as [
       string,
-      { method: string; body: Record<string, unknown> },
+      { method: string; body: PasskeyRequestBody },
     ];
     expect(finishCall[0]).toBe("/passkey/v1/login/finish");
     expect(finishCall[1]!.method).toBe("POST");
     const body = finishCall[1]!.body;
     expect(body.authentication_state).toEqual(LOGIN_STATE);
-    const cred = body.credential as Record<string, unknown>;
+    const cred = body.credential!;
     expect(cred.rawId).toBeTypeOf("string");
     expect(cred.raw_id).toBeUndefined();
     expect(cred.clientDataJSON).toBeUndefined();
-    const resp = cred.response as Record<string, unknown>;
+    const resp = cred.response!;
     expect(resp.clientDataJSON).toBeTypeOf("string");
     expect(resp.client_data_json).toBeUndefined();
     expect(resp.authenticatorData).toBeTypeOf("string");
@@ -261,9 +288,10 @@ describe("PasskeyFlow register", () => {
     expect(flow.passkeys[0]!.id).toBe("cred-2");
     expect(flow.passkeys[0]!.label).toBe("MacBook");
 
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
     const finishCall = client.unsafeRequest.mock.calls[1] as [
       string,
-      { method: string; body: Record<string, unknown> },
+      { method: string; body: PasskeyRequestBody },
     ];
     expect(finishCall[0]).toBe("/passkey/v1/register/finish");
     expect(finishCall[1]!.method).toBe("POST");
@@ -271,10 +299,10 @@ describe("PasskeyFlow register", () => {
     expect(body.registration_state).toEqual(REGISTER_STATE);
     expect(body.device_type).toBe("MacBook");
     expect(body.transports).toEqual(["internal"]);
-    const cred = body.credential as Record<string, unknown>;
+    const cred = body.credential!;
     expect(cred.rawId).toBeTypeOf("string");
     expect(cred.raw_id).toBeUndefined();
-    const resp = cred.response as Record<string, unknown>;
+    const resp = cred.response!;
     expect(resp.attestationObject).toBeTypeOf("string");
     expect(resp.attestation_object).toBeUndefined();
     expect(resp.clientDataJSON).toBeTypeOf("string");
@@ -321,6 +349,7 @@ describe("PasskeyFlow list", () => {
     const flow = createPasskeyFlow({ client, state: mockState() });
     const res = await flow.list();
 
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
     const call = client.unsafeRequest.mock.calls[0] as [string, { method: string }];
     expect(call[0]).toBe("/passkey/v1/list");
     expect(call[1]!.method).toBe("POST");
@@ -370,9 +399,10 @@ describe("PasskeyFlow remove", () => {
     const res = await flow.remove("cred-2");
     expect(res).toBe(true);
 
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
     const removeCall = client.unsafeRequest.mock.calls[1] as [
       string,
-      { method: string; body: Record<string, unknown> },
+      { method: string; body: PasskeyRequestBody },
     ];
     expect(removeCall[0]).toBe("/passkey/v1/remove");
     expect(removeCall[1]!.method).toBe("POST");

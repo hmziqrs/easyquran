@@ -60,10 +60,10 @@ export const READER_VARIANTS: VariantDef[] = [
   },
 ];
 
-export const VARIANTS: Record<VariantKind, VariantDef[]> = {
+export const VARIANTS = {
   landing: LANDING_VARIANTS,
   reader: READER_VARIANTS,
-};
+} satisfies Record<VariantKind, VariantDef[]>;
 
 export const isVariantId = (v: string): v is VariantId => v === "a" || v === "b" || v === "c";
 

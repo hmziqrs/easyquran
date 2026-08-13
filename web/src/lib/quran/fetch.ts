@@ -47,10 +47,18 @@ export class MalformedDataError extends Error {
   }
 }
 
+export type JsonDocument =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonDocument[]
+  | { readonly [key: string]: JsonDocument };
+
 export async function fetchJsonWithTimeout(
   url: string,
   init?: RequestInit & { timeout?: number },
-): Promise<unknown> {
+): Promise<JsonDocument> {
   const timeout = init?.timeout ?? FETCH_TIMEOUT_MS;
   const external = init?.signal;
   const ctrl = new AbortController();
@@ -101,6 +109,7 @@ export class ReadChainError extends Error {
   }
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); instanceof narrowing below is the parse
 export function classifyApiFailure(e: unknown): ReadFailure {
   if (e instanceof FetchTimeoutError) return { kind: "timeout" };
   if (e instanceof FetchHttpError) return { kind: "http", status: e.status };
@@ -108,6 +117,7 @@ export function classifyApiFailure(e: unknown): ReadFailure {
   return { kind: "transport" };
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); classification is kind-level only
 export function classifyWorkerFailure(_e: unknown): ReadFailure {
   return { kind: "worker" };
 }

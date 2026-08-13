@@ -5,11 +5,13 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+export type ExternalLinkAttrs = { target?: "_blank"; rel?: string };
+
 export function externalLinkAttrs(
   href?: string,
   opts: { me?: boolean } = {},
-): { target?: "_blank"; rel?: string } {
-  if (typeof href === "string" && /^https?:\/\//i.test(href)) {
+): ExternalLinkAttrs {
+  if (href !== undefined && /^https?:\/\//i.test(href)) {
     return {
       target: "_blank",
       rel: opts.me ? "me noopener noreferrer" : "noopener noreferrer",

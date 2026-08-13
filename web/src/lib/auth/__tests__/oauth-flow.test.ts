@@ -22,7 +22,12 @@ const PROFILE: UserProfile = {
   oauth_provider: "google",
 };
 
-function mockClient() {
+function mockClient(): AuthClient & {
+  unsafeRequest: ReturnType<typeof vi.fn>;
+  ensureAnonymousSession: ReturnType<typeof vi.fn>;
+  refreshCsrf: ReturnType<typeof vi.fn>;
+} {
+  // SAFETY: test double — OAuthFlow calls only unsafeRequest, ensureAnonymousSession, and refreshCsrf; AuthClient's private CSRF machinery is never invoked here.
   return {
     apiBase: "https://eq.test/api",
     unsafeRequest: vi.fn(),
@@ -31,11 +36,7 @@ function mockClient() {
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
     get: vi.fn(),
-  } as unknown as AuthClient & {
-    unsafeRequest: ReturnType<typeof vi.fn>;
-    ensureAnonymousSession: ReturnType<typeof vi.fn>;
-    refreshCsrf: ReturnType<typeof vi.fn>;
-  };
+  } as never;
 }
 
 type OAuthStateMock = OAuthFlowStateLike & {
@@ -45,11 +46,12 @@ type OAuthStateMock = OAuthFlowStateLike & {
 };
 
 function mockState(): OAuthStateMock {
+  // SAFETY: test double — every OAuthFlowStateLike member is a vi.fn() with a matching signature; transition/setUser/probe re-typed for assertions.
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "authenticated", user: PROFILE }),
-  } as unknown as OAuthStateMock;
+  } as OAuthStateMock;
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
@@ -75,10 +77,11 @@ describe("OAuthFlow.begin bootstrap-before-navigate", () => {
     expect(res).toBe(true);
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith("https://eq.test/api/auth/google/v1/login");
+    // SAFETY: ensureAnonymousSession is a vi.fn() from mockClient(); its .mock.invocationCallOrder records call order.
     const bootOrder = stateOf(
-      client.ensureAnonymousSession as unknown as { mock: { invocationCallOrder: number[] } },
+      client.ensureAnonymousSession as { mock: { invocationCallOrder: number[] } },
     );
-    const navOrder = (navigate.mock.invocationCallOrder as number[])[0] ?? 0;
+    const navOrder = navigate.mock.invocationCallOrder[0] ?? 0;
     expect(bootOrder).toBeGreaterThan(0);
     expect(bootOrder).toBeLessThan(navOrder);
   });
@@ -123,6 +126,7 @@ describe("OAuthFlow provider wiring", () => {
   }
 
   it("rejects an unknown provider at construction", () => {
+    // SAFETY: deliberately invalid provider value — the test asserts the constructor throws on it.
     expect(() =>
       createOAuthFlow("twitter" as OAuthProvider, {
         client: mockClient(),
@@ -145,10 +149,10 @@ describe("OAuthFlow.finish", () => {
     expect(res.ok).toBe(true);
     expect(res.returnTarget).toBe("/account");
     expect(state.transition).toHaveBeenCalledWith({ kind: "oauth" });
-    const tOrder = stateOf(
-      state.transition as unknown as { mock: { invocationCallOrder: number[] } },
-    );
-    const sOrder = stateOf(state.setUser as unknown as { mock: { invocationCallOrder: number[] } });
+    // SAFETY: transition is a vi.fn() double from mockState(); .mock.invocationCallOrder records call order.
+    const tOrder = stateOf(state.transition as { mock: { invocationCallOrder: number[] } });
+    // SAFETY: setUser is a vi.fn() double from mockState(); .mock.invocationCallOrder records call order.
+    const sOrder = stateOf(state.setUser as { mock: { invocationCallOrder: number[] } });
     expect(tOrder).toBeLessThan(sOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
     expect(consumeReturnTarget()).toBeNull();

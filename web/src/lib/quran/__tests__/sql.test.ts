@@ -11,6 +11,7 @@ const query: QuranQuery<number> = {
   sql: "SELECT value FROM fixture WHERE id = ?",
   decode: (row) => {
     const value = row.value;
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- row.value is a SqlValue runtime union (string | number | null | Uint8Array) read straight from sqlite; typeof is the only discriminator at this decode boundary
     if (typeof value !== "number") throw new Error("invalid fixture value");
     return value;
   },

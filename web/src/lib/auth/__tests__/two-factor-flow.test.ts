@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import type {
+  AuthClient,
+  AuthErrorEnvelope,
+  AuthRequestResult,
+  UserProfile,
+} from "$lib/auth/auth-client";
 import { createTwoFactorFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
@@ -18,26 +23,28 @@ const PROFILE: UserProfile = {
 const ENABLED: UserProfile = { ...PROFILE, two_fa_enabled: true };
 const DISABLED: UserProfile = { ...PROFILE, two_fa_enabled: false };
 
-function mockClient() {
+function mockClient(): AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> } {
+  // SAFETY: test double — TwoFactorFlow calls only unsafeRequest; AuthClient's private CSRF machinery is never invoked here.
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn(),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> };
+  } as never;
 }
 
 function mockState(): FlowStateLike & {
   transition: ReturnType<typeof vi.fn>;
   setUser: ReturnType<typeof vi.fn>;
 } {
+  // SAFETY: test double — every FlowStateLike member is a vi.fn() with a matching signature; transition/setUser re-typed for call-order assertions.
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "authenticated" }),
-  } as unknown as FlowStateLike & {
+  } as FlowStateLike & {
     transition: ReturnType<typeof vi.fn>;
     setUser: ReturnType<typeof vi.fn>;
   };
@@ -48,13 +55,13 @@ function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
 }
 function err(
   status: number,
-  body: Record<string, unknown> = {},
+  body: AuthErrorEnvelope = {},
   rotated = false,
 ): AuthRequestResult<never> {
-  return { ok: false, status, data: null, error: body as never, rotated };
+  return { ok: false, status, data: null, error: body, rotated };
 }
 
-function storageProbe(): { readKeys: string[] } {
+function storageProbe() {
   const readKeys: string[] = [];
   const proxy = (store: Storage | undefined, label: string) => {
     if (!store) return;
@@ -64,8 +71,8 @@ function storageProbe(): { readKeys: string[] } {
       return origSet(key, value);
     };
   };
-  proxy(typeof localStorage !== "undefined" ? localStorage : undefined, "local");
-  proxy(typeof sessionStorage !== "undefined" ? sessionStorage : undefined, "session");
+  proxy(localStorage, "local");
+  proxy(sessionStorage, "session");
   return { readKeys };
 }
 
@@ -121,10 +128,8 @@ describe("TwoFactorFlow verify (rotates only on success)", () => {
     const res = await flow.verify();
     expect(res).toBe(true);
     expect(state.transition).toHaveBeenCalledWith({ kind: "two-fa-verify" });
-    const tOrder = (state.transition as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0]!;
-    const sOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0]!;
+    const tOrder = state.transition.mock.invocationCallOrder[0]!;
+    const sOrder = state.setUser.mock.invocationCallOrder[0]!;
     expect(tOrder).toBeLessThan(sOrder);
     expect(state.setUser).toHaveBeenCalledWith(ENABLED);
     expect(flow.setupData).toBeNull();

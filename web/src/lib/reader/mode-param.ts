@@ -6,11 +6,12 @@ const VALID_MODES: ReadonlySet<string> = new Set(READER_MODE_VALUES);
 
 export function parseModeParam(url: URL): ReaderMode | null {
   const value = url.searchParams.get(READER_MODE_PARAM);
+  // SAFETY: VALID_MODES.has(value) proved value is one of READER_MODE_VALUES, the ReaderMode union.
   return value && VALID_MODES.has(value) ? (value as ReaderMode) : null;
 }
 
 export function withModeParam(url: URL | string, mode: ReaderMode, base?: URL | string): URL {
-  const next = typeof url === "string" ? new URL(url, base) : new URL(url);
+  const next = url instanceof URL ? url : new URL(url, base);
   next.searchParams.set(READER_MODE_PARAM, mode);
   return next;
 }

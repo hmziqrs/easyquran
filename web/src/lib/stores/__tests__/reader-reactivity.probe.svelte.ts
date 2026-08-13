@@ -1,13 +1,12 @@
 import type { ReaderApi } from "../reader.svelte";
 
-export function observeVersesFor(
-  reader: ReaderApi,
-  num: number,
-): {
-  runs: () => number;
-  latest: () => string[];
-  dispose: () => void;
-} {
+export interface VersesObserver {
+  runs(): number;
+  latest(): string[];
+  dispose(): void;
+}
+
+export function observeVersesFor(reader: ReaderApi, num: number): VersesObserver {
   let runs = 0;
   let latest: string[] = [];
   const dispose = $effect.root(() => {

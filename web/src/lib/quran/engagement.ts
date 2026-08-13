@@ -17,6 +17,8 @@ interface NetworkInformation {
 }
 
 function connectionAllowsPrefetch(): boolean {
+  // SAFETY: Navigator.connection is the draft Net Information API, absent from lib.dom's
+  // Navigator; the optional property keeps the lookup total, and undefined is handled below.
   const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
   if (!connection) return true;
   if (connection.saveData) return false;
@@ -25,6 +27,7 @@ function connectionAllowsPrefetch(): boolean {
 
 function whenIdle(run: () => void): void {
   const idle = window.requestIdleCallback;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- requestIdleCallback is missing on Safari/iOS despite being non-optional in lib.dom; typeof feature-detects the live value before calling
   if (typeof idle === "function") idle(() => run(), { timeout: 5_000 });
   else setTimeout(run, 500);
 }

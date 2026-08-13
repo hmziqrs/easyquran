@@ -42,18 +42,23 @@ function chunk(from: number, to: number, surahBase = 1): QuranRangeText {
 
 function fetcherReturning(...bodies: unknown[]): RangeJsonFetcher {
   const queue = [...bodies];
+  // SAFETY: the mock takes no args and resolves the queued body, so it satisfies RangeJsonFetcher (url, init?) => Promise<unknown>; only the .mock bookkeeping is extra
   return vi.fn(async () => {
     const next = queue.shift();
     if (next === undefined) throw new Error("fetcher exhausted");
     if (next instanceof Error) throw next;
     return next;
-  }) as unknown as RangeJsonFetcher;
+  }) as RangeJsonFetcher;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- decode mirrors range-fetch's (raw: unknown) => QuranRangeText | null contract for the unparsed wire JSON body
 const decoder = (raw: unknown): QuranRangeText | null => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- raw is JSON.parse output (a runtime representation with no schema); typeof object is the discriminator before the field checks below
   if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
+  // SAFETY: narrowed to an object by the guard above; ayahs/normalizations are probed immediately after
+  const r = raw as { ayahs: unknown; normalizations: unknown };
   if (!Array.isArray(r.ayahs) || !Array.isArray(r.normalizations)) return null;
+  // SAFETY: both fields proved arrays by the checks above, and every fixture body builds them as Ayah[]/SurahNormalization[]
   return raw as QuranRangeText;
 };
 
@@ -194,8 +199,10 @@ describe("fetchRangeChunks", () => {
     });
     expect(result.ayahs.map((a) => a.globalIndex)).toEqual([1, 2, 3, 4, 5]);
     expect(f).toHaveBeenCalledTimes(1);
-    const [url, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    // SAFETY: f is the vi.fn double from fetcherReturning; only its Mock bookkeeping side is needed to read recorded calls
+    const [url, init] = (f as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe("https://x/api/sources/en.x/range?from=1&to=5");
+    // SAFETY: fetchRangeChunks calls fetchImpl with (url, init) where init carries the RANGE_CHUNK_TIMEOUT_MS timeout field
     expect((init as RequestInit & { timeout?: number }).timeout).toBe(RANGE_CHUNK_TIMEOUT_MS);
   });
 
@@ -338,7 +345,8 @@ describe("five oversized juz through the shared range path", () => {
       });
 
       // Out-of-cap request chunks to at most 2, each at most RESPONSE_CAP wide.
-      const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      // SAFETY: f is the vi.fn double from fetcherReturning; only its Mock bookkeeping side is needed to read recorded calls
+      const calls = (f as ReturnType<typeof vi.fn>).mock.calls;
       expect(calls).toHaveLength(bounds.length);
       expect(bounds.length).toBeLessThanOrEqual(2);
       for (const [bf, bt] of bounds) {

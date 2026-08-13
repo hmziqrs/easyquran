@@ -330,7 +330,7 @@ export interface ReaderUiCopy {
 }
 
 function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
-  const options: { locale: UiLocale } = { locale };
+  const options = { locale };
   const noArgs = <Inputs>(
     message: (inputs?: Inputs, options?: { locale?: UiLocale }) => string,
   ): string => message(undefined, options);
@@ -551,6 +551,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
   };
 }
 
+// SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
 export function getReaderUiCopy(locale: UiLocale = getLocale() as UiLocale): ReaderUiCopy {
   return createReaderUiCopy(locale);
 }

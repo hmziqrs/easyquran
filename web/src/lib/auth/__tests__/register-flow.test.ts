@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import type {
+  AuthClient,
+  AuthErrorEnvelope,
+  AuthRequestResult,
+  UserProfile,
+} from "$lib/auth/auth-client";
 import { createRegisterFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
@@ -18,36 +23,39 @@ const UNVERIFIED: UserProfile = {
 
 const VERIFIED: UserProfile = { ...UNVERIFIED, id: 10, is_verified: true };
 
-function mockClient() {
+function mockClient(): AuthClient & {
+  unsafeRequest: ReturnType<typeof vi.fn>;
+  refreshCsrf: ReturnType<typeof vi.fn>;
+} {
+  // SAFETY: test double — RegisterFlow calls only unsafeRequest and refreshCsrf; AuthClient's private CSRF machinery is never invoked here.
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn().mockResolvedValue(undefined),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & {
-    unsafeRequest: ReturnType<typeof vi.fn>;
-    refreshCsrf: ReturnType<typeof vi.fn>;
-  };
+  } as never;
 }
 
 function mockState(): FlowStateLike {
+  // SAFETY: test double — every FlowStateLike member is a vi.fn() with a matching signature; flows only invoke them.
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "anonymous" }),
-  } as unknown as FlowStateLike;
+  } as FlowStateLike;
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
   return { ok: true, status: 200, data, error: null, rotated };
 }
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- data is the mocked register-201 HTTP body, opaque exactly like the unsafeRequest<unknown> payload the flow reads at runtime.
 function okStatus(status: number, data: unknown, rotated = false): AuthRequestResult<unknown> {
   return { ok: true, status, data, error: null, rotated };
 }
-function err(status: number, body: Record<string, unknown> = {}): AuthRequestResult<never> {
-  return { ok: false, status, data: null, error: body as never, rotated: false };
+function err(status: number, body: AuthErrorEnvelope = {}): AuthRequestResult<never> {
+  return { ok: false, status, data: null, error: body, rotated: false };
 }
 
 describe("RegisterFlow register->login->verification", () => {
@@ -174,9 +182,8 @@ describe("RegisterFlow register->login->verification", () => {
     flow.password = "strong-password-1";
     flow.confirmPassword = "strong-password-1";
     await flow.submit();
-    const calls = (client.unsafeRequest as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c) => c[0] as string,
-    );
+    // SAFETY: unsafeRequest's first argument is the endpoint path string (AuthClient signature), so recorded calls map to path strings.
+    const calls = client.unsafeRequest.mock.calls.map((c) => c[0] as string);
     expect(calls.some((p) => p.includes("email_verification"))).toBe(false);
     expect(calls).toEqual(["/auth/v1/register", "/auth/v1/log_in"]);
   });

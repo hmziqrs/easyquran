@@ -9,7 +9,7 @@
   type FaqItem = { q: string; a: string };
   type Crumb = { name: string; href: string };
 
-  const LOCALE_TERRITORY: Record<string, string> = {
+  const LOCALE_TERRITORY = {
     en: "en_US",
     ar: "ar_SA",
     ms: "ms_MY",
@@ -20,7 +20,7 @@
     tl: "tl_PH",
     bn: "bn_BD",
     hi: "hi_IN",
-  };
+  } satisfies Record<string, string>;
 
   let {
     path,
@@ -39,6 +39,7 @@
     title?: string;
     description?: string;
     faq?: FaqItem[];
+    // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- schema.org JSON-LD nodes are intentionally heterogeneous bags (arbitrary keys, nested nodes); only serialized via JSON.stringify, never read back by key
     extraLd?: Record<string, unknown>[];
     includeTextVariants?: boolean;
     noindex?: boolean;
@@ -57,7 +58,10 @@
   const ogImage = $derived(`${SITE.url}/og.png`);
   const ogImageAlt = `${SITE.name} — preview card`;
   const ogLocale = $derived(
-    LOCALE_TERRITORY[inLanguage] ?? `${inLanguage}_${inLanguage.toUpperCase()}`,
+    // SAFETY: inLanguage is an arbitrary locale string from props; a key miss performs a JS
+    // lookup that returns undefined, which the ?? fallback maps to `${lang}_${LANG}`.
+    LOCALE_TERRITORY[inLanguage as keyof typeof LOCALE_TERRITORY] ??
+      `${inLanguage}_${inLanguage.toUpperCase()}`,
   );
 
   const current = $derived(MARKETING_PAGES.find((p) => p.href === path));
@@ -117,6 +121,7 @@
       : null,
   );
 
+  // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- JSON-LD node bag: heterogeneous schema.org payloads, only escaped and serialized to a script tag, never read by key
   const ld = (obj: Record<string, unknown>) =>
     `<script type="application/ld+json">${
       JSON.stringify(obj)
@@ -125,6 +130,8 @@
         .replace(/\u2029/g, "\\u2029")
     }` + "<" + "/script>";
 
+  // SAFETY: every element is a JSON-LD object literal (webpageLd, breadcrumbLd, faqLd) or an
+  // extraLd record; filter(Boolean) only drops nulls and does not change the element shapes.
   const ldNodes = $derived(
     [
       webpageLd,
@@ -133,6 +140,7 @@
       ...(extraLd ?? []).filter(
         (n) => n["@type"] !== "WebSite" && n["@type"] !== "Organization",
       ),
+      // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- JSON-LD node bag: heterogeneous schema.org payloads, only serialized via JSON.stringify, never read by key
     ].filter(Boolean) as Record<string, unknown>[],
   );
 </script>

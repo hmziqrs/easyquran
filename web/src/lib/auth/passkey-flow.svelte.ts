@@ -1,7 +1,11 @@
 import {
   authClient,
   decodeUserProfile,
+  isNumber,
+  isString,
+  isWireObject,
   type AuthClient,
+  type JsonValue,
   type UserProfile,
 } from "$lib/auth/auth-client";
 import type { SessionProbeResult } from "$lib/auth/auth-client";
@@ -42,9 +46,41 @@ interface CredentialView {
   readonly id: number;
   readonly credential_id: string;
   readonly device_type?: string | null;
-  readonly transports?: unknown;
+  readonly transports?: JsonValue;
   readonly created_at?: string;
   readonly last_used_at?: string | null;
+}
+
+interface AuthenticatorSelectionEnvelope {
+  authenticatorSelection?: AuthenticatorSelectionCriteria;
+}
+
+interface SerializedCredentialResponse {
+  clientDataJSON: string;
+  attestationObject?: string;
+  authenticatorData?: string;
+  signature?: string;
+  userHandle?: string;
+  transports?: string[];
+}
+
+interface SerializedCredential {
+  id: string;
+  rawId: string;
+  type: string;
+  response: SerializedCredentialResponse;
+}
+
+interface AttestationPayload {
+  credential: SerializedCredential;
+  transports: string[] | null;
+}
+
+interface RegisterFinishBody {
+  credential: SerializedCredential;
+  registration_state: JsonValue | null;
+  transports?: string[];
+  device_type?: string;
 }
 
 function b64uToBuffer(b64u: string): ArrayBuffer {
@@ -63,8 +99,8 @@ function bufferToB64u(buf: ArrayBuffer | Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function decodeBufferField(raw: unknown): ArrayBuffer | undefined {
-  if (typeof raw === "string" && raw.length > 0) {
+function decodeBufferField(raw: JsonValue | undefined): ArrayBuffer | undefined {
+  if (isString(raw) && raw.length > 0) {
     try {
       return b64uToBuffer(raw);
     } catch {
@@ -74,17 +110,18 @@ function decodeBufferField(raw: unknown): ArrayBuffer | undefined {
   return undefined;
 }
 
-function isUserCancellation(e: unknown): boolean {
-  if (e instanceof DOMException) {
-    return e.name === "AbortError" || e.name === "NotAllowedError";
+function isUserCancellation(cause: unknown): boolean {
+  if (cause instanceof DOMException) {
+    return cause.name === "AbortError" || cause.name === "NotAllowedError";
   }
   return false;
 }
 
 function toPasskeyInfo(view: CredentialView): PasskeyInfo {
+  const deviceType = view.device_type;
   return {
     id: view.credential_id,
-    label: typeof view.device_type === "string" && view.device_type ? view.device_type : "Passkey",
+    label: isString(deviceType) && deviceType ? deviceType : "Passkey",
     deviceType: view.device_type ?? null,
     transports: view.transports,
     createdAt: view.created_at,
@@ -98,17 +135,19 @@ type NavigatorCredentials = CredentialsContainer | undefined;
  * Server options may omit authenticatorSelection entirely. An array is never a valid value for it,
  * so it is dropped rather than forwarded to the authenticator.
  */
-function authenticatorSelectionOf(raw: unknown): {
-  authenticatorSelection?: AuthenticatorSelectionCriteria;
-} {
-  if (Array.isArray(raw) || typeof raw !== "object" || !raw) return {};
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed authenticatorSelection JSON field; a narrower input type would assume the very wire contract this check exists to verify
+function authenticatorSelectionOf(raw: unknown): AuthenticatorSelectionEnvelope {
+  if (Array.isArray(raw) || !isWireObject(raw)) return {};
+  // SAFETY: isWireObject ruled out arrays, null and primitives; the surviving server JSON object is the WebAuthn selection criteria.
   return { authenticatorSelection: raw as AuthenticatorSelectionCriteria };
 }
 
 function resolveCredentials(inject?: CredentialsContainer): NavigatorCredentials {
   if (inject) return inject;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- navigator is an ambient global that is undeclared in some runtimes; typeof is the only ReferenceError-safe presence check
   if (typeof navigator === "undefined") return undefined;
-  return (navigator as unknown as { credentials?: CredentialsContainer }).credentials;
+  // SAFETY: where navigator exists it is the standard Navigator, which always exposes .credentials.
+  return (navigator as { credentials?: CredentialsContainer }).credentials;
 }
 
 export class PasskeyFlow {
@@ -120,8 +159,8 @@ export class PasskeyFlow {
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   passkeys = $state<ReadonlyArray<PasskeyInfo>>([]);
-  #loginState: unknown = null;
-  #registerState: unknown = null;
+  #loginState: JsonValue | null = null;
+  #registerState: JsonValue | null = null;
 
   constructor(client: AuthClient, state: PasskeyFlowStateLike, credentials?: CredentialsContainer) {
     this.client = client;
@@ -161,8 +200,8 @@ export class PasskeyFlow {
     this.fieldErrors = {};
     try {
       const begin = await this.client.unsafeRequest<{
-        challenge?: unknown;
-        authentication_state?: unknown;
+        challenge?: JsonValue;
+        authentication_state?: JsonValue;
       }>("/passkey/v1/login/begin", { method: "POST" });
       if (!begin.ok) {
         this.fail(begin.status, begin.error);
@@ -176,6 +215,8 @@ export class PasskeyFlow {
       }
       let assertion: PublicKeyCredential | null;
       try {
+        // SAFETY: credentials.get() with a publicKey request resolves to PublicKeyCredential | null
+        // per WebAuthn; the literal already structurally satisfies CredentialRequestOptions.
         assertion = (await this.#credentials.get({
           publicKey: options,
         } as CredentialRequestOptions)) as PublicKeyCredential | null;
@@ -239,8 +280,8 @@ export class PasskeyFlow {
     this.fieldErrors = {};
     try {
       const begin = await this.client.unsafeRequest<{
-        challenge?: unknown;
-        registration_state?: unknown;
+        challenge?: JsonValue;
+        registration_state?: JsonValue;
       }>("/passkey/v1/register/begin", { method: "POST" });
       if (!begin.ok) {
         if (begin.status === 403 || isVerifiedOnlyError(begin.error)) {
@@ -258,6 +299,9 @@ export class PasskeyFlow {
       }
       let credential: PublicKeyCredential | null;
       try {
+        // SAFETY: credentials.create() with a publicKey creation request resolves to
+        // PublicKeyCredential | null per WebAuthn; the literal already structurally satisfies
+        // CredentialCreationOptions.
         credential = (await this.#credentials.create({
           publicKey: options,
         } as CredentialCreationOptions)) as PublicKeyCredential | null;
@@ -273,16 +317,17 @@ export class PasskeyFlow {
         return false;
       }
       const serialized = this.#serializeAttestation(credential);
+      const body: RegisterFinishBody = {
+        credential: serialized.credential,
+        registration_state: this.#registerState,
+      };
+      if (serialized.transports) body.transports = serialized.transports;
+      if (label) body.device_type = label;
       const finish = await this.client.unsafeRequest<CredentialView>(
         "/passkey/v1/register/finish",
         {
           method: "POST",
-          body: {
-            credential: serialized.credential,
-            registration_state: this.#registerState,
-            ...(serialized.transports ? { transports: serialized.transports } : {}),
-            ...(label ? { device_type: label } : {}),
-          },
+          body,
         },
       );
       if (!finish.ok) {
@@ -316,7 +361,7 @@ export class PasskeyFlow {
   }
 
   async list(): Promise<ReadonlyArray<PasskeyInfo> | null> {
-    const res = await this.client.unsafeRequest<{ data?: unknown }>("/passkey/v1/list", {
+    const res = await this.client.unsafeRequest<{ data?: JsonValue }>("/passkey/v1/list", {
       method: "POST",
     });
     if (!res.ok) {
@@ -341,166 +386,196 @@ export class PasskeyFlow {
     return true;
   }
 
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- view is untrusted register-finish JSON; this method is the shape check (isWireObject + isString below), so no honest narrower type exists at entry
   #mergeSingle(view: unknown): void {
-    if (!view || typeof view !== "object") return;
+    if (!isWireObject(view)) return;
+    // SAFETY: isWireObject proved a JSON object; Partial reflects that server fields may still be absent.
     const v = view as Partial<CredentialView>;
-    if (typeof v.credential_id !== "string") return;
+    if (!isString(v.credential_id)) return;
+    // SAFETY: credential_id was just checked to be a string; the finish endpoint returns full rows.
     const info = toPasskeyInfo(v as CredentialView);
     const existing = this.passkeys.filter((p) => p.id !== info.id);
     this.passkeys = [...existing, info];
   }
 
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- data is the raw passkey-list payload; the loop below is the parse step, entries stay opaque until isWireObject/isString narrow them
   #mergeList(data: unknown): void {
     if (!Array.isArray(data)) return;
     const out: PasskeyInfo[] = [];
     for (const entry of data) {
-      if (!entry || typeof entry !== "object") continue;
+      if (!isWireObject(entry)) continue;
+      // SAFETY: isWireObject proved a JSON object; Partial reflects that server fields may still be absent.
       const v = entry as Partial<CredentialView>;
-      if (typeof v.credential_id !== "string") continue;
+      if (!isString(v.credential_id)) continue;
+      // SAFETY: credential_id was just checked to be a string; the list endpoint returns full rows.
       out.push(toPasskeyInfo(v as CredentialView));
     }
     this.passkeys = out;
   }
 
-  #toRequestOptions(challenge: unknown): PublicKeyCredentialRequestOptions | null {
-    if (!challenge || typeof challenge !== "object") return null;
-    const o = (challenge as { publicKey?: unknown }).publicKey;
-    if (!o || typeof o !== "object") return null;
-    const raw = o as Record<string, unknown>;
+  #toRequestOptions(challenge: JsonValue | undefined): PublicKeyCredentialRequestOptions | null {
+    if (!isWireObject(challenge)) return null;
+    const raw = challenge.publicKey;
+    if (!isWireObject(raw)) return null;
     const challengeBuf = decodeBufferField(raw.challenge);
     if (!challengeBuf) return null;
     const out: PublicKeyCredentialRequestOptions = {
       challenge: challengeBuf,
-      ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
-      ...(typeof raw.rpId === "string" ? { rpId: raw.rpId } : {}),
-      ...(Array.isArray(raw.allowCredentials)
-        ? { allowCredentials: this.#decodeCredentialDescriptors(raw.allowCredentials) }
-        : {}),
-      ...(typeof raw.userVerification === "string"
-        ? { userVerification: raw.userVerification as UserVerificationRequirement }
-        : {}),
     };
+    const timeout = raw.timeout;
+    if (isNumber(timeout)) out.timeout = timeout;
+    const rpId = raw.rpId;
+    if (isString(rpId)) out.rpId = rpId;
+    if (Array.isArray(raw.allowCredentials)) {
+      out.allowCredentials = this.#decodeCredentialDescriptors(raw.allowCredentials);
+    }
+    const userVerification = raw.userVerification;
+    if (isString(userVerification)) {
+      // SAFETY: server-sent userVerification is a UserVerificationRequirement enum value; the
+      // authenticator ignores values outside the enum.
+      out.userVerification = userVerification as UserVerificationRequirement;
+    }
     return out;
   }
 
-  #toCreationOptions(challenge: unknown): PublicKeyCredentialCreationOptions | null {
-    if (!challenge || typeof challenge !== "object") return null;
-    const o = (challenge as { publicKey?: unknown }).publicKey;
-    if (!o || typeof o !== "object") return null;
-    const raw = o as Record<string, unknown>;
+  #toCreationOptions(challenge: JsonValue | undefined): PublicKeyCredentialCreationOptions | null {
+    if (!isWireObject(challenge)) return null;
+    const raw = challenge.publicKey;
+    if (!isWireObject(raw)) return null;
     const challengeBuf = decodeBufferField(raw.challenge);
     if (!challengeBuf) return null;
-    const userRaw = raw.user;
-    if (!userRaw || typeof userRaw !== "object") return null;
-    const u = userRaw as Record<string, unknown>;
+    const u = raw.user;
+    if (!isWireObject(u)) return null;
     const userId = decodeBufferField(u.id);
     if (!userId) return null;
+    const userName = u.name;
+    const userDisplayName = u.displayName;
     const out: PublicKeyCredentialCreationOptions = {
       challenge: challengeBuf,
       rp: this.#decodeRp(raw.rp),
       user: {
         id: userId,
-        name: typeof u.name === "string" ? u.name : "",
-        displayName: typeof u.displayName === "string" ? u.displayName : "",
+        name: isString(userName) ? userName : "",
+        displayName: isString(userDisplayName) ? userDisplayName : "",
       },
       pubKeyCredParams: this.#decodeParams(raw.pubKeyCredParams),
-      ...(Array.isArray(raw.excludeCredentials)
-        ? { excludeCredentials: this.#decodeCredentialDescriptors(raw.excludeCredentials) }
-        : {}),
-      ...authenticatorSelectionOf(raw.authenticatorSelection),
-      ...(typeof raw.timeout === "number" ? { timeout: raw.timeout } : {}),
-      ...(typeof raw.attestation === "string"
-        ? { attestation: raw.attestation as AttestationConveyancePreference }
-        : {}),
     };
+    if (Array.isArray(raw.excludeCredentials)) {
+      out.excludeCredentials = this.#decodeCredentialDescriptors(raw.excludeCredentials);
+    }
+    const selection = authenticatorSelectionOf(raw.authenticatorSelection);
+    if (selection.authenticatorSelection) {
+      out.authenticatorSelection = selection.authenticatorSelection;
+    }
+    const timeout = raw.timeout;
+    if (isNumber(timeout)) out.timeout = timeout;
+    const attestation = raw.attestation;
+    if (isString(attestation)) {
+      // SAFETY: server-sent attestation is an AttestationConveyancePreference enum value; the
+      // browser ignores values outside the enum.
+      out.attestation = attestation as AttestationConveyancePreference;
+    }
     return out;
   }
 
-  #decodeRp(raw: unknown): PublicKeyCredentialRpEntity {
-    if (!raw || typeof raw !== "object") return { name: "EasyQuran" };
-    const o = raw as Record<string, unknown>;
-    return {
-      name: typeof o.name === "string" ? o.name : "EasyQuran",
-      ...(typeof o.id === "string" ? { id: o.id } : {}),
+  #decodeRp(raw: JsonValue | undefined): PublicKeyCredentialRpEntity {
+    if (!isWireObject(raw)) return { name: "EasyQuran" };
+    const rpName = raw.name;
+    const out: PublicKeyCredentialRpEntity = {
+      name: isString(rpName) ? rpName : "EasyQuran",
     };
+    const rpId = raw.id;
+    if (isString(rpId)) out.id = rpId;
+    return out;
   }
 
-  #decodeParams(raw: unknown): PublicKeyCredentialParameters[] {
+  #decodeParams(raw: JsonValue | undefined): PublicKeyCredentialParameters[] {
     if (!Array.isArray(raw)) return [{ type: "public-key", alg: -7 }];
     const out: PublicKeyCredentialParameters[] = [];
     for (const entry of raw) {
-      if (!entry || typeof entry !== "object") continue;
-      const o = entry as Record<string, unknown>;
-      const type = o.type;
-      const alg = o.alg;
-      if (type === "public-key" && typeof alg === "number") out.push({ type: "public-key", alg });
+      if (!isWireObject(entry)) continue;
+      const type = entry.type;
+      const alg = entry.alg;
+      if (type === "public-key" && isNumber(alg)) out.push({ type: "public-key", alg });
     }
     return out.length > 0 ? out : [{ type: "public-key", alg: -7 }];
   }
 
-  #decodeCredentialDescriptors(raw: unknown): PublicKeyCredentialDescriptor[] {
+  #decodeCredentialDescriptors(raw: JsonValue | undefined): PublicKeyCredentialDescriptor[] {
     if (!Array.isArray(raw)) return [];
     const out: PublicKeyCredentialDescriptor[] = [];
     for (const entry of raw) {
-      if (!entry || typeof entry !== "object") continue;
-      const o = entry as Record<string, unknown>;
-      const id = decodeBufferField(o.id);
+      if (!isWireObject(entry)) continue;
+      const id = decodeBufferField(entry.id);
       if (!id) continue;
-      out.push({
+      const descriptor: PublicKeyCredentialDescriptor = {
         type: "public-key",
         id,
-        ...(Array.isArray(o.transports)
-          ? { transports: o.transports as AuthenticatorTransport[] }
-          : {}),
-      });
+      };
+      const transports = entry.transports;
+      if (Array.isArray(transports)) {
+        // SAFETY: server transports entries are WebAuthn transport-name strings; the browser
+        // ignores values outside the enum.
+        descriptor.transports = transports as AuthenticatorTransport[];
+      }
+      out.push(descriptor);
     }
     return out;
   }
 
-  #serializeAssertion(cred: PublicKeyCredential): Record<string, unknown> {
+  #serializeAssertion(cred: PublicKeyCredential): SerializedCredential {
+    // SAFETY: get() with a publicKey request resolves to an assertion credential, so response
+    // carries clientDataJSON plus the assertion-only authenticatorData/signature/userHandle buffers.
     const response = cred.response as AuthenticatorResponse & {
       authenticatorData?: ArrayBuffer;
       signature?: ArrayBuffer;
       userHandle?: ArrayBuffer | null;
       clientDataJSON: ArrayBuffer;
     };
+    const serialized: SerializedCredentialResponse = {
+      clientDataJSON: bufferToB64u(response.clientDataJSON),
+    };
+    if (response.authenticatorData) {
+      serialized.authenticatorData = bufferToB64u(response.authenticatorData);
+    }
+    if (response.signature) {
+      serialized.signature = bufferToB64u(response.signature);
+    }
+    if (response.userHandle) {
+      serialized.userHandle = bufferToB64u(response.userHandle);
+    }
     return {
       id: cred.id,
       rawId: bufferToB64u(cred.rawId),
       type: cred.type,
-      response: {
-        clientDataJSON: bufferToB64u(response.clientDataJSON),
-        ...(response.authenticatorData
-          ? { authenticatorData: bufferToB64u(response.authenticatorData) }
-          : {}),
-        ...(response.signature ? { signature: bufferToB64u(response.signature) } : {}),
-        ...(response.userHandle ? { userHandle: bufferToB64u(response.userHandle) } : {}),
-      },
+      response: serialized,
     };
   }
 
-  #serializeAttestation(cred: PublicKeyCredential): {
-    credential: Record<string, unknown>;
-    transports: string[] | null;
-  } {
+  #serializeAttestation(cred: PublicKeyCredential): AttestationPayload {
+    // SAFETY: create() with a publicKey creation request resolves to an attestation credential, so
+    // response is AuthenticatorAttestationResponse (attestationObject buffer + getTransports()).
     const response = cred.response as AuthenticatorAttestationResponse;
     let transports: string[] | null = null;
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- runtime feature detection: older browsers ship AuthenticatorAttestationResponse without getTransports
     if (typeof response.getTransports === "function") {
       try {
         const t = response.getTransports();
         if (Array.isArray(t) && t.length > 0) transports = t.slice();
       } catch {}
     }
-    const credential: Record<string, unknown> = {
+    const credential: SerializedCredential = {
       id: cred.id,
       rawId: bufferToB64u(cred.rawId),
       type: cred.type,
       response: {
         clientDataJSON: bufferToB64u(response.clientDataJSON),
         attestationObject: bufferToB64u(response.attestationObject),
-        ...(transports ? { transports } : {}),
       },
     };
+    if (transports) {
+      credential.response.transports = transports;
+    }
     return { credential, transports };
   }
 }

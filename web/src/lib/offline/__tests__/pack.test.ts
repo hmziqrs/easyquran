@@ -16,6 +16,7 @@ function tamper(
   text: string,
   mutate: (root: { version: unknown; entries: unknown; bodies: unknown }) => void,
 ): string {
+  // SAFETY: text comes from buildPack, which JSON.stringify's {version, entries, bodies}; the cast only names those fields for mutate(), values stay unknown.
   const root = JSON.parse(text) as { version: unknown; entries: unknown; bodies: unknown };
   mutate(root);
   return JSON.stringify(root);
@@ -64,6 +65,7 @@ describe("decodePack", () => {
   it("rejects a non-string body", () => {
     const text = buildPack({ "/a/__data.json": "0", "/b/__data.json": "1" });
     const bad = tamper(text, (root) => {
+      // SAFETY: buildPack produced bodies as string[]; cast to unknown[] only lets the test inject a non-string element.
       (root.bodies as unknown[])[0] = 123;
     });
     expect(() => decodePack(bad)).toThrow(/body 0 is not a string/);
@@ -72,6 +74,7 @@ describe("decodePack", () => {
   it("rejects an out-of-range entry index", () => {
     const text = buildPack({ "/a/__data.json": "0", "/b/__data.json": "1" });
     const bad = tamper(text, (root) => {
+      // SAFETY: buildPack produced entries as Record<string, number>; the cast restores that shape so the test can write an out-of-range index.
       (root.entries as Record<string, number>)["/a/__data.json"] = 99;
     });
     expect(() => decodePack(bad)).toThrow(/invalid index/);
@@ -80,6 +83,7 @@ describe("decodePack", () => {
   it("rejects an entries/bodies count mismatch", () => {
     const text = buildPack({ "/a/__data.json": "0" });
     const bad = tamper(text, (root) => {
+      // SAFETY: buildPack produced bodies as string[]; the cast restores that shape so the test can push an extra element.
       (root.bodies as string[]).push("extra");
     });
     expect(() => decodePack(bad)).toThrow(/length mismatch/);

@@ -12,6 +12,7 @@ import type { Component } from "svelte";
 let pending: Promise<Component> | null = null;
 
 export function loadPalette(): Promise<Component> {
+  // SAFETY: the Svelte compiler emits GlobalSearchPalette.svelte's default export as a Component.
   pending ??= import("./GlobalSearchPalette.svelte").then((m) => m.default as Component);
   return pending;
 }

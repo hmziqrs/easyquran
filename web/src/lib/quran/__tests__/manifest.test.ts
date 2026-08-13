@@ -46,7 +46,12 @@ function scriptSpec(
   };
 }
 
-function jsonResponse(body: unknown, ok = true): Response {
+type ManifestJsonBody = {
+  data?: { scripts?: ReturnType<typeof scriptSpec>[] };
+  garbage?: boolean;
+};
+
+function jsonResponse(body: ManifestJsonBody, ok = true): Response {
   return new Response(JSON.stringify(body), {
     status: ok ? 200 : 500,
     headers: { "content-type": "application/json" },

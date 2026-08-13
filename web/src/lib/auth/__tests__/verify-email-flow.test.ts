@@ -1,34 +1,36 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
+import type { AuthClient, AuthErrorEnvelope, AuthRequestResult } from "$lib/auth/auth-client";
 import { createVerifyEmailFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
-function mockClient() {
+function mockClient(): AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> } {
+  // SAFETY: test double — VerifyEmailFlow calls only these four members; AuthClient's private CSRF machinery is never invoked here.
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn(),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> };
+  } as never;
 }
 
 function mockState(): FlowStateLike & { probe: ReturnType<typeof vi.fn> } {
+  // SAFETY: test double — every FlowStateLike member is a vi.fn() with a matching signature; probe re-typed for call assertions.
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "authenticated" }),
-  } as unknown as FlowStateLike & { probe: ReturnType<typeof vi.fn> };
+  } as FlowStateLike & { probe: ReturnType<typeof vi.fn> };
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
   return { ok: true, status: 200, data, error: null, rotated };
 }
-function err(status: number, body: Record<string, unknown> = {}): AuthRequestResult<never> {
-  return { ok: false, status, data: null, error: body as never, rotated: false };
+function err(status: number, body: AuthErrorEnvelope = {}): AuthRequestResult<never> {
+  return { ok: false, status, data: null, error: body, rotated: false };
 }
 
 describe("VerifyEmailFlow confirm", () => {

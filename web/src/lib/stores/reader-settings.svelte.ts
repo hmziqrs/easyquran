@@ -60,6 +60,7 @@ interface PersistedSource {
   sourceId: string | null;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (isFutureSchema/asObject/asString validate fields)
 function decodeSource(raw: unknown): PersistedSource {
   const fallback: PersistedSource = { v: SOURCE_SCHEMA_VERSION, sourceId: null };
   if (isFutureSchema(raw, SOURCE_SCHEMA_VERSION)) return fallback;

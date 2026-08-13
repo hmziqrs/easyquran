@@ -41,7 +41,7 @@ function earliestIndex(a: number, b: number): number {
   return Math.min(a, b);
 }
 
-function splitHref(value: string): { pathname: string; suffix: string } {
+function splitHref(value: string) {
   const queryIndex = value.indexOf("?");
   const fragmentIndex = value.indexOf("#");
   const suffixIndex = earliestIndex(queryIndex, fragmentIndex);
@@ -132,7 +132,9 @@ function isReaderPathname(pathname: string): boolean {
   }
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- runtime type guard at the public href boundary; callers may pass untrusted values (tests feed null/42/String objects), so it must accept opaque input and reject non-strings itself.
 function isCanonicalReaderHref(value: unknown): value is QuranReaderHref {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- deliberate non-string rejection so caller-supplied garbage throws TypeError instead of reaching the string scanners below.
   if (typeof value !== "string" || value === "") return false;
   if (
     hasUnsafeUrlCharacter(value) ||
@@ -161,11 +163,13 @@ function localizeReaderHref<const Locale extends UiLocale>(
   ) {
     throw new Error(`Invalid localized reader href: ${localized}`);
   }
+  // SAFETY: the equality check above proved `localized` is byte-identical to `/${locale}` + the canonical source pathname + its exact suffix, which is the LocalizedReaderHref<Locale> shape.
   return localized as LocalizedReaderHref<Locale>;
 }
 
 export function readerHomeHrefFor<const Locale extends UiLocale>(locale: Locale): `/${Locale}/app` {
   assertUiLocale(locale);
+  // SAFETY: localizeReaderHref verified its output equals `/${locale}` + "/app" (no query/fragment on the source), so the value is exactly `/${Locale}/app`.
   return localizeReaderHref(locale, "/app") as `/${Locale}/app`;
 }
 

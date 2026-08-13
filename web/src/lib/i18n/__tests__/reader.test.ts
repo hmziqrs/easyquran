@@ -86,9 +86,11 @@ describe("reader localized hrefs", () => {
   });
 
   it("rejects unsupported UI locales", () => {
+    // SAFETY: "de" is deliberately not a UiLocale — the casts feed the unsupported-locale throw path.
     expect(() => readerHomeHrefFor("de" as UiLocale)).toThrowError(
       new TypeError("Unsupported UI locale: de"),
     );
+    // SAFETY: same intentional invalid locale for the two-argument entry point.
     expect(() => readerHrefFor("de" as UiLocale, "/app/al-fatihah")).toThrowError(
       new TypeError("Unsupported UI locale: de"),
     );
@@ -111,6 +113,7 @@ describe("reader href validation", () => {
     "/en/app/al-fatihah",
     "/ar/app/al-fatihah",
   ])("rejects absolute, protocol-relative, localized, and non-reader input: %s", (href) => {
+    // SAFETY: each fixture is deliberately a non-canonical href; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("en", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -136,6 +139,7 @@ describe("reader href validation", () => {
     "/app/al-fatihah-",
     "/app/al--fatihah",
   ])("rejects ambiguous or non-canonical pathname: %s", (href) => {
+    // SAFETY: each fixture is deliberately a non-canonical pathname; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("en", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -151,6 +155,7 @@ describe("reader href validation", () => {
     "/app/t/en/sahih/page/2/extra",
     "/app/al-fatihah/t/en/sahih/page/2/extra",
   ])("rejects shapes outside reader grammar: %s", (href) => {
+    // SAFETY: each fixture is deliberately outside the reader grammar; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("ar", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -167,6 +172,7 @@ describe("reader href validation", () => {
     "/app/al-fatihah/t/en/sahih/page/00",
     "/app/t/en/sahih/juz/+1",
   ])("rejects non-canonical numeric segments: %s", (href) => {
+    // SAFETY: each fixture is deliberately a non-canonical numeric segment; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("en", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -181,6 +187,7 @@ describe("reader href validation", () => {
     "/app/al-fatihah/t/en%2Dus/sahih",
     "/app/al-fatihah/t/en/sahih%2Eint",
   ])("rejects malformed or encoded source segments: %s", (href) => {
+    // SAFETY: each fixture is deliberately a malformed/encoded source segment; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("en", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -203,6 +210,7 @@ describe("reader href validation", () => {
     "/app/al-fatihah?#",
     "/app/al-fatihah?x=1#",
   ])("rejects malformed query or fragment: %s", (href) => {
+    // SAFETY: each fixture is deliberately a malformed query/fragment; the cast only silences the compiler so the rejection path runs.
     expect(() => readerHrefFor("en", href as QuranReaderHref)).toThrow(TypeError);
   });
 
@@ -212,8 +220,11 @@ describe("reader href validation", () => {
   });
 
   it("rejects non-string href values at runtime", () => {
+    // SAFETY: null is deliberately not a href — exercises the runtime typeof rejection in isCanonicalReaderHref.
     expect(() => readerHrefFor("en", null as never)).toThrow(TypeError);
+    // SAFETY: 42 is deliberately not a href — exercises the runtime typeof rejection in isCanonicalReaderHref.
     expect(() => readerHrefFor("en", 42 as never)).toThrow(TypeError);
+    // SAFETY: a String object is deliberately not a primitive href — exercises the runtime typeof rejection in isCanonicalReaderHref.
     expect(() => readerHrefFor("en", new String("/app") as never)).toThrow(TypeError);
   });
 });

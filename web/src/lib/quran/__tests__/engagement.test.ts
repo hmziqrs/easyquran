@@ -45,10 +45,12 @@ async function importEngagement() {
 
 function stubIdle(): void {
   Reflect.deleteProperty(window, "requestIdleCallback");
-  vi.stubGlobal("setTimeout", ((fn: () => void) => {
+  // Sync setTimeout double: invokes the callback immediately and returns timer id 0. Only engagement's plain callback fns are ever scheduled through it.
+  const syncSetTimeout = (fn: () => void): number => {
     fn();
     return 0;
-  }) as unknown as typeof setTimeout);
+  };
+  vi.stubGlobal("setTimeout", syncSetTimeout);
 }
 
 async function flush(): Promise<void> {
@@ -95,11 +97,14 @@ interface DurableBlob {
   totalViews: number;
   distinctDays: number;
   sourceViews: Record<string, number>;
-  [k: string]: unknown;
+  lastDay?: string;
+  qualified?: boolean;
+  legacySeeded?: boolean;
 }
 
 function readDurable(): DurableBlob | undefined {
   const raw = window.localStorage.getItem(ENGAGEMENT_KEY);
+  // SAFETY: raw is the ENGAGEMENT_KEY blob written by seedDurable or engagement.ts, both of which serialize exactly these fields
   return raw ? (JSON.parse(raw) as DurableBlob) : undefined;
 }
 
@@ -580,7 +585,7 @@ describe("downloadBytes", () => {
   it("aborts when the elapsed budget expires", async () => {
     let observed: AbortSignal | null | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      observed = (init as RequestInit | undefined)?.signal;
+      observed = init?.signal;
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           const sig = observed;
@@ -626,13 +631,15 @@ describe("downloadBytes", () => {
     // which materializes the full body in one allocation. A Content-Length
     // announcing an oversized body must be rejected BEFORE that allocation on
     // this branch — the streaming path's pre-allocation guard does not run here.
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    const noBodyResponse: Partial<Response> = {
       ok: true,
       status: 200,
       body: null,
       headers: new Headers({ "content-length": "200" }),
       arrayBuffer: async () => new ArrayBuffer(200),
-    } as unknown as Response);
+    };
+    // SAFETY: fetch double for the no-body arrayBuffer fallback; downloadBytes reads only ok/body/headers/arrayBuffer, so the Partial<Response> stands in for the full Response
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(noBodyResponse as Response);
     const { downloadBytes } = await import("$lib/workers/download");
     await expect(
       downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" }),

@@ -59,10 +59,13 @@ if (staticImports.length > 0) {
   );
 }
 
+// SAFETY: the snapshot is a positional array; its eight-field shape is checked immediately below.
 const snapshot = JSON.parse(readFileSync(SNAPSHOT, "utf8")) as unknown[];
 if (snapshot.length !== 8) fail("snapshot root must contain exactly eight positional fields");
+// SAFETY: positional field 0 of the snapshot is the source array by format contract.
 const source = snapshot[0] as unknown[];
 const digest = source?.[0];
+// eslint-disable-next-line anti-slop/no-runtime-typeof -- digest is an untyped JSON.parse field; this check is the boundary parse
 if (typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) {
   fail("source provenance digest is missing");
 }

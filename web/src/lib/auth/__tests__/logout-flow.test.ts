@@ -1,44 +1,36 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient } from "$lib/auth/auth-client";
+import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
 import { createLogoutFlow } from "$lib/auth/flows.svelte";
-import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
 function mockClient() {
+  // SAFETY: hand-built AuthClient test double — the class's #private csrf members are never
+  // touched by LogoutFlow, and every member these tests invoke is stubbed as a vi.fn().
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn(),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & {
+  } as AuthClient & {
     unsafeRequest: ReturnType<typeof vi.fn>;
+    refreshCsrf: ReturnType<typeof vi.fn>;
     clearCsrf: ReturnType<typeof vi.fn>;
+    getUser: ReturnType<typeof vi.fn>;
   };
 }
 
-function mockState(): FlowStateLike & {
-  transition: ReturnType<typeof vi.fn>;
-  reset: ReturnType<typeof vi.fn>;
-  probe: ReturnType<typeof vi.fn>;
-} {
+function mockState() {
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "anonymous" }),
-  } as unknown as FlowStateLike & {
-    transition: ReturnType<typeof vi.fn>;
-    reset: ReturnType<typeof vi.fn>;
-    probe: ReturnType<typeof vi.fn>;
   };
 }
 
-function ok<T>(
-  data: T,
-  rotated = true,
-): { ok: true; status: number; data: T; error: null; rotated: boolean } {
+function ok<T>(data: T, rotated = true): AuthRequestResult<T> {
   return { ok: true, status: 200, data, error: null, rotated };
 }
 
@@ -60,15 +52,10 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
     expect(state.probe).toHaveBeenCalledTimes(1);
     expect(flow.anonymous).toBe(true);
 
-    const clearOrder = (client.clearCsrf as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0]!;
-    const transitionOrder = (
-      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const resetOrder = (state.reset as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0]!;
-    const probeOrder = (state.probe as unknown as { mock: { invocationCallOrder: number[] } }).mock
-      .invocationCallOrder[0]!;
+    const clearOrder = client.clearCsrf.mock.invocationCallOrder[0]!;
+    const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
+    const resetOrder = state.reset.mock.invocationCallOrder[0]!;
+    const probeOrder = state.probe.mock.invocationCallOrder[0]!;
     expect(clearOrder).toBeLessThan(transitionOrder);
     expect(transitionOrder).toBeLessThan(resetOrder);
     expect(resetOrder).toBeLessThan(probeOrder);
@@ -81,7 +68,7 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
       ok: false,
       status: 401,
       data: null,
-      error: { type: "unauthorized" } as never,
+      error: { type: "unauthorized" },
       rotated: false,
     });
     const flow = createLogoutFlow({ client, state });
@@ -101,7 +88,7 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
       ok: false,
       status: 503,
       data: null,
-      error: { type: "internal_server_error" } as never,
+      error: { type: "internal_server_error" },
       rotated: false,
     });
     const flow = createLogoutFlow({ client, state });

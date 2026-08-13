@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 const { envMock, clientMock } = vi.hoisted(() => ({
   envMock: { browser: true },
   clientMock: {
-    getUser: vi.fn<() => Promise<unknown>>(),
+    getUser: vi.fn<() => Promise<SessionProbeResult>>(),
   },
 }));
 
@@ -17,10 +17,12 @@ vi.mock("$lib/auth/auth-client", () => ({
   createAuthClient: () => clientMock,
 }));
 
-import type { AuthClient } from "$lib/auth/auth-client";
+import type { SessionProbeResult } from "$lib/auth/auth-client";
+import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import { createAuthState } from "$lib/auth/auth-state.svelte";
 
-const asClient = clientMock as unknown as AuthClient;
+// SAFETY: createAuthState only invokes getUser() on the client; the hoisted double supplies it as a vi.fn() resolving SessionProbeResult.
+const asClient = clientMock as never;
 
 const PROFILE = {
   id: 7,
@@ -47,9 +49,9 @@ afterEach(() => {
 
 describe("AuthState.probe single-flight", () => {
   it("concurrent probe calls share a single getUser request", async () => {
-    let resolveProbe!: (v: unknown) => void;
+    let resolveProbe!: (v: SessionProbeResult) => void;
     clientMock.getUser.mockReturnValue(
-      new Promise((res) => {
+      new Promise<SessionProbeResult>((res) => {
         resolveProbe = res;
       }),
     );
@@ -214,7 +216,7 @@ describe("AuthState probe result mapping", () => {
 
 describe("AuthState onAuthTransition hook (W8a purgeUserCaches placeholder)", () => {
   it("invokes the registered hook during transition()", async () => {
-    const hook = vi.fn<(ctx: unknown) => Promise<void>>().mockResolvedValue(undefined);
+    const hook = vi.fn<(ctx: AuthTransitionContext) => Promise<void>>().mockResolvedValue(undefined);
     const state = createAuthState(asClient);
     state.setOnAuthTransition(hook);
     await state.transition({ kind: "login" });

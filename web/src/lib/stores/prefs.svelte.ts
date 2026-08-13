@@ -7,7 +7,7 @@ import {
   type SurfaceId,
   type ThemeMode,
 } from "$lib/config/site";
-import { asLiteral, asObject, readJSON, writeJSON } from "$lib/storage";
+import { asLiteral, asObject, asString, readJSON, writeJSON } from "$lib/storage";
 import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
 
 const STORAGE_KEY = "easyquran.prefs";
@@ -44,8 +44,13 @@ export interface Prefs {
 
 type PrefPatch = Partial<Prefs>;
 
-const isHex = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- guards asObject() dictionary values (raw localStorage JSON); the string check below is the parse
+const isHex = (v: unknown): v is string => {
+  const s = asString(v);
+  return s !== undefined && /^#[0-9a-f]{6}$/i.test(s);
+};
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (asObject value); this function is the parser (isHex validates each seed)
 function cleanCustom(raw: unknown): CustomSeeds {
   const out: CustomSeeds = {};
   const c = asObject(raw);

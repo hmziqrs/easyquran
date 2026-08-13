@@ -11,6 +11,7 @@ import {
   decodeUserProfile,
 } from "$lib/auth/auth-client";
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- body is an arbitrary mocked JSON payload; jsonRes only serializes it via JSON.stringify, so there is no boundary contract to parse here.
 function jsonRes(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -43,6 +44,7 @@ describe("authClient.fetchCsrf", () => {
     const token = await c.fetchCsrf();
     expect(token).toBe("tok-1");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    // SAFETY: the fetch spy records (url, init); fetchCsrf calls fetch with a string URL plus a RequestInit.
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://eq.test/api/csrf/v1/generate");
     expect(init.method).toBe("POST");
@@ -70,6 +72,7 @@ describe("authClient.getUser session probe semantics", () => {
     const c = createAuthClient();
     const result = await c.getUser();
     expect(result).toEqual({ kind: "authenticated", user: decodeUserProfile(PROFILE) });
+    // SAFETY: the expect above pinned result to { kind: "authenticated" } with the decoded PROFILE (id 7).
     expect((result as { user: { id: number } }).user.id).toBe(7);
   });
 
@@ -166,10 +169,13 @@ describe("authClient.unsafeRequest CSRF bootstrap ordering", () => {
       body: { email: "a@b.c", password: "x" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    // SAFETY: the fetch spy records (url, init); call 0 is the CSRF generate, call 1 the login POST.
     const firstUrl = (fetchMock.mock.calls[0] as [string, RequestInit])[0];
+    // SAFETY: same (url, init) recording — call 1 is the login POST URL.
     const secondUrl = (fetchMock.mock.calls[1] as [string, RequestInit])[0];
     expect(firstUrl).toBe("https://eq.test/api/csrf/v1/generate");
     expect(secondUrl).toBe("https://eq.test/api/auth/v1/log_in");
+    // SAFETY: same (url, init) recording — call 1's second element is the login RequestInit.
     const secondInit = (fetchMock.mock.calls[1] as [string, RequestInit])[1];
     expect(secondInit.headers).toMatchObject({ "csrf-token": "anon-1" });
     expect(secondInit.credentials).toBe("include");
@@ -181,6 +187,7 @@ describe("authClient.unsafeRequest CSRF bootstrap ordering", () => {
     const c = createAuthClient();
     await c.unsafeRequest("/auth/google/v1/login", { method: "POST", exempt: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    // SAFETY: the fetch spy records (url, init); the exempt login POST is the only call.
     expect((fetchMock.mock.calls[0] as [string, RequestInit])[0]).toBe(
       "https://eq.test/api/auth/google/v1/login",
     );
@@ -220,8 +227,10 @@ describe("X-EQ-Session-Rotated header refreshes CSRF", () => {
     const res = await c.unsafeRequest("/auth/v1/log_in", { method: "POST", body: {} });
     expect(res.rotated).toBe(true);
     expect(c.getCsrfToken()).toBe("rotated-2");
+    // SAFETY: the fetch spy records (url, init); call 2 is the post-rotation CSRF re-fetch.
     const rotatedRequestInit = (fetchMock.mock.calls[2] as [string, RequestInit])[1];
     expect(rotatedRequestInit.method).toBe("POST");
+    // SAFETY: same (url, init) recording — call 2's URL is the CSRF generate endpoint.
     const rotatedUrl = (fetchMock.mock.calls[2] as [string, RequestInit])[0];
     expect(rotatedUrl).toBe("https://eq.test/api/csrf/v1/generate");
   });
@@ -289,6 +298,7 @@ describe("X-EQ-Session-Rotated header refreshes CSRF", () => {
       "https://eq.test/api/csrf/v1/generate",
       "https://eq.test/api/auth/v1/log_out",
     ]);
+    // SAFETY: the fetch spy records (url, init); call 3 is the post-failure re-bootstrap generate POST.
     const rebootstrapInit = (fetchMock.mock.calls[3] as [string, RequestInit])[1];
     expect(rebootstrapInit.method).toBe("POST");
   });
@@ -305,6 +315,7 @@ describe("authClient.refreshCsrf", () => {
     expect(c.getCsrfToken()).toBe("anon-1");
     await c.refreshCsrf();
     expect(c.getCsrfToken()).toBe("refreshed-2");
+    // SAFETY: the fetch spy records (url, init); call 1 is refreshCsrf's generate POST.
     expect((fetchMock.mock.calls[1] as [string, RequestInit])[0]).toBe(
       "https://eq.test/api/csrf/v1/generate",
     );
@@ -323,6 +334,7 @@ describe("authClient.clearCsrf", () => {
     c.clearCsrf();
     expect(c.getCsrfToken()).toBeNull();
     await c.unsafeRequest("/auth/v1/log_out", { method: "POST" });
+    // SAFETY: the fetch spy records (url, init); after clearCsrf, call 1 is the re-bootstrap generate POST.
     expect((fetchMock.mock.calls[1] as [string, RequestInit])[0]).toBe(
       "https://eq.test/api/csrf/v1/generate",
     );

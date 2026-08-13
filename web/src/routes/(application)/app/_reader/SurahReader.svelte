@@ -161,8 +161,9 @@
           rect.bottom > 0 &&
           rect.top < window.innerHeight
         ) {
+          const anchor = stableAnchor;
           layoutRepairPending = true;
-          void preserveViewportFrom(stableAnchor, () => undefined, true).finally(() => {
+          void preserveViewportFrom(() => anchor, () => undefined, true).finally(() => {
             layoutRepairPending = false;
           });
         }
@@ -176,12 +177,12 @@
   }
 
   function preserveViewportFrom(
-    anchorSource: ViewportAnchor | null | (() => ViewportAnchor | null),
+    anchorSource: () => ViewportAnchor | null,
     change: () => void,
     waitForLayout = false,
   ): Promise<void> {
     const operation = async () => {
-      const anchor = typeof anchorSource === "function" ? anchorSource() : anchorSource;
+      const anchor = anchorSource();
       suppressScroll = true;
       try {
         change();
@@ -218,7 +219,7 @@
           node.getBoundingClientRect().top < window.innerHeight
         ) {
           void preserveViewportFrom(
-            anchor,
+            () => anchor,
             () => {
               virtualCenterPage = visibleLocalPage;
             },
@@ -242,6 +243,8 @@
   function shiftVirtualWindow(localPage: number): void {
     if (renderedPageNumbers.has(localPage) || virtualShiftPage === localPage) return;
     virtualShiftPage = localPage;
+    // SAFETY: document.activeElement is Element | null; only page/render elements can hold focus in
+    // the reader, and closest<HTMLElement> types the match for dataset.localPage access below.
     const focusedPage = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
       "[data-page-rendered]",
     );
@@ -622,6 +625,8 @@
   }
 
   function onKeyDown(event: KeyboardEvent): void {
+    // SAFETY: window-level keydown; target is the focused element (or null), and only the
+    // HTMLElement fields isContentEditable/tagName are read to skip text-input contexts.
     const target = event.target as HTMLElement | null;
     if (
       target?.isContentEditable ||
@@ -677,7 +682,7 @@
       scheduleForwardFill();
     });
     let updateChannel: BroadcastChannel | null = null;
-    if (typeof BroadcastChannel !== "undefined") {
+    if ("BroadcastChannel" in window) {
       updateChannel = new BroadcastChannel(UPDATE_BROADCAST_CHANNEL);
       updateChannel.addEventListener("message", (event) => {
         if (event.data?.type === PREPARE_RELOAD) writeHistoryState();

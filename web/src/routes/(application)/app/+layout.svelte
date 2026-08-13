@@ -22,6 +22,8 @@
   const canonicalReaderHref = $derived.by<QuranReaderHref>(() => {
     const canonical = deLocalizeUrl(page.url);
     const pathname = canonical.pathname.replace(/\/+$/, "") || "/";
+    // SAFETY: this layout only mounts on /app reader routes and deLocalizeUrl strips the locale
+    // prefix, so the rebuilt path is always a reader route.
     return `${pathname}${canonical.search}${canonical.hash}` as QuranReaderHref;
   });
   const currentReaderHref = $derived(readerHrefFor(copy.locale, canonicalReaderHref));

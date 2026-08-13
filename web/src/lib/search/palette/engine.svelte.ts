@@ -75,9 +75,9 @@ export function createPaletteEngine(input: PaletteEngineInput): PaletteEngine {
       .then((data) => {
         quranData = data;
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         catalogueFailed = true;
-        console.warn("[palette] catalogue unavailable:", error);
+        console.warn("[palette] catalogue unavailable:", cause);
       });
   });
 

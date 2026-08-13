@@ -8,6 +8,7 @@ export interface ByteStore {
 }
 
 export function hasOpfs(): boolean {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- capability probe; `navigator` is undeclared in some runtimes (Node test env), so a bare reference would throw before the property check
   return typeof navigator !== "undefined" && !!navigator.storage?.getDirectory;
 }
 

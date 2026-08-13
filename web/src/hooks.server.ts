@@ -74,7 +74,11 @@ export function hasNoStore(response: Response): boolean {
 
 function responseSetsCookie(response: Response): boolean {
   if (response.headers.get("set-cookie")) return true;
+  // SAFETY: getSetCookie exists at runtime on modern Headers implementations
+  // but is missing from the TS lib target; the optional-prop intersection
+  // mirrors exactly that runtime shape.
   const getter = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- feature-detecting the optional getSetCookie method on this platform's Headers; no I/O boundary to parse here
   return typeof getter === "function" && getter.call(response.headers).length > 0;
 }
 

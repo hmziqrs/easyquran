@@ -17,7 +17,7 @@ export interface SurahCard {
  * the HTML at build time — no client fetch of the metadata bundle just to draw
  * the browse grid.
  */
-export const load = (): { surahs: SurahCard[] } => {
+export const load = () => {
   const data = createQuranData(quranDataRaw);
   const surahs = data.surahs.map((s) => ({
     num: s.num,
@@ -28,5 +28,5 @@ export const load = (): { surahs: SurahCard[] } => {
     ayahCount: s.ayahCount,
     place: s.place === "medinan" ? "Medinan" : "Meccan",
   }));
-  return { surahs };
+  return { surahs } satisfies { surahs: SurahCard[] };
 };

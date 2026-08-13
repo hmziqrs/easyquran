@@ -169,6 +169,7 @@ export function marketingHomeHref(locale: MarketingLocale): "/" | "/ar/" {
   if (href === null) {
     throw new Error(`marketingHomeHref: "home" is not published for locale "${locale}"`);
   }
+  // SAFETY: "home" is published for exactly en+ar and MARKETING_PATHS.home is "/", so the checked localizeHref output is "/" for en or "/ar/" for ar — no other value can pass the null check above.
   return href as "/" | "/ar/";
 }
 

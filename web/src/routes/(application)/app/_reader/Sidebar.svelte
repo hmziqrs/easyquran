@@ -43,6 +43,7 @@
   let contentEl: HTMLDivElement | null = $state(null);
 
   function oninput(e: Event) {
+    // SAFETY: oninput is bound only to the search Input's oninput below; currentTarget is that input element.
     reader.setQuery((e.currentTarget as HTMLInputElement).value);
   }
   function onItemClick() {

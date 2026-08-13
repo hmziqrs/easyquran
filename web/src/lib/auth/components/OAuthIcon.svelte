@@ -10,12 +10,12 @@
 
   let { provider, size = 16, class: className }: Props = $props();
 
-  const ICONS: Record<OAuthProvider, SimpleIcon> = {
+  const ICONS = {
     google: siGoogle,
     apple: siApple,
     facebook: siFacebook,
     github: siGithub,
-  };
+  } satisfies Record<OAuthProvider, SimpleIcon>;
 
   let icon = $derived(ICONS[provider]);
 </script>

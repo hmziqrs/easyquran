@@ -106,7 +106,9 @@ function listReaderHtml(): string[] {
 
 const allReaderHtml = listReaderHtml();
 
-function aggregate(files: string[]): { docs: number; raw: number; gzip: number } {
+type Aggregate = { docs: number; raw: number; gzip: number };
+
+function aggregate(files: string[]): Aggregate {
   let raw = 0;
   let gzip = 0;
   for (const f of files) {

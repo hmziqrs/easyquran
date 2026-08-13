@@ -31,11 +31,14 @@ function requestEvent(
   const url = new URL(pathname, ORIGIN);
   const request = new Request(url);
   for (const [name, value] of new Headers(headers)) request.headers.set(name, value);
+  // SAFETY: test double providing every RequestEvent member the handle() path reads; cookies and locals are inert placeholders in this test.
   return {
+    // SAFETY: handle() reads no cookies in these tests; the empty object satisfies the accessor shape RequestEvent declares.
     cookies: {} as RequestEvent["cookies"],
     fetch,
     getClientAddress: () => "127.0.0.1",
     isDataRequest: false,
+    isRemoteRequest: false,
     isSubRequest: false,
     locals: {},
     params,
@@ -43,8 +46,10 @@ function requestEvent(
     request,
     route: { id: routeId },
     setHeaders: () => {},
+    // SAFETY: tracing is kit-internal telemetry; the localized handle() path under test never reads it.
+    tracing: { enabled: false } as RequestEvent["tracing"],
     url,
-  } as unknown as RequestEvent;
+  } as RequestEvent;
 }
 
 function htmlResolve(body = "rendered"): Parameters<Handle>[0]["resolve"] {

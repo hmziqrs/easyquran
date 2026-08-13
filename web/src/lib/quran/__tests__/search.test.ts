@@ -43,8 +43,9 @@ describe("quranSearch api fallback", () => {
     const args = searchMock.mock.calls[0]!;
     // search(query, opts, signal, validateCoordinate)
     const validate = args[3];
-    expect(typeof validate).toBe("function");
+    expect(validate).toBeInstanceOf(Function);
     // validator must actually be wired to the catalog
+    // SAFETY: quranSearch passes its coordinate validator as quranApi.search's 4th argument, so args[3] is that (g, s, a) => boolean fn
     const validator = validate as (g: number, s: number, a: number) => boolean;
     expect(validator(0, 1, 1)).toBe(true); // global 0 = surah 1 ayah 1
     expect(validator(99, 1, 1)).toBe(false);

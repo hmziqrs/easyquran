@@ -3,6 +3,8 @@ import type { Analytics, ConsentSettings, AnalyticsCallOptions } from "firebase/
 
 import { isConfigured, initApp, ANALYTICS_DEBUG } from "./index";
 
+type AnalyticsParams = Record<string, string | number | boolean | null | undefined>;
+
 let analytics: Analytics | null = null;
 let initPromise: Promise<Analytics | null> | null = null;
 
@@ -45,7 +47,7 @@ async function withAnalytics(
 
 export function track(
   name: string,
-  params?: Record<string, unknown>,
+  params?: AnalyticsParams,
   options?: AnalyticsCallOptions,
 ): Promise<void> {
   return withAnalytics((a, m) => {
@@ -69,7 +71,7 @@ export function setCurrentScreen(name: string): Promise<void> {
 }
 
 export function setUserProperties(
-  properties: Record<string, unknown>,
+  properties: AnalyticsParams,
   options?: AnalyticsCallOptions,
 ): Promise<void> {
   return withAnalytics((a, m) => m.setUserProperties(a, properties, options));

@@ -5,19 +5,24 @@ vi.mock("$lib/offline/messages", () => ({
 }));
 
 import { installPurgeHook, makePurgeHook } from "$lib/auth/purge-hook";
+import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import { purgeUserCaches } from "$lib/offline/messages";
 import { reader } from "$lib/stores/reader.svelte";
 
-function fakeState(): { setOnAuthTransition: ReturnType<typeof vi.fn> } {
+function fakeState() {
   return { setOnAuthTransition: vi.fn() };
 }
 
 describe("installPurgeHook", () => {
   it("registers a transition hook that calls purgeUserCaches", () => {
     const state = fakeState();
+    // SAFETY: installPurgeHook reads only setOnAuthTransition, which this double provides as a vi.fn().
     installPurgeHook(state as never);
     expect(state.setOnAuthTransition).toHaveBeenCalledTimes(1);
-    const hook = state.setOnAuthTransition.mock.calls[0]![0]! as (ctx: unknown) => Promise<void>;
+    // SAFETY: the first argument of the first setOnAuthTransition call is makePurgeHook()'s hook, typed (ctx: AuthTransitionContext) => Promise<void>.
+    const hook = state.setOnAuthTransition.mock.calls[0]![0]! as (
+      ctx: AuthTransitionContext,
+    ) => Promise<void>;
     void hook({ kind: "login" });
     expect(purgeUserCaches).toHaveBeenCalled();
   });
@@ -30,7 +35,9 @@ describe("installPurgeHook", () => {
 
   it("reinstalling overwrites the previous hook (idempotent registration)", () => {
     const state = fakeState();
+    // SAFETY: installPurgeHook reads only setOnAuthTransition, which this double provides as a vi.fn().
     installPurgeHook(state as never);
+    // SAFETY: installPurgeHook reads only setOnAuthTransition, which this double provides as a vi.fn().
     installPurgeHook(state as never);
     expect(state.setOnAuthTransition).toHaveBeenCalledTimes(2);
   });

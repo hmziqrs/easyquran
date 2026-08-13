@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 function mockAbortAwareFetch(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-    const sig = (init as RequestInit | undefined)?.signal;
+    const sig = init?.signal;
     return new Promise<Response>((_resolve, reject) => {
       if (sig?.aborted) {
         reject(new DOMException("aborted", "AbortError"));
@@ -37,7 +37,7 @@ describe("fetchWithTimeout", () => {
   it("aborts through the default timeout and observes the inner signal aborted", async () => {
     let observed: AbortSignal | null | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      observed = (init as RequestInit | undefined)?.signal;
+      observed = init?.signal;
       return new Promise<Response>((_resolve, reject) => {
         observed?.addEventListener("abort", () =>
           reject(new DOMException("aborted", "AbortError")),
@@ -69,14 +69,14 @@ describe("fetchWithTimeout", () => {
       /aborted/i,
     );
     expect(spy).toHaveBeenCalledTimes(1);
-    const inner = spy.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect((inner?.signal as AbortSignal | undefined)?.aborted).toBe(true);
+    const inner = spy.mock.calls[0]?.[1];
+    expect(inner?.signal?.aborted).toBe(true);
   });
 
   it("relays a mid-flight external abort onto the inner signal", async () => {
     let inner: AbortSignal | null | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      inner = (init as RequestInit | undefined)?.signal;
+      inner = init?.signal;
       return new Promise<Response>((_resolve, reject) => {
         inner?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });
@@ -118,7 +118,7 @@ describe("fetchJsonWithTimeout", () => {
     let observed: AbortSignal | null | undefined;
     let bodyConsumed = false;
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      observed = (init as RequestInit | undefined)?.signal;
+      observed = init?.signal;
       return new Promise<Response>((resolve) => {
         const handle = (): void => {
           resolve(new Response('{"ok":1}'));
@@ -139,7 +139,7 @@ describe("fetchJsonWithTimeout", () => {
 
   it("aborts a stalled body decode under the timeout and surfaces FetchTimeoutError", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      const sig = (init as RequestInit | undefined)?.signal;
+      const sig = init?.signal;
       return new Promise<Response>((_resolve, reject) => {
         sig?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });
@@ -154,7 +154,7 @@ describe("fetchJsonWithTimeout", () => {
     let observed: AbortSignal | null | undefined;
     let streamErrored = false;
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
-      const sig = (init as RequestInit | undefined)?.signal;
+      const sig = init?.signal;
       observed = sig;
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {

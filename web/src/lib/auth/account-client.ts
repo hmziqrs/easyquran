@@ -1,9 +1,14 @@
 import {
   authClient,
   decodeUserProfile,
+  isNumber,
+  isString,
+  isWireObject,
   type AuthClient,
   type AuthErrorEnvelope,
+  type JsonValue,
   type UserProfile,
+  type WireObject,
 } from "$lib/auth/auth-client";
 
 export interface SessionInfo {
@@ -27,6 +32,19 @@ export interface ProfileUpdateInput {
 
 export type AccountResultStatus = "ok" | "anonymous" | "error";
 
+type SessionDraft = {
+  id: string;
+  isCurrent: boolean;
+  createdAt?: string;
+  lastSeenAt?: string;
+  userAgent?: string;
+};
+
+type ProfileUpdateWire = {
+  name?: string;
+  avatar_id?: number | null;
+};
+
 export interface AccountResult<T> {
   readonly status: AccountResultStatus;
   readonly httpStatus: number;
@@ -41,25 +59,26 @@ export interface TerminateResult {
 }
 
 /** First key present as a string, in preference order. Wire rows spell fields snake_case or camelCase. */
-function firstString(source: Record<string, unknown>, ...keys: string[]): string | undefined {
+function firstString(source: WireObject, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = source[key];
-    if (typeof value === "string") return value;
+    if (isString(value)) return value;
   }
   return undefined;
 }
 
 // id is the numeric i32 audit-row id on the wire; tolerate a numeric string
 // (never require a string id — the backend sends a number).
-function decodeSessionId(value: unknown): string | null {
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string" && value.length > 0) return value;
+function decodeSessionId(value: JsonValue | undefined): string | null {
+  if (isNumber(value)) return String(value);
+  if (isString(value) && value.length > 0) return value;
   return null;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed row from the sessions JSON body; this function is its boundary parser
 function decodeSession(raw: unknown): SessionInfo | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
+  if (!isWireObject(raw)) return null;
+  const o = raw;
   const id = decodeSessionId(o.id);
   if (id === null) return null;
   // Backend row fields: device, last_seen (snake_case) + isCurrent (camelCase,
@@ -67,24 +86,24 @@ function decodeSession(raw: unknown): SessionInfo | null {
   const lastSeenAt = firstString(o, "last_seen", "lastSeenAt");
   const userAgent = firstString(o, "device", "user_agent", "userAgent");
   const createdAt = firstString(o, "created_at", "createdAt");
-  return {
-    id,
-    isCurrent: o.is_current === true || o.isCurrent === true,
-    ...(createdAt !== undefined ? { createdAt } : {}),
-    ...(lastSeenAt !== undefined ? { lastSeenAt } : {}),
-    ...(userAgent !== undefined ? { userAgent } : {}),
-  };
+  const session: SessionDraft = { id, isCurrent: o.is_current === true || o.isCurrent === true };
+  if (createdAt !== undefined) session.createdAt = createdAt;
+  if (lastSeenAt !== undefined) session.lastSeenAt = lastSeenAt;
+  if (userAgent !== undefined) session.userAgent = userAgent;
+  return session;
 }
 
-function sessionRows(raw: unknown, envelope: Record<string, unknown>): unknown[] {
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the still-unparsed sessions payload (may be a bare array); each row is parsed by decodeSession below
+function sessionRows(raw: unknown, envelope: WireObject): unknown[] {
   if (Array.isArray(envelope.data)) return envelope.data;
   if (Array.isArray(raw)) return raw;
   return [];
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body from fetch; this function is the I/O boundary parser for the sessions list
 export function decodeSessionList(raw: unknown): SessionInfo[] {
-  if (!raw || typeof raw !== "object") return [];
-  const o = raw as Record<string, unknown>;
+  if (!isWireObject(raw)) return [];
+  const o = raw;
   // Real envelope is { data: [...], total, page }. Accept a bare array too.
   const arr = sessionRows(raw, o);
   const out: SessionInfo[] = [];
@@ -109,7 +128,7 @@ export class AccountClient {
   }
 
   async updateProfile(input: ProfileUpdateInput): Promise<AccountResult<UserProfile>> {
-    const body: Record<string, unknown> = {};
+    const body: ProfileUpdateWire = {};
     if (input.name !== undefined) body.name = input.name;
     if (input.avatarId !== undefined) body.avatar_id = input.avatarId;
     const res = await this.auth.unsafeRequest<UserProfile>("/user/v1/update", {

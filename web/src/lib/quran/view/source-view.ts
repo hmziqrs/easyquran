@@ -84,6 +84,7 @@ export interface QuranSourceView {
 
 function invariant(
   profile: QuranSourceProfile,
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- assertion-signature param must accept any check expression so `asserts condition` narrows truthiness at each call site
   condition: unknown,
   message: string,
 ): asserts condition {
@@ -221,16 +222,14 @@ export function bodyText(
   return raw.slice(scalarToUtf16Index(raw, normalization.bodyStartScalar));
 }
 
-export function packagingCounts(
-  normalizations: readonly SurahNormalization[],
-): Readonly<Record<OpenerPackagingValue, number>> {
-  const counts: Record<OpenerPackagingValue, number> = {
+export function packagingCounts(normalizations: readonly SurahNormalization[]) {
+  const counts = {
     [OpenerPackaging.NumberedAyah]: 0,
     [OpenerPackaging.EmbeddedPrefix]: 0,
     [OpenerPackaging.ChapterFlag]: 0,
     [OpenerPackaging.SeparateRow]: 0,
     [OpenerPackaging.Absent]: 0,
-  };
+  } satisfies Record<OpenerPackagingValue, number>;
   for (const descriptor of normalizations) counts[descriptor.packaging] += 1;
   return counts;
 }

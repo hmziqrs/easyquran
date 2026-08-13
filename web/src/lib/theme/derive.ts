@@ -57,7 +57,7 @@ const shift = (c: Rgb, t: number): Rgb => (t >= 0 ? mix(c, WHITE, t) : mix(c, BL
 const rgba = ({ r, g, b }: Rgb, a: number): string =>
   `rgba(${toChannel(r)}, ${toChannel(g)}, ${toChannel(b)}, ${a})`;
 
-function backgroundTokens(seed: Rgb): Record<string, string> {
+function backgroundTokens(seed: Rgb) {
   const light = isLight(seed);
   const dir = light ? -1 : 1;
   const ink = light ? BLACK : WHITE;
@@ -80,7 +80,7 @@ function backgroundTokens(seed: Rgb): Record<string, string> {
   };
 }
 
-function accentTokens(seed: Rgb): Record<string, string> {
+function accentTokens(seed: Rgb) {
   const onLight = isLight(seed);
   return {
     "--accent": toHex(seed),
@@ -91,14 +91,14 @@ function accentTokens(seed: Rgb): Record<string, string> {
   };
 }
 
-function popTokens(seed: Rgb): Record<string, string> {
+function popTokens(seed: Rgb) {
   return {
     "--pop": toHex(seed),
     "--pop-soft": rgba(seed, 0.13),
   };
 }
 
-export function deriveTokens(seeds: CustomSeeds): Record<string, string> {
+export function deriveTokens(seeds: CustomSeeds) {
   const out: Record<string, string> = {};
   const bg = seeds.bg ? parseHex(seeds.bg) : null;
   const accent = seeds.accent ? parseHex(seeds.accent) : null;

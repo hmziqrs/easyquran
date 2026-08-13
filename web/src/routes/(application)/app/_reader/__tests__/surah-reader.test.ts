@@ -1,6 +1,9 @@
 import type { SurahLocalPageData } from "$lib/data/quran";
+import type { QuranReaderSource } from "$lib/data/quran-types";
+import type { ReadTierStatus } from "$lib/quran/fetch";
+import type { AyahCoordinateValidator } from "$lib/quran/wire";
 import { mount, unmount } from "svelte";
-import type { Component, ComponentProps } from "svelte";
+import type { ComponentProps } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 // ---- hoisted doubles -------------------------------------------------------
@@ -21,20 +24,23 @@ const {
     onStatus: vi.fn().mockReturnValue(() => {}),
   },
   loadQuranDataStub: vi.fn(),
+  // SAFETY: the double mirrors the real store contract; beforeEach reassigns status to arbitrary status strings and error to string | null, and both seed values are members of those unions.
   quranStore: { status: "idle" as string, error: null as string | null },
   invalidateAllSpy: vi.fn().mockResolvedValue(undefined),
   gotoSpy: vi.fn().mockResolvedValue(undefined),
   readerStub: {
     hasLastRead: false,
+    // SAFETY: tests below reassign lastRead to { num, n, sourceId } objects or null; null is a member of that union.
     lastRead: null as { num: number; n: number; sourceId?: string } | null,
     lastReadRef: "",
+    // SAFETY: null is a member of the seeded union; no test in this file ever sets a concrete anchor.
     lastReadAnchor: null as { verseKey: string; localPage: number; ratio: number } | null,
     markRead: vi.fn(),
     setLastReadAnchor: vi.fn(),
     consumePendingAnchor: vi.fn(() => null),
     seedAyahs: vi.fn(),
   },
-  mountStub: (() => {}) as unknown as Component,
+  mountStub: () => {},
 }));
 
 vi.mock("$app/environment", () => ({ browser: true }));
@@ -69,10 +75,10 @@ function flushMicrotasks(n = 12): Promise<void> {
 
 const SURAH = { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة" };
 
+// SurahLocalPageData with a minimal valid shape.
 function pageData(
   opts: { localPage?: number; ayahs?: number; pageCount?: number } = {},
-): // SurahLocalPageData with a minimal valid shape.
-Record<string, unknown> {
+) {
   const localPage = opts.localPage ?? 1;
   const count = opts.ayahs ?? 0;
   return {
@@ -124,9 +130,10 @@ function flushRaf(): void {
   }
 }
 
-function propsFor(initial: Record<string, unknown>): ComponentProps<typeof SurahReader> {
+function propsFor(initial: ReturnType<typeof pageData>): ComponentProps<typeof SurahReader> {
   return {
-    initial: initial as unknown as SurahLocalPageData,
+    // SAFETY: pageData() builds a minimal valid SurahLocalPageData; the only difference from the declared type is widened field literals (e.g. script: string vs union), so the assertion is a narrowing, not a shape change.
+    initial: initial as SurahLocalPageData,
     previousPage: null,
     nextPage: null,
     previousSurah: null,
@@ -207,7 +214,7 @@ describe("SurahReader W7 single-page empty recovery", () => {
     // readRange resolves with content so the W5 fallback is observable.
     workerStub.readRange.mockResolvedValue({
       ayahs: [{ key: "1:1", surah: 1, ayah: 1, globalIndex: 1, text: "x" }],
-      normalizations: [(empty as { normalization: unknown }).normalization],
+      normalizations: [empty.normalization],
     });
 
     mount(SurahReader, { target, props: propsFor(empty) });
@@ -249,11 +256,17 @@ describe("SurahReader W7 distinct, clearable degradation state", () => {
   it("surfaces an API-only failure as the network-degraded message", async () => {
     const full = pageData({ ayahs: 7, pageCount: 3 });
     workerStub.readRange.mockImplementation(
-      (_from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        _from: number,
+        _to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         onStatus?.({ servedBy: "local", apiFailure: { kind: "http", status: 503 } });
         return Promise.resolve({
           ayahs: [{ key: "1:1", surah: 1, ayah: 1, globalIndex: 1, text: "x" }],
-          normalizations: [(full as { normalization: unknown }).normalization],
+          normalizations: [full.normalization],
         });
       },
     );
@@ -271,11 +284,17 @@ describe("SurahReader W7 distinct, clearable degradation state", () => {
   it("surfaces a worker-only failure as the local-offline message", async () => {
     const full = pageData({ ayahs: 7, pageCount: 3 });
     workerStub.readRange.mockImplementation(
-      (_from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        _from: number,
+        _to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         onStatus?.({ servedBy: "api", workerFailure: { kind: "worker" } });
         return Promise.resolve({
           ayahs: [{ key: "1:1", surah: 1, ayah: 1, globalIndex: 1, text: "x" }],
-          normalizations: [(full as { normalization: unknown }).normalization],
+          normalizations: [full.normalization],
         });
       },
     );
@@ -363,7 +382,7 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     }));
     return {
       ayahs,
-      normalizations: [(pageData() as { normalization: unknown }).normalization],
+      normalizations: [pageData().normalization],
     };
   }
 
@@ -372,7 +391,13 @@ describe("SurahReader W7 degradation state lifecycle", () => {
   it("clears workerDegraded when a later adjacent read succeeds cleanly", async () => {
     stubDistinctRanges();
     workerStub.readRange.mockImplementation(
-      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        from: number,
+        _to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         if (from <= 8) onStatus?.({ servedBy: "local", workerFailure: { kind: "worker" } });
         else onStatus?.({ servedBy: "local" });
         return Promise.resolve(surahOneRange(from, _to));
@@ -398,7 +423,13 @@ describe("SurahReader W7 degradation state lifecycle", () => {
   it("clears apiDegraded when a later adjacent read succeeds cleanly", async () => {
     stubDistinctRanges();
     workerStub.readRange.mockImplementation(
-      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        from: number,
+        _to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         if (from <= 8) onStatus?.({ servedBy: "local", apiFailure: { kind: "http", status: 503 } });
         else onStatus?.({ servedBy: "local" });
         return Promise.resolve(surahOneRange(from, _to));
@@ -424,7 +455,13 @@ describe("SurahReader W7 degradation state lifecycle", () => {
   it("surfaces worker+API both-down as a single clearable degraded state", async () => {
     stubDistinctRanges();
     workerStub.readRange.mockImplementation(
-      (from: number, _to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        from: number,
+        _to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         if (from <= 8) {
           onStatus?.({
             servedBy: "api",
@@ -462,7 +499,13 @@ describe("SurahReader W7 degradation state lifecycle", () => {
   it("does not carry degraded state from a prior route into a fresh mount", async () => {
     stubDistinctRanges();
     workerStub.readRange.mockImplementation(
-      (from: number, to: number, _v?: unknown, _s?: unknown, onStatus?: (s: unknown) => void) => {
+      (
+        from: number,
+        to: number,
+        _validate?: AyahCoordinateValidator,
+        _source?: QuranReaderSource,
+        onStatus?: (status: ReadTierStatus) => void,
+      ) => {
         onStatus?.({ servedBy: "local", workerFailure: { kind: "worker" } });
         return Promise.resolve(surahOneRange(from, to));
       },

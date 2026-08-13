@@ -25,6 +25,7 @@ export async function resumeToVerse(
     const resumeCtx = resumeCtxFor(sourceId !== undefined ? { sourceId } : null, currentCtx);
     reader.openVerse(num, n, sourceId);
     if (options.anchor) reader.setPendingAnchor(options.anchor);
+    // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
     await goto(
       publicHref(
         readerHrefFor(

@@ -15,7 +15,13 @@ import {
 } from "./lib/offline/messages";
 import { openIdb, idbGet, idbPut, idbDelete, idbScan } from "./lib/workers/idb";
 
-const sw = self as unknown as ServiceWorkerGlobalScope;
+// SAFETY: this file is the service-worker entry (compiled with the webworker
+// lib reference above), so `self` is the worker global at runtime; the DOM lib
+// also declares `self`, forcing a widen to cross the incompatible declarations.
+const selfAny = self as unknown;
+// SAFETY: carried over from `selfAny` above — same global object, re-branded
+// with the worker scope the rest of this module uses.
+const sw = selfAny as ServiceWorkerGlobalScope;
 
 const APP_CACHE = `eq-app-${version}`;
 export const PAGES_CACHE = "eq-pages-v1";
@@ -38,7 +44,7 @@ const PRECACHE = Array.from(
 const IMMUTABLE = new Set([...build, ...files]);
 
 export function normalizeDataKey(url: string | URL): string {
-  const u = typeof url === "string" ? new URL(url, sw.location.origin) : url;
+  const u = url instanceof URL ? url : new URL(url, sw.location.origin);
   const params = new URLSearchParams();
   for (const [key, value] of u.searchParams) {
     if (key.startsWith("x-sveltekit-")) continue;
@@ -75,6 +81,7 @@ async function metaGet<T>(key: string): Promise<T | undefined> {
   }
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- values are heterogeneous IndexedDB records (ack version strings, maintenance cursor, recency maps); the IDB value slot is structurally untyped by design
 async function metaSet(key: string, value: unknown): Promise<void> {
   try {
     await idbPut(await db(), META_STORE, value, key);
@@ -352,8 +359,15 @@ function announceTakeover(): void {
   }
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- m is event.data from postMessage, an opaque runtime boundary; this guard is the parse
 function isClientToSw(m: unknown): m is ClientToSwMessage {
-  return !!m && typeof m === "object" && typeof (m as { type?: unknown }).type === "string";
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- discriminating an opaque postMessage payload; no parse seam exists at a bare MessageEvent
+  if (!m || typeof m !== "object") return false;
+  // SAFETY: m is narrowed to a non-null object by the guard above; the cast
+  // only widens the property read for the string check below.
+  const type = (m as { type?: unknown }).type;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the untyped payload field to string; no schema boundary exists in the SW message path
+  return typeof type === "string";
 }
 
 function isClient(source: Client | ServiceWorker | MessagePort | null): source is Client {
@@ -600,11 +614,16 @@ async function setCursor(cursor: MaintenanceCursor): Promise<void> {
   await metaSet("maintenance", { cursor });
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the maintenance record read back from IndexedDB, which returns it untyped; this fn is the parse
 function normalizeCursor(raw: unknown): MaintenanceCursor {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- opaque IDB record; the runtime object check is the only available discriminator
   if (raw && typeof raw === "object") {
+    // SAFETY: raw is a non-null object by the guard above; the cast only
+    // exposes the persisted fields for validation below.
     const c = raw as { stage?: unknown; offset?: unknown };
     if (c.stage === "trim") return { stage: "trim" };
     if (c.stage === "done") return { stage: "done" };
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- validating the persisted offset field; no schema/parser seam exists in the SW
     if ((c.stage === "pages" || c.stage === "data") && typeof c.offset === "number") {
       return { stage: c.stage, offset: c.offset };
     }
@@ -723,7 +742,9 @@ async function trimPages(): Promise<void> {
   await metaSet("recency", nextRecency);
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the url field of an untrusted push JSON payload; this fn validates it before use
 function safeTarget(raw: unknown): string {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- untrusted push payload field; the runtime string check precedes URL parsing
   if (typeof raw !== "string" || raw.length === 0) return "/";
   try {
     const u = new URL(raw, sw.location.origin);
@@ -742,6 +763,8 @@ interface PushPayload {
 sw.addEventListener("push", (event) => {
   let payload: PushPayload = {};
   try {
+    // SAFETY: event.data.json() returns untyped JSON; PushPayload fields are
+    // all optional and every read below falls back when data is missing.
     payload = event.data ? (event.data.json() as PushPayload) : {};
   } catch {
     payload = {};

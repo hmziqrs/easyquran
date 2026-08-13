@@ -9,7 +9,7 @@ import {
 // Emitted by adapter-node at build time, so it carries no types of its own.
 import { handler } from "./build/handler.js";
 
-type RequestHandler = (request: IncomingMessage, response: ServerResponse) => unknown;
+type RequestHandler = (request: IncomingMessage, response: ServerResponse) => void | Promise<void>;
 
 /** Both `writeHead` overloads as one tuple: the optional middle arg is a status message or headers. */
 type WriteHeadArgs = [
@@ -52,15 +52,19 @@ const server = createServer((request: IncomingMessage, response: ServerResponse)
   //
   // `writeHead` is overloaded, and `Parameters<>` collapses to the last overload
   // `(statusCode, headers?)`. Spelling both shapes as one rest tuple keeps every real call
-  // forwarding untouched; the assertion re-attaches the overloaded type on the way out.
+  // forwarding untouched.
+  // SAFETY: the rest tuple spells both writeHead overloads and the assertions re-attach
+  // the overloaded type on the way out.
   response.writeHead = function headerAwareWriteHead(
     this: ServerResponse,
     ...args: WriteHeadArgs
   ): ServerResponse {
     applyHeaders(this, pathname, args[0]);
+    // SAFETY: writeHead was captured from this response; the tuple spells its overloads.
     return (writeHead as (...forwarded: WriteHeadArgs) => ServerResponse)(...args);
   } as ServerResponse["writeHead"];
 
+  // SAFETY: adapter-node emits handler.js without types; RequestHandler spells its real signature.
   Promise.resolve((handler as RequestHandler)(request, response)).catch((cause: unknown) => {
     console.error("[server] unhandled request error", cause);
     if (response.headersSent) {

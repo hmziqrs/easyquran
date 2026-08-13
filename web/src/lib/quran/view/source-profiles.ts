@@ -31,6 +31,8 @@ export function defineSourceProfile(profile: QuranSourceProfile): QuranSourcePro
   if (profile.packagingBySurah.length !== 115) {
     throw new Error(`[quran-view:${profile.id}] packaging registry must contain indexes 0..114`);
   }
+  // SAFETY: OPENER_PACKAGING_VALUES enumerates every OpenerPackagingValue exactly once, so
+  // Object.fromEntries builds precisely the keys of Record<OpenerPackagingValue, number>, all 0.
   const observed = Object.fromEntries(OPENER_PACKAGING_VALUES.map((kind) => [kind, 0])) as Record<
     OpenerPackagingValue,
     number

@@ -9,6 +9,7 @@ const readCatalog = async (domain, locale) => {
 };
 
 const flatten = (value, prefix = "", out = new Map()) => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- value is JSON.parse'd catalog content; this is the boundary discrimination
   if (value && typeof value === "object" && !Array.isArray(value)) {
     for (const [key, child] of Object.entries(value)) {
       flatten(child, prefix ? `${prefix}.${key}` : key, out);
@@ -20,6 +21,7 @@ const flatten = (value, prefix = "", out = new Map()) => {
 };
 
 const signature = (value, structural = false, complex = false) => {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- catalog leaf discrimination on untyped JSON.parse output
   if (typeof value === "string") {
     if (structural) return ["literal", value];
     if (complex) return ["text"];
@@ -31,6 +33,7 @@ const signature = (value, structural = false, complex = false) => {
   if (Array.isArray(value)) {
     return ["array", value.map((item) => signature(item, structural, true))];
   }
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- nested catalog object discrimination on untyped JSON.parse output
   if (value && typeof value === "object") {
     return [
       "object",
@@ -42,6 +45,7 @@ const signature = (value, structural = false, complex = false) => {
         ]),
     ];
   }
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- terminal primitive tag for a JSON.parse leaf; no schema layer in plain JS
   return [typeof value];
 };
 
@@ -87,6 +91,7 @@ const byLocale = Object.fromEntries(
     for (const domain of DOMAINS) {
       for (const [key, value] of catalogs[locale].get(domain)) {
         if (merged.has(key)) fail(`duplicate ${locale} key across domains: ${key}`);
+        // eslint-disable-next-line anti-slop/no-runtime-typeof -- message value is untyped JSON.parse output; string check is the emptiness parse
         if (typeof value === "string" && value.trim() === "") {
           fail(`empty ${locale} message: ${key}`);
         }

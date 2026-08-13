@@ -23,6 +23,7 @@ interface PersistedFcm {
   subscribed: boolean;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (asObject/asString validate fields)
 export function decodeFcm(raw: unknown): PersistedFcm {
   const stored = asObject(raw);
   if (!stored) return { token: null, subscribed: false };

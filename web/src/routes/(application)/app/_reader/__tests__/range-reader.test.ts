@@ -1,4 +1,11 @@
-import type { Ayah, RangePageData, SurahLink, SurahNormalization } from "$lib/data/quran-types";
+import type {
+  Ayah,
+  QuranRangeText,
+  QuranReaderSource,
+  RangePageData,
+  SurahLink,
+  SurahNormalization,
+} from "$lib/data/quran-types";
 import {
   createRangeReaderCoordinator,
   equalRangeKey,
@@ -7,7 +14,6 @@ import {
   type RangeDisplaySnapshot,
 } from "$lib/quran/worker-client";
 import { mount, unmount } from "svelte";
-import type { Component } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import RangeReader from "../RangeReader.svelte";
@@ -25,8 +31,8 @@ const { nav, loadQuranDataStub, gotoSpy, verseRowStub, tooltipStub } = vi.hoiste
   nav: { params: { lang: "en", translator: "sahih" } },
   loadQuranDataStub: vi.fn(),
   gotoSpy: vi.fn().mockResolvedValue(undefined),
-  verseRowStub: (() => {}) as unknown as Component,
-  tooltipStub: (() => {}) as unknown as Component,
+  verseRowStub: () => {},
+  tooltipStub: () => {},
 }));
 
 vi.mock("$lib/config/site", () => ({ QURAN: siteConfig }));
@@ -412,10 +418,10 @@ describe("RangeReader mount — atomic snapshot guarded by route key on a living
   it("discards a delayed result from the previous route and keeps the current route's snapshot", async () => {
     // Deferred API promises keyed by the range's start global (juz 30 vs juz 29
     // have distinct ranges), so each client read blocks until we release it.
-    const pending = new Map<number, (v: unknown) => void>();
-    apiReads.readRange.mockImplementation((_reader: unknown, from: number) => {
-      return new Promise((r) => {
-        pending.set(from, r as (v: unknown) => void);
+    const pending = new Map<number, (v: QuranRangeText) => void>();
+    apiReads.readRange.mockImplementation((_sourceId: QuranReaderSource, from: number) => {
+      return new Promise<QuranRangeText>((r) => {
+        pending.set(from, r);
       });
     });
 

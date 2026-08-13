@@ -30,12 +30,15 @@ export const UI_LOCALES = Object.freeze({
 export type UiDirection = (typeof UI_LOCALES)[UiLocale]["direction"];
 export type UiLocaleMetadata = (typeof UI_LOCALES)[UiLocale];
 
-export const SUPPORTED_UI_LOCALES = Object.freeze([...UI_LOCALE_IDS]) as readonly UiLocale[];
+export const SUPPORTED_UI_LOCALES = Object.freeze([...UI_LOCALE_IDS]);
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- exported runtime type guard; accepts opaque locale values (URL params, paraglide getLocale()) and parses via the Object.hasOwn lookup below.
 export function isUiLocale(value: unknown): value is UiLocale {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- first parse step of the guard: discriminate strings before the Object.hasOwn lookup.
   return typeof value === "string" && Object.hasOwn(UI_LOCALES, value);
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- assertion counterpart to isUiLocale; takes the same opaque input it is about to prove or reject.
 export function assertUiLocale(value: unknown): asserts value is UiLocale {
   if (!isUiLocale(value)) throw new TypeError(`Unsupported UI locale: ${String(value)}`);
 }

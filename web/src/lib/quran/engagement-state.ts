@@ -60,6 +60,7 @@ function blankState(): EngagementState {
   };
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is localStorage JSON via readJSON(); the as* guards below are the boundary parse
 export function decodeEngagement(raw: unknown): EngagementState | undefined {
   if (isFutureSchema(raw, SCHEMA_VERSION)) return undefined;
   const obj = asObject(raw);
@@ -67,7 +68,7 @@ export function decodeEngagement(raw: unknown): EngagementState | undefined {
   if (obj.v !== SCHEMA_VERSION) return undefined;
   const totalViews = asNumber(obj.totalViews, 0, Number.MAX_SAFE_INTEGER);
   const distinctDays = asNumber(obj.distinctDays, 0, Number.MAX_SAFE_INTEGER);
-  const lastDay = typeof obj.lastDay === "string" ? obj.lastDay : undefined;
+  const lastDay = asString(obj.lastDay);
   const firstSeen = asNumber(obj.firstSeen, 0, Number.MAX_SAFE_INTEGER);
   const lastSeen = asNumber(obj.lastSeen, 0, Number.MAX_SAFE_INTEGER);
   if (
@@ -136,8 +137,7 @@ export function bumpReaderView(sourceId: QuranReaderSource | null | undefined): 
   if (!browser) return { preBumpSourceViews: 0, engaged: false, sessionViews: 0 };
 
   const durable = decodeEngagement(readJSON(KEY)) ?? blankState();
-  const translationId =
-    typeof sourceId === "string" && !isArabicSourceId(sourceId) ? sourceId : null;
+  const translationId = sourceId != null && !isArabicSourceId(sourceId) ? sourceId : null;
   const preBumpSourceViews = translationId ? (durable.sourceViews[translationId] ?? 0) : 0;
 
   const legacyVal = Number(readRaw("session", LEGACY_KEY) ?? 0);

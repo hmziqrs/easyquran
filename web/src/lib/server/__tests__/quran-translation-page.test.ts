@@ -43,6 +43,7 @@ function wireChunk(from: number, to: number) {
   const bySurah = new Set<number>();
   for (let g = from; g <= to; g++) {
     const verseKey = QURAN_DATA.verseKeyAtGlobal(g)!;
+    // SAFETY: verseKeyAtGlobal() returns "surah:ayah" keys, so split(":") yields exactly two numeric parts.
     const [surah, ayah] = verseKey.split(":").map(Number) as [number, number];
     ayahs.push({ key: verseKey, surah, ayah, globalIndex: g, text: `t${g}` });
     bySurah.add(surah);
@@ -58,6 +59,7 @@ function makeFetcher() {
     const from = Number(u.searchParams.get("from"));
     const to = Number(u.searchParams.get("to"));
     calls.push({ from, to });
+    // SAFETY: fetch stub implements only ok, status, and json — the members the SSR loader's fetcher path reads.
     return {
       ok: true,
       status: 200,
@@ -143,6 +145,7 @@ describe("SSR translation range per-chunk coordinate validation", () => {
 
     const fetcher = vi.fn(
       async () =>
+        // SAFETY: fetch stub implements only ok, status, and json — the members the SSR loader's fetcher path reads.
         ({
           ok: true,
           status: 200,
@@ -181,6 +184,7 @@ describe("SSR internal token gating on the resolved API base", () => {
       const from = Number(u.searchParams.get("from"));
       const to = Number(u.searchParams.get("to"));
       if (init?.headers) for (const [k, v] of new Headers(init.headers)) seen.set(k, v);
+      // SAFETY: fetch stub implements only ok, status, and json — the members the SSR loader's fetcher path reads.
       return { ok: true, status: 200, json: async () => wireChunk(from, to) } as Response;
     });
     return { fetcher, seen };

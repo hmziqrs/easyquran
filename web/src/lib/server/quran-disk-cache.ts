@@ -149,7 +149,7 @@ export class QuranDiskCache {
   }
 
   async #entries(): Promise<{ name: string; mtime: number; size: number }[]> {
-    const names = await fs.readdir(this.#directory).catch(() => [] as string[]);
+    const names = await fs.readdir(this.#directory).catch((): string[] => []);
     const entries: { name: string; mtime: number; size: number }[] = [];
     for (const name of names) {
       if (!name.endsWith(HTML_EXT)) continue;
@@ -160,7 +160,7 @@ export class QuranDiskCache {
   }
 
   async #prune(): Promise<void> {
-    const names = await fs.readdir(this.#directory).catch(() => [] as string[]);
+    const names = await fs.readdir(this.#directory).catch((): string[] => []);
     const now = this.#now();
     const survivors: { name: string; mtime: number; size: number }[] = [];
     let total = 0;

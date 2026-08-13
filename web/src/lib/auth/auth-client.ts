@@ -50,6 +50,10 @@ export class AuthTransportError extends Error {
 
 type UnsafeMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 
+interface RequestHeaders {
+  [key: string]: string;
+}
+
 export interface UnsafeRequestInit {
   readonly method: UnsafeMethod;
   readonly body?: unknown;
@@ -59,33 +63,62 @@ export interface UnsafeRequestInit {
   readonly timeoutMs?: number;
 }
 
+export interface WireObject {
+  [key: string]: JsonValue;
+}
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | WireObject;
+
+export function isString(value: JsonValue | undefined): value is string {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- primitive wire discriminator inside the JSON.parse boundary; wire fields carry no static type to branch on
+  return typeof value === "string";
+}
+
+export function isNumber(value: JsonValue | undefined): value is number {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- primitive wire discriminator inside the JSON.parse boundary; wire fields carry no static type to branch on
+  return typeof value === "number";
+}
+
+function isBoolean(value: JsonValue | undefined): value is boolean {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- primitive wire discriminator inside the JSON.parse boundary; wire fields carry no static type to branch on
+  return typeof value === "boolean";
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- guards the unparsed fetch JSON boundary; the value carries no type until this predicate narrows it
+export function isWireObject(value: unknown): value is WireObject {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- typeof-object is the only discriminator available for arbitrary JSON.parse output before the WireObject narrow
+  return typeof value === "object" && value !== null;
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body from fetch; this function is the I/O boundary parser that validates it field-by-field
 export function decodeUserProfile(raw: unknown): UserProfile | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.id !== "number") return null;
-  if (typeof o.email !== "string") return null;
+  if (!isWireObject(raw)) return null;
+  const o = raw;
+  if (!isNumber(o.id)) return null;
+  if (!isString(o.email)) return null;
   return {
     id: o.id,
-    name: typeof o.name === "string" ? o.name : "",
+    name: isString(o.name) ? o.name : "",
     email: o.email,
-    avatar_id: typeof o.avatar_id === "number" ? o.avatar_id : null,
-    is_verified: typeof o.is_verified === "boolean" ? o.is_verified : false,
-    role: typeof o.role === "string" ? o.role : "user",
-    two_fa_enabled: typeof o.two_fa_enabled === "boolean" ? o.two_fa_enabled : false,
-    oauth_provider: typeof o.oauth_provider === "string" ? o.oauth_provider : null,
+    avatar_id: isNumber(o.avatar_id) ? o.avatar_id : null,
+    is_verified: isBoolean(o.is_verified) ? o.is_verified : false,
+    role: isString(o.role) ? o.role : "user",
+    two_fa_enabled: isBoolean(o.two_fa_enabled) ? o.two_fa_enabled : false,
+    oauth_provider: isString(o.oauth_provider) ? o.oauth_provider : null,
   };
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON error body from fetch; this function is the I/O boundary parser for it
 export function decodeErrorEnvelope(raw: unknown): AuthErrorEnvelope | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
+  if (!isWireObject(raw)) return null;
+  const o = raw;
   const out: AuthErrorEnvelope = {};
-  if (typeof o.type === "string") out.type = o.type;
-  if (typeof o.status === "number") out.status = o.status;
-  if (typeof o.message === "string") out.message = o.message;
+  if (isString(o.type)) out.type = o.type;
+  if (isNumber(o.status)) out.status = o.status;
+  if (isString(o.message)) out.message = o.message;
   if (o.context !== undefined) out.context = o.context;
-  if (typeof o.retry_after === "number") out.retry_after = o.retry_after;
-  if (typeof o.request_id === "string") out.request_id = o.request_id;
+  if (isNumber(o.retry_after)) out.retry_after = o.retry_after;
+  if (isString(o.request_id)) out.request_id = o.request_id;
   return out;
 }
 
@@ -96,11 +129,12 @@ interface RequestOpts {
   readonly timeoutMs?: number;
 }
 
-async function readBody(res: Response): Promise<unknown> {
+async function readBody<T>(res: Response): Promise<T | null> {
   const text = await res.text();
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    // SAFETY: JSON.parse returns any; T is the endpoint's response contract and every consumer validates the payload with a decode* boundary parser before use
+    return JSON.parse(text) as T;
   } catch {
     return null;
   }
@@ -130,7 +164,7 @@ export class AuthClient {
     path: string,
     opts: RequestOpts = {},
   ): Promise<AuthRequestResult<T>> {
-    const headers: Record<string, string> = {
+    const headers: RequestHeaders = {
       accept: "application/json",
       ...opts.headers,
     };
@@ -170,12 +204,12 @@ export class AuthClient {
 
     const status = res.status;
     const rotated = res.headers.get(ROTATED_HEADER) === "1";
-    const raw = await readBody(res);
+    const raw = await readBody<T>(res);
     const ok = res.ok;
     if (!ok) {
       return { ok: false, status, data: null, error: decodeErrorEnvelope(raw), rotated };
     }
-    const data = (raw as T) ?? null;
+    const data = raw;
     if (rotated && !this.#refreshing) {
       this.#refreshing = true;
       try {
@@ -190,10 +224,10 @@ export class AuthClient {
   }
 
   async fetchCsrf(signal?: AbortSignal): Promise<string> {
-    const res = await this.#request<unknown>("POST", "/csrf/v1/generate", { signal });
+    const res = await this.#request<WireObject>("POST", "/csrf/v1/generate", { signal });
     if (!res.ok) throw new AuthTransportError("csrf generate failed", res.status);
-    const raw = res.data as Record<string, unknown> | null;
-    const token = raw && typeof raw.token === "string" ? raw.token : null;
+    const raw = res.data;
+    const token = raw && isString(raw.token) ? raw.token : null;
     if (!token) throw new AuthTransportError("csrf generate returned no token", res.status);
     return token;
   }

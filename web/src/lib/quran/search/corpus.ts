@@ -135,11 +135,18 @@ function hitFor(unit: CanonicalSearchUnit, normalizedQuery: string): SearchHit {
   };
 }
 
+export interface CanonicalCorpusSearchResult {
+  total: number;
+  limit: number;
+  offset: number;
+  results: SearchHit[];
+}
+
 export function searchCanonicalCorpus(
   units: readonly CanonicalSearchUnit[],
   query: string,
   opts: SearchOpts = {},
-): { total: number; limit: number; offset: number; results: SearchHit[] } {
+): CanonicalCorpusSearchResult {
   const normalized = normalizeArabic(query);
   const limit = clamp(opts.limit ?? DEFAULT_LIMIT, 0, MAX_LIMIT);
   const offset = clamp(opts.offset ?? DEFAULT_OFFSET, 0, MAX_OFFSET);

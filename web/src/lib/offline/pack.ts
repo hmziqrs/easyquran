@@ -43,8 +43,8 @@ export function decodePack(text: string): Pack {
   }
 
   for (const [key, value] of Object.entries(entries)) {
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON.parse boundary check: entry values are untrusted and must be discriminated as number before range validation.
     if (
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON.parse boundary check: entry values are untrusted and must be discriminated as number before range validation.
       typeof value !== "number" ||
       !Number.isInteger(value) ||
       value < 0 ||

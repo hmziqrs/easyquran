@@ -29,7 +29,11 @@ const ARABIC_R2_URL = "https://r2.easyquran.fyi/scripts/uthmani.sqlite";
 const ARABIC_LOCAL_URL = "/_quran/scripts/uthmani.sqlite";
 const SQ_NAHI_SIZE = 1175552;
 
-function jsonResponse(body: unknown, ok = true): Response {
+type CatalogueJsonBody =
+  | never[]
+  | { data?: { sources?: SourceCatalogueEntry[] }; garbage?: boolean };
+
+function jsonResponse(body: CatalogueJsonBody, ok = true): Response {
   return new Response(JSON.stringify(body), {
     status: ok ? 200 : 500,
     headers: { "content-type": "application/json" },
@@ -64,6 +68,7 @@ function arabicEntry(
   return {
     kind: "arabic",
     spec: {
+      // SAFETY: the ids this helper supplies ("uthmani" default, "xx.fake" rejection case) are the exact literals the QuranSourceId-typed decoder path accepts or rejects
       id: (overrides.id ?? "uthmani") as QuranSourceId,
       sizeBytes: overrides.sizeBytes ?? 1,
       downloadUrl: overrides.downloadUrl ?? ARABIC_R2_URL,
@@ -134,7 +139,7 @@ describe("fetchSourceCatalogue", () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation((_url, init) =>
-        (init?.signal as AbortSignal | undefined)?.aborted
+        init?.signal?.aborted
           ? Promise.reject(new DOMException("aborted", "AbortError"))
           : Promise.resolve(jsonResponse({ data: { sources: [] } })),
       );

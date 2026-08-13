@@ -222,7 +222,10 @@ describe("OfflineStore.enable", () => {
     await store.enable();
 
     expect(store.status).toBe("active");
-    const fetchedUrls = fetchSpy.mock.calls.map(([url]) => (typeof url === "string" ? url : ""));
+    const fetchedUrls = fetchSpy.mock.calls.map(([url]) => {
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch's first argument is RequestInfo | URL; typeof-string is the only honest discrimination inside this spy mapper.
+      return typeof url === "string" ? url : "";
+    });
     expect(fetchedUrls.some((u) => u.includes("pack.abc.json"))).toBe(false);
   });
 
@@ -234,6 +237,7 @@ describe("OfflineStore.enable", () => {
     });
     const packBody = "tiny";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch stub's first argument is RequestInfo | URL; typeof-string discriminates the string case this stub serves.
       if (typeof url === "string" && url.includes("manifest.json")) {
         return Promise.resolve(new Response(manifestBody, { status: 200 }));
       }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { browser } from "$app/environment";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
@@ -69,7 +70,7 @@
   }
 
   function resolveHex(varName: string): string {
-    if (typeof window === "undefined") return "#000000";
+    if (!browser) return "#000000";
     const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
     if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
     if (!raw) return "#000000";
@@ -111,6 +112,8 @@
 
   function onPointerDown(event: PointerEvent) {
     if (!open) return;
+    // SAFETY: pointer events always dispatch with an EventTarget that is a DOM Node
+    // (element or text node); the null branch below still guards the typed null.
     const target = event.target as Node | null;
     if (!target) return;
     if (panelEl?.contains(target)) return;

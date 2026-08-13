@@ -35,13 +35,12 @@ interface Config {
 }
 
 const check = process.argv.includes("--check");
+// SAFETY: i18n-namespaces.json is repo-owned; malformed fields fail fast on first use below.
 const config = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Config;
 
 const catalogKeys = CATALOGS.flatMap((catalog) => {
-  const parsed = JSON.parse(readFileSync(join(WEB_ROOT, catalog), "utf8")) as Record<
-    string,
-    unknown
-  >;
+  // SAFETY: catalog files are repo-owned JSON objects; only their keys are read here.
+  const parsed = JSON.parse(readFileSync(join(WEB_ROOT, catalog), "utf8")) as object;
   return Object.keys(parsed).filter((key) => key !== "$schema");
 });
 
@@ -91,6 +90,7 @@ for (const key of catalogKeys) {
     unassigned.push(key);
     continue;
   }
+  // SAFETY: membership is seeded with every namespace.id; owner is always one of them.
   (membership.get(owner) as string[]).push(key);
 }
 
@@ -128,6 +128,7 @@ function render(namespace: NamespaceConfig, keys: string[]): string {
 
 const expected = new Map<string, string>();
 for (const namespace of config.namespaces) {
+  // SAFETY: membership is seeded with every namespace.id, so the lookup is defined.
   expected.set(`${namespace.id}.ts`, render(namespace, membership.get(namespace.id) as string[]));
 }
 
@@ -159,6 +160,7 @@ if (check) {
   mkdirSync(OUT_DIR, { recursive: true });
   for (const file of orphaned) rmSync(join(OUT_DIR, file));
   for (const [file, content] of expected) writeFileSync(join(OUT_DIR, file), content);
+  // SAFETY: membership is seeded with every namespace.id, so the lookup is defined.
   const summary = config.namespaces
     .map((ns) => `${ns.id}=${(membership.get(ns.id) as string[]).length}`)
     .join(" ");

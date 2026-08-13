@@ -5,7 +5,11 @@ vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.
 import { createAccountClient, decodeSessionList } from "$lib/auth/account-client";
 import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
 
-function mockClient() {
+function mockClient(): AuthClient & {
+  unsafeRequest: ReturnType<typeof vi.fn>;
+  get: ReturnType<typeof vi.fn>;
+} {
+  // SAFETY: test double — AccountClient calls only unsafeRequest and get; AuthClient's private CSRF machinery is never invoked here.
   return {
     apiBase: "https://eq.test/api",
     unsafeRequest: vi.fn(),
@@ -14,10 +18,7 @@ function mockClient() {
     refreshCsrf: vi.fn().mockResolvedValue(undefined),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & {
-    unsafeRequest: ReturnType<typeof vi.fn>;
-    get: ReturnType<typeof vi.fn>;
-  };
+  } as never;
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
@@ -151,6 +152,7 @@ describe("AccountClient.terminateSession", () => {
     client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Session terminated" }));
     const ac = createAccountClient(client);
     await ac.terminateSession("a b/c");
+    // SAFETY: unsafeRequest records (path, init); the first argument is the endpoint path string.
     const path = (client.unsafeRequest.mock.calls[0] as [string, unknown])[0];
     expect(path).toBe("/auth/v1/sessions/terminate/a%20b%2Fc");
   });
@@ -184,6 +186,7 @@ describe("AccountClient.updateProfile", () => {
     expect(res.status).toBe("ok");
     expect(res.data?.name).toBe("New");
     expect(res.data?.avatar_id).toBe(4);
+    // SAFETY: unsafeRequest records (path, init); updateProfile's second element carries { body } with the snake_case payload.
     const [, init] = client.unsafeRequest.mock.calls[0] as [string, { body: unknown }];
     expect(init.body).toEqual({ name: "New", avatar_id: 4 });
   });
@@ -193,6 +196,7 @@ describe("AccountClient.updateProfile", () => {
     client.unsafeRequest.mockResolvedValueOnce(ok({ id: 3, email: "n@eq.test" }));
     const ac = createAccountClient(client);
     await ac.updateProfile({ name: "Only" });
+    // SAFETY: unsafeRequest records (path, init); updateProfile's second element carries { body } with the snake_case payload.
     const [, init] = client.unsafeRequest.mock.calls[0] as [string, { body: unknown }];
     expect(init.body).toEqual({ name: "Only" });
   });

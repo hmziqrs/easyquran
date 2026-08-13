@@ -36,6 +36,7 @@ import {
 } from "./wire";
 
 interface Pending {
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- stores Promise resolvers for request<T> across every T; the worker reply is validated by each caller's decode() fn
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -73,20 +74,20 @@ function reportWorkerFailure(error: Error): void {
   for (const listener of statusListeners) listener("error", error.message);
 }
 
-const eventHandlers: {
-  [K in WorkerEvent["type"]]: (msg: Extract<WorkerEvent, { type: K }>) => void;
-} = {
-  status: (m) => {
+const eventHandlers = {
+  status: (m: Extract<WorkerEvent, { type: "status" }>) => {
     if (m.status === "ready") isReady = true;
     for (const cb of statusListeners) cb(m.status, m.detail);
   },
-  progress: (m) => {
+  progress: (m: Extract<WorkerEvent, { type: "progress" }>) => {
     const p: DownloadProgress = { script: m.script, loaded: m.loaded, total: m.total };
     for (const cb of progressListeners) cb(p);
   },
-  fatal: (m) => {
+  fatal: (m: Extract<WorkerEvent, { type: "fatal" }>) => {
     reportWorkerFailure(new Error(m.error));
   },
+} satisfies {
+  [K in WorkerEvent["type"]]: (msg: Extract<WorkerEvent, { type: K }>) => void;
 };
 
 function handle(msg: WorkerOutbound): void {
@@ -99,6 +100,8 @@ function handle(msg: WorkerOutbound): void {
     else p.reject(new Error(msg.error));
     return;
   }
+  // SAFETY: eventHandlers is keyed by every WorkerEvent["type"] via the satisfies contract,
+  // so msg.type selects the handler that accepts exactly this msg variant.
   (eventHandlers[msg.type] as (m: WorkerEvent) => void)(msg);
 }
 
@@ -113,6 +116,9 @@ function request<T>(
     const timer = setTimeout(() => {
       if (pending.delete(id)) reject(new Error("quran worker request timed out"));
     }, timeoutMs);
+    // SAFETY: Pending stores resolvers for request<T> calls of every T at once; the worker
+    // reply is untyped here and each caller's decode() fn is the boundary parse.
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- promise resolve value is the raw worker reply; callers decode it
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
     activeWorker.postMessage(build(id));
   });
@@ -142,6 +148,7 @@ interface SourceFallbackArgs<T> {
   hasLocal: () => boolean | Promise<boolean>;
   onMiss?: () => void;
   workerReq: (id: number) => WorkerRequest;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw worker reply is opaque wire data; the decode* fn passed here (wire.ts) is the boundary parser
   decode: (raw: unknown) => T | null;
   apiFetch: () => Promise<T>;
   errorMessage: string;
@@ -158,6 +165,7 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
   const tryLocal = async (): Promise<{ value: T } | null> => {
     let local: boolean;
     const probe = args.hasLocal();
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
     if (typeof probe === "boolean") {
       local = probe;
     } else {
@@ -288,6 +296,7 @@ export const quranWorker = {
       isReady = true;
     })();
     startPromise = attempt;
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); instanceof Error narrows it at first use
     void attempt.catch((error: unknown) => {
       if (startPromise === attempt) {
         resetWorker(error instanceof Error ? error : new Error(String(error)));
@@ -307,6 +316,7 @@ export const quranWorker = {
         })),
       )
       .then(() => undefined)
+      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); instanceof Error narrows it at first use
       .catch((err: unknown) =>
         reportWorkerFailure(err instanceof Error ? err : new Error(String(err))),
       );
@@ -381,22 +391,20 @@ export const quranWorker = {
     opts?: SearchOpts,
     validateCoordinate?: AyahCoordinateValidator,
   ): Promise<SearchResponse> {
-    return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then(
-      (r: unknown) => {
-        const limit = opts?.limit ?? DEFAULT_LIMIT;
-        const offset = opts?.offset ?? DEFAULT_OFFSET;
-        const payload = decodeSearchResponse(r, validateCoordinate);
-        if (!payload) throw new Error("quran worker returned a malformed search response");
-        return {
-          query,
-          total: payload.total ?? payload.results.length,
-          limit: payload.limit ?? limit,
-          offset: payload.offset ?? offset,
-          results: payload.results,
-          source: SearchProvider.Worker,
-        };
-      },
-    );
+    return request<SearchResponse>((id) => ({ id, type: "search", query, opts })).then((r) => {
+      const limit = opts?.limit ?? DEFAULT_LIMIT;
+      const offset = opts?.offset ?? DEFAULT_OFFSET;
+      const payload = decodeSearchResponse(r, validateCoordinate);
+      if (!payload) throw new Error("quran worker returned a malformed search response");
+      return {
+        query,
+        total: payload.total ?? payload.results.length,
+        limit: payload.limit ?? limit,
+        offset: payload.offset ?? offset,
+        results: payload.results,
+        source: SearchProvider.Worker,
+      };
+    });
   },
 };
 

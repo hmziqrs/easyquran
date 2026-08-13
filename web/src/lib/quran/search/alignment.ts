@@ -11,6 +11,11 @@ interface TextRange {
   end: number;
 }
 
+interface DisplayWordAlignment {
+  starts: number[];
+  ends: number[];
+}
+
 function wordRanges(text: string): TextRange[] {
   const ranges: TextRange[] = [];
   let start = 0;
@@ -73,7 +78,7 @@ function alignRange(
 function alignMatchToDisplay(
   match: NormalizedArabicMap,
   display: NormalizedArabicMap,
-): { starts: number[]; ends: number[] } {
+): DisplayWordAlignment {
   const alignedDisplay: (number | undefined)[] = Array(match.normalized.length);
   const matchWords = wordRanges(match.normalized);
   const displayWords = wordRanges(display.normalized);

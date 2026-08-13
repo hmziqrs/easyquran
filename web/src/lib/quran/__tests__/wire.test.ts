@@ -39,9 +39,9 @@ import {
 } from "$lib/server/quran-translation-page";
 
 function requestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
-  return input.url;
+  if (input instanceof Request) return input.url;
+  return input;
 }
 
 const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
@@ -448,7 +448,18 @@ describe("translation route loaders", () => {
   });
 
   type RangeAyah = { key: string; surah: number; ayah: number; globalIndex: number; text: string };
-  type RangePayload = { ayahs: RangeAyah[]; normalizations: unknown[] };
+  type RangeNormalization = {
+    surah: number;
+    sourceId: string;
+    script: QuranScript;
+    sourceProfile: string;
+    packaging: OpenerPackaging;
+    openerKind: OpenerKind;
+    openerText: null;
+    openerEndScalar: number;
+    bodyStartScalar: number;
+  };
+  type RangePayload = { ayahs: RangeAyah[]; normalizations: RangeNormalization[] };
 
   function translationRangeFor(from: number, to: number, sourceId = "en.sahih"): RangePayload {
     const ayahs: RangeAyah[] = [];
@@ -456,6 +467,7 @@ describe("translation route loaders", () => {
     for (let g = from; g <= to; g++) {
       const key = QURAN_DATA.verseKeyAtGlobal(g);
       if (!key) throw new Error(`no verse at global ${g}`);
+      // SAFETY: verseKeyAtGlobal returns "surah:ayah" keys, so split(":") yields exactly two entries.
       const [surah, ayah] = key.split(":").map(Number) as [number, number];
       surahNums.add(surah);
       ayahs.push({ key, surah, ayah, globalIndex: g, text: `v-${g}` });
@@ -474,6 +486,7 @@ describe("translation route loaders", () => {
     return { ayahs, normalizations };
   }
 
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- test double: body is any JSON-serializable value (valid payload or malformed {}) fed straight to JSON.stringify
   function fetcherReturning(body: unknown, status = 200): TranslationFetcher {
     return async () =>
       new Response(JSON.stringify(body), {
@@ -640,6 +653,7 @@ describe("baked artifact delivery contract", () => {
       ],
       ["path mismatch", ["uthmani", 100, "https://r2.easyquran.fyi/evil/quran-uthmani.sqlite"]],
     ])("rejects %s", (_label, [id, sizeBytes, downloadUrl]) => {
+      // SAFETY: each table row above pairs a string label with a [string, number, string] triple by construction; it.each types the row as a plain array, losing the tuple shape.
       expect(
         validateArtifactAgainstBaked(id as string, sizeBytes as number, downloadUrl as string, map),
       ).toBeNull();

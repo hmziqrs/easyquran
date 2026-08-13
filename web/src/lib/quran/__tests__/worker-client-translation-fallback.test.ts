@@ -38,6 +38,7 @@ import { quranWorker } from "$lib/quran/worker-client";
 
 const TRANSLATION = "en.pickthall";
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- mirrors the DOM Worker addEventListener callback contract; quranWorker registers its own opaque message listener, so the event shape stays unknown at this fake boundary
 type Listener = (e: unknown) => void;
 
 class FakeWorker {
@@ -67,7 +68,9 @@ class FakeWorker {
     this.terminated = true;
   }
   emit(type: "message", data: WorkerOutbound): void;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- error/messageerror payloads follow the DOM Worker event contract (opaque event data); no test emits them
   emit(type: "error" | "messageerror", payload: unknown): void;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- implementation signature must accept both the WorkerOutbound message payload and the opaque error payload above
   emit(type: string, payload: unknown): void {
     const evt = type === "message" ? { data: payload } : payload;
     this.listeners.get(type)?.forEach((fn) => fn(evt));
@@ -120,7 +123,7 @@ function respondHasTranslation(fake: FakeWorker, value: boolean): void {
   fake.emit("message", { id: req.id, ok: true, result: value });
 }
 
-function respondReadSurah(fake: FakeWorker, result: unknown): void {
+function respondReadSurah(fake: FakeWorker, result: { cached: boolean }): void {
   const req = fake.posted.at(-1)!;
   expect(req.type).toBe("readSurah");
   fake.emit("message", { id: req.id, ok: true, result });
@@ -230,6 +233,7 @@ describe("withSourceFallback via readSurah", () => {
       await p;
     } catch (err) {
       expect(err).toBeInstanceOf(ReadChainError);
+      // SAFETY: the preceding toBeInstanceOf(ReadChainError) check pins err's constructor before the cast
       expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
     }
   });
@@ -277,7 +281,9 @@ describe("withSourceFallback without a worker", () => {
       await p;
     } catch (err) {
       expect(err).toBeInstanceOf(ReadChainError);
+      // SAFETY: the preceding toBeInstanceOf(ReadChainError) check pins err's constructor before the cast
       expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
+      // SAFETY: same ReadChainError instance confirmed two assertions above
       expect((err as ReadChainError).workerFailure).toBeUndefined();
     }
     expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1);
@@ -340,6 +346,7 @@ describe("withSourceFallback via readRange", () => {
       await p;
     } catch (err) {
       expect(err).toBeInstanceOf(ReadChainError);
+      // SAFETY: the preceding toBeInstanceOf(ReadChainError) check pins err's constructor before the cast
       expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
     }
   });

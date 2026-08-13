@@ -14,6 +14,7 @@ type ConsentPatch = Partial<ConsentFlags>;
 
 const DEFAULT_FLAGS: ConsentFlags = { analytics: true, performance: true, advertising: false };
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (asObject + strict field comparisons)
 export function decodeConsent(raw: unknown): ConsentFlags {
   const stored = asObject(raw);
   if (!stored) return { ...DEFAULT_FLAGS };

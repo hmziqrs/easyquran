@@ -2,7 +2,7 @@ import { QURAN } from "$lib/config/site";
 import { isArabicSourceId } from "$lib/data/quran-types";
 import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "$lib/data/quran-types";
 
-import { fetchJsonWithTimeout, MalformedDataError } from "./fetch";
+import { fetchJsonWithTimeout, type JsonDocument, MalformedDataError } from "./fetch";
 import { fetchRangeChunks } from "./range-fetch";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import { SearchProvider, type SearchOpts, type SearchResponse } from "./search/types";
@@ -46,8 +46,8 @@ export const quranApi = {
     validateCoordinate?: AyahCoordinateValidator,
   ): Promise<QuranRangeText> {
     const decode = isArabicSourceId(sourceId)
-      ? (raw: unknown) => decodeQuranRangeText(raw, validateCoordinate)
-      : (raw: unknown) => decodeTranslationRangeText(raw, validateCoordinate);
+      ? (raw: JsonDocument) => decodeQuranRangeText(raw, validateCoordinate)
+      : (raw: JsonDocument) => decodeTranslationRangeText(raw, validateCoordinate);
     return fetchRangeChunks({
       base: requireBase(),
       source: String(sourceId),

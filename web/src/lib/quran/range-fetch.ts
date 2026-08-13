@@ -1,19 +1,19 @@
 import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
 
-import { MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "./fetch";
+import { type JsonDocument, MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "./fetch";
 import { unwrapEnvelope } from "./wire";
 
 export type RangeJsonFetcher = (
   url: string,
   init?: RequestInit & { timeout?: number },
-) => Promise<unknown>;
+) => Promise<JsonDocument>;
 
 export interface RangeFetchOptions {
   base: string;
   source: string;
   from: number;
   to: number;
-  decode: (raw: unknown) => QuranRangeText | null;
+  decode: (raw: JsonDocument) => QuranRangeText | null;
   fetchImpl: RangeJsonFetcher;
   signal?: AbortSignal;
 }
@@ -84,7 +84,9 @@ export async function fetchRangeChunks(opts: RangeFetchOptions): Promise<QuranRa
       signal: opts.signal,
       timeout: RANGE_CHUNK_TIMEOUT_MS,
     });
-    const decoded = opts.decode(unwrapEnvelope(body));
+    // SAFETY: body is parsed JSON from fetchImpl (JsonDocument); unwrapEnvelope only peels
+    // the envelope wrapper, so the payload it returns is still that same parsed JSON.
+    const decoded = opts.decode(unwrapEnvelope(body) as JsonDocument);
     if (!decoded) throw new MalformedDataError("malformed range chunk");
     chunks.push(decoded);
   }

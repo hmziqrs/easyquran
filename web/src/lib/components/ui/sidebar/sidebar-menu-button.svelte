@@ -49,6 +49,7 @@
 		size?: SidebarMenuButtonSize;
 		tooltipContent?: Snippet | string;
 		tooltipContentProps?: WithoutChildrenOrChild<ComponentProps<typeof Tooltip.Content>>;
+		// eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- bits-ui child-snippet prop bag: mergeProps output carries arbitrary HTML/data attrs forwarded straight onto the element, so no fixed shape exists
 		child?: Snippet<[{ props: Record<string, unknown> }]>;
 	} = $props();
 

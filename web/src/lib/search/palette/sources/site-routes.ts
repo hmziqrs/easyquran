@@ -29,6 +29,8 @@ const STATIC_ROUTES: readonly SiteRoute[] = [
     keywords: ["reader", "read", "mushaf", "quran", "open app"],
   },
   ...MARKETING_PAGES.map((page) => ({
+    // SAFETY: MARKETING_PAGES hrefs are the literal marketing routes hardcoded
+    // in site-structure config; the cast only re-brands `string` as Pathname.
     href: page.href as Pathname,
     label: baseEnglishPageCopy(page.id).label,
     detail: "Page",

@@ -1,37 +1,39 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
+import type { AuthClient, AuthErrorEnvelope, AuthRequestResult } from "$lib/auth/auth-client";
 import { createForgotPasswordFlow } from "$lib/auth/flows.svelte";
 import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
-function mockClient() {
+function mockClient(): AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> } {
+  // SAFETY: test double — ForgotPasswordFlow calls only unsafeRequest; AuthClient's private CSRF machinery is never invoked here.
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn(),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & { unsafeRequest: ReturnType<typeof vi.fn> };
+  } as never;
 }
 
 function mockState(): FlowStateLike {
+  // SAFETY: test double — every FlowStateLike member is a vi.fn() with a matching signature; flows only invoke them.
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "anonymous" }),
-  } as unknown as FlowStateLike;
+  } as FlowStateLike;
 }
 
 function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
   return { ok: true, status: 200, data, error: null, rotated };
 }
-function err(status: number, body: Record<string, unknown> = {}): AuthRequestResult<never> {
-  return { ok: false, status, data: null, error: body as never, rotated: false };
+function err(status: number, body: AuthErrorEnvelope = {}): AuthRequestResult<never> {
+  return { ok: false, status, data: null, error: body, rotated: false };
 }
 
-function storageProbe(): { readKeys: string[] } {
+function storageProbe() {
   const readKeys: string[] = [];
   const proxy = (store: Storage | undefined, label: string) => {
     if (!store) return;
@@ -41,8 +43,8 @@ function storageProbe(): { readKeys: string[] } {
       return origSet(key, value);
     };
   };
-  proxy(typeof localStorage !== "undefined" ? localStorage : undefined, "local");
-  proxy(typeof sessionStorage !== "undefined" ? sessionStorage : undefined, "session");
+  proxy(localStorage, "local");
+  proxy(sessionStorage, "session");
   return { readKeys };
 }
 
@@ -121,12 +123,14 @@ describe("ForgotPasswordFlow verify -> reset token in MEMORY only", () => {
     const res = await flow.reset();
     expect(res).toBe(true);
     expect(probe.readKeys).toEqual([]);
-    const resetCall = (client.unsafeRequest as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => (c[0] as string) === "/forgot_password/v1/reset",
+    const resetCall = client.unsafeRequest.mock.calls.find(
+      (c) => c[0] === "/forgot_password/v1/reset",
     );
     expect(resetCall).toBeDefined();
+    // SAFETY: resetCall is defined (expect above fails otherwise); unsafeRequest's first argument is the path string.
     const path = resetCall![0] as string;
     expect(path).not.toContain("SECRET-TOK");
+    // SAFETY: unsafeRequest's second argument is the request init; reset() sends { body: { reset_token, password, ... } }.
     const body = (resetCall![1] as { body: Record<string, string> }).body;
     expect(body.reset_token).toBe("SECRET-TOK");
     expect(flow.resetTokenInMemory).toBe(false);

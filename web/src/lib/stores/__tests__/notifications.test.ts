@@ -1,17 +1,17 @@
-import type { MessagePayload } from "firebase/messaging";
+import type { MessagePayload, Messaging, Unsubscribe } from "firebase/messaging";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { messaging, firebaseCore, analytics } = vi.hoisted(() => ({
   messaging: {
     getPermissionState: vi.fn<() => string>(),
     isMessagingSupported: vi.fn<() => Promise<boolean>>(),
-    initMessaging: vi.fn<() => Promise<unknown>>(),
+    initMessaging: vi.fn<() => Promise<Messaging | null>>(),
     requestPermission: vi.fn<() => Promise<string>>(),
     getFcmToken: vi.fn<() => Promise<string | null>>(),
     registerTokenWithServer: vi.fn<() => Promise<boolean>>(),
     unregisterTokenFromServer: vi.fn<() => Promise<boolean>>(),
     deleteFcmToken: vi.fn<() => Promise<void>>(),
-    onForegroundMessage: vi.fn<(cb: (p: MessagePayload) => void) => Promise<unknown>>(),
+    onForegroundMessage: vi.fn<(cb: (p: MessagePayload) => void) => Promise<Unsubscribe>>(),
   },
   firebaseCore: { isConfigured: true },
   analytics: { track: vi.fn<() => void>() },
@@ -166,7 +166,8 @@ describe("NotificationsStore foreground message", () => {
     await flush();
     expect(foregroundCb).toBeTypeOf("function");
     const before = store.messageSeq;
-    foregroundCb?.({ messageId: "msg-1" } as unknown as MessagePayload);
+    // SAFETY: minimal fixture for the foreground-message path; only messageId (a required string field) is read.
+    foregroundCb?.({ messageId: "msg-1" } as MessagePayload);
     expect(store.lastMessage).toMatchObject({ messageId: "msg-1" });
     expect(store.messageSeq).toBe(before + 1);
   });
@@ -175,7 +176,8 @@ describe("NotificationsStore foreground message", () => {
     const store = createNotifications();
     store.hydrate();
     await flush();
-    foregroundCb?.({ messageId: "msg-2" } as unknown as MessagePayload);
+    // SAFETY: minimal fixture for the foreground-message path; only messageId (a required string field) is read.
+    foregroundCb?.({ messageId: "msg-2" } as MessagePayload);
     expect(store.lastMessage).not.toBeNull();
     store.clearMessage();
     expect(store.lastMessage).toBeNull();

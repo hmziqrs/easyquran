@@ -67,7 +67,9 @@ describe("marketingHref", () => {
   });
 
   it("never falls back for unknown pages or locales", () => {
+    // SAFETY: "app" is deliberately not a MarketingPageId — the cast only lets the invalid value past the compiler so the null-return path is exercised.
     expect(marketingHref("app" as MarketingPageId, "en")).toBeNull();
+    // SAFETY: "de" is deliberately not a UiLocale — the cast feeds the unsupported-locale throw path.
     expect(() => marketingHref("home", "de" as UiLocale)).toThrowError(
       new TypeError("Unsupported UI locale: de"),
     );

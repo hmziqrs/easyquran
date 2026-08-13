@@ -9,6 +9,8 @@
   let { children } = $props();
 
   const parts = $derived(page.url.pathname.replace(/^\/design\/?/, "").split("/").filter(Boolean));
+  // SAFETY: parts[0] is a raw URL segment, not a validated value; the `kind in VARIANTS` check below
+  // gates every use, so any mismatch falls back to the empty list.
   const kind = $derived(parts[0] as VariantKind | undefined);
   const current = $derived(parts[1]);
   const list = $derived(kind && kind in VARIANTS ? VARIANTS[kind] : []);

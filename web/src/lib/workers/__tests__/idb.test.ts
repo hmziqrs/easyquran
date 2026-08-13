@@ -1,25 +1,39 @@
 import { idbDelete, idbGet, idbPut, openIdb, runTxVoid } from "$lib/workers/idb";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
+interface FakeRequest {
+  result: unknown;
+  onsuccess: ((ev: FakeRequest) => void) | null;
+}
+
+interface FakeOpenRequest {
+  result: FakeDB;
+  error: DOMException | null;
+  onsuccess: ((ev: FakeOpenRequest) => void) | null;
+  onerror: ((ev: FakeOpenRequest) => void) | null;
+  onupgradeneeded: ((ev: FakeOpenRequest) => void) | null;
+}
+
 interface FakeTx {
   aborted: boolean;
   error: DOMException | null;
-  oncomplete: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-  onabort: ((ev: unknown) => void) | null;
+  oncomplete: ((ev: FakeTx) => void) | null;
+  onerror: ((ev: FakeTx) => void) | null;
+  onabort: ((ev: FakeTx) => void) | null;
   objectStore(name: string): FakeStore;
   abort(): void;
 }
 
 interface FakeStore {
   data: Map<unknown, unknown>;
-  transaction: FakeTx;
-  get(key: unknown): { result: unknown; onsuccess: ((ev: unknown) => void) | null };
+  transaction: FakeTx | null;
+  get(key: IDBValidKey): FakeRequest;
   put(
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- fake of IDBObjectStore.put; value is the opaque structured-clone payload idbPut passes through (its own param is `unknown`) and is stored verbatim.
     value: unknown,
-    key?: unknown,
-  ): { result: unknown; onsuccess: ((ev: unknown) => void) | null };
-  delete(key: unknown): { result: unknown; onsuccess: ((ev: unknown) => void) | null };
+    key?: IDBValidKey,
+  ): FakeRequest;
+  delete(key: IDBValidKey): FakeRequest;
 }
 
 interface FakeDB {
@@ -29,37 +43,35 @@ interface FakeDB {
   transaction(name: string, mode: IDBTransactionMode): FakeTx;
 }
 
-function installFakeIndexedDB(): {
-  dbByName: Map<string, FakeDB>;
-} {
+function installFakeIndexedDB() {
   const dbByName = new Map<string, FakeDB>();
 
   function makeStore(): FakeStore {
     const data = new Map<unknown, unknown>();
-    function makeReq(result: unknown): {
-      result: unknown;
-      onsuccess: ((ev: unknown) => void) | null;
-    } {
-      const req = {
+    function makeReq(
+      // eslint-disable-next-line anti-slop/no-unknown-parameters -- fake IDBRequest.result: carries an arbitrary structured-clone store value, a key, or a FakeDB; handed to onsuccess untouched.
+      result: unknown,
+    ): FakeRequest {
+      const req: FakeRequest = {
         result,
-        onsuccess: null as ((ev: unknown) => void) | null,
+        onsuccess: null,
       };
       queueMicrotask(() => req.onsuccess?.(req));
       return req;
     }
-    const store = {
+    const store: FakeStore = {
       data,
-      transaction: null as unknown as FakeTx,
-      get: (key: unknown) => makeReq(data.get(key)),
-      put: (value: unknown, key?: unknown) => {
+      transaction: null,
+      get: (key) => makeReq(data.get(key)),
+      put: (value, key) => {
         if (key !== undefined) data.set(key, value);
         return makeReq(key ?? null);
       },
-      delete: (key: unknown) => {
+      delete: (key) => {
         data.delete(key);
         return makeReq(undefined);
       },
-    } as FakeStore;
+    };
     return store;
   }
 
@@ -110,12 +122,12 @@ function installFakeIndexedDB(): {
         db = makeDB();
         dbByName.set(name, db);
       }
-      const req = {
+      const req: FakeOpenRequest = {
         result: db,
-        error: null as DOMException | null,
-        onsuccess: null as ((ev: unknown) => void) | null,
-        onerror: null as ((ev: unknown) => void) | null,
-        onupgradeneeded: null as ((ev: unknown) => void) | null,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
       };
       queueMicrotask(() => {
         if (isNew) req.onupgradeneeded?.(req);
@@ -125,6 +137,7 @@ function installFakeIndexedDB(): {
     },
   };
 
+  // SAFETY: test seam — globalThis is widened to a plain indexedDB slot so this in-file fake (exactly the IDBFactory subset idb.ts reads) can replace the real factory for the test run.
   (globalThis as { indexedDB: unknown }).indexedDB = idb;
   return { dbByName };
 }
@@ -135,6 +148,7 @@ describe("idb helpers", () => {
   });
 
   afterEach(() => {
+    // SAFETY: teardown of the test seam — globalThis is widened to the optional indexedDB slot; delete is a no-op when no fake was installed.
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 
@@ -151,10 +165,8 @@ describe("idb helpers", () => {
     const meta = await openIdb("easyquran-sw-meta", "meta");
     const recency = await openIdb("easyquran-sw-meta", "recency");
     expect(meta).not.toBe(recency);
-    expect((meta.objectStoreNames as { contains(n: string): boolean }).contains("meta")).toBe(true);
-    expect((recency.objectStoreNames as { contains(n: string): boolean }).contains("recency")).toBe(
-      true,
-    );
+    expect(meta.objectStoreNames.contains("meta")).toBe(true);
+    expect(recency.objectStoreNames.contains("recency")).toBe(true);
   });
 
   it("runTxVoid rejects when the transaction is aborted", async () => {
@@ -188,6 +200,7 @@ describe("pointer-style records", () => {
   });
 
   afterEach(() => {
+    // SAFETY: teardown of the test seam — globalThis is widened to the optional indexedDB slot; delete is a no-op when no fake was installed.
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
   });
 
@@ -211,14 +224,8 @@ describe("pointer-style records", () => {
     expect(pointerDb).not.toBe(metaDb);
     await idbPut(pointerDb, "opfsPointers", { sourceId: "x", activeFile: "x.sqlite" }, "x");
     await idbPut(metaDb, "lastUsed", 123, "x");
-    expect(
-      (pointerDb.objectStoreNames as { contains(n: string): boolean }).contains("opfsPointers"),
-    ).toBe(true);
-    expect((metaDb.objectStoreNames as { contains(n: string): boolean }).contains("lastUsed")).toBe(
-      true,
-    );
-    expect(
-      (pointerDb.objectStoreNames as { contains(n: string): boolean }).contains("lastUsed"),
-    ).toBe(false);
+    expect(pointerDb.objectStoreNames.contains("opfsPointers")).toBe(true);
+    expect(metaDb.objectStoreNames.contains("lastUsed")).toBe(true);
+    expect(pointerDb.objectStoreNames.contains("lastUsed")).toBe(false);
   });
 });

@@ -9,8 +9,10 @@ vi.mock("$lib/config/site", () => ({
 import { quranApi } from "$lib/quran/api-client";
 import { FetchHttpError, MalformedDataError, RESPONSE_CAP } from "$lib/quran/fetch";
 
-function okJson(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
+type ApiEnvelopeBody = { data: object };
+
+function okJson(body: ApiEnvelopeBody): Response {
+  return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
@@ -160,7 +162,9 @@ describe("quranApi.readRange", () => {
       .mockResolvedValueOnce(okJson({ data: translationRange(mid + 1, to) }));
     const range = await quranApi.readRange("en.x", from, to);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    // SAFETY: quranApi.readRange passes a template-string URL to fetch, so each spy call's first arg is a string
     const firstUrl = fetchMock.mock.calls[0]![0] as string;
+    // SAFETY: same string-URL contract as the first chunk call above
     const secondUrl = fetchMock.mock.calls[1]![0] as string;
     expect(firstUrl).toContain(`from=${from}&to=${mid}`);
     expect(secondUrl).toContain(`from=${mid + 1}&to=${to}`);

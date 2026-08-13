@@ -5,13 +5,13 @@
   import { isArabicSourceId, QuranScript } from "$lib/data/quran-types";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
 
-  const SCRIPT_LABELS: Readonly<Record<QuranScript, string>> = {
+  const SCRIPT_LABELS = {
     [QuranScript.Uthmani]: "Uthmani",
     [QuranScript.SimpleClean]: "Simple-clean",
     [QuranScript.IndoPak]: "IndoPak",
     [QuranScript.Tajweed]: "Tajweed",
     [QuranScript.Translation]: "Translation",
-  };
+  } satisfies Readonly<Record<QuranScript, string>>;
 
   const sizeOf = new Map(QURAN.scripts.map((s) => [s.id, s.sizeBytes]));
   const totalBytes = sumBy(QURAN.scripts, (s) => s.sizeBytes);

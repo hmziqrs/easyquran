@@ -40,8 +40,8 @@ export type StagedValidator = (
 ) => Promise<void> | void;
 
 export class StagedValidationRejection extends Error {
-  constructor(rejection: unknown) {
-    const msg = rejection instanceof Error ? rejection.message : String(rejection);
+  constructor(cause: unknown) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
     super(`staged validation rejected DB: ${msg}`);
     this.name = "StagedValidationRejection";
   }
@@ -156,7 +156,9 @@ export async function readPointer(sourceId: string): Promise<ActivePointer | nul
     const rec = await idbGet<ActivePointer>(db, POINTER_STORE, sourceId);
     if (
       rec &&
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- parses the IDB-read pointer record at its boundary; IDB returns `any`-backed T and the stored record may be legacy or corrupt
       typeof rec.sourceId === "string" &&
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- same boundary parse of the stored record's activeFile field
       typeof rec.activeFile === "string" &&
       rec.sourceId === sourceId
     ) {
@@ -190,11 +192,16 @@ async function readAllPointers(): Promise<Map<string, ActivePointer>> {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
+        // SAFETY: cur.value is `any` from an IDB cursor; every field of the record is
+        // shape-checked for its concrete type below before it is used.
         const v = cur.value as Partial<ActivePointer> | undefined;
         if (
           v &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- parses the IDB-stored record at its read boundary; IDB returns `any`
           typeof v.sourceId === "string" &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- same boundary parse of the stored record's activeFile field
           typeof v.activeFile === "string" &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB cursor keys are polymorphic (IDBValidKey); this store writes string keys only
           typeof cur.key === "string"
         ) {
           out.set(cur.key, { sourceId: v.sourceId, activeFile: v.activeFile });
@@ -244,9 +251,12 @@ async function moveOpfsFile(tag: string, fromName: string, toName: string): Prom
   const top = await root.getDirectoryHandle(ROOT_DIR, { create: false });
   const dir = await top.getDirectoryHandle(tag, { create: false });
   const fh = await dir.getFileHandle(fromName);
+  // SAFETY: FileSystemFileHandle.move is a Chromium-only OPFS extension absent from
+  // the TS DOM lib; it is feature-detected as an optional member before any call.
   const movable = fh as FileSystemFileHandle & {
     move?: (name: string) => Promise<FileSystemFileHandle>;
   };
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- feature-detect of the non-standard move(); typeof "function" is the canonical callable check before invoking a possibly-absent API
   if (typeof movable.move === "function") {
     await movable.move(toName);
     return;
@@ -460,6 +470,7 @@ async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
+        // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB cursor keys are polymorphic (IDBValidKey); non-string keys map to "" which the ":" separator check below discards
         const compound = typeof cur.key === "string" ? cur.key : "";
         const sep = compound.indexOf(":");
         if (sep > 0) {

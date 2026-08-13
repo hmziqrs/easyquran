@@ -1,5 +1,5 @@
 export type SqlValue = string | number | null | Uint8Array;
-export type SqlRow = Readonly<Record<string, unknown>>;
+export type SqlRow = Readonly<Record<string, SqlValue>>;
 
 export interface QuranQueryRunner {
   all(sql: string, params?: readonly SqlValue[]): SqlRow[];
@@ -54,6 +54,7 @@ export function defineQuranQuery<Result>(
 
 export function decodeIntegerField(row: SqlRow, key: string): number {
   const value = row[key];
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- sqlite cell arrives as the SqlValue union; typeof IS the field parse at the DB boundary
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new Error(`[quran-sql] ${key} must be a safe integer`);
   }
@@ -62,6 +63,7 @@ export function decodeIntegerField(row: SqlRow, key: string): number {
 
 export function decodeTextField(row: SqlRow, key = "text"): string {
   const value = row[key];
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- sqlite cell arrives as the SqlValue union; typeof IS the field parse at the DB boundary
   if (typeof value !== "string") throw new Error(`[quran-sql] ${key} must be a string`);
   return value;
 }

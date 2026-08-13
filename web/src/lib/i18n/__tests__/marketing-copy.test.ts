@@ -12,6 +12,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 function readJson(path: string): Record<string, string> {
+  // SAFETY: messages/*.json catalogs are flat message-id → translation-string maps; the parity tests below iterate every entry as a string.
   return JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as Record<string, string>;
 }
 

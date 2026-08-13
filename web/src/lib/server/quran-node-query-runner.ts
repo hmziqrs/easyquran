@@ -11,6 +11,7 @@ export function createNodeQueryRunner(database: DatabaseSync): QuranQueryRunner 
         statement = database.prepare(sql);
         statements.set(sql, statement);
       }
+      // SAFETY: node:sqlite StatementSync.all() returns one column-name-keyed object per result row; SqlRow is exactly that readonly row shape.
       return statement.all(...params) as SqlRow[];
     },
   };

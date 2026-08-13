@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 function requestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
+  if (input instanceof Request) return input.url;
   if (input instanceof URL) return input.toString();
-  return input.url;
+  return input;
 }
 
 // Hoisted shared doubles. The boot engine imports a singleton quran store and
@@ -51,7 +51,22 @@ type QuranStoreModule = typeof import("$lib/stores/quran.svelte");
 
 const COORDS = Object.freeze({ rowCount: 6236, surahs: [1], pages: [1], juzs: [1] });
 
-function jsonResponse(body: unknown, ok = true): Response {
+type ScriptSpecBody = { id: string; sizeBytes: number; downloadUrl: string };
+type TranslationEntryBody = {
+  id: string;
+  language: string;
+  languageCode: string;
+  direction: string;
+  name: string;
+  translator: string | null;
+  sizeBytes: number;
+  downloadUrl: string;
+};
+type MetadataJsonBody = {
+  data?: { scripts?: ScriptSpecBody[]; sources?: { kind: string; entry: TranslationEntryBody }[] };
+};
+
+function jsonResponse(body: MetadataJsonBody, ok = true): Response {
   return new Response(JSON.stringify(body), {
     status: ok ? 200 : 500,
     headers: { "content-type": "application/json" },
@@ -63,6 +78,7 @@ async function flush(): Promise<void> {
 }
 
 async function importFresh<T>(path: string): Promise<T> {
+  // SAFETY: dynamic import returns the module namespace of `path`; every caller passes T = typeof import("<same path>")
   return (await import(path)) as T;
 }
 
@@ -109,6 +125,7 @@ describe("bootOfflineEngine boot sequence", () => {
     // The worker must have started with the baked manifest + baked catalogue
     // before any remote metadata resolved (both deferreds still pending).
     expect(startMock).toHaveBeenCalledTimes(1);
+    // SAFETY: startMock is an untyped double for quranWorker.start(manifest, coordinates, catalogue); bootOfflineEngine calls it with the baked ResolvedManifest first and the baked catalogue array third
     const [manifest, , catalogue] = startMock.mock.calls[0] as [
       { source: string },
       unknown,
@@ -163,6 +180,7 @@ describe("bootOfflineEngine boot sequence", () => {
 
     // Validated catalogue was pushed to the worker through provideCatalogue.
     expect(provideCatalogueMock).toHaveBeenCalledTimes(1);
+    // SAFETY: provideCatalogueMock doubles quranWorker.provideCatalogue(catalogue); bootOfflineEngine passes the validated SourceCatalogueEntry[] so the first arg is an array
     const pushed = provideCatalogueMock.mock.calls[0]![0]! as unknown[];
     expect(pushed.length).toBeGreaterThan(0);
     // Source-label upgrade from baked→api is covered by the W10a manifest
@@ -188,6 +206,7 @@ describe("bootOfflineEngine boot sequence", () => {
 
     // Worker still started from baked data; refresh failure did not abort boot.
     expect(startMock).toHaveBeenCalledTimes(1);
+    // SAFETY: same untyped startMock double as above; its first arg is the baked ResolvedManifest carrying source: "baked"
     expect((startMock.mock.calls[0]![0]! as { source: string }).source).toBe("baked");
     // Baked state survives the metadata outage — no error, baked source.
     // catalogueStore falls back to baked and may re-publish it, but the source

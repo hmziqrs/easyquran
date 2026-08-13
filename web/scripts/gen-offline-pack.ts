@@ -43,7 +43,9 @@ function readAppVersion(): string | null {
   const versionFile = candidates.find((c) => existsSync(c));
   if (!versionFile) return null;
   try {
+    // SAFETY: version.json is adapter-node's own build output; only the version field is read.
     const parsed = JSON.parse(readFileSync(versionFile, "utf8")) as { version?: unknown };
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- version is an untyped JSON.parse field; this check is the parse
     return typeof parsed.version === "string" ? parsed.version : null;
   } catch {
     return null;

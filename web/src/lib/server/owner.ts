@@ -32,12 +32,13 @@ const FALLBACK_PROFILE: OwnerProfile = {
 let cached: { profile: OwnerProfile; expires: number } | null = null;
 let inflight: Promise<OwnerProfile> | null = null;
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary parser for untrusted OWNER_SOURCE_URL JSON; callers pass raw res.json() output
 function isOwnerProfile(d: unknown): d is Pick<OwnerProfile, "email" | "social"> {
-  return (
-    !!d &&
-    typeof (d as OwnerProfile).email === "string" &&
-    typeof (d as OwnerProfile).social?.twitter === "string"
-  );
+  if (!d) return false;
+  // SAFETY: d is raw fetch JSON that only passed a truthiness check; the cast exists solely to probe fields whose representations are verified on the next line.
+  const candidate = d as OwnerProfile;
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- probes the runtime representation of untyped JSON fields at the fetch boundary
+  return typeof candidate.email === "string" && typeof candidate.social?.twitter === "string";
 }
 
 export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<OwnerProfile> {
@@ -50,6 +51,7 @@ export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<Own
         if (!res.ok) throw new Error(`owner fetch HTTP ${res.status}`);
         const data: unknown = await res.json();
         if (!isOwnerProfile(data)) throw new Error("owner payload shape invalid");
+        // SAFETY: isOwnerProfile(data) verified email and social; Partial marks the remaining fields optional so FALLBACK_PROFILE fills them below.
         const partial = data as Partial<OwnerProfile>;
         const profile: OwnerProfile = {
           ...FALLBACK_PROFILE,

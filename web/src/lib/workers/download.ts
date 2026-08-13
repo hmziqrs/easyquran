@@ -18,6 +18,9 @@ export function unsafeDownloadSpec(spec: {
   sizeBytes?: number;
   label?: string;
 }): DownloadSpec {
+  // SAFETY: trusted-caller escape hatch by design (see fn name); every DownloadSpec
+  // consumer re-guards `spec.sizeBytes !== undefined`, so an absent sizeBytes only
+  // disables size enforcement.
   return spec as DownloadSpec;
 }
 

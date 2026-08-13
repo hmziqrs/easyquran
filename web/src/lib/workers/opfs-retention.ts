@@ -33,6 +33,7 @@ async function readLastUsedMap(): Promise<Map<string, number>> {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
+        // eslint-disable-next-line anti-slop/no-runtime-typeof -- parses the IDB record at its read boundary: keys are polymorphic IDBValidKey (this store writes strings only) and values were stamped by stampLastUsed as numbers
         if (typeof cur.key === "string" && typeof cur.value === "number") {
           out.set(cur.key, cur.value);
         }

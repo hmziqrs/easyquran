@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
+import type { JsonValue } from "$lib/storage/decoders";
 
-export function readJSON(key: string): unknown {
+export function readJSON(key: string): JsonValue | undefined {
   if (!browser) return undefined;
   try {
     const raw = localStorage.getItem(key);
@@ -10,6 +11,7 @@ export function readJSON(key: string): unknown {
   }
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- callers persist heterogeneous app state; JSON.stringify inside this fn is the serializer at the boundary.
 export function writeJSON(key: string, value: unknown): void {
   if (!browser) return;
   try {
@@ -53,9 +55,11 @@ export function removeRaw(area: StorageArea, key: string): void {
   } catch {}
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is arbitrary parsed JSON from readJSON(); this predicate is the boundary check itself.
 export function isFutureSchema(raw: unknown, current: number): boolean {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- typeof-object is the only discriminator for arbitrary parsed JSON before the "v" probe.
   if (typeof raw !== "object" || raw === null || !("v" in raw)) return false;
-  return (raw as { v: unknown }).v !== current;
+  return raw.v !== current;
 }
 
 export function onStorageKey(key: string, handler: () => void): () => void {

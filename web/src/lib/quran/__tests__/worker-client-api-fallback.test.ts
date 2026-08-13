@@ -29,13 +29,14 @@ const SURAH1 = {
   },
 };
 
-function okJson(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
+function okJson(body: typeof SURAH1): Response {
+  return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- mirrors the DOM Worker addEventListener callback contract; quranWorker registers its own opaque message listener, so the event shape stays unknown at this fake boundary
 type Listener = (e: unknown) => void;
 
 class FakeWorker {
@@ -65,7 +66,9 @@ class FakeWorker {
     this.terminated = true;
   }
   emit(type: "message", data: WorkerOutbound): void;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- error/messageerror payloads follow the DOM Worker event contract (opaque event data); no test emits them
   emit(type: "error" | "messageerror", payload: unknown): void;
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- implementation signature must accept both the WorkerOutbound message payload and the opaque error payload above
   emit(type: string, payload: unknown): void {
     const evt = type === "message" ? { data: payload } : payload;
     this.listeners.get(type)?.forEach((fn) => fn(evt));

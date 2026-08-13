@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
-import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
+import type { AuthClient, AuthErrorEnvelope, AuthRequestResult } from "$lib/auth/auth-client";
 import type { UserProfile } from "$lib/auth/auth-client";
 import { createLoginFlow } from "$lib/auth/flows.svelte";
-import type { FlowStateLike } from "$lib/auth/flows.svelte";
 
 const PROFILE: UserProfile = {
   id: 7,
@@ -20,36 +19,28 @@ const PROFILE: UserProfile = {
 const UNVERIFIED: UserProfile = { ...PROFILE, id: 8, is_verified: false, email: "new@eq.test" };
 
 function mockClient() {
+  // SAFETY: hand-built AuthClient test double — the class's #private csrf members are never
+  // touched by LoginFlow, and every member these tests invoke is stubbed as a vi.fn().
   return {
     unsafeRequest: vi.fn(),
     refreshCsrf: vi.fn().mockResolvedValue(undefined),
     clearCsrf: vi.fn(),
     getUser: vi.fn(),
-  } as unknown as AuthClient & {
+  } as AuthClient & {
     unsafeRequest: ReturnType<typeof vi.fn>;
     refreshCsrf: ReturnType<typeof vi.fn>;
+    clearCsrf: ReturnType<typeof vi.fn>;
+    getUser: ReturnType<typeof vi.fn>;
   };
 }
 
-function mockState(): FlowStateLike & {
-  transition: ReturnType<typeof vi.fn>;
-  setUser: ReturnType<typeof vi.fn>;
-  setTwoFaPending: ReturnType<typeof vi.fn>;
-  reset: ReturnType<typeof vi.fn>;
-  probe: ReturnType<typeof vi.fn>;
-} {
+function mockState() {
   return {
     transition: vi.fn().mockResolvedValue(undefined),
     setUser: vi.fn(),
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "anonymous" }),
-  } as unknown as FlowStateLike & {
-    transition: ReturnType<typeof vi.fn>;
-    setUser: ReturnType<typeof vi.fn>;
-    setTwoFaPending: ReturnType<typeof vi.fn>;
-    reset: ReturnType<typeof vi.fn>;
-    probe: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -58,10 +49,10 @@ function ok<T>(data: T, rotated = false): AuthRequestResult<T> {
 }
 function err(
   status: number,
-  body: Record<string, unknown> = {},
+  body: AuthErrorEnvelope = {},
   rotated = false,
 ): AuthRequestResult<never> {
-  return { ok: false, status, data: null, error: body as never, rotated };
+  return { ok: false, status, data: null, error: body, rotated };
 }
 
 describe("LoginFlow credentials", () => {
@@ -75,11 +66,8 @@ describe("LoginFlow credentials", () => {
     const res = await flow.submitCredentials();
     expect(res).toBe(true);
     expect(state.transition).toHaveBeenCalledWith({ kind: "login" });
-    const transitionOrder = (
-      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0]!;
+    const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
+    const setUserOrder = state.setUser.mock.invocationCallOrder[0]!;
     expect(transitionOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
     expect(state.setTwoFaPending).toHaveBeenCalledWith(false);
@@ -147,14 +135,9 @@ describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
     const res = await flow.submitCredentials();
     expect(res).toBe(true);
     expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
-    const refreshOrder = (
-      client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const transitionOrder = (
-      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0]!;
+    const refreshOrder = client.refreshCsrf.mock.invocationCallOrder[0]!;
+    const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
+    const setUserOrder = state.setUser.mock.invocationCallOrder[0]!;
     expect(refreshOrder).toBeLessThan(transitionOrder);
     expect(refreshOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);
@@ -187,14 +170,9 @@ describe("LoginFlow CSRF refresh on rotated=false fallback", () => {
     const res = await flow.submitTotp();
     expect(res).toBe(true);
     expect(client.refreshCsrf).toHaveBeenCalledTimes(1);
-    const refreshOrder = (
-      client.refreshCsrf as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const transitionOrder = (
-      state.transition as unknown as { mock: { invocationCallOrder: number[] } }
-    ).mock.invocationCallOrder[0]!;
-    const setUserOrder = (state.setUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0]!;
+    const refreshOrder = client.refreshCsrf.mock.invocationCallOrder[0]!;
+    const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
+    const setUserOrder = state.setUser.mock.invocationCallOrder[0]!;
     expect(refreshOrder).toBeLessThan(transitionOrder);
     expect(refreshOrder).toBeLessThan(setUserOrder);
     expect(state.setUser).toHaveBeenCalledWith(PROFILE);

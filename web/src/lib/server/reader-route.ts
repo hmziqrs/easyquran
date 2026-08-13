@@ -40,7 +40,9 @@ for (const row of rawTranslations) {
   const language = row[2];
   const direction = row[3];
   if (
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- translations.json rows are positional (string|number)[] values from baked JSON; typeof discriminates elements at module load
     typeof id !== "string" ||
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- translations.json rows are positional (string|number)[] values from baked JSON; typeof discriminates elements at module load
     typeof language !== "string" ||
     (direction !== "ltr" && direction !== "rtl")
   ) {

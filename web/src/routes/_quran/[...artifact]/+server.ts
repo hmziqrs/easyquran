@@ -10,6 +10,7 @@ const ALLOWED_ARTIFACTS = new Set<string>([
   "tanzil/arabic/quran-uthmani.sqlite",
   "tanzil/arabic/quran-simple-clean.sqlite",
   ...rawTranslations.map((row) => {
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- this IS the boundary parse of the baked catalogue row; a non-string artifact path must throw here.
     if (!Array.isArray(row) || typeof row[TRANSLATION_FILE_PATH] !== "string") {
       throw new Error("[quran-artifact] malformed baked translation catalogue");
     }

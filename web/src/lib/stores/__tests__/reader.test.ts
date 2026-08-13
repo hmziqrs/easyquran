@@ -1,37 +1,48 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { flushSync } from "svelte";
 import { describe, it, expect } from "vite-plus/test";
 
 import { createReader, type ReaderApi } from "../reader.svelte";
 import { observeVersesFor } from "./reader-reactivity.probe.svelte";
 
+type RemovedReaderMembers = {
+  current?: undefined;
+  surah?: undefined;
+  surahCount?: undefined;
+  fontSize?: undefined;
+  bookmarkList?: undefined;
+  bookmarkCount?: undefined;
+};
+
 describe("createReader — preserved public API", () => {
   const r: ReaderApi = createReader();
 
   it("exposes every USED member consumers depend on", () => {
-    expect(typeof r.hydrate).toBe("function");
-    expect(typeof r.setQuery).toBe("function");
-    expect(typeof r.clearQuery).toBe("function");
-    expect(typeof r.setBrowse).toBe("function");
-    expect(typeof r.toggleNote).toBe("function");
-    expect(typeof r.setCurrent).toBe("function");
-    expect(typeof r.openVerse).toBe("function");
-    expect(typeof r.markRead).toBe("function");
-    expect(typeof r.bigger).toBe("function");
-    expect(typeof r.smaller).toBe("function");
-    expect(typeof r.setMode).toBe("function");
-    expect(typeof r.isBookmarked).toBe("function");
-    expect(typeof r.toggleBookmark).toBe("function");
-    expect(typeof r.getNote).toBe("function");
-    expect(typeof r.setNote).toBe("function");
-    expect(typeof r.versesFor).toBe("function");
-    expect(typeof r.seedAyahs).toBe("function");
-    expect(typeof r.refreshFromWorker).toBe("function");
-    expect(typeof r.copyVerse).toBe("function");
-    expect(typeof r.shareVerse).toBe("function");
+    expect(r.hydrate).toBeTypeOf("function");
+    expect(r.setQuery).toBeTypeOf("function");
+    expect(r.clearQuery).toBeTypeOf("function");
+    expect(r.setBrowse).toBeTypeOf("function");
+    expect(r.toggleNote).toBeTypeOf("function");
+    expect(r.setCurrent).toBeTypeOf("function");
+    expect(r.openVerse).toBeTypeOf("function");
+    expect(r.markRead).toBeTypeOf("function");
+    expect(r.bigger).toBeTypeOf("function");
+    expect(r.smaller).toBeTypeOf("function");
+    expect(r.setMode).toBeTypeOf("function");
+    expect(r.isBookmarked).toBeTypeOf("function");
+    expect(r.toggleBookmark).toBeTypeOf("function");
+    expect(r.getNote).toBeTypeOf("function");
+    expect(r.setNote).toBeTypeOf("function");
+    expect(r.versesFor).toBeTypeOf("function");
+    expect(r.seedAyahs).toBeTypeOf("function");
+    expect(r.refreshFromWorker).toBeTypeOf("function");
+    expect(r.copyVerse).toBeTypeOf("function");
+    expect(r.shareVerse).toBeTypeOf("function");
   });
 
   it("removed the verified-dead public members", () => {
-    const dead = r as unknown as Record<string, unknown>;
+    // SAFETY: createReader() returns the closed ReaderApi contract; the probed members are the verified-removed set, so each lookup is undefined.
+    const dead = r as RemovedReaderMembers;
     expect(dead.current).toBeUndefined();
     expect(dead.surah).toBeUndefined();
     expect(dead.surahCount).toBeUndefined();

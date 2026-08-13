@@ -90,7 +90,13 @@ export const SURFACES: SurfaceDef[] = [
   },
 ];
 
-export const DEFAULTS: { theme: ThemeMode; accent: AccentId; surface: SurfaceId } = {
+export interface ThemeDefaults {
+  theme: ThemeMode;
+  accent: AccentId;
+  surface: SurfaceId;
+}
+
+export const DEFAULTS: ThemeDefaults = {
   theme: "dark",
   accent: "emerald",
   surface: "ink",

@@ -18,7 +18,7 @@
   async function complete(): Promise<void> {
     try {
       const provider = page.params.provider;
-      if (!isOAuthProvider(provider)) {
+      if (!provider || !isOAuthProvider(provider)) {
         await goto("/login");
         return;
       }

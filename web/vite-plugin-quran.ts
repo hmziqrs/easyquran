@@ -13,6 +13,8 @@ const LOCAL_ARTIFACT_PREFIX = "/_quran/";
 const LOCAL_TRANSLATION_DIR = "db/quran/tanzil/translations";
 const TRANSLATION_FILE_PATH = 6;
 
+// SAFETY: source profiles carry string artifact paths, and translations.json rows are positional
+// arrays whose TRANSLATION_FILE_PATH slot holds the translation file name.
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
   ...registeredSourceProfiles().map(
     (profile) =>
@@ -22,7 +24,10 @@ const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
       ],
   ),
   ...(rawTranslations as readonly unknown[]).map((row) => {
+    // SAFETY: translations.json rows are positional arrays; the file name sits at
+    // TRANSLATION_FILE_PATH and is a string in every tracked row.
     const filePath = (row as readonly unknown[])[TRANSLATION_FILE_PATH] as string;
+    // SAFETY: both entries are strings — the URL key template and path.resolve both yield strings.
     return [
       `tanzil/translations/${filePath}`,
       path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, filePath),

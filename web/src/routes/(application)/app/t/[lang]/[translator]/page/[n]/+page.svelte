@@ -12,7 +12,7 @@
   const ctx = $derived.by<SurahRouteContext>(() => {
     const lang = page.params.lang;
     const translator = page.params.translator;
-    if (typeof lang === "string" && typeof translator === "string") {
+    if (lang !== undefined && translator !== undefined) {
       return { kind: "translation", lang, translator };
     }
     return { kind: "arabic" };

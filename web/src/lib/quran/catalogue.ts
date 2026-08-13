@@ -40,10 +40,16 @@ type TranslationRow = readonly [
   sizeBytes: number,
 ];
 
-function isTranslationDirection(value: unknown): value is TranslationDirection {
+function isTranslationDirection(value: string | number): value is TranslationDirection {
   return value === "rtl" || value === "ltr";
 }
 
+function isNonEmptyString(value: string | number | undefined): value is string {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- discriminating a JSON import field that TS only types as a loose union; no schema seam exists for baked JSON
+  return typeof value === "string" && value !== "";
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- the JSON import only types rows as a loose (string|number)[] union; per-field roles are established by the guards below
 function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
   if (!Array.isArray(raw) || raw.length !== TRANSLATION_FIELD_COUNT) {
     throw new Error(
@@ -58,17 +64,18 @@ function decodeTranslationRow(raw: unknown, index: number): TranslationRow {
   const translator = raw[TranslationField.Translator];
   const filePath = raw[TranslationField.FilePath];
   const sizeBytes = raw[TranslationField.FileSize];
-  if (typeof id !== "string" || !id) throw new Error(`[catalogue] row ${index + 1}: bad id`);
-  if (typeof language !== "string" || !language)
+  if (!isNonEmptyString(id)) throw new Error(`[catalogue] row ${index + 1}: bad id`);
+  if (!isNonEmptyString(language))
     throw new Error(`[catalogue] row ${index + 1}: bad language`);
-  if (typeof languageCode !== "string" || !languageCode)
+  if (!isNonEmptyString(languageCode))
     throw new Error(`[catalogue] row ${index + 1}: bad languageCode`);
   if (!isTranslationDirection(direction))
     throw new Error(`[catalogue] row ${index + 1}: bad direction`);
-  if (typeof name !== "string" || !name) throw new Error(`[catalogue] row ${index + 1}: bad name`);
+  if (!isNonEmptyString(name)) throw new Error(`[catalogue] row ${index + 1}: bad name`);
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- translator is nullable in the row union; typeof verifies the wire field at the JSON boundary
   if (translator !== null && typeof translator !== "string")
     throw new Error(`[catalogue] row ${index + 1}: bad translator`);
-  if (typeof filePath !== "string" || !filePath)
+  if (!isNonEmptyString(filePath))
     throw new Error(`[catalogue] row ${index + 1}: bad filePath`);
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0)
     throw new Error(`[catalogue] row ${index + 1}: bad sizeBytes`);

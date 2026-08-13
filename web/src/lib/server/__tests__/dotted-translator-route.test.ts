@@ -42,11 +42,14 @@ const PARAMS = { surah: "al-fatihah", lang: "en", translator: "sahih.int" };
 
 function event(): RequestEvent {
   const url = new URL("https://easyquran.fyi/en/app/al-fatihah/t/en/sahih.int");
+  // SAFETY: test double providing every RequestEvent member the handle() path reads; cookies and locals are inert placeholders in this test.
   return {
+    // SAFETY: handle() reads no cookies in this test; the empty object satisfies the accessor shape RequestEvent declares.
     cookies: {} as RequestEvent["cookies"],
     fetch,
     getClientAddress: () => "127.0.0.1",
     isDataRequest: false,
+    isRemoteRequest: false,
     isSubRequest: false,
     locals: {},
     params: PARAMS,
@@ -54,8 +57,10 @@ function event(): RequestEvent {
     request: new Request(url),
     route: { id: ROUTE_ID },
     setHeaders: () => {},
+    // SAFETY: tracing is kit-internal telemetry; the localized handle() path under test never reads it.
+    tracing: { enabled: false } as RequestEvent["tracing"],
     url,
-  } as unknown as RequestEvent;
+  } as RequestEvent;
 }
 
 beforeEach(() => {

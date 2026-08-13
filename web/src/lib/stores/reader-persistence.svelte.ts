@@ -4,6 +4,7 @@ import {
   asLiteral,
   asNumber,
   asObject,
+  asString,
   asStringRecord,
   onPageHide,
   onStorageKey,
@@ -29,6 +30,7 @@ import { applyReaderPresentation } from "./reader-presentation";
 const STORAGE_KEY = "easyquran.reader";
 const ANCHOR_PERSIST_DEBOUNCE_MS = 300;
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (asObject/asNumber/asLiteral validate every field)
 export function decodeReader(raw: unknown): Partial<Persisted> {
   const stored = asObject(raw);
   if (!stored) return {};
@@ -57,7 +59,7 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
     if (lr) {
       const num = asNumber(lr.num, -Infinity, Infinity);
       const n = asNumber(lr.n, -Infinity, Infinity);
-      const sourceId = typeof lr.sourceId === "string" ? lr.sourceId : undefined;
+      const sourceId = asString(lr.sourceId);
       if (num !== undefined && n !== undefined)
         out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
     }
@@ -68,7 +70,7 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
   } else {
     const a = asObject(stored.lastReadAnchor);
     if (a) {
-      const verseKey = typeof a.verseKey === "string" ? a.verseKey : undefined;
+      const verseKey = asString(a.verseKey);
       const localPage = asNumber(a.localPage, 1, Number.POSITIVE_INFINITY);
       const ratio = asNumber(a.ratio, 0, 1);
       if (verseKey && localPage !== undefined && ratio !== undefined)
@@ -84,7 +86,7 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
       const n = asNumber(e.n, 1, Number.POSITIVE_INFINITY);
       const ts = asNumber(e.ts, 0, Number.POSITIVE_INFINITY);
       if (num === undefined || n === undefined || ts === undefined) return undefined;
-      const sourceId = typeof e.sourceId === "string" ? e.sourceId : undefined;
+      const sourceId = asString(e.sourceId);
       return sourceId !== undefined ? { num, n, sourceId, ts } : { num, n, ts };
     });
   }

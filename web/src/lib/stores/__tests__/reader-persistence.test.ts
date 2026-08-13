@@ -7,7 +7,7 @@ vi.mock("$app/environment", () => ({
   },
 }));
 
-import { createReaderCore, READER_SCHEMA_VERSION } from "../reader-core.svelte";
+import { createReaderCore, type Persisted, READER_SCHEMA_VERSION } from "../reader-core.svelte";
 import { createReaderPersistence, decodeReader } from "../reader-persistence.svelte";
 import { createReader } from "../reader.svelte";
 
@@ -131,7 +131,7 @@ describe("createReaderPersistence scheduling", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  const read = (): unknown => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+  const read = (): Persisted | null => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
 
   it("writeNow() persists the durable blob immediately", () => {
     const core = createReaderCore();
@@ -166,10 +166,8 @@ describe("createReaderPersistence scheduling", () => {
     core.s.recents = [{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }];
     core.s.progress = { 2: { furthestAyah: 255, ts: 1000 } };
     persistence.writeNow();
-    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Record<
-      string,
-      unknown
-    >;
+    // SAFETY: blob was just written by writeNow() from core.s, whose serialized shape is Persisted.
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Persisted;
     expect(stored.v).toBe(READER_SCHEMA_VERSION);
     expect(stored.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
     expect(stored.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
@@ -252,7 +250,7 @@ describe("createReaderPersistence hydration race", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  const read = (): unknown => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+  const read = (): Persisted | null => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
 
   it("writeNow() before hydrate() defers and never wipes stored bookmarks/notes/lastRead", () => {
     window.localStorage.setItem(

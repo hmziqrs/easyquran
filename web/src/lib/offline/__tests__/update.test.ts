@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+interface FakeRegistration {
+  waiting: { postMessage: (message: { type: string }) => void } | null;
+  addEventListener: () => void;
+  removeEventListener: () => void;
+  update: () => void;
+}
+
 const { updatedMock, registerSwMock } = vi.hoisted(() => ({
   updatedMock: { current: false, check: vi.fn<() => Promise<void>>() },
-  registerSwMock: vi.fn<() => Promise<unknown>>(),
+  registerSwMock: vi.fn<() => Promise<FakeRegistration | null>>(),
 }));
 
 vi.mock("$app/environment", () => ({ browser: true }));
@@ -50,7 +57,7 @@ class MockBC {
   removeEventListener(type: string, listener: (e: { data: unknown }) => void): void {
     this.listeners.get(type)?.delete(listener);
   }
-  postMessage(data: unknown): void {
+  postMessage(data: { type: string }): void {
     const set = MockBC.byName.get(this.name);
     if (!set) return;
     for (const other of set) {
@@ -65,7 +72,8 @@ class MockBC {
 }
 
 function setServiceWorker(value: Partial<ServiceWorkerContainer> | null): void {
-  const nav = navigator as unknown as { serviceWorker?: unknown };
+  // SAFETY: the DOM lib types navigator.serviceWorker as readonly and non-optional; this test-only cast names it optional so delete/defineProperty injection below can toggle it.
+  const nav = navigator as { serviceWorker?: unknown };
   if (value === null) {
     try {
       delete nav.serviceWorker;
@@ -113,18 +121,19 @@ afterEach(() => {
   setServiceWorker(null);
 });
 
+function reloadCalls(): unknown[] {
+  // SAFETY: erasing Location first is required because its reload() method type does not overlap the spy shape below.
+  const loc = window.location as unknown;
+  // SAFETY: beforeEach replaces window.location.reload with a vi.fn(); this reads that mock's recorded calls.
+  return (loc as { reload: { mock?: { calls: unknown[] } } }).reload.mock?.calls ?? [];
+}
+
 function expectReload(count = 1): void {
-  const loc = window.location as unknown as {
-    reload: { mock?: { calls: unknown[] } };
-  };
-  expect(loc.reload.mock?.calls ?? []).toHaveLength(count);
+  expect(reloadCalls()).toHaveLength(count);
 }
 
 function expectNoReload(): void {
-  const loc = window.location as unknown as {
-    reload: { mock?: { calls: unknown[] } };
-  };
-  expect(loc.reload.mock?.calls ?? []).toHaveLength(0);
+  expect(reloadCalls()).toHaveLength(0);
 }
 
 describe("UpdateStore.available getter", () => {
@@ -176,6 +185,7 @@ describe("UpdateStore.apply", () => {
 
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: SKIP_WAITING });
     expect(sessionStorage.getItem(RELOAD_GUARD)).toBe("1");
+    // SAFETY: dispatchSpy wraps window.dispatchEvent(event: Event), so every recorded call argument is an Event.
     expect(
       dispatchSpy.mock.calls.some(([event]) => (event as Event).type === PREPARE_RELOAD_EVENT),
     ).toBe(true);
