@@ -265,7 +265,7 @@ describe("reader engagement", () => {
       // Simulate the real failure mode: safe-storage swallows the write error
       // and returns, so nothing is persisted — the read-back then fails and the
       // legacy key must survive for the next retry.
-      mocked.mockImplementation(async () => {});
+      mocked.mockImplementation(() => {});
       try {
         const { noteReaderView } = await importEngagement();
         await noteReaderView(TRANSLATION);

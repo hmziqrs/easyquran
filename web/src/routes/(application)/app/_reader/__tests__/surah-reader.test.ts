@@ -477,7 +477,7 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     expect(target.querySelector('[role="status"]')?.textContent ?? "").toMatch(
       /local offline copy/i,
     );
-    unmount(first);
+    await unmount(first);
 
     const next = document.createElement("div");
     document.body.appendChild(next);

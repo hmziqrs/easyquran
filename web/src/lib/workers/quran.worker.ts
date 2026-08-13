@@ -476,7 +476,7 @@ const handlers: { [K in WorkerRequest["type"]]: Handler<K> } = {
   search: (m) => search(m.query, m.opts),
 };
 
-ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
+async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> {
   const message = event.data;
   const id = message.id;
   try {
@@ -500,4 +500,9 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>): Promise<void> => {
     }
     emit({ id, ok: false, error: errorMessage });
   }
+}
+
+// onmessage must return void; the handler owns its own error reporting.
+ctx.onmessage = (event: MessageEvent<WorkerRequest>): void => {
+  void handleMessage(event);
 };

@@ -18,7 +18,7 @@ export function bootOfflineEngine(): () => void {
   const detachProgress = quranWorker.onProgress((p) => quran.setDownload(p));
 
   const persistenceRequest = navigator.storage?.persist?.();
-  if (persistenceRequest) void persistenceRequest.catch(() => false);
+  if (persistenceRequest !== undefined) void persistenceRequest.catch(() => false);
 
   void (async () => {
     try {

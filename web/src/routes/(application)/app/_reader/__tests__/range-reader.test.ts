@@ -331,8 +331,8 @@ describe("RangeReader mount — post-paint swap wiring + surah-metadata derivati
     document.body.appendChild(target);
   });
 
-  afterEach(() => {
-    if (mounted) unmount(mounted);
+  afterEach(async () => {
+    if (mounted) await unmount(mounted);
     mounted = undefined;
     quranWorker.dispose();
     if (target.parentNode) target.parentNode.removeChild(target);
@@ -401,8 +401,8 @@ describe("RangeReader mount — atomic snapshot guarded by route key on a living
     document.body.appendChild(target);
   });
 
-  afterEach(() => {
-    if (mounted) unmount(mounted);
+  afterEach(async () => {
+    if (mounted) await unmount(mounted);
     mounted = undefined;
     quranWorker.dispose();
     if (target.parentNode) target.parentNode.removeChild(target);
