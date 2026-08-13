@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+
 // Hoisted shared doubles. The boot engine imports a singleton quran store and
 // a singleton catalogueStore, so each test resets modules to get a fresh pair.
 const {
@@ -88,7 +95,7 @@ describe("bootOfflineEngine boot sequence", () => {
     const scriptsPromise = new Promise<Response>((r) => (resolveScripts = r));
     const sourcesPromise = new Promise<Response>((r) => (resolveSources = r));
     vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const u = String(url);
+      const u = requestUrl(url);
       if (u.endsWith("/scripts")) return scriptsPromise;
       if (u.endsWith("/sources")) return sourcesPromise;
       return Promise.resolve(jsonResponse({}));
@@ -146,7 +153,7 @@ describe("bootOfflineEngine boot sequence", () => {
       },
     };
     vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const u = String(url);
+      const u = requestUrl(url);
       if (u.endsWith("/scripts")) return Promise.resolve(jsonResponse(scriptsBody));
       if (u.endsWith("/sources")) return Promise.resolve(jsonResponse(sourcesBody));
       return Promise.resolve(jsonResponse({}));
@@ -169,7 +176,7 @@ describe("bootOfflineEngine boot sequence", () => {
 
   it("leaves baked state intact when metadata refresh fails", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const u = String(url);
+      const u = requestUrl(url);
       // Both metadata endpoints fail.
       if (u.endsWith("/scripts") || u.endsWith("/sources")) {
         return Promise.reject(new Error("network down"));

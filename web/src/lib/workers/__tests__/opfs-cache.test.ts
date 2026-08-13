@@ -388,13 +388,13 @@ async function breakNextPointerPut(): Promise<() => void> {
   // writePointer) throws synchronously inside runTxVoid's executor, rejecting
   // the commit. `get` (readPointer) stays intact, and other DBs are untouched.
   const pointerDb = (await openIdb(POINTER_DB, POINTER_STORE)) as unknown as FakeDB;
-  const origTransaction = pointerDb.transaction;
+  const origTransaction = pointerDb.transaction.bind(pointerDb);
   pointerDb.transaction = (store: string, mode: IDBTransactionMode): FakeTx => {
-    const tx = origTransaction.call(pointerDb, store, mode);
+    const tx = origTransaction(store, mode);
     if (store !== POINTER_STORE) return tx;
-    const origObjectStore = tx.objectStore;
+    const origObjectStore = tx.objectStore.bind(tx);
     tx.objectStore = (): FakeStoreHandle => {
-      const handle = origObjectStore.call(tx, store);
+      const handle = origObjectStore(store);
       handle.put = ((..._args: unknown[]) => {
         throw new Error("commit writePointer boom");
       }) as FakeStoreHandle["put"];
