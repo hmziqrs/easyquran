@@ -1,0 +1,39 @@
+diff --git a/dist/constants.cjs b/dist/constants.cjs
+index d5aba2dd5d28501371e70dda97d799b41b5b8d0f..9a82c27341edf333c005e2b67ef55309fbe7860e 100644
+--- a/dist/constants.cjs
++++ b/dist/constants.cjs
+@@ -374,7 +374,7 @@ const KEY_ALIASES = {
+ * ```
+ */
+ function isSingleLetterKey(key) {
+-	return /^\p{Letter}$/u.test(key);
++	return /^[A-Za-z]$/.test(key);
+ }
+ /**
+ * Normalizes a key name to its canonical form.
+diff --git a/dist/constants.js b/dist/constants.js
+index a86800646482081ae6fe9023bac7651fe2a46eed..bfa9d59809c71f772da7d01ba0e81b2921cf1beb 100644
+--- a/dist/constants.js
++++ b/dist/constants.js
+@@ -373,7 +373,7 @@ const KEY_ALIASES = {
+ * ```
+ */
+ function isSingleLetterKey(key) {
+-	return /^\p{Letter}$/u.test(key);
++	return /^[A-Za-z]$/.test(key);
+ }
+ /**
+ * Normalizes a key name to its canonical form.
+diff --git a/src/constants.ts b/src/constants.ts
+index f89628edb92c790bed7dc912ddea53ce1896b06b..127982951b8ee53fc30a9450f54a4a23f3dc7379 100644
+--- a/src/constants.ts
++++ b/src/constants.ts
+@@ -437,7 +437,7 @@ const KEY_ALIASES: Record<string, string> = {
+  * ```
+  */
+ export function isSingleLetterKey(key: string): boolean {
+-  return /^\p{Letter}$/u.test(key)
++  return /^[A-Za-z]$/.test(key)
+ }
+ 
+ /**

@@ -12,6 +12,8 @@ catalog:
   vite-plus: 0.2.5
 overrides:
   vite: "catalog:"
+patchedDependencies:
+  '@tanstack/hotkeys@0.8.0': patches/@tanstack__hotkeys@0.8.0.patch
 peerDependencyRules:
   allowAny:
     - vite

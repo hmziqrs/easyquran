@@ -212,6 +212,9 @@ catalogs:
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@0.2.5
 
+patchedDependencies:
+  '@tanstack/hotkeys@0.8.0': cbb18e3dcb08d448b1f54194ee3c89f15574866b3bfc01820f7dc5ffc2b63a57
+
 importers:
 
   .: {}
@@ -251,7 +254,7 @@ importers:
         version: 3.53.0-build1
       '@tanstack/hotkeys':
         specifier: 0.8.0
-        version: 0.8.0
+        version: 0.8.0(patch_hash=cbb18e3dcb08d448b1f54194ee3c89f15574866b3bfc01820f7dc5ffc2b63a57)
       '@tanstack/svelte-virtual':
         specifier: ^3.13.35
         version: 3.13.35(svelte@5.56.8)
@@ -3855,7 +3858,7 @@ snapshots:
       tailwindcss: 4.3.3
       vite: '@voidzero-dev/vite-plus-core@0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(typescript@6.0.3)'
 
-  '@tanstack/hotkeys@0.8.0':
+  '@tanstack/hotkeys@0.8.0(patch_hash=cbb18e3dcb08d448b1f54194ee3c89f15574866b3bfc01820f7dc5ffc2b63a57)':
     dependencies:
       '@tanstack/store': 0.11.1
 
