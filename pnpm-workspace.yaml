@@ -14,6 +14,7 @@ overrides:
   vite: "catalog:"
 patchedDependencies:
   '@tanstack/hotkeys@0.8.0': patches/@tanstack__hotkeys@0.8.0.patch
+  '@tanstack/svelte-store@0.12.1': patches/@tanstack__svelte-store@0.12.1.patch
 peerDependencyRules:
   allowAny:
     - vite
