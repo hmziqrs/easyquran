@@ -4,7 +4,7 @@
   import AuthForm from "$lib/auth/components/AuthForm.svelte";
   import AuthField from "$lib/auth/components/AuthField.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { createVerifyEmailFlow } from "$lib/auth/flows.svelte";
+  import { createLogoutFlow, createVerifyEmailFlow } from "$lib/auth/flows.svelte";
   import {
     dynamicValidator,
     fieldError,
@@ -15,6 +15,7 @@
   import { VERIFY_EMAIL_NEXT } from "$lib/auth/auth-copy";
 
   const flow = createVerifyEmailFlow();
+  const logout = createLogoutFlow();
   const serverErrors = new ServerFieldErrors();
 
   const alreadyVerified = $derived(authState.user?.is_verified === true || flow.alreadyVerified);
@@ -34,6 +35,12 @@
       await goto("/app");
     },
   }));
+
+  async function switchAccount(): Promise<void> {
+    const loggedOut = await logout.run();
+    if (!loggedOut) return;
+    await goto("/login");
+  }
 </script>
 
 {#if alreadyVerified && !flow.verified}
@@ -60,7 +67,7 @@
     subheading="Enter the code we sent to your inbox to confirm your account."
     submitLabel="Confirm email"
     pending={flow.pending}
-    serverError={flow.genericError}
+    serverError={flow.genericError ?? logout.genericError}
     successNotice={flow.successMessage}
     onsubmit={() => form.handleSubmit()}
   >
@@ -96,7 +103,17 @@
       <span class="text-xs text-fg-3">{VERIFY_EMAIL_NEXT}</span>
     </div>
     {#snippet footer()}
-      <span>Need to switch accounts? <a href="/login" class="text-accent hover:underline">Sign in again</a></span>
+      <span>
+        Need to switch accounts?
+        <button
+          type="button"
+          class="text-accent hover:underline"
+          disabled={logout.pending}
+          onclick={() => void switchAccount()}
+        >
+          Sign in again
+        </button>
+      </span>
     {/snippet}
   </AuthForm>
 {/if}

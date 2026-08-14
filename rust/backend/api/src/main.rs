@@ -815,8 +815,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             internal_token.clone(),
         )))
         .layer(compression.clone())
-        .layer(axum::Extension(state.clone()))
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
+        // Layers added later run first. Keep AppState outer to origin_guard so
+        // the guard can read its immutable boot-time allowlist from extensions.
+        .layer(axum::Extension(state.clone()))
         // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
