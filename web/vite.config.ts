@@ -58,6 +58,20 @@ export default defineConfig({
     },
     options: { typeAware: true, typeCheck: true },
   },
+  server: {
+    // Dev mirror of the production edge: Traefik routes Host(DOMAIN) + PathPrefix(/api)
+    // to api:8888 and strips /api (docker-compose.yml, strip-api middleware). With
+    // PUBLIC_API_BASE_URL unset the client falls back to the same-origin "/api", so dev
+    // needs the same strip — and same-origin keeps session cookies + CSRF behaving as
+    // they do in production. The API must allow http://localhost:5173 as an origin:
+    // set CONSUMER_PORT=5173 in .env (non-prod dev origin defaults are additive).
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8888",
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
   plugins: lazyPlugins(() => [
     quranArtifacts(),
     tailwindcss(),
