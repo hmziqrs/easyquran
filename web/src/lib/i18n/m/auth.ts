@@ -2,7 +2,7 @@
 //
 // Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.
 //
-// 34 messages. Import this barrel, never
+// 47 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { auth_close } from "$lib/paraglide/messages/auth_close.js";
@@ -15,6 +15,19 @@ export { auth_dialog_description } from "$lib/paraglide/messages/auth_dialog_des
 export { auth_dialog_title } from "$lib/paraglide/messages/auth_dialog_title.js";
 export { auth_display_name_placeholder } from "$lib/paraglide/messages/auth_display_name_placeholder.js";
 export { auth_email_placeholder } from "$lib/paraglide/messages/auth_email_placeholder.js";
+export { auth_error_backup_code_invalid } from "$lib/paraglide/messages/auth_error_backup_code_invalid.js";
+export { auth_error_code_digits } from "$lib/paraglide/messages/auth_error_code_digits.js";
+export { auth_error_code_length_8 } from "$lib/paraglide/messages/auth_error_code_length_8.js";
+export { auth_error_code_required } from "$lib/paraglide/messages/auth_error_code_required.js";
+export { auth_error_confirm_mismatch } from "$lib/paraglide/messages/auth_error_confirm_mismatch.js";
+export { auth_error_confirm_required } from "$lib/paraglide/messages/auth_error_confirm_required.js";
+export { auth_error_email_invalid } from "$lib/paraglide/messages/auth_error_email_invalid.js";
+export { auth_error_email_required } from "$lib/paraglide/messages/auth_error_email_required.js";
+export { auth_error_name_max } from "$lib/paraglide/messages/auth_error_name_max.js";
+export { auth_error_name_required } from "$lib/paraglide/messages/auth_error_name_required.js";
+export { auth_error_password_max } from "$lib/paraglide/messages/auth_error_password_max.js";
+export { auth_error_password_min } from "$lib/paraglide/messages/auth_error_password_min.js";
+export { auth_error_password_required } from "$lib/paraglide/messages/auth_error_password_required.js";
 export { auth_field_authentication_code } from "$lib/paraglide/messages/auth_field_authentication_code.js";
 export { auth_field_confirm_password } from "$lib/paraglide/messages/auth_field_confirm_password.js";
 export { auth_field_display_name } from "$lib/paraglide/messages/auth_field_display_name.js";

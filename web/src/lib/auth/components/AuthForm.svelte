@@ -2,7 +2,7 @@
   import { Button } from "$lib/components/ui/button";
   import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
   import { cn } from "$lib/utils";
-  import type { Snippet } from "svelte";
+  import { tick, type Snippet } from "svelte";
   import { getAuthCopy } from "$lib/i18n/auth-copy";
 
   const copy = getAuthCopy();
@@ -46,6 +46,9 @@
     event.preventDefault();
     if (pending) return;
     await onsubmit();
+    // Errors render in the same microtask batch as the submit result; wait for
+    // the DOM before hunting for the first invalid control.
+    await tick();
     if (!formEl) return;
     focusFirstInvalid(formEl);
   }

@@ -35,6 +35,7 @@
     "@fontsource/amiri": "^5.2.5",
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "@tanstack/hotkeys": "0.8.0",
+    "@tanstack/svelte-form": "^1.33.5",
     "@tanstack/svelte-virtual": "^3.13.35",
     "bits-ui": "^2.18.1",
     "clsx": "^2.1.1",
@@ -42,7 +43,8 @@
     "firebase": "^12.16.0",
     "simple-icons": "^16.28.0",
     "tailwind-merge": "^3.6.0",
-    "tailwind-variants": "^3.2.2"
+    "tailwind-variants": "^3.2.2",
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@inlang/paraglide-js": "2.23.2",

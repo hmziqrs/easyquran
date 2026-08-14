@@ -1,12 +1,21 @@
 <script lang="ts">
+  import { createForm, revalidateLogic } from "@tanstack/svelte-form";
   import AuthForm from "./AuthForm.svelte";
   import AuthField from "./AuthField.svelte";
   import PasswordInput from "./PasswordInput.svelte";
   import { Icon } from "$lib/components/icon";
   import type { RegisterFlow } from "$lib/auth/flows.svelte";
+  import {
+    dynamicValidator,
+    fieldError,
+    ServerFieldErrors,
+  } from "$lib/auth/form-validation.svelte";
+  import { registerSchema, totpSchema } from "$lib/auth/schemas";
   import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
 
   const copy = getAuthCopy();
+  const validationCopy = getAuthValidationCopy();
 
   type Props = {
     flow: RegisterFlow;
@@ -16,14 +25,54 @@
 
   let { flow, variant = "page", onsuccess }: Props = $props();
 
-  async function submit(): Promise<void> {
-    if (flow.step === "totp") {
+  const registerErrors = new ServerFieldErrors();
+  const totpErrors = new ServerFieldErrors();
+
+  const form = createForm(() => ({
+    defaultValues: {
+      name: flow.name,
+      email: flow.email,
+      password: flow.password,
+      confirm_password: flow.confirmPassword,
+    },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(registerSchema(validationCopy)) },
+    onSubmit: async ({ value }) => {
+      registerErrors.clearAll();
+      flow.name = value.name.trim();
+      flow.email = value.email.trim();
+      flow.password = value.password;
+      flow.confirmPassword = value.confirm_password;
+      const ok = await flow.submit();
+      if (!ok) {
+        registerErrors.adopt(flow.fieldErrors);
+        return;
+      }
+      await onsuccess();
+    },
+  }));
+
+  const totpForm = createForm(() => ({
+    defaultValues: { code: flow.login.code },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(totpSchema(validationCopy)) },
+    onSubmit: async ({ value }) => {
+      totpErrors.clearAll();
+      flow.login.code = value.code.trim();
       const ok = await flow.login.submitTotp();
-      if (ok) await onsuccess();
-      return;
-    }
-    const ok = await flow.submit();
-    if (ok) await onsuccess();
+      if (!ok) {
+        totpErrors.adopt(flow.login.fieldErrors);
+        return;
+      }
+      await onsuccess();
+    },
+  }));
+
+  function cancelTotp(): void {
+    flow.login.cancelTotp();
+    flow.step = "form";
+    totpErrors.clearAll();
+    totpForm.reset();
   }
 </script>
 
@@ -35,19 +84,29 @@
     pending={flow.login.pending}
     serverError={flow.login.genericError}
     {variant}
-    onsubmit={submit}
+    onsubmit={() => totpForm.handleSubmit()}
   >
-    <AuthField
-      id="register-totp"
-      label={copy.fieldAuthenticationCode}
-      inputmode="numeric"
-      autocomplete="one-time-code"
-      maxlength={6}
-      bind:value={flow.login.code}
-      error={flow.login.fieldErrors.code}
-    />
+    <totpForm.Field name="code">
+      {#snippet children(field)}
+        <AuthField
+          id="register-totp"
+          name={field.name}
+          label={copy.fieldAuthenticationCode}
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength={6}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? totpErrors.current.code ?? null}
+          oninput={(next) => {
+            totpErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </totpForm.Field>
     {#snippet footer()}
-      <button type="button" class="text-accent hover:underline" onclick={() => flow.login.cancelTotp()}>
+      <button type="button" class="text-accent hover:underline" onclick={cancelTotp}>
         {copy.useDifferentAccount}
       </button>
     {/snippet}
@@ -60,46 +119,88 @@
     pending={flow.pending}
     serverError={flow.genericError}
     {variant}
-    onsubmit={submit}
+    onsubmit={() => form.handleSubmit()}
   >
-    <AuthField
-      id="register-name"
-      label={copy.fieldDisplayName}
-      autocomplete="name"
-      placeholder={copy.displayNamePlaceholder}
-      bind:value={flow.name}
-      error={flow.fieldErrors.name}
-    >
-      {#snippet leadingIcon()}<Icon name="user" size={16} />{/snippet}
-    </AuthField>
-    <AuthField
-      id="register-email"
-      label={copy.fieldEmail}
-      type="email"
-      autocomplete="email"
-      placeholder={copy.emailPlaceholder}
-      bind:value={flow.email}
-      error={flow.fieldErrors.email}
-    >
-      {#snippet leadingIcon()}<Icon name="mail" size={16} />{/snippet}
-    </AuthField>
-    <PasswordInput
-      id="register-password"
-      label={copy.fieldPassword}
-      autocomplete="new-password"
-      minlength={12}
-      placeholder={copy.passwordMinPlaceholder}
-      bind:value={flow.password}
-      error={flow.fieldErrors.password}
-    />
-    <PasswordInput
-      id="register-confirm"
-      label={copy.fieldConfirmPassword}
-      autocomplete="new-password"
-      minlength={12}
-      bind:value={flow.confirmPassword}
-      error={flow.fieldErrors.confirm_password}
-    />
+    <form.Field name="name">
+      {#snippet children(field)}
+        <AuthField
+          id="register-name"
+          name={field.name}
+          label={copy.fieldDisplayName}
+          autocomplete="name"
+          placeholder={copy.displayNamePlaceholder}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? registerErrors.current.name ?? null}
+          oninput={(next) => {
+            registerErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        >
+          {#snippet leadingIcon()}<Icon name="user" size={16} />{/snippet}
+        </AuthField>
+      {/snippet}
+    </form.Field>
+    <form.Field name="email">
+      {#snippet children(field)}
+        <AuthField
+          id="register-email"
+          name={field.name}
+          label={copy.fieldEmail}
+          type="email"
+          autocomplete="email"
+          placeholder={copy.emailPlaceholder}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? registerErrors.current.email ?? null}
+          oninput={(next) => {
+            registerErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        >
+          {#snippet leadingIcon()}<Icon name="mail" size={16} />{/snippet}
+        </AuthField>
+      {/snippet}
+    </form.Field>
+    <form.Field name="password">
+      {#snippet children(field)}
+        <PasswordInput
+          id="register-password"
+          name={field.name}
+          label={copy.fieldPassword}
+          autocomplete="new-password"
+          minlength={12}
+          placeholder={copy.passwordMinPlaceholder}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? registerErrors.current.password ?? null}
+          oninput={(next) => {
+            registerErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </form.Field>
+    <form.Field name="confirm_password">
+      {#snippet children(field)}
+        <PasswordInput
+          id="register-confirm"
+          name={field.name}
+          label={copy.fieldConfirmPassword}
+          autocomplete="new-password"
+          minlength={12}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ??
+            registerErrors.current.confirm_password ??
+            null}
+          oninput={(next) => {
+            registerErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </form.Field>
     {#snippet footer()}
       <span>
         {copy.haveAccountPrompt}

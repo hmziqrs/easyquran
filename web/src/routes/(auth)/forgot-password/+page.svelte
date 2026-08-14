@@ -1,28 +1,63 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { createForm, revalidateLogic } from "@tanstack/svelte-form";
   import AuthForm from "$lib/auth/components/AuthForm.svelte";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
+  import AuthField from "$lib/auth/components/AuthField.svelte";
+  import PasswordInput from "$lib/auth/components/PasswordInput.svelte";
   import { createForgotPasswordFlow } from "$lib/auth/flows.svelte";
+  import {
+    dynamicValidator,
+    fieldError,
+    ServerFieldErrors,
+  } from "$lib/auth/form-validation.svelte";
+  import { forgotRequestSchema, forgotVerifySchema, resetPasswordSchema } from "$lib/auth/schemas";
 
   const flow = createForgotPasswordFlow();
 
-  async function handleSubmit(): Promise<void> {
-    if (flow.step === "request") {
-      await flow.request();
-    } else if (flow.step === "verify") {
-      const ok = await flow.verifyCode();
-      if (!ok) return;
-    } else if (flow.step === "reset") {
-      const ok = await flow.reset();
-      if (!ok) return;
-      await goto("/login");
-    }
-  }
+  const requestErrors = new ServerFieldErrors();
+  const verifyErrors = new ServerFieldErrors();
+  const resetErrors = new ServerFieldErrors();
 
-  function invalid(field: string): boolean {
-    return Boolean(flow.fieldErrors[field]);
-  }
+  const requestForm = createForm(() => ({
+    defaultValues: { email: flow.email },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(forgotRequestSchema()) },
+    onSubmit: async ({ value }) => {
+      requestErrors.clearAll();
+      flow.email = value.email.trim();
+      const ok = await flow.request();
+      if (!ok) requestErrors.adopt(flow.fieldErrors);
+    },
+  }));
+
+  const verifyForm = createForm(() => ({
+    defaultValues: { code: flow.code },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(forgotVerifySchema()) },
+    onSubmit: async ({ value }) => {
+      verifyErrors.clearAll();
+      flow.code = value.code.trim();
+      const ok = await flow.verifyCode();
+      if (!ok) verifyErrors.adopt(flow.fieldErrors);
+    },
+  }));
+
+  const resetForm = createForm(() => ({
+    defaultValues: { password: "", confirm_password: "" },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(resetPasswordSchema()) },
+    onSubmit: async ({ value }) => {
+      resetErrors.clearAll();
+      flow.password = value.password;
+      flow.confirmPassword = value.confirm_password;
+      const ok = await flow.reset();
+      if (!ok) {
+        resetErrors.adopt(flow.fieldErrors);
+        return;
+      }
+      await goto("/login");
+    },
+  }));
 </script>
 
 {#if flow.step === "request"}
@@ -33,22 +68,26 @@
     pending={flow.pending}
     serverError={flow.genericError}
     successNotice={flow.successMessage}
-    onsubmit={handleSubmit}
+    onsubmit={() => requestForm.handleSubmit()}
   >
-    <div class="flex flex-col gap-1.5">
-      <Label for="fp-email">Email</Label>
-      <Input
-        id="fp-email"
-        type="email"
-        autocomplete="email"
-        bind:value={flow.email}
-        aria-invalid={invalid("email")}
-        data-invalid={invalid("email")}
-      />
-      {#if flow.fieldErrors.email}
-        <span class="text-xs text-destructive">{flow.fieldErrors.email}</span>
-      {/if}
-    </div>
+    <requestForm.Field name="email">
+      {#snippet children(field)}
+        <AuthField
+          id="fp-email"
+          name={field.name}
+          label="Email"
+          type="email"
+          autocomplete="email"
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? requestErrors.current.email ?? null}
+          oninput={(next) => {
+            requestErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </requestForm.Field>
     {#snippet footer()}
       <span>Remembered it? <a href="/login" class="text-accent hover:underline">Back to sign in</a></span>
     {/snippet}
@@ -60,23 +99,26 @@
     submitLabel="Verify code"
     pending={flow.pending}
     serverError={flow.genericError}
-    onsubmit={handleSubmit}
+    onsubmit={() => verifyForm.handleSubmit()}
   >
-    <div class="flex flex-col gap-1.5">
-      <Label for="fp-code">Reset code</Label>
-      <Input
-        id="fp-code"
-        type="text"
-        inputmode="text"
-        autocomplete="off"
-        bind:value={flow.code}
-        aria-invalid={invalid("code")}
-        data-invalid={invalid("code")}
-      />
-      {#if flow.fieldErrors.code}
-        <span class="text-xs text-destructive">{flow.fieldErrors.code}</span>
-      {/if}
-    </div>
+    <verifyForm.Field name="code">
+      {#snippet children(field)}
+        <AuthField
+          id="fp-code"
+          name={field.name}
+          label="Reset code"
+          autocomplete="one-time-code"
+          maxlength={8}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? verifyErrors.current.code ?? null}
+          oninput={(next) => {
+            verifyErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </verifyForm.Field>
   </AuthForm>
 {:else if flow.step === "reset"}
   <AuthForm
@@ -85,38 +127,46 @@
     submitLabel="Reset password"
     pending={flow.pending}
     serverError={flow.genericError}
-    onsubmit={handleSubmit}
+    onsubmit={() => resetForm.handleSubmit()}
   >
-    <div class="flex flex-col gap-1.5">
-      <Label for="fp-password">New password</Label>
-      <Input
-        id="fp-password"
-        type="password"
-        autocomplete="new-password"
-        minlength={12}
-        bind:value={flow.password}
-        aria-invalid={invalid("password")}
-        data-invalid={invalid("password")}
-      />
-      {#if flow.fieldErrors.password}
-        <span class="text-xs text-destructive">{flow.fieldErrors.password}</span>
-      {/if}
-    </div>
-    <div class="flex flex-col gap-1.5">
-      <Label for="fp-confirm">Confirm new password</Label>
-      <Input
-        id="fp-confirm"
-        type="password"
-        autocomplete="new-password"
-        minlength={12}
-        bind:value={flow.confirmPassword}
-        aria-invalid={invalid("confirm_password")}
-        data-invalid={invalid("confirm_password")}
-      />
-      {#if flow.fieldErrors.confirm_password}
-        <span class="text-xs text-destructive">{flow.fieldErrors.confirm_password}</span>
-      {/if}
-    </div>
+    <resetForm.Field name="password">
+      {#snippet children(field)}
+        <PasswordInput
+          id="fp-password"
+          name={field.name}
+          label="New password"
+          autocomplete="new-password"
+          minlength={12}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? resetErrors.current.password ?? null}
+          oninput={(next) => {
+            resetErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </resetForm.Field>
+    <resetForm.Field name="confirm_password">
+      {#snippet children(field)}
+        <PasswordInput
+          id="fp-confirm"
+          name={field.name}
+          label="Confirm new password"
+          autocomplete="new-password"
+          minlength={12}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ??
+            resetErrors.current.confirm_password ??
+            null}
+          oninput={(next) => {
+            resetErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </resetForm.Field>
   </AuthForm>
 {:else}
   <AuthForm

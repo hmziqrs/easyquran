@@ -32,5 +32,18 @@
   "auth_continue_with_provider": "المتابعة عبر {provider}",
   "auth_continue_with_passkey": "المتابعة عبر مفتاح المرور",
   "auth_show_password_aria": "إظهار كلمة المرور",
-  "auth_hide_password_aria": "إخفاء كلمة المرور"
+  "auth_hide_password_aria": "إخفاء كلمة المرور",
+  "auth_error_name_required": "أدخل الاسم الظاهر.",
+  "auth_error_name_max": "يجب ألا يزيد الاسم الظاهر عن 120 حرفًا.",
+  "auth_error_email_required": "أدخل بريدك الإلكتروني.",
+  "auth_error_email_invalid": "أدخل بريدًا إلكترونيًا صحيحًا، مثل you@example.com.",
+  "auth_error_password_required": "أدخل كلمة المرور.",
+  "auth_error_password_min": "يجب ألا تقل كلمة المرور عن 12 حرفًا.",
+  "auth_error_password_max": "يجب ألا تزيد كلمة المرور عن 256 حرفًا.",
+  "auth_error_confirm_required": "أعد إدخال كلمة المرور للتأكيد.",
+  "auth_error_confirm_mismatch": "كلمتا المرور غير متطابقتين.",
+  "auth_error_code_required": "أدخل الرمز.",
+  "auth_error_code_digits": "الرمز مكوّن من 6 أرقام.",
+  "auth_error_code_length_8": "الرمز مكوّن من 8 خانات.",
+  "auth_error_backup_code_invalid": "أدخل رمزك المكوّن من 6 أرقام أو رمز احتياطي."
 }

@@ -9,22 +9,30 @@
 
   type Props = {
     id: string;
+    name?: string;
     label: string;
-    value?: string;
+    value: string;
     autocomplete?: string;
     placeholder?: string;
+    hint?: string;
     error?: string | null;
     minlength?: number;
+    oninput?: (value: string) => void;
+    onblur?: () => void;
   };
 
   let {
     id,
+    name,
     label,
-    value = $bindable(""),
+    value,
     autocomplete = "current-password",
     placeholder,
+    hint,
     error = null,
     minlength,
+    oninput,
+    onblur,
   }: Props = $props();
 
   let visible = $state(false);
@@ -33,13 +41,17 @@
 
 <AuthField
   {id}
+  {name}
   {label}
   {type}
   {autocomplete}
   {placeholder}
   {minlength}
-  bind:value
+  {hint}
+  {value}
   {error}
+  {oninput}
+  {onblur}
 >
   {#snippet leadingIcon()}
     <LockIcon weight="fill" size={16} aria-hidden="true" />

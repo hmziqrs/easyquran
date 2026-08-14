@@ -32,5 +32,18 @@
   "auth_continue_with_provider": "Continue with {provider}",
   "auth_continue_with_passkey": "Continue with passkey",
   "auth_show_password_aria": "Show password",
-  "auth_hide_password_aria": "Hide password"
+  "auth_hide_password_aria": "Hide password",
+  "auth_error_name_required": "Enter your display name.",
+  "auth_error_name_max": "Display name must be 120 characters or fewer.",
+  "auth_error_email_required": "Enter your email address.",
+  "auth_error_email_invalid": "Enter a valid email address, like you@example.com.",
+  "auth_error_password_required": "Enter your password.",
+  "auth_error_password_min": "Password must be at least 12 characters.",
+  "auth_error_password_max": "Password must be 256 characters or fewer.",
+  "auth_error_confirm_required": "Re-enter your password to confirm it.",
+  "auth_error_confirm_mismatch": "Passwords do not match.",
+  "auth_error_code_required": "Enter the code.",
+  "auth_error_code_digits": "The code is 6 digits.",
+  "auth_error_code_length_8": "The code is 8 characters.",
+  "auth_error_backup_code_invalid": "Enter your 6-digit code or a backup code."
 }

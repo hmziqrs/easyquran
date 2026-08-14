@@ -1,21 +1,39 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { createForm, revalidateLogic } from "@tanstack/svelte-form";
   import AuthForm from "$lib/auth/components/AuthForm.svelte";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
+  import AuthField from "$lib/auth/components/AuthField.svelte";
   import { Button } from "$lib/components/ui/button";
   import { createVerifyEmailFlow } from "$lib/auth/flows.svelte";
+  import {
+    dynamicValidator,
+    fieldError,
+    ServerFieldErrors,
+  } from "$lib/auth/form-validation.svelte";
+  import { verifyEmailSchema } from "$lib/auth/schemas";
   import { authState } from "$lib/auth/auth-state.svelte";
   import { VERIFY_EMAIL_NEXT } from "$lib/auth/auth-copy";
 
   const flow = createVerifyEmailFlow();
+  const serverErrors = new ServerFieldErrors();
 
   const alreadyVerified = $derived(authState.user?.is_verified === true || flow.alreadyVerified);
 
-  async function handleSubmit(): Promise<void> {
-    const ok = await flow.verify();
-    if (ok) await goto("/app");
-  }
+  const form = createForm(() => ({
+    defaultValues: { code: flow.code },
+    validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
+    validators: { onDynamic: dynamicValidator(verifyEmailSchema()) },
+    onSubmit: async ({ value }) => {
+      serverErrors.clearAll();
+      flow.code = value.code.trim();
+      const ok = await flow.verify();
+      if (!ok) {
+        serverErrors.adopt(flow.fieldErrors);
+        return;
+      }
+      await goto("/app");
+    },
+  }));
 </script>
 
 {#if alreadyVerified && !flow.verified}
@@ -44,23 +62,27 @@
     pending={flow.pending}
     serverError={flow.genericError}
     successNotice={flow.successMessage}
-    onsubmit={handleSubmit}
+    onsubmit={() => form.handleSubmit()}
   >
-    <div class="flex flex-col gap-1.5">
-      <Label for="ve-code">Verification code</Label>
-      <Input
-        id="ve-code"
-        type="text"
-        inputmode="numeric"
-        autocomplete="one-time-code"
-        bind:value={flow.code}
-        aria-invalid={Boolean(flow.fieldErrors.code)}
-        data-invalid={Boolean(flow.fieldErrors.code)}
-      />
-      {#if flow.fieldErrors.code}
-        <span class="text-xs text-destructive">{flow.fieldErrors.code}</span>
-      {/if}
-    </div>
+    <form.Field name="code">
+      {#snippet children(field)}
+        <AuthField
+          id="ve-code"
+          name={field.name}
+          label="Verification code"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength={8}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? serverErrors.current.code ?? null}
+          oninput={(next) => {
+            serverErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </form.Field>
     <div class="flex items-center justify-between gap-3">
       <Button
         type="button"
