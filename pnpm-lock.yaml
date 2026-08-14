@@ -214,7 +214,7 @@ overrides:
 
 patchedDependencies:
   '@tanstack/hotkeys@0.8.0': cbb18e3dcb08d448b1f54194ee3c89f15574866b3bfc01820f7dc5ffc2b63a57
-  '@tanstack/svelte-store@0.12.1': 33adaab1dd3e1ac16cae9814bf17e6585cfea48f19425aab931dda3e23da4f13
+  '@tanstack/svelte-store@0.12.1': a27c5467850bbdb9639d0f817320e562c467163e0ee2fe002906472b14f7b585
 
 importers:
 
@@ -3930,10 +3930,10 @@ snapshots:
   '@tanstack/svelte-form@1.33.5(svelte@5.56.8)':
     dependencies:
       '@tanstack/form-core': 1.33.5
-      '@tanstack/svelte-store': 0.12.1(patch_hash=33adaab1dd3e1ac16cae9814bf17e6585cfea48f19425aab931dda3e23da4f13)(svelte@5.56.8)
+      '@tanstack/svelte-store': 0.12.1(patch_hash=a27c5467850bbdb9639d0f817320e562c467163e0ee2fe002906472b14f7b585)(svelte@5.56.8)
       svelte: 5.56.8
 
-  '@tanstack/svelte-store@0.12.1(patch_hash=33adaab1dd3e1ac16cae9814bf17e6585cfea48f19425aab931dda3e23da4f13)(svelte@5.56.8)':
+  '@tanstack/svelte-store@0.12.1(patch_hash=a27c5467850bbdb9639d0f817320e562c467163e0ee2fe002906472b14f7b585)(svelte@5.56.8)':
     dependencies:
       '@tanstack/store': 0.11.1
       svelte: 5.56.8
