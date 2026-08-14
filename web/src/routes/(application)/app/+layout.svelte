@@ -67,7 +67,12 @@
     const param = parseModeParam(url);
     if (param && param !== current) reader.setMode(param);
     if (!modeParamMatches(url, current)) {
-      replaceState(withModeParam(url, current), page.state);
+      try {
+        replaceState(withModeParam(url, current), page.state);
+      } catch {
+        // Dev navigation can dispose this reader layout before SvelteKit finishes
+        // initializing its router; next navigation restores the mode parameter.
+      }
     }
   });
 
