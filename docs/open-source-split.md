@@ -172,15 +172,65 @@ Notes:
 `just release v1.0.0` → `publish-public` → `gh workflow run release.yml -R <org>/easyquran
 -f version=v1.0.0` → Dokploy redeploy.
 
-## 6. GHCR visibility
+## 6. Where the images go
+
+Registry stays GHCR, but the namespace follows the **public** repo's owner. If the public
+repo lands in an org, coordinates become `ghcr.io/<org>/easyquran-{web,api}` and `REGISTRY`
+must be updated in `.env` / `deploy/.env.example`, `docker-compose.yml`'s
+`${REGISTRY:-ghcr.io/hmziqrs}` defaults, the `justfile` header, and the Dokploy registry
+entry. Keeping the public repo under the personal account leaves `ghcr.io/hmziqrs` as-is.
+
+### 6.1 Pushing from CI
+
+No PAT and no registry secret. `GITHUB_TOKEN` is sufficient:
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+steps:
+  - uses: docker/login-action@v3
+    with:
+      registry: ghcr.io
+      username: ${{ github.actor }}
+      password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Then push `ghcr.io/<owner>/easyquran-web:<version>` and `:latest`, same for the api. The
+package auto-links to the repo it was pushed from. So the public repo needs exactly **one**
+secret in total: `PRIVATE_LAYER_KEY`, the read-only deploy key for the injection step.
+
+### 6.2 Visibility
 
 The published images contain the compiled private layer — SvelteKit output is readable
 JavaScript — so the **packages must stay private** even though the source repo is public.
 Publishing them publicly would defeat the split entirely.
 
-Private container storage and bandwidth on GHCR are currently free, and Dokploy keeps its
-existing registry credential. Nothing about the cost picture changes: builds move from the
-Mac to free public runners, images stay private and free, the VPS bill is unchanged.
+This is the default and requires no action: a package's first publish is private, and a
+package linked to a repository inherits that repository's *access permissions* but **not**
+its *visibility*. A public source repo therefore does not make the image public. The rule is
+simply: never flip it.
+
+Consequence: anonymous `docker pull` of the release images returns `denied`. Only accounts
+granted read access — and the PAT Dokploy uses — can fetch them. Note that this protects
+only the private layer; everything in the public repo is readable source by definition, and
+anyone can build a working app from it using the §4 fallbacks.
+
+Optional, if a publicly pullable demo is ever wanted: have `base-build.yml` push a
+fallback-only image under a separate name (`easyquran-web-oss`) and set *that* package
+public. The release images stay private.
+
+### 6.3 Pulling on the VPS
+
+Unchanged from today: the private package needs a registry credential in Dokploy, a PAT
+scoped `read:packages`. The only thing that changes is the username/namespace if the repo
+moves to an org.
+
+### 6.4 Cost
+
+Private container storage and bandwidth on GHCR are currently free. Nothing about the cost
+picture changes: builds move from the Mac to free public runners, images stay private and
+free, the VPS bill is unchanged.
 
 ## 7. Pre-work before the first export
 
