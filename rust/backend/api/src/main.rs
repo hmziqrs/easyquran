@@ -815,8 +815,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             internal_token.clone(),
         )))
         .layer(compression.clone())
-        .layer(axum::Extension(state.clone()))
+        // Extension(state) MUST sit outer to origin_guard: axum layers run last-added-first,
+        // so a layer added after origin_guard executes before it and its Extension insert is
+        // visible to origin_guard's req.extensions().get::<AppState>(). Placing it inner
+        // (as before) left origin_guard with no AppState → it rejected every Origin header.
         .layer(middleware::from_fn(middlewares::cors::origin_guard))
+        .layer(axum::Extension(state.clone()))
         // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
         .layer(session_layer)
