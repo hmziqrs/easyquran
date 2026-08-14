@@ -35,7 +35,7 @@ export interface QuranSourceQueries {
 }
 
 export const QuranDatabaseAdapterId = {
-  TanzilQuranTextV1: "tanzil-quran-text-v1",
+  QuranTextV1: "quran-text-v1",
 } as const;
 export type QuranDatabaseAdapterId =
   (typeof QuranDatabaseAdapterId)[keyof typeof QuranDatabaseAdapterId];
@@ -109,8 +109,8 @@ export function runOne<Result>(
   return rows[0]!;
 }
 
-export const TANZIL_QURAN_DATABASE = defineQuranDatabaseAdapter({
-  id: QuranDatabaseAdapterId.TanzilQuranTextV1,
+export const QURAN_TEXT_DATABASE = defineQuranDatabaseAdapter({
+  id: QuranDatabaseAdapterId.QuranTextV1,
   queries: Object.freeze({
     count: defineQuranQuery("SELECT count(*) AS count FROM quran_text", (row) =>
       decodeIntegerField(row, "count"),

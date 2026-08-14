@@ -142,8 +142,8 @@ fn packaging(surah: u16) -> OpenerPackagingDto {
 
 fn source_profile(script: Script) -> String {
     match script {
-        Script::Uthmani => "tanzil-uthmani-581cc540".to_string(),
-        Script::SimpleClean => "tanzil-simple-clean-a0c52760".to_string(),
+        Script::Uthmani => "uthmani-581cc540".to_string(),
+        Script::SimpleClean => "simple-clean-a0c52760".to_string(),
     }
 }
 
@@ -281,7 +281,7 @@ mod tests {
     use crate::quran::load_quran_store;
 
     fn settings() -> QuranSettings {
-        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
         QuranSettings {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),

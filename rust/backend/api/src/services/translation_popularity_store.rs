@@ -359,7 +359,7 @@ mod tests {
     async fn demand_pool() -> TranslationPool {
         // Real catalogue + real translations dir, with demand collection ON so get_or_build
         // bumps the AtomicU64 side table the flush task snapshots.
-        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
         let translations_dir = format!("{base}/translations");
         let cat = load_catalogue(&format!("{translations_dir}/index.min.json"))
             .await

@@ -30,7 +30,7 @@ fn ensure_dev_env() {
 }
 
 fn quran_settings() -> QuranSettings {
-    let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+    let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
     QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
@@ -803,12 +803,12 @@ async fn cors_no_cookies_on_every_public_route() {
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -1050,13 +1050,13 @@ async fn scripts_omits_failed_head_artifacts() {
 
     let cl_u = uthmani_size.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     let cl_sc = (sc_size + 1).to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -1097,12 +1097,12 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -1142,8 +1142,8 @@ async fn scripts_happy_path_advertises_both_artifacts() {
         };
         assert_eq!(
             s["downloadUrl"].as_str().unwrap(),
-            format!("{}/tanzil/arabic/{filename}", server.uri()),
-            "downloadUrl must match publisher R2 key tanzil/arabic/<file>.sqlite (upload-sqlite.ts PREFIX)"
+            format!("{}/arabic/{filename}", server.uri()),
+            "downloadUrl must match publisher R2 key arabic/<file>.sqlite (upload-sqlite.ts PREFIX)"
         );
     }
     assert_eq!(
@@ -1161,12 +1161,12 @@ async fn scripts_endpoint_carries_no_sha256() {
     let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
     let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-uthmani\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
         .mount(&server)
         .await;
     Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .and(path_regex(r".*/arabic/quran-simple-clean\.sqlite"))
         .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
         .mount(&server)
         .await;
@@ -1297,7 +1297,7 @@ async fn web_compatible_read_endpoints() {
     let n = &d["normalization"];
     assert_eq!(n["surah"], 2);
     assert_eq!(n["sourceId"], "uthmani");
-    assert_eq!(n["sourceProfile"], "tanzil-uthmani-581cc540");
+    assert_eq!(n["sourceProfile"], "uthmani-581cc540");
     assert_eq!(n["packaging"], "embedded-prefix");
     assert_eq!(n["openerKind"], "header");
     assert_eq!(n["openerEndScalar"], 39);
@@ -1405,7 +1405,7 @@ async fn arabic_and_translation_sources_carry_distinct_etags() {
         "translation must not share the uthmani ETag"
     );
     assert!(
-        etag_t.contains("tanzil-en.sahih"),
+        etag_t.contains("translation-en.sahih"),
         "translation etag keyed by its id (no digest — identity is the id): {etag_t}"
     );
 }
@@ -1423,7 +1423,7 @@ async fn mount_green_sources_heads(state: &AppState, server: &wiremock::MockServ
     ] {
         let cl = file.size_bytes.to_string();
         Mock::given(method("HEAD"))
-            .and(path(format!("/tanzil/arabic/{filename}")))
+            .and(path(format!("/arabic/{filename}")))
             .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
             .mount(server)
             .await;
@@ -1432,7 +1432,7 @@ async fn mount_green_sources_heads(state: &AppState, server: &wiremock::MockServ
     for e in state.translation_pool.catalogue().values() {
         let cl = e.size_bytes.to_string();
         Mock::given(method("HEAD"))
-            .and(path(format!("/tanzil/translations/{}", e.path)))
+            .and(path(format!("/translations/{}", e.path)))
             .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
             .mount(server)
             .await;
@@ -1472,7 +1472,7 @@ async fn sources_lists_all_sources_with_verified_download_urls() {
         .iter()
         .map(|s| (s["id"].as_str().unwrap(), s))
         .collect();
-    // Arabic entry shape + URL (guards the §1 tanzil/arabic layout).
+    // Arabic entry shape + URL (guards the §1 arabic/ layout).
     let u = by_id["uthmani"];
     assert_eq!(u["kind"], "arabic");
     assert_eq!(u["languageCode"], "ar");
@@ -1481,8 +1481,8 @@ async fn sources_lists_all_sources_with_verified_download_urls() {
     assert!(u["downloadUrl"]
         .as_str()
         .unwrap()
-        .ends_with("/tanzil/arabic/quran-uthmani.sqlite"));
-    // Translation entry shape + URL (R2 layout tanzil/translations/sqlite/<id>.sqlite).
+        .ends_with("/arabic/quran-uthmani.sqlite"));
+    // Translation entry shape + URL (R2 layout translations/sqlite/<id>.sqlite).
     let t = by_id["en.sahih"];
     assert_eq!(t["kind"], "translation");
     assert_eq!(t["languageCode"], "en");
@@ -1490,7 +1490,7 @@ async fn sources_lists_all_sources_with_verified_download_urls() {
     assert!(t["downloadUrl"]
         .as_str()
         .unwrap()
-        .ends_with("/tanzil/translations/sqlite/en.sahih.sqlite"));
+        .ends_with("/translations/sqlite/en.sahih.sqlite"));
     assert_eq!(
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::ARABIC_CACHE)
@@ -1543,7 +1543,7 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
     ] {
         let cl = file.size_bytes.to_string();
         Mock::given(method("HEAD"))
-            .and(path(format!("/tanzil/arabic/{filename}")))
+            .and(path(format!("/arabic/{filename}")))
             .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
             .mount(&server)
             .await;
@@ -1558,7 +1558,7 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
         };
         let cl = size.to_string();
         Mock::given(method("HEAD"))
-            .and(path(format!("/tanzil/translations/{}", e.path)))
+            .and(path(format!("/translations/{}", e.path)))
             .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
             .mount(&server)
             .await;

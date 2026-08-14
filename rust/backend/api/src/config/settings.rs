@@ -206,7 +206,7 @@ pub struct QuranSettings {
     pub translation_idle_ttl_secs: u64,
 }
 
-const QURAN_DB_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+const QURAN_DB_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
 
 impl QuranSettings {
     pub fn from_env() -> Self {

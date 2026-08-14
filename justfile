@@ -84,7 +84,7 @@ api-fmt:
 
 upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
-    cd db/quran/tanzil/translations && npm run upload:sqlite -- {{args}}
+    cd db/quran/translations && npm run upload:sqlite -- {{args}}
 
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled HERE, on the host, and the

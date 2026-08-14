@@ -505,7 +505,7 @@ mod tests {
     use crate::quran::load_catalogue;
 
     fn settings() -> crate::config::QuranSettings {
-        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
         crate::config::QuranSettings {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),

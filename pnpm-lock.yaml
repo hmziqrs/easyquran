@@ -220,7 +220,7 @@ importers:
 
   .: {}
 
-  db/quran/tanzil/translations:
+  db/quran/translations:
     dependencies:
       '@aws-sdk/client-s3':
         specifier: ^3.709.0

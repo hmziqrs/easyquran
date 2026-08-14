@@ -385,9 +385,9 @@ describe("W8a applyHeaders isolates cookie-bearing and session-setting web respo
     const immutable = new Response("x");
     applyHeaders(immutable, "/_app/immutable/app.abcd1234.js", true);
     expect(immutable.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
-    const tanzil = new Response("x");
-    applyHeaders(tanzil, "/_quran/tanzil/en.test.json", true);
-    expect(tanzil.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    const arabic = new Response("x");
+    applyHeaders(arabic, "/_quran/en.test.json", true);
+    expect(arabic.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
   it("leaves an anonymous, non-session-setting document cacheable as no-cache", () => {

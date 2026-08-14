@@ -560,7 +560,7 @@ mod tests {
     use crate::quran::{Bismillah, SajdaKind, Script};
 
     fn settings() -> QuranSettings {
-        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
         QuranSettings {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
@@ -706,7 +706,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let tmp = std::env::temp_dir().join(format!("quran-chmod-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
-        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
         for (src, name) in [
             ("arabic/quran-uthmani.sqlite", "u.sqlite"),
             ("arabic/quran-simple-clean.sqlite", "s.sqlite"),

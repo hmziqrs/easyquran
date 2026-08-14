@@ -108,7 +108,7 @@ function decodeBakedTranslations(): DecodedTranslation[] {
       name: row[TranslationField.Name],
       translator: row[TranslationField.Translator],
       sizeBytes: row[TranslationField.FileSize],
-      downloadUrl: `${QURAN.artifactBase}/tanzil/translations/${row[TranslationField.FilePath]}`,
+      downloadUrl: `${QURAN.artifactBase}/translations/${row[TranslationField.FilePath]}`,
     };
     return { row, entry };
   });
@@ -126,7 +126,7 @@ function bakedTranslationArtifactMap(): BakedArtifactMap {
   for (const { row, entry } of decodeBakedTranslations()) {
     map.set(entry.id, {
       sizeBytes: entry.sizeBytes,
-      r2Path: `/tanzil/translations/${row[TranslationField.FilePath]}`,
+      r2Path: `/translations/${row[TranslationField.FilePath]}`,
       sameOriginDeliveryPath: entry.downloadUrl,
     });
   }

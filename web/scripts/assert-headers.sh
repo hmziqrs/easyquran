@@ -70,12 +70,12 @@ contains "/_app/version.json is no-cache"    "$(curl -sSI "$ORIGIN/_app/version.
 contains "/service-worker.js is no-cache"    "$(curl -sSI "$ORIGIN/service-worker.js")" 'no-cache'
 contains "/manifest.webmanifest is no-cache" "$(curl -sSI "$ORIGIN/manifest.webmanifest")" 'no-cache'
 contains "/quran-meta/quran-data.json is no-cache" "$(curl -sSI "$ORIGIN/quran-meta/quran-data.json")" 'no-cache'
-artifact_path=/_quran/tanzil/arabic/quran-uthmani.sqlite
+artifact_path=/_quran/arabic/quran-uthmani.sqlite
 artifact_headers=$(curl -sSI "$ORIGIN$artifact_path")
 contains "same-origin Quran artifact gateway is immutable" "$artifact_headers" 'immutable'
 artifact_etag=$(printf '%s' "$artifact_headers" | sed -n 's/^[Ee][Tt][Aa][Gg]:[[:space:]]*//p' | tr -d '\r')
 artifact_conditional_status=$(curl -sS -o /dev/null -w '%{http_code}' -H "If-None-Match: $artifact_etag" "$ORIGIN$artifact_path")
-contains "artifact ETag is id-based and conditionally returns 304" "$artifact_etag $artifact_conditional_status" 'W/"quran-artifact:tanzil/arabic/quran-uthmani.sqlite" 304'
+contains "artifact ETag is id-based and conditionally returns 304" "$artifact_etag $artifact_conditional_status" 'W/"quran-artifact:arabic/quran-uthmani.sqlite" 304'
 contains "HTML page (/app) is no-cache"      "$(curl -sSI "$ORIGIN/app")" 'no-cache'
 contains "/app/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/app/al-kahf/__data.json")" 'no-cache'
 

@@ -40,7 +40,7 @@ render, Rust API benchmarking (Axum is a fixed dependency here, kept out of satu
 │                                 started once, pre-warmed, shared         │
 │                                          │                               │
 │                                          ▼                               │
-│                              db/quran/tanzil/**.sqlite (read-only)       │
+│                              db/quran/**.sqlite (read-only)       │
 │                                                                          │
 │  disk cache: bench/.run/cache/<scenario>/  (QURAN_SSR_CACHE_DIR)         │
 └──────────────────────────────────────────────────────────────────────────┘

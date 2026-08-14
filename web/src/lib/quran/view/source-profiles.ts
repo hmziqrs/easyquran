@@ -7,7 +7,7 @@ import {
   type QuranSourceId as QuranSourceIdValue,
   type OpenerPackaging as OpenerPackagingValue,
 } from "../../data/quran-types.ts";
-import { TANZIL_QURAN_DATABASE, type QuranDatabaseAdapter } from "../sql.ts";
+import { QURAN_TEXT_DATABASE, type QuranDatabaseAdapter } from "../sql.ts";
 
 export interface QuranSourceArtifact {
   readonly repositoryPath: string;
@@ -53,7 +53,7 @@ export function defineSourceProfile(profile: QuranSourceProfile): QuranSourcePro
   return Object.freeze(profile);
 }
 
-const TANZIL_PACKAGING = Object.freeze(
+const ARABIC_PACKAGING = Object.freeze(
   Array.from({ length: 115 }, (_, surah): OpenerPackagingValue => {
     if (surah === 1) return OpenerPackaging.NumberedAyah;
     if (surah === 9 || surah === 0) return OpenerPackaging.Absent;
@@ -61,7 +61,7 @@ const TANZIL_PACKAGING = Object.freeze(
   }),
 );
 
-const TANZIL_COUNTS: Readonly<Record<OpenerPackagingValue, number>> = Object.freeze({
+const ARABIC_COUNTS: Readonly<Record<OpenerPackagingValue, number>> = Object.freeze({
   [OpenerPackaging.NumberedAyah]: 1,
   [OpenerPackaging.EmbeddedPrefix]: 112,
   [OpenerPackaging.ChapterFlag]: 0,
@@ -71,33 +71,33 @@ const TANZIL_COUNTS: Readonly<Record<OpenerPackagingValue, number>> = Object.fre
 
 const PROFILES = Object.freeze([
   defineSourceProfile({
-    id: "tanzil-uthmani-581cc540",
-    sourceId: QuranSourceId.TanzilUthmani,
+    id: "uthmani-581cc540",
+    sourceId: QuranSourceId.Uthmani,
     script: QuranScript.Uthmani,
     artifact: Object.freeze({
-      repositoryPath: "db/quran/tanzil/arabic/quran-uthmani.sqlite",
-      r2Path: "tanzil/arabic/quran-uthmani.sqlite",
+      repositoryPath: "db/quran/arabic/quran-uthmani.sqlite",
+      r2Path: "arabic/quran-uthmani.sqlite",
       sizeBytes: 1_593_344,
     }),
-    database: TANZIL_QURAN_DATABASE,
+    database: QURAN_TEXT_DATABASE,
     canonicalRowCount: 6236,
-    packagingBySurah: TANZIL_PACKAGING,
-    expectedPackagingCounts: TANZIL_COUNTS,
+    packagingBySurah: ARABIC_PACKAGING,
+    expectedPackagingCounts: ARABIC_COUNTS,
     referenceOpenerSurah: 1,
   }),
   defineSourceProfile({
-    id: "tanzil-simple-clean-a0c52760",
-    sourceId: QuranSourceId.TanzilSimpleClean,
+    id: "simple-clean-a0c52760",
+    sourceId: QuranSourceId.SimpleClean,
     script: QuranScript.SimpleClean,
     artifact: Object.freeze({
-      repositoryPath: "db/quran/tanzil/arabic/quran-simple-clean.sqlite",
-      r2Path: "tanzil/arabic/quran-simple-clean.sqlite",
+      repositoryPath: "db/quran/arabic/quran-simple-clean.sqlite",
+      r2Path: "arabic/quran-simple-clean.sqlite",
       sizeBytes: 929_792,
     }),
-    database: TANZIL_QURAN_DATABASE,
+    database: QURAN_TEXT_DATABASE,
     canonicalRowCount: 6236,
-    packagingBySurah: TANZIL_PACKAGING,
-    expectedPackagingCounts: TANZIL_COUNTS,
+    packagingBySurah: ARABIC_PACKAGING,
+    expectedPackagingCounts: ARABIC_COUNTS,
     referenceOpenerSurah: 1,
   }),
 ] satisfies readonly QuranSourceProfile[]);

@@ -23,8 +23,8 @@ vi.mock("$lib/stores/consent.svelte", () => ({ consent: consentState }));
 type CatalogueModule = typeof import("$lib/quran/catalogue");
 let mod: CatalogueModule;
 
-const TRANSLATION_R2_URL = "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite";
-const TRANSLATION_LOCAL_URL = "/_quran/tanzil/translations/sqlite/sq.nahi.sqlite";
+const TRANSLATION_R2_URL = "https://r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite";
+const TRANSLATION_LOCAL_URL = "/_quran/translations/sqlite/sq.nahi.sqlite";
 const ARABIC_R2_URL = "https://r2.easyquran.fyi/scripts/uthmani.sqlite";
 const ARABIC_LOCAL_URL = "/_quran/scripts/uthmani.sqlite";
 const SQ_NAHI_SIZE = 1175552;
@@ -177,7 +177,7 @@ describe("fetchSourceCatalogue", () => {
 
   it("rejects the payload on an http (non-https) origin", async () => {
     const entry = translationEntry({
-      downloadUrl: "http://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite",
+      downloadUrl: "http://r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite",
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { sources: [entry] } }));
     decode.mockReturnValue([entry]);
@@ -185,9 +185,9 @@ describe("fetchSourceCatalogue", () => {
   });
 
   it.each([
-    ["credentials", "https://user:pass@r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite"],
-    ["query", "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite?x=1"],
-    ["fragment", "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite#frag"],
+    ["credentials", "https://user:pass@r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite"],
+    ["query", "https://r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite?x=1"],
+    ["fragment", "https://r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite#frag"],
   ])("rejects the payload when the url carries %s", async (_label, downloadUrl) => {
     const entry = translationEntry({ downloadUrl });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { sources: [entry] } }));

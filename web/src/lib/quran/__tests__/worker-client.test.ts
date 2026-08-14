@@ -50,12 +50,12 @@ class FakeWorker {
 const MANIFEST: ResolvedManifest = {
   scripts: [
     {
-      id: QuranSourceId.TanzilUthmani,
+      id: QuranSourceId.Uthmani,
       sizeBytes: 1,
       downloadUrl: "https://x/uthmani",
     },
     {
-      id: QuranSourceId.TanzilSimpleClean,
+      id: QuranSourceId.SimpleClean,
       sizeBytes: 1,
       downloadUrl: "https://x/simple-clean",
     },
@@ -108,14 +108,14 @@ describe("quranWorker request settlement", () => {
     const p = quranWorker.readSurah(1);
     const req = fake.posted.at(-1)!;
     const result = {
-      sourceId: QuranSourceId.TanzilUthmani,
+      sourceId: QuranSourceId.Uthmani,
       script: QuranScript.Uthmani,
       verses: ["بسم", "الله"],
       normalization: {
         surah: 1,
-        sourceId: QuranSourceId.TanzilUthmani,
+        sourceId: QuranSourceId.Uthmani,
         script: QuranScript.Uthmani,
-        sourceProfile: "tanzil-uthmani-581cc540",
+        sourceProfile: "uthmani-581cc540",
         packaging: OpenerPackaging.NumberedAyah,
         openerKind: OpenerKind.Verse,
         openerText: "بسم",
@@ -148,9 +148,9 @@ describe("quranWorker request settlement", () => {
     expect(req).toMatchObject({ type: "readRange", from: 8, to: 9 });
     const normalization = {
       surah: 2,
-      sourceId: QuranSourceId.TanzilUthmani,
+      sourceId: QuranSourceId.Uthmani,
       script: QuranScript.Uthmani,
-      sourceProfile: "tanzil-uthmani-581cc540",
+      sourceProfile: "uthmani-581cc540",
       packaging: OpenerPackaging.EmbeddedPrefix,
       openerKind: OpenerKind.Header,
       openerText: "opener",

@@ -31,8 +31,8 @@ function load(sourceId: QuranSourceIdValue) {
   return { profile, rows, view: source.view };
 }
 
-const uthmani = load(QuranSourceId.TanzilUthmani);
-const simple = load(QuranSourceId.TanzilSimpleClean);
+const uthmani = load(QuranSourceId.Uthmani);
+const simple = load(QuranSourceId.SimpleClean);
 
 describe("registered Quran source views", () => {
   it.each([

@@ -1,6 +1,6 @@
 packages:
   - web
-  - db/quran/tanzil/translations
+  - db/quran/translations
 
 allowBuilds:
   '@firebase/util': false

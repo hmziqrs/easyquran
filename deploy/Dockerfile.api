@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY rust/target/aarch64-unknown-linux-gnu/release/ruxlog /app/ruxlog
 
 # Quran sources are provided at runtime by the read-only compose bind mount of
-# db/quran/tanzil → /app/quran (see docker-compose.yml). ENV paths below target that mount.
+# db/quran → /app/quran (see docker-compose.yml). ENV paths below target that mount.
 
 ENV QURAN_UTHMANI_PATH=/app/quran/arabic/quran-uthmani.sqlite \
     QURAN_SIMPLE_CLEAN_PATH=/app/quran/arabic/quran-simple-clean.sqlite \

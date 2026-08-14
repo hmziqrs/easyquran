@@ -10,7 +10,7 @@ import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";
-const LOCAL_TRANSLATION_DIR = "db/quran/tanzil/translations";
+const LOCAL_TRANSLATION_DIR = "db/quran/translations";
 const TRANSLATION_FILE_PATH = 6;
 
 // SAFETY: source profiles carry string artifact paths, and translations.json rows are positional
@@ -29,7 +29,7 @@ const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
     const filePath = (row as readonly unknown[])[TRANSLATION_FILE_PATH] as string;
     // SAFETY: both entries are strings — the URL key template and path.resolve both yield strings.
     return [
-      `tanzil/translations/${filePath}`,
+      `translations/${filePath}`,
       path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, filePath),
     ] as [string, string];
   }),
@@ -75,7 +75,7 @@ export function quranArtifacts(): Plugin {
     generateBundle() {
       if (dataEnvironment !== QuranDataEnvironment.Local) return;
       for (const [artifactPath, localPath] of LOCAL_ARTIFACTS) {
-        if (!artifactPath.startsWith("tanzil/arabic/")) continue;
+        if (!artifactPath.startsWith("arabic/")) continue;
         this.emitFile({
           type: "asset",
           fileName: `${LOCAL_ARTIFACT_PREFIX.slice(1)}${artifactPath}`,

@@ -17,7 +17,7 @@ import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-p
 import {
   runOne,
   runQuery,
-  TANZIL_QURAN_DATABASE,
+  QURAN_TEXT_DATABASE,
   type CanonicalQuranRow,
   type QuranCoordinateRow,
   type QuranQueryRunner,
@@ -163,8 +163,8 @@ export function assertStagedQuranBytes(bytes: Uint8Array, sourceId: string): voi
   const database = openReadOnly(bytes);
   try {
     const runner = createWasmQueryRunner(database);
-    const count = runOne(runner, TANZIL_QURAN_DATABASE.queries.count);
-    const rows = runQuery(runner, TANZIL_QURAN_DATABASE.queries.coordinates);
+    const count = runOne(runner, QURAN_TEXT_DATABASE.queries.count);
+    const rows = runQuery(runner, QURAN_TEXT_DATABASE.queries.coordinates);
     runner.all("SELECT text FROM quran_text LIMIT 1");
     assertStagedQuranContent(count, rows, sourceId);
   } finally {
@@ -410,7 +410,7 @@ function translationNormalization(sourceId: string, surah: number): SurahNormali
 
 async function readTranslationSurah(sourceId: string, num: number): Promise<QuranSurahText> {
   const runner = await translationRunner(sourceId);
-  const verses = runQuery(runner, TANZIL_QURAN_DATABASE.queries.surah, [num]);
+  const verses = runQuery(runner, QURAN_TEXT_DATABASE.queries.surah, [num]);
   return {
     sourceId,
     script: QuranScript.Translation,
@@ -426,7 +426,7 @@ async function readTranslationRange(
 ): Promise<QuranRangeText> {
   const runner = await translationRunner(sourceId);
   return rowsToRangeText(
-    runQuery(runner, TANZIL_QURAN_DATABASE.queries.range, [from, to]),
+    runQuery(runner, QURAN_TEXT_DATABASE.queries.range, [from, to]),
     (surah) => translationNormalization(sourceId, surah),
   );
 }

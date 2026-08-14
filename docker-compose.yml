@@ -112,8 +112,9 @@ services:
     volumes:
       - api_data:/app/data
       # Immutable Quran sources (read-only). 1:1 with the /app/quran ENV paths in
-      # Dockerfile.api. Plain git blobs (no LFS) — present in every clone, incl. Dokploy.
-      - ./db/quran/tanzil:/app/quran:ro
+      # Dockerfile.api. db/ is gitignored: the DBs live in R2 and must be provisioned onto
+      # the host (incl. the Dokploy checkout) before the api starts — a clone alone has none.
+      - ./db/quran:/app/quran:ro
     networks:
       proxy:
         aliases: [api]

@@ -107,9 +107,9 @@ beforeAll(async () => {
 });
 
 describe("assertStagedQuranBytes real SQLite-opening path", () => {
-  it("accepts a valid staged Tanzil DB for an Arabic source", () => {
+  it("accepts a valid staged Arabic DB for an Arabic source", () => {
     expect(() =>
-      worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani),
+      worker.assertStagedQuranBytes(validBytes, QuranSourceId.Uthmani),
     ).not.toThrow();
   });
 
@@ -119,7 +119,7 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
 
   it("rejects a tampered DB with the wrong row count", () => {
     const bytes = serializeQuranDb(contiguousRows(QURAN_ROW_COUNT - 1));
-    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.Uthmani)).toThrow(
       /row count/,
     );
   });
@@ -128,7 +128,7 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     const rows = contiguousRows(QURAN_ROW_COUNT - 1);
     rows.push({ index: QURAN_ROW_COUNT + 1, sura: 1, aya: 1 });
     const bytes = serializeQuranDb(rows);
-    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.Uthmani)).toThrow(
       /non-contiguous/,
     );
   });
@@ -137,14 +137,14 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     // 6236 rows, contiguous, but indices 5..6240 (not 1..6236): the old
     // contiguity-only check accepted this. The start-at-1 assertion must reject it.
     const bytes = serializeQuranDb(contiguousRows(QURAN_ROW_COUNT, 5));
-    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.Uthmani)).toThrow(
       /start at 1/,
     );
   });
 
   it("rejects a DB with the wrong schema (missing quran_text table)", () => {
     const bytes = serializeWrongSchemaDb();
-    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.Uthmani)).toThrow(
       /no such table/i,
     );
   });
@@ -154,7 +154,7 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
     // count + coordinates never select text, so without the probe this DB
     // passes staging and only blows up at read time.
     const bytes = serializeNoTextColumnDb(contiguousRows(QURAN_ROW_COUNT));
-    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.TanzilUthmani)).toThrow(
+    expect(() => worker.assertStagedQuranBytes(bytes, QuranSourceId.Uthmani)).toThrow(
       /no such column/i,
     );
   });
@@ -162,7 +162,7 @@ describe("assertStagedQuranBytes real SQLite-opening path", () => {
   it("rejects an Arabic source whose profile row count disagrees", () => {
     profileOverride.value = { canonicalRowCount: QURAN_ROW_COUNT - 1 };
     try {
-      expect(() => worker.assertStagedQuranBytes(validBytes, QuranSourceId.TanzilUthmani)).toThrow(
+      expect(() => worker.assertStagedQuranBytes(validBytes, QuranSourceId.Uthmani)).toThrow(
         /profile row count mismatch/,
       );
     } finally {

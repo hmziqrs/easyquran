@@ -324,8 +324,9 @@ mail with SPF+DKIM pass.
 ## Notes
 
 - `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.
-- API reads Quran sources from a read-only bind mount (`./db/quran/tanzil` → `/app/quran`,
-  compose `volumes:`); the image no longer bakes them. Immutability is enforced both by the
+- API reads Quran sources from a read-only bind mount (`./db/quran` → `/app/quran`,
+  compose `volumes:`); the image no longer bakes them. `db/` is gitignored — the DBs live in
+  R2 and must be provisioned into the checkout on the host before the api container starts. Immutability is enforced both by the
   `:ro` mount (FS-level read-only for current and future inodes — strictly stronger than the
   old `chmod -R a-w`) and by `read_only(true).immutable(true)` in the loader. The
   Dockerfile.api COPY removal and the compose mount are a coupled pair — ship and revert together.

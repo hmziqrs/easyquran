@@ -19,7 +19,7 @@ const SURAH1 = {
       surah: 1,
       sourceId: "uthmani",
       script: "uthmani",
-      sourceProfile: "tanzil-uthmani-581cc540",
+      sourceProfile: "uthmani-581cc540",
       packaging: "numbered-ayah",
       openerKind: "verse",
       openerText: "ٱلْحَمْدُ",

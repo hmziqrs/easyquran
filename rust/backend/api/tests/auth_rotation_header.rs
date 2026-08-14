@@ -87,7 +87,7 @@ fn ensure_dev_env() {
 }
 
 fn quran_settings() -> QuranSettings {
-    let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran/tanzil");
+    let base = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../db/quran");
     QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),

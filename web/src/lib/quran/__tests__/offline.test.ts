@@ -159,7 +159,7 @@ describe("bootOfflineEngine boot sequence", () => {
               name: "Efendi Nahi",
               translator: "Hasan Efendi Nahi",
               sizeBytes: 1175552,
-              downloadUrl: "https://r2.easyquran.fyi/tanzil/translations/sqlite/sq.nahi.sqlite",
+              downloadUrl: "https://r2.easyquran.fyi/translations/sqlite/sq.nahi.sqlite",
             },
           },
         ],

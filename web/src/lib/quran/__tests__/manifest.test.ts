@@ -12,7 +12,7 @@ const { site, decode, track, consentState } = vi.hoisted(() => ({
       {
         id: "uthmani",
         sizeBytes: 2885632,
-        downloadUrl: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
+        downloadUrl: "/_quran/arabic/quran-uthmani.sqlite",
       },
     ],
   },
@@ -32,8 +32,8 @@ vi.mock("$lib/stores/consent.svelte", () => ({ consent: consentState }));
 type ManifestModule = typeof import("$lib/quran/manifest");
 let mod: ManifestModule;
 
-const ARABIC_R2_URL = "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite";
-const ARABIC_LOCAL_URL = "/_quran/tanzil/arabic/quran-uthmani.sqlite";
+const ARABIC_R2_URL = "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite";
+const ARABIC_LOCAL_URL = "/_quran/arabic/quran-uthmani.sqlite";
 const ARABIC_SIZE = 2885632;
 
 function scriptSpec(
@@ -137,23 +137,23 @@ describe("resolveManifest API -> baked fallback contract", () => {
         data: {
           scripts: [
             scriptSpec({
-              downloadUrl: "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
+              downloadUrl: "http://r2.easyquran.fyi/arabic/quran-uthmani.sqlite",
             }),
           ],
         },
       }),
     );
     decode.mockReturnValue([
-      scriptSpec({ downloadUrl: "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite" }),
+      scriptSpec({ downloadUrl: "http://r2.easyquran.fyi/arabic/quran-uthmani.sqlite" }),
     ]);
     const out = await mod.resolveManifest();
     expect(out.source).toBe("baked");
   });
 
   it.each([
-    ["credentials", "https://user:pass@r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
-    ["query", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite?x=1"],
-    ["fragment", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite#frag"],
+    ["credentials", "https://user:pass@r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
+    ["query", "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite?x=1"],
+    ["fragment", "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite#frag"],
   ])("falls back to baked when the url carries %s", async (_label, downloadUrl) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ data: { scripts: [scriptSpec({ downloadUrl })] } }),

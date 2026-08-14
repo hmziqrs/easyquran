@@ -2,7 +2,7 @@
   "sources": [
     {
       "sourceId": "uthmani",
-      "sourceProfile": "tanzil-uthmani-581cc540",
+      "sourceProfile": "uthmani-581cc540",
       "surahs": [
         {
           "surah": 1,
@@ -1148,7 +1148,7 @@
     },
     {
       "sourceId": "simple-clean",
-      "sourceProfile": "tanzil-simple-clean-a0c52760",
+      "sourceProfile": "simple-clean-a0c52760",
       "surahs": [
         {
           "surah": 1,
