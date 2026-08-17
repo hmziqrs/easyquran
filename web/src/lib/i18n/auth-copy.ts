@@ -1,5 +1,6 @@
 import {
   auth_create_account,
+  auth_confirm_password_placeholder,
   auth_create_one_link,
   auth_dialog_description,
   auth_dialog_title,
@@ -65,6 +66,7 @@ export interface AuthCopy {
   fieldDisplayName: string;
   displayNamePlaceholder: string;
   passwordMinPlaceholder: string;
+  confirmPasswordPlaceholder: string;
   fieldConfirmPassword: string;
   haveAccountPrompt: string;
   oauthError: string;
@@ -106,6 +108,7 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     fieldDisplayName: auth_field_display_name(undefined, { locale }),
     displayNamePlaceholder: auth_display_name_placeholder(undefined, { locale }),
     passwordMinPlaceholder: auth_password_min_placeholder(undefined, { locale }),
+    confirmPasswordPlaceholder: auth_confirm_password_placeholder(undefined, { locale }),
     fieldConfirmPassword: auth_field_confirm_password(undefined, { locale }),
     haveAccountPrompt: auth_have_account_prompt(undefined, { locale }),
     oauthError: auth_oauth_error(undefined, { locale }),

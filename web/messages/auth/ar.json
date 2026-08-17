@@ -24,6 +24,7 @@
   "auth_field_display_name": "الاسم المعروض",
   "auth_display_name_placeholder": "اسمك",
   "auth_password_min_placeholder": "12 حرفًا على الأقل",
+  "auth_confirm_password_placeholder": "أعد إدخال كلمة المرور",
   "auth_field_confirm_password": "تأكيد كلمة المرور",
   "auth_have_account_prompt": "لديك حساب بالفعل؟",
   "auth_oauth_error": "تعذّر بدء تسجيل الدخول. حاول مرة أخرى.",

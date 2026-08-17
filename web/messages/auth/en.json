@@ -24,6 +24,7 @@
   "auth_field_display_name": "Display name",
   "auth_display_name_placeholder": "Your name",
   "auth_password_min_placeholder": "At least 12 characters",
+  "auth_confirm_password_placeholder": "Re-enter your password",
   "auth_field_confirm_password": "Confirm password",
   "auth_have_account_prompt": "Already have an account?",
   "auth_oauth_error": "Couldn't start sign-in. Please try again.",

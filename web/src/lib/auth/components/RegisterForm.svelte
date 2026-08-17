@@ -189,6 +189,7 @@
           label={copy.fieldConfirmPassword}
           autocomplete="new-password"
           minlength={12}
+          placeholder={copy.confirmPasswordPlaceholder}
           value={field.state.value}
           error={fieldError(field.state.meta.errors) ??
             registerErrors.current.confirm_password ??
