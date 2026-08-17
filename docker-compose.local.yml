@@ -11,6 +11,10 @@
 #
 # Then visit http://localhost:8080  (stop with: docker compose down)
 services:
+  quran-init:
+    # Same as web/api below: the base compose's `pull_policy: always` would
+    # overwrite the locally built image with the registry copy.
+    pull_policy: never
   web:
     # `just docker-up local` builds both images on this machine; the base compose's
     # `pull_policy: always` (for CI's mutable `latest`) would overwrite them with the

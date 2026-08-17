@@ -6,8 +6,9 @@
 # file or directory". At the root they agree. Run locally with `docker compose
 # up` from the repo root.
 #
-# This stack builds nothing. Images come from the registry, built and pushed from a dev
-# machine with `just images` / `just push` (see deploy/README.md → Images). Override the
+# This stack builds nothing. Images come from the registry, built and pushed by CI
+# (.github/workflows/images.yml, every master push/tag) or by hand from a dev machine
+# (`just images` / `just push`; see deploy/README.md → Images). Override the
 # coordinates with REGISTRY and VERSION in .env; VERSION defaults to `latest`.
 #
 # Routing (from the labels), all on DOMAIN:
@@ -19,11 +20,27 @@
 name: ${PROJECT:-easyquran}
 
 services:
+  # One-shot corpus provisioner: fills quran_data (or the QURAN_DB_DIR bind) from
+  # the public R2 base, then exits 0. Idempotent per file — every redeploy re-runs
+  # it in seconds and picks up newly published translations only. No hashing;
+  # a corrupted download dies on the SQLite magic-header assert. Runs as root so
+  # it can write into a fresh volume or a host bind regardless of ownership;
+  # files land 0644 and the api (appuser, :ro) only reads them.
+  quran-init:
+    image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-api:${VERSION:-latest}
+    pull_policy: always
+    container_name: ${PROJECT:-easyquran}_quran-init
+    user: "0:0"
+    entrypoint: ["/app/provision-quran.sh"]
+    volumes:
+      - ${QURAN_DB_DIR:-quran_data}:/app/quran
+    restart: "no"
+
   web:
-    # No `build:` on purpose. Images are built on a developer machine (`just images`) and
-    # pushed to the registry (`just push`); this stack only ever PULLS. Building the web
-    # image from source inside Docker — toolchain install, CA certs, sqlite prerender — was
-    # the single most failure-prone step in the deploy and is gone.
+    # No `build:` on purpose. Images are built and pushed by CI (.github/workflows/images.yml)
+    # or by hand from a developer machine (`just images` / `just push`); this stack only ever
+    # PULLS. Building the web image from source inside Docker — toolchain install, CA certs,
+    # sqlite prerender — was the single most failure-prone step in the deploy and is gone.
     # PUBLIC_* are runtime $env/dynamic/public (NOT build-baked) and are set in
     # web.environment below, so a new PUBLIC_* value needs no new image.
     image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-web:${VERSION:-latest}
@@ -82,7 +99,8 @@ services:
     restart: unless-stopped
 
   api:
-    # Pull-only, same as web — built by `just image-api` (cargo-zigbuild) and pushed.
+    # Pull-only, same as web — built natively by CI (images.yml) or cross-compiled by hand
+    # (`just image-api`, cargo-zigbuild) and pushed.
     image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-api:${VERSION:-latest}
     pull_policy: always
     container_name: ${PROJECT:-easyquran}_api
@@ -113,15 +131,21 @@ services:
       MAIL_PROVIDER: ${MAIL_PROVIDER:-none}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@easyquran.fyi}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-EasyQuran}
+    # The corpus volume must be full before boot — the api fails fast (§4) on an
+    # incomplete catalogue, so without this gate it crashloops through the first
+    # deploy until quran-init finishes.
+    depends_on:
+      quran-init:
+        condition: service_completed_successfully
     volumes:
       - api_data:/app/data
-      # Immutable Quran sources (read-only). 1:1 with the /app/quran ENV paths in
-      # Dockerfile.api. db/ is gitignored: the DBs live in R2 and must be provisioned onto
-      # the host (incl. the Dokploy checkout) before the api starts — a clone alone has none.
-      # QURAN_DB_DIR points the mount outside the checkout on a managed host: Dokploy owns
-      # the code directory and re-syncs it per deploy, so ~130 MB of gitignored databases
-      # sitting inside it are at the mercy of that sync. Local dev keeps the in-repo default.
-      - ${QURAN_DB_DIR:-./db/quran}:/app/quran:ro
+      # Immutable Quran sources (read-only), 1:1 with the /app/quran ENV paths in
+      # Dockerfile.api. Default: the quran_data volume, filled by the quran-init
+      # one-shot service — no host provisioning, survives code-dir re-syncs.
+      # QURAN_DB_DIR=<absolute path> switches to a host bind mount instead
+      # (quran-init then fills that path; the value must be absolute or compose
+      # reads it as a volume name).
+      - ${QURAN_DB_DIR:-quran_data}:/app/quran:ro
     networks:
       proxy:
         aliases: [api]
@@ -153,3 +177,4 @@ networks:
 volumes:
   api_data: {}
   web_quran_cache: {}
+  quran_data: {}

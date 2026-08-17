@@ -3,6 +3,8 @@
 # so exclude everything and re-include just that path.
 *
 !rust/target/aarch64-unknown-linux-gnu/release/ruxlog
+!deploy/provision-quran.sh
+!web/src/lib/data/translations.json
 
 **/.env
 **/.env.*

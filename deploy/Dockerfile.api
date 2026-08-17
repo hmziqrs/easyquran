@@ -1,28 +1,42 @@
 # EasyQuran API — packaging only. NOTHING is compiled here.
 #
-# `ruxlog` is cross-compiled on your machine by `just image-api`
-# (cargo-zigbuild -> aarch64-unknown-linux-gnu.2.36, glibc 2.36 floor so the binary runs on
-# anything from Debian 12 / Ubuntu 22.04 up). Deploy target is arm64 Ubuntu, same arch as the
-# Apple Silicon host, so this is a cross-OS build only — no emulation anywhere.
+# The `ruxlog` binary is built outside this Dockerfile — natively by CI
+# (cargo build --target aarch64-unknown-linux-gnu, .github/workflows/images.yml) or
+# cross-compiled on a dev machine via `just image-api` (cargo-zigbuild ->
+# aarch64-unknown-linux-gnu.2.36, glibc 2.36 floor so the binary runs on anything from
+# Debian 12 / Ubuntu 22.04 up). Either way it lands in
+# rust/target/aarch64-unknown-linux-gnu/release/ruxlog, which this image COPYs. Deploy
+# target is arm64 Ubuntu, same arch as the Apple Silicon host, so the by-hand path is a
+# cross-OS build only — no emulation anywhere.
 #
-# Build via `just image-api`; a bare `docker build -f deploy/Dockerfile.api .` fails on the
-# missing binary COPY, by design.
+# Build via CI or `just image-api`; a bare `docker build -f deploy/Dockerfile.api .` fails
+# on the missing binary COPY, by design.
 #
 # Context = repo root, filtered by deploy/Dockerfile.api.dockerignore (the root .dockerignore
 # excludes **/target, which is exactly where the binary lives).
 FROM debian:trixie-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl jq \
     && rm -rf /var/lib/apt/lists/* && useradd -r -u 10001 appuser \
     # Pre-create + own /app/data so appuser can write the SQLite file. Without
     # this, the named volume mounts root-owned and the app can't create its db.
-    && mkdir -p /app/data && chown -R appuser /app/data
+    # /app/quran likewise: an empty named volume inherits this dir's ownership,
+    # keeping the corpus tree appuser-consistent.
+    && mkdir -p /app/data /app/quran && chown -R appuser /app/data /app/quran
 
 # Statically-vendored OpenSSL (the `vendored-openssl` cargo feature) — no libssl runtime dep.
 COPY rust/target/aarch64-unknown-linux-gnu/release/ruxlog /app/ruxlog
 
-# Quran sources are provided at runtime by the read-only compose bind mount of
-# db/quran → /app/quran (see docker-compose.yml). ENV paths below target that mount.
+# Corpus provisioning: the one-shot quran-init compose service runs this script
+# (same image, root user) to fill the quran_data volume from the public R2 base.
+# jq reads the translation file names out of the baked catalogue — the deploy
+# host has no repo checkout, no node, no python3.
+COPY --chmod=0755 deploy/provision-quran.sh /app/provision-quran.sh
+COPY web/src/lib/data/translations.json /app/manifest/translations.json
+
+# Quran sources are provided at runtime by the quran_data volume (or the
+# QURAN_DB_DIR bind escape hatch), filled by quran-init — see docker-compose.yml.
+# ENV paths below target that mount.
 
 ENV QURAN_UTHMANI_PATH=/app/quran/arabic/quran-uthmani.sqlite \
     QURAN_SIMPLE_CLEAN_PATH=/app/quran/arabic/quran-simple-clean.sqlite \
