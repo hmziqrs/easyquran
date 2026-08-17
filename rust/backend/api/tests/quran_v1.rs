@@ -206,8 +206,12 @@ async fn full_app() -> axum::Router {
         .layer(middleware::from_fn(client_ip::resolve_client_ip))
         .layer(ip_source.clone().into_extension())
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(axum::Extension(state.clone()))
+        // Extension(state) MUST be layered outer to origin_guard (mirrors main.rs):
+        // axum runs last-added-first, so this order makes the Extension insert visible
+        // to origin_guard's req.extensions().get::<AppState>(). Inner (as before) left
+        // the guard with no AppState -> it rejected every Origin header.
         .layer(middleware::from_fn(ruxlog::middlewares::cors::origin_guard))
+        .layer(axum::Extension(state.clone()))
         .layer(middleware::from_fn(
             ruxlog::middlewares::static_csrf::csrf_guard,
         ))
@@ -966,6 +970,45 @@ async fn phase_1a_auth_regression_on_merged_router() {
     assert!(
         resp.headers().get(header::SET_COOKIE).is_none(),
         "public branch must not set a session cookie"
+    );
+}
+
+// Regression: origin_guard reads AppState via req.extensions().get::<AppState>(),
+// so Extension(state) must be layered OUTER to it (see full_app + main.rs). When the
+// ordering was broken the guard saw no AppState and rejected EVERY Origin header —
+// including allowed dev origins. The off-origin rejection test above cannot catch
+// this (rejection happens either way); this asserts an ALLOWED origin traverses.
+#[tokio::test]
+async fn origin_guard_accepts_allowed_origin_on_private_router() {
+    std::env::set_var(
+        "COOKIE_KEY",
+        "test_cookie_key_padded_to_more_than_32_bytes_for_tests",
+    );
+    let app = full_app().await;
+
+    // http://localhost:8080 is a dev-default origin (build_allowed_origins(false, ..)).
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/healthz")
+                .header(header::ORIGIN, "http://localhost:8080")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "allowed dev origin must pass origin_guard (got {}); a 403 BIZ_001 here means \
+         Extension(state) is not layered outer to origin_guard",
+        resp.status()
+    );
+    assert!(
+        resp.status().is_success(),
+        "healthz with an allowed origin should be 2xx (got {})",
+        resp.status()
     );
 }
 

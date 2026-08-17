@@ -163,6 +163,8 @@ pub fn dev_default_origins(admin_port: Option<&str>, consumer_port: Option<&str>
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8888",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
@@ -521,6 +523,10 @@ mod tests {
         assert!(
             names.contains(&"http://localhost:8080"),
             "localhost kept in dev"
+        );
+        assert!(
+            names.contains(&"http://localhost:5173"),
+            "Vite dev server origin kept in dev"
         );
         assert!(
             names.contains(&"http://192.168.0.101:3333"),
