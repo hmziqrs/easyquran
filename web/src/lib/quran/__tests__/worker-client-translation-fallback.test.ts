@@ -211,8 +211,6 @@ describe("withSourceFallback via readSurah", () => {
     expect(ensure).toBeDefined();
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await vi.advanceTimersByTimeAsync(0);
-    // API failed: the re-check forces the worker read (download-then-read for a cold
-    // source) instead of only re-probing hasTranslation.
     respondReadSurah(fake, { downloaded: true });
     await expect(p).resolves.toBe(DECODED_SURAH);
     expect(apiReads.readSurah).toHaveBeenCalledTimes(1);
@@ -226,8 +224,6 @@ describe("withSourceFallback via readSurah", () => {
     await vi.advanceTimersByTimeAsync(0);
     respondHasTranslation(fake, false);
     await vi.advanceTimersByTimeAsync(0);
-    // The miss fires onMiss (ensureTranslation) and, with no apiBase, the forced
-    // worker read posts immediately after it — no API leg in between.
     const ensure = fake.posted.find((m) => m.type === "ensureTranslation");
     expect(ensure).toBeDefined();
     fake.emit("message", { id: ensure!.id, ok: true, result: null });
@@ -306,8 +302,6 @@ describe("withSourceFallback without a worker", () => {
       expect(err).toBeInstanceOf(ReadChainError);
       // SAFETY: the preceding toBeInstanceOf(ReadChainError) check pins err's constructor before the cast
       expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
-      // The post-API-failure re-check forces a translation read even without a started
-      // worker, so the absent engine is now recorded as the worker failure.
       // SAFETY: same ReadChainError instance confirmed two assertions above
       expect((err as ReadChainError).workerFailure).toEqual({ kind: "worker" });
     }

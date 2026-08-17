@@ -44,8 +44,6 @@ interface Pending {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-// A forced cold translation read rides on the worker's on-demand artifact download, so it
-// must outlive the worker's full transfer budget (open + validate + query ride on top).
 const COLD_TRANSLATION_READ_TIMEOUT_MS = DOWNLOAD_BUDGET_MS + 5_000;
 
 let worker: Worker | null = null;
@@ -168,12 +166,6 @@ interface SourceFallbackArgs<T> {
   onStatus?: (status: ReadTierStatus) => void;
   hedgeAfterMs?: number;
   signal?: AbortSignal;
-  /**
-   * Translation sources: their worker read downloads the sqlite on demand, so "not cached"
-   * does not mean "cannot serve". After an API failure — or when no read API is configured —
-   * the final local attempt sends the read directly (download-then-read in the worker)
-   * instead of only re-probing hasLocal, which would miss while the download is in flight.
-   */
   coldLocalRead?: boolean;
 }
 
@@ -190,10 +182,6 @@ async function attemptLocal<T>(
   force = false,
 ): Promise<{ value: T } | null> {
   if (force) {
-    // A forced read only makes sense once the engine is up: boot downloads the pinned
-    // Arabic corpora first, so a session's first translated read can land while isReady
-    // is still false. whenReady is bounded (30s) and its rejection falls through to the
-    // typed failure below.
     if (!isReady && startPromise) await quranWorker.whenReady().catch(() => undefined);
   } else {
     let local: boolean;
@@ -390,8 +378,6 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
       return recheck.value;
     }
   } else if (args.coldLocalRead) {
-    // No read API configured at all: a cold translation is still fully servable by the
-    // worker, which downloads the sqlite from its artifact store and reads it locally.
     const forced = await attemptLocal(args, state, true);
     if (forced) {
       args.onStatus?.({ servedBy: "local" });
