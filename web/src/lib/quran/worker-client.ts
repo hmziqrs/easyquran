@@ -34,6 +34,7 @@ import {
   decodeTranslationSurahText,
   type AyahCoordinateValidator,
 } from "./wire";
+import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
 
 interface Pending {
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- stores Promise resolvers for request<T> across every T; the worker reply is validated by each caller's decode() fn
@@ -43,6 +44,7 @@ interface Pending {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const COLD_TRANSLATION_READ_TIMEOUT_MS = DOWNLOAD_BUDGET_MS + 5_000;
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -164,6 +166,7 @@ interface SourceFallbackArgs<T> {
   onStatus?: (status: ReadTierStatus) => void;
   hedgeAfterMs?: number;
   signal?: AbortSignal;
+  coldLocalRead?: boolean;
 }
 
 interface FallbackState {
@@ -176,26 +179,36 @@ interface FallbackState {
 async function attemptLocal<T>(
   args: SourceFallbackArgs<T>,
   state: FallbackState,
+  force = false,
 ): Promise<{ value: T } | null> {
-  let local: boolean;
-  const probe = args.hasLocal();
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
-  if (typeof probe === "boolean") {
-    local = probe;
+  if (force) {
+    if (!isReady && startPromise) await quranWorker.whenReady().catch(() => undefined);
   } else {
-    try {
-      local = await probe;
-    } catch (e) {
-      if (!state.workerFailure) {
-        state.workerFailure = classifyWorkerFailure(e);
-        state.workerError = e;
+    let local: boolean;
+    const probe = args.hasLocal();
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
+    if (typeof probe === "boolean") {
+      local = probe;
+    } else {
+      try {
+        local = await probe;
+      } catch (e) {
+        if (!state.workerFailure) {
+          state.workerFailure = classifyWorkerFailure(e);
+          state.workerError = e;
+        }
+        return null;
       }
-      return null;
     }
+    if (!local) return null;
   }
-  if (!local) return null;
   try {
-    const decoded = args.decode(await request<unknown>(args.workerReq));
+    const decoded = args.decode(
+      await request<unknown>(
+        args.workerReq,
+        force ? COLD_TRANSLATION_READ_TIMEOUT_MS : DEFAULT_TIMEOUT_MS,
+      ),
+    );
     if (decoded) return { value: decoded };
     if (!state.workerFailure) state.workerFailure = { kind: "malformed" };
   } catch (e) {
@@ -324,7 +337,7 @@ async function hedgedSourceFallback<T>(
     return winner.value;
   }
   if (state.apiFailure) {
-    const recheck = await attemptLocal(args, state);
+    const recheck = await attemptLocal(args, state, args.coldLocalRead === true);
     if (recheck) {
       args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
       return recheck.value;
@@ -359,10 +372,16 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
     } catch (e) {
       state.apiFailure = classifyApiFailure(e);
     }
-    const recheck = await attemptLocal(args, state);
+    const recheck = await attemptLocal(args, state, args.coldLocalRead === true);
     if (recheck) {
       args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
       return recheck.value;
+    }
+  } else if (args.coldLocalRead) {
+    const forced = await attemptLocal(args, state, true);
+    if (forced) {
+      args.onStatus?.({ servedBy: "local" });
+      return forced.value;
     }
   }
 
@@ -506,6 +525,7 @@ export const quranWorker = {
       onStatus,
       hedgeAfterMs: options?.hedgeAfterMs,
       signal: options?.signal,
+      coldLocalRead: true,
     });
   },
 
@@ -542,6 +562,7 @@ export const quranWorker = {
       onStatus,
       hedgeAfterMs: options?.hedgeAfterMs,
       signal: options?.signal,
+      coldLocalRead: true,
     });
   },
 

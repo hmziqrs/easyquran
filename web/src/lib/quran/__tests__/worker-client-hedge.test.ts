@@ -224,9 +224,6 @@ describe("hedged translation reads", () => {
     respondHasTranslation(fake, true);
     await vi.advanceTimersByTimeAsync(0);
     respondReadRange(fake);
-    // Post-failure recheck.
-    await vi.advanceTimersByTimeAsync(0);
-    respondHasTranslation(fake, true);
     await vi.advanceTimersByTimeAsync(0);
     respondReadRange(fake);
     await expect(p).rejects.toBeInstanceOf(ReadChainError);
