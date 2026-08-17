@@ -1,0 +1,209 @@
+# Build + push the two runtime images, then poke Dokploy to redeploy.
+#
+# Mirrors `just images` / `just push` exactly, with one simplification: the runners are
+# arm64 (`ubuntu-24.04-arm`, the deploy target's arch), so nothing cross-compiles. cargo
+# builds natively into rust/target/aarch64-unknown-linux-gnu/release — the path
+# deploy/Dockerfile.api COPYs from — and no zig, no qemu, no buildx emulation is involved.
+#
+# Both Dockerfiles are packaging-only: the artifacts are produced by these jobs and COPYed
+# in. That is why each build job does its own toolchain work before touching Docker.
+#
+# db/ is gitignored, so the web build's Arabic prerender has no databases in a fresh clone:
+# deploy/fetch-quran-db.sh pulls them from the public R2 base (see that script), cached
+# between runs because the corpus is immutable.
+name: images
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Redeploy on Dokploy after pushing the images"
+        type: boolean
+        default: true
+
+# One build per ref. A superseded master push has nothing worth finishing.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Same coordinates the justfile and docker-compose.yml resolve: ghcr.io/<owner>/easyquran-*
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      push: ${{ github.event_name != 'pull_request' }}
+    steps:
+      # A tag ships its own name (v1.2.0); a branch build ships the short sha. This value
+      # only lands in the image's OCI version label — the registry tags come from
+      # docker/metadata-action below.
+      - id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+  web:
+    needs: meta
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+
+      # Root package.json declares pnpm under devEngines (not packageManager), which
+      # action-setup cannot read — keep this pinned to the same version.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The Quran corpus is immutable and unversioned, so the cache key tracks the baked
+      # maps that name the artifacts, not the bytes.
+      - name: Cache Quran databases
+        uses: actions/cache@v4
+        with:
+          path: db/quran
+          key: quran-db-${{ hashFiles('web/src/lib/quran/view/source-profiles.ts') }}
+
+      - run: deploy/fetch-quran-db.sh
+
+      - run: pnpm install --frozen-lockfile
+
+      # adapter-node output is pure JS (arch-independent); the sqlite prerender runs on Node
+      # here because bun does not implement node:sqlite.
+      - run: pnpm --filter web build
+        env:
+          PUBLIC_ENV: prod
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: needs.meta.outputs.push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: tags
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/easyquran-web
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          platforms: linux/arm64
+          push: ${{ needs.meta.outputs.push == 'true' }}
+          build-args: VERSION=${{ needs.meta.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.tags.outputs.labels }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  api:
+    needs: meta
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          # The vendored OpenSSL build lives in target/ and is expensive; keep it cached
+          # even when a build fails partway.
+          cache-on-failure: true
+
+      # `--target` (rather than a bare release build) puts the binary at the path
+      # Dockerfile.api COPYs. `vendored-openssl` is not a cross-build workaround here — the
+      # runtime image (debian:trixie-slim) carries no libssl, so the binary must not link
+      # one dynamically.
+      - name: Build ruxlog
+        working-directory: rust
+        run: |
+          cargo build --release --locked -p ruxlog \
+            --features vendored-openssl \
+            --target aarch64-unknown-linux-gnu
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: needs.meta.outputs.push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: tags
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/easyquran-api
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.api
+          platforms: linux/arm64
+          push: ${{ needs.meta.outputs.push == 'true' }}
+          build-args: VERSION=${{ needs.meta.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.tags.outputs.labels }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  # Dokploy pulls; it never builds. Both images must exist before it redeploys, otherwise it
+  # restarts the stack on the previous digests.
+  deploy:
+    needs: [meta, web, api]
+    if: needs.meta.outputs.push == 'true' && (github.event_name != 'workflow_dispatch' || inputs.deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Redeploy on Dokploy
+        env:
+          WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          if [ -n "$WEBHOOK" ]; then
+            echo "Triggering the Dokploy compose webhook"
+            curl -fsS -X POST -H 'content-type: application/json' -d '{}' "$WEBHOOK"
+            exit 0
+          fi
+          if [ -n "$DOKPLOY_URL" ] && [ -n "$DOKPLOY_API_KEY" ] && [ -n "$DOKPLOY_COMPOSE_ID" ]; then
+            echo "Calling compose.deploy on ${DOKPLOY_URL}"
+            curl -fsS -X POST "${DOKPLOY_URL%/}/api/compose.deploy" \
+              -H "x-api-key: ${DOKPLOY_API_KEY}" \
+              -H 'content-type: application/json' \
+              -d "{\"composeId\":\"${DOKPLOY_COMPOSE_ID}\"}"
+            exit 0
+          fi
+          echo "::warning::No Dokploy secret configured — images are pushed, deploy skipped."

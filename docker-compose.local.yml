@@ -12,6 +12,10 @@
 # Then visit http://localhost:8080  (stop with: docker compose down)
 services:
   web:
+    # `just docker-up local` builds both images on this machine; the base compose's
+    # `pull_policy: always` (for CI's mutable `latest`) would overwrite them with the
+    # registry copy.
+    pull_policy: never
     environment:
       ORIGIN: http://localhost:8080
       # Base compose derives https://${DOMAIN}/api with DOMAIN=localhost — broken
@@ -22,6 +26,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
   api:
+    pull_policy: never
     environment:
       # Flip the production boot gates off for local docker dev (the base
       # hardcodes RUST_ENV=production / IP_SOURCE=CfConnectingIp).

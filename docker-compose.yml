@@ -27,6 +27,9 @@ services:
     # PUBLIC_* are runtime $env/dynamic/public (NOT build-baked) and are set in
     # web.environment below, so a new PUBLIC_* value needs no new image.
     image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-web:${VERSION:-latest}
+    # CI republishes the mutable `latest` tag on every master push; without this a redeploy
+    # would restart the cached digest and silently ship the previous build.
+    pull_policy: always
     container_name: ${PROJECT:-easyquran}_web
     environment:
       HOST: "0.0.0.0"
@@ -81,6 +84,7 @@ services:
   api:
     # Pull-only, same as web — built by `just image-api` (cargo-zigbuild) and pushed.
     image: ${REGISTRY:-ghcr.io/hmziqrs}/easyquran-api:${VERSION:-latest}
+    pull_policy: always
     container_name: ${PROJECT:-easyquran}_api
     env_file: [.env]
     environment:

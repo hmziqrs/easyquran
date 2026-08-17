@@ -82,6 +82,12 @@ api-lint:
 api-fmt:
     cd rust && cargo fmt --all
 
+# Provision the immutable Quran DBs into db/ (gitignored). `mode=all` also pulls every
+# translation sqlite — needed by the api's bind mount, not by the web build. Read-only
+# public GETs, no credentials; publishing is still `just upload-sqlite`.
+quran-fetch mode="arabic":
+    deploy/fetch-quran-db.sh {{mode}}
+
 upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
     cd db/quran/translations && npm run upload:sqlite -- {{args}}

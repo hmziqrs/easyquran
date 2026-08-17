@@ -68,6 +68,11 @@ fails on pull.
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
   compose file.
+- `fetch-quran-db.sh` (`just quran-fetch [arabic|all]`) — provisions the immutable Quran
+  databases into gitignored `db/` from the public R2 base: read-only HTTPS GETs, no
+  credentials, keys taken from the baked maps. `arabic` is what the web build's prerender
+  needs; `all` adds the translation sqlites the api serves off its bind mount. Publishing
+  remains `just upload-sqlite`.
 - `../web/scripts/assert-headers.sh` — asserts the HTTP delivery contract
   against a running origin; run it before shipping (see checklist).
 - `.env.example` — config (copy to `.env`).
@@ -120,7 +125,8 @@ Arabic output and immutable assets.
 
 ## Release
 
-Dokploy no longer builds anything — a git push alone ships nothing. Releasing is:
+Dokploy no longer builds anything. Images ship either from CI
+(`.github/workflows/images.yml`) or by hand from a dev machine:
 
 ```bash
 just push v1.0.0                  # host build → both images → registry

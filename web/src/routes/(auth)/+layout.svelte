@@ -30,9 +30,14 @@
 </script>
 
 <Container width="narrow" class="flex min-h-[70vh] flex-col justify-center py-16">
-  {#if ready}
-    <main id="main" class="mx-auto w-full max-w-[420px]">{@render children()}</main>
-  {:else}
-    <p class="text-center text-sm text-fg-2" role="status" aria-live="polite">Checking your session…</p>
-  {/if}
+  <!-- `main#main` renders unconditionally: the root layout's skip link targets #main, and
+       gating it behind `ready` left prerendered auth pages without the anchor, failing the
+       build with `no element with id="main" exists`. -->
+  <main id="main" class="mx-auto w-full max-w-[420px]">
+    {#if ready}
+      {@render children()}
+    {:else}
+      <p class="text-center text-sm text-fg-2" role="status" aria-live="polite">Checking your session…</p>
+    {/if}
+  </main>
 </Container>

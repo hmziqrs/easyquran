@@ -32,6 +32,8 @@ rust/**/target/
 # Quran databases live in R2, never in git. Provisioned into db/ out of band.
 db/
 
+DEPLOYMENT.md
+
 .commandcode
 .cache
 .claude/skills
