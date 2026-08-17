@@ -142,8 +142,8 @@ fn packaging(surah: u16) -> OpenerPackagingDto {
 
 fn source_profile(script: Script) -> String {
     match script {
-        Script::Uthmani => "uthmani-581cc540".to_string(),
-        Script::SimpleClean => "simple-clean-a0c52760".to_string(),
+        Script::Uthmani => "tanzil-uthmani-581cc540".to_string(),
+        Script::SimpleClean => "tanzil-simple-clean-a0c52760".to_string(),
     }
 }
 

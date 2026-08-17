@@ -12,22 +12,22 @@
     {
       "input": "ا۞ب",
       "expected": "ا۞ب",
-      "rule": "U+06DE rub-el-hizb KEPT — quran.com indexes ornaments as searchable tokens (199 verses in Uthmani)"
+      "rule": "U+06DE rub-el-hizb KEPT — ornaments are searchable tokens (199 verses in Uthmani)"
     },
     {
       "input": "اۥۦ۩",
       "expected": "اۥۦ۩",
-      "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda KEPT (quran.com parity — searchable)"
+      "rule": "U+06E5 small-waw + U+06E6 small-yeh + U+06E9 sajda KEPT (standalone — searchable)"
     },
     {
       "input": "بۗر",
       "expected": "بۗر",
-      "rule": "U+06D7 stop mark KEPT (quran.com parity — searchable)"
+      "rule": "U+06D7 stop mark KEPT (standalone — searchable)"
     },
     {
       "input": "الضآلين",
       "expected": "الضالين",
-      "rule": "U+0653 maddah STRIPPED (intra-cluster) so a bare query matches Uthmani's decomposed alef-madda — matches quran.com index behavior"
+      "rule": "U+0653 maddah STRIPPED (intra-cluster) so a bare query matches Uthmani's decomposed alef-madda"
     }
   ]
 }

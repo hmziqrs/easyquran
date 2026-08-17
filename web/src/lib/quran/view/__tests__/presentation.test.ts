@@ -11,7 +11,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 const normalization: SurahNormalization = {
   surah: 2,
-  sourceId: QuranSourceId.Uthmani,
+  sourceId: QuranSourceId.TanzilUthmani,
   script: QuranScript.Uthmani,
   sourceProfile: "fixture",
   packaging: OpenerPackaging.EmbeddedPrefix,
@@ -41,7 +41,7 @@ describe("canonical reader presentation", () => {
   it("uses the same descriptor for a full surah body and header", () => {
     expect(
       displayVerses({
-        sourceId: QuranSourceId.Uthmani,
+        sourceId: QuranSourceId.TanzilUthmani,
         script: QuranScript.Uthmani,
         verses: [first.text, second.text],
         normalization,

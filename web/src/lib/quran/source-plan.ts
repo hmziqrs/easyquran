@@ -23,10 +23,10 @@ type ArabicQuranSourcePlan = {
 };
 
 export const DEFAULT_QURAN_SOURCE_PLAN: ArabicQuranSourcePlan = Object.freeze({
-  reader: QuranSourceId.Uthmani,
+  reader: QuranSourceId.TanzilUthmani,
   search: Object.freeze({
-    match: QuranSourceId.Uthmani,
-    display: QuranSourceId.Uthmani,
+    match: QuranSourceId.TanzilUthmani,
+    display: QuranSourceId.TanzilUthmani,
   }),
 });
 

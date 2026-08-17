@@ -138,14 +138,14 @@ describe("canonical search wire", () => {
 
 describe("normalized surah Worker wire", () => {
   const payload = {
-    sourceId: QuranSourceId.Uthmani,
+    sourceId: QuranSourceId.TanzilUthmani,
     script: QuranScript.Uthmani,
     verses: ["raw first", "raw second"],
     normalization: {
       surah: 2,
-      sourceId: QuranSourceId.Uthmani,
+      sourceId: QuranSourceId.TanzilUthmani,
       script: QuranScript.Uthmani,
-      sourceProfile: "uthmani-581cc540",
+      sourceProfile: "tanzil-uthmani-581cc540",
       packaging: OpenerPackaging.EmbeddedPrefix,
       openerKind: OpenerKind.Header,
       openerText: "opener",
@@ -183,9 +183,9 @@ describe("normalized surah Worker wire", () => {
 describe("coordinate-aware range Worker wire", () => {
   const normalization = {
     surah: 2,
-    sourceId: QuranSourceId.Uthmani,
+    sourceId: QuranSourceId.TanzilUthmani,
     script: QuranScript.Uthmani,
-    sourceProfile: "uthmani-581cc540",
+    sourceProfile: "tanzil-uthmani-581cc540",
     packaging: OpenerPackaging.EmbeddedPrefix,
     openerKind: OpenerKind.Header,
     openerText: "opener",
@@ -226,8 +226,8 @@ describe("coordinate-aware range Worker wire", () => {
 
 describe("manifest wire", () => {
   const scripts = [
-    { id: QuranSourceId.Uthmani, sizeBytes: 1, downloadUrl: "https://x/u" },
-    { id: QuranSourceId.SimpleClean, sizeBytes: 2, downloadUrl: "https://x/s" },
+    { id: QuranSourceId.TanzilUthmani, sizeBytes: 1, downloadUrl: "https://x/u" },
+    { id: QuranSourceId.TanzilSimpleClean, sizeBytes: 2, downloadUrl: "https://x/s" },
   ];
 
   it("decodes registered script ids and script envelopes", () => {
@@ -368,7 +368,7 @@ describe("translation range Worker wire", () => {
 
 describe("translation sources manifest wire", () => {
   const arabic = {
-    id: QuranSourceId.Uthmani,
+    id: QuranSourceId.TanzilUthmani,
     sizeBytes: 1,
     downloadUrl: "https://x/u",
   };
@@ -573,8 +573,8 @@ describe("translation route loaders", () => {
 describe("baked artifact delivery contract", () => {
   const baked: BakedArtifactEntry = {
     sizeBytes: 100,
-    r2Path: "/arabic/quran-uthmani.sqlite",
-    sameOriginDeliveryPath: "/_quran/arabic/quran-uthmani.sqlite",
+    r2Path: "/tanzil/arabic/quran-uthmani.sqlite",
+    sameOriginDeliveryPath: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
   };
 
   describe("buildArabicBakedMap", () => {
@@ -584,15 +584,15 @@ describe("baked artifact delivery contract", () => {
           {
             id: "uthmani",
             sizeBytes: 100,
-            downloadUrl: "/_quran/arabic/quran-uthmani.sqlite",
+            downloadUrl: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
           },
         ],
         "/_quran",
       );
       expect(map.get("uthmani")).toEqual({
         sizeBytes: 100,
-        r2Path: "/arabic/quran-uthmani.sqlite",
-        sameOriginDeliveryPath: "/_quran/arabic/quran-uthmani.sqlite",
+        r2Path: "/tanzil/arabic/quran-uthmani.sqlite",
+        sameOriginDeliveryPath: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
       });
     });
   });
@@ -600,17 +600,17 @@ describe("baked artifact delivery contract", () => {
   describe("parseArtifactUrl", () => {
     it("accepts a clean https url whose pathname equals the baked R2 path", () => {
       expect(
-        parseArtifactUrl("https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite", baked),
+        parseArtifactUrl("https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite", baked),
       ).toBeInstanceOf(URL);
     });
 
     it.each([
-      ["http origin", "http://r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
-      ["credentials", "https://user:pass@r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
-      ["query string", "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite?x=1"],
-      ["fragment", "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite#sec"],
+      ["http origin", "http://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ["credentials", "https://user:pass@r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
+      ["query string", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite?x=1"],
+      ["fragment", "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite#sec"],
       ["canonical path mismatch", "https://r2.easyquran.fyi/evil/quran-uthmani.sqlite"],
-      ["non-https scheme", "ftp://r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
+      ["non-https scheme", "ftp://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
     ])("rejects %s", (_label, url) => {
       expect(parseArtifactUrl(url, baked)).toBeNull();
     });
@@ -632,24 +632,24 @@ describe("baked artifact delivery contract", () => {
         validateArtifactAgainstBaked(
           "uthmani",
           100,
-          "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite",
+          "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite",
           map,
         ),
       ).toEqual({
         id: "uthmani",
         sizeBytes: 100,
-        downloadUrl: "/_quran/arabic/quran-uthmani.sqlite",
+        downloadUrl: "/_quran/tanzil/arabic/quran-uthmani.sqlite",
       });
     });
 
     it.each([
       [
         "unknown id",
-        ["missing", 100, "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
+        ["missing", 100, "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
       ],
       [
         "size mismatch",
-        ["uthmani", 101, "https://r2.easyquran.fyi/arabic/quran-uthmani.sqlite"],
+        ["uthmani", 101, "https://r2.easyquran.fyi/tanzil/arabic/quran-uthmani.sqlite"],
       ],
       ["path mismatch", ["uthmani", 100, "https://r2.easyquran.fyi/evil/quran-uthmani.sqlite"]],
     ])("rejects %s", (_label, [id, sizeBytes, downloadUrl]) => {

@@ -7,14 +7,14 @@ import type { RequestHandler } from "./$types";
 const TRANSLATION_FILE_PATH = 6;
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const ALLOWED_ARTIFACTS = new Set<string>([
-  "arabic/quran-uthmani.sqlite",
-  "arabic/quran-simple-clean.sqlite",
+  "tanzil/arabic/quran-uthmani.sqlite",
+  "tanzil/arabic/quran-simple-clean.sqlite",
   ...rawTranslations.map((row) => {
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- this IS the boundary parse of the baked catalogue row; a non-string artifact path must throw here.
     if (!Array.isArray(row) || typeof row[TRANSLATION_FILE_PATH] !== "string") {
       throw new Error("[quran-artifact] malformed baked translation catalogue");
     }
-    return `translations/${row[TRANSLATION_FILE_PATH]}`;
+    return `tanzil/translations/${row[TRANSLATION_FILE_PATH]}`;
   }),
 ]);
 

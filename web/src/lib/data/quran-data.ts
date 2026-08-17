@@ -25,7 +25,7 @@ export const SurahField = {
   Slug: 0,
   DisplayName: 1,
   ArabicName: 2,
-  Transliteration: 3,
+  TanzilTransliteration: 3,
   EnglishMeaning: 4,
   PlaceCode: 5,
   AyahCount: 6,
@@ -164,7 +164,7 @@ export function createQuranData(raw: QuranDataJson): QuranData {
       name: nonemptyString(row[SurahField.DisplayName], `Surah ${num} display name`),
       arabic: nonemptyString(row[SurahField.ArabicName], `Surah ${num} Arabic name`),
       transliteration: nonemptyString(
-        row[SurahField.Transliteration],
+        row[SurahField.TanzilTransliteration],
         `Surah ${num} transliteration`,
       ),
       meaning: nonemptyString(row[SurahField.EnglishMeaning], `Surah ${num} meaning`),

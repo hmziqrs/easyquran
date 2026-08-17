@@ -32,7 +32,7 @@ function applyHeaders(response: ServerResponse, pathname: string, statusCode: nu
     response.setHeader("Cache-Control", "no-store");
   } else if (
     pathname.startsWith("/_app/immutable/") ||
-    pathname.startsWith("/_quran/") ||
+    pathname.startsWith("/_quran/tanzil/") ||
     packPattern.test(pathname)
   ) {
     response.setHeader("Cache-Control", IMMUTABLE);

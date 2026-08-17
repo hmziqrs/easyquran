@@ -53,7 +53,7 @@ fn parse_source(
 }
 
 fn translation_profile(id: &str) -> String {
-    format!("translation-{id}")
+    format!("tanzil-{id}")
 }
 
 impl From<quran::ViewError> for QuranApiError {
@@ -810,7 +810,7 @@ async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
     let mut out = Vec::with_capacity(2);
     for (file, filename) in entries {
         let id = file.id.as_str().to_string();
-        let url = format!("{public_url}/arabic/{filename}");
+        let url = format!("{public_url}/tanzil/arabic/{filename}");
         match verify_head(&state.http_client, &url, file.size_bytes).await {
             Ok(true) => out.push(Artifact {
                 id,
@@ -908,7 +908,7 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
             "Simple Clean",
         ),
     ] {
-        let url = format!("{public_url}/arabic/{filename}");
+        let url = format!("{public_url}/tanzil/arabic/{filename}");
         candidates.push((
             SourceDto {
                 id: file.id.as_str().to_string(),
@@ -926,7 +926,7 @@ async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
     }
 
     for e in state.translation_pool.catalogue().values() {
-        let url = format!("{public_url}/translations/{}", e.path);
+        let url = format!("{public_url}/tanzil/translations/{}", e.path);
         candidates.push((
             SourceDto {
                 id: e.id.to_string(),

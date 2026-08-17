@@ -91,7 +91,7 @@ export function applyHeaders(response: Response, pathname: string, requestHasCoo
   const privateMode = requestHasCookie || responseSetsCookie(response);
   const isImmutableAsset =
     pathname.startsWith("/_app/immutable/") ||
-    pathname.startsWith("/_quran/") ||
+    pathname.startsWith("/_quran/tanzil/") ||
     packPattern.test(pathname);
   if (privateMode && !isImmutableAsset) {
     response.headers.set("Cache-Control", "private, no-store");

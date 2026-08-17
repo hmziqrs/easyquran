@@ -202,14 +202,14 @@ describe("reader engagement", () => {
       seedEngagedReader(TRANSLATION);
       const { noteReaderView } = await importEngagement();
       for (let i = 0; i < 6; i++) {
-        await noteReaderView(QuranSourceId.Uthmani);
+        await noteReaderView(QuranSourceId.TanzilUthmani);
         await flush();
       }
       expect(ensureTranslation).not.toHaveBeenCalled();
       const d = readDurable();
       expect(d?.totalViews).toBe(11);
       expect(d?.sourceViews[TRANSLATION]).toBe(2);
-      expect(d?.sourceViews[QuranSourceId.Uthmani]).toBeUndefined();
+      expect(d?.sourceViews[QuranSourceId.TanzilUthmani]).toBeUndefined();
     });
 
     it("reads the pre-bump sourceViews count for the gate", async () => {
@@ -365,14 +365,14 @@ describe("reader engagement", () => {
 
       seedReaderState({
         bookmarks: { "1:1": true },
-        sourceId: QuranSourceId.Uthmani,
+        sourceId: QuranSourceId.TanzilUthmani,
       });
       window.localStorage.removeItem(ENGAGEMENT_KEY);
       sessionStorage.removeItem(LEGACY_KEY);
       await noteReaderView("fr.hamidullah");
       await flush();
       const d2 = readDurable();
-      expect(d2?.sourceViews[QuranSourceId.Uthmani]).toBeUndefined();
+      expect(d2?.sourceViews[QuranSourceId.TanzilUthmani]).toBeUndefined();
       expect(d2?.sourceViews["fr.hamidullah"]).toBe(1);
     });
 

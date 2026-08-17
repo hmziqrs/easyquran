@@ -1,6 +1,6 @@
 export const QuranSourceId = {
-  Uthmani: "uthmani",
-  SimpleClean: "simple-clean",
+  TanzilUthmani: "uthmani",
+  TanzilSimpleClean: "simple-clean",
 } as const;
 export type QuranSourceId = (typeof QuranSourceId)[keyof typeof QuranSourceId];
 export const QURAN_SOURCE_IDS = Object.freeze(Object.values(QuranSourceId));

@@ -30,23 +30,23 @@ pub fn normalize_arabic(input: &str) -> (String, Vec<u32>) {
 pub fn contains_searchable_ornament(s: &str) -> bool {
     // The standalone Quranic ornaments kept by the normalizer (06D6–06DC, 06DE–06ED; 06DD is
     // stripped). A query built around one of these is eligible below MIN_QUERY_LEN so a lone
-    // mark search works like quran.com (۞→199, ۩→15) without relaxing the 3-char floor for text.
+    // mark search works (۞→199, ۩→15) without relaxing the 3-char floor for text.
     s.chars()
         .any(|c| matches!(c, '\u{06D6}'..='\u{06DC}' | '\u{06DE}'..='\u{06ED}'))
 }
 
 fn is_combining_mark(ch: char) -> bool {
-    // quran.com parity: the index strips intra-cluster combining marks (harakat, maddah
+    // The index strips intra-cluster combining marks (harakat, maddah
     // U+0653/U+0654, tatweel, superscript alef) so a bare query still matches Uthmani's
     // decomposed alef-madda. Standalone Quranic ornaments (U+06D6–U+06DC rub-el-hizb U+06DE,
     // small waw/yeh U+06E5/U+06E6, sajda U+06E9, signs U+06EA–U+06ED) are KEPT — they are
-    // searchable tokens, matching quran.com (۞→199, ۩→15). See docs/quran-system.md (Normalization).
+    // searchable tokens (۞→199, ۩→15). See docs/quran-system.md (Normalization).
     matches!(
         ch,
         '\u{064B}'..='\u{0658}' // harakat + maddah U+0653 / hamza-above U+0654 (intra-cluster).
             | '\u{0670}' // SUPERSCRIPT ALEF (consonant-chair role).
             | '\u{0640}' // TATWEEL.
-            | '\u{06DD}' // END OF AYAH (0 occurrences in our corpora; stripped for quran.com parity).
+            | '\u{06DD}' // END OF AYAH (0 occurrences in our corpora; stripped).
     )
 }
 

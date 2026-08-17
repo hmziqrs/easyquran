@@ -64,14 +64,14 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
 
   it("/scripts ArtifactSpec carries no sha256 (decoder ignores stray sha)", () => {
     const decoded = decodeScript({
-      id: QuranSourceId.Uthmani,
+      id: QuranSourceId.TanzilUthmani,
       sizeBytes: 1,
       downloadUrl: "https://x/u",
     });
     expect(decoded).not.toBeNull();
     expect(decoded).not.toHaveProperty("sha256");
     const stray = decodeScript({
-      id: QuranSourceId.Uthmani,
+      id: QuranSourceId.TanzilUthmani,
       sizeBytes: 1,
       downloadUrl: "https://x/u",
       sha256: "deadbeef",

@@ -18,7 +18,7 @@ describe("isEligibleQuery", () => {
     expect(isEligibleQuery(normalizeArabic("من"))).toBe(false);
   });
 
-  it("allows a lone Quranic ornament below the floor (quran.com parity)", () => {
+  it("allows a lone Quranic ornament below the floor", () => {
     expect(isEligibleQuery(normalizeArabic("۞"))).toBe(true);
     expect(isEligibleQuery(normalizeArabic("۩"))).toBe(true);
   });

@@ -34,7 +34,7 @@ function validRows(): QuranCoordinateRow[] {
 describe("assertStagedQuranContent content checks", () => {
   it("accepts a representative valid staged payload for an Arabic source", async () => {
     const validate = await realValidator();
-    expect(() => validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.Uthmani)).not.toThrow();
+    expect(() => validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.TanzilUthmani)).not.toThrow();
   });
 
   it("accepts a valid payload for a translation source (profile check skipped)", async () => {
@@ -45,7 +45,7 @@ describe("assertStagedQuranContent content checks", () => {
   it("rejects a tampered row count", async () => {
     const validate = await realValidator();
     const rows = validRows();
-    expect(() => validate(QURAN_ROW_COUNT - 1, rows, QuranSourceId.Uthmani)).toThrow(
+    expect(() => validate(QURAN_ROW_COUNT - 1, rows, QuranSourceId.TanzilUthmani)).toThrow(
       /row count/,
     );
   });
@@ -53,7 +53,7 @@ describe("assertStagedQuranContent content checks", () => {
   it("rejects a coordinate count that disagrees with the row count", async () => {
     const validate = await realValidator();
     const short = validRows().slice(0, QURAN_ROW_COUNT - 1);
-    expect(() => validate(QURAN_ROW_COUNT, short, QuranSourceId.Uthmani)).toThrow(
+    expect(() => validate(QURAN_ROW_COUNT, short, QuranSourceId.TanzilUthmani)).toThrow(
       /coordinate count/,
     );
   });
@@ -62,7 +62,7 @@ describe("assertStagedQuranContent content checks", () => {
     const validate = await realValidator();
     const rows = validRows();
     rows[100] = { globalIndex: rows[100]!.globalIndex + 5, surah: 1, ayah: 101 };
-    expect(() => validate(QURAN_ROW_COUNT, rows, QuranSourceId.Uthmani)).toThrow(
+    expect(() => validate(QURAN_ROW_COUNT, rows, QuranSourceId.TanzilUthmani)).toThrow(
       /non-contiguous/,
     );
   });
@@ -71,7 +71,7 @@ describe("assertStagedQuranContent content checks", () => {
     const validate = await realValidator();
     const rows = validRows();
     rows[5] = { globalIndex: 6, surah: 0, ayah: 6 };
-    expect(() => validate(QURAN_ROW_COUNT, rows, QuranSourceId.Uthmani)).toThrow(
+    expect(() => validate(QURAN_ROW_COUNT, rows, QuranSourceId.TanzilUthmani)).toThrow(
       /bad coordinate/,
     );
   });
@@ -80,7 +80,7 @@ describe("assertStagedQuranContent content checks", () => {
     profileOverride.value = { canonicalRowCount: QURAN_ROW_COUNT - 1 };
     try {
       const validate = await realValidator();
-      expect(() => validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.Uthmani)).toThrow(
+      expect(() => validate(QURAN_ROW_COUNT, validRows(), QuranSourceId.TanzilUthmani)).toThrow(
         /profile row count mismatch/,
       );
     } finally {
