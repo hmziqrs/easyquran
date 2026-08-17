@@ -64,15 +64,21 @@ stacked. Word-by-word source and transliteration are separate choices.
 
 - [Al-Fatihah reader](https://quran.com/al-fatihah)
 
-**EasyQuran today:** a singular route source is chosen by
-[`TranslationPicker.svelte`](../../web/src/routes/(application)/app/_reader/TranslationPicker.svelte).
-[`VerseRow.svelte`](../../web/src/routes/(application)/app/_reader/VerseRow.svelte) renders either
-Arabic or one translation. Translation routing/delivery itself is shipped and robust.
+**EasyQuran today:** the multi-translation subsystem is shipped. Every reader route — surah, juz, or
+global page, Arabic or translated primary — can stack up to 5 extra translations, hydrated
+client-only by
+[`stacked-translations.svelte.ts`](../../web/src/routes/(application)/app/_reader/stacked-translations.svelte.ts)
+with selection via
+[`StackedTranslationsPicker.svelte`](../../web/src/routes/(application)/app/_reader/StackedTranslationsPicker.svelte).
+The primary SSG/SSR routes and their cache keys are untouched; the `?more=<id>,<id>` client mirror
+is stripped from cache keys by the service worker; selected extras (and the primary) pin against
+OPFS eviction; each extra renders with its own language/direction and translator attribution; and
+share/copy deliberately excludes extras. Full contract: [Part 1 of
+`docs/quran-system.md`](../quran-system.md), “Multiple stacked translations”.
 
-**Remaining:** composed reader state (`Arabic + N translations`); multi-select picker; stacked or
-comparison presentation; independent font/direction/attribution per source; composed loading and
-partial-failure states; offline/cache policy; share/copy selection. Preserve existing single-source
-SSR routes and translation-context navigation.
+**Remaining:** side-by-side or parallel comparison presentation — extras currently stack vertically
+beneath the primary, verse mode only; per-extra font controls. Word-by-word source and
+transliteration choice belongs to R03.
 
 ### R05 — Real, credited tafsir — Partial · P0
 

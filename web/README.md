@@ -4,16 +4,19 @@ SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase.
 
 ## Run
 
+Fresh clone: provision the Quran DBs first — `just quran-fetch` (public R2 base; `just quran-fetch all`
+also pulls every translation sqlite); `db/` is gitignored and starts empty.
+
 Repo root (`just` picks DB source):
 
-    just web-dev local     # dev, tracked SQLite at /_quran
+    just web-dev local     # dev, SQLite served at /_quran from the gitignored db/quran/
     just web-dev prod      # dev, same-origin gateway to R2
     just web-build prod    # adapter-node build + Arabic prerender output
-    just docker-up local   # Node web + Axum API, localhost:8080 / :8888
+    just docker-up local   # Bun web + Axum API, localhost:8080 / :8888
 
 `PUBLIC_ENV` = `local|prod`. Selects DB origin only. `pnpm dev`->local, `pnpm build`->prod, Docker always prod.
-Local development serves tracked artifacts at `/_quran`; production uses the same URL space as an
-allowlisted streaming gateway to R2, so OPFS downloads never depend on cross-origin bucket CORS.
+Local development serves SQLite from the gitignored `db/quran/` at `/_quran`; production uses the same URL
+space as an allowlisted streaming gateway to R2, so OPFS downloads never depend on cross-origin bucket CORS.
 
 In `web/`:
 
@@ -49,4 +52,6 @@ Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`
 - shadcn names declared twice (`:root` + `@theme inline`); one half -> renders unstyled.
 - no FOUC: `app.html` inline script applies theme pre-paint.
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
-- no CI. sidebar lists virtualized (`@tanstack/svelte-virtual`); only visible rows render.
+- Image CI only (`.github/workflows/images.yml`): builds+pushes both images on arm64 runners and redeploys
+  Dokploy on master push/tag; no check/lint/test job — those stay local gates before push. sidebar lists
+  virtualized (`@tanstack/svelte-virtual`); only visible rows render.

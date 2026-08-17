@@ -14,37 +14,48 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
                                   → api:8888    (Host + PathPrefix /api, stripped)
 ```
 
-## Images are built on your machine, never in the deploy
+## Images are packaging-only — built in CI or on a dev machine, never in the deploy
 
 Both Dockerfiles are **packaging-only**: they compile nothing, install no toolchain, and make
-no network calls. Everything is built on a dev machine and COPYed in.
+no network calls. Everything is built outside the deploy and COPYed in.
+
+**Primary publisher: CI** (`.github/workflows/images.yml`). On every master push and `v*`
+tag (PRs build without pushing) it builds both images natively on `ubuntu-24.04-arm`
+runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `pnpm --filter web
+build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release --locked
+-p ruxlog --features vendored-openssl --target aarch64-unknown-linux-gnu`. It pushes
+`ghcr.io/hmziqrs/easyquran-{web,api}` tagged `latest` + short sha (plus `v*` on tags,
+`pr-N` on PRs), then a deploy job pokes Dokploy.
+
+**Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
+qemu), for when CI can't ship it:
 
 ```bash
 just images v1.2.0     # host build + both images (tags: v1.2.0 and latest)
 just push   v1.2.0     # push to $REGISTRY (default ghcr.io/hmziqrs)
 ```
 
+Fallback needs `zig` + `cargo-zigbuild` (`brew install zig`, `cargo install
+cargo-zigbuild`), `rustup target add aarch64-unknown-linux-gnu`, and a one-time
+`docker login ghcr.io` with a PAT carrying `write:packages`.
+
 Why: the old `Dockerfile.web` re-installed pnpm + the whole toolchain, needed CA certs added
 to `node:24-slim`, and re-ran the sqlite prerender inside the image on every build. That step
 failed repeatedly and opaquely (a bare `Exit status 1` with no error text). It is gone.
 
-Requirements on the build host (Apple Silicon → arm64 Ubuntu server, so same arch, no qemu):
+What the fallback recipes do — the same steps CI runs on the runner:
 
-- `zig` + `cargo-zigbuild` (`brew install zig`, `cargo install cargo-zigbuild`)
-- `rustup target add aarch64-unknown-linux-gnu`
-- `docker login ghcr.io` once, with a PAT carrying `write:packages`
-
-What each recipe does:
-
-| recipe | host step | image step |
+| recipe | host step (dev-machine fallback) | image step |
 | --- | --- | --- |
 | `just image-web` | `pnpm --filter web build` (PUBLIC_ENV=prod) | COPY `web/build` + `web/server.ts` (~10s) |
 | `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary |
 
-`vendored-openssl` exists only for the cross-build: `webauthn-rs` pulls `openssl-sys`
-unconditionally and pkg-config cannot resolve a target libssl when cross-compiling, so
-OpenSSL is compiled from vendored source instead. Native `cargo build` is unaffected.
-`.2.36` pins the glibc floor (Debian 12 / Ubuntu 22.04+).
+`vendored-openssl` is required on **both** build paths: the runtime image
+(`debian:trixie-slim`) installs no libssl, so the binary must not link one dynamically. On
+the dev-machine cross-build it additionally works around pkg-config being unable to resolve
+a target libssl (`webauthn-rs` pulls `openssl-sys` unconditionally). A plain host `cargo
+build`/`cargo run` for local dev is unaffected. `.2.36` pins the glibc floor (Debian 12 /
+Ubuntu 22.04+).
 
 Registry coordinates are `${REGISTRY:-ghcr.io/hmziqrs}/easyquran-{web,api}:${VERSION:-latest}`,
 resolved identically by the justfile and `docker-compose.yml`. If the packages are private,
@@ -68,11 +79,16 @@ fails on pull.
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
   compose file.
-- `fetch-quran-db.sh` (`just quran-fetch [arabic|all]`) — provisions the immutable Quran
-  databases into gitignored `db/` from the public R2 base: read-only HTTPS GETs, no
-  credentials, keys taken from the baked maps. `arabic` is what the web build's prerender
-  needs; `all` adds the translation sqlites the api serves off its bind mount. Publishing
-  remains `just upload-sqlite`.
+- `fetch-quran-db.sh` (`just quran-fetch [arabic|all]`) — the dev/CI provisioner: fills
+  gitignored `db/` from the public R2 base with read-only HTTPS GETs, no credentials, keys
+  taken from the baked maps. `arabic` is what the web build's prerender needs; `all` adds
+  every translation sqlite. Publishing remains `just upload-sqlite`.
+- `provision-quran.sh` — the server-side counterpart, baked into the api image and run by
+  the compose `quran-init` one-shot service: fills the `quran_data` volume from the public
+  R2 base. File list comes from the baked `web/src/lib/data/translations.json` manifest
+  (read with jq — the deploy host has no node/python3/checkout). Idempotent per file
+  (present + non-empty is skipped), so every redeploy re-runs it in seconds and picks up
+  newly published translations only.
 - `../web/scripts/assert-headers.sh` — asserts the HTTP delivery contract
   against a running origin; run it before shipping (see checklist).
 - `.env.example` — config (copy to `.env`).
@@ -89,7 +105,10 @@ docker login ghcr.io          # only if the packages are private
 docker compose up -d
 ```
 
-The server builds nothing — it pulls the tags you pushed with `just push`. Verify the public
+The server builds nothing — it pulls the images CI pushed (`pull_policy: always`). The Quran
+corpus self-provisions on first boot: the one-shot `quran-init` service fills the
+`quran_data` volume (~130 MB, credential-free GETs from the public R2 base); every later
+redeploy re-runs it in seconds and fetches only newly published files. Verify the public
 Quran route: `curl https://easyquran.fyi/api/quran/health/ready` → `{"ready":true,…}`.
 `/healthz` is deliberately **not** on the public router — reach it from the
 Docker network (`curl http://api:8888/healthz`) or the in-container healthcheck.
@@ -111,24 +130,18 @@ master push/tag — `ghcr.io/hmziqrs/easyquran-{web,api}`. One-time setup:
   (GitHub → package → settings), or add a Dokploy registry entry (Settings →
   Registries, ghcr.io, a PAT with `read:packages`).
 
-### 1. Provision the Quran DBs outside the checkout (once, on the VPS)
+### 1. Nothing to provision on the host
 
-Dokploy owns the code directory and re-syncs it per deploy, so the ~130 MB of
-gitignored databases cannot live inside it. Put them on a stable path and point
-both the fetch and the mount at it:
+The Quran corpus self-provisions: on first deploy the one-shot `quran-init` service
+(same api image, `user: 0:0`, entrypoint `/app/provision-quran.sh`) fills the named
+`quran_data` volume from the public R2 base — Arabic corpus + every translation sqlite,
+~130 MB, credential-free GETs, idempotent per file. The api
+`depends_on: service_completed_successfully`, so it never boots on an empty corpus, and
+every redeploy re-runs quran-init in seconds to pick up newly published translations.
 
-```bash
-ssh <vps>
-export QURAN_DB_DIR=/opt/easyquran/quran        # stable; survives redeploys
-git clone --depth 1 https://github.com/hmziqrs/easyquran /tmp/easyquran
-cd /tmp/easyquran && QURAN_DB_DIR="$QURAN_DB_DIR" deploy/fetch-quran-db.sh all
-rm -rf /tmp/easyquran
-```
-
-`all` = the Arabic corpus + every translation sqlite (the api serves
-translations off this mount). Credential-free GETs from the public R2 base;
-node or python3 on the host reads the catalogue. Set the **same** `QURAN_DB_DIR`
-in the env tab (step 2) — compose bind-mounts it read-only into the api.
+`QURAN_DB_DIR` is an optional escape hatch: leave it unset to use the volume; set it to
+an **absolute host path** to bind-mount a host directory instead (quran-init then fills
+that path — a relative or name-like value is read as a volume name, not a path).
 
 ### 2. Create the Compose application
 
@@ -140,8 +153,7 @@ in the env tab (step 2) — compose bind-mounts it read-only into the api.
    `…/code/deploy/.env: No such file or directory`.
 3. Environment tab: the 5 required vars from `.env.example` (`DOMAIN`,
    `COOKIE_KEY`, `FIELD_ENC_KEY`, `INTERNAL_QURAN_API_TOKEN`,
-   `ALLOWED_ORIGINS` — literal CSV, no `${DOMAIN}` expansion) plus
-   `QURAN_DB_DIR` from step 1.
+   `ALLOWED_ORIGINS` — literal CSV, no `${DOMAIN}` expansion).
 4. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels already
    define the routing (Host + `/api` PathPrefix + stripPrefix). Prefer the UI
    anyway? Delete the labels and configure domains there: web → `easyquran.fyi`,
@@ -384,17 +396,19 @@ mail with SPF+DKIM pass.
 ## Notes
 
 - `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.
-- API reads Quran sources from a read-only bind mount (`./db/quran` → `/app/quran`,
-  compose `volumes:`); the image no longer bakes them. `db/` is gitignored — the DBs live in
-  R2 and must be provisioned into the checkout on the host before the api container starts. Immutability is enforced both by the
+- API reads Quran sources from the `quran_data` volume mounted read-only into `/app/quran`
+  (compose `volumes:`), filled by the `quran-init` one-shot before the api boots. Immutability is enforced both by the
   `:ro` mount (FS-level read-only for current and future inodes — strictly stronger than the
-  old `chmod -R a-w`) and by `read_only(true).immutable(true)` in the loader. The
-  Dockerfile.api COPY removal and the compose mount are a coupled pair — ship and revert together.
+  old `chmod -R a-w`) and by `read_only(true).immutable(true)` in the loader. `QURAN_DB_DIR`
+  is the optional escape hatch: an absolute host path swaps the volume for a bind mount. The
+  provision script + manifest COPY in `Dockerfile.api` and the `quran-init` service are a
+  coupled pair — ship and revert together.
 - The web runtime reads `quran-data.json` from the build's `client/quran-meta/` output
   (adapter-node copies `static/` → `build/client/`).
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
-- VPS needs ≥2 GB RAM for the Rust build (add swap on smaller boxes).
+- Nothing builds on the VPS in the CI + Dokploy flow — it only pulls. The ≥2 GB RAM
+  requirement (add swap on smaller boxes) applies only if you build images on the box itself.
 - Env normalization: the production `.env` is intentionally minimal (5 required
   vars — see `deploy/.env.example`). Everything else is a co-location invariant
   hardcoded in `docker-compose.yml` (`RUST_ENV`, `IP_SOURCE`,

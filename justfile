@@ -93,10 +93,11 @@ upload-sqlite *args='':
     cd db/quran/translations && npm run upload:sqlite -- {{args}}
 
 # --- Images -------------------------------------------------------------------------------
-# Both images are packaging-only: everything is compiled HERE, on the host, and the
+# Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network
 # inside Docker anymore, which is what kept breaking. Dokploy no longer builds — it pulls the
-# tags pushed by `just push`.
+# tags CI (.github/workflows/images.yml) pushes on every master push; `just push` remains
+# the by-hand path.
 
 # SvelteKit build (host) -> web image. ~10s of Docker on top of the normal pnpm build.
 image-web version="dev":

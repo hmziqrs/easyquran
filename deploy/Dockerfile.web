@@ -1,9 +1,10 @@
 # EasyQuran Web — packaging only. NOTHING is compiled here.
 #
-# The SvelteKit build runs on your machine (`just image-web`, which shells out to
-# `pnpm --filter web build`), because building it inside Docker meant re-installing the
-# toolchain, re-downloading CA certs, and re-running the sqlite prerender on every image —
-# the single most fragile step in this repo. adapter-node emits a self-contained bundle
+# The SvelteKit build runs outside Docker (on the CI runner or your machine via
+# `just image-web`, which shells out to `pnpm --filter web build`), because building it
+# inside Docker meant re-installing the toolchain, re-downloading CA certs, and re-running
+# the sqlite prerender on every image — the single most fragile step in this repo.
+# adapter-node emits a self-contained bundle
 # (`web/build`) and `server.ts` imports nothing but `node:http` + that bundle, so the image
 # is two COPYs. The output is pure JS: arch-independent, no node_modules, no network.
 #
