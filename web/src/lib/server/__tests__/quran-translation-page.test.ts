@@ -199,7 +199,9 @@ describe("SSR internal token gating on the resolved API base", () => {
   });
 
   it("sends NO internal token when INTERNAL_QURAN_API_BASE is unset (public fallback)", async () => {
-    env.INTERNAL_QURAN_API_BASE = undefined;
+    // Empty string is the falsy stand-in for an unset var: the runtime only branches
+    // on truthiness (`INTERNAL_QURAN_API_BASE || …`, `!!env.INTERNAL_QURAN_API_BASE`).
+    env.INTERNAL_QURAN_API_BASE = "";
     env.INTERNAL_QURAN_API_TOKEN = "secret-token";
     const { fetcher, seen } = headerCapturingFetcher();
     await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);

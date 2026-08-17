@@ -123,7 +123,10 @@ function respondHasTranslation(fake: FakeWorker, value: boolean): void {
   fake.emit("message", { id: req.id, ok: true, result: value });
 }
 
-function respondReadSurah(fake: FakeWorker, result: { cached: boolean }): void {
+function respondReadSurah(
+  fake: FakeWorker,
+  result: { cached: boolean } | { downloaded: boolean },
+): void {
   const req = fake.posted.at(-1)!;
   expect(req.type).toBe("readSurah");
   fake.emit("message", { id: req.id, ok: true, result });
@@ -208,11 +211,29 @@ describe("withSourceFallback via readSurah", () => {
     expect(ensure).toBeDefined();
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(0);
-    respondHasTranslation(fake, true);
-    await vi.advanceTimersByTimeAsync(0);
-    respondReadSurah(fake, { cached: true });
+    // API failed: the re-check forces the worker read (download-then-read for a cold
+    // source) instead of only re-probing hasTranslation.
+    respondReadSurah(fake, { downloaded: true });
     await expect(p).resolves.toBe(DECODED_SURAH);
+    expect(apiReads.readSurah).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves a cold translation entirely from the worker when no read API is configured", async () => {
+    const fake = await startReady();
+    siteConfig.apiBase = "";
+    wireMocks.decodeTranslationSurah.mockReturnValue(DECODED_SURAH);
+    const p = quranWorker.readSurah(1, TRANSLATION);
+    await vi.advanceTimersByTimeAsync(0);
+    respondHasTranslation(fake, false);
+    await vi.advanceTimersByTimeAsync(0);
+    // The miss fires onMiss (ensureTranslation) and, with no apiBase, the forced
+    // worker read posts immediately after it — no API leg in between.
+    const ensure = fake.posted.find((m) => m.type === "ensureTranslation");
+    expect(ensure).toBeDefined();
+    fake.emit("message", { id: ensure!.id, ok: true, result: null });
+    respondReadSurah(fake, { downloaded: true });
+    await expect(p).resolves.toBe(DECODED_SURAH);
+    expect(apiReads.readSurah).not.toHaveBeenCalled();
   });
 
   it("throws the chained error message when every tier fails", async () => {
@@ -227,7 +248,9 @@ describe("withSourceFallback via readSurah", () => {
     const ensure = fake.posted.at(-1)!;
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await vi.advanceTimersByTimeAsync(0);
-    respondHasTranslation(fake, false);
+    const forced = fake.posted.at(-1)!;
+    expect(forced.type).toBe("readSurah");
+    fake.emit("message", { id: forced.id, ok: false, error: "translation fetch failed" });
     await expect(p).rejects.toThrow(/translation surah unavailable: en\.pickthall\/1/);
     try {
       await p;
@@ -283,8 +306,10 @@ describe("withSourceFallback without a worker", () => {
       expect(err).toBeInstanceOf(ReadChainError);
       // SAFETY: the preceding toBeInstanceOf(ReadChainError) check pins err's constructor before the cast
       expect((err as ReadChainError).apiFailure?.kind).toBe("transport");
+      // The post-API-failure re-check forces a translation read even without a started
+      // worker, so the absent engine is now recorded as the worker failure.
       // SAFETY: same ReadChainError instance confirmed two assertions above
-      expect((err as ReadChainError).workerFailure).toBeUndefined();
+      expect((err as ReadChainError).workerFailure).toEqual({ kind: "worker" });
     }
     expect(apiReads.readSurah).toHaveBeenCalledWith(TRANSLATION, 1, undefined);
   });
@@ -340,7 +365,9 @@ describe("withSourceFallback via readRange", () => {
     const ensure = fake.posted.at(-1)!;
     fake.emit("message", { id: ensure.id, ok: true, result: null });
     await vi.advanceTimersByTimeAsync(0);
-    respondHasTranslation(fake, false);
+    const forced = fake.posted.at(-1)!;
+    expect(forced.type).toBe("readRange");
+    fake.emit("message", { id: forced.id, ok: false, error: "translation fetch failed" });
     await expect(p).rejects.toThrow(/translation range unavailable/);
     try {
       await p;

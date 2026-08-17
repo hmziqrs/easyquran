@@ -34,6 +34,7 @@ import {
   decodeTranslationSurahText,
   type AyahCoordinateValidator,
 } from "./wire";
+import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
 
 interface Pending {
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- stores Promise resolvers for request<T> across every T; the worker reply is validated by each caller's decode() fn
@@ -43,6 +44,9 @@ interface Pending {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+// A forced cold translation read rides on the worker's on-demand artifact download, so it
+// must outlive the worker's full transfer budget (open + validate + query ride on top).
+const COLD_TRANSLATION_READ_TIMEOUT_MS = DOWNLOAD_BUDGET_MS + 5_000;
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -164,6 +168,13 @@ interface SourceFallbackArgs<T> {
   onStatus?: (status: ReadTierStatus) => void;
   hedgeAfterMs?: number;
   signal?: AbortSignal;
+  /**
+   * Translation sources: their worker read downloads the sqlite on demand, so "not cached"
+   * does not mean "cannot serve". After an API failure — or when no read API is configured —
+   * the final local attempt sends the read directly (download-then-read in the worker)
+   * instead of only re-probing hasLocal, which would miss while the download is in flight.
+   */
+  coldLocalRead?: boolean;
 }
 
 interface FallbackState {
@@ -176,26 +187,40 @@ interface FallbackState {
 async function attemptLocal<T>(
   args: SourceFallbackArgs<T>,
   state: FallbackState,
+  force = false,
 ): Promise<{ value: T } | null> {
-  let local: boolean;
-  const probe = args.hasLocal();
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
-  if (typeof probe === "boolean") {
-    local = probe;
+  if (force) {
+    // A forced read only makes sense once the engine is up: boot downloads the pinned
+    // Arabic corpora first, so a session's first translated read can land while isReady
+    // is still false. whenReady is bounded (30s) and its rejection falls through to the
+    // typed failure below.
+    if (!isReady && startPromise) await quranWorker.whenReady().catch(() => undefined);
   } else {
-    try {
-      local = await probe;
-    } catch (e) {
-      if (!state.workerFailure) {
-        state.workerFailure = classifyWorkerFailure(e);
-        state.workerError = e;
+    let local: boolean;
+    const probe = args.hasLocal();
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- hasLocal() returns boolean | Promise<boolean>; typeof picks the sync branch without forcing an await microtask
+    if (typeof probe === "boolean") {
+      local = probe;
+    } else {
+      try {
+        local = await probe;
+      } catch (e) {
+        if (!state.workerFailure) {
+          state.workerFailure = classifyWorkerFailure(e);
+          state.workerError = e;
+        }
+        return null;
       }
-      return null;
     }
+    if (!local) return null;
   }
-  if (!local) return null;
   try {
-    const decoded = args.decode(await request<unknown>(args.workerReq));
+    const decoded = args.decode(
+      await request<unknown>(
+        args.workerReq,
+        force ? COLD_TRANSLATION_READ_TIMEOUT_MS : DEFAULT_TIMEOUT_MS,
+      ),
+    );
     if (decoded) return { value: decoded };
     if (!state.workerFailure) state.workerFailure = { kind: "malformed" };
   } catch (e) {
@@ -324,7 +349,7 @@ async function hedgedSourceFallback<T>(
     return winner.value;
   }
   if (state.apiFailure) {
-    const recheck = await attemptLocal(args, state);
+    const recheck = await attemptLocal(args, state, args.coldLocalRead === true);
     if (recheck) {
       args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
       return recheck.value;
@@ -359,10 +384,18 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
     } catch (e) {
       state.apiFailure = classifyApiFailure(e);
     }
-    const recheck = await attemptLocal(args, state);
+    const recheck = await attemptLocal(args, state, args.coldLocalRead === true);
     if (recheck) {
       args.onStatus?.({ servedBy: "local", apiFailure: state.apiFailure });
       return recheck.value;
+    }
+  } else if (args.coldLocalRead) {
+    // No read API configured at all: a cold translation is still fully servable by the
+    // worker, which downloads the sqlite from its artifact store and reads it locally.
+    const forced = await attemptLocal(args, state, true);
+    if (forced) {
+      args.onStatus?.({ servedBy: "local" });
+      return forced.value;
     }
   }
 
@@ -506,6 +539,7 @@ export const quranWorker = {
       onStatus,
       hedgeAfterMs: options?.hedgeAfterMs,
       signal: options?.signal,
+      coldLocalRead: true,
     });
   },
 
@@ -542,6 +576,7 @@ export const quranWorker = {
       onStatus,
       hedgeAfterMs: options?.hedgeAfterMs,
       signal: options?.signal,
+      coldLocalRead: true,
     });
   },
 
