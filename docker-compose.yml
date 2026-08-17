@@ -118,7 +118,10 @@ services:
       # Immutable Quran sources (read-only). 1:1 with the /app/quran ENV paths in
       # Dockerfile.api. db/ is gitignored: the DBs live in R2 and must be provisioned onto
       # the host (incl. the Dokploy checkout) before the api starts — a clone alone has none.
-      - ./db/quran:/app/quran:ro
+      # QURAN_DB_DIR points the mount outside the checkout on a managed host: Dokploy owns
+      # the code directory and re-syncs it per deploy, so ~130 MB of gitignored databases
+      # sitting inside it are at the mercy of that sync. Local dev keeps the in-repo default.
+      - ${QURAN_DB_DIR:-./db/quran}:/app/quran:ro
     networks:
       proxy:
         aliases: [api]

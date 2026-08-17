@@ -36,7 +36,9 @@ arabic | all) ;;
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="$REPO_ROOT/db/quran"
+# QURAN_DB_DIR is the same knob docker-compose.yml reads: on a managed host the databases
+# belong outside the deploy tool's checkout. Default is the in-repo gitignored path.
+DEST="${QURAN_DB_DIR:-$REPO_ROOT/db/quran}"
 BASE="${QURAN_ARTIFACT_BASE:-https://r2.easyquran.fyi}"
 BASE="${BASE%/}"
 
@@ -52,6 +54,29 @@ get() {
   curl -fsSL --retry 3 --retry-connrefused -o "$out.part" "$BASE/$key"
   mv "$out.part" "$out"
   echo "  got $key"
+}
+
+# Translation file names, one per line, straight out of the tracked catalogue (field 6) —
+# never from a bucket listing. node or python3, whichever the host has: a VPS running this in
+# `all` mode carries no toolchain, only the images it pulls.
+translation_files() {
+  local json="$REPO_ROOT/web/src/lib/data/translations.json"
+  if command -v node >/dev/null; then
+    node --input-type=module -e "
+      import { readFileSync } from 'node:fs';
+      for (const row of JSON.parse(readFileSync('$json', 'utf8'))) console.log(row[6]);
+    "
+    return
+  fi
+  if command -v python3 >/dev/null; then
+    python3 -c "
+import json
+for row in json.load(open('$json')): print(row[6])
+"
+    return
+  fi
+  echo "need node or python3 to read translations.json" >&2
+  exit 127
 }
 
 # A truncated or error-page download must not survive as a "database".
@@ -76,11 +101,7 @@ if [ "$MODE" = "all" ]; then
   while read -r file; do
     get "tanzil/translations/$file" "$DEST/translations/$file"
     assert_sqlite "$DEST/translations/$file"
-  done < <(node --input-type=module -e "
-    import { readFileSync } from 'node:fs';
-    const rows = JSON.parse(readFileSync('$REPO_ROOT/web/src/lib/data/translations.json', 'utf8'));
-    for (const row of rows) console.log(row[6]);
-  ")
+  done < <(translation_files)
 fi
 
 echo "done"
