@@ -96,26 +96,80 @@ Docker network (`curl http://api:8888/healthz`) or the in-container healthcheck.
 
 ## Deploying with Dokploy
 
-Dokploy runs Traefik internally on `dokploy-network` — so this stack drops in
-with the defaults already in `.env.example` (`PROXY_NETWORK=dokploy-network`,
-`HTTPS_ENTRYPOINT=websecure`, `ACME_RESOLVER=letsencrypt`; confirm the last two
-against your Dokploy instance if you customized Traefik).
+Dokploy never builds: the Compose application only **pulls** the registry images
+(`pull_policy: always`) that CI (`.github/workflows/images.yml`) pushes on every
+master push/tag — `ghcr.io/hmziqrs/easyquran-{web,api}`. One-time setup:
 
-1. In Dokploy, create a **Docker Compose** application pointing at this repo.
-2. Set the compose path to the **root `docker-compose.yml`** (not `deploy/…`).
-   Dokploy writes the `.env` (from your Environment tab) and sources it relative
-   to the compose file, so it must be at the repo root or the deploy fails with
+### 0. Prerequisites
+
+- A Dokploy instance with its stock Traefik — the compose defaults already match
+  (`PROXY_NETWORK=dokploy-network`, `HTTPS_ENTRYPOINT=websecure`,
+  `ACME_RESOLVER=letsencrypt`). Override in the env tab only if you customized
+  Traefik. The common Dokploy 404 gotcha is containers not on `dokploy-network`;
+  the compose attaches them, so you're covered.
+- ghcr packages readable from the server: either make both packages **public**
+  (GitHub → package → settings), or add a Dokploy registry entry (Settings →
+  Registries, ghcr.io, a PAT with `read:packages`).
+
+### 1. Provision the Quran DBs outside the checkout (once, on the VPS)
+
+Dokploy owns the code directory and re-syncs it per deploy, so the ~130 MB of
+gitignored databases cannot live inside it. Put them on a stable path and point
+both the fetch and the mount at it:
+
+```bash
+ssh <vps>
+export QURAN_DB_DIR=/opt/easyquran/quran        # stable; survives redeploys
+git clone --depth 1 https://github.com/hmziqrs/easyquran /tmp/easyquran
+cd /tmp/easyquran && QURAN_DB_DIR="$QURAN_DB_DIR" deploy/fetch-quran-db.sh all
+rm -rf /tmp/easyquran
+```
+
+`all` = the Arabic corpus + every translation sqlite (the api serves
+translations off this mount). Credential-free GETs from the public R2 base;
+node or python3 on the host reads the catalogue. Set the **same** `QURAN_DB_DIR`
+in the env tab (step 2) — compose bind-mounts it read-only into the api.
+
+### 2. Create the Compose application
+
+1. Dokploy → project → new **Docker Compose** app pointing at this repo,
+   branch `master` (private repo: connect Dokploy's GitHub provider first).
+2. Compose path: the **root `docker-compose.yml`** (not `deploy/…`). Dokploy
+   writes the `.env` (from your Environment tab) and sources it relative to the
+   compose file, so it must be at the repo root or the deploy fails with
    `…/code/deploy/.env: No such file or directory`.
-3. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels in
-   `docker-compose.yml` already define the routing (Host + `/api` PathPrefix +
-   stripPrefix). Dokploy runs `docker compose up`, attaches both services to
-   `dokploy-network`, and its Traefik picks the labels up.
-4. Prefer Dokploy's UI to manage routing instead? Delete the `traefik.*` labels
-   and configure domains there: web → `easyquran.fyi`, api → `easyquran.fyi`
-   with path `/api`.
+3. Environment tab: the 5 required vars from `.env.example` (`DOMAIN`,
+   `COOKIE_KEY`, `FIELD_ENC_KEY`, `INTERNAL_QURAN_API_TOKEN`,
+   `ALLOWED_ORIGINS` — literal CSV, no `${DOMAIN}` expansion) plus
+   `QURAN_DB_DIR` from step 1.
+4. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels already
+   define the routing (Host + `/api` PathPrefix + stripPrefix). Prefer the UI
+   anyway? Delete the labels and configure domains there: web → `easyquran.fyi`,
+   api → `easyquran.fyi` with path `/api`.
 
-The common Dokploy gotcha (404s) is just containers not being on
-`dokploy-network` — our compose attaches them, so you're covered.
+### 3. Wire auto-redeploy (GitHub repo secrets)
+
+Set exactly one of these in the GitHub repo's secrets — CI's deploy job pokes it
+after **both** images are pushed:
+
+- `DOKPLOY_DEPLOY_WEBHOOK` — the compose app's Webhook URL (Dokploy app →
+  Webhooks tab). Simplest; recommended.
+- or the API trio `DOKPLOY_URL` (your Dokploy base URL) + `DOKPLOY_API_KEY` +
+  `DOKPLOY_COMPOSE_ID` (the UUID in the compose app's URL) → `POST /api/compose.deploy`.
+
+Neither set → CI warns and skips the redeploy (images still pushed).
+
+### 4. First deploy + verify
+
+Deploy from the Dokploy UI, wait for both services to report healthy, then:
+
+```bash
+curl https://easyquran.fyi/api/quran/health/ready   # → {"ready":true,…}
+```
+
+Ongoing: every master push → CI builds both images (`:latest` + `:sha`), pushes,
+and redeploys. Tag pushes ship `v*` tags — pin `VERSION=v1.0.0` in the env tab
+to freeze on a release instead of tracking `latest`.
 
 The web image runs SvelteKit's standalone adapter-node server on bun. `hooks.server.ts` owns
 translated-page disk caching and dynamic response headers; `server.ts` applies
