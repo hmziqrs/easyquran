@@ -15,6 +15,7 @@ use crate::error::{ErrorCode, ErrorResponse};
 const STATE_TTL_SECS: u64 = 600;
 pub const NATIVE_TOKEN_NONCE_TTL_SECS: u64 = STATE_TTL_SECS;
 const MAX_NATIVE_NONCES: usize = 10_000;
+const MAX_OAUTH_STATES: usize = 10_000;
 
 type StateMap = HashMap<String, (String, Instant)>;
 
@@ -137,6 +138,15 @@ pub fn store_oauth_state(
             .with_message("Failed to store OAuth state")
     })?;
     reap_stale(&mut map);
+    if map.len() >= MAX_OAUTH_STATES {
+        if let Some(oldest) = map
+            .iter()
+            .min_by_key(|(_, (_, stored_at))| *stored_at)
+            .map(|(key, _)| key.clone())
+        {
+            map.remove(&oldest);
+        }
+    }
     map.insert(
         state_key(session_id, state_secret),
         (payload, Instant::now()),
@@ -219,6 +229,26 @@ mod tests {
         assert_eq!(
             challenge.provider_nonce,
             hex::encode(Sha256::digest(challenge.nonce.as_bytes()))
+        );
+    }
+
+    #[test]
+    fn state_store_caps_map_size() {
+        for i in 0..(MAX_OAUTH_STATES + 5) {
+            store_oauth_state(
+                &format!("cap-session-{i}"),
+                &format!("cap-state-{i}"),
+                "",
+                None,
+            )
+            .unwrap();
+        }
+
+        let map = oauth_states().lock().unwrap();
+        assert_eq!(
+            map.len(),
+            MAX_OAUTH_STATES,
+            "OAUTH_STATES must evict-oldest instead of growing without bound"
         );
     }
 }

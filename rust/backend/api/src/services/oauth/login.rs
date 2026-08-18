@@ -52,23 +52,20 @@ impl std::fmt::Display for OAuthProvider {
 
 /// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(state), fields(provider = %provider))]
+#[instrument(skip(db), fields(provider = %provider))]
 pub async fn find_or_create_user_for_oauth(
-    state: &AppState,
+    db: &sea_orm::DatabaseConnection,
     provider: OAuthProvider,
     provider_user_id: &str,
     email: Option<String>,
     name: String,
     email_verified: bool,
 ) -> Result<user::Model, ErrorResponse> {
-    if let Some(identity) = user_oauth_identity::Entity::find_by_provider(
-        &state.sea_db,
-        provider.as_str(),
-        provider_user_id,
-    )
-    .await?
+    if let Some(identity) =
+        user_oauth_identity::Entity::find_by_provider(db, provider.as_str(), provider_user_id)
+            .await?
     {
-        let user = user::Entity::find_by_id_with_404(&state.sea_db, identity.user_id).await?;
+        let user = user::Entity::find_by_id_with_404(db, identity.user_id).await?;
         info!(
             user_id = user.id,
             "Existing user found by OAuth identity link"
@@ -85,18 +82,12 @@ pub async fn find_or_create_user_for_oauth(
         })?;
     ensure_verified_oauth_email(email_verified)?;
 
-    if let Some(existing) = user::Entity::find_by_email(&state.sea_db, email.clone()).await? {
+    if let Some(existing) = user::Entity::find_by_email(db, email.clone()).await? {
         info!(
             user_id = existing.id,
             "Linking OAuth account to existing user"
         );
-        link_identity(
-            &state.sea_db,
-            existing.id,
-            provider.as_str(),
-            provider_user_id,
-        )
-        .await?;
+        link_identity(db, existing.id, provider.as_str(), provider_user_id).await?;
         return Ok(existing);
     }
 
@@ -113,13 +104,13 @@ pub async fn find_or_create_user_for_oauth(
         updated_at: Set(now),
         ..Default::default()
     };
-    let user = active.insert(&state.sea_db).await.map_err(|e| {
+    let user = active.insert(db).await.map_err(|e| {
         error!(error = ?e, "Failed to create user from OAuth");
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to create user account")
     })?;
 
-    link_identity(&state.sea_db, user.id, provider.as_str(), provider_user_id).await?;
+    link_identity(db, user.id, provider.as_str(), provider_user_id).await?;
     tracing::Span::current().record("user_id", user.id);
     Ok(user)
 }
@@ -205,5 +196,85 @@ mod tests {
         let result = ensure_verified_oauth_email(false);
 
         assert!(result.is_err(), "unverified email must not link or create");
+    }
+
+    #[tokio::test]
+    async fn unverified_provider_email_never_links_existing_password_account() {
+        use migration::{Migrator, MigratorTrait};
+        use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+
+        async fn mem_db() -> DatabaseConnection {
+            use sea_orm::ConnectionTrait;
+
+            let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+            opt.max_connections(1);
+            let db = Database::connect(opt).await.unwrap();
+            Migrator::up(&db, None).await.unwrap();
+            // No migration owns user_oauth_identities yet (pre-existing repo gap);
+            // create it to match the sea-orm model so the lookup path is testable.
+            db.execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS user_oauth_identities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    provider_user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE (provider, provider_user_id)
+                )",
+            )
+            .await
+            .unwrap();
+            db
+        }
+
+        let db = mem_db().await;
+
+        let now = chrono::Utc::now().fixed_offset();
+        let victim = user::ActiveModel {
+            name: Set("Victim".to_string()),
+            email: Set("victim@corp.com".to_string()),
+            password: Set(Some("password-hash".to_string())),
+            role: Set(user::UserRole::User),
+            is_verified: Set(true),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .unwrap();
+
+        // Facebook-style attempt: provider asserts an email it never verified.
+        // find_or_create_user_for_oauth must refuse before any link/create, so
+        // finish_oauth_login (and its session) is never reached for the victim.
+        let error = find_or_create_user_for_oauth(
+            &db,
+            OAuthProvider::Facebook,
+            "attacker-fb-id",
+            Some("victim@corp.com".to_string()),
+            "Attacker".to_string(),
+            false,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::OperationNotAllowed);
+
+        let reloaded = user::Entity::find_by_email(&db, "victim@corp.com".to_string())
+            .await
+            .unwrap()
+            .expect("victim account still exists");
+        assert_eq!(reloaded.id, victim.id);
+        assert!(
+            reloaded.oauth_provider.is_none(),
+            "victim account must not be marked as OAuth-owned"
+        );
+        assert!(
+            user_oauth_identity::Entity::find_by_provider(&db, "facebook", "attacker-fb-id")
+                .await
+                .unwrap()
+                .is_none(),
+            "no identity link row may be created for the attacker"
+        );
     }
 }

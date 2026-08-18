@@ -25,7 +25,8 @@ use crate::services::paywall;
 use crate::AppState;
 
 use crate::services::billing::provider::{
-    canonical, canonical_subscription_status, BillingProvider, ParsedWebhook, WebhookEvent,
+    canonical, canonical_subscription_status, is_refund_or_dispute_event_type, BillingProvider,
+    ParsedWebhook, WebhookEvent,
 };
 
 use super::validator::*;
@@ -1027,10 +1028,97 @@ async fn process_webhook_event(
                 "Payment recorded from webhook (server-bound intent)"
             );
         }
+        _ if is_refund_or_dispute_event_type(&event.event_type) => {
+            process_refund_or_dispute(state, event, provider_name).await?;
+        }
         _ => {
             tracing::info!(event_type = %event.event_type, "Unhandled billing webhook event");
         }
     }
+    Ok(())
+}
+
+/// One-time post entitlements revoke by row deletion (the paywall grants on row
+/// existence); the target is linked only through provider-propagated checkout
+/// metadata — never client-reshapable fields.
+fn refund_post_target(event: &ParsedWebhook) -> Option<(i32, i32)> {
+    let user_id = event.user_id?;
+    let post_id = event.data["data"]["object"]["metadata"]["post_id"]
+        .as_str()
+        .and_then(|s| s.parse().ok())?;
+    Some((user_id, post_id))
+}
+
+async fn process_refund_or_dispute(
+    state: &AppState,
+    event: &ParsedWebhook,
+    provider_name: &str,
+) -> Result<(), ErrorResponse> {
+    if let Some((user_id, post_id)) = refund_post_target(event) {
+        let res = post_purchase::Entity::delete_many()
+            .filter(post_purchase::Column::UserId.eq(user_id))
+            .filter(post_purchase::Column::PostId.eq(post_id))
+            .filter(post_purchase::Column::Provider.eq(provider_name))
+            .exec(&state.sea_db)
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
+        if res.rows_affected > 0 {
+            tracing::warn!(
+                user_id,
+                post_id,
+                provider = provider_name,
+                "Refund/dispute revoked a one-time post purchase"
+            );
+        }
+    }
+
+    if let Some(payment_id) = event.payment_id.as_deref().filter(|p| !p.is_empty()) {
+        let found = payment::Entity::find()
+            .filter(payment::Column::Provider.eq(provider_name))
+            .filter(payment::Column::ProviderPaymentId.eq(payment_id))
+            .one(&state.sea_db)
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
+        if let Some(row) = found {
+            let mut active: payment::ActiveModel = row.into();
+            active.status = Set(payment::model::PaymentStatus::Refunded);
+            active.updated_at = Set(chrono::Utc::now().fixed_offset());
+            active
+                .update(&state.sea_db)
+                .await
+                .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
+            tracing::warn!(
+                payment_id,
+                provider = provider_name,
+                "Payment flagged refunded from webhook"
+            );
+        }
+    }
+
+    if let Some(sub_id) = event.subscription_id.as_deref().filter(|s| !s.is_empty()) {
+        let found = subscription::Entity::find()
+            .filter(subscription::Column::ProviderSubscriptionId.eq(sub_id))
+            .filter(subscription::Column::Provider.eq(provider_name))
+            .one(&state.sea_db)
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
+        if let Some(row) = found {
+            let mut active: subscription::ActiveModel = row.into();
+            active.status = Set(subscription::model::SubscriptionStatus::Canceled);
+            active.cancel_at_period_end = Set(false);
+            active.updated_at = Set(chrono::Utc::now().fixed_offset());
+            active
+                .update(&state.sea_db)
+                .await
+                .map_err(|_| ErrorResponse::new(ErrorCode::QueryError))?;
+            tracing::warn!(
+                subscription_id = sub_id,
+                provider = provider_name,
+                "Subscription canceled after refund/dispute"
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -1193,5 +1281,60 @@ mod tests {
         event.checkout_session_id = Some(String::new());
         event.payment_id = Some("pay_000".to_string());
         assert_eq!(resolve_intent_session_id(&event), "pay_000");
+    }
+
+    #[tokio::test]
+    async fn stripe_refund_webhook_is_detected_and_yields_revocation_targets() {
+        let secret = "whsec_refund".to_string();
+        let provider = StripeProvider::new("sk_test".into(), secret.clone());
+        let body = br#"{"type":"charge.refunded","data":{"object":{"id":"ch_1","payment_intent":"pi_r1","metadata":{"user_id":"42","post_id":"7"}}}}"#;
+        let now = chrono::Utc::now().timestamp();
+        let ts_str = now.to_string();
+        let mut signed = Vec::with_capacity(ts_str.len() + 1 + body.len());
+        signed.extend_from_slice(ts_str.as_bytes());
+        signed.push(b'.');
+        signed.extend_from_slice(body);
+        let v1 =
+            crate::services::billing::webhook_util::hmac_sha256_hex(secret.as_bytes(), &signed);
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Stripe-Signature",
+            format!("t={now},v1={v1}").parse().unwrap(),
+        );
+        let parsed = provider
+            .verify_webhook(WebhookEvent {
+                provider: "stripe".into(),
+                payload: body.to_vec(),
+                headers,
+                query: None,
+            })
+            .await
+            .expect("genuine refund webhook must verify");
+
+        assert!(is_refund_or_dispute_event_type(&parsed.event_type));
+        assert_eq!(parsed.event_type, "charge.refunded");
+        assert_eq!(parsed.payment_id.as_deref(), Some("pi_r1"));
+        assert_eq!(refund_post_target(&parsed), Some((42, 7)));
+    }
+
+    #[test]
+    fn refund_without_metadata_targets_no_post_entitlement() {
+        let event = ParsedWebhook {
+            event_type: "PAYMENT.SALE.REFUNDED".to_string(),
+            customer_id: String::new(),
+            subscription_id: Some("I-SUB1".to_string()),
+            payment_id: Some("S-1".to_string()),
+            current_period_end: None,
+            checkout_session_id: None,
+            subscription_status: None,
+            user_id: None,
+            amount_cents: None,
+            currency: None,
+            data: serde_json::json!({ "resource": { "billing_agreement_id": "I-SUB1" } }),
+        };
+        assert!(is_refund_or_dispute_event_type(&event.event_type));
+        assert_eq!(refund_post_target(&event), None);
+        assert_eq!(event.subscription_id.as_deref(), Some("I-SUB1"));
     }
 }

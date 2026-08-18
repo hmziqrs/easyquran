@@ -10,10 +10,17 @@ import {
   type ParsedReaderRoute,
 } from "$lib/server/reader-route";
 import type { Handle, RequestEvent } from "@sveltejs/kit";
+import { randomBytes } from "node:crypto";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
 const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
+
+const NONCE_PLACEHOLDER = "%csp-nonce%";
+
+function freshNonce(): string {
+  return randomBytes(16).toString("base64");
+}
 
 function translationRouteCacheKey(
   route: ParsedReaderRoute | null,
@@ -33,7 +40,7 @@ function withTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
 }
 
-function buildCsp(): string {
+function buildCsp(nonce: string | undefined): string {
   const api = QURAN.apiBase ? withTrailingSlash(QURAN.apiBase) : "";
   const connectSrc = [
     "'self'",
@@ -54,9 +61,15 @@ function buildCsp(): string {
   if (import.meta.env.DEV) {
     connectSrc.push("http://localhost:*", "ws://localhost:*", "wss://localhost:*");
   }
+  const scriptSrc = ["'self'"];
+  if (nonce) scriptSrc.push(`'nonce-${nonce}'`);
+  scriptSrc.push("https://www.gstatic.com", "https://www.googletagmanager.com");
+  if (import.meta.env.DEV) {
+    scriptSrc.push("'unsafe-inline'");
+  }
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googletagmanager.com",
+    `script-src ${scriptSrc.join(" ")}`,
     `connect-src ${connectSrc.join(" ")}`,
     "worker-src 'self' blob:",
     "img-src 'self' data: https:",
@@ -82,11 +95,17 @@ function responseSetsCookie(response: Response): boolean {
   return typeof getter === "function" && getter.call(response.headers).length > 0;
 }
 
-export function applyHeaders(response: Response, pathname: string, requestHasCookie = false): void {
-  response.headers.set("Content-Security-Policy", buildCsp());
+export function applyHeaders(
+  response: Response,
+  pathname: string,
+  requestHasCookie = false,
+  nonce?: string,
+): void {
+  response.headers.set("Content-Security-Policy", buildCsp(nonce));
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   const translationPending = response.headers.get("x-eq-translation-pending");
   const privateMode = requestHasCookie || responseSetsCookie(response);
   const isImmutableAsset =
@@ -112,6 +131,10 @@ interface DocumentAttributes {
   readonly dir: UiDirection;
 }
 
+interface NonceHolder {
+  nonce?: string;
+}
+
 function documentAttributes(uiLocale: UiLocale | null): DocumentAttributes {
   if (uiLocale) return { lang: uiLocale, dir: uiDirection(uiLocale) };
   return { lang: "en", dir: "ltr" };
@@ -121,6 +144,10 @@ function transformRootHtml(html: string, attributes: DocumentAttributes): string
   return html
     .replace('lang="%lang%"', `lang="${attributes.lang}"`)
     .replace('dir="%dir%"', `dir="${attributes.dir}"`);
+}
+
+function tagInlineScripts(html: string, nonce: string): string {
+  return html.replaceAll("<script>", `<script nonce="${nonce}">`);
 }
 
 function legacyReaderRedirect(event: RequestEvent): Response | null {
@@ -170,26 +197,30 @@ async function resolveRequest(
   uiLocale: UiLocale | null,
   readerRoute: ParsedReaderRoute | null,
   requestHasCookie: boolean,
-): Promise<Response> {
+): Promise<{ response: Response; nonce: string }> {
   const key = translationRouteCacheKey(readerRoute, uiLocale);
   const cacheable =
     event.request.method === "GET" && !event.isDataRequest && key !== null && !requestHasCookie;
   const attributes = documentAttributes(uiLocale);
+  const nonce = freshNonce();
   const resolveOpts = {
-    transformPageChunk: ({ html }: { html: string }) => transformRootHtml(html, attributes),
+    transformPageChunk: ({ html }: { html: string }) => {
+      const out = transformRootHtml(html, attributes);
+      return building ? out : tagInlineScripts(out, nonce);
+    },
   };
 
   if (cacheable) {
     const hit = await getCachedHtml(key);
     if (hit !== null) {
-      const response = new Response(hit, {
+      const response = new Response(hit.replaceAll(NONCE_PLACEHOLDER, nonce), {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "server-timing": 'quran_ssr_cache;desc="hit"',
           "x-easyquran-quran-cache": "hit",
         },
       });
-      return response;
+      return { response, nonce };
     }
     const response = await resolve(event, resolveOpts);
     const contentType = response.headers.get("content-type") ?? "";
@@ -203,15 +234,17 @@ async function resolveRequest(
       const clone = response.clone();
       await clone
         .text()
-        .then((html) => setCachedHtml(key, html))
+        .then((html) =>
+          setCachedHtml(key, html.replaceAll(`nonce="${nonce}"`, `nonce="${NONCE_PLACEHOLDER}"`)),
+        )
         .catch(() => {});
     }
     response.headers.set("server-timing", 'quran_ssr_cache;desc="miss"');
     response.headers.set("x-easyquran-quran-cache", "miss");
-    return response;
+    return { response, nonce };
   }
 
-  return resolve(event, resolveOpts);
+  return { response: await resolve(event, resolveOpts), nonce };
 }
 
 function isLocalizedMarketingPath(pathname: string): boolean {
@@ -222,6 +255,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
   const requestHasCookie = !!event.request.headers.get("cookie");
   let response = legacyReaderRedirect(event);
+  let nonce: string | undefined;
 
   if (!response) {
     const readerLocale = localizedReaderLocale(pathname);
@@ -232,23 +266,29 @@ export const handle: Handle = async ({ event, resolve }) => {
     } else if (readerLocale && !parseReaderRoute(event.route.id, event.params)) {
       response = notFound();
     } else if (useI18n) {
+      const resolved: NonceHolder = {};
       response = await paraglideMiddleware(event.request, async ({ request, locale }) => {
         if (!isUiLocale(locale)) return notFound();
         event.request = request;
         const readerRoute = readerLocale ? parseReaderRoute(event.route.id, event.params) : null;
-        return resolveRequest(event, resolve, locale, readerRoute, requestHasCookie);
+        const out = await resolveRequest(event, resolve, locale, readerRoute, requestHasCookie);
+        resolved.nonce = out.nonce;
+        return out.response;
       });
+      if (resolved.nonce) nonce = resolved.nonce;
     } else {
-      response = await resolveRequest(
+      const resolved = await resolveRequest(
         event,
         resolve,
         null,
         parseReaderRoute(event.route.id, event.params),
         requestHasCookie,
       );
+      response = resolved.response;
+      nonce = resolved.nonce;
     }
   }
 
-  applyHeaders(response, pathname, requestHasCookie);
+  applyHeaders(response, pathname, requestHasCookie, nonce);
   return response;
 };

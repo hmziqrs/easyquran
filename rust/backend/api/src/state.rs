@@ -71,8 +71,12 @@ impl FromRef<AppState> for AuthBackend {
     }
 }
 
-pub const KNOWN_COOKIE_KEY_PLACEHOLDERS: &[&str] =
-    &["CHANGE_ME_rotate_me_generate_with_openssl_rand_hex_32___"];
+pub const KNOWN_COOKIE_KEY_PLACEHOLDERS: &[&str] = &[
+    "CHANGE_ME_rotate_me_generate_with_openssl_rand_hex_32___",
+    // Shipped values (root + deploy templates; pinned by the template-scan test):
+    "CHANGE_ME_generate_with_openssl_rand_hex_32_______________________",
+    "CHANGE_ME_openssl_rand_hex_32",
+];
 
 pub fn validate_cookie_key(key: &str) -> Result<(), String> {
     if key.trim().is_empty() {
@@ -138,6 +142,16 @@ pub fn derive_field_enc_key() -> [u8; 32] {
              Export 32 raw bytes, e.g. FIELD_ENC_KEY=\"$(openssl rand -base64 32 \
              | head -c 32)\". See CRYPTO_AUDIT.md V-MED-11.",
             key_bytes.len()
+        );
+    }
+
+    // Exactly 32 bytes, so the length gate alone would wave the public dev
+    // default through; production must refuse it even when explicitly set.
+    if is_prod && key_bytes == FIELD_ENC_KEY_DEV_DEFAULT {
+        panic!(
+            "FIELD_ENC_KEY equals the public dev default in production. \
+             Generate a per-env 32-byte key with: openssl rand -base64 32 \
+             (then take 32 raw bytes). See CRYPTO_AUDIT.md V-MED-11."
         );
     }
 
@@ -273,6 +287,66 @@ mod tests {
             32,
             "dev default must be exactly 32 bytes for AES-256"
         );
+    }
+
+    #[test]
+    fn cookie_key_placeholders_cover_every_shipped_env_template() {
+        // Regression: the blocklist must contain every COOKIE_KEY value actually
+        // shipped in the repo's committed .env templates, so a copied template
+        // can never boot as a "real" key.
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let templates = [
+            "../../../.env.example".to_string(),
+            "../../../deploy/.env.example".to_string(),
+        ];
+        let mut scanned = 0;
+        for rel in templates {
+            let path = manifest_dir.join(&rel);
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for line in content.lines() {
+                if let Some(value) = line.strip_prefix("COOKIE_KEY=") {
+                    let v = value.trim();
+                    if v.is_empty() {
+                        continue;
+                    }
+                    assert!(
+                        KNOWN_COOKIE_KEY_PLACEHOLDERS.contains(&v),
+                        "shipped COOKIE_KEY template value '{v}' ({rel}) is not blocklisted"
+                    );
+                    scanned += 1;
+                }
+            }
+        }
+        assert!(scanned > 0, "expected at least one shipped template to scan");
+    }
+
+    #[test]
+    fn field_enc_key_prod_rejects_dev_default_value() {
+        let _g = crate::config::settings::TEST_ENV_MUTEX.lock().unwrap();
+        let prev = std::env::var("FIELD_ENC_KEY").ok();
+        let prev_env = std::env::var("RUST_ENV").ok();
+        std::env::set_var(
+            "FIELD_ENC_KEY",
+            String::from_utf8(FIELD_ENC_KEY_DEV_DEFAULT.to_vec()).unwrap(),
+        );
+        std::env::set_var("RUST_ENV", "production");
+
+        let result = std::panic::catch_unwind(derive_field_enc_key);
+        assert!(
+            result.is_err(),
+            "production must refuse to run on the public dev default FIELD_ENC_KEY"
+        );
+
+        match prev {
+            Some(v) => std::env::set_var("FIELD_ENC_KEY", v),
+            None => std::env::remove_var("FIELD_ENC_KEY"),
+        }
+        match prev_env {
+            Some(v) => std::env::set_var("RUST_ENV", v),
+            None => std::env::remove_var("RUST_ENV"),
+        }
     }
 
     #[test]

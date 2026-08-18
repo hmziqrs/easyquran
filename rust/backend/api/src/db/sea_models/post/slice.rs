@@ -102,7 +102,6 @@ pub struct PostTag {
 pub struct PostAuthor {
     pub id: i32,
     pub name: String,
-    pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar: Option<AuthorMedia>,
 }
@@ -188,7 +187,6 @@ pub struct PostWithJoinedData {
     pub category_id: i32,
 
     pub author_name: String,
-    pub author_email: String,
     pub author_avatar_id: Option<i32>,
 
     pub author_avatar_object_key: Option<String>,
@@ -335,7 +333,6 @@ impl PostWithJoinedData {
             author: PostAuthor {
                 id: self.author_id,
                 name: self.author_name.clone(),
-                email: self.author_email.clone(),
                 avatar,
             },
             comment_count: self.comment_count,
@@ -344,5 +341,24 @@ impl PostWithJoinedData {
             currency: None,
             has_access: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn post_author_projection_omits_email() {
+        let author = PostAuthor {
+            id: 1,
+            name: "Author".to_string(),
+            avatar: None,
+        };
+        let json = serde_json::to_value(&author).unwrap();
+        assert!(
+            json.get("email").is_none(),
+            "public author projection must not carry the account email"
+        );
     }
 }

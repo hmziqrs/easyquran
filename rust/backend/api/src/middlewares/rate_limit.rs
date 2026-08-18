@@ -4,6 +4,7 @@ use crate::error::{ErrorCode, ErrorResponse};
 use crate::state::AppState;
 
 pub use rux_request_gate::{PathKey, RateLimitLayer};
+use rux_request_gate::{ClientIpIdentitySource, IdentitySource, RequestIdentity};
 
 fn blocked_response(info: rux_request_gate::BlockInfo) -> axum::response::Response {
     ErrorResponse::new(ErrorCode::RateLimited)
@@ -15,8 +16,12 @@ fn blocked_response(info: rux_request_gate::BlockInfo) -> axum::response::Respon
         .into_response()
 }
 
+// Matched (not Raw): the route pattern keys the bucket, so parameterized routes
+// (e.g. /post/v1/{slug}) share ONE bucket per route instead of fanning into an
+// unbounded per-URI key space that defeats the per-IP ceiling.
 pub fn rate_limit_layer(state: &AppState, max_requests: u64, window_secs: u64) -> RateLimitLayer {
     RateLimitLayer::builder(state.gate_store.clone(), max_requests, window_secs)
+        .path_key(PathKey::Matched)
         .on_block(blocked_response)
         .build()
 }
@@ -73,12 +78,36 @@ pub fn quran_internal_layer(state: &AppState) -> RateLimitLayer {
         .build()
 }
 
-/// Public readiness bucket. Identity-independent (health is exempt from identity
-/// resolution, so health checks key into one isolated non-IP bucket); never
-/// shares content or escalation state.
+/// Health-bucket identity: the TCP peer (`ConnectInfo`). Health routes are
+/// exempt from header identity resolution, so the default source would key the
+/// Docker healthcheck (localhost curl) and anonymous public traffic into ONE
+/// shared "unknown" bucket — a public flood on /quran/health/ready would starve
+/// the container healthcheck until Docker restarts the api. Keying by peer
+/// splits them: the loopback healthcheck owns its own bucket, public traffic
+/// lands on the proxy peer's. Falls back to the extension-based source only
+/// when no ConnectInfo exists (harnesses serving without connect_info).
+#[derive(Clone, Copy, Default, Debug)]
+struct HealthPeerIdentitySource;
+
+impl IdentitySource for HealthPeerIdentitySource {
+    fn resolve(&self, req: &axum::extract::Request) -> Option<RequestIdentity> {
+        if let Some(peer) = req
+            .extensions()
+            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        {
+            return Some(RequestIdentity::External(peer.ip()));
+        }
+        ClientIpIdentitySource.resolve(req)
+    }
+}
+
+/// Public readiness bucket. Keyed by TCP peer (health is exempt from header
+/// identity resolution; the localhost Docker healthcheck never shares a bucket
+/// with anonymous public traffic); never shares content or escalation state.
 pub fn quran_health_layer(state: &AppState) -> RateLimitLayer {
     let max = state.settings.rate_limit.health_requests_per_minute.max(1);
     RateLimitLayer::builder(state.gate_store.clone(), max, 60)
+        .identity_source(std::sync::Arc::new(HealthPeerIdentitySource))
         .path_key(PathKey::Fixed("quran-health"))
         .applies(is_health_route)
         .on_block(blocked_response)
@@ -136,6 +165,7 @@ mod tests {
     }
     fn health_layer(store: Arc<dyn RateLimitStore>) -> RateLimitLayer {
         RateLimitLayer::builder(store, MAX, 60)
+            .identity_source(Arc::new(HealthPeerIdentitySource))
             .path_key(PathKey::Fixed("quran-health"))
             .applies(is_health_route)
             .build()
@@ -166,6 +196,22 @@ mod tests {
     // content vs health split is by path key, not by identity.
     fn health_req() -> axum::extract::Request {
         request("/healthz", RequestIdentity::External(ext_ip()))
+    }
+
+    // Health request whose TCP peer is `ip` (as `into_make_service_with_connect_info`
+    // layers it in production). Carries a DIFFERENT identity extension to prove
+    // the ConnectInfo peer wins for the health bucket.
+    fn health_req_from_peer(ip: IpAddr) -> axum::extract::Request {
+        let mut r = axum::http::Request::builder()
+            .method("GET")
+            .uri("/healthz")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        r.extensions_mut()
+            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::new(ip, 31337)));
+        r.extensions_mut()
+            .insert(RequestIdentity::External(ext_ip()));
+        r
     }
 
     use axum::http::StatusCode;
@@ -333,5 +379,42 @@ mod tests {
         assert_eq!(count_for(&mem, "ratelimit:203.0.113.5/32:quran-health"), 3);
         assert_eq!(count_for(&mem, "ratelimit:203.0.113.5/32:quran-v1"), 1);
         assert_eq!(count_for(&mem, "ratelimit:internal-webssr:quran-v1"), 1);
+    }
+
+    // M10: the Docker healthcheck (loopback peer) and public health traffic
+    // (proxy peer) must land in DIFFERENT buckets — exhausting the public one
+    // cannot 429 the container healthcheck.
+    #[tokio::test]
+    async fn public_health_flood_does_not_starve_the_local_healthcheck() {
+        let mem = Arc::new(InMemoryStore::default());
+        let store = mem.clone() as Arc<dyn RateLimitStore>;
+        let svc = health_layer(store).layer(OkService);
+
+        let public_peer: IpAddr = "10.0.0.9".parse().unwrap();
+        for _ in 0..3 {
+            let _ = svc
+                .clone()
+                .oneshot(health_req_from_peer(public_peer))
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            count_for(&mem, "ratelimit:10.0.0.9/32:quran-health"),
+            3,
+            "public peer flood must exhaust only its own bucket"
+        );
+
+        // Loopback healthcheck: still allowed, own bucket.
+        let resp = svc
+            .clone()
+            .oneshot(health_req_from_peer("127.0.0.1".parse().unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "local healthcheck must be immune to a public health flood"
+        );
+        assert_eq!(count_for(&mem, "ratelimit:127.0.0.1/32:quran-health"), 1);
     }
 }

@@ -149,7 +149,8 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 maxminddb = "0.27"
 tower = { version = "0.5", features = ["util"] }
-oauth2 = { version = "4.4" }
+# oauth2 5.x: reqwest 0.12 + rustls 0.23 only — 4.x pulled reqwest 0.11/rustls 0.21/webpki 0.101 (RUSTSEC-2026-0098/0099/0104 chain).
+oauth2 = { version = "5" }
 # jsonwebtoken: floor raised to 10.4 — CVE-2026-25537 (type confusion) affects <10.3.0; the root lockfile resolves 10.4.0, and pinning the floor here guarantees a future resolve can't pull a vulnerable 10.2.x.
 jsonwebtoken = { version = "10.4", features = ["aws_lc_rs"] }
 ratatui = "0.29"

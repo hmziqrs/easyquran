@@ -26,6 +26,19 @@ pub const MAIL_RCPT_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     block_duration: 24 * 60 * 60,
 };
 
+/// Transactional mail (password reset / verification) is exempt from the tight
+/// marketing cap but not uncapped: 30/hour per recipient stops a reset-mail
+/// flood (~1440/day) against a victim's mailbox while leaving legitimate
+/// account-recovery flows untouched.
+pub const MAIL_RCPT_TRANSACTIONAL_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
+    temp_block_attempts: 30,
+    temp_block_range: 60 * 60,
+    temp_block_duration: 60 * 60,
+    block_retry_limit: 90,
+    block_range: 24 * 60 * 60,
+    block_duration: 24 * 60 * 60,
+};
+
 pub const MAIL_PROVIDER_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     temp_block_attempts: 50,
     temp_block_range: 60,
@@ -38,6 +51,7 @@ pub const MAIL_PROVIDER_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
 #[derive(Clone)]
 pub struct MailRouterLimits {
     pub rcpt: AbuseLimiterConfig,
+    pub rcpt_transactional: AbuseLimiterConfig,
     pub provider: AbuseLimiterConfig,
     pub dedup_ttl_secs: usize,
     pub soft_cooldown_secs: i64,
@@ -47,6 +61,7 @@ impl Default for MailRouterLimits {
     fn default() -> Self {
         Self {
             rcpt: MAIL_RCPT_CFG,
+            rcpt_transactional: MAIL_RCPT_TRANSACTIONAL_CFG,
             provider: MAIL_PROVIDER_CFG,
             dedup_ttl_secs: 300,
             soft_cooldown_secs: 24 * 60 * 60,
@@ -119,14 +134,27 @@ impl MailRouter {
         Ok(row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown))
     }
 
-    async fn check_rate(&self, recipient: &str) -> Result<(), MailError> {
-        self.enforce(&format!("mail:send:rcpt:{recipient}"), self.limits.rcpt)
+    async fn check_rate(&self, recipient: &str, transactional: bool) -> Result<(), MailError> {
+        // Transactional mail gets its own (looser) bucket: a shared key would
+        // mix two configs into one attempt deque and let a reset-mail burst
+        // burn the marketing budget (or vice versa).
+        let (rcpt_key, rcpt_cfg) = if transactional {
+            (
+                format!("mail:send:rcpt:txn:{recipient}"),
+                self.limits.rcpt_transactional,
+            )
+        } else {
+            (format!("mail:send:rcpt:{recipient}"), self.limits.rcpt)
+        };
+        self.enforce(&rcpt_key, rcpt_cfg).await?;
+        // Provider-wide circuit breaker is marketing-only; transactional sends are per-user limited at the controller.
+        if !transactional {
+            self.enforce(
+                &format!("mail:send:provider:{}", self.registry.default_provider()),
+                self.limits.provider,
+            )
             .await?;
-        self.enforce(
-            &format!("mail:send:provider:{}", self.registry.default_provider()),
-            self.limits.provider,
-        )
-        .await?;
+        }
         Ok(())
     }
 
@@ -245,9 +273,9 @@ impl MailProvider for MailRouter {
             None
         };
 
-        // Transactional sends are rate-limited at the controller (per user_id); exempt here or they get double-limited under a different key.
-        if self.rate_limit_enabled && !transactional {
-            if let Err(e) = self.check_rate(&msg.to).await {
+        // Transactional sends are also per-user limited at the controller; here they pass under the looser transactional bucket (30/hour) instead of no cap at all.
+        if self.rate_limit_enabled {
+            if let Err(e) = self.check_rate(&msg.to, transactional).await {
                 self.release_dedup(dedup_claim.as_deref()).await;
                 return Err(e);
             }
@@ -325,6 +353,73 @@ pub fn canonicalize_recipient(input: &str) -> Result<String, MailError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::mail::provider::TEMPLATE_PASSWORD_RESET;
+
+    async fn capped_router() -> MailRouter {
+        use crate::services::mail::none::NoOpMailProvider;
+        use std::collections::HashMap;
+
+        let db = sea_orm::Database::connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite connects");
+        let providers: HashMap<String, Arc<dyn MailProvider>> = [(
+            "none".to_string(),
+            Arc::new(NoOpMailProvider) as Arc<dyn MailProvider>,
+        )]
+        .into_iter()
+        .collect();
+        MailRouter::new(
+            providers,
+            "none".to_string(),
+            Arc::new(rux_request_gate::InMemoryStore::default()),
+            db,
+            MailRouterLimits::default(),
+            true,
+        )
+    }
+
+    fn txn_msg(to: &str) -> OutboundEmail {
+        OutboundEmail {
+            to: to.to_string(),
+            subject: "Password reset verification code".to_string(),
+            html: None,
+            text: None,
+            template: Some(TEMPLATE_PASSWORD_RESET),
+        }
+    }
+
+    #[tokio::test]
+    async fn transactional_sends_cap_at_30_per_hour() {
+        let router = capped_router().await;
+
+        for _ in 0..29 {
+            assert!(
+                router.send(txn_msg("victim@example.com")).await.is_ok(),
+                "transactional sends below the hourly threshold must pass"
+            );
+        }
+        // The 30th attempt within the hour trips the temp block.
+        match router.send(txn_msg("victim@example.com")).await {
+            Err(MailError::Throttled { .. }) => {}
+            other => panic!("expected Throttled on the 30th send, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn transactional_sends_do_not_burn_the_marketing_rcpt_bucket() {
+        let router = capped_router().await;
+
+        for _ in 0..10 {
+            assert!(router.send(txn_msg("victim@example.com")).await.is_ok());
+        }
+        let mut m = txn_msg("victim@example.com");
+        m.template = Some(TEMPLATE_NEWSLETTER);
+        m.subject = "Weekly".to_string();
+        assert!(
+            router.send(m).await.is_ok(),
+            "marketing bucket must stay separate — a shared key would temp-block at 5 attempts"
+        );
+    }
 
     #[test]
     fn canonicalize_trims_and_lowercases() {

@@ -33,6 +33,11 @@ contains() {
 	if grep -qi -- "$needle" <<<"$haystack"; then ok "$label"; else fail_ "$label (missing '$needle')"; fi
 }
 
+absent() {
+	local label="$1" haystack="$2" needle="$3"
+	if grep -qi -- "$needle" <<<"$haystack"; then fail_ "$label (unexpected '$needle')"; else ok "$label"; fi
+}
+
 code_is() {
 	local label="$1" got="$2" want="$3"
 	if [[ "$got" == "$want" ]]; then ok "$label ($got)"; else fail_ "$label (got $got, want $want)"; fi
@@ -63,8 +68,8 @@ contains "$translation_path warm request is served by disk cache" "$translation_
 translation_data_headers=$(curl -sS -D - -o /dev/null "$ORIGIN$translation_path/__data.json")
 contains "translation __data.json remains data, never cached HTML" "$translation_data_headers" 'content-type: application/json'
 web_quran_health=$(curl -sS "$ORIGIN/health/quran")
-contains "web Quran health exports translated-page cache metrics" "$web_quran_health" '"translatedPageCache"'
-contains "web Quran health exports disk cache byte usage" "$web_quran_health" '"bytes"'
+contains "web Quran health reports readiness only" "$web_quran_health" '"ready":true'
+absent "web Quran health leaks no cache metrics" "$web_quran_health" 'translatedPageCache'
 
 contains "/_app/version.json is no-cache"    "$(curl -sSI "$ORIGIN/_app/version.json")" 'no-cache'
 contains "/service-worker.js is no-cache"    "$(curl -sSI "$ORIGIN/service-worker.js")" 'no-cache'

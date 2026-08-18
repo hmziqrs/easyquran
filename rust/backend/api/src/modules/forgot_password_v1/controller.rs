@@ -11,7 +11,7 @@ use crate::{
     extractors::ValidatedJson,
     services::{
         abuse_limiter,
-        mail::{mail_error_kind, mail_error_to_response, send_forgot_password_email},
+        mail::{mail_error_kind, mail_error_to_response, send_forgot_password_email, MailError},
     },
     AppState,
 };
@@ -80,7 +80,7 @@ mod reset_token {
     }
 }
 
-/// Shared by both `generate` branches so the response leaks no account existence (SC-006); do not diverge them.
+/// Shared by every `generate` exit (unknown email, in-delay, mail throttled, sent) so the response leaks no account existence (SC-006); do not diverge them.
 pub(crate) fn uniform_success_response() -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::OK,
@@ -140,12 +140,9 @@ pub async fn generate(
     match forgot_password::Entity::find_query(pool, Some(user_id), None, None).await {
         Ok(verification) => {
             if verification.is_in_delay() {
+                // Delay stays enforced (no new code, no email) but the response must stay uniform — a distinct status here would confirm the account exists.
                 warn!(user_id, "Forgot password in delay period");
-                return Err(ErrorResponse::new(ErrorCode::TooManyAttempts)
-                    .with_message(
-                        "You have already requested a verification code. Please try again after 1 minute",
-                    )
-                    .with_retry_after(60));
+                return Ok(uniform_success_response());
             }
         }
         Err(err) => {
@@ -164,6 +161,15 @@ pub async fn generate(
         return Err(err);
     }
     if let Err(err) = send_forgot_password_email(&state.mailer, &payload.email, &code).await {
+        // The per-recipient transactional cap must not turn into an account-existence oracle — throttling returns the uniform envelope too.
+        if matches!(err, MailError::Throttled { .. }) {
+            warn!(
+                user_id,
+                error_kind = mail_error_kind(&err),
+                "Forgot password email throttled; returning uniform response"
+            );
+            return Ok(uniform_success_response());
+        }
         error!(
             user_id,
             error_kind = mail_error_kind(&err),
@@ -272,6 +278,23 @@ pub async fn reset(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generate_exits_stay_on_the_uniform_envelope() {
+        // Guard only the handler source — this test's own text must not satisfy the asserts.
+        let src = include_str!("controller.rs");
+        let (code, _) = src
+            .split_once("#[cfg(test)]")
+            .expect("tests module present");
+        assert!(
+            !code.contains("ErrorCode::TooManyAttempts"),
+            "generate must not answer with a direct 429 — the in-delay branch and every other exit share the uniform envelope; IP-scoped throttling stays in the abuse limiter"
+        );
+        assert!(
+            code.contains("MailError::Throttled"),
+            "a Throttled send must fall back to the uniform envelope or the transactional mail cap becomes an account-existence oracle"
+        );
+    }
 
     #[test]
     fn uniform_success_response_is_stable_and_non_leaking() {

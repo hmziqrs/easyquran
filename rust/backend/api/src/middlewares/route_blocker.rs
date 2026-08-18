@@ -2,7 +2,7 @@ use crate::error::RouteBlockerError;
 use crate::services::route_blocker_service::RouteBlockerService;
 use crate::state::AppState;
 use axum::{
-    extract::{MatchedPath, Request, State},
+    extract::{MatchedPath, Request},
     response::{IntoResponse, Response},
 };
 use std::future::Future;
@@ -81,9 +81,11 @@ where
 
             debug!(path = %path, pattern = %pattern, "Route blocker evaluating request");
 
-            // Route-pattern recording stays best-effort.
+            // Route-pattern recording stays best-effort (snapshot-gated in the
+            // service: one DB write per pattern, not per request).
             if matched_pattern.is_some() {
-                if let Err(err) = RouteBlockerService::record_route_pattern(&state, &pattern).await
+                if let Err(err) =
+                    RouteBlockerService::record_route_pattern(&state.sea_db, &pattern).await
                 {
                     error!(
                         pattern = %pattern,
@@ -94,7 +96,8 @@ where
             }
 
             // Fail-closed for matched private routes: only Ok(false) proceeds.
-            match RouteBlockerService::is_route_blocked(State(state.clone()), &pattern).await {
+            // Answered from the in-memory snapshot (5s TTL refresh).
+            match RouteBlockerService::is_route_blocked(&state.sea_db, &pattern).await {
                 Ok(true) => {
                     warn!(path = %path, pattern = %pattern, "Route blocked by dynamic route_blocker middleware");
                     let error_response: Response =
@@ -182,6 +185,7 @@ mod tests {
                 port: "0".into(),
                 ip_source: axum_client_ip::ClientIpSource::ConnectInfo,
                 cookie_secure: false,
+                trusted_proxy_cidrs: Vec::new(),
             },
             site: SiteSettings {
                 url: "http://localhost".into(),

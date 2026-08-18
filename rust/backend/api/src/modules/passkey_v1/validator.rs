@@ -1,15 +1,16 @@
-//! Passkey state is deserialized from the client-held blob safely: webauthn-rs cryptographically binds each state to its challenge, so tampered/replayed state is rejected at /finish.
+//! Finish payloads carry only an opaque server-issued state handle; the WebAuthn
+//! state itself is stored server-side (services/passkey_state) and never
+//! deserialized from the client.
 
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use webauthn_rs::prelude::{
-    PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-};
+use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1RegisterFinishPayload {
     pub credential: RegisterPublicKeyCredential,
-    pub registration_state: PasskeyRegistration,
+    #[validate(length(min = 1, max = 128))]
+    pub state_handle: String,
     #[validate(length(max = 128))]
     pub device_type: Option<String>,
     pub transports: Option<serde_json::Value>,
@@ -18,7 +19,8 @@ pub struct V1RegisterFinishPayload {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1LoginFinishPayload {
     pub credential: PublicKeyCredential,
-    pub authentication_state: PasskeyAuthentication,
+    #[validate(length(min = 1, max = 128))]
+    pub state_handle: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
@@ -30,52 +32,10 @@ pub struct V1RemovePasskeyPayload {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::sea_models::user;
-    use crate::services::webauthn::WebauthnService;
-    use chrono::TimeZone;
     use serde_json::json;
 
     const B64U: &str = "AA";
-
-    fn make_user() -> user::Model {
-        let now = chrono::Utc
-            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
-            .unwrap()
-            .fixed_offset();
-        user::Model {
-            id: 1,
-            name: "Pk User".to_string(),
-            email: "pk@example.com".to_string(),
-            password: None,
-            avatar_id: None,
-            is_verified: true,
-            role: user::UserRole::User,
-            two_fa_enabled: false,
-            two_fa_secret: None,
-            two_fa_backup_codes: None,
-            two_fa_last_totp_counter: None,
-            google_id: None,
-            oauth_provider: None,
-            session_auth_secret: "test-secret".to_string(),
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
-    fn svc() -> WebauthnService {
-        WebauthnService::new("example.com", "https://example.com", "Test")
-            .expect("dev WebAuthn service must construct for a real origin")
-    }
-
-    fn real_authentication_state() -> serde_json::Value {
-        let (_c, state) = svc().start_login().unwrap();
-        serde_json::to_value(&state).unwrap()
-    }
-
-    fn real_registration_state() -> serde_json::Value {
-        let (_c, state) = svc().start_registration(&make_user()).unwrap();
-        serde_json::to_value(&state).unwrap()
-    }
+    const HANDLE: &str = "state-handle-0123456789abcdef";
 
     fn login_credential_camel_case() -> serde_json::Value {
         json!({
@@ -103,15 +63,16 @@ mod tests {
     }
 
     #[test]
-    fn login_finish_accepts_camel_case_credential() {
+    fn login_finish_accepts_camel_case_credential_and_handle() {
         let body = json!({
             "credential": login_credential_camel_case(),
-            "authentication_state": real_authentication_state()
+            "state_handle": HANDLE
         });
         let payload: V1LoginFinishPayload =
             serde_json::from_value(body).expect("camelCase login finish must deserialize");
         assert_eq!(payload.credential.type_, "public-key");
         assert_eq!(payload.credential.raw_id.as_slice(), [0]);
+        assert_eq!(payload.state_handle, HANDLE);
     }
 
     #[test]
@@ -127,7 +88,7 @@ mod tests {
                     "signature": B64U
                 }
             },
-            "authentication_state": real_authentication_state()
+            "state_handle": HANDLE
         });
         assert!(
             serde_json::from_value::<V1LoginFinishPayload>(body).is_err(),
@@ -136,19 +97,44 @@ mod tests {
     }
 
     #[test]
-    fn login_finish_requires_authentication_state() {
+    fn login_finish_requires_state_handle() {
         let body = json!({ "credential": login_credential_camel_case() });
         assert!(
             serde_json::from_value::<V1LoginFinishPayload>(body).is_err(),
-            "missing authentication_state must be rejected"
+            "missing state_handle must be rejected"
         );
     }
 
     #[test]
-    fn register_finish_accepts_camel_case_credential() {
+    fn login_finish_rejects_client_forged_authentication_state() {
+        let body = json!({
+            "credential": login_credential_camel_case(),
+            "authentication_state": { "ast": { "credentials": [] } }
+        });
+        assert!(
+            serde_json::from_value::<V1LoginFinishPayload>(body).is_err(),
+            "a forged authentication_state carries no state_handle and must be rejected"
+        );
+    }
+
+    #[test]
+    fn login_finish_rejects_empty_state_handle() {
+        let body = json!({
+            "credential": login_credential_camel_case(),
+            "state_handle": ""
+        });
+        let payload = serde_json::from_value::<V1LoginFinishPayload>(body).unwrap();
+        assert!(
+            payload.validate().is_err(),
+            "empty state_handle must fail validation"
+        );
+    }
+
+    #[test]
+    fn register_finish_accepts_camel_case_credential_and_handle() {
         let body = json!({
             "credential": register_credential_camel_case(),
-            "registration_state": real_registration_state()
+            "state_handle": HANDLE
         });
         let payload: V1RegisterFinishPayload =
             serde_json::from_value(body).expect("camelCase register finish must deserialize");
@@ -168,7 +154,7 @@ mod tests {
                     "attestation_object": B64U
                 }
             },
-            "registration_state": real_registration_state()
+            "state_handle": HANDLE
         });
         assert!(
             serde_json::from_value::<V1RegisterFinishPayload>(body).is_err(),
@@ -177,11 +163,23 @@ mod tests {
     }
 
     #[test]
-    fn register_finish_requires_registration_state() {
+    fn register_finish_requires_state_handle() {
         let body = json!({ "credential": register_credential_camel_case() });
         assert!(
             serde_json::from_value::<V1RegisterFinishPayload>(body).is_err(),
-            "missing registration_state must be rejected"
+            "missing state_handle must be rejected"
+        );
+    }
+
+    #[test]
+    fn register_finish_rejects_client_forged_registration_state() {
+        let body = json!({
+            "credential": register_credential_camel_case(),
+            "registration_state": { "rs": {} }
+        });
+        assert!(
+            serde_json::from_value::<V1RegisterFinishPayload>(body).is_err(),
+            "a forged registration_state carries no state_handle and must be rejected"
         );
     }
 
@@ -189,11 +187,11 @@ mod tests {
     fn register_finish_rejects_oversized_device_type() {
         let body = json!({
             "credential": register_credential_camel_case(),
-            "registration_state": real_registration_state(),
+            "state_handle": HANDLE,
             "device_type": "x".repeat(129)
         });
-        let payload =
-            serde_json::from_value::<V1RegisterFinishPayload>(body).expect("parses before validate");
+        let payload = serde_json::from_value::<V1RegisterFinishPayload>(body)
+            .expect("parses before validate");
         assert!(
             payload.validate().is_err(),
             "device_type longer than 128 chars must fail validation"
@@ -204,12 +202,26 @@ mod tests {
     fn register_finish_accepts_max_device_type() {
         let body = json!({
             "credential": register_credential_camel_case(),
-            "registration_state": real_registration_state(),
+            "state_handle": HANDLE,
             "device_type": "x".repeat(128)
         });
-        let payload =
-            serde_json::from_value::<V1RegisterFinishPayload>(body).expect("parses before validate");
+        let payload = serde_json::from_value::<V1RegisterFinishPayload>(body)
+            .expect("parses before validate");
         assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn register_finish_rejects_oversized_state_handle() {
+        let body = json!({
+            "credential": register_credential_camel_case(),
+            "state_handle": "x".repeat(129)
+        });
+        let payload = serde_json::from_value::<V1RegisterFinishPayload>(body)
+            .expect("parses before validate");
+        assert!(
+            payload.validate().is_err(),
+            "state_handle longer than 128 chars must fail validation"
+        );
     }
 
     #[test]

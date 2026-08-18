@@ -111,17 +111,18 @@ impl From<&CategoryModel> for CategorySummary {
 struct UserSummary {
     id: i32,
     name: String,
-    email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
     role: user::UserRole,
     avatar_id: Option<i32>,
 }
 
-impl From<&UserModel> for UserSummary {
-    fn from(model: &UserModel) -> Self {
+impl UserSummary {
+    fn from_model(model: &UserModel, include_email: bool) -> Self {
         Self {
             id: model.id,
             name: model.name.clone(),
-            email: model.email.clone(),
+            email: include_email.then(|| model.email.clone()),
             role: model.role,
             avatar_id: model.avatar_id,
         }
@@ -266,7 +267,8 @@ pub async fn create(
 
     tracing::Span::current().record("is_duplicate", false);
 
-    // Fail-open on moderation provider error: a closed gate turns any moderation outage into a full upload outage.
+    // Fail-closed on moderation provider error: an unverifiable image is rejected
+    // rather than landing unmoderated (availability tradeoff accepted).
     if let Some(moderator) = state.storage.image_moderator.as_ref() {
         match moderator.classify(&file_bytes, &declared_mime).await {
             Ok(verdict) => {
@@ -293,8 +295,11 @@ pub async fn create(
                 error!(
                     user_id = uploader.id,
                     error = %err,
-                    "Image moderation provider error; failing open (upload allowed)"
+                    "Image moderation provider error; failing closed (upload rejected)"
                 );
+                tracing::Span::current().record("result", "moderation_unavailable");
+                return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
+                    .with_message("Image moderation is unavailable; upload rejected"));
             }
         }
     }
@@ -753,7 +758,9 @@ pub async fn list_usage_details(
                 });
             }
             media_usage::EntityType::User => {
-                let summary = user_map.get(&entity_id).map(UserSummary::from);
+                let summary = user_map
+                    .get(&entity_id)
+                    .map(|model| UserSummary::from_model(model, caller.is_moderator()));
                 entry.users.push(UserUsage {
                     usage_id,
                     field_name,
@@ -920,6 +927,22 @@ mod tests {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    #[test]
+    fn user_summary_hides_email_from_non_staff() {
+        let owner = make_user(7, UserRole::Author);
+        let summary = UserSummary::from_model(&owner, false);
+        assert!(summary.email.is_none());
+        let json = serde_json::to_value(&summary).unwrap();
+        assert!(json.get("email").is_none());
+    }
+
+    #[test]
+    fn user_summary_includes_email_for_staff_caller() {
+        let owner = make_user(7, UserRole::Author);
+        let summary = UserSummary::from_model(&owner, true);
+        assert_eq!(summary.email.as_deref(), Some("user-7@example.com"));
     }
 
     #[test]

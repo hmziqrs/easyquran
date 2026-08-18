@@ -1,11 +1,30 @@
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use super::provider::{
     BillingError, BillingProvider, CheckoutSession, ParsedWebhook, SubscriptionInfo, WebhookEvent,
 };
 
 use crate::state::build_http_client;
+
+const TOKEN_REFRESH_MARGIN_SECS: u64 = 60;
+const TOKEN_MIN_TTL_SECS: u64 = 30;
+const TOKEN_FALLBACK_TTL_SECS: u64 = 300;
+
+struct CachedAccessToken {
+    token: String,
+    expires_at: Instant,
+}
+
+fn token_ttl_from_expires_in(expires_in_secs: Option<u64>) -> Duration {
+    let ttl = expires_in_secs.unwrap_or(TOKEN_FALLBACK_TTL_SECS);
+    Duration::from_secs(
+        ttl.saturating_sub(TOKEN_REFRESH_MARGIN_SECS)
+            .max(TOKEN_MIN_TTL_SECS),
+    )
+}
 
 pub struct PayPalProvider {
     pub client_id: String,
@@ -14,6 +33,7 @@ pub struct PayPalProvider {
     pub webhook_id: Option<String>,
     pub base_url: String,
     pub http_client: reqwest::Client,
+    access_token_cache: Mutex<Option<CachedAccessToken>>,
 }
 
 impl PayPalProvider {
@@ -26,6 +46,7 @@ impl PayPalProvider {
             base_url: std::env::var("PAYPAL_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api-m.paypal.com".to_string()),
             http_client: build_http_client(),
+            access_token_cache: Mutex::new(None),
         }
     }
 
@@ -47,6 +68,22 @@ impl PayPalProvider {
 
 impl PayPalProvider {
     async fn get_access_token(&self) -> Result<String, BillingError> {
+        // Unauthenticated webhook verification hits this too — serve from cache
+        // until expiry so junk traffic cannot mint an outbound OAuth call per request.
+        {
+            let cache = self.access_token_cache.lock().map_err(|e| {
+                tracing::error!(error = %e, "paypal access token cache lock poisoned");
+                BillingError::Other("paypal access token cache lock poisoned".to_string())
+            })?;
+            if let Some(cached) = cache.as_ref() {
+                let still_valid = Instant::now() + Duration::from_secs(TOKEN_REFRESH_MARGIN_SECS)
+                    < cached.expires_at;
+                if still_valid {
+                    return Ok(cached.token.clone());
+                }
+            }
+        }
+
         let client = self.http_client.clone();
         let resp = client
             .post(format!("{}/v1/oauth2/token", self.base_url))
@@ -68,10 +105,22 @@ impl PayPalProvider {
             .await
             .map_err(|e| BillingError::ProviderApi(e.to_string()))?;
 
-        data["access_token"]
+        let token = data["access_token"]
             .as_str()
             .map(String::from)
-            .ok_or_else(|| BillingError::ProviderApi("No access_token in response".to_string()))
+            .ok_or_else(|| BillingError::ProviderApi("No access_token in response".to_string()))?;
+        let ttl = token_ttl_from_expires_in(data["expires_in"].as_u64());
+
+        let mut cache = self.access_token_cache.lock().map_err(|e| {
+            tracing::error!(error = %e, "paypal access token cache lock poisoned");
+            BillingError::Other("paypal access token cache lock poisoned".to_string())
+        })?;
+        *cache = Some(CachedAccessToken {
+            token: token.clone(),
+            expires_at: Instant::now() + ttl,
+        });
+
+        Ok(token)
     }
 
     async fn fetch_subscription_period_end(&self, subscription_id: &str) -> Option<i64> {
@@ -344,10 +393,14 @@ impl BillingProvider for PayPalProvider {
         let resource_id = resource["id"].as_str().map(String::from);
         let billing_agreement_id = resource["billing_agreement_id"].as_str().map(String::from);
 
-        // SALE/CAPTURE resource.id is the sale (`S-…`), not the sub; the recurring sub is billing_agreement_id (`I-…`) — using the sale id breaks dispatch.
+        // SALE/CAPTURE resource.id is the sale (`S-…`), not the sub; the recurring sub is billing_agreement_id (`I-…`) — using the sale id breaks dispatch. Refund/reversal events carry the same shape.
         let is_sale = matches!(
             native_event,
-            "PAYMENT.SALE.COMPLETED" | "PAYMENT.CAPTURE.COMPLETED"
+            "PAYMENT.SALE.COMPLETED"
+                | "PAYMENT.CAPTURE.COMPLETED"
+                | "PAYMENT.SALE.REFUNDED"
+                | "PAYMENT.CAPTURE.REFUNDED"
+                | "PAYMENT.SALE.REVERSED"
         );
         let subscription_id = if is_sale {
             billing_agreement_id.clone()
@@ -444,5 +497,56 @@ mod tests {
         let provider = PayPalProvider::new("c".into(), "s".into(), "w".into())
             .with_base_url("http://localhost:9999".into());
         assert_eq!(provider.base_url, "http://localhost:9999");
+    }
+
+    #[test]
+    fn token_ttl_applies_refresh_margin_and_floor() {
+        use std::time::Duration;
+
+        assert_eq!(
+            token_ttl_from_expires_in(Some(32_400)),
+            Duration::from_secs(32_340)
+        );
+        assert_eq!(
+            token_ttl_from_expires_in(Some(45)),
+            Duration::from_secs(TOKEN_MIN_TTL_SECS)
+        );
+        assert_eq!(
+            token_ttl_from_expires_in(None),
+            Duration::from_secs(TOKEN_FALLBACK_TTL_SECS - TOKEN_REFRESH_MARGIN_SECS)
+        );
+    }
+
+    #[tokio::test]
+    async fn unexpired_cached_token_is_served_without_network() {
+        let provider = PayPalProvider::new("c".into(), "s".into(), "w".into())
+            .with_base_url("http://localhost:9".into());
+        provider
+            .access_token_cache
+            .lock()
+            .unwrap()
+            .replace(CachedAccessToken {
+                token: "cached_token".to_string(),
+                expires_at: Instant::now() + Duration::from_secs(3600),
+            });
+        let token = provider.get_access_token().await.expect("cache hit");
+        assert_eq!(token, "cached_token");
+    }
+
+    #[tokio::test]
+    async fn expired_cached_token_bypasses_to_provider() {
+        let provider = PayPalProvider::new("c".into(), "s".into(), "w".into())
+            .with_base_url("http://localhost:9".into());
+        provider
+            .access_token_cache
+            .lock()
+            .unwrap()
+            .replace(CachedAccessToken {
+                token: "stale_token".to_string(),
+                expires_at: Instant::now(),
+            });
+        // Nothing listens on localhost:9 — a connection error proves the stale
+        // entry was bypassed instead of served.
+        assert!(provider.get_access_token().await.is_err());
     }
 }

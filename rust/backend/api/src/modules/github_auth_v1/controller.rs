@@ -7,10 +7,7 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
-use oauth2::{
-    reqwest::async_http_client, AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope,
-    TokenResponse,
-};
+use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope, TokenResponse};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::json;
 use tower_sessions::Session;
@@ -37,14 +34,18 @@ const GITHUB_API_VERSION: &str = "2026-03-10";
 const GITHUB_API_MAX_BYTES: usize = 64 * 1024;
 const GITHUB_USER_AGENT: &str = "EasyQuran";
 static GITHUB_API_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
+    github_api_http_client_builder()
+        .build()
+        .map_err(|error| error.to_string())
+});
+
+fn github_api_http_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(15))
         .pool_idle_timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|error| error.to_string())
-});
+}
 
 #[derive(Debug, Deserialize)]
 struct GitHubTokenInspection {
@@ -154,7 +155,7 @@ async fn run_github_callback(
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange GitHub authorization code");
@@ -187,7 +188,7 @@ pub async fn github_exchange(
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange GitHub authorization code");
@@ -522,7 +523,7 @@ async fn finish_github_login(
     let provider_user_id = user_info.id.to_string();
 
     let user = oauth::find_or_create_user_for_oauth(
-        state,
+        &state.sea_db,
         oauth::OAuthProvider::Github,
         &provider_user_id,
         email.clone(),
@@ -549,6 +550,13 @@ mod tests {
     use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
     use wiremock::matchers::{body_string_contains, header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // Each #[tokio::test] owns a short-lived runtime. The shared static client would park
+    // idle connections whose dispatch tasks die with that runtime, so a later request that
+    // reuses one fails instantly (hyper DispatchGone). Build a fresh client per test.
+    fn test_http_client() -> reqwest::Client {
+        github_api_http_client_builder().build().unwrap()
+    }
 
     fn valid_token_inspection() -> GitHubTokenInspection {
         GitHubTokenInspection {
@@ -613,10 +621,10 @@ mod tests {
             })))
             .mount(&server)
             .await;
-        let client = github_api_http_client().unwrap();
+        let client = test_http_client();
 
         let user_id = verify_github_access_token_from_url(
-            client,
+            &client,
             &format!("{}/applications/configured-github-app/token", server.uri()),
             "github-user-token",
             "configured-github-app",
@@ -644,7 +652,7 @@ mod tests {
                 .await;
 
             let error = verify_github_access_token_from_url(
-                github_api_http_client().unwrap(),
+                &test_http_client(),
                 &format!("{}/applications/app/token", server.uri()),
                 "invalid-token",
                 "app",
@@ -675,7 +683,7 @@ mod tests {
             .await;
 
         let profile = fetch_github_user_info_from_url(
-            github_api_http_client().unwrap(),
+            &test_http_client(),
             &format!("{}/user", server.uri()),
             "github-user-token",
         )
@@ -702,7 +710,7 @@ mod tests {
                 .await;
 
             let error = fetch_github_user_info_from_url(
-                github_api_http_client().unwrap(),
+                &test_http_client(),
                 &format!("{}/user", server.uri()),
                 "github-user-token",
             )
@@ -728,7 +736,7 @@ mod tests {
             .await;
 
         let email = fetch_github_primary_verified_email_from_url(
-            github_api_http_client().unwrap(),
+            &test_http_client(),
             &format!("{}/user/emails", server.uri()),
             "github-user-token",
         )
@@ -748,7 +756,7 @@ mod tests {
             .await;
 
         let email = fetch_github_primary_verified_email_from_url(
-            github_api_http_client().unwrap(),
+            &test_http_client(),
             &format!("{}/user/emails", server.uri()),
             "github-user-token-without-email-scope",
         )
@@ -778,7 +786,7 @@ mod tests {
             .await;
 
         let error = fetch_github_user_info_from_url(
-            github_api_http_client().unwrap(),
+            &test_http_client(),
             &format!("{}/user", source.uri()),
             "must-not-cross-redirect",
         )
@@ -799,7 +807,7 @@ mod tests {
             .await;
 
         let error = fetch_github_user_info_from_url(
-            github_api_http_client().unwrap(),
+            &test_http_client(),
             &format!("{}/user", server.uri()),
             "github-user-token",
         )

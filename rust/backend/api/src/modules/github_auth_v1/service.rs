@@ -1,5 +1,5 @@
 use oauth2::basic::BasicClient;
-use oauth2::{AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl};
+use oauth2::{AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl, TokenUrl};
 
 use crate::error::{ErrorCode, ErrorResponse};
 
@@ -24,7 +24,10 @@ pub fn load_github_credentials() -> Result<GitHubCredentials, ErrorResponse> {
     })
 }
 
-pub fn get_github_oauth_client() -> Result<BasicClient, ErrorResponse> {
+pub type GithubClient =
+    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
+
+pub fn get_github_oauth_client() -> Result<GithubClient, ErrorResponse> {
     let credentials = load_github_credentials()?;
     let redirect_url = std::env::var("GITHUB_REDIRECT_URI").map_err(|_| {
         ErrorResponse::new(ErrorCode::InternalServerError)
@@ -44,17 +47,15 @@ pub fn get_github_oauth_client() -> Result<BasicClient, ErrorResponse> {
                 .with_details(e.to_string())
         })?;
 
-    let client = BasicClient::new(
-        ClientId::new(credentials.client_id),
-        Some(ClientSecret::new(credentials.client_secret)),
-        auth_url,
-        Some(token_url),
-    )
-    .set_redirect_uri(RedirectUrl::new(redirect_url).map_err(|e| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("Invalid GitHub redirect URI")
-            .with_details(e.to_string())
-    })?);
+    let client = BasicClient::new(ClientId::new(credentials.client_id))
+        .set_client_secret(ClientSecret::new(credentials.client_secret))
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(RedirectUrl::new(redirect_url).map_err(|e| {
+            ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Invalid GitHub redirect URI")
+                .with_details(e.to_string())
+        })?);
 
     Ok(client)
 }

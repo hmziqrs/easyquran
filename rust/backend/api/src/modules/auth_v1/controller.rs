@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{rejection::JsonRejection, FromRequest, Path, Request, State},
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::IntoResponse,
     Json,
@@ -10,8 +10,10 @@ use axum_client_ip::ClientIp;
 
 use rux_auth::AuthBackend as AuthBackendTrait;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait};
+use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
+use validator::Validate;
 
 use crate::{
     db::sea_models::{email_verification, user, user_session},
@@ -19,7 +21,7 @@ use crate::{
     extractors::ValidatedJson,
     modules::auth_v1::validator::{
         V1LoginPayload, V1LoginTotpPayload, V1RegisterPayload, V1TwoFADisablePayload,
-        V1TwoFAVerifyPayload,
+        V1TwoFASetupPayload, V1TwoFAVerifyPayload,
     },
     services::{abuse_limiter, auth::AuthSession, mail::send_email_verification_code},
     utils::twofa,
@@ -34,6 +36,32 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_range: 900,
     block_duration: 86400,
 };
+
+/// M2: axum 0.8 has no `Option<ValidatedJson<T>>` blanket impl, and 2FA setup
+/// must keep accepting a body-less POST (the un-enrolled first call). A missing,
+/// malformed, or validation-failing body extracts to `None` — fail-closed: an
+/// enrolled account then hits the "code is required" rejection.
+pub struct OptionalValidatedJson<T>(pub Option<T>);
+
+impl<T, S> FromRequest<S> for OptionalValidatedJson<T>
+where
+    T: DeserializeOwned + Validate + Send + Sync,
+    S: Send + Sync,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let parsed = async {
+            let json = Json::<T>::from_request(req, state).await.ok()?;
+            let data = json.0;
+            data.validate().ok()?;
+            Some(data)
+        }
+        .await;
+        Ok(Self(parsed))
+    }
+}
 
 #[debug_handler(state = AppState)]
 #[instrument(skip(state, auth), fields(user_id))]
@@ -347,8 +375,10 @@ pub async fn register(
     let code = email_verification::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
 
-    match user::Entity::create(&state.sea_db, payload.into_new_user(), code_hash).await {
-        Ok(user) => {
+    let outcome = user::Entity::create(&state.sea_db, payload.into_new_user(), code_hash).await;
+
+    match classify_register_outcome(outcome) {
+        RegisterOutcome::Created(user) => {
             info!(user_id = user.id, "User registered successfully");
             tracing::Span::current().record("user_id", user.id);
             tracing::Span::current().record("result", "success");
@@ -365,29 +395,81 @@ pub async fn register(
                     tracing::error!(user_id, "Failed to send verification email: {}", err);
                 }
             });
-
-            Ok((StatusCode::CREATED, Json(json!(user))))
         }
-        Err(err) => {
+        RegisterOutcome::DuplicateEmail => {
+            // M3: a unique-violation must be answered with the exact success status
+            // and body — any distinguishable status/shape is an account-existence
+            // oracle. No verification email is sent for the existing address.
+            warn!("Registration on an existing email answered with the generic success envelope");
+            tracing::Span::current().record("result", "duplicate_masked");
+        }
+        RegisterOutcome::Failed(err) => {
             warn!(error = ?err, "Registration failed");
             tracing::Span::current().record("result", "failure");
             // Do not echo the raw SeaORM error: a unique-violation would leak that the email is already registered (enumeration oracle).
-            Err(ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Registration could not be completed at this time"))
+            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Registration could not be completed at this time"));
         }
+    }
+
+    Ok((StatusCode::CREATED, Json(register_accepted_body())))
+}
+
+/// How the register DB write ended. `DuplicateEmail` is kept distinct from
+/// `Failed` so the handler can mask it as success (M3) without special-casing
+/// the error text at the call site.
+enum RegisterOutcome {
+    Created(user::Model),
+    DuplicateEmail,
+    Failed(ErrorResponse),
+}
+
+fn classify_register_outcome(outcome: Result<user::Model, ErrorResponse>) -> RegisterOutcome {
+    match outcome {
+        Ok(user) => RegisterOutcome::Created(user),
+        Err(err) if err.code == ErrorCode::DuplicateEntry => RegisterOutcome::DuplicateEmail,
+        Err(err) => RegisterOutcome::Failed(err),
     }
 }
 
+/// M3: the single source of the register response body. Fresh registrations and
+/// masked duplicates MUST serialize to the exact same value (byte-identical), so
+/// both handler arms return this — never a per-path body. The web client
+/// discards the body and immediately logs in, so it carries no account data.
+fn register_accepted_body() -> serde_json::Value {
+    json!({ "message": "Registration accepted" })
+}
+
 #[debug_handler]
-#[instrument(skip(state, auth), fields(user_id))]
+#[instrument(skip(state, auth, payload), fields(user_id))]
 pub async fn twofa_setup(
     State(state): State<AppState>,
-    auth: AuthSession,
+    mut auth: AuthSession,
+    payload: OptionalValidatedJson<V1TwoFASetupPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
     info!(user_id = user.id, "2FA setup initiated");
+
+    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
+
+    // M2: rotating the secret on an enrolled account disarms 2FA (two_fa_enabled
+    // drops to false below and the old secret + backup codes are replaced), i.e.
+    // a trust downgrade — demand a valid current TOTP/backup code first, the
+    // same gate twofa_disable uses. An un-enrolled account keeps the
+    // generate-fresh-secret behavior (nothing to disarm).
+    let was_enabled = existing.two_fa_enabled;
+    if was_enabled {
+        // Fail-closed per-account TOTP brute-force throttle (mirrors disable).
+        let key_prefix = format!("totp:{}", user.id);
+        abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+
+        let code = payload.0.and_then(|p| p.code).ok_or_else(|| {
+            ErrorResponse::new(ErrorCode::MissingRequiredField).with_message("code is required")
+        })?;
+        verify_current_second_factor(&state.sea_db, &existing, &code).await?;
+    }
 
     let secret_b32 = twofa::generate_secret_base32(20).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::InternalServerError)
@@ -415,7 +497,6 @@ pub async fn twofa_setup(
     };
     let backup_hashes_json = serde_json::json!(backup_hashes);
 
-    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
     let mut active: user::ActiveModel = existing.into();
     active.two_fa_enabled = sea_orm::Set(false);
     active.two_fa_secret = sea_orm::Set(Some(secret_b32.clone()));
@@ -423,14 +504,93 @@ pub async fn twofa_setup(
     active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
     active.update(&state.sea_db).await?;
 
+    // Trust changed (enrolled -> pending re-verify): rotate the session id and
+    // rebind the durable mapping, same contract as verify/disable.
+    let rotated = if was_enabled {
+        rotate_session_after_trust_change(&state.sea_db, &mut auth).await?
+    } else {
+        false
+    };
+
     Ok((
         StatusCode::OK,
+        session_rotated_headers(rotated),
         Json(json!({
             "secret": secret_b32,
             "otpauth_url": otpauth_url,
             "backup_codes": backup_codes,
         })),
     ))
+}
+
+/// M2: shared second-factor gate for trust-downgrading operations on an ENROLLED
+/// account (2FA disable, secret rotation via 2FA setup). Accepts a current TOTP
+/// code or a backup code. TOTP path enforces the same replay watermark as
+/// login/verify: `advance_totp_counter_if_higher` is the authoritative atomic
+/// gate closing the TOCTOU race (V-MED-6). Backup-code hits are not persisted
+/// here — every caller replaces or clears the stored set right after, so the
+/// consumed-hash list is intentionally dropped.
+async fn verify_current_second_factor(
+    db: &DatabaseConnection,
+    existing: &user::Model,
+    code: &str,
+) -> Result<(), ErrorResponse> {
+    // CRYP-2FA-002: decrypt failure → empty secret (falls through to backup code); never grant without a valid second factor.
+    let secret = match existing.two_fa_secret_plain() {
+        Ok(Some(s)) => s,
+        Ok(None) => String::new(),
+        Err(e) => {
+            warn!(user_id = existing.id, error = %e, "second-factor gate: TOTP secret unreadable");
+            String::new()
+        }
+    };
+    let totp_matched = if secret.is_empty() {
+        None
+    } else {
+        twofa::verify_totp_code_now(&secret, code)
+    };
+    let totp_fresh = match totp_matched {
+        Some(matched) => twofa::is_fresh_counter(matched, existing.two_fa_last_totp_counter),
+        None => false,
+    };
+
+    if totp_fresh {
+        let matched = totp_matched.expect("totp_matched is Some when totp_fresh");
+        let advanced =
+            user::Entity::advance_totp_counter_if_higher(db, existing.id, matched).await?;
+        if !advanced {
+            warn!(
+                user_id = existing.id,
+                matched_counter = matched,
+                "second-factor gate lost the watermark race (concurrent advance); rejecting as replay"
+            );
+            return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+                .with_message("Invalid 2FA or backup code"));
+        }
+        return Ok(());
+    }
+
+    if let Some(stored) = &existing.two_fa_backup_codes {
+        let stored_vec: Vec<String> =
+            serde_json::from_value(stored.clone()).unwrap_or_else(|_| vec![]);
+        let backup_ok = {
+            let stored_clone = stored_vec;
+            let code_clone = code.to_string();
+            tokio::task::spawn_blocking(move || {
+                twofa::consume_backup_code(&stored_clone, &code_clone).is_some()
+            })
+            .await
+            .map_err(|e| {
+                ErrorResponse::new(ErrorCode::InternalServerError)
+                    .with_message(format!("Backup code verification failed: {e}"))
+            })?
+        };
+        if backup_ok {
+            return Ok(());
+        }
+    }
+
+    Err(ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid 2FA or backup code"))
 }
 
 #[debug_handler]
@@ -553,77 +713,13 @@ pub async fn twofa_disable(
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
 
-    // V-MED-6: advance_totp_counter_if_higher is the authoritative replay gate; totp_authorized records success so the final UPDATE leaves the counter Unchanged (no racy re-write); backup-code path skips it.
-    let mut totp_authorized = false;
-
+    // V-MED-6 (via verify_current_second_factor): advance_totp_counter_if_higher is the authoritative replay gate; the final UPDATE below leaves the counter Unchanged (no racy re-write); backup-code path skips it.
     if existing.two_fa_enabled {
-        if let Some(code) = payload.code.clone() {
-            // CRYP-2FA-002: decrypt failure → empty secret (falls through to backup code); never grant disable without a valid second factor.
-            let secret = match existing.two_fa_secret_plain() {
-                Ok(Some(s)) => s,
-                Ok(None) => String::new(),
-                Err(e) => {
-                    warn!(user_id = existing.id, error = %e, "2fa/disable: TOTP secret unreadable");
-                    String::new()
-                }
-            };
-            let totp_matched = if secret.is_empty() {
-                None
-            } else {
-                twofa::verify_totp_code_now(&secret, &code)
-            };
-            let totp_fresh = match totp_matched {
-                Some(matched) => {
-                    twofa::is_fresh_counter(matched, existing.two_fa_last_totp_counter)
-                }
-                None => false,
-            };
-
-            if totp_fresh {
-                let matched = totp_matched.expect("totp_matched is Some when totp_fresh");
-                let advanced =
-                    user::Entity::advance_totp_counter_if_higher(&state.sea_db, user.id, matched)
-                        .await?;
-                if !advanced {
-                    warn!(
-                        user_id = user.id,
-                        matched_counter = matched,
-                        "TOTP disable lost the watermark race (concurrent advance); rejecting as replay"
-                    );
-                    return Err(ErrorResponse::new(ErrorCode::InvalidToken)
-                        .with_message("Invalid 2FA or backup code"));
-                }
-                totp_authorized = true;
-            }
-
-            let mut backup_ok = false;
-            if !totp_authorized {
-                if let Some(stored) = &existing.two_fa_backup_codes {
-                    let stored_vec: Vec<String> =
-                        serde_json::from_value(stored.clone()).unwrap_or_else(|_| vec![]);
-                    backup_ok = {
-                        let stored_clone = stored_vec;
-                        let code_clone = code.clone();
-                        tokio::task::spawn_blocking(move || {
-                            twofa::consume_backup_code(&stored_clone, &code_clone).is_some()
-                        })
-                        .await
-                        .map_err(|e| {
-                            ErrorResponse::new(ErrorCode::InternalServerError)
-                                .with_message(format!("Backup code verification failed: {e}"))
-                        })?
-                    };
-                }
-            }
-
-            if !totp_authorized && !backup_ok {
-                return Err(ErrorResponse::new(ErrorCode::InvalidToken)
-                    .with_message("Invalid 2FA or backup code"));
-            }
-        } else {
+        let Some(code) = payload.code.clone() else {
             return Err(ErrorResponse::new(ErrorCode::MissingRequiredField)
                 .with_message("code is required"));
-        }
+        };
+        verify_current_second_factor(&state.sea_db, &existing, &code).await?;
     }
 
     let last_counter = existing.two_fa_last_totp_counter;
@@ -959,6 +1055,13 @@ mod tests {
     use super::annotate_session_row;
     use super::login_totp_token;
     use super::sessions_list_payload;
+    use super::verify_current_second_factor;
+    use super::{classify_register_outcome, register_accepted_body, RegisterOutcome};
+
+    use axum::http::StatusCode;
+
+    use crate::error::{ErrorCode, ErrorResponse};
+    use crate::utils::twofa;
 
     #[test]
     fn login_totp_redis_key_prefix_is_stable() {
@@ -1090,5 +1193,156 @@ mod tests {
         let rows = vec![sample_revoked_row(1), sample_revoked_row(2)];
         let payload = sessions_list_payload(rows, Some(1));
         assert!(payload.is_empty(), "no active rows means no payload");
+    }
+
+    // --- M3: register anti-enumeration ---------------------------------------
+
+    fn registered_user_model() -> crate::db::sea_models::user::Model {
+        crate::db::sea_models::user::Model {
+            id: 7,
+            name: "New User".to_string(),
+            email: "new@example.com".to_string(),
+            password: None,
+            avatar_id: None,
+            is_verified: false,
+            role: crate::db::sea_models::user::UserRole::User,
+            two_fa_enabled: false,
+            two_fa_secret: None,
+            two_fa_backup_codes: None,
+            two_fa_last_totp_counter: None,
+            google_id: None,
+            oauth_provider: None,
+            session_auth_secret: "s".repeat(64),
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }
+    }
+
+    #[test]
+    fn register_classify_routes_only_duplicate_entry_to_masked_arm() {
+        assert!(matches!(
+            classify_register_outcome(Err(ErrorResponse::new(ErrorCode::DuplicateEntry))),
+            RegisterOutcome::DuplicateEmail
+        ));
+        assert!(matches!(
+            classify_register_outcome(Err(ErrorResponse::new(ErrorCode::QueryError))),
+            RegisterOutcome::Failed(_)
+        ));
+        assert!(matches!(
+            classify_register_outcome(Err(ErrorResponse::new(ErrorCode::InternalServerError))),
+            RegisterOutcome::Failed(_)
+        ));
+        assert!(matches!(
+            classify_register_outcome(Ok(registered_user_model())),
+            RegisterOutcome::Created(_)
+        ));
+    }
+
+    #[test]
+    fn register_duplicate_and_fresh_produce_identical_status_and_body() {
+        // Mirrors the handler's response mapping: Created and DuplicateEmail both
+        // fall through to the single CREATED + register_accepted_body() return;
+        // only Failed diverges (500).
+        let respond = |outcome: RegisterOutcome| match outcome {
+            RegisterOutcome::Created(_) | RegisterOutcome::DuplicateEmail => {
+                (StatusCode::CREATED, register_accepted_body())
+            }
+            RegisterOutcome::Failed(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, serde_json::Value::Null)
+            }
+        };
+
+        let fresh = respond(classify_register_outcome(Ok(registered_user_model())));
+        let duplicate = respond(classify_register_outcome(Err(ErrorResponse::new(
+            ErrorCode::DuplicateEntry,
+        ))));
+
+        assert_eq!(fresh.0, duplicate.0, "status code must not be an oracle");
+        assert_eq!(
+            fresh.1, duplicate.1,
+            "body must be byte-identical, not just same shape"
+        );
+        assert_eq!(fresh.0, StatusCode::CREATED);
+
+        let obj = fresh
+            .1
+            .as_object()
+            .expect("register envelope must be a JSON object");
+        assert!(
+            !obj.contains_key("id") && !obj.contains_key("email") && !obj.contains_key("name"),
+            "register response must not echo account data"
+        );
+    }
+
+    #[test]
+    fn register_accepted_body_is_stable_across_calls() {
+        assert_eq!(
+            serde_json::to_string(&register_accepted_body()).unwrap(),
+            serde_json::to_string(&register_accepted_body()).unwrap()
+        );
+    }
+
+    // --- M2: second-factor gate on secret rotation ----------------------------
+
+    fn enrolled_user(
+        hashed_backup_codes: Option<Vec<String>>,
+    ) -> crate::db::sea_models::user::Model {
+        crate::db::sea_models::user::Model {
+            id: 42,
+            name: "Enrolled".to_string(),
+            email: "enrolled@example.com".to_string(),
+            password: None,
+            avatar_id: None,
+            is_verified: true,
+            role: crate::db::sea_models::user::UserRole::User,
+            two_fa_enabled: true,
+            two_fa_secret: None,
+            two_fa_backup_codes: hashed_backup_codes.map(|codes| serde_json::json!(codes)),
+            two_fa_last_totp_counter: None,
+            google_id: None,
+            oauth_provider: None,
+            session_auth_secret: "s".repeat(64),
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }
+    }
+
+    async fn schemaless_db() -> sea_orm::DatabaseConnection {
+        // The backup-code path never touches the DB (only a fresh TOTP match does),
+        // so a connection to an empty in-memory SQLite is enough.
+        sea_orm::Database::connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite connects")
+    }
+
+    #[tokio::test]
+    async fn second_factor_gate_accepts_current_backup_code() {
+        let db = schemaless_db().await;
+        let codes = twofa::generate_backup_codes(3).expect("CSPRNG available");
+        let model = enrolled_user(Some(twofa::hash_backup_codes(&codes)));
+        verify_current_second_factor(&db, &model, &codes[1])
+            .await
+            .expect("a valid current backup code must pass the gate");
+    }
+
+    #[tokio::test]
+    async fn second_factor_gate_rejects_wrong_code() {
+        let db = schemaless_db().await;
+        let codes = twofa::generate_backup_codes(3).expect("CSPRNG available");
+        let model = enrolled_user(Some(twofa::hash_backup_codes(&codes)));
+        let err = verify_current_second_factor(&db, &model, "WRONG-CODE-0000")
+            .await
+            .expect_err("a wrong code must be rejected");
+        assert_eq!(err.code, ErrorCode::InvalidToken);
+    }
+
+    #[tokio::test]
+    async fn second_factor_gate_fails_closed_with_nothing_stored() {
+        let db = schemaless_db().await;
+        let model = enrolled_user(None);
+        let err = verify_current_second_factor(&db, &model, "123456")
+            .await
+            .expect_err("no secret and no backup codes must fail closed");
+        assert_eq!(err.code, ErrorCode::InvalidToken);
     }
 }

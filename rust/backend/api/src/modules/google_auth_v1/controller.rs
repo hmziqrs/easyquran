@@ -7,10 +7,7 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
-use oauth2::{
-    reqwest::async_http_client, AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope,
-    TokenResponse,
-};
+use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope, TokenResponse};
 use serde_json::json;
 use tower_sessions::Session;
 use tracing::{error, info, instrument, warn};
@@ -34,14 +31,18 @@ const GOOGLE_USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo
 const GOOGLE_USERINFO_MAX_BYTES: usize = 64 * 1024;
 static GOOGLE_USERINFO_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
     LazyLock::new(|| {
-        reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(15))
-            .pool_idle_timeout(std::time::Duration::from_secs(30))
+        google_userinfo_http_client_builder()
             .build()
             .map_err(|error| error.to_string())
     });
+
+fn google_userinfo_http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(15))
+        .pool_idle_timeout(std::time::Duration::from_secs(30))
+}
 
 #[debug_handler]
 #[instrument(skip(_state, session), fields(result))]
@@ -55,7 +56,7 @@ pub async fn google_login(
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-    // OIDC nonce binds this flow to the signed id_token checked at callback; defeats token-injection/replay. (oauth2 4.4 has no nonce builder.)
+    // OIDC nonce binds this flow to the signed id_token checked at callback; defeats token-injection/replay. (oauth2 5 has no nonce builder.)
     let nonce = oauth::generate_oauth_nonce();
 
     let (auth_url, csrf_token) = client
@@ -137,7 +138,7 @@ async fn run_google_callback(
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange authorization code");
@@ -175,7 +176,7 @@ pub async fn google_exchange(
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange authorization code");
@@ -547,6 +548,13 @@ mod tests {
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    // Each #[tokio::test] owns a short-lived runtime. The shared static client would park
+    // idle connections whose dispatch tasks die with that runtime, so a later request that
+    // reuses one fails instantly (hyper DispatchGone). Build a fresh client per test.
+    fn test_http_client() -> reqwest::Client {
+        google_userinfo_http_client_builder().build().unwrap()
+    }
+
     fn mobile_claims() -> GoogleIdTokenClaims {
         GoogleIdTokenClaims {
             sub: "google-sub-123".to_string(),
@@ -669,10 +677,10 @@ mod tests {
             })))
             .mount(&server)
             .await;
-        let client = google_userinfo_http_client().unwrap();
+        let client = test_http_client();
 
         let result = fetch_google_user_info_from_url(
-            client,
+            &client,
             &format!("{}/userinfo", server.uri()),
             "fake-google-access-token",
         )
@@ -690,10 +698,10 @@ mod tests {
             .respond_with(ResponseTemplate::new(401))
             .mount(&server)
             .await;
-        let client = google_userinfo_http_client().unwrap();
+        let client = test_http_client();
 
         let error = fetch_google_user_info_from_url(
-            client,
+            &client,
             &format!("{}/userinfo", server.uri()),
             "expired-google-access-token",
         )
@@ -722,10 +730,10 @@ mod tests {
             )
             .mount(&source)
             .await;
-        let client = google_userinfo_http_client().unwrap();
+        let client = test_http_client();
 
         let error = fetch_google_user_info_from_url(
-            client,
+            &client,
             &format!("{}/userinfo", source.uri()),
             "must-not-cross-redirect",
         )

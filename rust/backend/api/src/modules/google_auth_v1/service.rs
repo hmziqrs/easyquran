@@ -6,9 +6,9 @@ use oauth2::basic::{
     BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
     BasicTokenType,
 };
-use oauth2::revocation::StandardRevocableToken;
 use oauth2::{
-    AuthUrl, Client, ClientId, ClientSecret, RedirectUrl, StandardTokenResponse, TokenUrl,
+    AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl,
+    StandardRevocableToken, StandardTokenResponse, TokenUrl,
 };
 use serde::Deserialize;
 use tokio::sync::RwLock;
@@ -26,10 +26,14 @@ impl oauth2::ExtraTokenFields for IdTokenFields {}
 pub type GoogleClient = Client<
     BasicErrorResponse,
     StandardTokenResponse<IdTokenFields, BasicTokenType>,
-    BasicTokenType,
     BasicTokenIntrospectionResponse,
     StandardRevocableToken,
     BasicRevocationErrorResponse,
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointSet,
 >;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -100,17 +104,15 @@ pub fn get_google_oauth_client() -> Result<GoogleClient, ErrorResponse> {
                 .with_details(e.to_string())
         })?;
 
-    let client = GoogleClient::new(
-        ClientId::new(client_id),
-        Some(ClientSecret::new(client_secret)),
-        auth_url,
-        Some(token_url),
-    )
-    .set_redirect_uri(RedirectUrl::new(redirect_url).map_err(|e| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("Invalid redirect URI")
-            .with_details(e.to_string())
-    })?);
+    let client = Client::new(ClientId::new(client_id))
+        .set_client_secret(ClientSecret::new(client_secret))
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(RedirectUrl::new(redirect_url).map_err(|e| {
+            ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Invalid redirect URI")
+                .with_details(e.to_string())
+        })?);
 
     Ok(client)
 }

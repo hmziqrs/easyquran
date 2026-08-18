@@ -214,16 +214,12 @@ pub struct HealthReady {
     pub ready: bool,
     pub verse_count: u32,
     pub surah_count: u16,
-    pub arabic_resident_bytes: u64,
-    pub loading: QuranLoadingHealth,
-    pub translation_pool: TranslationPoolHealth,
     pub auth: AuthHealth,
 }
 
 // Auth readiness surface (W8f). Reports the gate flag + per-provider ready state
-// computed at boot from credential PRESENCE — never the credential values. Live
-// on the public readiness endpoint so an operator sees which provider is
-// misconfigured without any secret reaching the response.
+// computed at boot from credential PRESENCE — never the credential values or
+// provider names; the public body is readiness booleans only.
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -236,43 +232,7 @@ pub struct AuthHealth {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ProviderStatusDto {
-    pub name: String,
     pub ready: bool,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct QuranLoadingHealth {
-    pub arabic_load_duration_ms: u64,
-    pub translation_catalogue_load_duration_ms: u64,
-    pub translation_catalogue_entries: u64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct TranslationPoolHealth {
-    pub resident_count: u64,
-    pub resident_bytes: u64,
-    pub max_resident_count: u64,
-    pub max_resident_bytes: u64,
-    pub idle_ttl_seconds: u64,
-    pub builds: u64,
-    pub lookups: u64,
-    pub hit_rate: Option<f64>,
-    pub evictions: u64,
-    pub evictions_per_minute: u64,
-    pub prewarmed: Vec<String>,
-    pub top_demand: Vec<DemandEntry>,
-}
-
-#[derive(Serialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct DemandEntry {
-    pub id: String,
-    pub score: f64,
 }
 
 #[derive(Serialize, Debug)]

@@ -36,6 +36,23 @@ pub mod canonical {
     pub const PAYMENT_PENDING: &str = "payment.pending";
 }
 
+/// Refund/chargeback/dispute natives that provider normalization passes through
+/// unmapped (Stripe, PayPal) or arrives verbatim from providers with their own
+/// spelling (Airwallex `refund.created`, Lemon Squeezy `order_refunded`); the
+/// controller revokes the linked entitlement for these.
+pub fn is_refund_or_dispute_event_type(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "charge.refunded"
+            | "charge.dispute.created"
+            | "refund.created"
+            | "order_refunded"
+            | "PAYMENT.SALE.REFUNDED"
+            | "PAYMENT.CAPTURE.REFUNDED"
+            | "PAYMENT.SALE.REVERSED"
+    )
+}
+
 pub fn canonical_subscription_status(raw: Option<&str>) -> Option<SubscriptionStatus> {
     let s = raw?.trim().to_ascii_lowercase();
     Some(match s.as_str() {
@@ -181,8 +198,40 @@ impl From<rux_provider_core::FrameworkError> for BillingError {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_subscription_status, period_end_to_unix, SubscriptionStatus};
+    use super::{
+        canonical_subscription_status, is_refund_or_dispute_event_type, period_end_to_unix,
+        SubscriptionStatus,
+    };
     use serde_json::json;
+
+    #[test]
+    fn refund_dispute_event_types_are_detected_across_providers() {
+        for raw in [
+            "charge.refunded",
+            "charge.dispute.created",
+            "refund.created",
+            "order_refunded",
+            "PAYMENT.SALE.REFUNDED",
+            "PAYMENT.CAPTURE.REFUNDED",
+            "PAYMENT.SALE.REVERSED",
+        ] {
+            assert!(is_refund_or_dispute_event_type(raw), "raw={raw}");
+        }
+    }
+
+    #[test]
+    fn non_refund_event_types_are_not_flagged() {
+        for raw in [
+            "checkout.session.completed",
+            "customer.subscription.deleted",
+            "invoice.payment_succeeded",
+            "payment.confirmed",
+            "PAYMENT.SALE.COMPLETED",
+            "order_created",
+        ] {
+            assert!(!is_refund_or_dispute_event_type(raw), "raw={raw}");
+        }
+    }
 
     #[test]
     fn period_end_handles_epoch_seconds_int() {

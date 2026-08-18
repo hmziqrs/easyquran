@@ -4,10 +4,9 @@ Two images — **web** (SvelteKit adapter-node: Arabic SSG + translation SSR) + 
 sit behind your **external Traefik** reverse proxy. No Traefik config lives here;
 the containers carry the labels your proxy auto-discovers.
 
-Both containers have health checks. Web `/health/quran` reports translated-page
-disk-cache entries/bytes and hit/miss/write/eviction/error counters; API
-`/quran/health/ready` reports corpus loading, resident database bytes, and the
-bounded translation-pool metrics.
+Both containers have health checks. Web `/health/quran` reports readiness only;
+API `/quran/health/ready` reports readiness, verse/surah counts, and auth
+provider readiness booleans — pool and cache internals stay off the public body.
 
 ```
 easyquran.fyi → [external Traefik] → web:8080   (Host)

@@ -37,6 +37,42 @@ fn reject_missing_external_identity(is_prod: bool) -> Response {
     (StatusCode::BAD_REQUEST, body).into_response()
 }
 
+fn reject_untrusted_proxy_peer() -> Response {
+    let body = Json(serde_json::json!({
+        "error": "untrusted_proxy_peer",
+        "message": "Forwarded client-IP header from a TCP peer outside TRUSTED_PROXY_CIDRS."
+    }));
+    (StatusCode::BAD_REQUEST, body).into_response()
+}
+
+/// CIDR allowlist gating forwarded client-IP headers (e.g. CF-Connecting-IP):
+/// when non-empty, the TCP peer (`ConnectInfo`) must fall inside a listed
+/// network before the header is believed. Empty/unset keeps the header
+/// presence-only check. Layered as an extension by main.rs from HttpSettings.
+#[derive(Clone, Default)]
+pub struct TrustedProxyCidrs(pub std::sync::Arc<Vec<ipnet::IpNet>>);
+
+// ConnectInfo (peer-as-identity) has nothing to validate — the gate only
+// guards header-based sources, where a spoofable value is trusted.
+fn uses_forwarded_header_source(req: &Request) -> bool {
+    !matches!(
+        req.extensions().get::<axum_client_ip::ClientIpSource>(),
+        Some(axum_client_ip::ClientIpSource::ConnectInfo) | None
+    )
+}
+
+fn peer_within_trusted_cidrs(req: &Request, cidrs: &[ipnet::IpNet]) -> bool {
+    req.extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .is_some_and(|peer| cidrs.iter().any(|net| net.contains(&peer.ip())))
+}
+
+fn forwarded_header_from_untrusted_peer(req: &Request, trusted: &TrustedProxyCidrs) -> bool {
+    !trusted.0.is_empty()
+        && uses_forwarded_header_source(req)
+        && !peer_within_trusted_cidrs(req, &trusted.0)
+}
+
 pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
     if is_health_route(&path) {
@@ -70,6 +106,20 @@ pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
     }
 
     // External identity via the layered ClientIpSource (CfConnectingIp in prod).
+    // Header trust is peer-gated: a forwarded header is only believed when the
+    // TCP peer falls inside TRUSTED_PROXY_CIDRS (when configured); anything else
+    // presenting that header is rejected outright rather than keyed by a
+    // spoofed IP.
+    if let Some(trusted) = req.extensions().get::<TrustedProxyCidrs>() {
+        if forwarded_header_from_untrusted_peer(&req, trusted) {
+            tracing::warn!(
+                path = %path,
+                "forwarded client-IP header rejected: TCP peer outside TRUSTED_PROXY_CIDRS"
+            );
+            return reject_untrusted_proxy_peer();
+        }
+    }
+
     let (mut parts, body) = req.into_parts();
     match axum_client_ip::ClientIp::from_request_parts(&mut parts, &()).await {
         Ok(client_ip) => {
@@ -408,5 +458,113 @@ mod tests {
             Some(v) => std::env::set_var("RUST_ENV", v),
             None => std::env::remove_var("RUST_ENV"),
         }
+    }
+
+    // --- M11: forwarded-header trust is peer-gated by TRUSTED_PROXY_CIDRS ------
+
+    fn trusted_cidrs(cidrs: &[&str]) -> TrustedProxyCidrs {
+        TrustedProxyCidrs(std::sync::Arc::new(
+            cidrs
+                .iter()
+                .map(|c| c.parse::<ipnet::IpNet>().unwrap())
+                .collect(),
+        ))
+    }
+
+    fn peer(peer_ip: &str) -> axum::extract::ConnectInfo<std::net::SocketAddr> {
+        axum::extract::ConnectInfo(format!("{peer_ip}:40000").parse().unwrap())
+    }
+
+    #[tokio::test]
+    async fn cf_header_from_peer_outside_trusted_cidrs_is_rejected() {
+        let _g = env_lock();
+        let app = echo_identity_router()
+            .layer(Extension(trusted_cidrs(&["10.0.0.0/8"])))
+            .layer(Extension(peer("203.0.113.99")));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            axum::http::StatusCode::BAD_REQUEST,
+            "a spoofed CF header from a peer outside TRUSTED_PROXY_CIDRS must be rejected"
+        );
+    }
+
+    #[tokio::test]
+    async fn cf_header_from_peer_inside_trusted_cidrs_is_believed() {
+        let _g = env_lock();
+        let app = echo_identity_router()
+            .layer(Extension(trusted_cidrs(&["10.0.0.0/8", "fd00::/8"])))
+            .layer(Extension(peer("10.1.2.3")));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 64).await.unwrap();
+        let s = std::str::from_utf8(&body).unwrap();
+        assert!(s.contains("198.51.100.7"), "trusted peer: header wins, got: {s}");
+    }
+
+    #[tokio::test]
+    async fn empty_trusted_cidrs_keeps_presence_only_behavior() {
+        let _g = env_lock();
+        let app = echo_identity_router()
+            .layer(Extension(trusted_cidrs(&[])))
+            .layer(Extension(peer("203.0.113.99")));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            axum::http::StatusCode::OK,
+            "unset TRUSTED_PROXY_CIDRS keeps the presence-only check"
+        );
+    }
+
+    #[tokio::test]
+    async fn connect_info_source_is_exempt_from_the_peer_gate() {
+        // IP_SOURCE=ConnectInfo trusts the peer itself — no spoofable header is
+        // consulted, so a configured CIDR list must not 400 the request.
+        let _g = env_lock();
+        let app: Router = Router::new()
+            .route(
+                "/",
+                get(|Extension(ip): Extension<ClientIp>| async move { ip.0.to_string() }),
+            )
+            .layer(middleware::from_fn(resolve_client_ip))
+            .layer(Extension(ClientIpSource::ConnectInfo))
+            .layer(Extension(trusted_cidrs(&["10.0.0.0/8"])))
+            .layer(Extension(peer("203.0.113.99")));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 64).await.unwrap();
+        assert_eq!(&body[..], b"203.0.113.99");
     }
 }

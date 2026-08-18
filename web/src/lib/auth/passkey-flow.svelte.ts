@@ -78,7 +78,7 @@ interface AttestationPayload {
 
 interface RegisterFinishBody {
   credential: SerializedCredential;
-  registration_state: JsonValue | null;
+  state_handle: string | null;
   transports?: string[];
   device_type?: string;
 }
@@ -159,8 +159,8 @@ export class PasskeyFlow {
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   passkeys = $state<ReadonlyArray<PasskeyInfo>>([]);
-  #loginState: JsonValue | null = null;
-  #registerState: JsonValue | null = null;
+  #loginHandle: string | null = null;
+  #registerHandle: string | null = null;
 
   constructor(client: AuthClient, state: PasskeyFlowStateLike, credentials?: CredentialsContainer) {
     this.client = client;
@@ -173,8 +173,8 @@ export class PasskeyFlow {
   }
 
   clearSecrets(): void {
-    this.#loginState = null;
-    this.#registerState = null;
+    this.#loginHandle = null;
+    this.#registerHandle = null;
   }
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
@@ -201,14 +201,19 @@ export class PasskeyFlow {
     try {
       const begin = await this.client.unsafeRequest<{
         challenge?: JsonValue;
-        authentication_state?: JsonValue;
+        state_handle?: JsonValue;
       }>("/passkey/v1/login/begin", { method: "POST" });
       if (!begin.ok) {
         this.fail(begin.status, begin.error);
         return false;
       }
-      this.#loginState = begin.data?.authentication_state ?? null;
+      const beginHandle = begin.data?.state_handle;
+      this.#loginHandle = isString(beginHandle) ? beginHandle : null;
       const options = this.#toRequestOptions(begin.data?.challenge);
+      if (!this.#loginHandle) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
       if (!options) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
@@ -237,7 +242,7 @@ export class PasskeyFlow {
           method: "POST",
           body: {
             credential: this.#serializeAssertion(assertion),
-            authentication_state: this.#loginState,
+            state_handle: this.#loginHandle,
           },
         },
       );
@@ -264,7 +269,7 @@ export class PasskeyFlow {
       return false;
     } finally {
       this.pending = false;
-      this.#loginState = null;
+      this.#loginHandle = null;
     }
   }
 
@@ -281,7 +286,7 @@ export class PasskeyFlow {
     try {
       const begin = await this.client.unsafeRequest<{
         challenge?: JsonValue;
-        registration_state?: JsonValue;
+        state_handle?: JsonValue;
       }>("/passkey/v1/register/begin", { method: "POST" });
       if (!begin.ok) {
         if (begin.status === 403 || isVerifiedOnlyError(begin.error)) {
@@ -291,8 +296,13 @@ export class PasskeyFlow {
         }
         return false;
       }
-      this.#registerState = begin.data?.registration_state ?? null;
+      const beginHandle = begin.data?.state_handle;
+      this.#registerHandle = isString(beginHandle) ? beginHandle : null;
       const options = this.#toCreationOptions(begin.data?.challenge);
+      if (!this.#registerHandle) {
+        this.genericError = GENERIC_TRY_AGAIN;
+        return false;
+      }
       if (!options) {
         this.genericError = GENERIC_TRY_AGAIN;
         return false;
@@ -319,7 +329,7 @@ export class PasskeyFlow {
       const serialized = this.#serializeAttestation(credential);
       const body: RegisterFinishBody = {
         credential: serialized.credential,
-        registration_state: this.#registerState,
+        state_handle: this.#registerHandle,
       };
       if (serialized.transports) body.transports = serialized.transports;
       if (label) body.device_type = label;
@@ -356,7 +366,7 @@ export class PasskeyFlow {
       return false;
     } finally {
       this.pending = false;
-      this.#registerState = null;
+      this.#registerHandle = null;
     }
   }
 
