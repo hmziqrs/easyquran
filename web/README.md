@@ -52,6 +52,7 @@ Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`
 - shadcn names declared twice (`:root` + `@theme inline`); one half -> renders unstyled.
 - no FOUC: `app.html` inline script applies theme pre-paint.
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
-- Image CI only (`.github/workflows/images.yml`): builds+pushes both images on arm64 runners and redeploys
-  Dokploy on master push/tag; no check/lint/test job — those stay local gates before push. sidebar lists
+- Image CI only (`.github/workflows/images.yml`): builds+pushes both images on arm64 runners on master
+  push/tag; no deploy step (a Dokploy Schedule Job pulls them — deploy/README.md) and no check/lint/test
+  job — those stay local gates before push. sidebar lists
   virtualized (`@tanstack/svelte-virtual`); only visible rows render.

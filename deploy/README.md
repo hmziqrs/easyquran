@@ -25,7 +25,8 @@ runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `pnpm -
 build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release --locked
 -p ruxlog --features vendored-openssl --target aarch64-unknown-linux-gnu`. It pushes
 `ghcr.io/hmziqrs/easyquran-{web,api}` tagged `latest` + short sha (plus `v*` on tags,
-`pr-N` on PRs), then a deploy job pokes Dokploy.
+`pr-N` on PRs). CI never contacts the deploy target — a Dokploy Schedule Job pulls
+the new bytes on its own schedule (see `Deploying with Dokploy` → step 3).
 
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
@@ -89,6 +90,9 @@ fails on pull.
   (read with jq — the deploy host has no node/python3/checkout). Idempotent per file
   (present + non-empty is skipped), so every redeploy re-runs it in seconds and picks up
   newly published translations only.
+- `dokploy-auto-update.sh` — the pull-based deploy half: paste into a Dokploy
+  Schedule Job (type "Dokploy Server"); it polls the compose's images, compares
+  digests before/after `docker pull`, and calls `compose.redeploy` when they move.
 - `../web/scripts/assert-headers.sh` — asserts the HTTP delivery contract
   against a running origin; run it before shipping (see checklist).
 - `.env.example` — config (copy to `.env`).
@@ -159,17 +163,24 @@ that path — a relative or name-like value is read as a volume name, not a path
    anyway? Delete the labels and configure domains there: web → `easyquran.fyi`,
    api → `easyquran.fyi` with path `/api`.
 
-### 3. Wire auto-redeploy (GitHub repo secrets)
+### 3. Wire auto-redeploy (pull-based, entirely inside Dokploy)
 
-Set exactly one of these in the GitHub repo's secrets — CI's deploy job pokes it
-after **both** images are pushed:
+No GitHub secrets, no webhook: a Dokploy Schedule Job notices new images by
+polling. One-time setup:
 
-- `DOKPLOY_DEPLOY_WEBHOOK` — the compose app's Webhook URL (Dokploy app →
-  Webhooks tab). Simplest; recommended.
-- or the API trio `DOKPLOY_URL` (your Dokploy base URL) + `DOKPLOY_API_KEY` +
-  `DOKPLOY_COMPOSE_ID` (the UUID in the compose app's URL) → `POST /api/compose.deploy`.
+1. Settings → Profile → API/CLI → **Generate Token**.
+2. Schedule Jobs → new job, type **Dokploy Server** (runs in the Dokploy
+   container: curl + node + docker socket), cron e.g. `*/10 * * * *`.
+3. Paste `deploy/dokploy-auto-update.sh`, fill `API_KEY` and `APP_NAME`
+   (Compose → General → App Name).
+4. **Run Manually** once and check the job logs before trusting the cron.
 
-Neither set → CI warns and skips the redeploy (images still pushed).
+It pulls each compose image, compares digests before/after, and on a change
+calls `POST /api/compose.redeploy` — the redeploy shows up in the Dokploy UI
+like any deploy. The ghcr packages are public, so the plain `docker pull` needs
+no registry credentials. Only moving tags (`latest`) can trigger it: an
+immutable `v*` pin never changes digest and is left alone. Trade-off vs a
+webhook poke: deploy lands within the poll interval, not instantly.
 
 ### 4. First deploy + verify
 
@@ -179,9 +190,10 @@ Deploy from the Dokploy UI, wait for both services to report healthy, then:
 curl https://easyquran.fyi/api/quran/health/ready   # → {"ready":true,…}
 ```
 
-Ongoing: every master push → CI builds both images (`:latest` + `:sha`), pushes,
-and redeploys. Tag pushes ship `v*` tags — pin `VERSION=v1.0.0` in the env tab
-to freeze on a release instead of tracking `latest`.
+Ongoing: every master push → CI builds both images (`:latest` + `:sha`) and
+pushes; the Schedule Job picks them up within its interval and redeploys. Tag
+pushes ship `v*` tags — pin `VERSION=v1.0.0` in the env tab to freeze on a
+release instead of tracking `latest`.
 
 The web image runs SvelteKit's standalone adapter-node server on bun. `hooks.server.ts` owns
 translated-page disk caching and dynamic response headers; `server.ts` applies
@@ -200,7 +212,8 @@ git tag v1.0.0 && git push origin v1.0.0
 ```
 
 then redeploy in Dokploy (or `docker compose pull && docker compose up -d` on the box). Set
-`VERSION=v1.0.0` in the environment to pin a release instead of tracking `latest`.
+`VERSION=v1.0.0` in the environment to pin a release — and note the auto-update job
+deliberately ignores pinned tags, so a pin freezes the stack until you move it.
 
 ### Header checklist (before each release)
 

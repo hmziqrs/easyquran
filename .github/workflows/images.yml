@@ -1,4 +1,6 @@
-# Build + push the two runtime images, then poke Dokploy to redeploy.
+# Build + push the two runtime images. Deployment is pull-based: a Dokploy
+# Schedule Job (deploy/dokploy-auto-update.sh) polls ghcr and redeploys — this
+# workflow never contacts the deploy target.
 #
 # Mirrors `just images` / `just push` exactly, with one simplification: the runners are
 # arm64 (`ubuntu-24.04-arm`, the deploy target's arch), so nothing cross-compiles. cargo
@@ -19,11 +21,6 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      deploy:
-        description: "Redeploy on Dokploy after pushing the images"
-        type: boolean
-        default: true
 
 # One build per ref. A superseded master push has nothing worth finishing.
 concurrency:
@@ -178,32 +175,3 @@ jobs:
           labels: ${{ steps.tags.outputs.labels }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
-
-  # Dokploy pulls; it never builds. Both images must exist before it redeploys, otherwise it
-  # restarts the stack on the previous digests.
-  deploy:
-    needs: [meta, web, api]
-    if: needs.meta.outputs.push == 'true' && (github.event_name != 'workflow_dispatch' || inputs.deploy)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Redeploy on Dokploy
-        env:
-          WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
-          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
-          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
-          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
-        run: |
-          if [ -n "$WEBHOOK" ]; then
-            echo "Triggering the Dokploy compose webhook"
-            curl -fsS -X POST -H 'content-type: application/json' -d '{}' "$WEBHOOK"
-            exit 0
-          fi
-          if [ -n "$DOKPLOY_URL" ] && [ -n "$DOKPLOY_API_KEY" ] && [ -n "$DOKPLOY_COMPOSE_ID" ]; then
-            echo "Calling compose.deploy on ${DOKPLOY_URL}"
-            curl -fsS -X POST "${DOKPLOY_URL%/}/api/compose.deploy" \
-              -H "x-api-key: ${DOKPLOY_API_KEY}" \
-              -H 'content-type: application/json' \
-              -d "{\"composeId\":\"${DOKPLOY_COMPOSE_ID}\"}"
-            exit 0
-          fi
-          echo "::warning::No Dokploy secret configured — images are pushed, deploy skipped."
