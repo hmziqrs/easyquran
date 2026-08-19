@@ -18,14 +18,15 @@ easyquran.fyi → [external Traefik] → web:8080   (Host)
 Both Dockerfiles are **packaging-only**: they compile nothing, install no toolchain, and make
 no network calls. Everything is built outside the deploy and COPYed in.
 
-**Primary publisher: CI** (`.github/workflows/images.yml`). On every master push and `v*`
+**Primary publisher + deploy trigger: CI** (`.github/workflows/images.yml`). On every master push and `v*`
 tag (PRs build without pushing) it builds both images natively on `ubuntu-24.04-arm`
 runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `pnpm --filter web
 build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release --locked
 -p ruxlog --features vendored-openssl --target aarch64-unknown-linux-gnu`. It pushes
 `ghcr.io/hmziqrs/easyquran-{web,api}` tagged `latest` + short sha (plus `v*` on tags,
-`pr-N` on PRs). CI never contacts the deploy target — a Dokploy Schedule Job pulls
-the new bytes on its own schedule (see `Deploying with Dokploy` → step 3).
+`pr-N` on PRs). After both images from a master push publish, CI calls Dokploy's
+redeploy API; Dokploy pulls `:latest` during that redeploy (see `Deploying with
+Dokploy` → step 3).
 
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
@@ -89,9 +90,8 @@ fails on pull.
   (read with jq — the deploy host has no node/python3/checkout). Idempotent per file
   (present + non-empty is skipped), so every redeploy re-runs it in seconds and picks up
   newly published translations only.
-- `dokploy-auto-update.sh` — the pull-based deploy half: paste into a Dokploy
-  Schedule Job (type "Dokploy Server"); it polls the compose's images, compares
-  digests before/after `docker pull`, and calls `compose.redeploy` when they move.
+- `dokploy-auto-update.sh` — legacy server-local fallback. Do not schedule it
+  when using CI-triggered deploys.
 - `../web/scripts/assert-headers.sh` — asserts the HTTP delivery contract
   against a running origin; run it before shipping (see checklist).
 - `.env.example` — config (copy to `.env`).
@@ -162,27 +162,31 @@ that path — a relative or name-like value is read as a volume name, not a path
    anyway? Delete the labels and configure domains there: web → `easyquran.fyi`,
    api → `easyquran.fyi` with path `/api`.
 
-### 3. Wire auto-redeploy (pull-based, entirely inside Dokploy)
+### 3. Wire auto-redeploy (push-based from GitHub Actions)
 
-No GitHub secrets, no webhook: a Dokploy Schedule Job notices new images by
-polling. One-time setup:
+No Dokploy Schedule Job. A successful master run builds both images, publishes
+both `:latest` tags, then calls `POST /api/compose.redeploy`. Dokploy's
+`pull_policy: always` fetches those tags during redeploy.
 
 1. Settings → Profile → API/CLI → **Generate Token**.
-2. Schedule Jobs → new job, type **Dokploy Server** (runs in the Dokploy
-   container: curl + node + docker socket), cron e.g. `*/10 * * * *`.
-3. Paste `deploy/dokploy-auto-update.sh`, fill `API_KEY` and `COMPOSE_ID` — the
-   id in the compose app's URL (`/service/compose/<id>`), or from the host:
-   `curl -s http://localhost:3000/api/project.all -H "x-api-key: …" |
-   jq '.[].environments[]?.compose[]? | {name, composeId}'` (current Dokploy
-   returns `appName: null` there, so the id is the key).
-4. **Run Manually** once and check the job logs before trusting the cron.
+2. Get Compose ID from app URL (`/service/compose/<id>`).
+3. GitHub → Settings → Environments → create **production** (recommended:
+   required reviewers), then add secrets:
 
-It pulls each compose image, compares digests before/after, and on a change
-calls `POST /api/compose.redeploy` — the redeploy shows up in the Dokploy UI
-like any deploy. The ghcr packages are public, so the plain `docker pull` needs
-no registry credentials. Only moving tags (`latest`) can trigger it: an
-immutable `v*` pin never changes digest and is left alone. Trade-off vs a
-webhook poke: deploy lands within the poll interval, not instantly.
+   | secret | value |
+   | --- | --- |
+   | `DOKPLOY_API_URL` | reachable Dokploy API base, e.g. `https://dokploy.example.com/api` |
+   | `DOKPLOY_API_KEY` | token from step 1 |
+   | `DOKPLOY_COMPOSE_ID` | Compose ID from step 2 |
+
+   GitHub-hosted runner needs network access to this URL. If Dokploy is
+   private-only, use a tightly restricted proxy/VPN gateway or self-hosted
+   runner with private-network access.
+4. Push harmless master commit. **deploy** runs only after **publish** succeeds;
+   approve production if environment protection requires it.
+
+Deployment failure remains visible in Actions; retry deploy after fixing
+connectivity or Dokploy. VPS performs no image polling.
 
 ### 4. First deploy + verify
 
@@ -192,10 +196,18 @@ Deploy from the Dokploy UI, wait for both services to report healthy, then:
 curl https://easyquran.fyi/api/quran/health/ready   # → {"ready":true,…}
 ```
 
-Ongoing: every master push → CI builds both images (`:latest` + `:sha`) and
-pushes; the Schedule Job picks them up within its interval and redeploys. Tag
-pushes ship `v*` tags — pin `VERSION=v1.0.0` in the env tab to freeze on a
-release instead of tracking `latest`.
+Ongoing: every master push → CI builds both images (`:latest` + `:sha`), pushes
+them, then triggers Dokploy. Tag pushes ship `v*` tags but do not redeploy the
+`:latest` stack. Pin `VERSION=v1.0.0` in the env tab to freeze on a release.
+
+**Trust model.** A merged master push is a deploy: after CI publishes both
+`latest` images it tells Dokploy to redeploy. The root `docker-compose.yml` and
+everything under `deploy/` are production configuration — review changes with
+prod eyes. The write side is deliberately narrow: CI's registry writes
+happen only in a `publish` job that never runs for `pull_request` events, so a
+PR can build and validate but can never move `latest` (a same-repo collaborator
+PR included — it executes its own copy of the workflow); fork PRs don't build
+at all.
 
 The web image runs SvelteKit's standalone adapter-node server on bun. `hooks.server.ts` owns
 translated-page disk caching and dynamic response headers; `server.ts` applies
