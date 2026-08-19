@@ -4,6 +4,7 @@ mod m000001_init;
 mod m000002_rate_limit_state;
 mod m000003_translation_popularity;
 mod m000004_auth_session_binding;
+mod m000005_device_notification_oauth;
 
 pub struct Migrator;
 
@@ -17,6 +18,10 @@ impl MigratorTrait for Migrator {
             // m000004 ships AFTER m000003; additive (new table only), so an old
             // binary rolled back across this migration simply ignores the table.
             Box::new(m000004_auth_session_binding::Migration),
+            // m000005 backfills tables the device/notification/OAuth code paths
+            // always wrote but no migration owned; IF NOT EXISTS keeps any
+            // out-of-band-provisioned DB that already has them untouched.
+            Box::new(m000005_device_notification_oauth::Migration),
         ]
     }
 }

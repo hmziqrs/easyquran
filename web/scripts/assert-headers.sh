@@ -45,11 +45,16 @@ code_is() {
 
 printf 'Asserting §6.1 delivery contract against %s\n' "$ORIGIN"
 
-html=$(curl -sS -H 'Accept: text/html' "$ORIGIN/app")
+# /app itself is a 92-byte locale-redirect stub (no theme script, no asset refs);
+# /en/app is the real prerendered page both probes below need.
+html=$(curl -sS -H 'Accept: text/html' "$ORIGIN/en/app")
 
 immutable=$(grep -oE '/_app/immutable/[^"]+\.js' <<<"$html" | head -n1 || true)
 if [[ -n "$immutable" ]]; then
-	contains "immutable asset ($immutable) is immutable" "$(curl -sSI "$ORIGIN$immutable")" 'immutable'
+	immutable_headers=$(curl -sSI "$ORIGIN$immutable")
+	contains "immutable asset ($immutable) is immutable" "$immutable_headers" 'immutable'
+	contains "immutable asset carries nosniff" "$immutable_headers" 'x-content-type-options: nosniff'
+	contains "immutable asset carries HSTS" "$immutable_headers" 'strict-transport-security:'
 else
 	fail_ "no /_app/immutable/* reference on /app — cannot verify immutable"
 fi
@@ -60,13 +65,18 @@ for p in /app /app/al-kahf; do
 done
 ok "clean-URL HTML routes resolve (200)"
 
-translation_path=/app/al-fatihah/t/en/sahih
+# Localized canonical reader path — the bare /app/** prefix 307s to /{en,ar}/app/**.
+translation_path=/en/app/al-fatihah/t/en/sahih
 translation_html=$(curl -sS "$ORIGIN$translation_path")
 contains "$translation_path renders translated ayahs in SSR HTML" "$translation_html" 'data-verse-key="1:1"'
 translation_headers=$(curl -sS -D - -o /dev/null "$ORIGIN$translation_path")
 contains "$translation_path warm request is served by disk cache" "$translation_headers" 'x-easyquran-quran-cache: hit'
 translation_data_headers=$(curl -sS -D - -o /dev/null "$ORIGIN$translation_path/__data.json")
 contains "translation __data.json remains data, never cached HTML" "$translation_data_headers" 'content-type: application/json'
+authed_headers=$(curl -sS -D - -o /dev/null -H 'Cookie: session=private' "$ORIGIN$translation_path")
+contains "cookie-bearing SSR keeps its private tier (server never clobbers it)" "$authed_headers" 'cache-control: private, no-store'
+anonymous_csp=$(curl -sS -D - -o /dev/null "$ORIGIN$translation_path" | grep -i '^content-security-policy:' || true)
+contains "SSR (hooks) CSP carries a per-request nonce" "$anonymous_csp" "'nonce-"
 web_quran_health=$(curl -sS "$ORIGIN/health/quran")
 contains "web Quran health reports readiness only" "$web_quran_health" '"ready":true'
 absent "web Quran health leaks no cache metrics" "$web_quran_health" 'translatedPageCache'
@@ -82,7 +92,20 @@ artifact_etag=$(printf '%s' "$artifact_headers" | sed -n 's/^[Ee][Tt][Aa][Gg]:[[
 artifact_conditional_status=$(curl -sS -o /dev/null -w '%{http_code}' -H "If-None-Match: $artifact_etag" "$ORIGIN$artifact_path")
 contains "artifact ETag is id-based and conditionally returns 304" "$artifact_etag $artifact_conditional_status" 'W/"quran-artifact:tanzil/arabic/quran-uthmani.sqlite" 304'
 contains "HTML page (/app) is no-cache"      "$(curl -sSI "$ORIGIN/app")" 'no-cache'
-contains "/app/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/app/al-kahf/__data.json")" 'no-cache'
+contains "/en/app/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/en/app/al-kahf/__data.json")" 'no-cache'
+
+app_headers=$(curl -sSI "$ORIGIN/en/app")
+contains "prerendered /en/app carries CSP (server.ts outer pass)" "$app_headers" 'content-security-policy: default-src'
+contains "prerendered /en/app CSP authorizes inline scripts by hash" "$app_headers" 'sha256-'
+contains "prerendered /en/app carries HSTS" "$app_headers" 'strict-transport-security:'
+contains "prerendered /en/app carries nosniff" "$app_headers" 'x-content-type-options: nosniff'
+headers_file=$(curl -sS "$ORIGIN/_headers" || true)
+static_hash=$(grep -oE "sha256-[A-Za-z0-9+/=]+" <<<"$headers_file" | head -n1 || true)
+if [[ -n "$static_hash" ]]; then
+  contains "web/static/_headers theme-script hash matches the served /app CSP" "$app_headers" "$static_hash"
+else
+  fail_ "live /_headers file has no sha256 script hash — regenerate it (see web/static/_headers comment)"
+fi
 
 robots_ok=0
 for p in /app.txt /app.md /index.txt /index.md; do

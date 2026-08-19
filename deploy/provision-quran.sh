@@ -39,9 +39,10 @@ assert_sqlite() {
 }
 
 # Expected byte size per object (identity = id + size, never a hash). Arabic
-# sizes mirror web/src/lib/quran/view/source-profiles.ts sizeBytes — the DBs are
-# immutable, so a mismatch means a truncated/corrupted download or a stale
-# volume vs a newer baked manifest, and the provisioner refuses to bless it.
+# sizes mirror web/src/lib/quran/view/source-profiles.ts sizeBytes, the xml size
+# mirrors the R2 object — the DBs are immutable, so a mismatch means a
+# truncated/corrupted download or a stale volume vs a newer baked manifest, and
+# the provisioner refuses to bless it.
 assert_size() {
   local file="$1" want="$2" got
   got=$(wc -c < "$file" | tr -d ' ')
@@ -59,6 +60,7 @@ assert_sqlite "$DEST/arabic/quran-uthmani.sqlite"
 assert_size "$DEST/arabic/quran-uthmani.sqlite" 1593344
 assert_sqlite "$DEST/arabic/quran-simple-clean.sqlite"
 assert_size "$DEST/arabic/quran-simple-clean.sqlite" 929792
+assert_size "$DEST/quran-data.xml" 77234
 
 get "tanzil/translations/index.min.json" "$DEST/translations/index.min.json"
 # Translation file names + expected byte sizes out of the baked catalogue COPYed

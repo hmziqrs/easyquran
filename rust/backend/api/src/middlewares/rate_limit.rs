@@ -381,6 +381,80 @@ mod tests {
         assert_eq!(count_for(&mem, "ratelimit:internal-webssr:quran-v1"), 1);
     }
 
+    // Production mounts auth-limiters at nest level (`nest(prefix,
+    // routes().layer(rl))`) with PathKey::Matched. This pins the axum-0.8
+    // ordering that makes that PER-ROUTE, not per-nest: the outer router
+    // inserts MatchedPath ("/auth/v1/log_in") into the request before the
+    // nested endpoint (StripPrefix -> RateLimit -> handler) runs, so sibling
+    // routes under one nest land in distinct buckets. If this ever regresses
+    // (shared or raw-path keying), register/logout noise exhausts the login
+    // budget — the exact cross-user DoS the layout exists to prevent.
+    #[tokio::test]
+    async fn nest_level_limiter_keys_buckets_per_matched_route() {
+        use axum::{routing::post, Router as AxumRouter};
+
+        let mem = Arc::new(InMemoryStore::default());
+        let store = mem.clone() as Arc<dyn RateLimitStore>;
+        let rl = RateLimitLayer::builder(store, MAX, 60)
+            .path_key(PathKey::Matched)
+            .build();
+        let inner = AxumRouter::new()
+            .route("/log_in", post(|| async { StatusCode::OK }))
+            .route("/register", post(|| async { StatusCode::OK }));
+        let app = AxumRouter::new().nest("/auth/v1", inner.layer(rl));
+
+        let post_uri = |uri: &'static str| {
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .body(axum::body::Body::empty())
+                .unwrap()
+        };
+
+        // Same absent identity for both routes: the path key is the only bucket
+        // variable. Exhaust /auth/v1/log_in (max=2): two pass, third is 429.
+        assert_eq!(
+            app.clone()
+                .oneshot(post_uri("/auth/v1/log_in"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(post_uri("/auth/v1/log_in"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(post_uri("/auth/v1/log_in"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "3rd login request must exhaust the login bucket"
+        );
+
+        // Sibling route: own bucket, untouched by the login flood.
+        assert_eq!(
+            app.clone()
+                .oneshot(post_uri("/auth/v1/register"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "register must keep its own bucket after login exhaustion"
+        );
+
+        // Key-level evidence: two distinct matched-pattern keys, one identity.
+        assert_eq!(count_for(&mem, "ratelimit:unknown:/auth/v1/log_in"), 3);
+        assert_eq!(count_for(&mem, "ratelimit:unknown:/auth/v1/register"), 1);
+    }
+
     // M10: the Docker healthcheck (loopback peer) and public health traffic
     // (proxy peer) must land in DIFFERENT buckets — exhausting the public one
     // cannot 429 the container healthcheck.

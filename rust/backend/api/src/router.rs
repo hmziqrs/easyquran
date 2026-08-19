@@ -61,6 +61,14 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     // Auth nests mount ONLY when WEB_AUTH_ENABLED (W8f). CSRF generation stays
     // unconditional (it is foundation, used by anonymous sessions too).
+    //
+    // Bucket layout: these nests use `rate_limit_layer` (PathKey::Matched), so
+    // each bucket key is per-IP unit + MATCHED ROUTE PATTERN (e.g.
+    // `ratelimit:{ip}:/auth/v1/log_in`) — NOT one bucket per nest. Login,
+    // login/totp, 2fa/verify, register, logout, each OAuth begin/callback, and
+    // passkey begin/finish hold independent per-IP budgets, so register/logout
+    // noise cannot exhaust the login budget. Pinned by
+    // `nest_level_limiter_keys_buckets_per_matched_route` in middlewares/rate_limit.rs.
     if web_auth_enabled {
         router = router.nest(
             "/auth/v1",

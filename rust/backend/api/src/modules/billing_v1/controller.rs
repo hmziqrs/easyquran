@@ -25,7 +25,7 @@ use crate::services::paywall;
 use crate::AppState;
 
 use crate::services::billing::provider::{
-    canonical, canonical_subscription_status, is_refund_or_dispute_event_type, BillingProvider,
+    canonical, canonical_subscription_status, is_refund_or_dispute_event, BillingProvider,
     ParsedWebhook, WebhookEvent,
 };
 
@@ -571,18 +571,50 @@ pub async fn webhook_receiver(
         hasher.update(body.as_ref());
         let body_hash = hex::encode(hasher.finalize());
         let dedup_key = format!("webhook:{provider}:{body_hash}");
-        if !rux_request_gate::dedup_nx(&state.gate_store, &dedup_key, 86_400).await {
-            tracing::info!(
+        match dedup_process_commit(&state.gate_store, &dedup_key, || {
+            process_webhook_event(&state, &parsed, &provider)
+        })
+        .await?
+        {
+            WebhookDedup::Duplicate => tracing::info!(
                 provider = %provider,
                 "Replay webhook (already processed within 24h); acknowledging"
-            );
-            return Ok(Json(json!({ "received": true })));
+            ),
+            WebhookDedup::Processed => {}
         }
-
-        process_webhook_event(&state, &parsed, &provider).await?;
 
         Ok(Json(json!({ "received": true })))
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum WebhookDedup {
+    Processed,
+    Duplicate,
+}
+
+/// Claim-then-commit: the dedup key is claimed up front (concurrent duplicate
+/// deliveries ack without double-processing) but only kept once processing
+/// succeeds — a failed grant/revocation releases the key so the provider's
+/// retry reprocesses instead of hitting the dedup wall and being silently
+/// dropped.
+async fn dedup_process_commit<F, Fut>(
+    gate_store: &rux_request_gate::InMemoryStore,
+    dedup_key: &str,
+    process: F,
+) -> Result<WebhookDedup, ErrorResponse>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<(), ErrorResponse>>,
+{
+    if !rux_request_gate::dedup_nx(gate_store, dedup_key, 86_400).await {
+        return Ok(WebhookDedup::Duplicate);
+    }
+    if let Err(e) = process().await {
+        rux_request_gate::release_dedup(gate_store, dedup_key).await;
+        return Err(e);
+    }
+    Ok(WebhookDedup::Processed)
 }
 
 fn resolve_intent_session_id(event: &ParsedWebhook) -> &str {
@@ -1028,7 +1060,7 @@ async fn process_webhook_event(
                 "Payment recorded from webhook (server-bound intent)"
             );
         }
-        _ if is_refund_or_dispute_event_type(&event.event_type) => {
+        _ if is_refund_or_dispute_event(event) => {
             process_refund_or_dispute(state, event, provider_name).await?;
         }
         _ => {
@@ -1178,9 +1210,12 @@ pub async fn admin_set_post_access(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::billing::provider::is_refund_or_dispute_event_type;
     use crate::services::billing::provider::BillingProvider;
     use crate::services::billing::revolut::RevolutProvider;
     use crate::services::billing::stripe::StripeProvider;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn per_post_checkout_defaults_to_not_supported_for_non_overriding_provider() {
@@ -1336,5 +1371,90 @@ mod tests {
         assert!(is_refund_or_dispute_event_type(&event.event_type));
         assert_eq!(refund_post_target(&event), None);
         assert_eq!(event.subscription_id.as_deref(), Some("I-SUB1"));
+    }
+
+    #[tokio::test]
+    async fn failed_webhook_processing_releases_dedup_so_provider_retry_reprocesses() {
+        let gate = Arc::new(rux_request_gate::InMemoryStore::default());
+        let dedup_key = "webhook:stripe:deadbeef";
+        let attempts = Arc::new(AtomicUsize::new(0));
+
+        let fail_attempts = attempts.clone();
+        let first = dedup_process_commit(&gate, dedup_key, || async move {
+            fail_attempts.fetch_add(1, Ordering::SeqCst);
+            Err(ErrorResponse::new(ErrorCode::QueryError))
+        })
+        .await;
+        assert!(first.is_err(), "first delivery must surface the failure");
+
+        let retry_attempts = attempts.clone();
+        let second = dedup_process_commit(&gate, dedup_key, || async move {
+            retry_attempts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .await;
+        assert!(
+            matches!(second, Ok(WebhookDedup::Processed)),
+            "provider retry after failure must reprocess, not hit the dedup wall"
+        );
+
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "both deliveries must have invoked processing"
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_webhook_processing_keeps_dedup_claimed() {
+        let gate = Arc::new(rux_request_gate::InMemoryStore::default());
+        let dedup_key = "webhook:paypal:cafef00d";
+        let attempts = Arc::new(AtomicUsize::new(0));
+
+        let first_attempts = attempts.clone();
+        let first = dedup_process_commit(&gate, dedup_key, || async move {
+            first_attempts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .await;
+        assert!(matches!(first, Ok(WebhookDedup::Processed)));
+
+        let replay_attempts = attempts.clone();
+        let replay = dedup_process_commit(&gate, dedup_key, || async move {
+            replay_attempts.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .await;
+        assert!(
+            matches!(replay, Ok(WebhookDedup::Duplicate)),
+            "a replayed delivery must be deduped away after success"
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn paddle_refund_adjustment_dispatches_to_revocation() {
+        let event = ParsedWebhook {
+            event_type: "adjustment.created".to_string(),
+            customer_id: String::new(),
+            subscription_id: Some("sub_2".to_string()),
+            payment_id: Some("txn_9".to_string()),
+            current_period_end: None,
+            checkout_session_id: None,
+            subscription_status: None,
+            user_id: None,
+            amount_cents: None,
+            currency: None,
+            data: serde_json::json!({
+                "data": { "id": "adj_1", "action": "refund", "transaction_id": "txn_9" }
+            }),
+        };
+        assert!(is_refund_or_dispute_event(&event));
+
+        let credit = ParsedWebhook {
+            data: serde_json::json!({ "data": { "id": "adj_2", "action": "credit" } }),
+            ..event
+        };
+        assert!(!is_refund_or_dispute_event(&credit));
     }
 }

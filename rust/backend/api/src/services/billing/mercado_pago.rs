@@ -342,7 +342,15 @@ impl MercadoPagoProvider {
 
         let native_event = data["type"].as_str().unwrap_or_default();
         let event_type = match native_event {
-            "payment" => super::provider::canonical::CHECKOUT_COMPLETED,
+            // MP has no distinct refund webhook type — refunds/chargebacks arrive as a
+            // plain `payment` notification whose resource status says which; only
+            // notifications that actually carry the resource can be classified (minimal
+            // bodies keep the checkout-completed path).
+            "payment" => match data["data"]["status"].as_str() {
+                Some("refunded") => "payment.refunded",
+                Some("charged_back") => "payment.charged_back",
+                _ => super::provider::canonical::CHECKOUT_COMPLETED,
+            },
             "preapproval" => super::provider::canonical::SUBSCRIPTION_UPDATED,
             other => other,
         }
@@ -439,6 +447,18 @@ mod tests {
             (
                 r#"{"type":"payment","data":{"id":"pay_1"}}"#,
                 "checkout.session.completed",
+            ),
+            (
+                r#"{"type":"payment","data":{"id":"pay_1","status":"approved"}}"#,
+                "checkout.session.completed",
+            ),
+            (
+                r#"{"type":"payment","data":{"id":"pay_9","status":"refunded","preapproval_id":"preap_1"}}"#,
+                "payment.refunded",
+            ),
+            (
+                r#"{"type":"payment","data":{"id":"pay_9","status":"charged_back"}}"#,
+                "payment.charged_back",
             ),
             (
                 r#"{"type":"preapproval","data":{"id":"preap_1","status":"authorized","preapproval_id":"preap_1","next_payment_date":"2026-12-31T00:00:00Z","external_reference":"42","transaction_amount":99.9,"currency_id":"BRL"}}"#,

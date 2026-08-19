@@ -5,6 +5,7 @@ import {
   type AuthClient,
   type AuthErrorEnvelope,
   type SessionProbeResult,
+  type UnsafeRequestInit,
   type UserProfile,
 } from "$lib/auth/auth-client";
 import {
@@ -648,15 +649,17 @@ export class TwoFactorFlow {
     this.#setup = null;
   }
 
-  async setup(): Promise<boolean> {
+  async setup(currentCode?: string): Promise<boolean> {
     if (this.pending) return false;
     this.pending = true;
     this.genericError = null;
     this.fieldErrors = {};
+    const code = currentCode?.trim();
+    const init: UnsafeRequestInit = code
+      ? { method: "POST", body: { code } }
+      : { method: "POST" };
     try {
-      const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/setup", {
-        method: "POST",
-      });
+      const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/setup", init);
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = NETWORK_ERROR;

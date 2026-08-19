@@ -113,6 +113,47 @@ describe("TwoFactorFlow setup (secret stays in memory)", () => {
     expect(flow.setupData).toBeNull();
     expect(flow.genericError).toMatch(/verify your email/i);
   });
+
+  it("setup without a code sends NO body (un-enrolled first call keeps the body-less POST)", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      ok({ secret: "S", otpauth_url: "u", backup_codes: [] }, false),
+    );
+    const flow = createTwoFactorFlow({ client, state });
+    await flow.setup();
+    const [, init] = client.unsafeRequest.mock.calls[0]!;
+    expect(init.body).toBeUndefined();
+  });
+
+  it("setup with a current code sends it in the body (enrolled re-arm gate)", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      ok({ secret: "NEW", otpauth_url: "u", backup_codes: [] }, false),
+    );
+    const flow = createTwoFactorFlow({ client, state });
+    const res = await flow.setup(" 123456 ");
+    expect(res).toBe(true);
+    expect(client.unsafeRequest).toHaveBeenCalledWith(
+      "/auth/v1/2fa/setup",
+      expect.objectContaining({ method: "POST", body: { code: "123456" } }),
+    );
+  });
+
+  it("setup 400 missing-code envelope (enrolled, no code available) surfaces the envelope message", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      err(400, { type: "missing_required_field", message: "code is required" }),
+    );
+    const flow = createTwoFactorFlow({ client, state });
+    const res = await flow.setup();
+    expect(res).toBe(false);
+    expect(flow.setupData).toBeNull();
+    expect(flow.step).toBe("idle");
+    expect(flow.genericError).toBe("code is required");
+  });
 });
 
 describe("TwoFactorFlow verify (rotates only on success)", () => {

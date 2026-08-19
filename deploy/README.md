@@ -236,6 +236,7 @@ Run against the running web origin to confirm the delivery contract holds:
 ```bash
 just docker-up local          # builds both images on the host, then `compose up`
 web/scripts/assert-headers.sh http://localhost:8080 http://localhost:8888
+# same thing via the wired script: cd web && pnpm assert:headers http://localhost:8080 http://localhost:8888
 ```
 
 It verifies: `/_app/immutable/*` and allowlisted `/_quran/*` artifacts are `immutable`; `_app/version.json`, HTML

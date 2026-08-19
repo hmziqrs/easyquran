@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
 
 import { paraglideOptions } from "./paraglide.config.js";
+import { previewSecurityHeaders } from "./vite-plugin-preview-headers";
 import { quranArtifacts } from "./vite-plugin-quran";
 
 export default defineConfig({
@@ -73,6 +74,7 @@ export default defineConfig({
     },
   },
   plugins: lazyPlugins(() => [
+    previewSecurityHeaders(),
     quranArtifacts(),
     tailwindcss(),
     paraglideVitePlugin(paraglideOptions),

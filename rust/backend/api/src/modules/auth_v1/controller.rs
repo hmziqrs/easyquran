@@ -37,6 +37,19 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_duration: 86400,
 };
 
+/// N4: login/totp, 2fa/verify and 2fa/disable deliberately share ONE per-account
+/// budget (anti-brute design — code attempts anywhere lock code checks
+/// everywhere). 2fa/setup gets its own key so re-arming attempts can never
+/// consume or escalate the shared login budget.
+fn totp_limiter_key(user_id: i32) -> String {
+    format!("totp:{user_id}")
+}
+
+/// N4: separate budget for the enrolled re-arm gate on 2fa/setup.
+fn totp_setup_limiter_key(user_id: i32) -> String {
+    format!("totp_setup:{user_id}")
+}
+
 /// M2: axum 0.8 has no `Option<ValidatedJson<T>>` blanket impl, and 2FA setup
 /// must keep accepting a body-less POST (the un-enrolled first call). A missing,
 /// malformed, or validation-failing body extracts to `None` — fail-closed: an
@@ -274,7 +287,7 @@ pub async fn login_totp(
     }
 
     // Fail-closed per-account TOTP brute-force throttle.
-    let key_prefix = format!("totp:{}", user.id);
+    let key_prefix = totp_limiter_key(user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     // CRYP-2FA-002: secret is encrypted at rest; a decrypt failure must fail closed (reject), never verify against the opaque envelope bytes.
@@ -461,8 +474,10 @@ pub async fn twofa_setup(
     // generate-fresh-secret behavior (nothing to disarm).
     let was_enabled = existing.two_fa_enabled;
     if was_enabled {
-        // Fail-closed per-account TOTP brute-force throttle (mirrors disable).
-        let key_prefix = format!("totp:{}", user.id);
+        // Fail-closed per-account TOTP brute-force throttle, but on its OWN key:
+        // a user fumbling the re-arm code must never drain the shared
+        // login/verify/disable budget (N4 — a lockout here locked out LOGIN).
+        let key_prefix = totp_setup_limiter_key(user.id);
         abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
         let code = payload.0.and_then(|p| p.code).ok_or_else(|| {
@@ -603,7 +618,7 @@ pub async fn twofa_verify(
     let payload = payload.0;
 
     // Fail-closed per-account TOTP brute-force throttle.
-    let key_prefix = format!("totp:{}", user.id);
+    let key_prefix = totp_limiter_key(user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
@@ -708,7 +723,7 @@ pub async fn twofa_disable(
     let payload = payload.0;
 
     // Fail-closed per-account TOTP brute-force throttle.
-    let key_prefix = format!("totp:{}", user.id);
+    let key_prefix = totp_limiter_key(user.id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
@@ -1055,7 +1070,10 @@ mod tests {
     use super::annotate_session_row;
     use super::login_totp_token;
     use super::sessions_list_payload;
+    use super::totp_limiter_key;
+    use super::totp_setup_limiter_key;
     use super::verify_current_second_factor;
+    use super::ABUSE_LIMITER_CONFIG;
     use super::{classify_register_outcome, register_accepted_body, RegisterOutcome};
 
     use axum::http::StatusCode;
@@ -1344,5 +1362,50 @@ mod tests {
             .await
             .expect_err("no secret and no backup codes must fail closed");
         assert_eq!(err.code, ErrorCode::InvalidToken);
+    }
+
+    // --- N4: setup limiter budget isolation ----------------------------------
+
+    #[test]
+    fn setup_limiter_key_is_distinct_from_shared_totp_key() {
+        assert_eq!(totp_limiter_key(42), "totp:42");
+        assert_eq!(totp_setup_limiter_key(42), "totp_setup:42");
+        assert_ne!(
+            totp_limiter_key(42),
+            totp_setup_limiter_key(42),
+            "setup must not share the login/verify/disable limiter key"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_setups_never_touch_the_login_totp_budget() {
+        let store = rux_request_gate::InMemoryStore::default();
+        let user_id = 42;
+
+        // Exhaust the setup budget past both thresholds (temp 3/6min, long 5/15min):
+        // each failed re-arm attempt runs the setup-key limiter before its gate.
+        let attempts = ABUSE_LIMITER_CONFIG.block_retry_limit + 1;
+        let mut saw_block = false;
+        for _ in 0..attempts {
+            let blocked = crate::services::abuse_limiter::limiter(
+                &store,
+                &totp_setup_limiter_key(user_id),
+                ABUSE_LIMITER_CONFIG,
+            )
+            .await
+            .is_err();
+            saw_block = saw_block || blocked;
+        }
+        assert!(saw_block, "setup attempts must trip their own limiter");
+
+        // The shared login/verify/disable budget must still admit a fresh attempt:
+        // a fumbled re-arm must never lock the account out of LOGIN for 24h.
+        crate::services::abuse_limiter::limiter(
+            &store,
+            &totp_limiter_key(user_id),
+            ABUSE_LIMITER_CONFIG,
+        )
+        .await
+        .expect("login/verify TOTP budget must be untouched by setup attempts");
     }
 }

@@ -3,8 +3,18 @@
 # out of the search index (noindex) so the canonical HTML is what ranks.
 # Effective on Cloudflare Pages / Netlify (copied to build/_headers). For
 # Vercel, mirror these in vercel.json `headers`.
+#
+# CSP mirrors the nonce-less branch of hooks' buildCsp. A static host cannot
+# mint per-request nonces, so the app.html inline theme script is authorized
+# by its sha256 hash instead — regenerate it when that script changes:
+#   python3 -c "import hashlib,re,base64;s=re.search(r'<script>(.*?)</script>',open('src/app.html').read(),re.S).group(1);print(base64.b64encode(hashlib.sha256(s.encode()).digest()).decode())"
+# Kit also emits one inline hydration bootstrap script whose bytes differ per
+# route; only the adapter-node path (web/server.ts boot scan) can enumerate
+# those hashes, so on a static host the prerendered mirror serves without
+# hydration under this policy.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googletagmanager.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://firebase.googleapis.com https://firebaseremoteconfig.googleapis.com https://firebaselogging.googleapis.com https://firebaselogging-pa.googleapis.com https://fcmregistrations.googleapis.com https://play.google.com https://www.google-analytics.com https://www.google.com; worker-src 'self' blob:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-a/xqAVhoYqrTfXzF16QZlUT1KB67sQOksM2vi5mNtVY=' https://www.gstatic.com https://www.googletagmanager.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseremoteconfig.googleapis.com https://firebaselogging.googleapis.com https://firebaselogging-pa.googleapis.com https://fcmregistrations.googleapis.com https://play.google.com https://www.google-analytics.com https://www.google.com; worker-src 'self' blob:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()

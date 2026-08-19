@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
@@ -10,7 +12,6 @@ import {
   type ParsedReaderRoute,
 } from "$lib/server/reader-route";
 import type { Handle, RequestEvent } from "@sveltejs/kit";
-import { randomBytes } from "node:crypto";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
@@ -65,7 +66,7 @@ function buildCsp(nonce: string | undefined): string {
   if (nonce) scriptSrc.push(`'nonce-${nonce}'`);
   scriptSrc.push("https://www.gstatic.com", "https://www.googletagmanager.com");
   if (import.meta.env.DEV) {
-    scriptSrc.push("'unsafe-inline'");
+    scriptSrc.push("'unsafe-eval'");
   }
   return [
     "default-src 'self'",
