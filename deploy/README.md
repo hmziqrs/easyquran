@@ -171,8 +171,11 @@ polling. One-time setup:
 1. Settings → Profile → API/CLI → **Generate Token**.
 2. Schedule Jobs → new job, type **Dokploy Server** (runs in the Dokploy
    container: curl + node + docker socket), cron e.g. `*/10 * * * *`.
-3. Paste `deploy/dokploy-auto-update.sh`, fill `API_KEY` and `APP_NAME`
-   (Compose → General → App Name).
+3. Paste `deploy/dokploy-auto-update.sh`, fill `API_KEY` and `COMPOSE_ID` — the
+   id in the compose app's URL (`/service/compose/<id>`), or from the host:
+   `curl -s http://localhost:3000/api/project.all -H "x-api-key: …" |
+   jq '.[].environments[]?.compose[]? | {name, composeId}'` (current Dokploy
+   returns `appName: null` there, so the id is the key).
 4. **Run Manually** once and check the job logs before trusting the cron.
 
 It pulls each compose image, compares digests before/after, and on a change
