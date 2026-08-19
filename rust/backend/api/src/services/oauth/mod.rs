@@ -2,8 +2,10 @@ pub mod login;
 pub mod redirect;
 pub mod state;
 
+use std::sync::LazyLock;
+
 use axum::http::{header::ORIGIN, HeaderMap};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
 
@@ -16,6 +18,27 @@ pub use state::{
     oauth_session_id, store_oauth_state, ConsumedOauthState, NativeTokenProvider,
     NATIVE_TOKEN_NONCE_TTL_SECS,
 };
+
+static TOKEN_EXCHANGE_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
+    LazyLock::new(|| {
+        reqwest::Client::builder()
+            // oauth2 5.x drives exchanges through a caller-owned client; never follow
+            // redirects so a hostile token endpoint cannot SSRF the server.
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(15))
+            .pool_idle_timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|error| error.to_string())
+    });
+
+pub fn token_exchange_http_client() -> Result<&'static reqwest::Client, ErrorResponse> {
+    TOKEN_EXCHANGE_HTTP_CLIENT.as_ref().map_err(|error| {
+        error!(error = %error, "Failed to build OAuth token-exchange HTTP client");
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Failed to initialize OAuth HTTP client")
+    })
+}
 
 /// Native provider-token endpoints are CSRF-exempt because native SDK clients have no browser
 /// session. Reject browser-origin requests so they cannot create or replace a cookie session.

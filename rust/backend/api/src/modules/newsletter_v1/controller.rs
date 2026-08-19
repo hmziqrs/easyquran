@@ -26,6 +26,11 @@ use super::validator::{
 const NEWSLETTER_PACE: std::time::Duration = std::time::Duration::from_millis(1300);
 const NEWSLETTER_MAX_THROTTLE_RETRIES: u8 = 2;
 
+// PII: logs carry the recipient domain only, never the full address (matches the mail service's domain-only policy).
+fn email_domain(email: &str) -> &str {
+    email.split('@').nth(1).unwrap_or("unknown")
+}
+
 async fn send_mail(
     mailer: &crate::services::mail::MailRouter,
     to_email: &str,
@@ -46,7 +51,7 @@ async fn send_mail(
 }
 
 #[debug_handler]
-#[instrument(skip(state, client_ip, payload), fields(email = %payload.email))]
+#[instrument(skip(state, client_ip, payload), fields(email_domain = %email_domain(&payload.email)))]
 pub async fn subscribe(
     State(state): State<AppState>,
     ClientIp(client_ip): ClientIp,
@@ -89,7 +94,7 @@ pub async fn subscribe(
 
     match SubscriberEntity::create(&state.sea_db, new_sub).await {
         Ok(_model) => {
-            info!(email = %email, "Newsletter subscription created");
+            info!(email_domain = %email_domain(&email), "Newsletter subscription created");
             let site_url = state.settings.site.url.clone();
 
             // Fragment, not ?token=: fragments aren't sent to servers, so the secret stays out of logs/Referer.
@@ -112,14 +117,14 @@ pub async fn subscribe(
             Ok((StatusCode::CREATED, Json(body)))
         }
         Err(err) => {
-            error!(email = %email, "Failed to create newsletter subscription: {}", err);
+            error!(email_domain = %email_domain(&email), "Failed to create newsletter subscription: {}", err);
             Err(err)
         }
     }
 }
 
 #[debug_handler]
-#[instrument(skip(state, payload), fields(email = %payload.email))]
+#[instrument(skip(state, payload), fields(email_domain = %email_domain(&payload.email)))]
 pub async fn unsubscribe(
     State(state): State<AppState>,
     payload: ValidatedJson<V1UnsubscribePayload>,
@@ -129,16 +134,16 @@ pub async fn unsubscribe(
 
     match SubscriberEntity::unsubscribe(&state.sea_db, &email, Some(&token)).await {
         Ok(Some(_)) => {
-            info!(email = %email, "Newsletter unsubscribed");
+            info!(email_domain = %email_domain(&email), "Newsletter unsubscribed");
             Ok(Json(json!({ "message": "Unsubscribed successfully" })))
         }
         Ok(None) => {
-            warn!(email = %email, "Invalid unsubscribe token");
+            warn!(email_domain = %email_domain(&email), "Invalid unsubscribe token");
             Err(ErrorResponse::new(ErrorCode::SubscriberNotFound)
                 .with_message("Invalid token or subscriber not found"))
         }
         Err(err) => {
-            error!(email = %email, "Failed to unsubscribe: {}", err);
+            error!(email_domain = %email_domain(&email), "Failed to unsubscribe: {}", err);
             Err(err)
         }
     }
@@ -264,7 +269,7 @@ pub async fn list_subscribers(
 }
 
 #[debug_handler]
-#[instrument(skip(state, payload), fields(email = %payload.email))]
+#[instrument(skip(state, payload), fields(email_domain = %email_domain(&payload.email)))]
 pub async fn confirm(
     State(state): State<AppState>,
     payload: ValidatedJson<V1UnsubscribePayload>,
@@ -274,17 +279,28 @@ pub async fn confirm(
 
     match SubscriberEntity::confirm(&state.sea_db, &email, &token).await {
         Ok(Some(_)) => {
-            info!(email = %email, "Newsletter subscription confirmed");
+            info!(email_domain = %email_domain(&email), "Newsletter subscription confirmed");
             Ok(Json(json!({ "message": "Subscription confirmed" })))
         }
         Ok(None) => {
-            warn!(email = %email, "Invalid confirmation token");
+            warn!(email_domain = %email_domain(&email), "Invalid confirmation token");
             Err(ErrorResponse::new(ErrorCode::SubscriberNotFound)
                 .with_message("Invalid token or subscriber not found"))
         }
         Err(err) => {
-            error!(email = %email, "Failed to confirm subscription: {}", err);
+            error!(email_domain = %email_domain(&email), "Failed to confirm subscription: {}", err);
             Err(err)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn email_domain_redacts_local_part() {
+        assert_eq!(email_domain("subscriber@example.com"), "example.com");
+        assert_eq!(email_domain("not-an-email"), "unknown");
     }
 }

@@ -7,7 +7,7 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
-use oauth2::{reqwest::async_http_client, AuthorizationCode, CsrfToken, Scope, TokenResponse};
+use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::json;
 use tower_sessions::Session;
@@ -32,14 +32,18 @@ use super::{
 const FACEBOOK_GRAPH_MAX_BYTES: usize = 64 * 1024;
 static FACEBOOK_GRAPH_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
     LazyLock::new(|| {
-        reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(15))
-            .pool_idle_timeout(std::time::Duration::from_secs(30))
+        facebook_graph_http_client_builder()
             .build()
             .map_err(|error| error.to_string())
     });
+
+fn facebook_graph_http_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(15))
+        .pool_idle_timeout(std::time::Duration::from_secs(30))
+}
 
 #[derive(Debug, Deserialize)]
 struct FacebookDebugTokenResponse {
@@ -136,7 +140,7 @@ async fn run_facebook_callback(
     let client = get_facebook_oauth_client()?;
     let token_result = client
         .exchange_code(AuthorizationCode::new(query.code()?))
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange Facebook authorization code");
@@ -165,7 +169,7 @@ pub async fn facebook_exchange(
     let client = get_facebook_oauth_client()?;
     let token_result = client
         .exchange_code(AuthorizationCode::new(payload.code))
-        .request_async(async_http_client)
+        .request_async(oauth::token_exchange_http_client()?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange Facebook authorization code");
@@ -432,13 +436,15 @@ async fn finish_facebook_login(
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "Facebook User".to_string());
     let user = oauth::find_or_create_user_for_oauth(
-        state,
+        &state.sea_db,
         oauth::OAuthProvider::Facebook,
         &user_info.id,
         email,
         name,
-        // email_verified: Graph API emails are policy-verified.
-        true,
+        // email_verified: the Graph API /me response carries no verified flag, so a
+        // Facebook email must stay unverified — find_or_create_user_for_oauth then
+        // refuses to link it onto (or create an account from) an existing email.
+        false,
     )
     .await?;
 
@@ -452,6 +458,13 @@ mod tests {
     use crate::modules::auth_v1::controller::{session_rotated_headers, SESSION_ROTATED};
     use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // Each #[tokio::test] owns a short-lived runtime. The shared static client would park
+    // idle connections whose dispatch tasks die with that runtime, so a later request that
+    // reuses one fails instantly (hyper DispatchGone). Build a fresh client per test.
+    fn test_http_client() -> reqwest::Client {
+        facebook_graph_http_client_builder().build().unwrap()
+    }
 
     fn valid_debug_token() -> FacebookDebugTokenData {
         FacebookDebugTokenData {
@@ -508,10 +521,10 @@ mod tests {
             })))
             .mount(&server)
             .await;
-        let client = facebook_graph_http_client().unwrap();
+        let client = test_http_client();
 
         let user_id = verify_facebook_access_token_from_url(
-            client,
+            &client,
             &format!("{}/debug_token", server.uri()),
             "facebook-user-token",
             "configured-facebook-app",
@@ -537,10 +550,10 @@ mod tests {
             })))
             .mount(&server)
             .await;
-        let client = facebook_graph_http_client().unwrap();
+        let client = test_http_client();
 
         let profile = fetch_facebook_user_info_from_url(
-            client,
+            &client,
             &format!("{}/me", server.uri()),
             "facebook-user-token",
         )
@@ -561,10 +574,10 @@ mod tests {
             .respond_with(ResponseTemplate::new(401))
             .mount(&server)
             .await;
-        let client = facebook_graph_http_client().unwrap();
+        let client = test_http_client();
 
         let error = fetch_facebook_user_info_from_url(
-            client,
+            &client,
             &format!("{}/me", server.uri()),
             "expired-facebook-token",
         )
@@ -592,10 +605,10 @@ mod tests {
             )
             .mount(&source)
             .await;
-        let client = facebook_graph_http_client().unwrap();
+        let client = test_http_client();
 
         let error = fetch_facebook_user_info_from_url(
-            client,
+            &client,
             &format!("{}/me", source.uri()),
             "must-not-cross-redirect",
         )

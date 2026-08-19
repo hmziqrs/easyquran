@@ -800,6 +800,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_age(Duration::from_secs(360));
 
     let ip_source = settings.http.ip_source.clone();
+    let trusted_proxy_cidrs = middlewares::client_ip::TrustedProxyCidrs(std::sync::Arc::new(
+        settings.http.trusted_proxy_cidrs.clone(),
+    ));
     // Server-only token shared with trusted Docker-internal SSR. Layered as an
     // extension (never a public env var, response, or log) for the identity
     // middleware to compare constant-time.
@@ -811,6 +814,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             middlewares::client_ip::resolve_client_ip,
         ))
         .layer(ip_source.clone().into_extension())
+        .layer(axum::Extension(trusted_proxy_cidrs.clone()))
         .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
             internal_token.clone(),
         )))
@@ -830,7 +834,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // rejections) is uncacheable. Does not infer auth from `ruxlog.sid`, which
         // CSRF generation mints for anonymous sessions too. The public Quran router
         // never enters this middleware.
-        .layer(middleware::from_fn(middlewares::cors::private_no_store));
+        .layer(middleware::from_fn(middlewares::cors::private_no_store))
+        // Outermost-er: security headers must also cover responses short-circuited
+        // by the outer stack (CSRF 401, origin 403, route-block 503); the inner
+        // application in with_observability only sees requests that pass them.
+        .layer(middleware::from_fn(
+            middlewares::security_headers::security_headers,
+        ));
 
     // W3a escalation: attached ONLY to the outer quran-v1 content limiter, and
     // only when QURAN_BAN_ESCALATION_ENABLED=true (default-off). Every other
@@ -879,7 +889,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     let public = router::with_observability(quran)
         .layer(compression)
-        // Three isolated limiters: health (identity-independent) + internal SSR
+        // Three isolated limiters: health (TCP-peer keyed) + internal SSR
         // (service label) + external content (verified IP). Each self-skips via
         // `applies`; only external IPs enter the content/escalation bucket.
         .layer(middlewares::rate_limit::quran_health_layer(&state))
@@ -889,11 +899,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             middlewares::client_ip::resolve_client_ip,
         ))
         .layer(ip_source.into_extension())
+        .layer(axum::Extension(trusted_proxy_cidrs))
         .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
             internal_token,
         )))
         .layer(axum::Extension(state.clone()))
-        .layer(ruxlog::modules::quran_v1::cors::public_cors_layer());
+        .layer(ruxlog::modules::quran_v1::cors::public_cors_layer())
+        // Outermost: 429/400/503 responses from the limiter + identity stack
+        // must carry nosniff etc. just like handler responses do.
+        .layer(middleware::from_fn(
+            middlewares::security_headers::security_headers,
+        ));
 
     let app = axum::Router::new()
         .merge(private)

@@ -22,7 +22,6 @@ impl Entity {
             .column_as(Column::FeaturedImageId, "featured_image_id")
             .column_as(UserColumn::Id, "author_id")
             .column_as(UserColumn::Name, "author_name")
-            .column_as(UserColumn::Email, "author_email")
             .column_as(UserColumn::AvatarId, "author_avatar_id")
             .column_as(CategoryColumn::Id, "category_id")
             .column_as(CategoryColumn::Name, "category_name")

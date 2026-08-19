@@ -16,12 +16,11 @@ const PROFILE: UserProfile = {
   oauth_provider: null,
 };
 
-const LOGIN_STATE = { opaque: "login-state-blob" };
-const REGISTER_STATE = { opaque: "register-state-blob" };
+const LOGIN_HANDLE = "login-state-handle";
+const REGISTER_HANDLE = "register-state-handle";
 
 type PasskeyRequestBody = {
-  authentication_state?: { opaque: string };
-  registration_state?: { opaque: string };
+  state_handle?: string;
   credential?: {
     id?: string;
     rawId?: string;
@@ -89,7 +88,7 @@ function fakeLoginBegin(challengeB64u = "AAAAAA") {
         allowCredentials: [{ type: "public-key", id: "AAAA" }],
       },
     },
-    authentication_state: LOGIN_STATE,
+    state_handle: LOGIN_HANDLE,
   };
 }
 
@@ -106,7 +105,7 @@ function fakeRegisterBegin(challengeB64u = "BBBBBB") {
         attestation: "none",
       },
     },
-    registration_state: REGISTER_STATE,
+    state_handle: REGISTER_HANDLE,
   };
 }
 
@@ -245,7 +244,8 @@ describe("PasskeyFlow login success", () => {
     expect(finishCall[0]).toBe("/passkey/v1/login/finish");
     expect(finishCall[1]!.method).toBe("POST");
     const body = finishCall[1]!.body;
-    expect(body.authentication_state).toEqual(LOGIN_STATE);
+    expect(body.state_handle).toBe(LOGIN_HANDLE);
+    expect("authentication_state" in body).toBe(false);
     const cred = body.credential!;
     expect(cred.rawId).toBeTypeOf("string");
     expect(cred.raw_id).toBeUndefined();
@@ -267,6 +267,21 @@ describe("PasskeyFlow login success", () => {
     const res = await flow.login();
     expect(res).toBe(false);
     expect(flow.genericError).toBeTruthy();
+  });
+
+  it("begin response without state_handle -> generic error, no finish call", async () => {
+    const client = mockClient();
+    const beginWithoutHandle = { ...fakeLoginBegin(), state_handle: undefined };
+    client.unsafeRequest.mockReset();
+    client.unsafeRequest.mockResolvedValueOnce(ok(beginWithoutHandle));
+    const creds = fakeCredentialsGet(() => Promise.resolve(fakeAssertion()));
+    const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
+    const res = await flow.login();
+    expect(res).toBe(false);
+    expect(flow.genericError).toBeTruthy();
+    // SAFETY: unsafeRequest is invoked positionally as (path, init); mock.calls keeps that order.
+    const paths = (client.unsafeRequest.mock.calls as [string, unknown][]).map(([p]) => p);
+    expect(paths).not.toContain("/passkey/v1/login/finish");
   });
 });
 
@@ -296,7 +311,8 @@ describe("PasskeyFlow register", () => {
     expect(finishCall[0]).toBe("/passkey/v1/register/finish");
     expect(finishCall[1]!.method).toBe("POST");
     const body = finishCall[1]!.body;
-    expect(body.registration_state).toEqual(REGISTER_STATE);
+    expect(body.state_handle).toBe(REGISTER_HANDLE);
+    expect("registration_state" in body).toBe(false);
     expect(body.device_type).toBe("MacBook");
     expect(body.transports).toEqual(["internal"]);
     const cred = body.credential!;

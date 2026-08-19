@@ -8,6 +8,7 @@ pub mod mail;
 pub mod media;
 pub mod notification;
 pub mod oauth;
+pub mod passkey_state;
 pub mod paywall;
 pub mod rate_limit_store;
 pub mod route_blocker_config;

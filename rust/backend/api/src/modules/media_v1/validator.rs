@@ -152,7 +152,11 @@ impl V1MediaListQuery {
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1MediaUsageQuery {
-    #[validate(length(min = 1, message = "media_ids must contain at least one id"))]
+    #[validate(length(
+        min = 1,
+        max = 100,
+        message = "media_ids must contain between 1 and 100 ids"
+    ))]
     pub media_ids: Vec<i32>,
 }
 
@@ -365,6 +369,25 @@ mod tests {
     fn validate_upload_rejects_when_neither_mime_nor_ext_allowed() {
         let result = validate_upload(Some("application/octet-stream"), Some("data.bin"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn usage_query_rejects_empty_media_ids() {
+        let query = V1MediaUsageQuery { media_ids: vec![] };
+        assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn usage_query_caps_media_ids() {
+        let over = V1MediaUsageQuery {
+            media_ids: vec![1; 101],
+        };
+        assert!(over.validate().is_err());
+
+        let at_cap = V1MediaUsageQuery {
+            media_ids: vec![1; 100],
+        };
+        assert!(at_cap.validate().is_ok());
     }
 
     #[test]

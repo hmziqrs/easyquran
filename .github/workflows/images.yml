@@ -1,6 +1,5 @@
-# Build + push the two runtime images. Deployment is pull-based: a Dokploy
-# Schedule Job (deploy/dokploy-auto-update.sh) polls ghcr and redeploys — this
-# workflow never contacts the deploy target.
+# Build + push two runtime images. After both master images publish, CI tells
+# Dokploy to redeploy; pull_policy: always fetches new latest tags.
 #
 # Mirrors `just images` / `just push` exactly, with one simplification: the runners are
 # arm64 (`ubuntu-24.04-arm`, the deploy target's arch), so nothing cross-compiles. cargo
@@ -9,6 +8,11 @@
 #
 # Both Dockerfiles are packaging-only: the artifacts are produced by these jobs and COPYed
 # in. That is why each build job does its own toolchain work before touching Docker.
+#
+# The build jobs export image tars and never touch the registry: registry writes happen
+# only in the publish job, which runs solely on non-PR events and is the only job holding
+# a packages:write token. A pull_request run executes the PR's own copy of this file, so
+# it must never be handed a token that can move `latest` or reach Dokploy.
 #
 # db/ is gitignored, so the web build's Arabic prerender has no databases in a fresh clone:
 # deploy/fetch-quran-db.sh pulls them from the public R2 base (see that script), cached
@@ -27,9 +31,11 @@ concurrency:
   group: images-${{ github.ref }}
   cancel-in-progress: true
 
+# Baseline for every job, including pull_request runs. The publish job overrides
+# this with packages:write — no other job can write to the registry, and no PR
+# path can reach a write token at all.
 permissions:
   contents: read
-  packages: write
 
 env:
   # Same coordinates the justfile and docker-compose.yml resolve: ghcr.io/<owner>/easyquran-*
@@ -44,17 +50,24 @@ jobs:
     steps:
       # A tag ships its own name (v1.2.0); a branch build ships the short sha. This value
       # only lands in the image's OCI version label — the registry tags come from
-      # docker/metadata-action below.
+      # docker/metadata-action below. ref_name is injectable via a crafted tag name, so it
+      # reaches the shell only through the env block, never as a raw interpolation.
       - id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          if [ "$REF_TYPE" = "tag" ]; then
+            echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
           else
             echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
 
   web:
     needs: meta
+    # Same-repo PRs only: a fork PR cannot be trusted with two arm64 build
+    # runners (it still executes its own copy of this workflow).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
@@ -90,13 +103,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v4
-        if: needs.meta.outputs.push == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - id: tags
         uses: docker/metadata-action@v6
         with:
@@ -107,20 +113,32 @@ jobs:
             type=ref,event=pr
             type=sha,format=short
 
+      # Build to a tar (tags/labels baked in) — this job has no registry
+      # credentials at all; the publish job loads and pushes the tars.
       - uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.web
           platforms: linux/arm64
-          push: ${{ needs.meta.outputs.push == 'true' }}
           build-args: VERSION=${{ needs.meta.outputs.version }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.tags.outputs.labels }}
+          outputs: type=docker,dest=/tmp/easyquran-web.tar
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
+      # PR runs build purely as validation; only the push path ships the tar.
+      - uses: actions/upload-artifact@v4
+        if: needs.meta.outputs.push == 'true'
+        with:
+          name: easyquran-web-image
+          path: /tmp/easyquran-web.tar
+          retention-days: 1
+
   api:
     needs: meta
+    # Same-repo PRs only — see the web job.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
@@ -147,13 +165,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v4
-        if: needs.meta.outputs.push == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - id: tags
         uses: docker/metadata-action@v6
         with:
@@ -164,14 +175,82 @@ jobs:
             type=ref,event=pr
             type=sha,format=short
 
+      # Build to a tar (tags/labels baked in) — this job has no registry
+      # credentials at all; the publish job loads and pushes the tars.
       - uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.api
           platforms: linux/arm64
-          push: ${{ needs.meta.outputs.push == 'true' }}
           build-args: VERSION=${{ needs.meta.outputs.version }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.tags.outputs.labels }}
+          outputs: type=docker,dest=/tmp/easyquran-api.tar
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
+
+      - uses: actions/upload-artifact@v4
+        if: needs.meta.outputs.push == 'true'
+        with:
+          name: easyquran-api-image
+          path: /tmp/easyquran-api.tar
+          retention-days: 1
+
+  # The only job with packages:write, and it never runs for pull_request events
+  # (a PR executes its own copy of this file, so the gate must be the event
+  # itself, not anything PR-controlled). Loading an arm64 tar on an amd64
+  # runner is fine — pushing is manifest work, not execution.
+  publish:
+    needs: [meta, web, api]
+    if: needs.meta.outputs.push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: easyquran-*-image
+          path: /tmp
+          merge-multiple: true
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Push every tag baked into the tars (latest, short sha, v*/pr-N as applicable).
+      - name: Push images
+        run: |
+          docker load -i /tmp/easyquran-web.tar
+          docker load -i /tmp/easyquran-api.tar
+          docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep "^$REGISTRY/easyquran-" \
+            | while read -r ref; do docker push "$ref"; done
+
+  # Runs after both images publish. Tags do not move the stack's latest tag.
+  deploy:
+    needs: publish
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Redeploy Dokploy compose app
+        env:
+          DOKPLOY_API_URL: ${{ secrets.DOKPLOY_API_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          set -euo pipefail
+          : "${DOKPLOY_API_URL:?Set production secret DOKPLOY_API_URL}"
+          : "${DOKPLOY_API_KEY:?Set production secret DOKPLOY_API_KEY}"
+          : "${DOKPLOY_COMPOSE_ID:?Set production secret DOKPLOY_COMPOSE_ID}"
+
+          body=$(jq -cn --arg compose_id "$DOKPLOY_COMPOSE_ID" '{composeId: $compose_id}')
+          curl --fail-with-body --silent --show-error -K - \
+            --header 'content-type: application/json' \
+            --data "$body" \
+            "$DOKPLOY_API_URL/compose.redeploy" <<EOF
+          header = "x-api-key: $DOKPLOY_API_KEY"
+          EOF

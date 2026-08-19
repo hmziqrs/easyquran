@@ -41,13 +41,15 @@ ignore = [
     # any built target. Pure lockfile-residual risk.
     { id = "RUSTSEC-2023-0071", reason = "rsa Marvin: no upstream fix; not in the built graph; no RSA ops in ruxlog." },
 
-    # DEPS-AWS-SDK-LEGACY-TLS (resolved 2026-06-30): the AWS SDK is now on
-    # default-features = false (backend/api/Cargo.toml), which removed the
-    # legacy hyper-0.14 + rustls-0.21 + rustls-webpki-0.101 stack entirely —
-    # only rustls-webpki 0.103.x remains. The three RUSTSEC-2026-0098/0099/0104
-    # ignores that used to suppress webpki 0.101.7's name-constraint / CRL
-    # advisories are therefore deleted (verified: `cargo tree` shows no
-    # rustls 0.21 / webpki 0.101 / hyper 0.14 in the graph).
+    # DEPS-AWS-SDK-LEGACY-TLS (resolved 2026-06-30) + oauth2 5 upgrade
+    # (2026-08-18): the AWS SDK's default-features = false removed most of the
+    # legacy hyper-0.14 + rustls-0.21 + rustls-webpki-0.101 stack, and the
+    # oauth2 4.4 -> 5.0 bump removed the last of it (4.4's bundled reqwest 0.11
+    # client was the one remaining rustls-0.21 consumer). Only rustls-webpki
+    # 0.103.x remains. The three RUSTSEC-2026-0098/0099/0104 ignores that used
+    # to suppress webpki 0.101.7's name-constraint / CRL advisories are
+    # therefore deleted (verified after both changes: `cargo tree` shows no
+    # rustls 0.21 / webpki 0.101 / hyper 0.14 / reqwest 0.11 in the graph).
 
     # async-std 1.13.x — "has been discontinued" (unmaintained). Pulled directly
     # by our `migration` path-crate (SeaORM migration tooling), which is why the
@@ -110,10 +112,10 @@ highlight = "all"
 # collapsed from this crate. Skipping them keeps the warnings signal clean for
 # any *new* duplicate that a dependency change might introduce.
 skip = [
-    # aws-smithy-http-client still pulls hyper-rustls 0.24 (rustls 0.21) for one
-    # internal HTTP path while the rest of the graph (newer AWS connectors and
-    # other rustls-0.23 consumers) is on rustls 0.23.
-    { name = "rustls", version = "0.21" },
+    # The rustls 0.21 skip is deleted (2026-08-18): its only consumer was
+    # oauth2 4.4's bundled reqwest 0.11 client, and the oauth2 5 upgrade removed
+    # that entire chain — rustls 0.23 is now the only rustls in the graph.
+    #
     # getrandom resolves to THREE transitive versions, all pulled by the AWS SDK
     # stack and impossible to collapse from this crate:
     #   0.2 - rand_core 0.6 <- crypto-bigint <- aws-sigv4 (sigv4 request signing)

@@ -480,12 +480,27 @@ mod tests {
                 r#"{"event_type":"reporting.transaction.created","data":{"id":"x"}}"#,
                 "reporting.transaction.created",
             ),
+            (
+                r#"{"event_type":"adjustment.created","data":{"id":"adj_1","action":"refund","transaction_id":"txn_9","subscription_id":"sub_2"}}"#,
+                "adjustment.created",
+            ),
         ];
         for (body, expected) in cases {
             let evt = signed_paddle_event(body.as_bytes(), now, &sk);
             let parsed = provider.verify_webhook(evt).await.expect("must verify");
             assert_eq!(parsed.event_type, *expected, "body={body}");
         }
+
+        let evt = signed_paddle_event(
+            br#"{"event_type":"adjustment.created","data":{"id":"adj_1","action":"chargeback","transaction_id":"txn_9","subscription_id":"sub_2"}}"#,
+            now,
+            &sk,
+        );
+        let parsed = provider.verify_webhook(evt).await.unwrap();
+        assert_eq!(parsed.event_type, "adjustment.created");
+        assert_eq!(parsed.payment_id.as_deref(), Some("txn_9"));
+        assert_eq!(parsed.subscription_id.as_deref(), Some("sub_2"));
+        assert!(crate::services::billing::provider::is_refund_or_dispute_event(&parsed));
 
         let evt = signed_paddle_event(
             br#"{"event_type":"transaction.completed","data":{"id":"txn_1","subscription_id":"sub_9","custom_data":{"user_id":"42"},"status":"completed","currency_code":"USD","details":{"totals":{"total":"1000"}}}}"#,

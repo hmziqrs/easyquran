@@ -140,6 +140,7 @@ pub struct HttpSettings {
     pub port: String,
     pub ip_source: ClientIpSource,
     pub cookie_secure: bool,
+    pub trusted_proxy_cidrs: Vec<IpNet>,
 }
 
 impl HttpSettings {
@@ -168,14 +169,41 @@ impl HttpSettings {
                     .to_string(),
             );
         }
+        let trusted_proxy_cidrs =
+            parse_trusted_proxy_cidrs(&std::env::var("TRUSTED_PROXY_CIDRS").unwrap_or_default())?;
+        if trusted_proxy_cidrs.is_empty() && is_prod {
+            tracing::warn!(
+                "TRUSTED_PROXY_CIDRS is unset in production: CF-Connecting-IP is trusted on \
+                 header presence alone. List the proxy network CIDRs (or the published \
+                 Cloudflare ranges for a directly-terminated edge) so the TCP peer is validated."
+            );
+        }
         let cookie_secure = env_bool("COOKIE_SECURE", true);
         Ok(Self {
             host,
             port,
             ip_source,
             cookie_secure,
+            trusted_proxy_cidrs,
         })
     }
+}
+
+// Comma-separated CIDRs; empty entries are skipped so a trailing comma or an
+// empty value stays "unset". Mirrors parse_allowlist (QURAN_BAN_ALLOWLIST).
+fn parse_trusted_proxy_cidrs(raw: &str) -> Result<Vec<IpNet>, String> {
+    let mut nets = Vec::new();
+    for part in raw.split(',') {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        let net: IpNet = p
+            .parse()
+            .map_err(|e| format!("invalid CIDR '{p}' in TRUSTED_PROXY_CIDRS: {e}"))?;
+        nets.push(net);
+    }
+    Ok(nets)
 }
 
 pub struct SiteSettings {
@@ -373,6 +401,11 @@ impl std::fmt::Debug for RateLimitSettings {
     }
 }
 
+// Placeholder values shipped for INTERNAL_QURAN_API_TOKEN in committed .env
+// templates. Same discipline as KNOWN_COOKIE_KEY_PLACEHOLDERS: production must
+// never boot on a publicly-known token.
+pub const KNOWN_INTERNAL_TOKEN_PLACEHOLDERS: &[&str] = &["CHANGE_ME_openssl_rand_hex_32"];
+
 impl RateLimitSettings {
     pub fn from_env() -> Result<Self, String> {
         let is_prod = is_production()?;
@@ -384,6 +417,21 @@ impl RateLimitSettings {
                 return Err("INTERNAL_QURAN_API_TOKEN is unset/empty in production. \
                      Generate with: openssl rand -hex 32."
                     .to_string());
+            }
+            if KNOWN_INTERNAL_TOKEN_PLACEHOLDERS.contains(&internal_token.as_str()) {
+                return Err(
+                    "INTERNAL_QURAN_API_TOKEN is the known placeholder value shipped in \
+                     deploy/.env.example — production must NOT boot on a publicly-known \
+                     token. Generate with: openssl rand -hex 32."
+                        .to_string(),
+                );
+            }
+            if internal_token.len() < 32 {
+                return Err(format!(
+                    "INTERNAL_QURAN_API_TOKEN must be >= 32 chars of CSPRNG output in production \
+                     (got {}); generate with: openssl rand -hex 32.",
+                    internal_token.len()
+                ));
             }
             if internal_requests_per_minute == 0 {
                 return Err(
@@ -836,6 +884,7 @@ mod tests {
         internal_rpm: Option<String>,
         health_rpm: Option<String>,
         allowed_origins: Option<String>,
+        trusted_proxy_cidrs: Option<String>,
     }
 
     fn snapshot_env() -> EnvSnapshot {
@@ -848,6 +897,7 @@ mod tests {
             internal_rpm: std::env::var("QURAN_INTERNAL_REQUESTS_PER_MINUTE").ok(),
             health_rpm: std::env::var("QURAN_HEALTH_REQUESTS_PER_MINUTE").ok(),
             allowed_origins: std::env::var("ALLOWED_ORIGINS").ok(),
+            trusted_proxy_cidrs: std::env::var("TRUSTED_PROXY_CIDRS").ok(),
         }
     }
 
@@ -861,6 +911,7 @@ mod tests {
             "QURAN_INTERNAL_REQUESTS_PER_MINUTE",
             "QURAN_HEALTH_REQUESTS_PER_MINUTE",
             "ALLOWED_ORIGINS",
+            "TRUSTED_PROXY_CIDRS",
         ] {
             std::env::remove_var(k);
         }
@@ -898,6 +949,10 @@ mod tests {
         match snap.allowed_origins {
             Some(v) => std::env::set_var("ALLOWED_ORIGINS", v),
             None => std::env::remove_var("ALLOWED_ORIGINS"),
+        }
+        match snap.trusted_proxy_cidrs {
+            Some(v) => std::env::set_var("TRUSTED_PROXY_CIDRS", v),
+            None => std::env::remove_var("TRUSTED_PROXY_CIDRS"),
         }
     }
 
@@ -1030,7 +1085,10 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         std::env::set_var("RUST_ENV", "production");
-        std::env::set_var("INTERNAL_QURAN_API_TOKEN", "t");
+        std::env::set_var(
+            "INTERNAL_QURAN_API_TOKEN",
+            "prod-internal-token-0123456789abcdef0123",
+        );
         std::env::set_var("QURAN_INTERNAL_REQUESTS_PER_MINUTE", "0");
         let err = RateLimitSettings::from_env().expect_err("internal rpm=0 must error");
         assert!(err.contains("INTERNAL_REQUESTS_PER_MINUTE"), "got: {err}");
@@ -1039,6 +1097,118 @@ mod tests {
         std::env::set_var("QURAN_HEALTH_REQUESTS_PER_MINUTE", "0");
         let err = RateLimitSettings::from_env().expect_err("health rpm=0 must error");
         assert!(err.contains("HEALTH_REQUESTS_PER_MINUTE"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn rate_limit_prod_rejects_placeholder_internal_token() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("INTERNAL_QURAN_API_TOKEN", "CHANGE_ME_openssl_rand_hex_32");
+        let err =
+            RateLimitSettings::from_env().expect_err("shipped placeholder must fail boot in prod");
+        assert!(err.contains("placeholder"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn rate_limit_prod_rejects_short_internal_token() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("INTERNAL_QURAN_API_TOKEN", "short-but-nonempty-token");
+        let err = RateLimitSettings::from_env().expect_err("short token must fail boot in prod");
+        assert!(err.contains("32"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn rate_limit_prod_accepts_strong_internal_token() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var(
+            "INTERNAL_QURAN_API_TOKEN",
+            "9f3a7c1e4b6d820f5a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f",
+        );
+        let s = RateLimitSettings::from_env().expect("64-hex token must boot in prod");
+        assert!(!s.internal_token.is_empty());
+        restore_env(snap);
+    }
+
+    #[test]
+    fn internal_token_placeholders_cover_shipped_env_templates() {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let templates = [
+            "../../../.env.example".to_string(),
+            "../../../deploy/.env.example".to_string(),
+        ];
+        let mut scanned = 0;
+        for rel in templates {
+            let path = manifest_dir.join(&rel);
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for line in content.lines() {
+                if let Some(value) = line.strip_prefix("INTERNAL_QURAN_API_TOKEN=") {
+                    let v = value.trim();
+                    if v.is_empty() {
+                        continue;
+                    }
+                    assert!(
+                        KNOWN_INTERNAL_TOKEN_PLACEHOLDERS.contains(&v),
+                        "shipped INTERNAL_QURAN_API_TOKEN template value '{v}' ({rel}) is not \
+                         blocklisted"
+                    );
+                    scanned += 1;
+                }
+            }
+        }
+        assert!(scanned > 0, "expected at least one shipped template to scan");
+    }
+
+    // --- TRUSTED_PROXY_CIDRS ---------------------------------------------------
+
+    #[test]
+    fn trusted_proxy_cidrs_parse_v4_v6_and_skip_empties() {
+        let nets = parse_trusted_proxy_cidrs("10.0.0.0/8, 172.16.0.0/12,fd00::/8,,").unwrap();
+        assert_eq!(nets.len(), 3);
+        assert!(parse_trusted_proxy_cidrs("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn trusted_proxy_cidrs_reject_garbage() {
+        let err = parse_trusted_proxy_cidrs("not-a-cidr").expect_err("garbage must not parse");
+        assert!(err.contains("TRUSTED_PROXY_CIDRS"), "got: {err}");
+    }
+
+    #[test]
+    fn http_settings_prod_warns_but_boots_without_trusted_cidrs() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::remove_var("TRUSTED_PROXY_CIDRS");
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("IP_SOURCE", "CfConnectingIp");
+        let s = HttpSettings::from_env().expect("unset list must keep presence-only behavior");
+        assert!(s.trusted_proxy_cidrs.is_empty());
+        restore_env(snap);
+    }
+
+    #[test]
+    fn http_settings_parses_trusted_cidrs() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("IP_SOURCE", "CfConnectingIp");
+        std::env::set_var("TRUSTED_PROXY_CIDRS", "10.0.0.0/8,fd00::/8");
+        let s = HttpSettings::from_env().expect("valid CIDR list must boot");
+        assert_eq!(s.trusted_proxy_cidrs.len(), 2);
         restore_env(snap);
     }
 

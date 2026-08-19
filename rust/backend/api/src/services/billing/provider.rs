@@ -36,6 +36,44 @@ pub mod canonical {
     pub const PAYMENT_PENDING: &str = "payment.pending";
 }
 
+/// Refund/chargeback/dispute natives that provider normalization passes through
+/// unmapped (Stripe, PayPal) or arrives verbatim from providers with their own
+/// spelling (Airwallex `refund.created`, Lemon Squeezy `order_refunded`, Polar
+/// `refund.created`/`refund.updated`/`order.refunded`, Mercado Pago
+/// `payment.refunded`/`payment.charged_back`, Paddle `adjustment.*`); the
+/// controller revokes the linked entitlement for these.
+pub fn is_refund_or_dispute_event_type(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "charge.refunded"
+            | "charge.dispute.created"
+            | "refund.created"
+            | "refund.updated"
+            | "order_refunded"
+            | "order.refunded"
+            | "payment.refunded"
+            | "payment.charged_back"
+            | "adjustment.created"
+            | "adjustment.updated"
+            | "PAYMENT.SALE.REFUNDED"
+            | "PAYMENT.CAPTURE.REFUNDED"
+            | "PAYMENT.SALE.REVERSED"
+    )
+}
+
+/// Event-level gate over the raw string match: Paddle surfaces refunds and
+/// chargebacks as `adjustment.*` events whose `action` also covers non-revoking
+/// `credit` adjustments, so only `refund`/`chargeback` actions revoke.
+pub fn is_refund_or_dispute_event(event: &ParsedWebhook) -> bool {
+    match event.event_type.as_str() {
+        "adjustment.created" | "adjustment.updated" => matches!(
+            event.data["data"]["action"].as_str(),
+            Some("refund") | Some("chargeback")
+        ),
+        other => is_refund_or_dispute_event_type(other),
+    }
+}
+
 pub fn canonical_subscription_status(raw: Option<&str>) -> Option<SubscriptionStatus> {
     let s = raw?.trim().to_ascii_lowercase();
     Some(match s.as_str() {
@@ -181,8 +219,97 @@ impl From<rux_provider_core::FrameworkError> for BillingError {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_subscription_status, period_end_to_unix, SubscriptionStatus};
+    use super::{
+        canonical_subscription_status, is_refund_or_dispute_event_type, period_end_to_unix,
+        SubscriptionStatus,
+    };
     use serde_json::json;
+
+    #[test]
+    fn refund_dispute_event_types_are_detected_across_providers() {
+        for raw in [
+            "charge.refunded",
+            "charge.dispute.created",
+            "refund.created",
+            "refund.updated",
+            "order_refunded",
+            "order.refunded",
+            "payment.refunded",
+            "payment.charged_back",
+            "adjustment.created",
+            "adjustment.updated",
+            "PAYMENT.SALE.REFUNDED",
+            "PAYMENT.CAPTURE.REFUNDED",
+            "PAYMENT.SALE.REVERSED",
+        ] {
+            assert!(is_refund_or_dispute_event_type(raw), "raw={raw}");
+        }
+    }
+
+    #[test]
+    fn paddle_adjustment_events_revoke_only_for_refund_or_chargeback_action() {
+        let adjustment_event = |action: &str| super::ParsedWebhook {
+            event_type: "adjustment.created".to_string(),
+            customer_id: String::new(),
+            subscription_id: None,
+            payment_id: None,
+            current_period_end: None,
+            checkout_session_id: None,
+            subscription_status: None,
+            user_id: None,
+            amount_cents: None,
+            currency: None,
+            data: serde_json::json!({ "data": { "action": action } }),
+        };
+
+        for action in ["refund", "chargeback"] {
+            let event = adjustment_event(action);
+            assert!(
+                super::is_refund_or_dispute_event(&event),
+                "action={action} must revoke"
+            );
+        }
+
+        let credit = adjustment_event("credit");
+        assert!(
+            !super::is_refund_or_dispute_event(&credit),
+            "a credit adjustment must not revoke an entitlement"
+        );
+    }
+
+    #[test]
+    fn mercado_pago_refund_status_event_types_revoke() {
+        for raw in ["payment.refunded", "payment.charged_back"] {
+            let event = super::ParsedWebhook {
+                event_type: raw.to_string(),
+                customer_id: String::new(),
+                subscription_id: None,
+                payment_id: Some("pay_1".to_string()),
+                current_period_end: None,
+                checkout_session_id: None,
+                subscription_status: None,
+                user_id: None,
+                amount_cents: None,
+                currency: None,
+                data: serde_json::json!({}),
+            };
+            assert!(super::is_refund_or_dispute_event(&event), "raw={raw}");
+        }
+    }
+
+    #[test]
+    fn non_refund_event_types_are_not_flagged() {
+        for raw in [
+            "checkout.session.completed",
+            "customer.subscription.deleted",
+            "invoice.payment_succeeded",
+            "payment.confirmed",
+            "PAYMENT.SALE.COMPLETED",
+            "order_created",
+        ] {
+            assert!(!is_refund_or_dispute_event_type(raw), "raw={raw}");
+        }
+    }
 
     #[test]
     fn period_end_handles_epoch_seconds_int() {

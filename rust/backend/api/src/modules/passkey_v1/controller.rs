@@ -34,13 +34,15 @@ pub async fn register_begin(
 
     let svc = webauthn_service(&state)?;
     let (challenge, registration_state) = svc.start_registration(user)?;
+    let state_handle =
+        crate::services::passkey_state::issue_registration(user.id, &registration_state)?;
 
     info!(user_id = user.id, "passkey registration begun");
     Ok((
         StatusCode::OK,
         Json(json!({
             "challenge": challenge,
-            "registration_state": registration_state,
+            "state_handle": state_handle,
         })),
     ))
 }
@@ -57,12 +59,14 @@ pub async fn register_finish(
     let payload = payload.0;
 
     let svc = webauthn_service(&state)?;
+    let registration_state =
+        crate::services::passkey_state::consume_registration(&payload.state_handle, user.id)?;
     let model = svc
         .finish_registration(
             &state.sea_db,
             user.id,
             &payload.credential,
-            &payload.registration_state,
+            &registration_state,
             payload.device_type.clone(),
             payload.transports.clone(),
         )
@@ -129,13 +133,14 @@ pub async fn login_begin(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let svc = webauthn_service(&state)?;
     let (challenge, authentication_state) = svc.start_login()?;
+    let state_handle = crate::services::passkey_state::issue_authentication(&authentication_state)?;
 
     info!("passkey login begun");
     Ok((
         StatusCode::OK,
         Json(json!({
             "challenge": challenge,
-            "authentication_state": authentication_state,
+            "state_handle": state_handle,
         })),
     ))
 }
@@ -150,12 +155,10 @@ pub async fn login_finish(
     let payload = payload.0;
 
     let svc = webauthn_service(&state)?;
+    let authentication_state =
+        crate::services::passkey_state::consume_authentication(&payload.state_handle)?;
     let (credential, user) = svc
-        .finish_login(
-            &state.sea_db,
-            &payload.credential,
-            &payload.authentication_state,
-        )
+        .finish_login(&state.sea_db, &payload.credential, &authentication_state)
         .await?;
     tracing::Span::current().record("user_id", user.id);
 
@@ -218,9 +221,9 @@ pub async fn login_finish(
 mod tests {
     use super::*;
     use crate::db::sea_models::user;
+    use crate::services::passkey_state;
     use crate::services::webauthn::WebauthnService;
     use chrono::TimeZone;
-    use validator::Validate;
 
     fn make_user() -> user::Model {
         let now = chrono::Utc
@@ -256,14 +259,19 @@ mod tests {
     fn login_begin_envelope_shape_matches_wire_contract() {
         let svc = svc();
         let (challenge, authentication_state) = svc.start_login().unwrap();
+        let state_handle = passkey_state::issue_authentication(&authentication_state).unwrap();
         let body = json!({
             "challenge": challenge,
-            "authentication_state": authentication_state,
+            "state_handle": state_handle,
         });
         assert!(body.get("challenge").is_some(), "must carry challenge");
         assert!(
-            body.get("authentication_state").is_some(),
-            "must carry authentication_state for the client to echo back"
+            body.get("state_handle").is_some(),
+            "must carry the opaque server-issued state handle"
+        );
+        assert!(
+            body.get("authentication_state").is_none(),
+            "the WebAuthn authentication state must never reach the client"
         );
         assert!(
             body["challenge"].get("publicKey").is_some(),
@@ -275,14 +283,19 @@ mod tests {
     fn register_begin_envelope_shape_matches_wire_contract() {
         let svc = svc();
         let (challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
+        let state_handle = passkey_state::issue_registration(1, &registration_state).unwrap();
         let body = json!({
             "challenge": challenge,
-            "registration_state": registration_state,
+            "state_handle": state_handle,
         });
         assert!(body.get("challenge").is_some(), "must carry challenge");
         assert!(
-            body.get("registration_state").is_some(),
-            "must carry registration_state for the client to echo back"
+            body.get("state_handle").is_some(),
+            "must carry the opaque server-issued state handle"
+        );
+        assert!(
+            body.get("registration_state").is_none(),
+            "the WebAuthn registration state must never reach the client"
         );
         assert!(
             body["challenge"].get("publicKey").is_some(),
@@ -291,10 +304,10 @@ mod tests {
     }
 
     #[test]
-    fn login_finish_payload_round_trips_real_authentication_state() {
+    fn login_finish_payload_takes_handle_not_state() {
         let svc = svc();
         let (_challenge, authentication_state) = svc.start_login().unwrap();
-        let state_value = serde_json::to_value(&authentication_state).unwrap();
+        let state_handle = passkey_state::issue_authentication(&authentication_state).unwrap();
 
         let body = json!({
             "credential": {
@@ -307,18 +320,51 @@ mod tests {
                     "signature": "AA"
                 }
             },
-            "authentication_state": state_value
+            "state_handle": state_handle
         });
         let payload: V1LoginFinishPayload =
-            serde_json::from_value(body).expect("real authentication_state must round-trip");
+            serde_json::from_value(body).expect("handle-based login finish must round-trip");
         assert_eq!(payload.credential.type_, "public-key");
+        assert!(
+            passkey_state::consume_authentication(&payload.state_handle).is_ok(),
+            "handle must resolve to the stored state"
+        );
+        assert!(
+            passkey_state::consume_authentication(&payload.state_handle).is_err(),
+            "replayed handle must be rejected"
+        );
     }
 
     #[test]
-    fn register_finish_payload_round_trips_real_registration_state() {
+    fn login_finish_rejects_client_echoed_authentication_state() {
+        let svc = svc();
+        let (_challenge, authentication_state) = svc.start_login().unwrap();
+        let echoed_state = serde_json::to_value(&authentication_state).unwrap();
+
+        let body = json!({
+            "credential": {
+                "id": "cred-1",
+                "rawId": "AA",
+                "type": "public-key",
+                "response": {
+                    "clientDataJSON": "AA",
+                    "authenticatorData": "AA",
+                    "signature": "AA"
+                }
+            },
+            "authentication_state": echoed_state
+        });
+        assert!(
+            serde_json::from_value::<V1LoginFinishPayload>(body).is_err(),
+            "an echoed/forged authentication_state carries no state_handle and must be rejected"
+        );
+    }
+
+    #[test]
+    fn register_finish_payload_takes_handle_not_state() {
         let svc = svc();
         let (_challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
-        let state_value = serde_json::to_value(&registration_state).unwrap();
+        let state_handle = passkey_state::issue_registration(1, &registration_state).unwrap();
 
         let body = json!({
             "credential": {
@@ -330,15 +376,47 @@ mod tests {
                     "attestationObject": "AA"
                 }
             },
-            "registration_state": state_value,
+            "state_handle": state_handle,
             "device_type": "MacBook",
             "transports": ["internal"]
         });
         let payload: V1RegisterFinishPayload =
-            serde_json::from_value(body).expect("real registration_state must round-trip");
+            serde_json::from_value(body).expect("handle-based register finish must round-trip");
         assert_eq!(payload.credential.type_, "public-key");
         assert_eq!(payload.device_type.as_deref(), Some("MacBook"));
-        assert!(payload.validate().is_ok());
+        assert!(
+            passkey_state::consume_registration(&payload.state_handle, 1).is_ok(),
+            "handle must resolve to the stored state for the bound user"
+        );
+        assert!(
+            passkey_state::consume_registration(&payload.state_handle, 1).is_err(),
+            "replayed handle must be rejected"
+        );
+    }
+
+    #[test]
+    fn register_finish_rejects_client_echoed_registration_state() {
+        let svc = svc();
+        let (_challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
+        let echoed_state = serde_json::to_value(&registration_state).unwrap();
+
+        let body = json!({
+            "credential": {
+                "id": "cred-2",
+                "rawId": "AA",
+                "type": "public-key",
+                "response": {
+                    "clientDataJSON": "AA",
+                    "attestationObject": "AA"
+                }
+            },
+            "registration_state": echoed_state,
+            "device_type": "MacBook"
+        });
+        assert!(
+            serde_json::from_value::<V1RegisterFinishPayload>(body).is_err(),
+            "an echoed/forged registration_state carries no state_handle and must be rejected"
+        );
     }
 
     #[test]
@@ -352,12 +430,18 @@ mod tests {
             counter: 0,
             device_type: None,
             transports: None,
-            created_at: chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap().fixed_offset(),
+            created_at: chrono::Utc
+                .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                .unwrap()
+                .fixed_offset(),
             last_used_at: None,
         }
         .into_view();
         let body = json!({ "data": [view] });
-        assert!(body.get("data").is_some(), "list envelope must use the data key");
+        assert!(
+            body.get("data").is_some(),
+            "list envelope must use the data key"
+        );
         assert!(
             body.get("passkeys").is_none(),
             "list envelope must not use the legacy passkeys key"

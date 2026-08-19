@@ -463,12 +463,31 @@ mod tests {
                 r#"{"type":"subscription.canceled","data":{"id":"sub_1","status":"canceled"}}"#,
                 "customer.subscription.deleted",
             ),
+            (
+                r#"{"type":"refund.created","data":{"id":"ref_1","order_id":"o_1","subscription_id":"sub_1"}}"#,
+                "refund.created",
+            ),
+            (
+                r#"{"type":"order.refunded","data":{"id":"o_1","subscription_id":"sub_1"}}"#,
+                "order.refunded",
+            ),
         ];
         for (body, expected) in cases {
             let evt = sign_polar(body.as_bytes(), &secret, "evt_norm", now);
             let parsed = provider.verify_webhook(evt).await.expect("must verify");
             assert_eq!(parsed.event_type, *expected, "body={body}");
         }
+
+        let evt = sign_polar(
+            br#"{"type":"refund.created","data":{"id":"ref_1","order_id":"o_1","subscription_id":"sub_1"}}"#,
+            &secret,
+            "evt_refund",
+            now,
+        );
+        let parsed = provider.verify_webhook(evt).await.unwrap();
+        assert_eq!(parsed.payment_id.as_deref(), Some("o_1"));
+        assert_eq!(parsed.subscription_id.as_deref(), Some("sub_1"));
+        assert!(crate::services::billing::provider::is_refund_or_dispute_event(&parsed));
 
         let evt = sign_polar(
             br#"{"type":"checkout.updated","data":{"id":"co_1","status":"open"}}"#,

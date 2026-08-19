@@ -97,13 +97,31 @@ impl QuranApiError {
     }
 }
 
+// 5xx detail (sqlx text, server file paths) must stay tracing-only; release
+// bodies carry a generic message. 4xx messages are safe, purpose-built strings.
+fn render_message(status: StatusCode, detail: &str) -> String {
+    if status.is_server_error() && !cfg!(debug_assertions) {
+        "internal error".to_string()
+    } else {
+        detail.to_string()
+    }
+}
+
 impl IntoResponse for QuranApiError {
     fn into_response(self) -> Response {
         let class = self.class;
+        if self.status.is_server_error() {
+            tracing::error!(
+                code = self.code,
+                message = %self.message,
+                "quran internal error returned"
+            );
+        }
+        let message = render_message(self.status, &self.message);
         let body = json!({
             "error": {
                 "code": self.code,
-                "message": self.message,
+                "message": message,
                 "detail": self.detail,
             }
         });
@@ -254,6 +272,35 @@ mod tests {
         assert!(invalid.extensions().get::<QuranErrorClass>().is_none());
         let server_err = QuranApiError::internal("boom").into_response();
         assert!(server_err.extensions().get::<QuranErrorClass>().is_none());
+    }
+
+    #[test]
+    fn client_error_messages_are_never_redacted() {
+        assert_eq!(
+            render_message(StatusCode::NOT_FOUND, "surah 999 not found"),
+            "surah 999 not found"
+        );
+        assert_eq!(
+            render_message(StatusCode::BAD_REQUEST, "malformed query"),
+            "malformed query"
+        );
+    }
+
+    #[test]
+    fn server_error_detail_stays_out_of_release_bodies() {
+        let detail = "error ReturnedErr(| IO: /srv/quran/db.sqlite not found)";
+        if cfg!(debug_assertions) {
+            assert_eq!(
+                render_message(StatusCode::INTERNAL_SERVER_ERROR, detail),
+                detail
+            );
+        } else {
+            assert_eq!(
+                render_message(StatusCode::INTERNAL_SERVER_ERROR, detail),
+                "internal error"
+            );
+            assert!(!render_message(StatusCode::INTERNAL_SERVER_ERROR, detail).contains("/srv"));
+        }
     }
 
     #[tokio::test]

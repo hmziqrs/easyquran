@@ -20,15 +20,29 @@
 #
 # Only moving tags (latest) can ever trigger a redeploy — an immutable `v*` pin
 # never changes digest, so the job correctly leaves it alone.
+#
+# Failure safety: a digest change counts as consumed only AFTER compose.redeploy
+# succeeds. The pull below has already made the local digest match, so the diff
+# alone can never re-trigger — on failure the script exits non-zero and leaves
+# the marker file (MARKER_FILE) so the next run retries the redeploy instead of
+# wedging. The API key travels via a curl config piped on stdin (`-K -`), never
+# in curl's argv where /proc would show it to other processes on the box.
 set -euo pipefail
 
 API_KEY="replace-me"
 API_URL="http://localhost:3000/api"
 COMPOSE_ID="replace-me"
+MARKER_FILE="${MARKER_FILE:-/tmp/easyquran-auto-update.pending}"
+
+# Shared curl wrapper: auth header arrives via stdin config, not argv.
+api() {
+  curl -sf -K - "$@" <<EOF
+header = "x-api-key: $API_KEY"
+EOF
+}
 
 # Image refs from the compose Dokploy actually runs
-IMAGES=$(curl -sf "$API_URL/compose.getConvertedCompose?composeId=$COMPOSE_ID" \
-  -H "x-api-key: $API_KEY" | node -e '
+IMAGES=$(api "$API_URL/compose.getConvertedCompose?composeId=$COMPOSE_ID" | node -e '
   let d = "";
   process.stdin.on("data", c => (d += c));
   process.stdin.on("end", () => {
@@ -50,10 +64,20 @@ for IMAGE in $IMAGES; do
   fi
 done
 
+# Write the pending marker BEFORE attempting the redeploy — once the redeploy
+# call fails, this file is the only remaining retry signal.
 if [ "$CHANGED" -eq 1 ]; then
-  curl -sf -X POST "$API_URL/compose.redeploy" \
-    -H "x-api-key: $API_KEY" -H "content-type: application/json" \
-    -d "{\"composeId\":\"$COMPOSE_ID\"}"
+  date -u +"%Y-%m-%dT%H:%M:%SZ redeploy pending (digest moved)" > "$MARKER_FILE"
+fi
+
+if [ "$CHANGED" -eq 1 ] || [ -f "$MARKER_FILE" ]; then
+  if ! api -X POST "$API_URL/compose.redeploy" \
+    -H "content-type: application/json" \
+    -d "{\"composeId\":\"$COMPOSE_ID\"}"; then
+    echo "ERROR: compose.redeploy failed — marker left at $MARKER_FILE, next run retries" >&2
+    exit 1
+  fi
+  rm -f "$MARKER_FILE"
   echo "redeploy triggered"
 else
   echo "all images current"

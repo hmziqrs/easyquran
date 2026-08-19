@@ -50,11 +50,25 @@ pub fn router(state: AppState) -> Router<AppState> {
     let mut router = Router::new()
         .route("/healthz", get(health_check))
         .route("/robots.txt", get(robots_txt))
-        .route("/sitemap.xml", get(sitemap_xml))
-        .route("/csrf/v1/generate", post(csrf_v1::controller::generate));
+        .route(
+            "/sitemap.xml",
+            get(sitemap_xml).layer(rate_limit::rate_limit_layer(&state, 30, 60)),
+        )
+        .route(
+            "/csrf/v1/generate",
+            post(csrf_v1::controller::generate).layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+        );
 
     // Auth nests mount ONLY when WEB_AUTH_ENABLED (W8f). CSRF generation stays
     // unconditional (it is foundation, used by anonymous sessions too).
+    //
+    // Bucket layout: these nests use `rate_limit_layer` (PathKey::Matched), so
+    // each bucket key is per-IP unit + MATCHED ROUTE PATTERN (e.g.
+    // `ratelimit:{ip}:/auth/v1/log_in`) — NOT one bucket per nest. Login,
+    // login/totp, 2fa/verify, register, logout, each OAuth begin/callback, and
+    // passkey begin/finish hold independent per-IP budgets, so register/logout
+    // noise cannot exhaust the login budget. Pinned by
+    // `nest_level_limiter_keys_buckets_per_matched_route` in middlewares/rate_limit.rs.
     if web_auth_enabled {
         router = router.nest(
             "/auth/v1",
@@ -67,7 +81,10 @@ pub fn router(state: AppState) -> Router<AppState> {
         router = router
             .nest("/email_verification/v1", email_verification_v1::routes())
             .nest("/forgot_password/v1", forgot_password_v1::routes());
-        router = router.nest("/passkey/v1", passkey_v1::routes());
+        router = router.nest(
+            "/passkey/v1",
+            passkey_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+        );
         router = router
             .nest(
                 "/auth/facebook/v1",
@@ -130,7 +147,10 @@ pub fn router(state: AppState) -> Router<AppState> {
         router = router.nest("/admin/seed/v1", seed_v1::routes());
     }
 
-    router = router.nest("/billing/v1", billing_v1::routes());
+    router = router.nest(
+        "/billing/v1",
+        billing_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+    );
 
     router = router
         .nest(

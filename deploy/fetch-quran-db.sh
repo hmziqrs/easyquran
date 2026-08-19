@@ -59,19 +59,20 @@ get() {
 # Translation file names, one per line, straight out of the tracked catalogue (field 6) —
 # never from a bucket listing. node or python3, whichever the host has: a VPS running this in
 # `all` mode carries no toolchain, only the images it pulls.
+# Emits "filePath sizeBytes" per row (fields 6/7) out of the tracked catalogue.
 translation_files() {
   local json="$REPO_ROOT/web/src/lib/data/translations.json"
   if command -v node >/dev/null; then
     node --input-type=module -e "
       import { readFileSync } from 'node:fs';
-      for (const row of JSON.parse(readFileSync('$json', 'utf8'))) console.log(row[6]);
+      for (const row of JSON.parse(readFileSync('$json', 'utf8'))) console.log(row[6] + ' ' + row[7]);
     "
     return
   fi
   if command -v python3 >/dev/null; then
     python3 -c "
 import json
-for row in json.load(open('$json')): print(row[6])
+for row in json.load(open('$json')): print(row[6], row[7])
 "
     return
   fi
@@ -88,19 +89,38 @@ assert_sqlite() {
   fi
 }
 
+# Expected byte size per object (identity = id + size, never a hash). Arabic
+# sizes mirror web/src/lib/quran/view/source-profiles.ts sizeBytes, the xml size
+# mirrors the R2 object — the DBs are immutable, so a mismatch means a
+# truncated/corrupted download, and the fetch refuses to bless it.
+assert_size() {
+  local file="$1" want="$2" got
+  got=$(wc -c < "$file" | tr -d ' ')
+  if [ "$got" != "$want" ]; then
+    echo "✗ $file is $got bytes, expected $want (catalogue mismatch — remove the file and re-run)" >&2
+    exit 1
+  fi
+}
+
 echo "$BASE → db/quran (mode: $MODE)"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
 get "tanzil/quran-data.xml" "$DEST/quran-data.xml"
 assert_sqlite "$DEST/arabic/quran-uthmani.sqlite"
+assert_size "$DEST/arabic/quran-uthmani.sqlite" 1593344
 assert_sqlite "$DEST/arabic/quran-simple-clean.sqlite"
+assert_size "$DEST/arabic/quran-simple-clean.sqlite" 929792
+assert_size "$DEST/quran-data.xml" 77234
 
 if [ "$MODE" = "all" ]; then
   get "tanzil/translations/index.min.json" "$DEST/translations/index.min.json"
-  # Ids come from the tracked baked catalogue, never from a remote listing.
-  while read -r file; do
+  # File + expected size come from the tracked baked catalogue (fields 6/7:
+  # filePath, sizeBytes), never from a remote listing.
+  while read -r file want; do
+    [ -n "$file" ] || continue
     get "tanzil/translations/$file" "$DEST/translations/$file"
     assert_sqlite "$DEST/translations/$file"
+    assert_size "$DEST/translations/$file" "$want"
   done < <(translation_files)
 fi
 

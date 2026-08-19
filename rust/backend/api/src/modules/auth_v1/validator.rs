@@ -59,6 +59,14 @@ pub struct V1TwoFADisablePayload {
     pub code: Option<String>,
 }
 
+// M2: only read when the account is already 2FA-enrolled — rotating the secret
+// disarms 2FA, so a current TOTP/backup code is required first.
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1TwoFASetupPayload {
+    #[validate(length(min = 6, max = 64))]
+    pub code: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1LoginTotpPayload {
     #[validate(length(min = 64, max = 64))]
@@ -297,5 +305,28 @@ mod tests {
             code: "1234567".to_string(),
         };
         assert!(payload.validate().is_err());
+    }
+
+    // --- M2: setup payload only matters once enrolled ------------------------
+
+    #[test]
+    fn twofa_setup_payload_code_is_optional_and_bounded() {
+        let none = V1TwoFASetupPayload { code: None };
+        assert!(none.validate().is_ok());
+
+        let valid = V1TwoFASetupPayload {
+            code: Some("123456".to_string()),
+        };
+        assert!(valid.validate().is_ok());
+
+        let short = V1TwoFASetupPayload {
+            code: Some("12345".to_string()),
+        };
+        assert!(short.validate().is_err());
+
+        let long = V1TwoFASetupPayload {
+            code: Some("a".repeat(65)),
+        };
+        assert!(long.validate().is_err());
     }
 }

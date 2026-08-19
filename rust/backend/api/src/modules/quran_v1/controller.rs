@@ -982,56 +982,22 @@ pub async fn openapi_json() -> axum::Json<utoipa::openapi::OpenApi> {
         get,
         path = "/quran/health/ready",
         tag = "quran",
-        responses((status = 200, description = "Readiness + observability surface", body = crate::modules::quran_v1::dto::HealthReady))
+        responses((status = 200, description = "Readiness booleans (public surface)", body = crate::modules::quran_v1::dto::HealthReady))
     )
 )]
 pub async fn health_ready(
-    State(state): State<AppState>,
     QQuery(_unused): QQuery<NoQuery>,
 ) -> Result<Response<Body>, QuranApiError> {
-    let pool = state.translation_pool.stats().await;
     let body = HealthReady {
         ready: true,
         verse_count: VERSE_COUNT,
         surah_count: quran::SURA_COUNT as u16,
-        arabic_resident_bytes: (state.quran.uthmani.bytes() + state.quran.simple_clean.bytes())
-            as u64,
         auth: AuthHealth {
             enabled: crate::config::settings::web_auth().enabled,
             providers: crate::config::settings::web_auth()
                 .providers_status
                 .iter()
-                .map(|p| ProviderStatusDto {
-                    name: p.name.clone(),
-                    ready: p.ready,
-                })
-                .collect(),
-        },
-        loading: QuranLoadingHealth {
-            arabic_load_duration_ms: state.quran_runtime_metrics.arabic_load_duration_ms,
-            translation_catalogue_load_duration_ms: state
-                .quran_runtime_metrics
-                .translation_catalogue_load_duration_ms,
-            translation_catalogue_entries: state
-                .quran_runtime_metrics
-                .translation_catalogue_entries,
-        },
-        translation_pool: TranslationPoolHealth {
-            resident_count: pool.resident_count,
-            resident_bytes: pool.resident_bytes,
-            max_resident_count: state.settings.quran.max_resident_translations,
-            max_resident_bytes: state.settings.quran.max_resident_bytes,
-            idle_ttl_seconds: state.settings.quran.translation_idle_ttl_secs,
-            builds: pool.builds,
-            lookups: pool.lookups,
-            hit_rate: pool.hit_rate,
-            evictions: pool.evictions,
-            evictions_per_minute: pool.evictions_per_minute,
-            prewarmed: pool.prewarmed,
-            top_demand: pool
-                .top_demand
-                .into_iter()
-                .map(|(id, score)| DemandEntry { id, score })
+                .map(|p| ProviderStatusDto { ready: p.ready })
                 .collect(),
         },
     };

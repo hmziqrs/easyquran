@@ -192,7 +192,7 @@ pub async fn apple_token(
     });
 
     let user = oauth::find_or_create_user_for_oauth(
-        &state,
+        &state.sea_db,
         oauth::OAuthProvider::Apple,
         &claims.sub,
         email,
@@ -268,7 +268,7 @@ async fn finish_apple_code(
     let name = "Apple User".to_string();
 
     let user = oauth::find_or_create_user_for_oauth(
-        state,
+        &state.sea_db,
         oauth::OAuthProvider::Apple,
         &claims.sub,
         email,

@@ -725,6 +725,10 @@ pub async fn series_add(
     let user = auth.user.ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
+    if !user.is_admin() {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Only staff may manage post series"));
+    }
 
     require_post_ownership(&state, post_id, &user).await?;
 
@@ -749,6 +753,10 @@ pub async fn series_remove(
     let user = auth.user.ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
     })?;
+    if !user.is_admin() {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Only staff may manage post series"));
+    }
 
     require_post_ownership(&state, post_id, &user).await?;
 

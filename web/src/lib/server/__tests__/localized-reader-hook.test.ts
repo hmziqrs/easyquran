@@ -82,7 +82,11 @@ describe("server localized reader integration", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("/en/app/al-fatihah?view=reading");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
+    const csp = response.headers.get("content-security-policy") ?? "";
+    const scriptSrc = csp.split("; ").find((directive) => directive.startsWith("script-src")) ?? "";
+    expect(csp).toContain("default-src 'self'");
+    expect(scriptSrc).toContain("'unsafe-eval'");
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
     expect(resolve).not.toHaveBeenCalled();
     expect(cache.get).not.toHaveBeenCalled();
   });
@@ -105,6 +109,7 @@ describe("server localized reader integration", () => {
     expect(keys[1]).toContain("__en.sahih__surah__1__1__ui-ar");
     expect(await enResponse.text()).toContain('<html lang="en" dir="ltr">');
     expect(await arResponse.text()).toContain('<html lang="ar" dir="rtl">');
+    expect(enResponse.headers.get("content-security-policy")).toContain("nonce-");
     expect(enResponse.headers.get("x-easyquran-quran-cache")).toBe("miss");
     expect(arResponse.headers.get("x-easyquran-quran-cache")).toBe("miss");
   });

@@ -200,7 +200,12 @@ mod tests {
     #[test]
     fn failure_codes_are_opaque_short_tokens() {
         // Short, non-leaky tokens only — no PII, no provider payload.
-        for c in [FAILURE_CANCELLED, FAILURE_AUTH, FAILURE_LINK, FAILURE_SERVER] {
+        for c in [
+            FAILURE_CANCELLED,
+            FAILURE_AUTH,
+            FAILURE_LINK,
+            FAILURE_SERVER,
+        ] {
             let s = c.as_str();
             assert!(s.len() <= 8);
             assert!(!s.contains('@'));

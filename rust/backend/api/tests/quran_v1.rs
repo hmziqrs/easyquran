@@ -74,6 +74,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
             port: "0".into(),
             ip_source: "ConnectInfo".parse().unwrap(),
             cookie_secure: false,
+            trusted_proxy_cidrs: Vec::new(),
         },
         site: SiteSettings {
             url: "http://localhost".into(),
@@ -529,34 +530,22 @@ async fn health_ready_endpoint() {
     assert_eq!(st, StatusCode::OK);
     assert_eq!(body["ready"], true);
     assert_eq!(body["verseCount"], 6236);
-    assert!(body["arabicResidentBytes"].as_u64().unwrap() > 0);
-    assert_eq!(body["translationPool"]["residentCount"], 0);
-    assert_eq!(body["translationPool"]["residentBytes"], 0);
-    assert_eq!(body["translationPool"]["maxResidentCount"], 8);
-    assert_eq!(
-        body["translationPool"]["maxResidentBytes"],
-        48 * 1024 * 1024
-    );
-    assert_eq!(body["translationPool"]["idleTtlSeconds"], 1800);
-    assert_eq!(body["translationPool"]["builds"], 0);
-    assert_eq!(body["translationPool"]["lookups"], 0);
+    assert_eq!(body["surahCount"], 114);
+    // The public readiness body is readiness booleans/counts only: internal
+    // memory footprints, pool telemetry and boot timings are an info leak on an
+    // unauthenticated endpoint and must stay off the wire.
     assert!(
-        body["translationPool"]["hitRate"].is_null(),
-        "hitRate is null until the first lookup lands (no lookups yet)"
-    );
-    assert_eq!(body["translationPool"]["evictions"], 0);
-    assert_eq!(body["translationPool"]["evictionsPerMinute"], 0);
-    assert!(
-        body["translationPool"]["prewarmed"].is_array(),
-        "prewarmed is always a (possibly empty) array"
+        body.get("arabicResidentBytes").is_none(),
+        "health must not expose the arabic store's resident byte count"
     );
     assert!(
-        body["translationPool"]["topDemand"].is_array(),
-        "topDemand is always a (possibly empty) array"
+        body.get("translationPool").is_none(),
+        "health must not expose translation pool internals"
     );
-    assert_eq!(body["loading"]["arabicLoadDurationMs"], 7);
-    assert_eq!(body["loading"]["translationCatalogueLoadDurationMs"], 3);
-    assert_eq!(body["loading"]["translationCatalogueEntries"], 115);
+    assert!(
+        body.get("loading").is_none(),
+        "health must not expose boot/load timings or catalogue sizes"
+    );
     // W8F-002: exercise the auth readiness surface (enabled + providers[]) so the
     // readiness privacy contract (provider names + ready/not-ready, NO secrets) is
     // asserted end-to-end. The test harness builds a literal Settings (never
