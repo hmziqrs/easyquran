@@ -59,6 +59,16 @@ export default defineConfig({
     },
     options: { typeAware: true, typeCheck: true },
   },
+  optimizeDeps: {
+    // `@sqlite.org/sqlite-wasm` is imported only by the OPFS worker, which is loaded through
+    // `new Worker(new URL(...))` — a graph Vite's cold dependency scan never crawls. Left out,
+    // the first offline read (API down, or a translation served from OPFS) discovers it
+    // mid-session: Vite re-optimizes, the browser hash changes, and every module the live page
+    // already holds under the old `?v=` hash goes stale. Anything rendering in that window can
+    // throw inside the half-swapped Svelte runtime ("Cannot read properties of undefined
+    // (reading 'call')") before the reload lands.
+    include: ["@sqlite.org/sqlite-wasm"],
+  },
   server: {
     // Dev mirror of the production edge: Traefik routes Host(DOMAIN) + PathPrefix(/api)
     // to api:8888 and strips /api (docker-compose.yml, strip-api middleware). With
