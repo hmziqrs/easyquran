@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, constants as zlib, gzipSync } from "node:zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(__dirname, "..");
@@ -84,6 +85,20 @@ mkdirSync(OFFLINE_DIR, { recursive: true });
 
 if (!existsSync(packPath)) {
   writeFileSync(packPath, serialized);
+  // adapter-node precompresses build/client from inside the build; this pack is written after
+  // that pass, so without these siblings sirv serves the raw ~14 MB body and the edge re-compresses
+  // it on every install. Same settings kit's own builder.compress uses: brotli max quality, gzip 9.
+  const raw = Buffer.from(serialized);
+  writeFileSync(
+    `${packPath}.br`,
+    brotliCompressSync(raw, {
+      params: {
+        [zlib.BROTLI_PARAM_QUALITY]: zlib.BROTLI_MAX_QUALITY,
+        [zlib.BROTLI_PARAM_SIZE_HINT]: raw.byteLength,
+      },
+    }),
+  );
+  writeFileSync(`${packPath}.gz`, gzipSync(raw, { level: zlib.Z_BEST_COMPRESSION }));
 }
 
 const manifest = {
@@ -94,6 +109,8 @@ const manifest = {
 };
 writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
 
+const wireBytes = existsSync(`${packPath}.br`) ? statSync(`${packPath}.br`).size : manifest.bytes;
 console.log(
-  `[offline] pack ${packId} · ${bodies.length} entries · ${manifest.bytes} bytes → ${path.relative(WEB, packPath)}`,
+  `[offline] pack ${packId} · ${bodies.length} entries · ${manifest.bytes} bytes ` +
+    `(${wireBytes} brotli) → ${path.relative(WEB, packPath)}`,
 );
