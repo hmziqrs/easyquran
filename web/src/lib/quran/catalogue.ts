@@ -4,17 +4,8 @@ import {
   type TranslationCatalogueEntry,
   type TranslationDirection,
 } from "$lib/data/quran-types";
-import { fetchWithTimeout } from "$lib/quran/fetch";
 
 import rawTranslations from "../data/translations.json";
-import {
-  type BakedArtifactEntry,
-  type BakedArtifactMap,
-  buildArabicBakedMap,
-  decodeSourcesPayload,
-  reportArtifactRejection,
-  validateArtifactAgainstBaked,
-} from "./wire";
 
 export const TranslationField = {
   Id: 0,
@@ -119,114 +110,6 @@ export function bakedTranslationCatalogue(): SourceCatalogueEntry[] {
     kind: "translation" as const,
     entry,
   }));
-}
-
-function bakedTranslationArtifactMap(): BakedArtifactMap {
-  const map = new Map<string, BakedArtifactEntry>();
-  for (const { row, entry } of decodeBakedTranslations()) {
-    map.set(entry.id, {
-      sizeBytes: entry.sizeBytes,
-      r2Path: `/tanzil/translations/${row[TranslationField.FilePath]}`,
-      sameOriginDeliveryPath: entry.downloadUrl,
-    });
-  }
-  return map;
-}
-
-function validateAndLocalizeCatalogue(
-  entries: readonly SourceCatalogueEntry[],
-): SourceCatalogueEntry[] | null {
-  const translations = bakedTranslationArtifactMap();
-  const arabic = buildArabicBakedMap(QURAN.scripts, QURAN.artifactBase);
-  const out: SourceCatalogueEntry[] = [];
-  for (const item of entries) {
-    if (item.kind === "translation") {
-      const validated = validateArtifactAgainstBaked(
-        item.entry.id,
-        item.entry.sizeBytes,
-        item.entry.downloadUrl,
-        translations,
-      );
-      if (!validated) return null;
-      out.push({
-        kind: "translation",
-        entry: {
-          ...item.entry,
-          sizeBytes: validated.sizeBytes,
-          downloadUrl: validated.downloadUrl,
-        },
-      });
-    } else {
-      const validated = validateArtifactAgainstBaked(
-        item.spec.id,
-        item.spec.sizeBytes,
-        item.spec.downloadUrl,
-        arabic,
-      );
-      if (!validated) return null;
-      out.push({
-        kind: "arabic",
-        spec: {
-          ...item.spec,
-          sizeBytes: validated.sizeBytes,
-          downloadUrl: validated.downloadUrl,
-        },
-      });
-    }
-  }
-  return out;
-}
-
-const SOURCE_CATALOGUE_TTL_MS = 300_000;
-let catalogueCache: { entries: SourceCatalogueEntry[]; expiresAt: number } | null = null;
-let pendingCatalogue: Promise<SourceCatalogueEntry[]> | null = null;
-
-export async function fetchSourceCatalogue(signal?: AbortSignal): Promise<SourceCatalogueEntry[]> {
-  try {
-    const res = await fetchWithTimeout(`${QURAN.apiBase}/sources`, {
-      signal,
-      headers: { accept: "application/json" },
-    });
-    if (!res.ok) return [];
-    const entries = decodeSourcesPayload(await res.json());
-    if (!entries) {
-      reportArtifactRejection("sources_payload_malformed");
-      return [];
-    }
-    const validated = validateAndLocalizeCatalogue(entries);
-    if (!validated) {
-      reportArtifactRejection("sources_payload");
-      return [];
-    }
-    return validated;
-  } catch {
-    return [];
-  }
-}
-
-export async function resolveSourceCatalogue(
-  signal?: AbortSignal,
-): Promise<SourceCatalogueEntry[]> {
-  if (!QURAN.apiBase) return bakedTranslationCatalogue();
-  const cached = catalogueCache;
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.entries;
-  }
-  if (signal?.aborted) return [];
-  if (!pendingCatalogue) {
-    pendingCatalogue = fetchSourceCatalogue()
-      .then((entries) => {
-        if (entries.length > 0) {
-          catalogueCache = { entries, expiresAt: Date.now() + SOURCE_CATALOGUE_TTL_MS };
-          return entries;
-        }
-        return bakedTranslationCatalogue();
-      })
-      .finally(() => {
-        pendingCatalogue = null;
-      });
-  }
-  return pendingCatalogue;
 }
 
 export function translationCatalogue(

@@ -493,10 +493,6 @@ const handlers = {
     await initialize(m.manifest, m.coordinates, m.catalogue);
     return null;
   },
-  refreshCatalogue: (m) => {
-    if (m.catalogue !== undefined) storedCatalogue = m.catalogue;
-    return null;
-  },
   hasTranslation: (m) => hasTranslationCached(m.source),
   ensureTranslation: (m) => {
     void ensureTranslation(m.source);

@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { QuranSourceId } from "$lib/data/quran-types";
-import { decodeScript } from "$lib/quran/wire";
 import { describe, expect, it } from "vite-plus/test";
 
 function read(rel: string): string {
@@ -62,21 +60,10 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
     expect(cache).not.toMatch(/\bsha256\b|\bsha2\b/i);
   });
 
-  it("/scripts ArtifactSpec carries no sha256 (decoder ignores stray sha)", () => {
-    const decoded = decodeScript({
-      id: QuranSourceId.TanzilUthmani,
-      sizeBytes: 1,
-      downloadUrl: "https://x/u",
-    });
-    expect(decoded).not.toBeNull();
-    expect(decoded).not.toHaveProperty("sha256");
-    const stray = decodeScript({
-      id: QuranSourceId.TanzilUthmani,
-      sizeBytes: 1,
-      downloadUrl: "https://x/u",
-      sha256: "deadbeef",
-    });
-    expect(stray).not.toBeNull();
-    expect(stray).not.toHaveProperty("sha256");
+  it("baked metadata modules never fetch API catalogues", () => {
+    for (const rel of ["src/lib/quran/manifest.ts", "src/lib/quran/catalogue.ts"]) {
+      const source = read(rel);
+      expect(source).not.toMatch(/fetch|\/scripts|apiBase.*\/sources/);
+    }
   });
 });

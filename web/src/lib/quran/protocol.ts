@@ -23,13 +23,6 @@ export type WorkerRequest =
   | { id: number; type: "search"; query: string; opts?: SearchOpts }
   | { id: number; type: "hasTranslation"; source: QuranReaderSource }
   | { id: number; type: "ensureTranslation"; source: QuranReaderSource }
-  | {
-      id: number;
-      type: "refreshCatalogue";
-      manifest?: ResolvedManifest;
-      coordinates?: CanonicalQuranCoordinates;
-      catalogue?: SourceCatalogueEntry[];
-    }
   | { id: number; type: "setPinnedTranslations"; ids: readonly string[] };
 
 export type WorkerResponse =

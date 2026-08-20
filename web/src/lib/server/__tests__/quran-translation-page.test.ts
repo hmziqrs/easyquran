@@ -15,11 +15,6 @@ vi.mock("$env/dynamic/public", () => ({
   env: { PUBLIC_QURAN_API_BASE: "https://public.test", PUBLIC_ENV: "local" },
 }));
 
-vi.mock("$lib/quran/catalogue", () => ({
-  resolveSourceCatalogue: vi.fn(async () => []),
-  findCatalogueEntry: vi.fn(() => undefined),
-}));
-
 const SOURCE_ID = "en.sahih";
 
 function translationNorm(surah: number) {
@@ -70,6 +65,15 @@ function makeFetcher() {
 }
 
 describe("loadTranslationRangeData juz chunking through the SSR loader", () => {
+  it("rejects an unregistered baked source before requesting Quran content", async () => {
+    const fetcher = vi.fn();
+
+    await expect(
+      loadTranslationRangeData("page", 1, "xx", "missing", fetcher),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it.each([19, 23, 27, 29, 30])(
     "juz %i (oversized) chunks to <=2 cap-sized requests with no truncation",
     async (juz) => {

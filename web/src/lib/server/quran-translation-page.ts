@@ -12,7 +12,7 @@ import type {
   SurahNormalization,
 } from "$lib/data/quran-types";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import { findCatalogueEntry, resolveSourceCatalogue } from "$lib/quran/catalogue";
+import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
 import {
   FetchHttpError,
   FetchTimeoutError,
@@ -105,13 +105,8 @@ async function fetchTranslationRange(
   }
 }
 
-async function requireTranslationSource(
-  sourceId: string,
-  lang: string,
-  translator: string,
-): Promise<void> {
-  const catalogue = await resolveSourceCatalogue();
-  if (catalogue.length > 0 && !findCatalogueEntry(catalogue, sourceId)) {
+function requireTranslationSource(sourceId: string, lang: string, translator: string): void {
+  if (!findCatalogueEntry(bakedTranslationCatalogue(), sourceId)) {
     throw error(404, `Unknown translation: ${lang}.${translator}`);
   }
 }
@@ -152,7 +147,7 @@ export async function loadTranslationSurahRouteData(
   const page = QURAN_DATA.surahLocalPage(surah.num, localPage);
   if (!page) return undefined;
   const sourceId = translationIdFromSegments(lang, translator);
-  await requireTranslationSource(sourceId, lang, translator);
+  requireTranslationSource(sourceId, lang, translator);
   let ayahs: Ayah[];
   let normalization: SurahNormalization;
   let range: QuranRangeText | null;
@@ -189,7 +184,7 @@ export async function loadTranslationRangeData(
 ): Promise<RangePageData> {
   const entry = requireRangeEntry(kind, index);
   const sourceId = translationIdFromSegments(lang, translator);
-  await requireTranslationSource(sourceId, lang, translator);
+  requireTranslationSource(sourceId, lang, translator);
   let ayahs: Ayah[];
   let normalizations: SurahNormalization[];
   try {

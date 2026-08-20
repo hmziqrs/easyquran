@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import {
@@ -89,19 +88,13 @@
   const summary = $derived(activeTranslationId ?? copy.sources.arabic);
   const arabicHref = $derived(hrefFor(position, SourceKind.Arabic));
 
-  onMount(() => {
-    void catalogueStore.ensure();
-  });
-
   let detailsEl: HTMLDetailsElement | null = $state(null);
   let revealed = false;
 
-  // Open on a non-Arabic source and bring the picked row into view, once the
-  // catalogue rows exist. Runs once per mount so user toggles are not fought.
+  // Open on a non-Arabic source and bring the picked row into view once per mount.
   $effect(() => {
     const el = detailsEl;
-    const ready = catalogueStore.translations.length > 0;
-    if (!el || revealed || (!ready && activeTranslationId !== null)) return;
+    if (!el || revealed) return;
     revealed = true;
     if (activeTranslationId === null) return;
     el.open = true;
