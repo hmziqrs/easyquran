@@ -17,7 +17,7 @@ disposable cache dir.
    (disk read) — and the ratio at which each runtime falls over.
 3. How TTL expiry, LRU budget eviction, and Zipf popularity interact — specifically whether a hot
    head starves the long tail out of the cache.
-4. Whether bun (1.3.14 / 1.4) can run this production server at all, and at what cost.
+4. Whether bun 1.4 can run this production server at all, and at what cost.
 
 **Non-goals.** Absolute capacity numbers (generator shares the host), CDN/edge behavior, browser
 render, Rust API benchmarking (Axum is a fixed dependency here, kept out of saturation on purpose).
@@ -63,10 +63,9 @@ visible rather than silently attributed to the runtime.
 | slot | binary | source |
 | --- | --- | --- |
 | `node24` | `node` v24.11.1 | already installed |
-| `bun13` | `bun` 1.3.14 | already installed |
-| `bun14` | `bench/.tools/bun-1.4/bin/bun` | downloaded from `oven-sh/bun` GitHub releases (darwin-aarch64), gitignored, never on PATH, never replaces the installed bun |
+| `bun14` | `bun` 1.4.0 | already installed |
 
-All three execute the **identical** `web/build` output produced by one `pnpm build`
+Both execute the **identical** `web/build` output produced by one `pnpm build`
 (`PUBLIC_ENV=prod`). The build is produced once, its build-id recorded, and never rebuilt mid-matrix
 — the disk cache key is namespaced by SvelteKit's build id, so a rebuild would silently invalidate
 every scenario's cache.
@@ -172,8 +171,8 @@ probe polled until ready.
 
 - Fresh web server process + wiped `QURAN_SSR_CACHE_DIR` per scenario.
 - Axum: started once, pre-warmed, shared, sampled.
-- **3 repeats per (runtime × suite × scenario), interleaved** `node24 → bun13 → bun14 → node24 → …`
-  so thermal drift and background-load drift hit all three equally. **Median** of the 3 reported,
+- **3 repeats per (runtime × suite × scenario), interleaved** `node24 → bun14 → node24 → …`
+  so thermal drift and background-load drift hit both equally. **Median** of the 3 reported,
   with min/max spread — a spread > 10% on any cell is flagged in the report as untrustworthy.
 - 10 s warmup discarded, 30 s cooldown between scenarios.
 - Pre-flight gate, aborts the run if violated: load average below threshold, both ports free, disk
@@ -195,7 +194,7 @@ The `15m` profile is a **directional** ranking tool, not a publishable measureme
 means no spread, so every cell is emitted with `"confidence": "unverified"` and the report renders
 those cells muted with an explicit banner. p999 is suppressed entirely at this profile — 8 s at
 200 req/s is ~1,600 samples, far too few. It does still produce the cold-vs-warm miss-cost delta,
-the hit-ratio curve, saturation point, and mem/CPU traces for all three runtimes.
+the hit-ratio curve, saturation point, and mem/CPU traces for both runtimes.
 
 **Deep scope is per-suite, not cross-product.** The five extra cache scenarios (`ttl-expiry`,
 `lru-evict`, `tail-starvation`, `stampede`, `compression`) run on `translated-surah` only — running
@@ -250,7 +249,7 @@ chart, memory/CPU traces, and a plain-language findings section. Theme-aware, no
 bench/
 ├── README.md              # this file
 ├── .gitignore             # .tools/ .run/ results/
-├── .tools/                # bun 1.4 (downloaded); vegeta via brew
+├── .tools/                # vegeta via brew
 ├── .run/                  # per-scenario cache dirs, pid files, target files (disposable)
 ├── shims/bun-node-sqlite.ts
 ├── src/
@@ -269,7 +268,7 @@ bench/
 Driven by `just`:
 
 ```
-just bench-setup      # fetch bun 1.4, brew install vegeta, build web (prod) + axum (release), verify
+just bench-setup      # brew install vegeta, build web (prod) + axum (release), verify
 just bench-quick      # quick profile   — ~5 min
 just bench-15         # 15m profile     — ~10.5 min, directional
 just bench            # full profile    — ~80 min, publishable

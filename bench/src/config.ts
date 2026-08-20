@@ -22,12 +22,7 @@ export interface Runtime {
 
 export const RUNTIMES: readonly Runtime[] = [
   { id: "node24", bin: "node", args: [] },
-  { id: "bun13", bin: "bun", args: ["--bun"] },
-  {
-    id: "bun14-canary",
-    bin: path.join(TOOLS, "bun-darwin-aarch64/bun"),
-    args: ["--bun"],
-  },
+  { id: "bun14", bin: "bun", args: ["--bun"] },
 ];
 
 export interface Stage {

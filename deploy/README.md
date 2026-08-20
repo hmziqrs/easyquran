@@ -70,7 +70,7 @@ fails on pull.
   root `.dockerignore`, which is what lets these builds see `web/build` and `rust/target/…`
   (both blanket-excluded at the root) while shipping nothing else.
 - `Dockerfile.web` runs the standalone adapter-node server **on the bun runtime**
-  (`oven/bun:1.3.14-slim`). The SvelteKit build still runs on Node, just on the host now:
+  (`oven/bun:1.4.0-slim`). The SvelteKit build still runs on Node, just on the host now:
   prerendering reads the sqlite corpus via `node:sqlite`, which bun does not implement, and
   every sqlite route is `prerender = true` — a build-time dependency the runtime never loads.
   bun holds roughly half Node's resident memory under translation SSR (see `bench/`). Its
