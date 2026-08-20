@@ -60,7 +60,6 @@ const MANIFEST: ResolvedManifest = {
       downloadUrl: "https://x/simple-clean",
     },
   ],
-  source: "baked",
 };
 
 beforeEach(() => {

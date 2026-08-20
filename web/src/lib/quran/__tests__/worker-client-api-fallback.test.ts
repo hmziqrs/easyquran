@@ -77,7 +77,6 @@ class FakeWorker {
 
 const MANIFEST: ResolvedManifest = {
   scripts: [{ id: "uthmani", sizeBytes: 1, downloadUrl: "https://x/uthmani" }],
-  source: "baked",
 };
 
 function mockFetchSurah(): ReturnType<typeof vi.spyOn> {

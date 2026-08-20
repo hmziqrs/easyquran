@@ -6,15 +6,10 @@ import {
   OpenerKind,
   OpenerPackaging,
   QuranScript,
-  SourceKind,
   type Ayah,
-  type ArtifactSpec,
-  type DownloadableSpec,
   type QuranRangeText,
   type QuranSurahText,
-  type SourceCatalogueEntry,
   type SurahNormalization,
-  type TranslationCatalogueEntry,
 } from "$lib/data/quran-types";
 import { isNumber, isString } from "es-toolkit";
 
@@ -22,14 +17,6 @@ import { SearchHitKind, type SearchHit } from "./search/types";
 import { sourceProfile } from "./view/source-profiles";
 
 export type AyahCoordinateValidator = (globalIndex: number, surah: number, ayah: number) => boolean;
-
-/** First candidate that is actually an array. Payload envelopes spell the same list several ways. */
-function firstArray(...candidates: unknown[]): unknown[] | null {
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-  }
-  return null;
-}
 
 // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- decoded JSON object bag: every field read below is followed by a per-field decode check
 type WireRecord = Record<string, unknown>;
@@ -299,114 +286,6 @@ export function decodeSearchResponse(
   };
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: raw is unverified manifest JSON; this fn is the parser
-export function decodeScript(raw: unknown): ArtifactSpec | null {
-  const rec = asRecord(raw);
-  if (!rec) return null;
-  const id = rec.id;
-  if (!isString(id) || !isQuranSourceId(id)) return null;
-  const sizeBytes = positiveInteger(rec.sizeBytes);
-  const downloadUrl = rec.downloadUrl;
-  if (sizeBytes === null || !isString(downloadUrl) || downloadUrl.length === 0) {
-    return null;
-  }
-  return { id, sizeBytes, downloadUrl };
-}
-
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: rawBody is unverified manifest JSON; this fn is the parser
-export function decodeScriptsPayload(rawBody: unknown): ArtifactSpec[] | null {
-  const data = asRecord(unwrapEnvelope(rawBody));
-  if (!data) return null;
-  if (!Array.isArray(data.scripts)) return null;
-  const out: ArtifactSpec[] = [];
-  for (const item of data.scripts) {
-    const spec = decodeScript(item);
-    if (!spec) return null;
-    out.push(spec);
-  }
-  return out;
-}
-
-function decodeTranslationCatalogueEntry(rec: WireRecord): TranslationCatalogueEntry | null {
-  const id = isString(rec.id) && rec.id.length > 0 ? rec.id : null;
-  const language = isString(rec.language) && rec.language.length > 0 ? rec.language : null;
-  const languageCode =
-    isString(rec.languageCode) && rec.languageCode.length > 0 ? rec.languageCode : null;
-  const direction = rec.direction === "rtl" || rec.direction === "ltr" ? rec.direction : null;
-  const name = isString(rec.name) && rec.name.length > 0 ? rec.name : null;
-  const translator =
-    rec.translator === null || isString(rec.translator) ? rec.translator : undefined;
-  const sizeBytes = positiveInteger(rec.sizeBytes);
-  const downloadUrl =
-    isString(rec.downloadUrl) && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
-  if (
-    !id ||
-    !language ||
-    !languageCode ||
-    !direction ||
-    !name ||
-    translator === undefined ||
-    sizeBytes === null ||
-    !downloadUrl
-  ) {
-    return null;
-  }
-  return {
-    id,
-    language,
-    languageCode,
-    direction,
-    name,
-    translator,
-    sizeBytes,
-    downloadUrl,
-  };
-}
-
-function decodeArabicCatalogueSpec(rec: WireRecord): ArtifactSpec | null {
-  const id = rec.id;
-  if (!isString(id) || !isQuranSourceId(id)) return null;
-  const sizeBytes = positiveInteger(rec.sizeBytes);
-  const downloadUrl =
-    isString(rec.downloadUrl) && rec.downloadUrl.length > 0 ? rec.downloadUrl : null;
-  if (sizeBytes === null || downloadUrl === null) return null;
-  return { id, sizeBytes, downloadUrl };
-}
-
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: raw is unverified manifest JSON; this fn is the parser
-function decodeSourceCatalogueEntry(raw: unknown): SourceCatalogueEntry | null {
-  const rec = asRecord(raw);
-  if (!rec) return null;
-  const kind = isString(rec.kind) ? rec.kind : null;
-  if (kind === SourceKind.Translation) {
-    const entry = decodeTranslationCatalogueEntry(rec);
-    return entry ? { kind: SourceKind.Translation, entry } : null;
-  }
-  if (kind === SourceKind.Arabic) {
-    const spec = decodeArabicCatalogueSpec(rec);
-    return spec ? { kind: SourceKind.Arabic, spec } : null;
-  }
-  const spec = decodeArabicCatalogueSpec(rec);
-  if (spec) return { kind: SourceKind.Arabic, spec };
-  const entry = decodeTranslationCatalogueEntry(rec);
-  return entry ? { kind: SourceKind.Translation, entry } : null;
-}
-
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: rawBody is unverified manifest JSON; this fn is the parser
-export function decodeSourcesPayload(rawBody: unknown): SourceCatalogueEntry[] | null {
-  const data = asRecord(unwrapEnvelope(rawBody));
-  if (!data) return null;
-  const list = firstArray(data.scripts, data.sources);
-  if (!list) return null;
-  const out: SourceCatalogueEntry[] = [];
-  for (const item of list) {
-    const entry = decodeSourceCatalogueEntry(item);
-    if (!entry) return null;
-    out.push(entry);
-  }
-  return out;
-}
-
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: raw is unverified Worker JSON; this fn is the parser
 function decodeTranslationNormalization(raw: unknown): SurahNormalization | null {
   const rec = asRecord(raw);
@@ -461,81 +340,4 @@ export function decodeTranslationRangeText(
   validateCoordinate?: AyahCoordinateValidator,
 ): QuranRangeText | null {
   return decodeRangeText(raw, validateCoordinate, decodeTranslationNormalization);
-}
-
-export interface BakedArtifactEntry {
-  readonly sizeBytes: number;
-  readonly r2Path: string;
-  readonly sameOriginDeliveryPath: string;
-}
-
-export type BakedArtifactMap = ReadonlyMap<string, BakedArtifactEntry>;
-
-export interface ValidatedArtifact {
-  readonly id: string;
-  readonly sizeBytes: number;
-  readonly downloadUrl: string;
-}
-
-export function buildArabicBakedMap(
-  scripts: readonly DownloadableSpec[],
-  artifactBase: string,
-): BakedArtifactMap {
-  const map = new Map<string, BakedArtifactEntry>();
-  for (const spec of scripts) {
-    const r2Path = spec.downloadUrl.startsWith(artifactBase)
-      ? spec.downloadUrl.slice(artifactBase.length)
-      : "";
-    map.set(spec.id, {
-      sizeBytes: spec.sizeBytes,
-      r2Path,
-      sameOriginDeliveryPath: spec.downloadUrl,
-    });
-  }
-  return map;
-}
-
-export function reportArtifactRejection(reason: string): void {
-  void import("$lib/stores/consent.svelte")
-    .then((mod) =>
-      mod.consent.analytics
-        ? import("$lib/firebase/analytics").then((m) =>
-            m.track("quran_artifact_rejected", { reason }),
-          )
-        : null,
-    )
-    .catch(() => {});
-}
-
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- wire decoder boundary: raw is an unvalidated manifest downloadUrl field
-export function parseArtifactUrl(raw: unknown, baked: BakedArtifactEntry): URL | null {
-  if (!isString(raw) || raw.length === 0) return null;
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "https:") return null;
-  if (url.username !== "" || url.password !== "") return null;
-  if (url.search !== "" || url.hash !== "") return null;
-  if (url.pathname !== baked.r2Path) return null;
-  return url;
-}
-
-export function validateArtifactAgainstBaked(
-  id: string,
-  sizeBytes: number,
-  downloadUrl: string,
-  baked: BakedArtifactMap,
-): ValidatedArtifact | null {
-  const entry = baked.get(id);
-  if (!entry) return null;
-  if (sizeBytes !== entry.sizeBytes) return null;
-  if (!parseArtifactUrl(downloadUrl, entry)) return null;
-  return {
-    id,
-    sizeBytes: entry.sizeBytes,
-    downloadUrl: entry.sameOriginDeliveryPath,
-  };
 }

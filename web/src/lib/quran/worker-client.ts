@@ -473,23 +473,6 @@ export const quranWorker = {
     return attempt;
   },
 
-  provideCatalogue(catalogue: readonly SourceCatalogueEntry[]): Promise<void> {
-    return quranWorker
-      .whenReady()
-      .then(() =>
-        request<null>((id) => ({
-          id,
-          type: "refreshCatalogue",
-          catalogue: [...catalogue],
-        })),
-      )
-      .then(() => undefined)
-      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); instanceof Error narrows it at first use
-      .catch((err: unknown) =>
-        reportWorkerFailure(err instanceof Error ? err : new Error(String(err))),
-      );
-  },
-
   dispose(): void {
     resetWorker(new Error("quran worker disposed"));
   },

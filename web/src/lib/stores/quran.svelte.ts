@@ -7,7 +7,6 @@ export type QuranStatus = "idle" | "resolving" | "init" | "downloading" | "ready
 class QuranStore {
   status = $state<QuranStatus>("idle");
   detail = $state<string>("");
-  source = $state<"unknown" | "baked" | "api">("unknown");
   error = $state<string | null>(null);
   download = $state<DownloadProgress | null>(null);
 

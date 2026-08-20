@@ -166,12 +166,14 @@ afterEach(() => {
 
 describe("W5 same-origin /api/ requests never enter Cache Storage", () => {
   it("does not call respondWith for a same-origin /api/ GET (bypass)", async () => {
-    const ev = dispatchFetch(makeRequest("/api/quran/sources"));
+    const ev = dispatchFetch(
+      makeRequest("/api/quran/sources/en.sahih/range?from=1&to=7"),
+    );
     expect(ev.respondWithCalled).toBe(false);
   });
 
   it("leaves every Cache Storage bucket empty after an /api/ GET", async () => {
-    dispatchFetch(makeRequest("/api/quran/sources"));
+    dispatchFetch(makeRequest("/api/quran/sources/en.sahih/range?from=1&to=7"));
     await flush();
     expect(totalPuts()).toBe(0);
     for (const name of fakeCaches.caches.keys()) {
@@ -185,8 +187,8 @@ describe("W5 same-origin /api/ requests never enter Cache Storage", () => {
   });
 
   it.each([
-    "/api/quran/scripts",
-    "/api/quran/sources",
+    "/api/quran/search?q=mercy",
+    "/api/quran/sources/en.sahih/surah/1",
     "/api/auth/session",
     "/api/quran/v1/surah/1",
   ])("bypasses %s regardless of path depth", (pathname) => {
@@ -202,7 +204,7 @@ describe("W5 same-origin /api/ requests never enter Cache Storage", () => {
   });
 
   it("ignores non-GET /api/ requests at the top of the handler (method guard)", () => {
-    const ev = dispatchFetch(makeRequest("/api/quran/sources", { method: "POST" }));
+    const ev = dispatchFetch(makeRequest("/api/quran/search", { method: "POST" }));
     expect(ev.respondWithCalled).toBe(false);
   });
 });
