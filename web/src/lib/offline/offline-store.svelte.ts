@@ -161,8 +161,11 @@ class OfflineStore {
     }
     if (generation !== this.#generation) return;
     if (state === "incomplete") {
-      await clearActivePack().catch(() => {});
+      if ((await getActivePack())?.packId === active.packId) {
+        await clearActivePack().catch(() => {});
+      }
       await caches.delete(cacheName).catch(() => {});
+      if (generation !== this.#generation) return;
       this.#activePack = null;
       this.#mirror();
       this.#status = "idle";

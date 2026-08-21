@@ -47,7 +47,7 @@ export function stackStorageLayers(input: StackLayersInput): StorageLayer[] {
   ];
   if (input.pagesBytes !== null) layers.push({ id: "pages", bytes: input.pagesBytes });
   if (input.dataBytes !== null) layers.push({ id: "data", bytes: input.dataBytes });
-  if (input.usage !== null) {
+  if (input.usage !== null && input.pagesBytes !== null && input.dataBytes !== null) {
     const owned = sumBy(layers, (layer) => layer.bytes);
     const residual = Math.max(0, input.usage - owned);
     if (residual > 0) layers.push({ id: "other", bytes: residual });
@@ -193,7 +193,7 @@ class StorageReportStore {
     for (const artifact of targets) {
       try {
         await quranWorker.deleteTranslation(artifact.id);
-        freedBytes += artifact.sizeBytes;
+        freedBytes += artifact.store === "session" ? 0 : artifact.sizeBytes;
       } catch {
         failures++;
       }

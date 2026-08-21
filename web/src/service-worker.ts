@@ -222,9 +222,17 @@ async function measurePagesCache(): Promise<StorageLayerStats> {
 
 async function measureDataCache(): Promise<StorageLayerStats> {
   const meta = await rawDataMetaScan();
+  const data = await caches.open(DATA_CACHE);
+  const cacheKeys = new Set<string>();
+  for (const req of await data.keys()) cacheKeys.add(normalizeDataKey(req.url));
   let bytes = 0;
-  for (const entry of meta.values()) bytes += entry.sizeBytes;
-  return { entries: meta.size, bytes };
+  let entries = 0;
+  for (const [key, entry] of meta) {
+    if (!cacheKeys.has(key)) continue;
+    bytes += entry.sizeBytes;
+    entries += 1;
+  }
+  return { entries, bytes };
 }
 
 export async function computeStorageStats(): Promise<{

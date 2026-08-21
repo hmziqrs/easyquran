@@ -113,10 +113,9 @@ describe("settings route chunk isolation", () => {
       ),
       "settings +page.ts must stay a pure route-option module",
     ).toEqual([]);
-    const pageOptions = sources.get("routes/(application)/app/settings/+page.ts");
-    if (pageOptions !== undefined) {
-      expect(pageOptions).toContain("prerender = false");
-    }
+    const pageOptions = [...sources].find(([path]) => path.endsWith(`${SETTINGS_DIR}+page.ts`));
+    expect(pageOptions, "settings +page.ts should exist").toBeDefined();
+    expect(pageOptions![1]).toContain("prerender = false");
   });
 });
 

@@ -163,10 +163,16 @@ function stepTo(target: number, current: () => number, up: () => void, down: () 
   let previous = current();
   for (let i = 0; i < STEP_LIMIT; i += 1) {
     if (previous === target) return;
+    const distance = Math.abs(previous - target);
     if (previous < target) up();
     else down();
     const next = current();
     if (next === previous) return;
+    if (Math.abs(next - target) >= distance) {
+      if (previous < target) down();
+      else up();
+      return;
+    }
     previous = next;
   }
 }

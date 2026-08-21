@@ -1,5 +1,4 @@
 import type { Pathname } from "$app/types";
-import { publicHref } from "$lib/i18n/public-href";
 
 import { PaletteGroups } from "../groups";
 import { byScore, scoreFields } from "../scoring";
@@ -9,8 +8,10 @@ const SOURCE_ID = "settings.routes";
 const SETTINGS_PATH = "/app/settings";
 
 function settingsHref(): Pathname {
-  // SAFETY: canonical settings pathname (localized /{en,ar}/app/settings is not a published route); publicHref only prepends base, so the cast is sound.
-  return publicHref(SETTINGS_PATH) as Pathname;
+  // SAFETY: canonical settings pathname (localized /{en,ar}/app/settings is not
+  // a published route); the palette's resolveHref applies the base, so the raw
+  // path is what the cast brands it as.
+  return SETTINGS_PATH as Pathname;
 }
 
 /** Settings navigation. Labels stay English — see the palette-label precedent in site-routes.ts. */

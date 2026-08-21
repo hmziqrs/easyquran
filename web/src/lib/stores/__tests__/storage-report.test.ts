@@ -180,6 +180,19 @@ describe("storage report fan-in", () => {
     expect(result).toEqual({ freedBytes: 3 * MB, failures: 0 });
   });
 
+  it("clearAllTranslations deletes session artifacts but never counts their bytes as freed", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation.mockResolvedValue(undefined);
+    const report = createStorageReport();
+    report.artifacts = [
+      artifact({ id: "en.sahih", sizeBytes: 3 * MB }),
+      artifact({ id: "fr.hamid", sizeBytes: 2 * MB, store: "session" }),
+    ];
+    const result = await report.clearAllTranslations([]);
+    expect(workerMock.deleteTranslation).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ freedBytes: 3 * MB, failures: 0 });
+  });
+
   it("clearAllTranslations refreshes once after the whole run, not per artifact", async () => {
     workerMock.listArtifacts.mockResolvedValue([]);
     workerMock.deleteTranslation.mockResolvedValue(undefined);

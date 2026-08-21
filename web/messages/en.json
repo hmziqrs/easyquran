@@ -269,14 +269,40 @@
   "settings_storage_estimate_note": "Item sizes come from easyquran's own records and may differ from the browser's estimate.",
   "settings_storage_offline_pack_note": "The offline pack keeps reader pages available without a connection.",
   "settings_storage_pack_heading": "Offline pack",
-  "settings_storage_pack_routes": "{entries} routes · {size}",
+  "settings_storage_pack_routes": [
+    {
+      "declarations": ["input entries", "input size", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
+      "match": {
+        "entriesPlural=zero": "0 routes · {size}",
+        "entriesPlural=one": "1 route · {size}",
+        "entriesPlural=two": "{entries} routes · {size}",
+        "entriesPlural=few": "{entries} routes · {size}",
+        "entriesPlural=many": "{entries} routes · {size}",
+        "entriesPlural=other": "{entries} routes · {size}"
+      }
+    }
+  ],
   "settings_storage_pack_saved": "saved {when}",
   "settings_storage_pack_usage": "Storage: {used} of {quota}",
   "settings_storage_pack_toggle_on": "Remove offline",
   "settings_storage_pack_toggle_off": "Download for offline",
   "settings_storage_pack_busy": "Working…",
   "settings_storage_pack_retry": "Retry",
-  "settings_storage_pack_status_active": "On — {entries} routes stored.",
+  "settings_storage_pack_status_active": [
+    {
+      "declarations": ["input entries", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
+      "match": {
+        "entriesPlural=zero": "On — 0 routes stored.",
+        "entriesPlural=one": "On — 1 route stored.",
+        "entriesPlural=two": "On — {entries} routes stored.",
+        "entriesPlural=few": "On — {entries} routes stored.",
+        "entriesPlural=many": "On — {entries} routes stored.",
+        "entriesPlural=other": "On — {entries} routes stored."
+      }
+    }
+  ],
   "settings_storage_pack_status_on": "On.",
   "settings_storage_pack_status_downloading": "Downloading offline pack…",
   "settings_storage_pack_status_staging": "Staging offline pack…",

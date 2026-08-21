@@ -187,6 +187,7 @@
               <button
                 type="button"
                 class={pillClass(prefs.theme === t)}
+                aria-pressed={prefs.theme === t}
                 onclick={() => prefs.setTheme(t)}>{copy.themeNames[t]}</button
               >
             {/each}

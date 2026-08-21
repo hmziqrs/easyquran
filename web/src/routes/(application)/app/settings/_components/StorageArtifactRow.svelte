@@ -164,7 +164,7 @@
         bind:this={removeButton}
         disabled={inUse}
         title={inUse ? copy.inUse : copy.removeConfirmTitle(name)}
-        aria-label={copy.removeConfirmTitle(name)}
+        aria-label={inUse ? `${copy.inUse} — ${copy.removeConfirmTitle(name)}` : copy.removeConfirmTitle(name)}
         onclick={startConfirm}
         class={cn(actionBtn, "border-line-2 text-fg-3 hover:border-line hover:text-fg")}
       >

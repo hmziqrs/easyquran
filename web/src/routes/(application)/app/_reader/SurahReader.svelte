@@ -700,7 +700,7 @@
 
   let lastTypography: string | null = null;
   $effect(() => {
-    const typography = `${reader.arabicFont}:${reader.translationSizePx}:${reader.translationFamily}`;
+    const typography = `${reader.arabicFont}:${reader.arabicSizePx}:${reader.translationSizePx}:${reader.translationFamily}`;
     if (lastTypography === typography) return;
     const firstRun = lastTypography === null;
     lastTypography = typography;

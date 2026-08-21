@@ -511,3 +511,11 @@ Where shipped code departs from the sections above, current code wins; the reaso
     `stopPropagation` in the row confirm, exactly one polite announcer in the row, the
     arabic/busy/error outcome copy mapping, `result.failures` surfacing in remove-all, and
     the `readerSource.sourceId` + `stackedTranslations.ids` in-use join.
+13. **§5's "app version" row displays no version number.** The row surfaces the existing
+    `UpdateStore` (up-to-date / update-available status plus "Check for updates"), but there
+    is no version string to show: `UpdateStore` exposes only booleans, SvelteKit's `updated`
+    state carries no version, and the offline manifest's optional `appVersion` is the pack's
+    manifest version — absent whenever no pack is staged, and not the app build's version.
+    Surfacing a real build version needs new build-time plumbing (injecting a version
+    constant into the bundle), deferred until such a constant exists; the row's substantive
+    intent — surfacing `UpdateStore` — is fully shipped.
