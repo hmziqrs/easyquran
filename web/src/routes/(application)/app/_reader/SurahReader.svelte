@@ -324,7 +324,7 @@
     }, true);
   }
 
-  function changeFontSize(change: () => void): void {
+  function changeTypography(change: () => void): void {
     void preserveViewport(() => {
       virtualCenterPage = visibleLocalPage;
       change();
@@ -768,8 +768,8 @@
       {visibleLocalPage}
       {clientMounted}
       onChangeMode={changeMode}
-      onSmaller={() => changeFontSize(() => reader.smaller())}
-      onBigger={() => changeFontSize(() => reader.bigger())}
+      onSmaller={() => changeTypography(() => reader.smaller())}
+      onBigger={() => changeTypography(() => reader.bigger())}
     />
 
     <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
@@ -887,7 +887,7 @@
     direction: rtl;
     text-align: justify;
     text-align-last: center;
-    font-family: var(--font-arabic);
+    font-family: var(--reader-arabic-family, var(--font-arabic));
     line-height: 2.35;
     word-spacing: 0.14em;
   }

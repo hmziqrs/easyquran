@@ -27,7 +27,7 @@ import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm
 import { uniq } from "es-toolkit";
 
 import type { ResolvedManifest } from "../quran/manifest";
-import type { WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
+import type { StorageArtifactInfo, WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
   buildCanonicalSearchCorpus,
   searchCanonicalCorpus,
@@ -43,13 +43,15 @@ import {
   type LoadedQuranSource,
 } from "../quran/view/source-runtime";
 import {
+  deleteCachedArtifact,
   ensureArtifact,
   listCachedArtifacts,
   QURAN_ROW_COUNT,
   sweepAbandonedTemps,
+  type CachedArtifactInfo,
   type StagedValidator,
 } from "./opfs-cache";
-import { pruneTranslations } from "./opfs-retention";
+import { clearLastUsed, pruneTranslations, readLastUsedMap } from "./opfs-retention";
 
 interface WorkerCtx {
   postMessage(msg: WorkerOutbound): void;
@@ -437,6 +439,64 @@ function sourceState(sourceId: QuranSourceId): WorkerSourceState {
   return state;
 }
 
+function toStorageArtifactInfo(
+  artifact: CachedArtifactInfo,
+  lastUsed: ReadonlyMap<string, number>,
+): StorageArtifactInfo {
+  const used = lastUsed.get(artifact.id);
+  return {
+    id: artifact.id,
+    store: artifact.store === "idb" ? "idb" : "opfs",
+    tag: artifact.tag,
+    sizeBytes: artifact.sizeBytes,
+    lastUsed: used !== undefined ? used : null,
+  };
+}
+
+export async function listStorageArtifacts(): Promise<StorageArtifactInfo[]> {
+  const [artifacts, lastUsed] = await Promise.all([listCachedArtifacts(), readLastUsedMap()]);
+  return artifacts.map((artifact) => toStorageArtifactInfo(artifact, lastUsed));
+}
+
+export async function deleteStorageArtifact(sourceId: string): Promise<null> {
+  if (isArabicSourceId(sourceId)) throw new Error("arabic");
+  if (pendingTranslationRunners.has(sourceId)) throw new Error("busy");
+  forgetTranslations([sourceId]);
+  const artifacts = await listCachedArtifacts();
+  const hit = artifacts.find((artifact) => artifact.id === sourceId);
+  if (hit) {
+    await deleteCachedArtifact(sourceId, hit.tag);
+    await clearLastUsed(sourceId);
+  }
+  return null;
+}
+
+export const __artifactAdminTestHooks = {
+  injectInFlight(id: string): void {
+    pendingTranslationRunners.set(
+      id,
+      new Promise<QuranQueryRunner>(() => {}),
+    );
+  },
+  clearInFlight(id: string): void {
+    pendingTranslationRunners.delete(id);
+  },
+  injectOpenDb(id: string, close: () => void): void {
+    // SAFETY: the fake only carries the close() method deleteStorageArtifact calls via
+    // forgetTranslations; no sqlite-wasm query path ever touches a test-injected handle.
+    translationDbs.set(id, { close } as Database);
+  },
+  hasOpenDb(id: string): boolean {
+    return translationDbs.has(id);
+  },
+  markCached(id: string): void {
+    cachedTranslationIds.add(id);
+  },
+  cachedIds(): readonly string[] {
+    return [...cachedTranslationIds];
+  },
+};
+
 function readAllRows(state: WorkerSourceState) {
   if (state.runner) return readAllSourceRows(state.runner, state.source);
   const database = openReadOnly(state.bytes);
@@ -483,7 +543,13 @@ function arabicSourceId(source: QuranReaderSource | undefined): QuranSourceId | 
   return source;
 }
 
-type HandlerResult = QuranSurahText | QuranRangeText | SearchResponse | boolean | null;
+type HandlerResult =
+  | QuranSurahText
+  | QuranRangeText
+  | SearchResponse
+  | boolean
+  | null
+  | readonly StorageArtifactInfo[];
 type Handler<K extends WorkerRequest["type"]> = (
   msg: Extract<WorkerRequest, { type: K }>,
 ) => HandlerResult | Promise<HandlerResult>;
@@ -502,6 +568,8 @@ const handlers = {
     pinnedTranslationIds = m.ids;
     return null;
   },
+  listArtifacts: () => listStorageArtifacts(),
+  deleteArtifact: (m) => deleteStorageArtifact(m.sourceId),
   readSurah: (m) =>
     runReaderOp(
       m.source,

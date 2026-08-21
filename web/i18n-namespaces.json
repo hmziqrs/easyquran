@@ -110,6 +110,11 @@
       "prefixes": ["reader"]
     },
     {
+      "id": "settings",
+      "description": "Settings page: storage, reading, privacy and account sections. Lazy: only downloaded when the settings route loads.",
+      "prefixes": ["settings"]
+    },
+    {
       "id": "auth",
       "description": "Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.",
       "prefixes": ["auth"]

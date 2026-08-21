@@ -6,7 +6,7 @@
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
   import type { CustomSeeds } from "$lib/theme/derive";
   import { Notifications } from "$lib/components/notifications";
-  import { OfflinePack } from "$lib/components/status";
+  import { OfflinePack, OfflinePackBar } from "$lib/components/status";
   import { cn } from "$lib/utils";
   import { uiDirection, type UiLocale } from "$lib/i18n/locales";
   import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
@@ -285,7 +285,10 @@
           <hr class="border-line" />
           <Notifications />
           <hr class="border-line" />
-          <OfflinePack />
+          {#if copy.offlinePack}
+            <OfflinePack copy={copy.offlinePack} />
+          {/if}
+          <OfflinePackBar />
         {/if}
 
         <div>

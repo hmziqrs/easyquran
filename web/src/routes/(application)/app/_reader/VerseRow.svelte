@@ -141,13 +141,17 @@
     text-align: right;
   }
 
-  .verse-text--translation {
-    font-family: var(--font-sans);
+  .verse-row .verse-text {
+    font-family: var(--reader-arabic-family, var(--font-arabic));
+  }
+
+  .verse-row .verse-text--translation {
+    font-family: var(--reader-translation-family, var(--font-sans));
     text-align: start;
   }
 
-  .translation-marker {
-    font-family: var(--font-sans);
+  .verse-row .translation-marker {
+    font-family: var(--reader-translation-family, var(--font-sans));
   }
 
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-row {
@@ -163,6 +167,7 @@
   .verse-extra {
     display: block;
     border-top: 1px solid var(--line);
+    font-family: var(--reader-translation-family, var(--font-sans));
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     text-align: start;

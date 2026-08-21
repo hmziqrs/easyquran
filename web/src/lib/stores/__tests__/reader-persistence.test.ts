@@ -121,6 +121,42 @@ describe("decodeReader", () => {
     expect(out.recents).toEqual([{ num: 2, n: 255, ts: 1 }]);
     expect(out.progress).toEqual({ 2: { furthestAyah: 5, ts: 1 } });
   });
+
+  it("decodes v3 arabicFont from the allowlist and drops unknown ids", () => {
+    expect(decodeReader({ v: 3, arabicFont: "scheherazade-new" }).arabicFont).toBe(
+      "scheherazade-new",
+    );
+    expect(decodeReader({ v: 3, arabicFont: "noto-naskh-arabic" }).arabicFont).toBe(
+      "noto-naskh-arabic",
+    );
+    expect(decodeReader({ v: 3, arabicFont: "amiri" }).arabicFont).toBe("amiri");
+    expect(decodeReader({ v: 3, arabicFont: "kufi" }).arabicFont).toBeUndefined();
+    expect(decodeReader({ v: 3, arabicFont: 7 }).arabicFont).toBeUndefined();
+  });
+
+  it("decodes v3 translationSize only inside the 13-28 bounds", () => {
+    expect(decodeReader({ v: 3, translationSize: 13 }).translationSize).toBe(13);
+    expect(decodeReader({ v: 3, translationSize: 28 }).translationSize).toBe(28);
+    expect(decodeReader({ v: 3, translationSize: 12 }).translationSize).toBeUndefined();
+    expect(decodeReader({ v: 3, translationSize: 29 }).translationSize).toBeUndefined();
+    expect(decodeReader({ v: 3, translationSize: "17" }).translationSize).toBeUndefined();
+  });
+
+  it("handles schema versions explicitly: past/current decode, future decodes known fields, garbage rejects", () => {
+    expect(decodeReader({ v: 1, current: 2, arabicFont: "amiri" })).toMatchObject({
+      current: 2,
+      arabicFont: "amiri",
+    });
+    expect(decodeReader({ v: 3, current: 2, translationSize: 18 })).toMatchObject({
+      current: 2,
+      translationSize: 18,
+    });
+    expect(
+      decodeReader({ v: READER_SCHEMA_VERSION + 1, current: 3, arabicFont: "noto-naskh-arabic" }),
+    ).toMatchObject({ current: 3, arabicFont: "noto-naskh-arabic" });
+    expect(decodeReader({ v: "2", current: 2 })).toEqual({});
+    expect(decodeReader({ v: 0, current: 2 })).toEqual({});
+  });
 });
 
 describe("createReaderPersistence scheduling", () => {
@@ -186,6 +222,42 @@ describe("createReaderPersistence scheduling", () => {
     r.markRead(1, 2);
     const blob = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
     expect(blob.progress["1"].furthestAyah).toBe(5);
+  });
+
+  it("round-trips v3 typography through writeBlob and re-decode", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    core.s.arabicFont = "scheherazade-new";
+    core.s.translationSize = 21;
+    core.s.translationFamily = "serif";
+    persistence.writeNow();
+    // SAFETY: blob was just written by writeNow() from core.s, whose serialized shape is Persisted.
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Persisted;
+    expect(stored.arabicFont).toBe("scheherazade-new");
+    expect(stored.translationSize).toBe(21);
+    expect(stored).not.toHaveProperty("translationFamily");
+    const decoded = decodeReader(stored);
+    expect(decoded.arabicFont).toBe("scheherazade-new");
+    expect(decoded.translationSize).toBe(21);
+
+    const next = createReaderCore();
+    const nextPersistence = createReaderPersistence(next);
+    nextPersistence.hydrate();
+    expect(next.s.arabicFont).toBe("scheherazade-new");
+    expect(next.s.translationSize).toBe(21);
+    expect(next.s.translationFamily).toBe("sans");
+    nextPersistence.dispose();
+    persistence.dispose();
+  });
+
+  it("writeBlob keeps v3 defaults for untouched typography fields", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    persistence.writeNow();
+    expect(read()).toMatchObject({ v: 3, arabicFont: "amiri", translationSize: 17 });
+    persistence.dispose();
   });
 
   it("scheduleNoteWrite() only writes after the trailing debounce", () => {

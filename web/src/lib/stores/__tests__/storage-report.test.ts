@@ -1,0 +1,258 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { StorageArtifactInfo } from "$lib/quran/protocol";
+
+interface OfflinePackMirror {
+  packId: string;
+  entries: number;
+  bytes: number;
+  savedAt: number;
+}
+
+interface OfflineStoreMock {
+  usage: number | null;
+  quota: number | null;
+  activePack: OfflinePackMirror | null;
+}
+
+const h = vi.hoisted(() => ({
+  workerMock: {
+    whenReady: vi.fn<() => Promise<void>>(),
+    listArtifacts: vi.fn<() => Promise<StorageArtifactInfo[]>>(),
+    deleteTranslation: vi.fn<(id: string) => Promise<void>>(),
+  },
+  statsMock: {
+    requestStorageStats: vi.fn<
+      () => Promise<{ pages: { entries: number; bytes: number }; data: { entries: number; bytes: number } } | null>
+    >(),
+  },
+  offlineMock: {
+    usage: null,
+    quota: null,
+    activePack: null,
+  },
+  AdminErrorMock: class extends Error {
+    readonly failure: "arabic" | "busy";
+    constructor(failure: "arabic" | "busy") {
+      super(failure);
+      this.failure = failure;
+    }
+  },
+}));
+
+const workerMock = h.workerMock;
+const statsMock = h.statsMock;
+const offlineMock: OfflineStoreMock = h.offlineMock;
+
+vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$lib/quran/worker-client", () => ({
+  quranWorker: h.workerMock,
+  StorageAdminError: h.AdminErrorMock,
+}));
+vi.mock("$lib/offline/offline-store.svelte", () => ({ offline: h.offlineMock }));
+vi.mock("$lib/offline/messages", () => ({ requestStorageStats: h.statsMock.requestStorageStats }));
+
+import {
+  createStorageReport,
+  isQuotaHigh,
+  isTranslationCapHigh,
+  layerTotal,
+  layoutUsageSegments,
+  stackStorageLayers,
+  TRANSLATION_CAP_BYTES,
+} from "$lib/stores/storage-report.svelte";
+import { CAP_BYTES } from "$lib/workers/opfs-retention";
+
+const MB = 1024 * 1024;
+
+function artifact(partial: Partial<StorageArtifactInfo> & { id: string }): StorageArtifactInfo {
+  return {
+    store: "opfs",
+    tag: partial.id,
+    sizeBytes: MB,
+    lastUsed: null,
+    ...partial,
+  };
+}
+
+beforeEach(() => {
+  workerMock.whenReady.mockReset().mockResolvedValue(undefined);
+  workerMock.listArtifacts.mockReset();
+  workerMock.deleteTranslation.mockReset().mockResolvedValue(undefined);
+  statsMock.requestStorageStats.mockReset().mockResolvedValue(null);
+  offlineMock.usage = null;
+  offlineMock.quota = null;
+  offlineMock.activePack = null;
+  Object.defineProperty(globalThis.navigator, "storage", {
+    value: {
+      persisted: async () => true,
+      persist: async () => false,
+      getDirectory: async () => {
+        throw new Error("no opfs in test");
+      },
+    },
+    configurable: true,
+    writable: true,
+  });
+});
+
+afterEach(() => {
+  // SAFETY: navigator.storage is optional at runtime; cast exposes it for teardown.
+  const nav = globalThis.navigator as { storage?: unknown } | undefined;
+  if (nav) delete nav.storage;
+});
+
+describe("storage report fan-in", () => {
+  it("fans in artifacts, SW stats, and persist state after whenReady resolves", async () => {
+    workerMock.listArtifacts.mockResolvedValue([
+      artifact({ id: "uthmani", sizeBytes: 2 * MB }),
+      artifact({ id: "en.sahih" }),
+    ]);
+    offlineMock.usage = 6 * MB;
+    offlineMock.quota = 60 * MB;
+    offlineMock.activePack = { packId: "p", entries: 10, bytes: MB, savedAt: 0 };
+    statsMock.requestStorageStats.mockResolvedValue({
+      pages: { entries: 4, bytes: MB },
+      data: { entries: 2, bytes: 0.5 * MB },
+    });
+
+    const report = createStorageReport();
+    report.hydrate();
+    await report.refresh();
+
+    expect(report.phase).toBe("ready");
+    expect(report.artifacts).toHaveLength(2);
+    expect(report.swPages).toEqual({ entries: 4, bytes: MB });
+    expect(report.swData).toEqual({ entries: 2, bytes: 0.5 * MB });
+    expect(report.persisted).toBe(true);
+  });
+
+  it("gates on whenReady and reports error when the engine fails to boot", async () => {
+    workerMock.whenReady.mockRejectedValue(new Error("no worker"));
+    const report = createStorageReport();
+    await report.refresh();
+    expect(report.phase).toBe("error");
+    expect(workerMock.listArtifacts).not.toHaveBeenCalled();
+  });
+
+  it("reports error when the artifact list is malformed or fails", async () => {
+    workerMock.listArtifacts.mockRejectedValue(new Error("list boom"));
+    const report = createStorageReport();
+    await report.refresh();
+    expect(report.phase).toBe("error");
+  });
+
+  it("maps StorageAdminError failures from deleteTranslation", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation.mockRejectedValue(new h.AdminErrorMock("busy"));
+    const report = createStorageReport();
+    const outcome = await report.deleteArtifact("en.sahih");
+    expect(outcome).toBe("busy");
+  });
+
+  it("clearAllTranslations skips Arabic and passed ids and sums freed bytes", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation.mockResolvedValue(undefined);
+    const report = createStorageReport();
+    report.artifacts = [
+      artifact({ id: "uthmani", sizeBytes: 2 * MB }),
+      artifact({ id: "en.sahih", sizeBytes: 3 * MB }),
+      artifact({ id: "ur.jalandhry", sizeBytes: 4 * MB }),
+    ];
+    const result = await report.clearAllTranslations(["ur.jalandhry"]);
+    expect(workerMock.deleteTranslation).toHaveBeenCalledTimes(1);
+    expect(workerMock.deleteTranslation).toHaveBeenCalledWith("en.sahih");
+    expect(result).toEqual({ freedBytes: 3 * MB, failures: 0 });
+  });
+});
+
+describe("stackStorageLayers residual math", () => {
+  it("splits arabic vs translations by id and adds the estimate residual", () => {
+    const layers = stackStorageLayers({
+      artifacts: [
+        artifact({ id: "uthmani", sizeBytes: 2 * MB }),
+        artifact({ id: "en.sahih", sizeBytes: 1 * MB }),
+      ],
+      packBytes: MB,
+      pagesBytes: MB,
+      dataBytes: 0.5 * MB,
+      usage: 6.5 * MB,
+    });
+    const byId = new Map(layers.map((l) => [l.id, l.bytes]));
+    expect(byId.get("arabic")).toBe(2 * MB);
+    expect(byId.get("translations")).toBe(1 * MB);
+    expect(byId.get("pack")).toBe(MB);
+    expect(byId.get("other")).toBe(1 * MB);
+  });
+
+  it("floors the residual at 0 and hides it when the estimate under-reports", () => {
+    const layers = stackStorageLayers({
+      artifacts: [artifact({ id: "en.sahih", sizeBytes: 5 * MB })],
+      packBytes: MB,
+      pagesBytes: MB,
+      dataBytes: MB,
+      usage: 2 * MB,
+    });
+    expect(layers.find((l) => l.id === "other")).toBeUndefined();
+    expect(layerTotal(layers)).toBe(8 * MB);
+  });
+
+  it("omits pages/data layers when SW stats are unavailable", () => {
+    const layers = stackStorageLayers({
+      artifacts: [],
+      packBytes: 0,
+      pagesBytes: null,
+      dataBytes: null,
+      usage: null,
+    });
+    expect(layers.map((l) => l.id)).toEqual(["arabic", "translations", "pack"]);
+  });
+});
+
+describe("threshold + segment helpers", () => {
+  it("warns when translations pass 80% of the 256MB cap", () => {
+    const hot = stackStorageLayers({
+      artifacts: [artifact({ id: "en.sahih", sizeBytes: 0.81 * TRANSLATION_CAP_BYTES })],
+      packBytes: 0,
+      pagesBytes: null,
+      dataBytes: null,
+      usage: null,
+    });
+    const cold = stackStorageLayers({
+      artifacts: [artifact({ id: "en.sahih", sizeBytes: 0.79 * TRANSLATION_CAP_BYTES })],
+      packBytes: 0,
+      pagesBytes: null,
+      dataBytes: null,
+      usage: null,
+    });
+    expect(isTranslationCapHigh(hot)).toBe(true);
+    expect(isTranslationCapHigh(cold)).toBe(false);
+  });
+
+  it("keeps the store cap pinned to the worker retention cap", () => {
+    expect(TRANSLATION_CAP_BYTES).toBe(CAP_BYTES);
+  });
+
+  it("warns when usage passes 90% of quota", () => {
+    expect(isQuotaHigh(9.1 * MB, 10 * MB)).toBe(true);
+    expect(isQuotaHigh(9 * MB, 10 * MB)).toBe(false);
+    expect(isQuotaHigh(null, 10 * MB)).toBe(false);
+    expect(isQuotaHigh(9.5 * MB, 0)).toBe(false);
+  });
+
+  it("bumps tiny layers to the min sliver and rescales when the slivers overflow the track", () => {
+    const widths = layoutUsageSegments(400, [{ bytes: 1 }, { bytes: 0 }, { bytes: 2 }], 400);
+    expect(widths[0]).toBeGreaterThanOrEqual(3);
+    expect(widths[1]).toBe(0);
+    const total = widths.reduce((a, b) => a + b, 0);
+    expect(total).toBeLessThanOrEqual(400);
+
+    const many = layoutUsageSegments(
+      400,
+      Array.from({ length: 200 }, () => ({ bytes: 1 })),
+      400,
+    );
+    const manyTotal = many.reduce((a, b) => a + b, 0);
+    expect(manyTotal).toBeLessThanOrEqual(400 + 1e-6);
+    expect(many.every((w) => w > 0)).toBe(true);
+  });
+});

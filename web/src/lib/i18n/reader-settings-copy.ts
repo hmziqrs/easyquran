@@ -1,3 +1,4 @@
+import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import type { UiLocale } from "$lib/i18n/locales";
 import {
   tweaks_accent_option,
@@ -44,9 +45,20 @@ import {
   reader_surface_slate_note,
   reader_theme_derived_note,
 } from "$lib/i18n/m/reader-settings";
+import {
+  settings_storage_pack_busy,
+  settings_storage_pack_heading,
+  settings_storage_pack_retry,
+  settings_storage_pack_routes,
+  settings_storage_pack_saved,
+  settings_storage_pack_toggle_off,
+  settings_storage_pack_toggle_on,
+  settings_storage_pack_usage,
+} from "$lib/i18n/m/settings";
 import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
+  readonly offlinePack: OfflinePackCopy;
   readonly background: string;
   readonly pop: string;
   readonly accentColour: (label: string) => string;
@@ -93,6 +105,17 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
     on: noArgs(reader_on),
     off: noArgs(reader_off),
     performanceReload: noArgs(reader_performance_reload),
+    offlinePack: {
+      heading: noArgs(settings_storage_pack_heading),
+      routes: (entries: number, size: string) =>
+        settings_storage_pack_routes({ entries, size }, options),
+      saved: (when: string) => settings_storage_pack_saved({ when }, options),
+      usage: (used: string, quota: string) => settings_storage_pack_usage({ used, quota }, options),
+      toggleOn: noArgs(settings_storage_pack_toggle_on),
+      toggleOff: noArgs(settings_storage_pack_toggle_off),
+      busy: noArgs(settings_storage_pack_busy),
+      retry: noArgs(settings_storage_pack_retry),
+    },
     background: noArgs(reader_background),
     pop: noArgs(reader_pop),
     themeNames: {
