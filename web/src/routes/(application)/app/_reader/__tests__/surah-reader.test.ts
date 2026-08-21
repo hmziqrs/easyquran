@@ -55,9 +55,7 @@ vi.mock("$app/state", () => ({ page: nav }));
 
 vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
 vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
-vi.mock("$lib/quran/catalogue-store.svelte", () => ({
-  catalogueStore: { translations: [] },
-}));
+vi.mock("$lib/quran/catalogue", () => ({ TRANSLATION_CATALOGUE: [] }));
 vi.mock("$lib/stores/quran.svelte", () => ({ quran: quranStore }));
 vi.mock("$lib/stores/reader.svelte", () => ({
   reader: readerStub,

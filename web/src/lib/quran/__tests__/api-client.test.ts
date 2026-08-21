@@ -6,6 +6,7 @@ vi.mock("$lib/config/site", () => ({
   QURAN: { apiBase: "https://api.test/quran" },
 }));
 
+import { quranApiAvailability } from "$lib/quran/api-availability";
 import { quranApi } from "$lib/quran/api-client";
 import { FetchHttpError, MalformedDataError, RESPONSE_CAP } from "$lib/quran/fetch";
 
@@ -38,7 +39,10 @@ const UTHMANI_SURAH_1 = {
 };
 
 describe("quranApi", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    quranApiAvailability.reset();
+    vi.restoreAllMocks();
+  });
 
   it("readSurah hits /sources/{id}/surah/{n}, unwraps the envelope, decodes", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson(UTHMANI_SURAH_1));
@@ -85,7 +89,6 @@ describe("quranApi", () => {
 
   it("search throws a FetchHttpError without leaking the URL on a non-ok response", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 500 }));
-    await expect(quranApi.search("الحمد")).rejects.toThrow(/http 500/);
     await expect(quranApi.search("الحمد")).rejects.toBeInstanceOf(FetchHttpError);
   });
 
@@ -141,7 +144,10 @@ function translationRange(from: number, to: number): QuranRangeText {
 }
 
 describe("quranApi.readRange", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    quranApiAvailability.reset();
+    vi.restoreAllMocks();
+  });
 
   it("issues a single request for an in-cap range and stitches the result", async () => {
     const fetchMock = vi

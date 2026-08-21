@@ -5,7 +5,8 @@ import type { Ayah } from "$lib/data/quran-types";
 import { RESPONSE_CAP } from "$lib/quran/fetch";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { clearTranslationRangeCache } from "$lib/server/translation-range-cache";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/private", () => ({
   env: { INTERNAL_QURAN_API_BASE: "https://api.test", INTERNAL_QURAN_API_TOKEN: undefined },
@@ -16,6 +17,10 @@ vi.mock("$env/dynamic/public", () => ({
 }));
 
 const SOURCE_ID = "en.sahih";
+
+beforeEach(() => {
+  clearTranslationRangeCache();
+});
 
 function translationNorm(surah: number) {
   return {

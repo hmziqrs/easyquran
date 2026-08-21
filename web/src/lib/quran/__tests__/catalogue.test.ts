@@ -1,4 +1,9 @@
-import type { SourceCatalogueEntry } from "$lib/data/quran-types";
+import { TRANSLATION_BY_ARTIFACT_PATH, TRANSLATION_BY_ID } from "$lib/data/translations";
+import {
+  peekTranslationName,
+  TRANSLATION_CATALOGUE,
+  TRANSLATION_CATALOGUE_BY_ID,
+} from "$lib/quran/catalogue";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({
@@ -9,64 +14,38 @@ vi.mock("$lib/config/site", () => ({
   },
 }));
 
-import {
-  bakedTranslationCatalogue,
-  findCatalogueEntry,
-  translationCatalogue,
-} from "$lib/quran/catalogue";
-
 describe("baked translation catalogue", () => {
   it("contains complete same-origin metadata without fetching", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const entries = bakedTranslationCatalogue();
-    const sqNahi = findCatalogueEntry(entries, "sq.nahi");
+    const sqNahi = TRANSLATION_CATALOGUE_BY_ID.get("sq.nahi");
 
-    expect(entries.length).toBeGreaterThan(100);
+    expect(TRANSLATION_CATALOGUE.length).toBeGreaterThan(100);
     expect(sqNahi).toEqual({
-      kind: "translation",
-      entry: {
-        id: "sq.nahi",
-        language: "Albanian",
-        languageCode: "sq",
-        direction: "ltr",
-        name: "Efendi Nahi",
-        translator: "Hasan Efendi Nahi",
-        sizeBytes: 1175552,
-        downloadUrl: "/_quran/tanzil/translations/sqlite/sq.nahi.sqlite",
-      },
+      id: "sq.nahi",
+      language: "Albanian",
+      languageCode: "sq",
+      direction: "ltr",
+      name: "Efendi Nahi",
+      translator: "Hasan Efendi Nahi",
+      sizeBytes: 1175552,
+      downloadUrl: "/_quran/tanzil/translations/sqlite/sq.nahi.sqlite",
     });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("returns undefined for an unregistered source", () => {
-    expect(findCatalogueEntry(bakedTranslationCatalogue(), "xx.missing")).toBeUndefined();
+  it("provides stable indexed metadata and labels", () => {
+    const byId = TRANSLATION_BY_ID.get("sq.nahi");
+    const byPath = TRANSLATION_BY_ARTIFACT_PATH.get(
+      "tanzil/translations/sqlite/sq.nahi.sqlite",
+    );
+
+    expect(byId).toBe(byPath);
+    expect(peekTranslationName("sq.nahi")).toBe("Efendi Nahi");
+    expect(peekTranslationName("xx.missing")).toBeNull();
   });
-});
 
-describe("translationCatalogue", () => {
-  it("extracts only translation entries from a mixed list", () => {
-    const entries: SourceCatalogueEntry[] = [
-      {
-        kind: "arabic",
-        spec: { id: "uthmani", sizeBytes: 1, downloadUrl: "/_quran/uthmani.sqlite" },
-      },
-      {
-        kind: "translation",
-        entry: {
-          id: "x",
-          language: "X",
-          languageCode: "x",
-          direction: "ltr",
-          name: "X",
-          translator: null,
-          sizeBytes: 1,
-          downloadUrl: "/_quran/x.sqlite",
-        },
-      },
-    ];
-
-    const translations = translationCatalogue(entries);
-    expect(translations).toHaveLength(1);
-    expect(translations[0]!.id).toBe("x");
+  it("exports frozen catalogue records", () => {
+    expect(Object.isFrozen(TRANSLATION_CATALOGUE)).toBe(true);
+    expect(Object.isFrozen(TRANSLATION_CATALOGUE[0])).toBe(true);
   });
 });

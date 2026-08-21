@@ -1,11 +1,11 @@
 import type {
   CanonicalQuranCoordinates,
   DownloadProgress,
+  ArtifactSpec,
   QuranReaderSource,
-  SourceCatalogueEntry,
+  TranslationCatalogueEntry,
 } from "$lib/data/quran-types";
 
-import type { ResolvedManifest } from "./manifest";
 import type { SearchOpts } from "./search/types";
 
 export type WorkerStatus = "init" | "downloading" | "ready" | "error" | "translation-fetch-failed";
@@ -14,9 +14,9 @@ export type WorkerRequest =
   | {
       id: number;
       type: "init";
-      manifest: ResolvedManifest;
+      artifacts: readonly ArtifactSpec[];
       coordinates: CanonicalQuranCoordinates;
-      catalogue?: SourceCatalogueEntry[];
+      catalogue?: readonly TranslationCatalogueEntry[];
     }
   | { id: number; type: "readSurah"; num: number; source?: QuranReaderSource }
   | { id: number; type: "readRange"; from: number; to: number; source?: QuranReaderSource }

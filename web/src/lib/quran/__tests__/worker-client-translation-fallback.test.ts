@@ -1,6 +1,10 @@
-import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
+import {
+  OpenerKind,
+  OpenerPackaging,
+  QuranScript,
+  type ArtifactSpec,
+} from "$lib/data/quran-types";
 import { ReadChainError } from "$lib/quran/fetch";
-import type { ResolvedManifest } from "$lib/quran/manifest";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -77,9 +81,9 @@ class FakeWorker {
   }
 }
 
-const MANIFEST: ResolvedManifest = {
-  scripts: [{ id: "uthmani", sizeBytes: 1, downloadUrl: "https://x/uthmani" }],
-};
+const ARTIFACTS: readonly ArtifactSpec[] = [
+  { id: "uthmani", sizeBytes: 1, downloadUrl: "https://x/uthmani" },
+];
 
 const TRANSLATION_NORMALIZATION = {
   surah: 1,
@@ -106,7 +110,7 @@ const DECODED_RANGE = {
 } as const;
 
 async function startReady(): Promise<FakeWorker> {
-  const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+  const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
   const fake = FakeWorker.last!;
   const init = fake.posted.find(
     (m): m is Extract<WorkerRequest, { type: "init" }> => m.type === "init",

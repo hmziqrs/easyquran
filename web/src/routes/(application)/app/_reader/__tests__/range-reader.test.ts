@@ -146,17 +146,16 @@ describe("range reader coordinator — post-paint swap decision logic", () => {
     void serverNorm;
   });
 
-  it("Arabic total failure keeps the matching server snapshot (no blank, no restore)", () => {
+  it("complete Arabic route changes keep the matching server snapshot without a client read", () => {
     const c = createRangeReaderCoordinator();
     const a = rangeRouteKey(null, "juz", 30);
     const b = rangeRouteKey(null, "juz", 29);
     expect(c.installServer(a, FULL_A).read).toBe(false);
-    expect(c.installServer(b, FULL_B).read).toBe(true);
+    expect(c.installServer(b, FULL_B).read).toBe(false);
 
-    c.markFailed(b, { kind: "worker" });
     expect(c.isDegraded()).toBe(false);
     expect(c.currentSnapshot()).toBe(FULL_B);
-    expect(c.lastFailure()?.kind).toBe("worker");
+    expect(c.lastFailure()).toBeUndefined();
   });
 
   it("translation total failure keeps the degraded server snapshot with typed degradation", () => {
@@ -209,12 +208,13 @@ describe("range reader coordinator — post-paint swap decision logic", () => {
     expect(c.canRetry()).toBeNull();
   });
 
-  it("a later navigation runs the chain even when the new server paint is complete", () => {
+  it("a later navigation trusts a complete server paint without a duplicate client read", () => {
     const c = createRangeReaderCoordinator();
     const a = rangeRouteKey(null, "juz", 30);
     const b = rangeRouteKey(null, "juz", 29);
     c.installServer(a, FULL_A);
-    expect(c.installServer(b, FULL_B).read).toBe(true);
+    expect(c.installServer(b, FULL_B).read).toBe(false);
+    expect(c.currentSnapshot()).toBe(FULL_B);
   });
 
   it("juz 30 round-trips through the coordinator on arabic and translation paths", () => {
@@ -384,6 +384,36 @@ describe("RangeReader mount — post-paint swap wiring + surah-metadata derivati
     // ("Al-Fatihah"), confirming runClientRead never derived client metadata.
     expect(target.textContent ?? "").toMatch(/Surah 1/);
     expect(target.textContent ?? "").not.toMatch(/Al-Fatihah/);
+  });
+
+  it("does not run a duplicate client read after navigation to another complete snapshot", async () => {
+    const first = rangePage({
+      index: 30,
+      startGlobal: 5700,
+      endGlobal: 5720,
+      ayahs: [ayah(1, 1, 5700)],
+      normalizations: [norm(1, "en.sahih")],
+      surahs: [surah(1)],
+    });
+    const second = rangePage({
+      index: 29,
+      startGlobal: 5500,
+      endGlobal: 5520,
+      ayahs: [ayah(2, 1, 5500)],
+      normalizations: [norm(2, "en.sahih")],
+      surahs: [surah(2)],
+    });
+    let navigate!: (next: RangePageData) => void;
+    mounted = mount(RangeReaderHost, {
+      target,
+      props: { initial: first, expose: (fn: (next: RangePageData) => void) => (navigate = fn) },
+    });
+    await flushMicrotasks(20);
+    navigate(second);
+    await flushMicrotasks(20);
+
+    expect(apiReads.readRange).not.toHaveBeenCalled();
+    expect(target.textContent ?? "").toMatch(/Surah 2/);
   });
 });
 

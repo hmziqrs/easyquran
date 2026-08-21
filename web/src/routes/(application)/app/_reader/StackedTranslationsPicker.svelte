@@ -5,7 +5,7 @@
   import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
   import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
   import { withMoreParam } from "$lib/reader/more-param";
-  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import { translationIdFromSegments } from "$lib/data/quran";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { Icon } from "$lib/components/icon";
@@ -39,7 +39,7 @@
 
   const filtered = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
-    const list = catalogueStore.translations;
+    const list = TRANSLATION_CATALOGUE;
     if (!q) return list;
     return list.filter(
       (t) =>
@@ -60,10 +60,9 @@
   });
 
   const selectedEntries = $derived.by(() => {
-    const all = catalogueStore.translations;
     const out: TranslationCatalogueEntry[] = [];
     for (const id of selectedIds) {
-      const found = all.find((t) => t.id === id);
+      const found = TRANSLATION_CATALOGUE_BY_ID.get(id);
       if (found) out.push(found);
     }
     return out;

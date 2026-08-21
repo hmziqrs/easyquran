@@ -147,14 +147,14 @@ export interface ArtifactSpec extends DownloadableSpec {
 export type TranslationDirection = "rtl" | "ltr";
 
 export interface TranslationCatalogueEntry {
-  id: string;
-  language: string;
-  languageCode: string;
-  direction: TranslationDirection;
-  name: string;
-  translator: string | null;
-  sizeBytes: number;
-  downloadUrl: string;
+  readonly id: string;
+  readonly language: string;
+  readonly languageCode: string;
+  readonly direction: TranslationDirection;
+  readonly name: string;
+  readonly translator: string | null;
+  readonly sizeBytes: number;
+  readonly downloadUrl: string;
 }
 
 export const SourceKind = {
@@ -162,10 +162,6 @@ export const SourceKind = {
   Translation: "translation",
 } as const;
 export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
-
-export type SourceCatalogueEntry =
-  | { kind: "arabic"; spec: ArtifactSpec }
-  | { kind: "translation"; entry: TranslationCatalogueEntry };
 
 export interface DownloadProgress {
   script: QuranReaderSource;
