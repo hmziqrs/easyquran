@@ -265,6 +265,21 @@ describe("storage report fan-in", () => {
     expect(workerMock.listArtifacts.mock.calls.length).toBe(settled);
   });
 
+  it("hydrate re-subscribes the status listener after dispose", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    const report = createStorageReport();
+    report.hydrate();
+    report.dispose();
+    report.hydrate();
+    await new Promise((r) => setTimeout(r, 0));
+    const baseline = workerMock.listArtifacts.mock.calls.length;
+    expect(baseline).toBeGreaterThan(0);
+    emitStatus("ready");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(baseline + 1);
+    report.dispose();
+  });
+
   it("a stale in-flight listing cannot overwrite a newer refresh", async () => {
     let resolveStale!: (list: StorageArtifactInfo[]) => void;
     workerMock.listArtifacts

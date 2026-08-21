@@ -184,7 +184,7 @@ function decodeStorageArtifacts(raw: unknown): StorageArtifactInfo[] | null {
     const obj = item as Record<string, unknown>;
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: id must be a non-empty string
     if (typeof obj.id !== "string" || obj.id === "") return null;
-    if (obj.store !== "opfs" && obj.store !== "idb") return null;
+    if (obj.store !== "opfs" && obj.store !== "idb" && obj.store !== "session") return null;
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: tag must be a string
     if (typeof obj.tag !== "string") return null;
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: sizeBytes must be a finite number

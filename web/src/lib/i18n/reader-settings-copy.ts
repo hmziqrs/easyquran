@@ -12,7 +12,20 @@ import {
   tweaks_reset_to_preset,
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
-import { reader_copied, reader_dark, reader_light, reader_theme } from "$lib/i18n/m/reader";
+import {
+  reader_copied,
+  reader_dark,
+  reader_light,
+  reader_notifications,
+  reader_notifications_blocked,
+  reader_notifications_browser_unsupported,
+  reader_notifications_checking,
+  reader_notifications_off,
+  reader_notifications_off_updates,
+  reader_notifications_on,
+  reader_notifications_unavailable,
+  reader_theme,
+} from "$lib/i18n/m/reader";
 import {
   reader_accent,
   reader_accent_azure,
@@ -54,14 +67,6 @@ import {
   settings_notifications_busy,
   settings_notifications_disable,
   settings_notifications_enable,
-  settings_notifications_heading,
-  settings_notifications_status_blocked,
-  settings_notifications_status_browser_unsupported,
-  settings_notifications_status_checking,
-  settings_notifications_status_off,
-  settings_notifications_status_off_updates,
-  settings_notifications_status_on,
-  settings_notifications_status_unavailable,
   settings_notifications_unsupported,
   settings_storage_pack_bar_preparing,
   settings_storage_pack_bar_ready,
@@ -94,8 +99,10 @@ export type ReaderSettingsCopy = TweaksResolvedCopy & {
 };
 
 /**
- * Reader appearance panel copy. Loaded on first panel open, never eagerly: it is ~34 messages that
- * nothing renders until the user opens the panel. See docs/quran-system.md (Part 2, Message chunking).
+ * Reader appearance panel copy. Loaded on first panel open, never eagerly: it spans the
+ * reader-settings, controls, settings (offline-pack + notification toggle copy) and reader
+ * namespaces, and nothing renders until the user opens the panel.
+ * See docs/quran-system.md (Part 2, Message chunking).
  */
 export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
   const options = { locale } as const;
@@ -154,15 +161,15 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       barReady: noArgs(settings_storage_pack_bar_ready),
     },
     notifications: {
-      heading: noArgs(settings_notifications_heading),
+      heading: noArgs(reader_notifications),
       status: notificationsStatus({
-        unavailable: noArgs(settings_notifications_status_unavailable),
-        checking: noArgs(settings_notifications_status_checking),
-        browserUnsupported: noArgs(settings_notifications_status_browser_unsupported),
-        blocked: noArgs(settings_notifications_status_blocked),
-        on: noArgs(settings_notifications_status_on),
-        offUpdates: noArgs(settings_notifications_status_off_updates),
-        off: noArgs(settings_notifications_status_off),
+        unavailable: noArgs(reader_notifications_unavailable),
+        checking: noArgs(reader_notifications_checking),
+        browserUnsupported: noArgs(reader_notifications_browser_unsupported),
+        blocked: noArgs(reader_notifications_blocked),
+        on: noArgs(reader_notifications_on),
+        offUpdates: noArgs(reader_notifications_off_updates),
+        off: noArgs(reader_notifications_off),
       }),
       toggleBusy: noArgs(settings_notifications_busy),
       toggleDisable: noArgs(settings_notifications_disable),

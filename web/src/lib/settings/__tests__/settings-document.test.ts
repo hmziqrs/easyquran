@@ -6,6 +6,11 @@ vi.mock("$app/environment", () => ({
 }));
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
+const presentation = vi.hoisted(() => ({ apply: vi.fn() }));
+vi.mock("$lib/stores/reader-presentation", () => ({
+  applyReaderPresentation: presentation.apply,
+}));
+
 import { DEFAULTS } from "$lib/config/site";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
 import { createConsent } from "$lib/stores/consent.svelte";
@@ -232,6 +237,22 @@ describe("toSettingsDoc / applySettingsDoc", () => {
     expect(store.arabicSizePx).toBe("36px");
     expect(store.translationSizePx).toBe("19px");
     expect(store.calls()).toEqual(["bigger", "grow", "grow"]);
+  });
+
+  it("applies reader presentation from the settled reader state after fanning out", () => {
+    presentation.apply.mockClear();
+    const store = fakeReader();
+    applySettingsDoc(
+      {
+        v: SETTINGS_DOC_VERSION,
+        appearance: { ...DEFAULTS, instantResume: false, custom: {} },
+        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", translationSize: 19 },
+        privacy: { analytics: true, performance: true, advertising: false },
+      },
+      { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
+    );
+    expect(presentation.apply).toHaveBeenCalledTimes(1);
+    expect(presentation.apply).toHaveBeenCalledWith("reading", 36, "noto-naskh-arabic", 19, "sans");
   });
 
   it("terminates bounded when a stepped font size cannot land exactly on target", () => {

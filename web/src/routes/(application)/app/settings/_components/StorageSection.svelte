@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
   import { tick } from "svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { Card, OfflinePack } from "$lib/components";
@@ -57,10 +56,8 @@
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- capability probe mirroring hasOpfs(); `navigator` is absent in some runtimes and getDirectory is an optional member, so typeof is the honest check
     return typeof navigator !== "undefined" && !!navigator.storage?.getDirectory;
   }
-  const opfsAbsent = $derived(browser && !opfsSupported());
-  const hasController = $derived(
-    browser && !!navigator.serviceWorker?.controller,
-  );
+  let opfsAbsent = $state(false);
+  let hasController = $state(false);
   const usedLabel = $derived(
     usage !== null && quota !== null
       ? copy.usedOf(formatBytes(usage), formatBytes(quota))
@@ -82,7 +79,19 @@
   let persistBusy = $state(false);
 
   $effect(() => {
+    opfsAbsent = !opfsSupported();
+    const sw = navigator.serviceWorker;
+    const sync = () => {
+      hasController = !!sw?.controller;
+    };
+    sync();
+    sw?.addEventListener("controllerchange", sync);
+    return () => sw?.removeEventListener("controllerchange", sync);
+  });
+
+  $effect(() => {
     report.hydrate();
+    return () => report.dispose();
   });
 
   $effect(() => {
@@ -151,7 +160,8 @@
     const result = await report.clearAllTranslations([...inUseIds]);
     busyAll = false;
     confirmingAll = false;
-    actionNotice = copy.freed(formatBytes(result.freedBytes));
+    actionNotice =
+      result.freedBytes > 0 ? copy.freed(formatBytes(result.freedBytes)) : copy.empty;
     if (result.failures > 0) actionNotice += ` · ${copy.busyError}`;
     await tick();
     downloadsHeading?.focus();
@@ -329,8 +339,8 @@
       </div>
     </section>
 
-    <section class="mt-5">
-      <OfflinePack copy={copy.offlinePack} />
+    <section class="mt-5" aria-label={copy.offlinePack.heading}>
+      <OfflinePack copy={copy.offlinePack} headingTag="h3" />
       <p class="mt-1.5 text-[11px] leading-snug text-fg-4">{copy.offlinePackNote}</p>
     </section>
 

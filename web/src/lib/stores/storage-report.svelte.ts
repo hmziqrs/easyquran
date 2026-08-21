@@ -140,6 +140,7 @@ class StorageReportStore {
   dispose(): void {
     this.#statusDetach?.();
     this.#statusDetach = null;
+    this.#hydrated = false;
   }
 
   async refresh(): Promise<void> {

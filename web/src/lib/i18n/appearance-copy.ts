@@ -43,44 +43,13 @@ import {
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
 import { theme_dark, theme_light } from "$lib/i18n/m/theme";
-import {
-  settings_notifications_blocked,
-  settings_notifications_busy,
-  settings_notifications_disable,
-  settings_notifications_enable,
-  settings_notifications_heading,
-  settings_notifications_status_blocked,
-  settings_notifications_status_browser_unsupported,
-  settings_notifications_status_checking,
-  settings_notifications_status_off,
-  settings_notifications_status_off_updates,
-  settings_notifications_status_on,
-  settings_notifications_status_unavailable,
-  settings_notifications_unsupported,
-  settings_storage_pack_bar_preparing,
-  settings_storage_pack_bar_ready,
-  settings_storage_pack_busy,
-  settings_storage_pack_heading,
-  settings_storage_pack_retry,
-  settings_storage_pack_routes,
-  settings_storage_pack_saved,
-  settings_storage_pack_status_active,
-  settings_storage_pack_status_downloading,
-  settings_storage_pack_status_error,
-  settings_storage_pack_status_off,
-  settings_storage_pack_status_on,
-  settings_storage_pack_status_staging,
-  settings_storage_pack_toggle_off,
-  settings_storage_pack_toggle_on,
-  settings_storage_pack_usage,
-} from "$lib/i18n/m/settings";
-import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
-import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
 import type { MarketingLocale, TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 /**
  * Marketing appearance panel copy. Loaded lazily when the panel opens — it is the largest single
- * block of chrome copy and nothing renders it until the user asks for it.
+ * block of chrome copy and nothing renders it until the user asks for it. offlinePack and
+ * notifications stay undefined: the marketing panel never renders them, and resolving them would
+ * pull the whole settings namespace into a marketing-page download.
  * See docs/quran-system.md (Part 2, Message chunking).
  */
 export function resolveAppearanceCopy(locale: MarketingLocale): TweaksResolvedCopy {
@@ -114,44 +83,6 @@ export function resolveAppearanceCopy(locale: MarketingLocale): TweaksResolvedCo
     on: tweaks_on(undefined, { locale }),
     off: tweaks_off(undefined, { locale }),
     performanceReload: tweaks_performance_reload(undefined, { locale }),
-    offlinePack: {
-      heading: settings_storage_pack_heading(undefined, { locale }),
-      status: offlinePackStatus({
-        active: (entries) => settings_storage_pack_status_active({ entries }, { locale }),
-        on: settings_storage_pack_status_on(undefined, { locale }),
-        downloading: settings_storage_pack_status_downloading(undefined, { locale }),
-        staging: settings_storage_pack_status_staging(undefined, { locale }),
-        error: settings_storage_pack_status_error(undefined, { locale }),
-        off: settings_storage_pack_status_off(undefined, { locale }),
-      }),
-      routes: (entries, size) => settings_storage_pack_routes({ entries, size }, { locale }),
-      saved: (when) =>
-        settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, { locale }),
-      usage: (used, quota) => settings_storage_pack_usage({ used, quota }, { locale }),
-      toggleOn: settings_storage_pack_toggle_on(undefined, { locale }),
-      toggleOff: settings_storage_pack_toggle_off(undefined, { locale }),
-      busy: settings_storage_pack_busy(undefined, { locale }),
-      retry: settings_storage_pack_retry(undefined, { locale }),
-      barPreparing: settings_storage_pack_bar_preparing(undefined, { locale }),
-      barReady: settings_storage_pack_bar_ready(undefined, { locale }),
-    },
-    notifications: {
-      heading: settings_notifications_heading(undefined, { locale }),
-      status: notificationsStatus({
-        unavailable: settings_notifications_status_unavailable(undefined, { locale }),
-        checking: settings_notifications_status_checking(undefined, { locale }),
-        browserUnsupported: settings_notifications_status_browser_unsupported(undefined, { locale }),
-        blocked: settings_notifications_status_blocked(undefined, { locale }),
-        on: settings_notifications_status_on(undefined, { locale }),
-        offUpdates: settings_notifications_status_off_updates(undefined, { locale }),
-        off: settings_notifications_status_off(undefined, { locale }),
-      }),
-      toggleBusy: settings_notifications_busy(undefined, { locale }),
-      toggleDisable: settings_notifications_disable(undefined, { locale }),
-      toggleBlocked: settings_notifications_blocked(undefined, { locale }),
-      toggleUnsupported: settings_notifications_unsupported(undefined, { locale }),
-      toggleEnable: settings_notifications_enable(undefined, { locale }),
-    },
     themeNames: {
       dark: theme_dark(undefined, { locale }),
       light: theme_light(undefined, { locale }),

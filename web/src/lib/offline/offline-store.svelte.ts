@@ -76,6 +76,7 @@ class OfflineStore {
   #busy = $state(false);
   #hydrated = false;
   #reconcilePending = false;
+  #generation = 0;
 
   get status(): OfflineStatus {
     return this.#status;
@@ -128,8 +129,10 @@ class OfflineStore {
   }
 
   async #reconcile(): Promise<void> {
+    const generation = this.#generation;
     const active = await getActivePack();
     if (!active) {
+      if (generation !== this.#generation) return;
       if (this.#activePack) {
         this.#activePack = null;
         this.#mirror();
@@ -156,6 +159,7 @@ class OfflineStore {
       }
       return;
     }
+    if (generation !== this.#generation) return;
     if (state === "incomplete") {
       await clearActivePack().catch(() => {});
       await caches.delete(cacheName).catch(() => {});
@@ -259,6 +263,7 @@ class OfflineStore {
       this.#status = previousPackId ? "active" : "error";
     } finally {
       this.#busy = false;
+      this.#generation += 1;
     }
   }
 
@@ -304,6 +309,7 @@ class OfflineStore {
       this.#status = "error";
     } finally {
       this.#busy = false;
+      this.#generation += 1;
     }
   }
 }

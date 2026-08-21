@@ -28,6 +28,7 @@ import {
   settings_reading_font_serif,
   settings_reading_intro,
   settings_reading_preview,
+  settings_reading_sample,
   settings_reading_translation_font,
   settings_reading_translation_size,
   settings_section_account,
@@ -214,6 +215,7 @@ export interface SettingsCopy {
     readonly arabicSize: string;
     readonly translationSize: string;
     readonly preview: string;
+    readonly sample: string;
     readonly mode: string;
     readonly modeNames: {
       readonly verse: string;
@@ -259,8 +261,8 @@ export interface SettingsCopy {
 
 /**
  * Settings page copy. Loaded only by the settings route, never eagerly: the `settings` namespace
- * is a lazy chunk, and the appearance section reuses the reader-settings resolver so its ~34
- * messages are not duplicated under new keys. See docs/quran-system.md (Part 2, Message chunking).
+ * is a lazy chunk, and the appearance section reuses the reader-settings resolver so its messages
+ * are not duplicated under new keys. See docs/quran-system.md (Part 2, Message chunking).
  */
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
 export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): SettingsCopy {
@@ -380,6 +382,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       arabicSize: noArgs(reader_arabic_text_size),
       translationSize: noArgs(settings_reading_translation_size),
       preview: noArgs(settings_reading_preview),
+      sample: noArgs(settings_reading_sample),
       mode: noArgs(reader_mode),
       modeNames: {
         verse: noArgs(reader_ayah_by_ayah),

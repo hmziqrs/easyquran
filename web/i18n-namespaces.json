@@ -111,7 +111,7 @@
     },
     {
       "id": "settings",
-      "description": "Settings page: storage, reading, privacy and account sections. Lazy: downloaded when the settings route loads or the reader appearance panel opens (offline-pack copy).",
+      "description": "Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.",
       "prefixes": ["settings"]
     },
     {

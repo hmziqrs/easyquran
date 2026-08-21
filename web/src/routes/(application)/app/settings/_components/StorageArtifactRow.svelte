@@ -50,9 +50,16 @@
   let removeButton = $state<HTMLButtonElement>();
   let confirmButton = $state<HTMLButtonElement>();
 
-  const storeLabel = $derived(
-    artifact.store === "opfs" ? copy.stores.opfs : copy.stores.idb,
-  );
+  const storeLabel = $derived(storeLabelFor(artifact.store, copy.stores));
+
+  function storeLabelFor(
+    store: StorageArtifactInfo["store"],
+    labels: SettingsCopy["storage"]["stores"],
+  ): string {
+    if (store === "opfs") return labels.opfs;
+    if (store === "session") return labels.memory;
+    return labels.idb;
+  }
   const lastUsedLabel = $derived(
     artifact.lastUsed === null
       ? copy.neverUsed
@@ -112,7 +119,9 @@
       {#if language}
         <span class={badge}>{language}</span>
       {/if}
-      <span class={badge}>{storeLabel}</span>
+      <span class={cn(badge, artifact.store === "session" && "border-accent-line text-accent")}>
+        {storeLabel}
+      </span>
       {#if inUse}
         <span
           class="rounded border border-accent-line bg-accent-soft px-1.5 py-0.5 text-[10px] leading-none text-fg-2"

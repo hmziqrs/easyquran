@@ -321,6 +321,7 @@ describe("quranWorker storage admin wire contract", () => {
     const assertion = expect(p).resolves.toEqual([
       { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: 1234 },
       { id: "fr.hamid", store: "idb", tag: "fr.hamid", sizeBytes: 4096, lastUsed: null },
+      { id: "ur.jaw", store: "session", tag: "ur.jaw", sizeBytes: 1024, lastUsed: null },
     ]);
     fake.emit("message", {
       id: req.id,
@@ -328,6 +329,7 @@ describe("quranWorker storage admin wire contract", () => {
       result: [
         { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: 1234 },
         { id: "fr.hamid", store: "idb", tag: "fr.hamid", sizeBytes: 4096, lastUsed: null },
+        { id: "ur.jaw", store: "session", tag: "ur.jaw", sizeBytes: 1024, lastUsed: null },
       ],
     });
     await assertion;

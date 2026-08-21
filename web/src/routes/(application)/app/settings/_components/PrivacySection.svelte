@@ -7,6 +7,7 @@
   import { createLogoutFlow } from "$lib/auth/flows.svelte";
   import { installPurgeHook } from "$lib/auth/purge-hook";
   import { isConfigured } from "$lib/firebase";
+  import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
   import { update } from "$lib/offline/update.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
@@ -64,17 +65,14 @@
     await logout.run();
   }
 
-  function notificationsStatusLabel(): string {
-    if (!isConfigured) return copy.notificationsStatus.unavailable;
-    if (notifications.supported === null) return copy.notificationsStatus.checking;
-    if (!notifications.supported) return copy.notificationsStatus.browserUnsupported;
-    if (notifications.permission === "denied") return copy.notificationsStatus.blocked;
-    if (notifications.subscribed) return copy.notificationsStatus.on;
-    if (notifications.permission === "default") return copy.notificationsStatus.offUpdates;
-    return copy.notificationsStatus.off;
-  }
-
-  const notificationsLabel = $derived(notificationsStatusLabel());
+  const notificationsLabel = $derived(
+    notificationsStatus(copy.notificationsStatus)({
+      configured: isConfigured,
+      supported: notifications.supported,
+      permission: notifications.permission,
+      subscribed: notifications.subscribed,
+    }),
+  );
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">

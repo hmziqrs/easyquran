@@ -163,7 +163,7 @@
       <div class="mb-1.5 text-xs text-fg-3">{copy.preview}</div>
       <div class="overflow-x-auto rounded-lg border border-line bg-bg-2 px-4 py-3">
         <p class="preview-arabic" dir="rtl" lang="ar">{SAMPLE_ARABIC}</p>
-        <p class="preview-translation" dir="auto">{copy.intro}</p>
+        <p class="preview-translation" dir="auto">{copy.sample}</p>
       </div>
     </div>
   </div>

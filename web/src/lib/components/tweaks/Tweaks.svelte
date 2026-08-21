@@ -7,6 +7,7 @@
   import type { CustomSeeds } from "$lib/theme/derive";
   import { Notifications } from "$lib/components/notifications";
   import { OfflinePack, OfflinePackBar } from "$lib/components/status";
+  import { offline } from "$lib/offline/offline-store.svelte";
   import { cn } from "$lib/utils";
   import { uiDirection, type UiLocale } from "$lib/i18n/locales";
   import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
@@ -133,6 +134,15 @@
   $effect(() => {
     if (open && firstControl) {
       firstControl.focus();
+    }
+  });
+
+  $effect(() => {
+    if (
+      showReaderTools &&
+      (offline.status === "downloading" || offline.status === "staging")
+    ) {
+      ensureCopy();
     }
   });
 
@@ -289,7 +299,6 @@
           <hr class="border-line" />
           {#if copy.offlinePack}
             <OfflinePack copy={copy.offlinePack} />
-            <OfflinePackBar copy={copy.offlinePack} />
           {/if}
         {/if}
 
@@ -327,6 +336,10 @@
       </div>
       </div>
     </div>
+  {/if}
+
+  {#if showReaderTools && copy?.offlinePack}
+    <OfflinePackBar copy={copy.offlinePack} />
   {/if}
 
   <button

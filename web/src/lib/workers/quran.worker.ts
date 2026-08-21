@@ -45,6 +45,7 @@ import {
 import {
   deleteCachedArtifact,
   ensureArtifact,
+  forgetSessionArtifact,
   listCachedArtifacts,
   QURAN_ROW_COUNT,
   sweepAbandonedTemps,
@@ -306,6 +307,7 @@ function evictTranslationDbs(): void {
     if (oldest === undefined) break;
     const database = translationDbs.get(oldest);
     translationDbs.delete(oldest);
+    forgetSessionArtifact(oldest);
     if (database) {
       try {
         database.close();
@@ -317,6 +319,7 @@ function evictTranslationDbs(): void {
 function forgetTranslations(ids: readonly string[]): void {
   for (const id of ids) {
     cachedTranslationIds.delete(id);
+    forgetSessionArtifact(id);
     const database = translationDbs.get(id);
     if (database) {
       translationDbs.delete(id);
@@ -446,7 +449,7 @@ function toStorageArtifactInfo(
   const used = lastUsed.get(artifact.id);
   return {
     id: artifact.id,
-    store: artifact.store === "idb" ? "idb" : "opfs",
+    store: artifact.store,
     tag: artifact.tag,
     sizeBytes: artifact.sizeBytes,
     lastUsed: used !== undefined ? used : null,

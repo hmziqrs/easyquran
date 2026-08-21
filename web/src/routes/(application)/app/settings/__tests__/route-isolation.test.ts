@@ -127,6 +127,8 @@ describe("settings storage delete-flow guards", () => {
   it("row confirm keeps the Escape guard and a single live announcer", () => {
     const row = findSource("StorageArtifactRow.svelte");
     expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();
+    expect(row![1]).toContain("onkeydown={onKeydown}");
+    expect(row![1]).toContain('event.key === "Escape"');
     expect(row![1]).toContain("event.stopPropagation()");
     expect(row![1]).toContain('aria-live="polite"');
     expect(row![1].match(/aria-live="polite"/gu)?.length ?? 0).toBe(1);
@@ -135,8 +137,8 @@ describe("settings storage delete-flow guards", () => {
   it("delete outcomes map to distinct copy keys", () => {
     const row = findSource("StorageArtifactRow.svelte");
     expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();
-    expect(row![1]).toContain("copy.arabicError");
-    expect(row![1]).toContain("copy.busyError");
+    expect(row![1]).toContain('if (outcome === "arabic") errorText = copy.arabicError');
+    expect(row![1]).toContain('else if (outcome === "busy") errorText = copy.busyError');
     expect(row![1]).toContain("copy.error");
   });
 
@@ -152,5 +154,25 @@ describe("settings storage delete-flow guards", () => {
     expect(section, "StorageSection.svelte should exist").toBeDefined();
     expect(section![1]).toContain("readerSource.sourceId");
     expect(section![1]).toContain("stackedTranslations.ids");
+    expect(section![1]).toContain("inUse={inUseIds.has(artifact.id)}");
+    const row = findSource("StorageArtifactRow.svelte");
+    expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();
+    expect(row![1]).toContain("disabled={inUse}");
+  });
+});
+
+describe("settings URL param suppression", () => {
+  it("the app layout keeps reader ?mode/?more replaceState off /app/settings", () => {
+    const layout = [...sources].find(([path]) =>
+      path.endsWith("(application)/app/+layout.svelte"),
+    );
+    expect(layout, "app/+layout.svelte should exist").toBeDefined();
+    const src = layout![1];
+    expect(src).toContain('endsWith("/app/settings")');
+    expect(
+      src.match(/if \(onSettingsRoute\) return;/gu)?.length ?? 0,
+      "both the ?mode and ?more effects must keep their settings-route early return",
+    ).toBe(2);
+    expect(src).toContain('onSettingsRoute ? "/app" : canonicalReaderHref');
   });
 });

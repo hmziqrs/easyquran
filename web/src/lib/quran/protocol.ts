@@ -12,7 +12,7 @@ export type WorkerStatus = "init" | "downloading" | "ready" | "error" | "transla
 
 export interface StorageArtifactInfo {
   readonly id: string;
-  readonly store: "opfs" | "idb";
+  readonly store: "opfs" | "idb" | "session";
   readonly tag: string;
   readonly sizeBytes: number;
   readonly lastUsed: number | null;
