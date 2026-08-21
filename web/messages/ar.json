@@ -262,7 +262,7 @@
   "settings_storage_persist_granted": "ممنوح — التنزيلات محمية من التنظيف التلقائي.",
   "settings_storage_persist_denied": "غير ممنوح — قد يزيل المتصفح التنزيلات عند ضغط التخزين.",
   "settings_storage_persist_request": "اطلب مرة أخرى",
-  "settings_storage_persist_declined": "رفض المتصفح الطلب. يمنح كروم هذا الإذن عادةً بعد تثبيت الموقع أو إضافته إلى المفضلة.",
+  "settings_storage_persist_declined": "رفض المتصفح الطلب. يمنح كروم هذا الإذن عادةً بعد تثبيت الموقع أو إضافته إلى المفضلة. تنزيلاتك تعمل بشكل طبيعي في كلتا الحالتين.",
   "settings_storage_persist_unavailable": "حالة التخزين الدائم غير متاحة في هذا المتصفح.",
   "settings_storage_empty": "لا توجد ترجمات منزّلة.",
   "settings_storage_opfs_absent": "يخزّن متصفحك التنزيلات في IndexedDB.",

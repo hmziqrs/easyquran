@@ -262,7 +262,7 @@
   "settings_storage_persist_granted": "Granted — downloads are protected from automatic cleanup.",
   "settings_storage_persist_denied": "Not granted — the browser may remove downloads under storage pressure.",
   "settings_storage_persist_request": "Request again",
-  "settings_storage_persist_declined": "The browser declined the request. Chrome usually grants this after you install or bookmark the site.",
+  "settings_storage_persist_declined": "The browser declined the request. Chrome usually grants this after you install or bookmark the site. Your downloads keep working either way.",
   "settings_storage_persist_unavailable": "Persistent storage status is unavailable in this browser.",
   "settings_storage_empty": "No translations downloaded.",
   "settings_storage_opfs_absent": "Your browser stores downloads in IndexedDB.",

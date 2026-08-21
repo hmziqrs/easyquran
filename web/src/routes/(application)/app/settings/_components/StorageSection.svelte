@@ -263,7 +263,7 @@
               {/if}
             </p>
           </div>
-          {#if report.persisted === false}
+          {#if report.persisted === false && !persistDeclined}
             <button
               type="button"
               disabled={persistBusy}
