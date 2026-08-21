@@ -230,10 +230,13 @@
           {copy.quotaNote(formatBytes(quota))}
         </p>
         <div class="mt-2.5">
-          <UsageBar layers={layers} labels={copy.layers} quotaBytes={quota} {usedLabel} />
+          <UsageBar layers={layers} labels={copy.layers} usageBytes={usage} {usedLabel} />
         </div>
       {:else}
         <p class="text-[15px] text-fg">{copy.usage}</p>
+        <div class="mt-2.5">
+          <UsageBar layers={layers} labels={copy.layers} usageBytes={null} {usedLabel} />
+        </div>
       {/if}
       {#if quotaHigh}
         <p class="mt-2 text-[13.5px] text-red-400">{copy.quotaWarning}</p>

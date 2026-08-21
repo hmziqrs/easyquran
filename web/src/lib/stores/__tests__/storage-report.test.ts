@@ -487,6 +487,21 @@ describe("stackStorageLayers residual math", () => {
     });
     expect(layers.map((l) => l.id)).toEqual(["arabic", "translations", "pack"]);
   });
+
+  it("still accounts the estimate gap when SW stats are unavailable", () => {
+    const layers = stackStorageLayers({
+      artifacts: [
+        artifact({ id: "uthmani", sizeBytes: 1.5 * MB }),
+        artifact({ id: "en.sahih", sizeBytes: 8.5 * MB }),
+      ],
+      packBytes: 0,
+      pagesBytes: null,
+      dataBytes: null,
+      usage: 305.3 * MB,
+    });
+    expect(layers.map((l) => l.id)).toEqual(["arabic", "translations", "pack", "other"]);
+    expect(layers.find((l) => l.id === "other")?.bytes).toBeCloseTo(295.3 * MB, 5);
+  });
 });
 
 describe("threshold + segment helpers", () => {

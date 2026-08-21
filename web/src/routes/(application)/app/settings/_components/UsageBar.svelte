@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { layoutUsageSegments, type StorageLayer } from "$lib/stores/storage-report.svelte";
+  import { layerTotal, layoutUsageSegments, type StorageLayer } from "$lib/stores/storage-report.svelte";
   import { formatBytes } from "$lib/utils";
 
   const TRACK_UNITS = 400;
@@ -17,20 +17,21 @@
   let {
     layers,
     labels,
-    quotaBytes,
+    usageBytes,
     usedLabel,
   }: {
     layers: readonly StorageLayer[];
     labels: Readonly<Record<StorageLayer["id"], string>>;
-    quotaBytes: number | null;
+    usageBytes: number | null;
     usedLabel: string;
   } = $props();
 
+  const trackBytes = $derived(usageBytes !== null && usageBytes > 0 ? usageBytes : layerTotal(layers));
   const widths = $derived(
     layoutUsageSegments(
       TRACK_UNITS,
       layers,
-      quotaBytes ?? 0,
+      trackBytes,
     ),
   );
   const segments = $derived.by(() => {
@@ -43,12 +44,12 @@
     });
   });
   const composedTitle = $derived(usedLabel);
-  const hasBar = $derived(quotaBytes !== null && quotaBytes > 0);
+  const hasBar = $derived(trackBytes > 0);
   const legendLayers = $derived(layers.filter((layer) => layer.bytes > 0));
 
   function percent(bytes: number): string {
-    if (quotaBytes === null || quotaBytes <= 0) return "—";
-    return `${Math.round((bytes / quotaBytes) * 100)}%`;
+    if (trackBytes <= 0) return "—";
+    return `${Math.round((bytes / trackBytes) * 100)}%`;
   }
 
   function segmentTitle(layer: StorageLayer): string {
