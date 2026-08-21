@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { page } from "$app/state";
+  import { replaceState } from "$app/navigation";
   import { getSettingsCopy } from "$lib/i18n/settings-copy";
   import AppearanceSection from "./_components/AppearanceSection.svelte";
   import StorageSection from "./_components/StorageSection.svelte";
@@ -44,7 +46,7 @@
   function select(id: string): void {
     if (!isSectionId(id) || active === id) return;
     active = id;
-    history.replaceState(null, "", `#${id}`);
+    replaceState(`#${id}`, page.state);
     void tick().then(() => {
       document.getElementById(id)?.focus();
     });
