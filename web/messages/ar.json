@@ -221,7 +221,7 @@
   "settings_storage_intro": "التنزيلات والمحتوى المخزَّن مؤقتًا على هذا الجهاز.",
   "settings_storage_usage": "استخدام التخزين",
   "settings_storage_used_of": "{used} مستخدمة",
-  "settings_storage_quota_note": "حد التخزين في المتصفح: {quota} — يحدده المتصفح وليس حدًا ثابتًا.",
+  "settings_storage_quota_note": "حد التخزين في المتصفح لهذا الموقع: {quota} — يحسبه متصفحك من قرصك وليس حدًا ثابتًا.",
   "settings_storage_layer_arabic": "النص العربي",
   "settings_storage_layer_translations": "الترجمات",
   "settings_storage_layer_pack": "حزمة العمل دون اتصال",

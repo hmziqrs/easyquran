@@ -221,7 +221,7 @@
   "settings_storage_intro": "Downloads and cached content on this device.",
   "settings_storage_usage": "Storage use",
   "settings_storage_used_of": "{used} used",
-  "settings_storage_quota_note": "Browser storage limit: {quota} — set by your browser, not a fixed allowance.",
+  "settings_storage_quota_note": "Browser storage limit for this site: {quota} — computed by your browser from your disk, not a fixed allowance.",
   "settings_storage_layer_arabic": "Arabic text",
   "settings_storage_layer_translations": "Translations",
   "settings_storage_layer_pack": "Offline pack",
