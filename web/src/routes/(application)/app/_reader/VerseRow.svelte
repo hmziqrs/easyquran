@@ -107,7 +107,7 @@
       class="verse-text font-arabic leading-[2.15] text-fg"
       style="font-size:var(--reader-arabic-size, 33px)"
     >
-      {text}<span class="ayah-marker" data-verse-anchor={vKey}>{toArabicDigits(n)}</span>
+      {text}<span class="ayah-marker arabic-marker" data-verse-anchor={vKey}>{toArabicDigits(n)}</span>
     </span>
   {/if}
 
@@ -148,6 +148,10 @@
   .verse-row .verse-text--translation {
     font-family: var(--reader-translation-family, var(--font-sans));
     text-align: start;
+  }
+
+  .verse-row .arabic-marker {
+    font-family: var(--reader-arabic-family, var(--font-arabic));
   }
 
   .verse-row .translation-marker {

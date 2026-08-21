@@ -93,6 +93,19 @@ export interface ClearAllResult {
   readonly failures: number;
 }
 
+function deletedTranslationBytes(
+  before: readonly StorageArtifactInfo[],
+  after: readonly StorageArtifactInfo[],
+  skipped: ReadonlySet<string>,
+): number {
+  const remaining = new Set(after.map((artifact) => artifact.id));
+  return sumBy(before, (artifact) => {
+    if (isArabicSourceId(artifact.id) || skipped.has(artifact.id)) return 0;
+    if (remaining.has(artifact.id) || artifact.store === "session") return 0;
+    return artifact.sizeBytes;
+  });
+}
+
 export type DeleteOutcome = "ok" | StorageAdminFailure | "error";
 
 class StorageReportStore {
@@ -188,17 +201,19 @@ class StorageReportStore {
     const targets = this.artifacts.filter(
       (artifact) => !isArabicSourceId(artifact.id) && !skipped.has(artifact.id),
     );
-    let freedBytes = 0;
+    const before = await quranWorker.listArtifacts().catch(() => null);
     let failures = 0;
     for (const artifact of targets) {
       try {
         await quranWorker.deleteTranslation(artifact.id);
-        freedBytes += artifact.store === "session" ? 0 : artifact.sizeBytes;
       } catch {
         failures++;
       }
     }
+    const after = await quranWorker.listArtifacts().catch(() => null);
     await this.refresh();
+    const freedBytes =
+      before !== null && after !== null ? deletedTranslationBytes(before, after, skipped) : 0;
     return { freedBytes, failures };
   }
 

@@ -6,6 +6,7 @@
   import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
   import { purgeUserCaches } from "$lib/offline/messages";
+  import type { StorageArtifactInfo } from "$lib/quran/protocol";
   import {
     isQuotaHigh,
     isTranslationCapHigh,
@@ -114,6 +115,12 @@
     return sourceId;
   }
 
+  function storeLabelFor(store: StorageArtifactInfo["store"]): string {
+    if (store === "opfs") return copy.stores.opfs;
+    if (store === "session") return copy.stores.memory;
+    return copy.stores.idb;
+  }
+
   function localizedLanguageName(code: string, fallback: string): string {
     try {
       return new Intl.DisplayNames([locale], { type: "language" }).of(code) ?? fallback;
@@ -157,11 +164,14 @@
   async function confirmRemoveAll() {
     if (busyAll) return;
     busyAll = true;
+    const targets = translationArtifacts.filter((a) => !inUseIds.has(a.id)).length;
     const result = await report.clearAllTranslations([...inUseIds]);
     busyAll = false;
     confirmingAll = false;
-    actionNotice =
-      result.freedBytes > 0 ? copy.freed(formatBytes(result.freedBytes)) : copy.empty;
+    const removed = targets - result.failures;
+    if (result.freedBytes > 0) actionNotice = copy.freed(formatBytes(result.freedBytes));
+    else if (removed > 0) actionNotice = copy.removedAll;
+    else actionNotice = copy.empty;
     if (result.failures > 0) actionNotice += ` · ${copy.busyError}`;
     await tick();
     downloadsHeading?.focus();
@@ -264,7 +274,7 @@
                     <span
                       class="rounded border border-line-2 px-1.5 py-0.5 text-[10px] leading-none text-fg-3"
                     >
-                      {artifact.store === "opfs" ? copy.stores.opfs : copy.stores.idb}
+                      {storeLabelFor(artifact.store)}
                     </span>
                   </div>
                   <div class="text-[11px] text-fg-4">{formatBytes(artifact.sizeBytes)}</div>
@@ -357,9 +367,9 @@
       {#if !hasController}
         <span class="sr-only">{copy.clearPagesUnavailable}</span>
       {/if}
-      <span class="sr-only" aria-live="polite">
-        {#if clearedPages}{copy.clearPagesDone}{/if}
-      </span>
+      {#if clearedPages}
+        <span class="text-[11px] text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
+      {/if}
     </section>
 
     <p class="mt-5 text-[11px] leading-snug text-fg-4">{copy.retentionNote}</p>

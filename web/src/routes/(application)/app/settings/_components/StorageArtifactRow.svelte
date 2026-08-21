@@ -95,6 +95,13 @@
     }
   }
 
+  function onCellFocusOut(event: FocusEvent & { currentTarget: EventTarget & HTMLDivElement }): void {
+    if (!confirming || busy) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    confirming = false;
+  }
+
   async function confirmRemove() {
     if (busy) return;
     busy = true;
@@ -133,12 +140,14 @@
     <div class="text-[11px] text-fg-4">{formatBytes(artifact.sizeBytes)} · {lastUsedLabel}</div>
   </div>
 
-  <div class="flex items-center gap-1.5" aria-live="polite">
+  <div class="flex items-center gap-1.5" aria-live="polite" aria-busy={busy} onfocusout={onCellFocusOut}>
     {#if confirming}
       <span class="text-[11px] text-fg-3">{copy.removeConfirmTitle(name)}</span>
       <button
         type="button"
         bind:this={confirmButton}
+        disabled={busy}
+        aria-busy={busy}
         onclick={confirmRemove}
         onkeydown={onKeydown}
         class={cn(actionBtn, "border-red-500/60 bg-red-500/10 text-red-400 hover:bg-red-500/20")}
@@ -147,6 +156,7 @@
       </button>
       <button
         type="button"
+        disabled={busy}
         onclick={cancelConfirm}
         onkeydown={onKeydown}
         class={cn(actionBtn, "border-line-2 text-fg-2 hover:text-fg")}

@@ -89,6 +89,7 @@ import {
   settings_storage_remove_confirm_action,
   settings_storage_remove_confirm_title,
   settings_storage_removed,
+  settings_storage_removed_all,
   settings_storage_required_group,
   settings_storage_required_note,
   settings_storage_retention_note,
@@ -108,6 +109,11 @@ import {
 import {
   reader_arabic_text_size,
   reader_ayah_by_ayah,
+  reader_reading,
+} from "$lib/i18n/m/reader";
+import {
+  reader_analytics,
+  reader_mode,
   reader_notifications,
   reader_notifications_blocked,
   reader_notifications_browser_unsupported,
@@ -116,11 +122,6 @@ import {
   reader_notifications_off_updates,
   reader_notifications_on,
   reader_notifications_unavailable,
-  reader_reading,
-} from "$lib/i18n/m/reader";
-import {
-  reader_analytics,
-  reader_mode,
   reader_off,
   reader_on,
   reader_performance,
@@ -179,6 +180,7 @@ export interface SettingsCopy {
     readonly removeAllConfirm: string;
     readonly freed: (size: string) => string;
     readonly removed: (name: string) => string;
+    readonly removedAll: string;
     readonly clearPages: string;
     readonly clearPagesDone: string;
     readonly clearPagesUnavailable: string;
@@ -325,6 +327,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       removeAllConfirm: noArgs(settings_storage_remove_all_confirm),
       freed: (size) => settings_storage_freed({ size }, options),
       removed: (name) => settings_storage_removed({ name }, options),
+      removedAll: noArgs(settings_storage_removed_all),
       clearPages: noArgs(settings_storage_clear_pages),
       clearPagesDone: noArgs(settings_storage_clear_pages_done),
       clearPagesUnavailable: noArgs(settings_storage_clear_pages_unavailable),

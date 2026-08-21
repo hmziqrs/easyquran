@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 104 messages. Import this barrel, never
+// 105 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "$lib/paraglide/messages/settings_account_device_note.js";
@@ -94,6 +94,7 @@ export { settings_storage_remove_cancel } from "$lib/paraglide/messages/settings
 export { settings_storage_remove_confirm_action } from "$lib/paraglide/messages/settings_storage_remove_confirm_action.js";
 export { settings_storage_remove_confirm_title } from "$lib/paraglide/messages/settings_storage_remove_confirm_title.js";
 export { settings_storage_removed } from "$lib/paraglide/messages/settings_storage_removed.js";
+export { settings_storage_removed_all } from "$lib/paraglide/messages/settings_storage_removed_all.js";
 export { settings_storage_required_group } from "$lib/paraglide/messages/settings_storage_required_group.js";
 export { settings_storage_required_note } from "$lib/paraglide/messages/settings_storage_required_note.js";
 export { settings_storage_retention_note } from "$lib/paraglide/messages/settings_storage_retention_note.js";

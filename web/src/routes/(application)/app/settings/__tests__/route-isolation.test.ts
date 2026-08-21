@@ -148,6 +148,20 @@ describe("settings storage delete-flow guards", () => {
     expect(section![1]).toContain("copy.busyError");
   });
 
+  it("section-level remove-all confirm keeps the Escape guard and focus cycle", () => {
+    const section = findSource("StorageSection.svelte");
+    expect(section, "StorageSection.svelte should exist").toBeDefined();
+    expect(section![1]).toContain("onkeydown={onKeydown}");
+    expect(section![1]).toContain('event.key === "Escape"');
+    expect(section![1]).toContain("event.stopPropagation()");
+    expect(section![1]).toContain("refocusRemoveAll = true");
+    expect(section![1]).toContain("confirmAllButton.focus()");
+    expect(section![1]).toContain("removeAllButton.focus()");
+    expect(section![1]).toContain("copy.removed(artifactName(artifactId))");
+    expect(section![1]).toContain("downloadsHeading?.focus()");
+    expect(section![1]).toContain("disabled={!hasController || clearingPages}");
+  });
+
   it("the in-use guard joins reader primary and stacked translation ids", () => {
     const section = findSource("StorageSection.svelte");
     expect(section, "StorageSection.svelte should exist").toBeDefined();

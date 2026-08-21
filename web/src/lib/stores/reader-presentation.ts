@@ -9,13 +9,13 @@ import {
   type ArabicFontId,
   type TranslationFamily,
 } from "$lib/config/reader-fonts";
-import type { ReaderMode } from "./reader-core.svelte";
+import { READER_DEFAULTS, type ReaderMode } from "./reader-core.svelte";
 
 export function applyReaderPresentation(
   mode: ReaderMode,
   fontSize: number,
   arabicFont: ArabicFontId = DEFAULT_ARABIC_FONT,
-  translationSize = 17,
+  translationSize = READER_DEFAULTS.translationSize,
   translationFamily: TranslationFamily = DEFAULT_TRANSLATION_FAMILY,
 ): void {
   if (!browser) return;

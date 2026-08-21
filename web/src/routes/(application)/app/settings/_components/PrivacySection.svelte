@@ -118,7 +118,9 @@
     <div class="flex items-center gap-2">
       {#if update.available}
         <span class="text-[11px] leading-tight text-fg-3">{copy.updateAvailable}</span>
-      {:else if !checking}
+      {:else if checking}
+        <span class="text-[11px] leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
+      {:else}
         <span class="text-[11px] leading-tight text-fg-3">{copy.upToDate}</span>
       {/if}
       <button

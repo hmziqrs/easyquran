@@ -492,6 +492,14 @@ Where shipped code departs from the sections above, current code wins; the reaso
     non-default fonts on every apply (hydrate + cross-tab re-apply), so a persisted
     Scheherazade/Noto selection survives reloads. First paint still shows Amiri until the
     lazy woff2 lands — inherent to keeping alternate mushaf bytes out of the bundle.
+11. **Pre-paint mirror covers the font id only.** `app.html` mirrors the `arabicFont` id
+    allowlist (pinned by the literal-sync guard) into `data-arabic-font`, but the
+    `--reader-arabic-family` stack applies at hydrate — the dataset write is the plan §3.2
+    hook and is deliberately unconsumed by CSS today; the visual outcome is the same
+    Amiri-first paint described in divergence 10.
+12. **Byte-unit wording.** `formatBytes` keeps Latin unit symbols (MB/GB) in the Arabic UI —
+    unit symbols are standard in Arabic technical copy and match the ICU `{entries}` Latin
+    digits used elsewhere; catalog prose keeps Arabic-script units (ميغابايت).
 11. **The purge no-controller window fallback (§2.5) was dropped.** "Clear cached pages &
     data" stays a worker-message-only path (`purgeUserCaches()`); when
     `navigator.serviceWorker.controller === null` the button renders permanently disabled

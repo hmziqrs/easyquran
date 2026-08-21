@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { reader } from "$lib/stores/reader.svelte";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -29,5 +31,16 @@ describe("PageHeightCache typography key", () => {
     expect(cache.get(3, 800)).not.toBe(1234);
     reader.smaller();
     expect(cache.get(3, 800)).toBe(1234);
+  });
+
+  it("SurahReader remeasures through preserveViewport keyed on every typography axis", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/routes/(application)/app/_reader/SurahReader.svelte"),
+      "utf-8",
+    );
+    expect(src).toContain(
+      "${reader.arabicFont}:${reader.arabicSizePx}:${reader.translationSizePx}:${reader.translationFamily}",
+    );
+    expect(src).toContain("void preserveViewport(");
   });
 });

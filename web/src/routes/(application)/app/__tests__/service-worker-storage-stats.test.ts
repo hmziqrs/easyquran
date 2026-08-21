@@ -110,11 +110,12 @@ class FakeCacheStorage {
   }
 }
 
-function responseWith(size: number): Response {
+function responseWith(size: number, contentLength?: string): Response {
   const body = ".".repeat(size);
-  return new Response(body, {
-    headers: { "content-type": "application/json", "content-length": String(size) },
-  });
+  const headers = { "content-type": "application/json" };
+  const withLength =
+    contentLength === undefined ? headers : { ...headers, "content-length": contentLength };
+  return new Response(body, { headers: withLength });
 }
 
 const ORIGIN = "https://easyquran.fyi";
@@ -153,6 +154,16 @@ describe("storageStats accounting", () => {
     expect(stats.pages.bytes).toBe(1250);
   });
 
+  it("measures the pages body length, never a trusted content-length header", async () => {
+    const pages = await fakeCaches.open(PAGES_CACHE);
+    await pages.put(new Request(`${ORIGIN}/app/al-baqarah`), responseWith(300, "1"));
+    await pages.put(new Request(`${ORIGIN}/app/al-fatihah`), responseWith(120, "9999"));
+
+    const stats = await computeStorageStats();
+    expect(stats.pages.entries).toBe(2);
+    expect(stats.pages.bytes).toBe(420);
+  });
+
   it("sums eq-data-v1 from scanDataMeta — the same accounting the budget enforcer uses", async () => {
     const data = await fakeCaches.open(DATA_CACHE);
     for (let i = 1; i <= 3; i++) {
@@ -164,6 +175,18 @@ describe("storageStats accounting", () => {
     const stats = await computeStorageStats();
     expect(stats.data.entries).toBe(3);
     expect(stats.data.bytes).toBe(192);
+  });
+
+  it("skips data-meta records whose cache entry was already evicted", async () => {
+    const data = await fakeCaches.open(DATA_CACHE);
+    const liveKey = "/app/juz/1/__data.json";
+    await data.put(new Request(`${ORIGIN}${liveKey}`), responseWith(64));
+    await recordDataEntry(liveKey, responseWith(64));
+    await recordDataEntry("/app/juz/9/__data.json", responseWith(512));
+
+    const stats = await computeStorageStats();
+    expect(stats.data.entries).toBe(1);
+    expect(stats.data.bytes).toBe(64);
   });
 
   it("keeps pages and data layers independent (pack and app caches never counted)", async () => {

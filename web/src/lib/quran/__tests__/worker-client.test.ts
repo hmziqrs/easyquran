@@ -347,4 +347,26 @@ describe("quranWorker storage admin wire contract", () => {
     });
     await assertion;
   });
+
+  it("rejects every malformed artifact field at the boundary", async () => {
+    const fake = await startReady();
+    const wellFormed = { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: null };
+    const cases: unknown[] = [
+      "not-an-array",
+      { not: "an array" },
+      [{ ...wellFormed, id: "" }],
+      [{ ...wellFormed, tag: 7 }],
+      [{ ...wellFormed, sizeBytes: Number.NaN }],
+      [{ ...wellFormed, sizeBytes: "2048" }],
+      [{ ...wellFormed, lastUsed: "1234" }],
+      [{ ...wellFormed, lastUsed: Number.POSITIVE_INFINITY }],
+    ];
+    for (const result of cases) {
+      const p = quranWorker.listArtifacts();
+      const req = fake.posted.at(-1)!;
+      const assertion = expect(p).rejects.toThrow("malformed artifact list");
+      fake.emit("message", { id: req.id, ok: true, result });
+      await assertion;
+    }
+  });
 });

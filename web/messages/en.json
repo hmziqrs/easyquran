@@ -254,6 +254,7 @@
   "settings_storage_remove_all_confirm": "Remove all downloaded translations? The Arabic text stays.",
   "settings_storage_freed": "Freed {size}",
   "settings_storage_removed": "Removed {name}.",
+  "settings_storage_removed_all": "Downloads removed.",
   "settings_storage_clear_pages": "Clear cached pages & data",
   "settings_storage_clear_pages_done": "Cached pages and data cleared.",
   "settings_storage_clear_pages_unavailable": "Available once the app has finished starting.",

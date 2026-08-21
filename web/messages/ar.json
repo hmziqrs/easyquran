@@ -254,6 +254,7 @@
   "settings_storage_remove_all_confirm": "إزالة جميع الترجمات المنزّلة؟ يبقى النص العربي.",
   "settings_storage_freed": "تم تحرير {size}",
   "settings_storage_removed": "تمت إزالة {name}.",
+  "settings_storage_removed_all": "تمت إزالة التنزيلات.",
   "settings_storage_clear_pages": "مسح الصفحات والبيانات المخزَّنة مؤقتًا",
   "settings_storage_clear_pages_done": "تم مسح الصفحات والبيانات المخزَّنة مؤقتًا.",
   "settings_storage_clear_pages_unavailable": "يتوفر هذا الخيار بعد اكتمال بدء تشغيل التطبيق.",

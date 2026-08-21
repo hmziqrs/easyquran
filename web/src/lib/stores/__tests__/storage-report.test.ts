@@ -165,8 +165,32 @@ describe("storage report fan-in", () => {
     expect(outcome).toBe("busy");
   });
 
+  it("refreshes from worker truth after a successful deleteArtifact", async () => {
+    workerMock.listArtifacts
+      .mockResolvedValueOnce([artifact({ id: "en.sahih" })])
+      .mockResolvedValueOnce([]);
+    workerMock.deleteTranslation.mockResolvedValue(undefined);
+    const report = createStorageReport();
+    await report.refresh();
+    expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih"]);
+
+    const outcome = await report.deleteArtifact("en.sahih");
+
+    expect(outcome).toBe("ok");
+    expect(workerMock.deleteTranslation).toHaveBeenCalledWith("en.sahih");
+    expect(workerMock.listArtifacts).toHaveBeenCalledTimes(2);
+    expect(report.artifacts).toEqual([]);
+    expect(report.phase).toBe("ready");
+  });
+
   it("clearAllTranslations skips Arabic and passed ids and sums freed bytes", async () => {
-    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.listArtifacts
+      .mockResolvedValueOnce([
+        artifact({ id: "uthmani", sizeBytes: 2 * MB }),
+        artifact({ id: "en.sahih", sizeBytes: 3 * MB }),
+        artifact({ id: "ur.jalandhry", sizeBytes: 4 * MB }),
+      ])
+      .mockResolvedValue([]);
     workerMock.deleteTranslation.mockResolvedValue(undefined);
     const report = createStorageReport();
     report.artifacts = [
@@ -181,7 +205,12 @@ describe("storage report fan-in", () => {
   });
 
   it("clearAllTranslations deletes session artifacts but never counts their bytes as freed", async () => {
-    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.listArtifacts
+      .mockResolvedValueOnce([
+        artifact({ id: "en.sahih", sizeBytes: 3 * MB }),
+        artifact({ id: "fr.hamid", sizeBytes: 2 * MB, store: "session" }),
+      ])
+      .mockResolvedValue([]);
     workerMock.deleteTranslation.mockResolvedValue(undefined);
     const report = createStorageReport();
     report.artifacts = [
@@ -193,8 +222,24 @@ describe("storage report fan-in", () => {
     expect(result).toEqual({ freedBytes: 3 * MB, failures: 0 });
   });
 
-  it("clearAllTranslations refreshes once after the whole run, not per artifact", async () => {
+  it("clearAllTranslations does not count artifacts another tab already evicted", async () => {
     workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation.mockResolvedValue(undefined);
+    const report = createStorageReport();
+    report.artifacts = [artifact({ id: "en.sahih", sizeBytes: 3 * MB })];
+    const result = await report.clearAllTranslations([]);
+    expect(workerMock.deleteTranslation).toHaveBeenCalledWith("en.sahih");
+    expect(result).toEqual({ freedBytes: 0, failures: 0 });
+  });
+
+  it("clearAllTranslations refreshes once after the whole run, not per artifact", async () => {
+    workerMock.listArtifacts
+      .mockResolvedValueOnce([
+        artifact({ id: "en.sahih" }),
+        artifact({ id: "fr.hamid" }),
+        artifact({ id: "ur.jalandhry" }),
+      ])
+      .mockResolvedValue([]);
     workerMock.deleteTranslation.mockResolvedValue(undefined);
     const report = createStorageReport();
     report.artifacts = [
@@ -204,11 +249,17 @@ describe("storage report fan-in", () => {
     ];
     await report.clearAllTranslations([]);
     expect(workerMock.deleteTranslation).toHaveBeenCalledTimes(3);
-    expect(workerMock.listArtifacts).toHaveBeenCalledTimes(1);
+    expect(workerMock.listArtifacts).toHaveBeenCalledTimes(3);
   });
 
   it("counts per-row failures without aborting the bulk run", async () => {
-    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.listArtifacts
+      .mockResolvedValueOnce([
+        artifact({ id: "en.sahih", sizeBytes: 2 * MB }),
+        artifact({ id: "fr.hamid", sizeBytes: MB }),
+      ])
+      .mockResolvedValueOnce([artifact({ id: "en.sahih", sizeBytes: 2 * MB })])
+      .mockResolvedValue([]);
     workerMock.deleteTranslation
       .mockRejectedValueOnce(new h.AdminErrorMock("busy"))
       .mockResolvedValue(undefined);

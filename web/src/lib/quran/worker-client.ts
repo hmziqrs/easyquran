@@ -189,8 +189,8 @@ function decodeStorageArtifacts(raw: unknown): StorageArtifactInfo[] | null {
     if (typeof obj.tag !== "string") return null;
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: sizeBytes must be a finite number
     if (typeof obj.sizeBytes !== "number" || !Number.isFinite(obj.sizeBytes)) return null;
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: lastUsed is a stamped number or null
-    if (obj.lastUsed !== null && typeof obj.lastUsed !== "number") return null;
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: lastUsed is a stamped finite number or null
+    if (obj.lastUsed !== null && (typeof obj.lastUsed !== "number" || !Number.isFinite(obj.lastUsed))) return null;
     out.push({
       id: obj.id,
       store: obj.store,
