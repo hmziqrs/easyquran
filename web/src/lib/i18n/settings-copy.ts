@@ -83,6 +83,7 @@ import {
   settings_storage_persist_heading,
   settings_storage_persist_request,
   settings_storage_persist_unavailable,
+  settings_storage_quota_note,
   settings_storage_quota_warning,
   settings_storage_remove,
   settings_storage_remove_all,
@@ -149,7 +150,8 @@ export interface SettingsCopy {
   readonly storage: {
     readonly intro: string;
     readonly usage: string;
-    readonly usedOf: (used: string, quota: string) => string;
+    readonly usedOf: (used: string) => string;
+    readonly quotaNote: (quota: string) => string;
     readonly layers: {
       readonly arabic: string;
       readonly translations: string;
@@ -293,7 +295,8 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
     storage: {
       intro: noArgs(settings_storage_intro),
       usage: noArgs(settings_storage_usage),
-      usedOf: (used, quota) => settings_storage_used_of({ used, quota }, options),
+      usedOf: (used: string) => settings_storage_used_of({ used }, options),
+      quotaNote: (quota: string) => settings_storage_quota_note({ quota }, options),
       layers: {
         arabic: noArgs(settings_storage_layer_arabic),
         translations: noArgs(settings_storage_layer_translations),
@@ -364,7 +367,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
           settings_storage_pack_routes({ entries, size }, options),
         saved: (when: Date) =>
           settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, options),
-        usage: (used: string, quota: string) => settings_storage_pack_usage({ used, quota }, options),
+        usage: (used: string) => settings_storage_pack_usage({ used }, options),
         toggleOn: noArgs(settings_storage_pack_toggle_on),
         toggleOff: noArgs(settings_storage_pack_toggle_off),
         busy: noArgs(settings_storage_pack_busy),

@@ -10,7 +10,7 @@ export interface OfflinePackCopy {
   readonly status: (state: OfflinePackStatusInput) => string;
   readonly routes: (entries: number, size: string) => string;
   readonly saved: (when: Date) => string;
-  readonly usage: (used: string, quota: string) => string;
+  readonly usage: (used: string) => string;
   readonly toggleOn: string;
   readonly toggleOff: string;
   readonly busy: string;

@@ -47,7 +47,7 @@
   {/if}
   {#if offline.quota != null}
     <div class="text-[11px] text-fg-4">
-      {copy.usage(formatBytes(offline.usage), formatBytes(offline.quota))}
+      {copy.usage(formatBytes(offline.usage))}
     </div>
   {/if}
   <button
@@ -57,6 +57,7 @@
     aria-pressed={!!offline.activePack}
     class={cn(
       pill,
+      "justify-self-start px-3.5 py-2 text-[13.5px]",
       offline.activePack
         ? "border-line-2 text-fg-2 hover:text-fg"
         : "border-accent bg-accent-soft text-fg hover:opacity-90",

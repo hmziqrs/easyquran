@@ -153,7 +153,7 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       routes: (entries: number, size: string) =>
         settings_storage_pack_routes({ entries, size }, options),
       saved: (when: Date) => settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, options),
-      usage: (used: string, quota: string) => settings_storage_pack_usage({ used, quota }, options),
+      usage: (used: string) => settings_storage_pack_usage({ used }, options),
       toggleOn: noArgs(settings_storage_pack_toggle_on),
       toggleOff: noArgs(settings_storage_pack_toggle_off),
       busy: noArgs(settings_storage_pack_busy),

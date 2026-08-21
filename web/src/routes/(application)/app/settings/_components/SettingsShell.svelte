@@ -36,7 +36,7 @@
   <div class="mt-8 flex flex-col gap-6 lg:mt-10 lg:flex-row lg:gap-0">
     <nav
       aria-label={copy.sectionsLabel}
-      class="lg:sticky lg:top-24 lg:w-60 lg:shrink-0 lg:self-start lg:border-e lg:pe-6"
+      class="lg:sticky lg:top-[76px] lg:mb-10 lg:w-60 lg:shrink-0 lg:self-start lg:border-e lg:pe-8"
     >
       <ul
         class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:block lg:space-y-0.5 lg:overflow-visible lg:px-0 lg:pb-0"
@@ -62,7 +62,7 @@
       </ul>
     </nav>
 
-    <div class="min-w-0 flex-1 lg:ps-8" aria-live="polite">
+    <div class="min-w-0 flex-1 lg:ps-10" aria-live="polite">
       {@render children()}
     </div>
   </div>

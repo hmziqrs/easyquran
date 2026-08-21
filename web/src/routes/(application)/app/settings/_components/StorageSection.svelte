@@ -61,7 +61,7 @@
   let hasController = $state(false);
   const usedLabel = $derived(
     usage !== null && quota !== null
-      ? copy.usedOf(formatBytes(usage), formatBytes(quota))
+      ? copy.usedOf(formatBytes(usage))
       : copy.usage,
   );
   const quotaHigh = $derived(isQuotaHigh(usage, quota));
@@ -225,11 +225,15 @@
   {:else}
     <section class="mb-6 mt-6" aria-label={copy.usage}>
       {#if quota !== null}
-        <UsageBar layers={layers} labels={copy.layers} quotaBytes={quota} {usedLabel} />
-        <p class="mt-2 text-[13.5px] tabular-nums text-fg-2">{usedLabel}</p>
+        <p class="text-[15px] font-medium tabular-nums text-fg">{usedLabel}</p>
+        <p class="mt-0.5 text-[13.5px] tabular-nums text-fg-3">
+          {copy.quotaNote(formatBytes(quota))}
+        </p>
+        <div class="mt-2.5">
+          <UsageBar layers={layers} labels={copy.layers} quotaBytes={quota} {usedLabel} />
+        </div>
       {:else}
-        <UsageBar layers={layers} labels={copy.layers} quotaBytes={null} {usedLabel} />
-        <p class="mt-2 text-[13.5px] text-fg-2">{copy.usage}</p>
+        <p class="text-[15px] text-fg">{copy.usage}</p>
       {/if}
       {#if quotaHigh}
         <p class="mt-2 text-[13.5px] text-red-400">{copy.quotaWarning}</p>

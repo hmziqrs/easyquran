@@ -44,6 +44,7 @@
   });
   const composedTitle = $derived(usedLabel);
   const hasBar = $derived(quotaBytes !== null && quotaBytes > 0);
+  const legendLayers = $derived(layers.filter((layer) => layer.bytes > 0));
 
   function percent(bytes: number): string {
     if (quotaBytes === null || quotaBytes <= 0) return "—";
@@ -61,7 +62,7 @@
     preserveAspectRatio="none"
     role="img"
     aria-label={composedTitle}
-    class="block h-3.5 w-full overflow-hidden rounded-full border border-line bg-bg-2"
+    class="block h-4 w-full overflow-hidden rounded-full border border-line-2 bg-bg-2"
   >
     <title>{composedTitle}</title>
     <defs>
@@ -93,7 +94,7 @@
 {/if}
 
 <ul class="mt-3 grid gap-1.5">
-  {#each layers as layer (layer.id)}
+  {#each legendLayers as layer (layer.id)}
     <li class="flex items-center gap-2.5 text-[13.5px] text-fg-3">
       <span
         class="inline-block size-2.5 shrink-0 rounded-sm border border-line-2"
@@ -103,7 +104,6 @@
       ></span>
       <span class="min-w-0 flex-1 truncate">{labels[layer.id]}</span>
       <span class="tabular-nums text-fg-2">{formatBytes(layer.bytes)}</span>
-      <span class="w-12 text-end tabular-nums text-fg-3">{percent(layer.bytes)}</span>
     </li>
   {/each}
 </ul>
