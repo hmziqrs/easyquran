@@ -410,6 +410,17 @@ describe("storage report fan-in", () => {
     expect(report.persisted).toBe(true);
   });
 
+  it("requestPersist surfaces a persist() resolution of false and keeps persisted false", async () => {
+    Object.defineProperty(globalThis.navigator, "storage", {
+      value: { persist: async () => false },
+      configurable: true,
+      writable: true,
+    });
+    const report = createStorageReport();
+    await expect(report.requestPersist()).resolves.toBe(false);
+    expect(report.persisted).toBe(false);
+  });
+
   it("requestPersist collapses a persist() rejection to denied", async () => {
     Object.defineProperty(globalThis.navigator, "storage", {
       value: {

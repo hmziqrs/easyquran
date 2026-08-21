@@ -21,9 +21,9 @@
     return rtf.format(Math.round(delta / MONTH_MS), "month");
   }
 
-  const badge = "rounded border border-line-2 px-1.5 py-0.5 text-[10px] leading-none text-fg-3";
+  const badge = "rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3";
   const actionBtn =
-    "rounded-md border px-2.5 py-1 text-[11px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded-md border px-2.5 py-1.5 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
 
   let {
     artifact,
@@ -131,18 +131,18 @@
       </span>
       {#if inUse}
         <span
-          class="rounded border border-accent-line bg-accent-soft px-1.5 py-0.5 text-[10px] leading-none text-fg-2"
+          class="rounded border border-accent-line bg-accent-soft px-1.5 py-0.5 text-xs leading-none text-fg-2"
         >
           {copy.inUse}
         </span>
       {/if}
     </div>
-    <div class="text-[11px] text-fg-4">{formatBytes(artifact.sizeBytes)} · {lastUsedLabel}</div>
+    <div class="text-xs text-fg-4">{formatBytes(artifact.sizeBytes)} · {lastUsedLabel}</div>
   </div>
 
   <div class="flex items-center gap-1.5" aria-live="polite" aria-busy={busy} onfocusout={onCellFocusOut}>
     {#if confirming}
-      <span class="text-[11px] text-fg-3">{copy.removeConfirmTitle(name)}</span>
+      <span class="text-xs text-fg-3">{copy.removeConfirmTitle(name)}</span>
       <button
         type="button"
         bind:this={confirmButton}
@@ -165,7 +165,7 @@
       </button>
     {:else}
       {#if errorText}
-        <span class="max-w-40 truncate text-[11px] text-red-400" title={errorText}>
+        <span class="max-w-40 truncate text-xs text-red-400" title={errorText}>
           {errorText}
         </span>
       {/if}

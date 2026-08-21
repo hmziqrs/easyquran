@@ -1,47 +1,72 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { getSettingsCopy } from "$lib/i18n/settings-copy";
   import AppearanceSection from "./_components/AppearanceSection.svelte";
   import StorageSection from "./_components/StorageSection.svelte";
   import ReadingSection from "./_components/ReadingSection.svelte";
   import PrivacySection from "./_components/PrivacySection.svelte";
   import AccountSection from "./_components/AccountSection.svelte";
+  import SettingsShell from "./_components/SettingsShell.svelte";
 
   const copy = getSettingsCopy();
 
-  const sections = [
+  type SectionId = "storage" | "appearance" | "reading" | "privacy" | "account";
+
+  const sections: { id: SectionId; label: string }[] = [
     { id: "storage", label: copy.nav.storage },
     { id: "appearance", label: copy.nav.appearance },
     { id: "reading", label: copy.nav.reading },
     { id: "privacy", label: copy.nav.privacy },
     { id: "account", label: copy.nav.account },
-  ] as const;
+  ];
 
-  const pill =
-    "rounded-full border border-line-2 bg-bg-1 px-3.5 py-1.5 text-xs text-fg-2 transition-colors hover:border-line hover:text-fg";
+  function isSectionId(value: string): value is SectionId {
+    return sections.some((section) => section.id === value);
+  }
+
+  function sectionFromHash(hash: string): SectionId {
+    const id = hash.slice(1);
+    if (isSectionId(id)) return id;
+    return "storage";
+  }
+
+  let active = $state<SectionId>("storage");
+
+  $effect(() => {
+    active = sectionFromHash(location.hash);
+    const syncFromHash = () => {
+      active = sectionFromHash(location.hash);
+    };
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  });
+
+  function select(id: string): void {
+    if (!isSectionId(id) || active === id) return;
+    active = id;
+    history.replaceState(null, "", `#${id}`);
+    void tick().then(() => {
+      document.getElementById(id)?.focus();
+    });
+  }
 </script>
 
 <svelte:head>
   <title>{copy.title} · EasyQuran</title>
 </svelte:head>
 
-<div lang={copy.locale} dir={copy.direction} class="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-  <h1 class="text-lg font-semibold text-fg">{copy.title}</h1>
-
-  <nav aria-label={copy.sectionsLabel} class="sticky top-[72px] z-30 -mx-1 bg-bg/90 px-1 py-2 backdrop-blur">
-    <ul class="flex flex-wrap gap-1.5">
-      {#each sections as section (section.id)}
-        <li>
-          <a href="#{section.id}" class={pill}>{section.label}</a>
-        </li>
-      {/each}
-    </ul>
-  </nav>
-
-  <div class="mt-4 grid gap-4">
-    <StorageSection id="storage" heading={copy.nav.storage} copy={copy.storage} />
-    <AppearanceSection id="appearance" heading={copy.nav.appearance} copy={copy.appearance} />
-    <ReadingSection id="reading" heading={copy.nav.reading} copy={copy.reading} />
-    <PrivacySection id="privacy" heading={copy.nav.privacy} copy={copy.privacy} />
-    <AccountSection id="account" heading={copy.nav.account} copy={copy.account} />
-  </div>
+<div lang={copy.locale} dir={copy.direction}>
+  <SettingsShell {copy} {sections} {active} onSelect={select}>
+    {#if active === "storage"}
+      <StorageSection id="storage" heading={copy.nav.storage} copy={copy.storage} />
+    {:else if active === "appearance"}
+      <AppearanceSection id="appearance" heading={copy.nav.appearance} copy={copy.appearance} />
+    {:else if active === "reading"}
+      <ReadingSection id="reading" heading={copy.nav.reading} copy={copy.reading} />
+    {:else if active === "privacy"}
+      <PrivacySection id="privacy" heading={copy.nav.privacy} copy={copy.privacy} />
+    {:else}
+      <AccountSection id="account" heading={copy.nav.account} copy={copy.account} />
+    {/if}
+  </SettingsShell>
 </div>

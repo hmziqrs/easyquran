@@ -30,7 +30,7 @@
 
   const SAMPLE_ARABIC = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
 
-  const pill = "rounded-md border px-3 py-1 text-xs transition-colors duration-150";
+  const pill = "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150";
   const pillOn = "border-accent bg-accent-soft text-fg";
   const pillOff = "border-line-2 text-fg-2 hover:text-fg";
 
@@ -62,16 +62,16 @@
   }
 
   const stepperButton =
-    "flex h-7 w-9 items-center justify-center rounded-md border border-line-2 text-xs text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
+    "flex h-8 w-9 items-center justify-center rounded-md border border-line-2 text-sm text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-sm font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
+  <h2 class="text-base font-semibold text-fg">{heading}</h2>
+  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
 
   <div class="mt-5 grid gap-6">
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.mode}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.mode}</div>
       <div class="flex gap-1.5">
         {#each modes as mode (mode)}
           <button
@@ -85,7 +85,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.arabicFont}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.arabicFont}</div>
       <div class="flex flex-wrap gap-1.5">
         {#each ARABIC_FONTS as font (font.id)}
           <button
@@ -100,7 +100,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.arabicSize}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.arabicSize}</div>
       <div class="flex items-center gap-2" role="group" aria-label={copy.arabicSize}>
         <button
           type="button"
@@ -109,7 +109,7 @@
           disabled={reader.arabicSizePx === `${ARABIC_FONT_MIN}px`}
           onclick={() => reader.smaller()}>−</button
         >
-        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2" aria-live="polite"
+        <span class="min-w-10 text-center text-sm tabular-nums text-fg-2" aria-live="polite"
           >{reader.arabicSizePx}</span
         >
         <button
@@ -123,7 +123,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.translationFont}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.translationFont}</div>
       <div class="flex gap-1.5">
         {#each families as family (family)}
           <button
@@ -137,7 +137,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.translationSize}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.translationSize}</div>
       <div class="flex items-center gap-2" role="group" aria-label={copy.translationSize}>
         <button
           type="button"
@@ -146,7 +146,7 @@
           disabled={reader.translationSizePx === `${TRANSLATION_FONT_MIN}px`}
           onclick={() => reader.shrinkTranslation()}>−</button
         >
-        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2" aria-live="polite"
+        <span class="min-w-10 text-center text-sm tabular-nums text-fg-2" aria-live="polite"
           >{reader.translationSizePx}</span
         >
         <button
@@ -160,7 +160,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{copy.preview}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{copy.preview}</div>
       <div class="overflow-x-auto rounded-lg border border-line bg-bg-2 px-4 py-3">
         <p class="preview-arabic" dir="rtl" lang="ar">{SAMPLE_ARABIC}</p>
         <p class="preview-translation" dir="auto">{copy.sample}</p>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isConfigured } from "$lib/firebase";
+  import { isMessagingConfigured } from "$lib/firebase";
   import { notifications } from "$lib/stores/notifications.svelte";
   import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
   import { cn } from "$lib/utils";
@@ -27,14 +27,17 @@
 
   const statusLabel = $derived(
     copy.status({
-      configured: isConfigured,
+      configured: isMessagingConfigured,
       supported: notifications.supported,
       permission: notifications.permission,
       subscribed: notifications.subscribed,
+      pushError: notifications.pushError,
     }),
   );
 
-  let disabled = $derived(!notifications.subscribed && !notifications.canSubscribe);
+  let disabled = $derived(
+    !notifications.subscribed && (!notifications.canSubscribe || !isMessagingConfigured),
+  );
   let label = $derived(toggleLabel());
 </script>
 

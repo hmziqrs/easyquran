@@ -77,10 +77,12 @@ import {
   settings_storage_pack_toggle_on,
   settings_storage_pack_usage,
   settings_storage_opfs_absent,
+  settings_storage_persist_declined,
   settings_storage_persist_denied,
   settings_storage_persist_granted,
   settings_storage_persist_heading,
   settings_storage_persist_request,
+  settings_storage_persist_unavailable,
   settings_storage_quota_warning,
   settings_storage_remove,
   settings_storage_remove_all,
@@ -118,6 +120,7 @@ import {
   reader_notifications_blocked,
   reader_notifications_browser_unsupported,
   reader_notifications_checking,
+  reader_notifications_error,
   reader_notifications_off,
   reader_notifications_off_updates,
   reader_notifications_on,
@@ -187,7 +190,9 @@ export interface SettingsCopy {
     readonly persistHeading: string;
     readonly persistGranted: string;
     readonly persistDenied: string;
+    readonly persistDeclined: string;
     readonly persistRequest: string;
+    readonly persistUnavailable: string;
     readonly empty: string;
     readonly opfsAbsent: string;
     readonly loading: string;
@@ -237,6 +242,7 @@ export interface SettingsCopy {
       readonly checking: string;
       readonly browserUnsupported: string;
       readonly blocked: string;
+      readonly error: string;
       readonly on: string;
       readonly offUpdates: string;
       readonly off: string;
@@ -334,7 +340,9 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       persistHeading: noArgs(settings_storage_persist_heading),
       persistGranted: noArgs(settings_storage_persist_granted),
       persistDenied: noArgs(settings_storage_persist_denied),
+      persistDeclined: noArgs(settings_storage_persist_declined),
       persistRequest: noArgs(settings_storage_persist_request),
+      persistUnavailable: noArgs(settings_storage_persist_unavailable),
       empty: noArgs(settings_storage_empty),
       opfsAbsent: noArgs(settings_storage_opfs_absent),
       loading: noArgs(settings_storage_loading),
@@ -405,6 +413,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         checking: noArgs(reader_notifications_checking),
         browserUnsupported: noArgs(reader_notifications_browser_unsupported),
         blocked: noArgs(reader_notifications_blocked),
+        error: noArgs(reader_notifications_error),
         on: noArgs(reader_notifications_on),
         offUpdates: noArgs(reader_notifications_off_updates),
         off: noArgs(reader_notifications_off),

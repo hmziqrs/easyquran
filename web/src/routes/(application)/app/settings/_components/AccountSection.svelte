@@ -22,13 +22,13 @@
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-sm font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
+  <h2 class="text-base font-semibold text-fg">{heading}</h2>
+  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
 
   {#if signedIn}
     <div class="mt-3 flex flex-col gap-3">
       <div class="flex flex-col gap-0.5">
-        <h3 class="text-xs font-medium text-fg">{copy.signedInHeading}</h3>
+        <h3 class="text-sm font-medium text-fg">{copy.signedInHeading}</h3>
         {#if user?.name}
           <p class="text-xs text-fg-2">{copy.signedInAs(user.name)}</p>
         {/if}
@@ -52,5 +52,5 @@
     </div>
   {/if}
 
-  <p class="mt-3 text-[11px] leading-snug text-fg-4">{copy.deviceNote}</p>
+  <p class="mt-3 text-xs leading-snug text-fg-4">{copy.deviceNote}</p>
 </Card>

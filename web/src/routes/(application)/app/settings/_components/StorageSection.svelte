@@ -78,6 +78,7 @@
   let clearingPages = $state(false);
   let clearedPages = $state(false);
   let persistBusy = $state(false);
+  let persistDeclined = $state(false);
 
   $effect(() => {
     opfsAbsent = !opfsSupported();
@@ -189,13 +190,18 @@
     persistBusy = true;
     const granted = await report.requestPersist();
     persistBusy = false;
-    if (granted) persistHeading?.focus();
+    if (granted) {
+      persistDeclined = false;
+      persistHeading?.focus();
+    } else {
+      persistDeclined = true;
+    }
   }
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-sm font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
+  <h2 class="text-base font-semibold text-fg">{heading}</h2>
+  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
 
   {#if phase === "boot"}
     <p class="mt-4 text-xs text-fg-3" role="status">{copy.loading}</p>
@@ -206,7 +212,7 @@
         <button
           type="button"
           onclick={() => report.refresh()}
-          class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg"
+          class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
         >
           {copy.retry}
         </button>
@@ -216,38 +222,44 @@
     <section class="mt-4" aria-label={copy.usage}>
       {#if quota !== null}
         <UsageBar layers={layers} labels={copy.layers} quotaBytes={quota} {usedLabel} />
-        <p class="mt-1.5 text-[11px] text-fg-2 tabular-nums">{usedLabel}</p>
+        <p class="mt-1.5 text-xs text-fg-2 tabular-nums">{usedLabel}</p>
       {:else}
         <UsageBar layers={layers} labels={copy.layers} quotaBytes={null} {usedLabel} />
-        <p class="mt-1.5 text-[11px] text-fg-2">{copy.usage}</p>
+        <p class="mt-1.5 text-xs text-fg-2">{copy.usage}</p>
       {/if}
       {#if quotaHigh}
-        <p class="mt-1.5 text-[11px] text-red-400">{copy.quotaWarning}</p>
+        <p class="mt-1.5 text-xs text-red-400">{copy.quotaWarning}</p>
       {/if}
       {#if capHigh}
-        <p class="mt-1.5 text-[11px] text-fg-3">{copy.capNote}</p>
+        <p class="mt-1.5 text-xs text-fg-3">{copy.capNote}</p>
       {/if}
-      <p class="mt-1.5 text-[11px] leading-snug text-fg-4">{copy.estimateNote}</p>
+      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.estimateNote}</p>
     </section>
 
     <section class="mt-5" aria-label={copy.persistHeading}>
-      <h3 class="text-xs font-medium text-fg-2" tabindex="-1" bind:this={persistHeading}>
+      <h3 class="text-sm font-medium text-fg-2" tabindex="-1" bind:this={persistHeading}>
         {copy.persistHeading}
       </h3>
       <p
         aria-live="polite"
-        class={cn("mt-1 text-[11px] leading-snug", report.persisted === false ? "text-fg-4" : "text-fg-3")}
+        class={cn("mt-1 text-xs leading-snug", report.persisted === false ? "text-fg-4" : "text-fg-3")}
       >
-        {#if report.persisted === true}{copy.persistGranted}{:else if report.persisted === false}
+        {#if report.persisted === true}
+          {copy.persistGranted}
+        {:else if persistDeclined && report.persisted === false}
+          {copy.persistDeclined}
+        {:else if report.persisted === false}
           {copy.persistDenied}
-        {:else}{copy.loading}{/if}
+        {:else}
+          {copy.persistUnavailable}
+        {/if}
       </p>
       {#if report.persisted === false}
         <button
           type="button"
           disabled={persistBusy}
           onclick={requestPersist}
-          class="mt-1.5 rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+          class="mt-1.5 rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
         >
           {copy.persistRequest}
         </button>
@@ -255,15 +267,15 @@
     </section>
 
     {#if opfsAbsent}
-      <p class="mt-4 rounded-md border border-line bg-bg-2 px-3 py-2 text-[11px] text-fg-3">
+      <p class="mt-4 rounded-md border border-line bg-bg-2 px-3 py-2 text-xs text-fg-3">
         {copy.opfsAbsent}
       </p>
     {/if}
 
     {#if arabicArtifacts.length > 0}
       <section class="mt-5" aria-label={copy.requiredGroup}>
-        <h3 class="text-xs font-medium text-fg-2">{copy.requiredGroup}</h3>
-        <p class="mt-1 text-[11px] leading-snug text-fg-4">{copy.requiredNote}</p>
+        <h3 class="text-sm font-medium text-fg-2">{copy.requiredGroup}</h3>
+        <p class="mt-1 text-xs leading-snug text-fg-4">{copy.requiredNote}</p>
         <ul class="mt-1.5">
           {#each arabicArtifacts as artifact (artifact.id)}
             <li>
@@ -272,12 +284,12 @@
                   <div class="flex flex-wrap items-center gap-1.5">
                     <span class="truncate text-xs text-fg">{artifactName(artifact.id)}</span>
                     <span
-                      class="rounded border border-line-2 px-1.5 py-0.5 text-[10px] leading-none text-fg-3"
+                      class="rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3"
                     >
                       {storeLabelFor(artifact.store)}
                     </span>
                   </div>
-                  <div class="text-[11px] text-fg-4">{formatBytes(artifact.sizeBytes)}</div>
+                  <div class="text-xs text-fg-4">{formatBytes(artifact.sizeBytes)}</div>
                 </div>
               </div>
             </li>
@@ -287,11 +299,11 @@
     {/if}
 
     <section class="mt-5" aria-label={copy.downloadsHeading}>
-      <h3 class="text-xs font-medium text-fg-2" tabindex="-1" bind:this={downloadsHeading}>
+      <h3 class="text-sm font-medium text-fg-2" tabindex="-1" bind:this={downloadsHeading}>
         {copy.downloadsHeading}
       </h3>
       {#if translationArtifacts.length === 0}
-        <p class="mt-1.5 text-[11px] text-fg-4">{copy.empty}</p>
+        <p class="mt-1.5 text-xs text-fg-4">{copy.empty}</p>
       {:else}
         <ul class="mt-0.5 divide-y divide-line">
           {#each translationArtifacts as artifact (artifact.id)}
@@ -311,13 +323,13 @@
       {/if}
       <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
         {#if confirmingAll}
-          <span class="text-[11px] text-fg-3">{copy.removeAllConfirm}</span>
+          <span class="text-xs text-fg-3">{copy.removeAllConfirm}</span>
           <button
             type="button"
             bind:this={confirmAllButton}
             onclick={confirmRemoveAll}
             onkeydown={onKeydown}
-            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/20"
+            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1.5 text-sm text-red-400 transition-colors hover:bg-red-500/20"
           >
             {copy.removeConfirmAction}
           </button>
@@ -325,7 +337,7 @@
             type="button"
             onclick={cancelConfirmAll}
             onkeydown={onKeydown}
-            class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg"
+            class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
           >
             {copy.removeCancel}
           </button>
@@ -336,14 +348,14 @@
               bind:this={removeAllButton}
               onclick={() => (confirmingAll = true)}
               class={cn(
-                "rounded-md border border-red-500/50 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/10",
+                "rounded-md border border-red-500/50 px-2.5 py-1.5 text-sm text-red-400 transition-colors hover:bg-red-500/10",
               )}
             >
               {copy.removeAll}
             </button>
           {/if}
           {#if actionNotice}
-            <span class="text-[11px] text-fg-3">{actionNotice}</span>
+            <span class="text-xs text-fg-3">{actionNotice}</span>
           {/if}
         {/if}
       </div>
@@ -351,7 +363,7 @@
 
     <section class="mt-5" aria-label={copy.offlinePack.heading}>
       <OfflinePack copy={copy.offlinePack} headingTag="h3" />
-      <p class="mt-1.5 text-[11px] leading-snug text-fg-4">{copy.offlinePackNote}</p>
+      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.offlinePackNote}</p>
     </section>
 
     <section class="mt-5">
@@ -360,7 +372,7 @@
         disabled={!hasController || clearingPages}
         title={hasController ? undefined : copy.clearPagesUnavailable}
         onclick={clearPages}
-        class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
       >
         {copy.clearPages}
       </button>
@@ -368,10 +380,10 @@
         <span class="sr-only">{copy.clearPagesUnavailable}</span>
       {/if}
       {#if clearedPages}
-        <span class="text-[11px] text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
+        <span class="text-xs text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
       {/if}
     </section>
 
-    <p class="mt-5 text-[11px] leading-snug text-fg-4">{copy.retentionNote}</p>
+    <p class="mt-5 text-xs leading-snug text-fg-4">{copy.retentionNote}</p>
   {/if}
 </Card>

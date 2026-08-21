@@ -25,7 +25,7 @@
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const pill = "rounded-md border px-3 py-1 text-xs transition-colors duration-150";
+  const pill = "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150";
   const pillOn = "border-accent bg-accent-soft text-fg";
   const pillOff = "border-line-2 text-fg-2 hover:text-fg";
 
@@ -73,12 +73,12 @@
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-sm font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
+  <h2 class="text-base font-semibold text-fg">{heading}</h2>
+  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
 
   <div class="mt-5 grid gap-6">
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{panel.theme}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{panel.theme}</div>
       <div class="flex gap-1.5">
         {#each themes as t (t)}
           <button
@@ -92,7 +92,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{panel.surface}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{panel.surface}</div>
       <div class="grid gap-1 sm:grid-cols-2">
         {#each SURFACES as s (s.id)}
           <button
@@ -112,8 +112,8 @@
               style={`background:${prefs.theme === "light" ? s.lightHex : s.darkHex}`}
             ></span>
             <span class="min-w-0">
-              <span class="block text-xs text-fg">{panel.surfaces[s.id].label}</span>
-              <span class="block truncate text-[11px] text-fg-4"
+              <span class="block text-sm text-fg">{panel.surfaces[s.id].label}</span>
+              <span class="block truncate text-xs text-fg-4"
                 >{panel.surfaces[s.id].note}</span
               >
             </span>
@@ -123,7 +123,7 @@
     </div>
 
     <div>
-      <div class="mb-1.5 text-xs text-fg-3">{panel.accent}</div>
+      <div class="mb-1.5 text-sm text-fg-3">{panel.accent}</div>
       <div class="flex flex-wrap gap-2">
         {#each ACCENTS as a (a.id)}
           <button
@@ -144,11 +144,11 @@
 
     <div>
       <div class="mb-1.5 flex items-center justify-between">
-        <span class="text-xs text-fg-3">{panel.customColours}</span>
+        <span class="text-sm text-fg-3">{panel.customColours}</span>
         {#if prefs.hasCustom}
           <button
             type="button"
-            class="text-[11px] text-fg-3 underline underline-offset-2 transition-colors hover:text-fg"
+            class="text-sm text-fg-3 underline underline-offset-2 transition-colors hover:text-fg"
             onclick={() => prefs.clearCustom()}>{panel.clear}</button
           >
         {/if}
@@ -163,8 +163,8 @@
               oninput={(e) => prefs.setCustom(s.key, e.currentTarget.value)}
               class="size-7 flex-none cursor-pointer rounded-md border border-line-2 bg-transparent p-0.5"
             />
-            <span class="flex-1 text-xs text-fg-2">{panel.seedNames[s.key]}</span>
-            <span class="font-mono text-[11px] text-fg-4">
+            <span class="flex-1 text-sm text-fg-2">{panel.seedNames[s.key]}</span>
+            <span class="font-mono text-xs text-fg-4">
               {prefs.custom[s.key] ?? panel.preset}
             </span>
             {#if prefs.custom[s.key]}
@@ -178,7 +178,7 @@
           </div>
         {/each}
       </div>
-      <p class="mt-1.5 text-[11px] leading-snug text-fg-4">
+      <p class="mt-1.5 text-xs leading-snug text-fg-4">
         {panel.derivedColours}
       </p>
     </div>

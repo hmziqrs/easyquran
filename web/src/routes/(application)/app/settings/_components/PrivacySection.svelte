@@ -6,7 +6,7 @@
   import { authState } from "$lib/auth/auth-state.svelte";
   import { createLogoutFlow } from "$lib/auth/flows.svelte";
   import { installPurgeHook } from "$lib/auth/purge-hook";
-  import { isConfigured } from "$lib/firebase";
+  import { isMessagingConfigured } from "$lib/firebase";
   import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
   import { update } from "$lib/offline/update.svelte";
   import { consent } from "$lib/stores/consent.svelte";
@@ -33,7 +33,7 @@
   });
 
   const pill =
-    "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors duration-150 text-start";
+    "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors duration-150 text-start";
   const on = "border-accent bg-accent-soft text-fg";
   const off = "border-line-2 text-fg-2 hover:text-fg";
 
@@ -67,17 +67,18 @@
 
   const notificationsLabel = $derived(
     notificationsStatus(copy.notificationsStatus)({
-      configured: isConfigured,
+      configured: isMessagingConfigured,
       supported: notifications.supported,
       permission: notifications.permission,
       subscribed: notifications.subscribed,
+      pushError: notifications.pushError,
     }),
   );
 </script>
 
 <Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-sm font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
+  <h2 class="text-base font-semibold text-fg">{heading}</h2>
+  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
 
   <div class="mt-3 grid gap-2">
     <button
@@ -87,7 +88,7 @@
       class={cn(pill, consent.analytics ? on : off)}
     >
       <span>{copy.analytics}</span>
-      <span class="text-[11px]">{consent.analytics ? copy.on : copy.off}</span>
+      <span class="text-xs">{consent.analytics ? copy.on : copy.off}</span>
     </button>
     <div>
       <button
@@ -98,37 +99,37 @@
         class={cn(pill, consent.performance ? on : off)}
       >
         <span>{copy.performance}</span>
-        <span class="text-[11px]">{consent.performance ? copy.on : copy.off}</span>
+        <span class="text-xs">{consent.performance ? copy.on : copy.off}</span>
       </button>
-      <p class="mt-1.5 text-[11px] leading-snug text-fg-4">{copy.performanceReload}</p>
+      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.performanceReload}</p>
     </div>
   </div>
 
   <hr class="my-3 border-line" />
 
   <div class="flex items-center justify-between gap-2">
-    <span class="text-xs text-fg-3">{copy.notifications}</span>
-    <span class="text-end text-[11px] leading-tight text-fg-3">
+    <span class="text-sm text-fg-3">{copy.notifications}</span>
+    <span class="text-end text-xs leading-tight text-fg-3">
       {notificationsLabel}
     </span>
   </div>
 
   <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2" role="status">
-    <span class="text-xs text-fg-3">{copy.version}</span>
+    <span class="text-sm text-fg-3">{copy.version}</span>
     <div class="flex items-center gap-2">
       {#if update.available}
-        <span class="text-[11px] leading-tight text-fg-3">{copy.updateAvailable}</span>
+        <span class="text-xs leading-tight text-fg-3">{copy.updateAvailable}</span>
       {:else if checking}
-        <span class="text-[11px] leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
+        <span class="text-xs leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
       {:else}
-        <span class="text-[11px] leading-tight text-fg-3">{copy.upToDate}</span>
+        <span class="text-xs leading-tight text-fg-3">{copy.upToDate}</span>
       {/if}
       <button
         type="button"
         disabled={checking}
         onclick={onCheckUpdates}
         class={cn(
-          "rounded-md border px-3 py-1 text-xs transition-colors duration-150",
+          "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150",
           update.available ? on : off,
           checking && "cursor-not-allowed opacity-50",
         )}
@@ -138,7 +139,7 @@
     </div>
   </div>
 
-  <p class="mt-3 text-[11px] leading-snug text-fg-4">{copy.syncNote}</p>
+  <p class="mt-3 text-xs leading-snug text-fg-4">{copy.syncNote}</p>
 
   {#if signedIn}
     <hr class="my-3 border-line" />

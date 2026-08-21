@@ -2,7 +2,7 @@
 //
 // Reader appearance panel. Lazy: only downloaded once the panel is opened.
 //
-// 42 messages. Import this barrel, never
+// 43 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_accent } from "$lib/paraglide/messages/reader_accent.js";
@@ -24,6 +24,7 @@ export { reader_notifications } from "$lib/paraglide/messages/reader_notificatio
 export { reader_notifications_blocked } from "$lib/paraglide/messages/reader_notifications_blocked.js";
 export { reader_notifications_browser_unsupported } from "$lib/paraglide/messages/reader_notifications_browser_unsupported.js";
 export { reader_notifications_checking } from "$lib/paraglide/messages/reader_notifications_checking.js";
+export { reader_notifications_error } from "$lib/paraglide/messages/reader_notifications_error.js";
 export { reader_notifications_off } from "$lib/paraglide/messages/reader_notifications_off.js";
 export { reader_notifications_off_updates } from "$lib/paraglide/messages/reader_notifications_off_updates.js";
 export { reader_notifications_on } from "$lib/paraglide/messages/reader_notifications_on.js";

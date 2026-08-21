@@ -1,4 +1,5 @@
 import { browser } from "$app/environment";
+import { isMessagingConfigured } from "$lib/firebase";
 import { track } from "$lib/firebase/analytics";
 import {
   deleteFcmToken,
@@ -35,6 +36,8 @@ export function decodeFcm(raw: unknown): PersistedFcm {
 class NotificationsStore {
   #permission = $state<PermissionState>("default");
   #supported = $state<boolean | null>(null);
+  #configured = $state(isMessagingConfigured);
+  #pushError = $state(false);
   #subscribed = $state(false);
   #token = $state<string | null>(null);
   #lastMessage = $state.raw<MessagePayload | null>(null);
@@ -49,6 +52,12 @@ class NotificationsStore {
   }
   get supported(): boolean | null {
     return this.#supported;
+  }
+  get configured(): boolean {
+    return this.#configured;
+  }
+  get pushError(): boolean {
+    return this.#pushError;
   }
   get subscribed(): boolean {
     return this.#subscribed;
@@ -74,17 +83,22 @@ class NotificationsStore {
     this.#token = stored.token;
     this.#subscribed = stored.subscribed;
     this.#permission = getPermissionState();
+    this.#configured = isMessagingConfigured;
 
     if (this.#permission !== "granted") this.#subscribed = false;
 
-    void isMessagingSupported().then((ok) => {
-      this.#supported = ok;
-      if (!ok) this.#subscribed = false;
-    });
+    this.#probeSupport();
 
     void this.#wireListeners();
 
     if (this.#subscribed && this.#permission === "granted") void this.#refreshToken();
+  }
+
+  #probeSupport(): void {
+    void isMessagingSupported().then((ok) => {
+      this.#supported = ok;
+      if (!ok) this.#subscribed = false;
+    });
   }
 
   async #wireListeners(): Promise<void> {
@@ -95,9 +109,12 @@ class NotificationsStore {
       void track("notification_received_foreground", { message_id: payload.messageId });
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && this.#subscribed) {
-        void this.#refreshToken();
-      }
+      if (document.visibilityState !== "visible") return;
+      if (this.#subscribed) void this.#refreshToken();
+      if (this.#supported === false) this.#probeSupport();
+    });
+    navigator.serviceWorker?.addEventListener("controllerchange", () => {
+      if (this.#supported === false) this.#probeSupport();
     });
   }
 
@@ -145,8 +162,9 @@ class NotificationsStore {
 
   async subscribe(): Promise<boolean> {
     if (!browser || this.#busy) return false;
-    if (this.#supported === false) return false;
+    if (!this.#configured || this.#supported === false) return false;
     this.#busy = true;
+    this.#pushError = false;
     this.#generation += 1;
     try {
       const permission = await requestPermission();
@@ -154,7 +172,10 @@ class NotificationsStore {
       if (permission !== "granted") return false;
 
       const token = await getFcmToken();
-      if (!token) return false;
+      if (!token) {
+        this.#pushError = true;
+        return false;
+      }
 
       const registered = await registerTokenWithServer(token);
       this.#setSubscribed(true, token, registered);
@@ -162,6 +183,7 @@ class NotificationsStore {
       return true;
     } catch (err) {
       console.warn("[firebase] subscribe failed:", err);
+      this.#pushError = true;
       return false;
     } finally {
       this.#busy = false;
@@ -177,6 +199,7 @@ class NotificationsStore {
       if (this.#token) await unregisterTokenFromServer(this.#token);
       await deleteFcmToken();
       this.#setSubscribed(false, null);
+      this.#pushError = false;
       void track("notification_unsubscribe");
       return true;
     } catch (err) {

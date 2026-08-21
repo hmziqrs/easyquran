@@ -87,6 +87,7 @@
         "reader_notifications_blocked",
         "reader_notifications_browser_unsupported",
         "reader_notifications_checking",
+        "reader_notifications_error",
         "reader_notifications_off",
         "reader_notifications_off_updates",
         "reader_notifications_on",

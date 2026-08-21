@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 105 messages. Import this barrel, never
+// 107 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "$lib/paraglide/messages/settings_account_device_note.js";
@@ -82,10 +82,12 @@ export { settings_storage_pack_status_staging } from "$lib/paraglide/messages/se
 export { settings_storage_pack_toggle_off } from "$lib/paraglide/messages/settings_storage_pack_toggle_off.js";
 export { settings_storage_pack_toggle_on } from "$lib/paraglide/messages/settings_storage_pack_toggle_on.js";
 export { settings_storage_pack_usage } from "$lib/paraglide/messages/settings_storage_pack_usage.js";
+export { settings_storage_persist_declined } from "$lib/paraglide/messages/settings_storage_persist_declined.js";
 export { settings_storage_persist_denied } from "$lib/paraglide/messages/settings_storage_persist_denied.js";
 export { settings_storage_persist_granted } from "$lib/paraglide/messages/settings_storage_persist_granted.js";
 export { settings_storage_persist_heading } from "$lib/paraglide/messages/settings_storage_persist_heading.js";
 export { settings_storage_persist_request } from "$lib/paraglide/messages/settings_storage_persist_request.js";
+export { settings_storage_persist_unavailable } from "$lib/paraglide/messages/settings_storage_persist_unavailable.js";
 export { settings_storage_quota_warning } from "$lib/paraglide/messages/settings_storage_quota_warning.js";
 export { settings_storage_remove } from "$lib/paraglide/messages/settings_storage_remove.js";
 export { settings_storage_remove_all } from "$lib/paraglide/messages/settings_storage_remove_all.js";

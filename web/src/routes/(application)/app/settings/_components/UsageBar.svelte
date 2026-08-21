@@ -94,7 +94,7 @@
 
 <ul class="mt-2 grid gap-1">
   {#each layers as layer (layer.id)}
-    <li class="flex items-center gap-2 text-[11px] text-fg-3">
+    <li class="flex items-center gap-2 text-xs text-fg-3">
       <span
         class="inline-block size-2 shrink-0 rounded-sm border border-line-2"
         style={`background:${
