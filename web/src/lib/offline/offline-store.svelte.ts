@@ -193,20 +193,29 @@ class OfflineStore {
       const manifest = decodeOfflineManifest(await response.json());
       if (!manifest) return;
       const packId = extractPackId(manifest.pack);
-      if (packId && this.#activePack && packId !== this.#activePack.packId) void this.enable();
+      if (packId && this.#activePack && packId !== this.#activePack.packId) {
+        void this.#enable(manifest);
+      }
     } catch {}
   }
 
-  async enable(): Promise<void> {
+  enable(): Promise<void> {
+    return this.#enable(null);
+  }
+
+  async #enable(existingManifest: OfflineManifest | null): Promise<void> {
     if (!browser || this.#busy) return;
     this.#busy = true;
     const previousPackId = this.#activePack?.packId ?? null;
     let targetPackId: string | null = null;
     try {
-      const manifestResponse = await fetch("/offline/manifest.json", { cache: "no-store" });
-      if (!manifestResponse.ok) throw new Error(`manifest ${manifestResponse.status}`);
-      const manifest = decodeOfflineManifest(await manifestResponse.json());
-      if (!manifest) throw new Error("manifest malformed");
+      let manifest = existingManifest;
+      if (!manifest) {
+        const manifestResponse = await fetch("/offline/manifest.json", { cache: "no-store" });
+        if (!manifestResponse.ok) throw new Error(`manifest ${manifestResponse.status}`);
+        manifest = decodeOfflineManifest(await manifestResponse.json());
+        if (!manifest) throw new Error("manifest malformed");
+      }
       targetPackId = extractPackId(manifest.pack);
       if (!targetPackId) throw new Error("manifest missing pack id");
       const totalBytes = manifest.bytes;

@@ -18,7 +18,7 @@
   import { modeParamMatches, parseModeParam, withModeParam } from "$lib/reader/mode-param";
   import { moreParamMatches, parseMoreParam, withMoreParam } from "$lib/reader/more-param";
   import { quranWorker } from "$lib/quran/worker-client";
-  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import { translationIdFromSegments } from "$lib/data/quran";
 
   let { data, children } = $props();
@@ -43,7 +43,7 @@
   );
   const footerLinks = $derived(footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref));
   const knownMoreIds = (ids: readonly string[]): string[] =>
-    ids.filter((id) => catalogueStore.translations.some((entry) => entry.id === id));
+    ids.filter((id) => TRANSLATION_CATALOGUE_BY_ID.has(id));
 
   onMount(() => {
     reader.hydrate(parseModeParam(page.url) ?? undefined);
@@ -101,12 +101,7 @@
     const translator = page.params.translator;
     const primary = lang && translator ? translationIdFromSegments(lang, translator) : null;
     const pinned = primary ? [primary, ...ids] : [...ids];
-    void quranWorker.setPinnedTranslations(pinned).catch(() => {
-      void quranWorker
-        .whenReady()
-        .then(() => quranWorker.setPinnedTranslations(pinned))
-        .catch(() => {});
-    });
+    void quranWorker.setPinnedTranslations(pinned).catch(() => {});
   });
 
   // Dynamic import on purpose: the reader appearance panel owns ~34 messages that nothing renders

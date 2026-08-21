@@ -4,34 +4,29 @@ import { fileURLToPath } from "node:url";
 
 import type { Plugin } from "vite";
 
-import rawTranslations from "./src/lib/data/translations.json";
+import { TRANSLATIONS } from "./src/lib/data/translations";
 import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment";
 import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";
 const LOCAL_TRANSLATION_DIR = "db/quran/translations";
-const TRANSLATION_FILE_PATH = 6;
-
-// SAFETY: source profiles carry string artifact paths, and translations.json rows are positional
-// arrays whose TRANSLATION_FILE_PATH slot holds the translation file name.
+function artifactEntry(artifactPath: string, localPath: string): [string, string] {
+  return [artifactPath, localPath];
+}
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
   ...registeredSourceProfiles().map(
     (profile) =>
-      [profile.artifact.r2Path, path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath)] as [
-        string,
-        string,
-      ],
+      artifactEntry(
+        profile.artifact.r2Path,
+        path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
+      ),
   ),
-  ...(rawTranslations as readonly unknown[]).map((row) => {
-    // SAFETY: translations.json rows are positional arrays; the file name sits at
-    // TRANSLATION_FILE_PATH and is a string in every tracked row.
-    const filePath = (row as readonly unknown[])[TRANSLATION_FILE_PATH] as string;
-    // SAFETY: both entries are strings — the URL key template and path.resolve both yield strings.
-    return [
-      `tanzil/translations/${filePath}`,
-      path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, filePath),
-    ] as [string, string];
+  ...TRANSLATIONS.map((translation) => {
+    return artifactEntry(
+      translation.artifactPath,
+      path.resolve(WEB_ROOT, "..", LOCAL_TRANSLATION_DIR, translation.filePath),
+    );
   }),
 ];
 

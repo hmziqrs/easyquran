@@ -20,7 +20,7 @@
     loadingFor,
     stackedFor,
   } from "./stacked-translations.svelte";
-  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
   import { bodyText } from "$lib/quran/view/source-view";
@@ -52,7 +52,7 @@
       const translator = page.params.translator;
       return lang && translator ? translationIdFromSegments(lang, translator) : null;
     },
-    catalogue: () => catalogueStore.translations,
+    catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${data.kind}:${data.index}`,
   });
   const stackedAnnouncement = $derived.by(() => {

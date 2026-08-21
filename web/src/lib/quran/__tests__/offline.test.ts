@@ -57,13 +57,13 @@ describe("bootOfflineEngine", () => {
     await flush();
 
     expect(startMock).toHaveBeenCalledTimes(1);
-    // SAFETY: startMock replaces quranWorker.start(manifest, coordinates, catalogue); this test first proves one call exists, then reads that fixed three-argument contract.
-    const [manifest, coordinates, catalogue] = startMock.mock.calls[0] as [
-      { scripts: unknown[] },
+    // SAFETY: startMock replaces quranWorker.start(artifacts, coordinates, catalogue); this test first proves one call exists, then reads that fixed three-argument contract.
+    const [artifacts, coordinates, catalogue] = startMock.mock.calls[0] as [
+      unknown[],
       unknown,
       unknown[],
     ];
-    expect(manifest.scripts).toHaveLength(1);
+    expect(artifacts).toHaveLength(1);
     expect(coordinates).toBe(COORDS);
     expect(catalogue.length).toBeGreaterThan(100);
     expect(quran.status).not.toBe("error");

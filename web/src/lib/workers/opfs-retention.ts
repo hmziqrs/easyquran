@@ -1,8 +1,12 @@
-import type { SourceCatalogueEntry, TranslationCatalogueEntry } from "$lib/data/quran-types";
+import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
 
 import { idbDelete, idbPut, openIdb } from "./idb";
 import { idbError } from "./idb-error";
-import { deleteCachedArtifact, listCachedArtifacts } from "./opfs-cache";
+import {
+  deleteCachedArtifact,
+  listCachedArtifacts,
+  type CachedArtifactInfo,
+} from "./opfs-cache";
 
 const META_DB = "easyquran-meta";
 const META_STORE = "lastUsed";
@@ -46,18 +50,11 @@ async function readLastUsedMap(): Promise<Map<string, number>> {
   return out;
 }
 
-function buildSizeLookup(
-  catalogue?: readonly (TranslationCatalogueEntry | SourceCatalogueEntry)[],
-): Map<string, number> {
+function buildSizeLookup(catalogue?: readonly TranslationCatalogueEntry[]): Map<string, number> {
   const m = new Map<string, number>();
   if (!catalogue) return m;
   for (const entry of catalogue) {
-    if ("kind" in entry) {
-      if (entry.kind === "translation") m.set(entry.entry.id, entry.entry.sizeBytes);
-      else m.set(entry.spec.id, entry.spec.sizeBytes);
-    } else {
-      m.set(entry.id, entry.sizeBytes);
-    }
+    m.set(entry.id, entry.sizeBytes);
   }
   return m;
 }
@@ -65,7 +62,9 @@ function buildSizeLookup(
 export interface PruneOptions {
   readonly pinnedArabicIds: readonly string[];
   readonly pinnedTranslationIds?: readonly string[];
-  readonly catalogue?: readonly (TranslationCatalogueEntry | SourceCatalogueEntry)[];
+  readonly catalogue?: readonly TranslationCatalogueEntry[];
+  /** Boot-only snapshot, captured before translation staging can begin. */
+  readonly inventory?: readonly CachedArtifactInfo[];
 }
 
 export interface PruneResult {
@@ -119,7 +118,7 @@ export function computeEvictions(
 }
 
 async function runPrune(opts: PruneOptions): Promise<PruneResult> {
-  const artifacts = await listCachedArtifacts();
+  const artifacts = opts.inventory ?? (await listCachedArtifacts());
   if (artifacts.length === 0) return { evicted: [] };
 
   const lastUsed = await readLastUsedMap();

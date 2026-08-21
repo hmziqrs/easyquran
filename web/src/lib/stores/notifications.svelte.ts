@@ -44,6 +44,8 @@ class NotificationsStore {
   #hydrated = false;
   #generation = 0;
   #refreshInFlight: Promise<void> | null = null;
+  #foregroundUnsubscribe: (() => void) | null = null;
+  #visibilityListener: (() => void) | null = null;
 
   get permission(): PermissionState {
     return this.#permission;
@@ -87,28 +89,41 @@ class NotificationsStore {
 
     if (this.#permission !== "granted") this.#subscribed = false;
 
-    void isMessagingSupported().then((ok) => {
-      this.#supported = ok;
-      if (!ok) this.#subscribed = false;
-    });
+    void this.#hydrateMessaging();
+  }
 
-    void this.#wireListeners();
-
-    if (this.#subscribed && this.#permission === "granted") void this.#refreshToken();
+  async #hydrateMessaging(): Promise<void> {
+    const generation = this.#generation;
+    const supported = await isMessagingSupported();
+    if (!this.#hydrated || generation !== this.#generation) return;
+    this.#supported = supported;
+    if (!supported) {
+      this.#subscribed = false;
+      return;
+    }
+    await this.#wireListeners();
+    if (this.#subscribed && this.#permission === "granted") await this.#refreshToken();
   }
 
   async #wireListeners(): Promise<void> {
     if (!browser) return;
-    await onForegroundMessage((payload) => {
+    const unsubscribe = await onForegroundMessage((payload) => {
       this.#lastMessage = payload;
       this.#messageSeq += 1;
       void track("notification_received_foreground", { message_id: payload.messageId });
     });
-    document.addEventListener("visibilitychange", () => {
+    if (!this.#hydrated) {
+      unsubscribe();
+      return;
+    }
+    this.#foregroundUnsubscribe = unsubscribe;
+    const onVisibility = (): void => {
       if (document.visibilityState === "visible" && this.#subscribed) {
         void this.#refreshToken();
       }
-    });
+    };
+    this.#visibilityListener = onVisibility;
+    document.addEventListener("visibilitychange", onVisibility);
   }
 
   #refreshToken(): Promise<void> {
@@ -133,9 +148,10 @@ class NotificationsStore {
       void track("notification_token_refresh");
     })();
     this.#refreshInFlight = run;
-    void run.finally(() => {
-      this.#refreshInFlight = null;
-    });
+    const clearInFlight = (): void => {
+      if (this.#refreshInFlight === run) this.#refreshInFlight = null;
+    };
+    void run.then(clearInFlight, clearInFlight);
     return run;
   }
 
@@ -207,7 +223,18 @@ class NotificationsStore {
     if (this.#permission !== "granted") {
       this.#setSubscribed(false, null);
     }
-    void initMessaging();
+    if (this.#supported === true) void initMessaging();
+  }
+
+  dispose(): void {
+    this.#generation += 1;
+    this.#foregroundUnsubscribe?.();
+    this.#foregroundUnsubscribe = null;
+    if (this.#visibilityListener) {
+      document.removeEventListener("visibilitychange", this.#visibilityListener);
+      this.#visibilityListener = null;
+    }
+    this.#hydrated = false;
   }
 }
 

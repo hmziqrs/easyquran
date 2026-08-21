@@ -1,6 +1,6 @@
 import { translationIdFromSegments } from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
-import rawTranslations from "$lib/data/translations.json";
+import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "$lib/data/translations";
 import { isUiLocale, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { QURAN_DATA } from "$lib/server/quran-data";
 
@@ -28,29 +28,6 @@ interface TranslationReaderRoute {
 
 export type ParsedReaderRoute = ReaderIndexRoute | ArabicReaderRoute | TranslationReaderRoute;
 
-interface BakedTranslation {
-  readonly language: string;
-  readonly direction: UiDirection;
-}
-
-const BAKED_TRANSLATIONS = new Map<string, BakedTranslation>();
-for (const row of rawTranslations) {
-  if (!Array.isArray(row)) continue;
-  const id = row[0];
-  const language = row[2];
-  const direction = row[3];
-  if (
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- translations.json rows are positional (string|number)[] values from baked JSON; typeof discriminates elements at module load
-    typeof id !== "string" ||
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- translations.json rows are positional (string|number)[] values from baked JSON; typeof discriminates elements at module load
-    typeof language !== "string" ||
-    (direction !== "ltr" && direction !== "rtl")
-  ) {
-    continue;
-  }
-  BAKED_TRANSLATIONS.set(id, { language, direction });
-}
-
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
@@ -70,10 +47,10 @@ function positiveInteger(value: string): number | null {
 function translation(
   lang: string,
   translator: string,
-): { sourceId: string; metadata: BakedTranslation } | null {
+): { sourceId: string; metadata: BakedTranslationMetadata } | null {
   if (!CONTENT_LANGUAGE_SEGMENT.test(lang) || !TRANSLATOR_SEGMENT.test(translator)) return null;
   const sourceId = translationIdFromSegments(lang, translator);
-  const metadata = BAKED_TRANSLATIONS.get(sourceId);
+  const metadata = TRANSLATION_BY_ID.get(sourceId);
   return metadata ? { sourceId, metadata } : null;
 }
 
@@ -103,7 +80,7 @@ function translationSurahRoute(
     return {
       type: "translation",
       sourceId: source.sourceId,
-      contentLanguage: source.metadata.language,
+      contentLanguage: source.metadata.languageCode,
       contentDirection: source.metadata.direction,
       cacheKind: "surah",
       index: surah.num,
@@ -113,7 +90,7 @@ function translationSurahRoute(
   return {
     type: "translation",
     sourceId: source.sourceId,
-    contentLanguage: source.metadata.language,
+    contentLanguage: source.metadata.languageCode,
     contentDirection: source.metadata.direction,
     cacheKind: "surah",
     index: surah.num,
@@ -146,7 +123,7 @@ function translationRangeRoute(
   return {
     type: "translation",
     sourceId: source.sourceId,
-    contentLanguage: source.metadata.language,
+    contentLanguage: source.metadata.languageCode,
     contentDirection: source.metadata.direction,
     cacheKind: kind,
     index,

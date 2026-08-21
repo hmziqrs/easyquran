@@ -1,5 +1,10 @@
-import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
-import type { ResolvedManifest } from "$lib/quran/manifest";
+import {
+  OpenerKind,
+  OpenerPackaging,
+  QuranScript,
+  QuranSourceId,
+  type ArtifactSpec,
+} from "$lib/data/quran-types";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 import { quranWorker } from "$lib/quran/worker-client";
@@ -47,8 +52,7 @@ class FakeWorker {
   }
 }
 
-const MANIFEST: ResolvedManifest = {
-  scripts: [
+const ARTIFACTS: readonly ArtifactSpec[] = [
     {
       id: QuranSourceId.TanzilUthmani,
       sizeBytes: 1,
@@ -59,8 +63,7 @@ const MANIFEST: ResolvedManifest = {
       sizeBytes: 1,
       downloadUrl: "https://x/simple-clean",
     },
-  ],
-};
+];
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -75,7 +78,7 @@ afterEach(() => {
 });
 
 async function startReady(): Promise<FakeWorker> {
-  const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+  const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
   const fake = FakeWorker.last!;
   const init = fake.posted.find(
     (m): m is Extract<WorkerRequest, { type: "init" }> => m.type === "init",
@@ -86,9 +89,34 @@ async function startReady(): Promise<FakeWorker> {
 }
 
 describe("quranWorker request settlement", () => {
+  it("coalesces pre-ready pinned translations and sends only latest state", async () => {
+    const first = quranWorker.setPinnedTranslations(["en.sahih"]);
+    const second = quranWorker.setPinnedTranslations(["ur.jalandhry", "en.sahih"]);
+    expect(second).toBe(first);
+
+    const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
+    const fake = FakeWorker.last!;
+    const init = fake.posted.find(
+      (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
+    )!;
+    fake.emit("message", { id: init.id, ok: true, result: null });
+    fake.emit("message", { type: "status", status: "ready" });
+    await started;
+    await Promise.resolve();
+
+    const pinRequests = fake.posted.filter(
+      (message): message is Extract<WorkerRequest, { type: "setPinnedTranslations" }> =>
+        message.type === "setPinnedTranslations",
+    );
+    expect(pinRequests).toHaveLength(1);
+    expect(pinRequests[0]!.ids).toEqual(["ur.jalandhry", "en.sahih"]);
+    fake.emit("message", { id: pinRequests[0]!.id, ok: true, result: null });
+    await expect(first).resolves.toBeUndefined();
+  });
+
   it("notifies page loaders when the worker reports ready", async () => {
     const ready = quranWorker.whenReady();
-    const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
     const fake = FakeWorker.last!;
     fake.emit("message", { type: "status", status: "ready" });
     await ready;
@@ -253,7 +281,7 @@ describe("quranWorker request settlement", () => {
     expect(statuses.at(-1)).toEqual(["error", "sqlite-wasm exploded"]);
     detach();
 
-    const restarted = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const restarted = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
     const next = FakeWorker.last!;
     const init = next.posted.find(
       (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
