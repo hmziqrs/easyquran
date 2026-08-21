@@ -76,6 +76,7 @@
   }
 
   function cancelConfirm() {
+    if (busy) return;
     confirming = false;
     refocusRemove = true;
   }
@@ -88,6 +89,7 @@
   }
 
   async function confirmRemove() {
+    if (busy) return;
     busy = true;
     const outcome = await onremove(artifact.id);
     busy = false;
@@ -122,14 +124,12 @@
     <div class="text-[11px] text-fg-4">{formatBytes(artifact.sizeBytes)} · {lastUsedLabel}</div>
   </div>
 
-  <span class="sr-only" aria-live="polite">{errorText}</span>
   <div class="flex items-center gap-1.5" aria-live="polite">
     {#if confirming}
       <span class="text-[11px] text-fg-3">{copy.removeConfirmTitle(name)}</span>
       <button
         type="button"
         bind:this={confirmButton}
-        disabled={busy}
         onclick={confirmRemove}
         onkeydown={onKeydown}
         class={cn(actionBtn, "border-red-500/60 bg-red-500/10 text-red-400 hover:bg-red-500/20")}
@@ -138,7 +138,6 @@
       </button>
       <button
         type="button"
-        disabled={busy}
         onclick={cancelConfirm}
         onkeydown={onKeydown}
         class={cn(actionBtn, "border-line-2 text-fg-2 hover:text-fg")}

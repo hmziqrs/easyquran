@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded when the settings route loads or the reader appearance panel opens (offline-pack copy).
 //
-// 98 messages. Import this barrel, never
+// 111 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "$lib/paraglide/messages/settings_account_device_note.js";
@@ -13,6 +13,19 @@ export { settings_account_signed_in_as } from "$lib/paraglide/messages/settings_
 export { settings_account_signed_in_heading } from "$lib/paraglide/messages/settings_account_signed_in_heading.js";
 export { settings_account_signed_out_note } from "$lib/paraglide/messages/settings_account_signed_out_note.js";
 export { settings_appearance_intro } from "$lib/paraglide/messages/settings_appearance_intro.js";
+export { settings_notifications_blocked } from "$lib/paraglide/messages/settings_notifications_blocked.js";
+export { settings_notifications_busy } from "$lib/paraglide/messages/settings_notifications_busy.js";
+export { settings_notifications_disable } from "$lib/paraglide/messages/settings_notifications_disable.js";
+export { settings_notifications_enable } from "$lib/paraglide/messages/settings_notifications_enable.js";
+export { settings_notifications_heading } from "$lib/paraglide/messages/settings_notifications_heading.js";
+export { settings_notifications_status_blocked } from "$lib/paraglide/messages/settings_notifications_status_blocked.js";
+export { settings_notifications_status_browser_unsupported } from "$lib/paraglide/messages/settings_notifications_status_browser_unsupported.js";
+export { settings_notifications_status_checking } from "$lib/paraglide/messages/settings_notifications_status_checking.js";
+export { settings_notifications_status_off } from "$lib/paraglide/messages/settings_notifications_status_off.js";
+export { settings_notifications_status_off_updates } from "$lib/paraglide/messages/settings_notifications_status_off_updates.js";
+export { settings_notifications_status_on } from "$lib/paraglide/messages/settings_notifications_status_on.js";
+export { settings_notifications_status_unavailable } from "$lib/paraglide/messages/settings_notifications_status_unavailable.js";
+export { settings_notifications_unsupported } from "$lib/paraglide/messages/settings_notifications_unsupported.js";
 export { settings_privacy_check_updates } from "$lib/paraglide/messages/settings_privacy_check_updates.js";
 export { settings_privacy_intro } from "$lib/paraglide/messages/settings_privacy_intro.js";
 export { settings_privacy_sign_out } from "$lib/paraglide/messages/settings_privacy_sign_out.js";

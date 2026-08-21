@@ -74,6 +74,7 @@
   let actionNotice = $state<string | null>(null);
   let refocusRemoveAll = $state(false);
   let downloadsHeading = $state<HTMLHeadingElement>();
+  let persistHeading = $state<HTMLHeadingElement>();
   let removeAllButton = $state<HTMLButtonElement>();
   let confirmAllButton = $state<HTMLButtonElement>();
   let clearingPages = $state(false);
@@ -104,10 +105,20 @@
     return sourceId;
   }
 
+  function localizedLanguageName(code: string, fallback: string): string {
+    try {
+      return new Intl.DisplayNames([locale], { type: "language" }).of(code) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   function artifactLanguage(sourceId: string): string | null {
     if (isArabicSourceId(sourceId)) return null;
     const entry = findCatalogueEntry(catalogue, sourceId);
-    if (entry && entry.kind === "translation") return entry.entry.language;
+    if (entry && entry.kind === "translation") {
+      return localizedLanguageName(entry.entry.languageCode, entry.entry.language);
+    }
     return null;
   }
 
@@ -122,6 +133,7 @@
   }
 
   function cancelConfirmAll() {
+    if (busyAll) return;
     confirmingAll = false;
     refocusRemoveAll = true;
   }
@@ -134,11 +146,13 @@
   }
 
   async function confirmRemoveAll() {
+    if (busyAll) return;
     busyAll = true;
     const result = await report.clearAllTranslations([...inUseIds]);
     busyAll = false;
     confirmingAll = false;
     actionNotice = copy.freed(formatBytes(result.freedBytes));
+    if (result.failures > 0) actionNotice += ` · ${copy.busyError}`;
     await tick();
     downloadsHeading?.focus();
   }
@@ -153,8 +167,9 @@
 
   async function requestPersist() {
     persistBusy = true;
-    await report.requestPersist();
+    const granted = await report.requestPersist();
     persistBusy = false;
+    if (granted) persistHeading?.focus();
   }
 </script>
 
@@ -196,8 +211,13 @@
     </section>
 
     <section class="mt-5" aria-label={copy.persistHeading}>
-      <h3 class="text-xs font-medium text-fg-2">{copy.persistHeading}</h3>
-      <p class={cn("mt-1 text-[11px] leading-snug", report.persisted === false ? "text-fg-4" : "text-fg-3")}>
+      <h3 class="text-xs font-medium text-fg-2" tabindex="-1" bind:this={persistHeading}>
+        {copy.persistHeading}
+      </h3>
+      <p
+        aria-live="polite"
+        class={cn("mt-1 text-[11px] leading-snug", report.persisted === false ? "text-fg-4" : "text-fg-3")}
+      >
         {#if report.persisted === true}{copy.persistGranted}{:else if report.persisted === false}
           {copy.persistDenied}
         {:else}{copy.loading}{/if}
@@ -275,16 +295,14 @@
           <button
             type="button"
             bind:this={confirmAllButton}
-            disabled={busyAll}
             onclick={confirmRemoveAll}
             onkeydown={onKeydown}
-            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/20"
           >
             {copy.removeConfirmAction}
           </button>
           <button
             type="button"
-            disabled={busyAll}
             onclick={cancelConfirmAll}
             onkeydown={onKeydown}
             class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg"

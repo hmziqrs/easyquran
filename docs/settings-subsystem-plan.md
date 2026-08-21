@@ -492,3 +492,22 @@ Where shipped code departs from the sections above, current code wins; the reaso
     non-default fonts on every apply (hydrate + cross-tab re-apply), so a persisted
     Scheherazade/Noto selection survives reloads. First paint still shows Amiri until the
     lazy woff2 lands — inherent to keeping alternate mushaf bytes out of the bundle.
+11. **The purge no-controller window fallback (§2.5) was dropped.** "Clear cached pages &
+    data" stays a worker-message-only path (`purgeUserCaches()`); when
+    `navigator.serviceWorker.controller === null` the button renders permanently disabled
+    with the unavailable reason instead of falling back to a window-side
+    `caches.delete("eq-pages-v1"/"eq-data-v1")`. Rationale: duplicating the cache-name list
+    on the main thread is a second source of truth for what user action may delete, and the
+    no-controller state is session-transient (first claimed load ends it). §11's "window
+    fallback gated to exactly that case" risk note is therefore resolved by the disabled UI
+    alone.
+12. **§9 item 7's `lazy-sections.test.ts` raw-source chunk guard shipped as
+    `route-isolation.test.ts` with the opposite chunk contract:** test 2 pins that
+    `+page.svelte` statically imports all five sections (one settings chunk, no per-section
+    loaders), and the chunk-regression mitigation named in §11 is a raw-source ban on static
+    heavy-package imports (bits-ui, `@fontsource/*` files, chart libs, d3, echarts, three)
+    across the settings route tree — dynamic `await import(...)` remains allowed. Raw-source
+    pins also cover the delete-flow contracts the plan left untested: Escape
+    `stopPropagation` in the row confirm, exactly one polite announcer in the row, the
+    arabic/busy/error outcome copy mapping, `result.failures` surfacing in remove-all, and
+    the `readerSource.sourceId` + `stackedTranslations.ids` in-use join.

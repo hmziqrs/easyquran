@@ -29,12 +29,14 @@ function findWebRoot(): string {
 const APP_HTML = readFileSync(resolve(findWebRoot(), "src/app.html"), "utf8");
 
 describe("app.html pre-paint literal sync", () => {
-  it("mirrors every ARABIC_FONT_IDS entry in the arabicFont allowlist", () => {
+  it("carries no arabicFont mirror: fonts lazy-load at hydration and applyReaderPresentation owns the dataset/--reader-arabic-family writes", () => {
+    expect(APP_HTML.includes("arabicFont")).toBe(false);
+    expect(APP_HTML.includes("--reader-arabic-family")).toBe(false);
     for (const id of ARABIC_FONT_IDS) {
       expect(
-        APP_HTML.includes(`af === "${id}"`),
-        `app.html arabicFont allowlist is missing "${id}"`,
-      ).toBe(true);
+        APP_HTML.includes(`"${id}"`),
+        `app.html must not mirror font id "${id}" pre-paint`,
+      ).toBe(false);
     }
   });
 
@@ -48,8 +50,7 @@ describe("app.html pre-paint literal sync", () => {
     expect(APP_HTML.includes(`r.fontSize <= ${ARABIC_FONT_MAX}`)).toBe(true);
   });
 
-  it("rejects ids and bounds the allowlist must not carry (guard is not toothless)", () => {
-    expect(APP_HTML.includes('af === "kufi"')).toBe(false);
+  it("rejects bounds the pre-paint script must not carry (guard is not toothless)", () => {
     expect(APP_HTML.includes("r.translationSize >= 12")).toBe(false);
     expect(APP_HTML.includes("r.fontSize >= 20")).toBe(false);
   });

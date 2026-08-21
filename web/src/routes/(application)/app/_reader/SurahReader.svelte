@@ -698,6 +698,18 @@
     lastRouteKey = key;
   });
 
+  let lastTypography: string | null = null;
+  $effect(() => {
+    const typography = `${reader.arabicFont}:${reader.translationSizePx}:${reader.translationFamily}`;
+    if (lastTypography === typography) return;
+    const firstRun = lastTypography === null;
+    lastTypography = typography;
+    if (firstRun) return;
+    void preserveViewport(() => {
+      virtualCenterPage = visibleLocalPage;
+    }, true);
+  });
+
   onMount(() => {
     clientMounted = true;
     lastScrollY = window.scrollY;

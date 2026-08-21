@@ -1,5 +1,4 @@
 import { browser } from "$app/environment";
-import { isConfigured } from "$lib/firebase";
 import { track } from "$lib/firebase/analytics";
 import {
   deleteFcmToken,
@@ -65,15 +64,6 @@ class NotificationsStore {
   }
   get canSubscribe(): boolean {
     return this.#supported === true && this.#permission !== "denied";
-  }
-  get statusText(): string {
-    if (!isConfigured) return "Notifications unavailable (not configured).";
-    if (this.#supported === null) return "Checking…";
-    if (this.#supported === false) return "Not supported on this browser.";
-    if (this.#permission === "denied") return "Blocked in your browser settings.";
-    if (this.#subscribed) return "On — you'll receive notifications.";
-    if (this.#permission === "default") return "Off — enable to get updates.";
-    return "Off.";
   }
 
   hydrate(): void {

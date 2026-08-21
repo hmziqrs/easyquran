@@ -1,8 +1,16 @@
 <script lang="ts">
+  import { isConfigured } from "$lib/firebase";
   import { notifications } from "$lib/stores/notifications.svelte";
+  import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
   import { cn } from "$lib/utils";
 
   const pill = "rounded-md border px-3 py-1.5 text-xs transition-colors duration-150";
+
+  let {
+    copy,
+  }: {
+    copy: NotificationsCopy;
+  } = $props();
 
   async function toggle() {
     if (notifications.subscribed) await notifications.unsubscribe();
@@ -10,12 +18,21 @@
   }
 
   function toggleLabel(): string {
-    if (notifications.busy) return "Working…";
-    if (notifications.subscribed) return "Disable";
-    if (notifications.permission === "denied") return "Blocked";
-    if (notifications.supported === false) return "Unsupported";
-    return "Enable";
+    if (notifications.busy) return copy.toggleBusy;
+    if (notifications.subscribed) return copy.toggleDisable;
+    if (notifications.permission === "denied") return copy.toggleBlocked;
+    if (notifications.supported === false) return copy.toggleUnsupported;
+    return copy.toggleEnable;
   }
+
+  const statusLabel = $derived(
+    copy.status({
+      configured: isConfigured,
+      supported: notifications.supported,
+      permission: notifications.permission,
+      subscribed: notifications.subscribed,
+    }),
+  );
 
   let disabled = $derived(!notifications.subscribed && !notifications.canSubscribe);
   let label = $derived(toggleLabel());
@@ -23,9 +40,9 @@
 
 <div class="grid gap-1.5">
   <div class="flex items-center justify-between gap-2">
-    <span class="text-xs text-fg-3">Notifications</span>
-    <span class="text-right text-[11px] leading-tight text-fg-3">
-      {notifications.statusText}
+    <span class="text-xs text-fg-3">{copy.heading}</span>
+    <span class="text-end text-[11px] leading-tight text-fg-3">
+      {statusLabel}
     </span>
   </div>
   <button

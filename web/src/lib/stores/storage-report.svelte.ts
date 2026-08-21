@@ -148,7 +148,6 @@ class StorageReportStore {
     try {
       await quranWorker.whenReady();
       if (seq !== this.#refreshSeq) return;
-      this.phase = "ready";
     } catch {
       if (seq === this.#refreshSeq) this.phase = "error";
       return;
@@ -163,10 +162,13 @@ class StorageReportStore {
       this.phase = "error";
       return;
     }
+    const persisted = await readPersisted();
+    if (seq !== this.#refreshSeq) return;
     this.artifacts = artifacts;
     this.swPages = sw ? sw.pages : null;
     this.swData = sw ? sw.data : null;
-    this.persisted = await readPersisted();
+    this.persisted = persisted;
+    this.phase = "ready";
   }
 
   async deleteArtifact(id: string): Promise<DeleteOutcome> {

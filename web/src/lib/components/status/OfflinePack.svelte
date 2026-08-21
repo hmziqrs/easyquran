@@ -35,12 +35,12 @@
 <section class="grid gap-1.5">
   <div class="flex items-center justify-between gap-2">
     <span class="text-xs text-fg-3">{copy.heading}</span>
-    <span class="text-right text-[11px] leading-tight text-fg-3">{statusLabel}</span>
+    <span class="text-end text-[11px] leading-tight text-fg-3" aria-live="polite">{statusLabel}</span>
   </div>
   {#if offline.activePack}
     <div class="text-[11px] text-fg-4">
       {copy.routes(offline.activePack.entries, formatBytes(offline.activePack.bytes))}{#if savedAt}
-        · {copy.saved(new Date(savedAt).toLocaleDateString())}{/if}
+        · {copy.saved(new Date(savedAt))}{/if}
     </div>
   {/if}
   {#if offline.quota != null}

@@ -283,7 +283,9 @@
 
         {#if showReaderTools}
           <hr class="border-line" />
-          <Notifications />
+          {#if copy.notifications}
+            <Notifications copy={copy.notifications} />
+          {/if}
           <hr class="border-line" />
           {#if copy.offlinePack}
             <OfflinePack copy={copy.offlinePack} />

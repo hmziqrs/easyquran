@@ -1,4 +1,8 @@
 import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
+import {
+  notificationsStatus,
+  type NotificationsCopy,
+} from "$lib/components/notifications/notifications-copy";
 import type { UiLocale } from "$lib/i18n/locales";
 import {
   tweaks_accent_option,
@@ -46,6 +50,19 @@ import {
   reader_theme_derived_note,
 } from "$lib/i18n/m/reader-settings";
 import {
+  settings_notifications_blocked,
+  settings_notifications_busy,
+  settings_notifications_disable,
+  settings_notifications_enable,
+  settings_notifications_heading,
+  settings_notifications_status_blocked,
+  settings_notifications_status_browser_unsupported,
+  settings_notifications_status_checking,
+  settings_notifications_status_off,
+  settings_notifications_status_off_updates,
+  settings_notifications_status_on,
+  settings_notifications_status_unavailable,
+  settings_notifications_unsupported,
   settings_storage_pack_bar_preparing,
   settings_storage_pack_bar_ready,
   settings_storage_pack_busy,
@@ -68,6 +85,7 @@ import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
   readonly offlinePack: OfflinePackCopy;
+  readonly notifications: NotificationsCopy;
   readonly background: string;
   readonly pop: string;
   readonly accentColour: (label: string) => string;
@@ -126,7 +144,7 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       }),
       routes: (entries: number, size: string) =>
         settings_storage_pack_routes({ entries, size }, options),
-      saved: (when: string) => settings_storage_pack_saved({ when }, options),
+      saved: (when: Date) => settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, options),
       usage: (used: string, quota: string) => settings_storage_pack_usage({ used, quota }, options),
       toggleOn: noArgs(settings_storage_pack_toggle_on),
       toggleOff: noArgs(settings_storage_pack_toggle_off),
@@ -134,6 +152,23 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       retry: noArgs(settings_storage_pack_retry),
       barPreparing: noArgs(settings_storage_pack_bar_preparing),
       barReady: noArgs(settings_storage_pack_bar_ready),
+    },
+    notifications: {
+      heading: noArgs(settings_notifications_heading),
+      status: notificationsStatus({
+        unavailable: noArgs(settings_notifications_status_unavailable),
+        checking: noArgs(settings_notifications_status_checking),
+        browserUnsupported: noArgs(settings_notifications_status_browser_unsupported),
+        blocked: noArgs(settings_notifications_status_blocked),
+        on: noArgs(settings_notifications_status_on),
+        offUpdates: noArgs(settings_notifications_status_off_updates),
+        off: noArgs(settings_notifications_status_off),
+      }),
+      toggleBusy: noArgs(settings_notifications_busy),
+      toggleDisable: noArgs(settings_notifications_disable),
+      toggleBlocked: noArgs(settings_notifications_blocked),
+      toggleUnsupported: noArgs(settings_notifications_unsupported),
+      toggleEnable: noArgs(settings_notifications_enable),
     },
     background: noArgs(reader_background),
     pop: noArgs(reader_pop),

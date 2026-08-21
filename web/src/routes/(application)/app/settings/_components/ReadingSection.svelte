@@ -101,7 +101,7 @@
 
     <div>
       <div class="mb-1.5 text-xs text-fg-3">{copy.arabicSize}</div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2" role="group" aria-label={copy.arabicSize}>
         <button
           type="button"
           class={stepperButton}
@@ -109,7 +109,7 @@
           disabled={reader.arabicSizePx === `${ARABIC_FONT_MIN}px`}
           onclick={() => reader.smaller()}>−</button
         >
-        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2"
+        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2" aria-live="polite"
           >{reader.arabicSizePx}</span
         >
         <button
@@ -138,7 +138,7 @@
 
     <div>
       <div class="mb-1.5 text-xs text-fg-3">{copy.translationSize}</div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2" role="group" aria-label={copy.translationSize}>
         <button
           type="button"
           class={stepperButton}
@@ -146,7 +146,7 @@
           disabled={reader.translationSizePx === `${TRANSLATION_FONT_MIN}px`}
           onclick={() => reader.shrinkTranslation()}>−</button
         >
-        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2"
+        <span class="min-w-10 text-center text-xs tabular-nums text-fg-2" aria-live="polite"
           >{reader.translationSizePx}</span
         >
         <button

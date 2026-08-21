@@ -31,6 +31,9 @@ const SECTION_COMPONENTS = [
 
 const SETTINGS_DIR = "app/settings/";
 
+const HEAVY_STATIC_IMPORT =
+  /import\s+(?:[A-Za-z0-9_$ {},*]*from\s*)?["'](?:bits-ui(?:\/[^"']*)?|@fontsource\/[^"']+|chart\.js|echarts|d3(?:-[^"']*)?|three(?:\/[^"']*)?)["']/u;
+
 describe("settings route chunk isolation", () => {
   it("section components are referenced only from inside the settings route", () => {
     const outside = [...sources].filter(
@@ -54,6 +57,17 @@ describe("settings route chunk isolation", () => {
         `+page.svelte must keep importing ${name} statically`,
       ).toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}"`, "u"));
     }
+  });
+
+  it("settings route files carry no static heavy-package imports", () => {
+    const offenders = [...sources]
+      .filter(([path]) => path.includes(SETTINGS_DIR))
+      .filter(([, src]) => HEAVY_STATIC_IMPORT.test(src))
+      .map(([path]) => path);
+    expect(
+      offenders,
+      "heavy packages (bits-ui, @fontsource files, chart libs) may only reach the settings route via dynamic import",
+    ).toEqual([]);
   });
 
   it("shared chrome and the reader tweaks panel never import settings modules", () => {
@@ -103,5 +117,40 @@ describe("settings route chunk isolation", () => {
     if (pageOptions !== undefined) {
       expect(pageOptions).toContain("prerender = false");
     }
+  });
+});
+
+describe("settings storage delete-flow guards", () => {
+  const findSource = (name: string): [string, string] | undefined =>
+    [...sources].find(([path]) => path.endsWith(`${SETTINGS_DIR}_components/${name}`));
+
+  it("row confirm keeps the Escape guard and a single live announcer", () => {
+    const row = findSource("StorageArtifactRow.svelte");
+    expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();
+    expect(row![1]).toContain("event.stopPropagation()");
+    expect(row![1]).toContain('aria-live="polite"');
+    expect(row![1].match(/aria-live="polite"/gu)?.length ?? 0).toBe(1);
+  });
+
+  it("delete outcomes map to distinct copy keys", () => {
+    const row = findSource("StorageArtifactRow.svelte");
+    expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();
+    expect(row![1]).toContain("copy.arabicError");
+    expect(row![1]).toContain("copy.busyError");
+    expect(row![1]).toContain("copy.error");
+  });
+
+  it("remove-all surfaces worker refusals instead of a bare freed summary", () => {
+    const section = findSource("StorageSection.svelte");
+    expect(section, "StorageSection.svelte should exist").toBeDefined();
+    expect(section![1]).toContain("result.failures");
+    expect(section![1]).toContain("copy.busyError");
+  });
+
+  it("the in-use guard joins reader primary and stacked translation ids", () => {
+    const section = findSource("StorageSection.svelte");
+    expect(section, "StorageSection.svelte should exist").toBeDefined();
+    expect(section![1]).toContain("readerSource.sourceId");
+    expect(section![1]).toContain("stackedTranslations.ids");
   });
 });

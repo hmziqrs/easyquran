@@ -224,11 +224,16 @@ describe("storage report fan-in", () => {
     report.hydrate();
     await new Promise((r) => setTimeout(r, 0));
     expect(report.artifacts).toHaveLength(0);
+    const baseline = workerMock.listArtifacts.mock.calls.length;
+    expect(baseline).toBe(1);
 
     emitStatus("downloading");
     await new Promise((r) => setTimeout(r, 0));
-    const duringDownload = workerMock.listArtifacts.mock.calls.length;
-    expect(duringDownload).toBeGreaterThan(0);
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(baseline);
+
+    emitStatus("error");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(baseline);
 
     workerMock.listArtifacts.mockResolvedValue([
       artifact({ id: "en.sahih" }),
@@ -237,11 +242,11 @@ describe("storage report fan-in", () => {
     emitStatus("ready");
     await new Promise((r) => setTimeout(r, 0));
     expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih", "ur.jalandhry"]);
-    expect(workerMock.listArtifacts.mock.calls.length).toBe(duringDownload + 1);
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(baseline + 1);
 
     emitStatus("translation-fetch-failed");
     await new Promise((r) => setTimeout(r, 0));
-    expect(workerMock.listArtifacts.mock.calls.length).toBe(duringDownload + 2);
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(baseline + 2);
     report.dispose();
   });
 
@@ -280,6 +285,74 @@ describe("storage report fan-in", () => {
     resolveStale([artifact({ id: "uthmani" })]);
     await stale;
     expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih"]);
+  });
+
+  it("a stale refresh cannot stamp a stale persisted value", async () => {
+    let resolveStale!: (granted: boolean) => void;
+    let resolveFresh!: (granted: boolean) => void;
+    let persistedCalls = 0;
+    Object.defineProperty(globalThis.navigator, "storage", {
+      value: {
+        persisted: () =>
+          new Promise<boolean>((resolve) => {
+            persistedCalls += 1;
+            if (persistedCalls === 1) resolveStale = resolve;
+            else resolveFresh = resolve;
+          }),
+      },
+      configurable: true,
+      writable: true,
+    });
+    workerMock.listArtifacts.mockResolvedValue([]);
+    const report = createStorageReport();
+    const stale = report.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(resolveStale).toBeTypeOf("function");
+    const fresh = report.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(resolveFresh).toBeTypeOf("function");
+    expect(report.persisted).toBe(null);
+    resolveStale(true);
+    await stale;
+    expect(report.persisted).toBe(null);
+    resolveFresh(false);
+    await fresh;
+    expect(report.persisted).toBe(false);
+  });
+
+  it("requestPersist stores and returns a grant", async () => {
+    Object.defineProperty(globalThis.navigator, "storage", {
+      value: { persist: async () => true },
+      configurable: true,
+      writable: true,
+    });
+    const report = createStorageReport();
+    await expect(report.requestPersist()).resolves.toBe(true);
+    expect(report.persisted).toBe(true);
+  });
+
+  it("requestPersist collapses a persist() rejection to denied", async () => {
+    Object.defineProperty(globalThis.navigator, "storage", {
+      value: {
+        persist: async () => {
+          throw new Error("denied");
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    const report = createStorageReport();
+    await expect(report.requestPersist()).resolves.toBe(false);
+    expect(report.persisted).toBe(false);
+  });
+
+  it("requestPersist reports unsupported storage without touching persisted", async () => {
+    // SAFETY: navigator.storage is optional at runtime; cast drops the beforeEach stub.
+    const nav = globalThis.navigator as { storage?: unknown };
+    delete nav.storage;
+    const report = createStorageReport();
+    await expect(report.requestPersist()).resolves.toBe(false);
+    expect(report.persisted).toBe(null);
   });
 });
 

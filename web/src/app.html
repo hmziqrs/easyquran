@@ -31,10 +31,6 @@
           if (typeof r.fontSize === "number" && r.fontSize >= 22 && r.fontSize <= 56) {
             d.style.setProperty("--reader-arabic-size", r.fontSize + "px");
           }
-          var af = r.arabicFont;
-          if (af === "amiri" || af === "scheherazade-new" || af === "noto-naskh-arabic") {
-            d.dataset.arabicFont = af;
-          }
           if (
             typeof r.translationSize === "number" &&
             r.translationSize >= 13 &&

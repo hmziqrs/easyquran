@@ -1,20 +1,16 @@
 import type { Pathname } from "$app/types";
-import type { UiLocale } from "$lib/i18n/locales";
 import { publicHref } from "$lib/i18n/public-href";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { getLocale } from "$lib/paraglide/runtime.js";
 
 import { PaletteGroups } from "../groups";
 import { byScore, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteSource } from "../types";
 
 const SOURCE_ID = "settings.routes";
+const SETTINGS_PATH = "/app/settings";
 
 function settingsHref(): Pathname {
-  // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
-  const locale = getLocale() as UiLocale;
-  // SAFETY: publicHref returns a validated route string and readerHrefFor only yields internal app pathnames, so the result is a valid Pathname.
-  return publicHref(readerHrefFor(locale, "/app/settings")) as Pathname;
+  // SAFETY: canonical settings pathname (localized /{en,ar}/app/settings is not a published route); publicHref only prepends base, so the cast is sound.
+  return publicHref(SETTINGS_PATH) as Pathname;
 }
 
 /** Settings navigation. Labels stay English — see the palette-label precedent in site-routes.ts. */
