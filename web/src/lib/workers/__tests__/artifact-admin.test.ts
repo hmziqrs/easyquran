@@ -332,6 +332,29 @@ describe("worker deleteStorageArtifact refusals", () => {
       worker.__artifactAdminTestHooks.clearInFlight("en.sahih");
     }
   });
+
+  it("rejects a same-id runner landing inside the delete window instead of letting it resurrect", async () => {
+    await seedOpfsArtifact("en.sahih", 2 * MB);
+    seedIdbRecord("easyquran-pointers", "opfsPointers", "en.sahih", {
+      sourceId: "en.sahih",
+      activeFile: "en.sahih.sqlite",
+    });
+    seedIdbRecord("easyquran-meta", "lastUsed", "en.sahih", 1_700_000_000_000);
+    const hooks = worker.__artifactAdminTestHooks;
+
+    const deleting = worker.deleteStorageArtifact("en.sahih");
+    const gate = hooks.pendingRunner("en.sahih");
+    expect(gate).not.toBeNull();
+    const secondDelete = worker.deleteStorageArtifact("en.sahih");
+    const gateRejection = expect(gate).rejects.toThrow(/^busy$/);
+    const secondRejection = expect(secondDelete).rejects.toThrow(/^busy$/);
+    await gateRejection;
+    await secondRejection;
+
+    await deleting;
+    expect(hooks.pendingRunner("en.sahih")).toBeNull();
+    expect(opLog).toContain("idb:del:easyquran-meta/lastUsed:en.sahih");
+  });
 });
 
 describe("worker deleteStorageArtifact ordering mirrors runPrune", () => {

@@ -1,6 +1,7 @@
-import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
+import { offlinePackStatus, type OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import type { UiDirection, UiLocale } from "$lib/i18n/locales";
 import { uiDirection } from "$lib/i18n/locales";
+import { QuranScript } from "$lib/data/quran-types";
 import { reader_new_version_ready, reader_reload_open_tabs } from "$lib/i18n/m/reader";
 import { getLocale } from "$lib/paraglide/runtime.js";
 import {
@@ -15,6 +16,7 @@ import {
   settings_privacy_check_updates,
   settings_privacy_intro,
   settings_privacy_sign_out,
+  settings_privacy_sign_out_error,
   settings_privacy_sync_note,
   settings_privacy_up_to_date,
   settings_privacy_version,
@@ -57,11 +59,19 @@ import {
   settings_storage_loading,
   settings_storage_never_used,
   settings_storage_offline_pack_note,
+  settings_storage_pack_bar_preparing,
+  settings_storage_pack_bar_ready,
   settings_storage_pack_busy,
   settings_storage_pack_heading,
   settings_storage_pack_retry,
   settings_storage_pack_routes,
   settings_storage_pack_saved,
+  settings_storage_pack_status_active,
+  settings_storage_pack_status_downloading,
+  settings_storage_pack_status_error,
+  settings_storage_pack_status_off,
+  settings_storage_pack_status_on,
+  settings_storage_pack_status_staging,
   settings_storage_pack_toggle_off,
   settings_storage_pack_toggle_on,
   settings_storage_pack_usage,
@@ -77,9 +87,15 @@ import {
   settings_storage_remove_cancel,
   settings_storage_remove_confirm_action,
   settings_storage_remove_confirm_title,
+  settings_storage_removed,
   settings_storage_required_group,
   settings_storage_required_note,
   settings_storage_retention_note,
+  settings_storage_script_indopak,
+  settings_storage_script_simple_clean,
+  settings_storage_script_tajweed,
+  settings_storage_script_translation,
+  settings_storage_script_uthmani,
   settings_storage_retry,
   settings_storage_store_idb,
   settings_storage_store_memory,
@@ -92,6 +108,13 @@ import {
   reader_arabic_text_size,
   reader_ayah_by_ayah,
   reader_notifications,
+  reader_notifications_blocked,
+  reader_notifications_browser_unsupported,
+  reader_notifications_checking,
+  reader_notifications_off,
+  reader_notifications_off_updates,
+  reader_notifications_on,
+  reader_notifications_unavailable,
   reader_reading,
 } from "$lib/i18n/m/reader";
 import {
@@ -139,6 +162,7 @@ export interface SettingsCopy {
     readonly inUse: string;
     readonly requiredGroup: string;
     readonly requiredNote: string;
+    readonly scripts: Readonly<Record<QuranScript, string>>;
     readonly stores: {
       readonly opfs: string;
       readonly idb: string;
@@ -153,6 +177,7 @@ export interface SettingsCopy {
     readonly removeAll: string;
     readonly removeAllConfirm: string;
     readonly freed: (size: string) => string;
+    readonly removed: (name: string) => string;
     readonly clearPages: string;
     readonly clearPagesDone: string;
     readonly clearPagesUnavailable: string;
@@ -203,6 +228,15 @@ export interface SettingsCopy {
     readonly on: string;
     readonly off: string;
     readonly notifications: string;
+    readonly notificationsStatus: {
+      readonly unavailable: string;
+      readonly checking: string;
+      readonly browserUnsupported: string;
+      readonly blocked: string;
+      readonly on: string;
+      readonly offUpdates: string;
+      readonly off: string;
+    };
     readonly version: string;
     readonly checkUpdates: string;
     readonly upToDate: string;
@@ -210,6 +244,7 @@ export interface SettingsCopy {
     readonly reloadUpdate: string;
     readonly syncNote: string;
     readonly signOut: string;
+    readonly signOutError: string;
   };
   readonly account: {
     readonly intro: string;
@@ -266,6 +301,13 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       inUse: noArgs(settings_storage_in_use),
       requiredGroup: noArgs(settings_storage_required_group),
       requiredNote: noArgs(settings_storage_required_note),
+      scripts: {
+        [QuranScript.Uthmani]: noArgs(settings_storage_script_uthmani),
+        [QuranScript.SimpleClean]: noArgs(settings_storage_script_simple_clean),
+        [QuranScript.IndoPak]: noArgs(settings_storage_script_indopak),
+        [QuranScript.Tajweed]: noArgs(settings_storage_script_tajweed),
+        [QuranScript.Translation]: noArgs(settings_storage_script_translation),
+      },
       stores: {
         opfs: noArgs(settings_storage_store_opfs),
         idb: noArgs(settings_storage_store_idb),
@@ -280,6 +322,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       removeAll: noArgs(settings_storage_remove_all),
       removeAllConfirm: noArgs(settings_storage_remove_all_confirm),
       freed: (size) => settings_storage_freed({ size }, options),
+      removed: (name) => settings_storage_removed({ name }, options),
       clearPages: noArgs(settings_storage_clear_pages),
       clearPagesDone: noArgs(settings_storage_clear_pages_done),
       clearPagesUnavailable: noArgs(settings_storage_clear_pages_unavailable),
@@ -296,6 +339,14 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       offlinePackNote: noArgs(settings_storage_offline_pack_note),
       offlinePack: {
         heading: noArgs(settings_storage_pack_heading),
+        status: offlinePackStatus({
+          active: (entries) => settings_storage_pack_status_active({ entries }, options),
+          on: noArgs(settings_storage_pack_status_on),
+          downloading: noArgs(settings_storage_pack_status_downloading),
+          staging: noArgs(settings_storage_pack_status_staging),
+          error: noArgs(settings_storage_pack_status_error),
+          off: noArgs(settings_storage_pack_status_off),
+        }),
         routes: (entries: number, size: string) =>
           settings_storage_pack_routes({ entries, size }, options),
         saved: (when: string) => settings_storage_pack_saved({ when }, options),
@@ -304,6 +355,8 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         toggleOff: noArgs(settings_storage_pack_toggle_off),
         busy: noArgs(settings_storage_pack_busy),
         retry: noArgs(settings_storage_pack_retry),
+        barPreparing: noArgs(settings_storage_pack_bar_preparing),
+        barReady: noArgs(settings_storage_pack_bar_ready),
       },
     },
     appearance: {
@@ -340,6 +393,15 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       on: noArgs(reader_on),
       off: noArgs(reader_off),
       notifications: noArgs(reader_notifications),
+      notificationsStatus: {
+        unavailable: noArgs(reader_notifications_unavailable),
+        checking: noArgs(reader_notifications_checking),
+        browserUnsupported: noArgs(reader_notifications_browser_unsupported),
+        blocked: noArgs(reader_notifications_blocked),
+        on: noArgs(reader_notifications_on),
+        offUpdates: noArgs(reader_notifications_off_updates),
+        off: noArgs(reader_notifications_off),
+      },
       version: noArgs(settings_privacy_version),
       checkUpdates: noArgs(settings_privacy_check_updates),
       upToDate: noArgs(settings_privacy_up_to_date),
@@ -347,6 +409,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       reloadUpdate: noArgs(reader_reload_open_tabs),
       syncNote: noArgs(settings_privacy_sync_note),
       signOut: noArgs(settings_privacy_sign_out),
+      signOutError: noArgs(settings_privacy_sign_out_error),
     },
     account: {
       intro: noArgs(settings_account_intro),

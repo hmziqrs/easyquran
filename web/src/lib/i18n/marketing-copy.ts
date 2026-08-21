@@ -33,6 +33,7 @@ export interface NavResolvedCopy {
   searchQuran: string;
   account: string;
   signIn: string;
+  settings: string;
   openPanel: string;
   closePanel: string;
   sitePanel: string;

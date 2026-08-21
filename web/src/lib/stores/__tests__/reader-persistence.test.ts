@@ -370,3 +370,46 @@ describe("createReaderPersistence hydration race", () => {
     persistence.dispose();
   });
 });
+
+describe("createReaderPersistence cross-tab re-apply", () => {
+  beforeEach(() => {
+    flag.value = true;
+    window.localStorage.clear();
+  });
+
+  it("re-applies v3 typography from a foreign-tab storage event", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    expect(core.s.arabicFont).toBe("amiri");
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        v: 3,
+        arabicFont: "scheherazade-new",
+        translationSize: 21,
+        mode: "reading",
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    expect(core.s.arabicFont).toBe("scheherazade-new");
+    expect(core.s.translationSize).toBe(21);
+    expect(core.s.mode).toBe("reading");
+    const root = document.documentElement;
+    expect(root.dataset.arabicFont).toBe("scheherazade-new");
+    expect(root.style.getPropertyValue("--reader-arabic-family")).toContain("Scheherazade New");
+    expect(root.style.getPropertyValue("--reader-translation-size")).toBe("21px");
+    persistence.dispose();
+  });
+
+  it("ignores storage events for other keys", () => {
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    window.localStorage.setItem("easyquran.prefs", JSON.stringify({ theme: "light" }));
+    window.dispatchEvent(new StorageEvent("storage", { key: "easyquran.prefs" }));
+    expect(core.s.arabicFont).toBe("amiri");
+    expect(core.s.translationSize).toBe(17);
+    persistence.dispose();
+  });
+});

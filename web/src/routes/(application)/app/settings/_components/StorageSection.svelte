@@ -1,8 +1,9 @@
 <script lang="ts">
   import { browser } from "$app/environment";
+  import { tick } from "svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
-  import { Card, OfflinePack, OfflinePackBar } from "$lib/components";
-  import { isArabicSourceId, QuranScript } from "$lib/data/quran-types";
+  import { Card, OfflinePack } from "$lib/components";
+  import { isArabicSourceId } from "$lib/data/quran-types";
   import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
   import { purgeUserCaches } from "$lib/offline/messages";
@@ -10,6 +11,7 @@
     isQuotaHigh,
     isTranslationCapHigh,
     storageReport,
+    type DeleteOutcome,
   } from "$lib/stores/storage-report.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
@@ -19,14 +21,6 @@
   import type { UiLocale } from "$lib/i18n/locales";
   import UsageBar from "./UsageBar.svelte";
   import StorageArtifactRow from "./StorageArtifactRow.svelte";
-
-  const SCRIPT_LABELS = {
-    [QuranScript.Uthmani]: "Uthmani",
-    [QuranScript.SimpleClean]: "Simple-clean",
-    [QuranScript.IndoPak]: "IndoPak",
-    [QuranScript.Tajweed]: "Tajweed",
-    [QuranScript.Translation]: "Translation",
-  } satisfies Readonly<Record<QuranScript, string>>;
 
   let {
     id,
@@ -77,7 +71,9 @@
 
   let confirmingAll = $state(false);
   let busyAll = $state(false);
-  let freedSummary = $state<string | null>(null);
+  let actionNotice = $state<string | null>(null);
+  let refocusRemoveAll = $state(false);
+  let downloadsHeading = $state<HTMLHeadingElement>();
   let removeAllButton = $state<HTMLButtonElement>();
   let confirmAllButton = $state<HTMLButtonElement>();
   let clearingPages = $state(false);
@@ -92,9 +88,16 @@
     if (confirmingAll && confirmAllButton) confirmAllButton.focus();
   });
 
+  $effect(() => {
+    if (refocusRemoveAll && removeAllButton) {
+      removeAllButton.focus();
+      refocusRemoveAll = false;
+    }
+  });
+
   function artifactName(sourceId: string): string {
     if (isArabicSourceId(sourceId)) {
-      return SCRIPT_LABELS[sourceProfile(sourceId).script];
+      return copy.scripts[sourceProfile(sourceId).script];
     }
     const entry = findCatalogueEntry(catalogue, sourceId);
     if (entry && entry.kind === "translation") return entry.entry.name;
@@ -108,13 +111,19 @@
     return null;
   }
 
-  async function removeOne(artifactId: string) {
-    return report.deleteArtifact(artifactId);
+  async function removeOne(artifactId: string): Promise<DeleteOutcome> {
+    const outcome = await report.deleteArtifact(artifactId);
+    if (outcome === "ok") {
+      actionNotice = copy.removed(artifactName(artifactId));
+      await tick();
+      downloadsHeading?.focus();
+    }
+    return outcome;
   }
 
   function cancelConfirmAll() {
     confirmingAll = false;
-    removeAllButton?.focus();
+    refocusRemoveAll = true;
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -129,8 +138,9 @@
     const result = await report.clearAllTranslations([...inUseIds]);
     busyAll = false;
     confirmingAll = false;
-    freedSummary = copy.freed(formatBytes(result.freedBytes));
-    removeAllButton?.focus();
+    actionNotice = copy.freed(formatBytes(result.freedBytes));
+    await tick();
+    downloadsHeading?.focus();
   }
 
   async function clearPages() {
@@ -148,9 +158,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<Card id={id} class="scroll-mt-24">
+<Card id={id} tabindex={-1} class="scroll-mt-24">
   <h2 class="text-sm font-semibold text-fg">{heading}</h2>
   <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
 
@@ -239,7 +247,9 @@
     {/if}
 
     <section class="mt-5" aria-label={copy.downloadsHeading}>
-      <h3 class="text-xs font-medium text-fg-2">{copy.downloadsHeading}</h3>
+      <h3 class="text-xs font-medium text-fg-2" tabindex="-1" bind:this={downloadsHeading}>
+        {copy.downloadsHeading}
+      </h3>
       {#if translationArtifacts.length === 0}
         <p class="mt-1.5 text-[11px] text-fg-4">{copy.empty}</p>
       {:else}
@@ -258,27 +268,31 @@
             </li>
           {/each}
         </ul>
-        <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
-          {#if confirmingAll}
-            <span class="text-[11px] text-fg-3">{copy.removeAllConfirm}</span>
-            <button
-              type="button"
-              bind:this={confirmAllButton}
-              disabled={busyAll}
-              onclick={confirmRemoveAll}
-              class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {copy.removeConfirmAction}
-            </button>
-            <button
-              type="button"
-              disabled={busyAll}
-              onclick={cancelConfirmAll}
-              class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg"
-            >
-              {copy.removeCancel}
-            </button>
-          {:else}
+      {/if}
+      <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
+        {#if confirmingAll}
+          <span class="text-[11px] text-fg-3">{copy.removeAllConfirm}</span>
+          <button
+            type="button"
+            bind:this={confirmAllButton}
+            disabled={busyAll}
+            onclick={confirmRemoveAll}
+            onkeydown={onKeydown}
+            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {copy.removeConfirmAction}
+          </button>
+          <button
+            type="button"
+            disabled={busyAll}
+            onclick={cancelConfirmAll}
+            onkeydown={onKeydown}
+            class="rounded-md border border-line-2 px-2.5 py-1 text-[11px] text-fg-2 transition-colors hover:text-fg"
+          >
+            {copy.removeCancel}
+          </button>
+        {:else}
+          {#if translationArtifacts.length > 0}
             <button
               type="button"
               bind:this={removeAllButton}
@@ -289,20 +303,18 @@
             >
               {copy.removeAll}
             </button>
-            {#if freedSummary}
-              <span class="text-[11px] text-fg-3">{freedSummary}</span>
-            {/if}
           {/if}
-        </div>
-      {/if}
+          {#if actionNotice}
+            <span class="text-[11px] text-fg-3">{actionNotice}</span>
+          {/if}
+        {/if}
+      </div>
     </section>
 
     <section class="mt-5">
       <OfflinePack copy={copy.offlinePack} />
       <p class="mt-1.5 text-[11px] leading-snug text-fg-4">{copy.offlinePackNote}</p>
     </section>
-
-    <OfflinePackBar />
 
     <section class="mt-5">
       <button
@@ -314,6 +326,9 @@
       >
         {copy.clearPages}
       </button>
+      {#if !hasController}
+        <span class="sr-only">{copy.clearPagesUnavailable}</span>
+      {/if}
       <span class="sr-only" aria-live="polite">
         {#if clearedPages}{copy.clearPagesDone}{/if}
       </span>

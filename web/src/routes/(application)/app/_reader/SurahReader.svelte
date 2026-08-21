@@ -793,7 +793,7 @@
                 {copy.shell.surahPageTitle(initial.surah.name, pageData.page.localPage, initial.pageCount)}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-                <p dir="rtl" lang="ar" class="surah-opener py-3 text-center font-arabic text-fg-3">
+                <p dir="rtl" lang="ar" class="surah-opener py-3 text-center text-fg-3">
                   {headerText(pageData.normalization)}
                 </p>
               {/if}
@@ -867,6 +867,10 @@
   .ayah-list {
     display: flex;
     flex-direction: column;
+  }
+
+  .surah-opener {
+    font-family: var(--reader-arabic-family, var(--font-arabic));
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page {

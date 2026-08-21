@@ -72,7 +72,7 @@
   });
 </script>
 
-<Card id={id} class="scroll-mt-24">
+<Card id={id} tabindex={-1} class="scroll-mt-24">
   <h2 class="text-sm font-semibold text-fg">{heading}</h2>
   <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
 
@@ -190,6 +190,7 @@
       <button type="button" class={cn(pill, pillOff, "flex-1")} onclick={() => prefs.reset()}>
         {panel.reset}
       </button>
+      <span class="sr-only" aria-live="polite">{copied ? panel.copied : ""}</span>
     </div>
   </div>
 </Card>

@@ -102,6 +102,8 @@ class StorageReportStore {
   persisted = $state<boolean | null>(null);
   phase = $state<StorageReportPhase>("boot");
   #hydrated = false;
+  #refreshSeq = 0;
+  #statusDetach: (() => void) | null = null;
 
   get usage(): number | null {
     return offline.usage;
@@ -124,24 +126,39 @@ class StorageReportStore {
   }
 
   hydrate(): void {
-    if (!browser || this.#hydrated) return;
-    this.#hydrated = true;
+    if (!browser) return;
+    if (!this.#hydrated) {
+      this.#hydrated = true;
+      this.#statusDetach =
+        quranWorker.onStatus?.((status) => {
+          if (status === "ready" || status === "translation-fetch-failed") void this.refresh();
+        }) ?? null;
+    }
     void this.refresh();
+  }
+
+  dispose(): void {
+    this.#statusDetach?.();
+    this.#statusDetach = null;
   }
 
   async refresh(): Promise<void> {
     if (!browser) return;
+    const seq = ++this.#refreshSeq;
     try {
       await quranWorker.whenReady();
+      if (seq !== this.#refreshSeq) return;
       this.phase = "ready";
     } catch {
-      this.phase = "error";
+      if (seq === this.#refreshSeq) this.phase = "error";
       return;
     }
     const [artifacts, sw] = await Promise.all([
       quranWorker.listArtifacts().catch(() => null),
       requestStorageStats(),
+      offline.refreshEstimate(),
     ]);
+    if (seq !== this.#refreshSeq) return;
     if (artifacts === null) {
       this.phase = "error";
       return;
@@ -171,10 +188,14 @@ class StorageReportStore {
     let freedBytes = 0;
     let failures = 0;
     for (const artifact of targets) {
-      const outcome = await this.deleteArtifact(artifact.id);
-      if (outcome === "ok") freedBytes += artifact.sizeBytes;
-      else failures++;
+      try {
+        await quranWorker.deleteTranslation(artifact.id);
+        freedBytes += artifact.sizeBytes;
+      } catch {
+        failures++;
+      }
     }
+    await this.refresh();
     return { freedBytes, failures };
   }
 

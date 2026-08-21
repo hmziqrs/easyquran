@@ -43,6 +43,25 @@ import {
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
 import { theme_dark, theme_light } from "$lib/i18n/m/theme";
+import {
+  settings_storage_pack_bar_preparing,
+  settings_storage_pack_bar_ready,
+  settings_storage_pack_busy,
+  settings_storage_pack_heading,
+  settings_storage_pack_retry,
+  settings_storage_pack_routes,
+  settings_storage_pack_saved,
+  settings_storage_pack_status_active,
+  settings_storage_pack_status_downloading,
+  settings_storage_pack_status_error,
+  settings_storage_pack_status_off,
+  settings_storage_pack_status_on,
+  settings_storage_pack_status_staging,
+  settings_storage_pack_toggle_off,
+  settings_storage_pack_toggle_on,
+  settings_storage_pack_usage,
+} from "$lib/i18n/m/settings";
+import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
 import type { MarketingLocale, TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 /**
@@ -81,6 +100,26 @@ export function resolveAppearanceCopy(locale: MarketingLocale): TweaksResolvedCo
     on: tweaks_on(undefined, { locale }),
     off: tweaks_off(undefined, { locale }),
     performanceReload: tweaks_performance_reload(undefined, { locale }),
+    offlinePack: {
+      heading: settings_storage_pack_heading(undefined, { locale }),
+      status: offlinePackStatus({
+        active: (entries) => settings_storage_pack_status_active({ entries }, { locale }),
+        on: settings_storage_pack_status_on(undefined, { locale }),
+        downloading: settings_storage_pack_status_downloading(undefined, { locale }),
+        staging: settings_storage_pack_status_staging(undefined, { locale }),
+        error: settings_storage_pack_status_error(undefined, { locale }),
+        off: settings_storage_pack_status_off(undefined, { locale }),
+      }),
+      routes: (entries, size) => settings_storage_pack_routes({ entries, size }, { locale }),
+      saved: (when) => settings_storage_pack_saved({ when }, { locale }),
+      usage: (used, quota) => settings_storage_pack_usage({ used, quota }, { locale }),
+      toggleOn: settings_storage_pack_toggle_on(undefined, { locale }),
+      toggleOff: settings_storage_pack_toggle_off(undefined, { locale }),
+      busy: settings_storage_pack_busy(undefined, { locale }),
+      retry: settings_storage_pack_retry(undefined, { locale }),
+      barPreparing: settings_storage_pack_bar_preparing(undefined, { locale }),
+      barReady: settings_storage_pack_bar_ready(undefined, { locale }),
+    },
     themeNames: {
       dark: theme_dark(undefined, { locale }),
       light: theme_light(undefined, { locale }),

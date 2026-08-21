@@ -21,6 +21,7 @@ import {
   footer_whats_inside,
   nav_change_language,
   nav_language,
+  nav_settings,
   skip_to_content,
 } from "$lib/i18n/m/chrome";
 import {
@@ -483,6 +484,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       theme: noArgs(reader_theme),
       language: noArgs(nav_language),
       changeLanguage: noArgs(nav_change_language),
+      settings: noArgs(nav_settings),
       themeNames: {
         dark: noArgs(reader_dark),
         light: noArgs(reader_light),

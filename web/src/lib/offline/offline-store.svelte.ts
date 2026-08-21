@@ -98,20 +98,6 @@ class OfflineStore {
   get pct(): number {
     return Math.round(this.#progress * 100);
   }
-  get statusText(): string {
-    switch (this.#status) {
-      case "active":
-        return this.#activePack ? `On — ${this.#activePack.entries} routes stored.` : "On.";
-      case "downloading":
-        return "Downloading offline pack…";
-      case "staging":
-        return "Staging offline pack…";
-      case "error":
-        return "Offline download failed. Retry?";
-      default:
-        return "Off — download every route for offline reading.";
-    }
-  }
 
   hydrate(): void {
     if (this.#hydrated || !browser) return;
@@ -123,11 +109,11 @@ class OfflineStore {
       this.#status = "active";
     }
 
-    void this.#refreshEstimate();
+    void this.refreshEstimate();
     void this.#reconcile();
   }
 
-  async #refreshEstimate(): Promise<void> {
+  async refreshEstimate(): Promise<void> {
     if (!browser || !navigator.storage?.estimate) return;
     try {
       const estimate = await navigator.storage.estimate();
@@ -266,7 +252,7 @@ class OfflineStore {
       this.#mirror();
       this.#status = "active";
       this.#progress = 1;
-      void this.#refreshEstimate();
+      void this.refreshEstimate();
     } catch (err) {
       console.warn("[offline] enable failed:", err);
       if (targetPackId) await caches.delete(`eq-pack-${targetPackId}`).catch(() => {});
@@ -312,7 +298,7 @@ class OfflineStore {
       this.#mirror();
       this.#status = "idle";
       this.#progress = 0;
-      void this.#refreshEstimate();
+      void this.refreshEstimate();
     } catch (err) {
       console.warn("[offline] disable failed:", err);
       this.#status = "error";

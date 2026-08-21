@@ -287,8 +287,8 @@
           <hr class="border-line" />
           {#if copy.offlinePack}
             <OfflinePack copy={copy.offlinePack} />
+            <OfflinePackBar copy={copy.offlinePack} />
           {/if}
-          <OfflinePackBar />
         {/if}
 
         <div>

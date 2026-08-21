@@ -46,6 +46,7 @@
   let confirming = $state(false);
   let busy = $state(false);
   let errorText = $state<string | null>(null);
+  let refocusRemove = $state(false);
   let removeButton = $state<HTMLButtonElement>();
   let confirmButton = $state<HTMLButtonElement>();
 
@@ -62,6 +63,13 @@
     if (confirming && confirmButton) confirmButton.focus();
   });
 
+  $effect(() => {
+    if (refocusRemove && removeButton) {
+      removeButton.focus();
+      refocusRemove = false;
+    }
+  });
+
   function startConfirm() {
     errorText = null;
     confirming = true;
@@ -69,7 +77,7 @@
 
   function cancelConfirm() {
     confirming = false;
-    removeButton?.focus();
+    refocusRemove = true;
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -86,16 +94,14 @@
     confirming = false;
     if (outcome === "ok") {
       errorText = null;
-      removeButton?.focus();
       return;
     }
     if (outcome === "arabic") errorText = copy.arabicError;
     else if (outcome === "busy") errorText = copy.busyError;
     else errorText = copy.error;
+    refocusRemove = true;
   }
 </script>
-
-<svelte:window onkeydown={onKeydown} />
 
 <div class="flex items-center gap-2 py-1.5">
   <div class="min-w-0 flex-1">
@@ -125,6 +131,7 @@
         bind:this={confirmButton}
         disabled={busy}
         onclick={confirmRemove}
+        onkeydown={onKeydown}
         class={cn(actionBtn, "border-red-500/60 bg-red-500/10 text-red-400 hover:bg-red-500/20")}
       >
         {copy.removeConfirmAction}
@@ -133,6 +140,7 @@
         type="button"
         disabled={busy}
         onclick={cancelConfirm}
+        onkeydown={onKeydown}
         class={cn(actionBtn, "border-line-2 text-fg-2 hover:text-fg")}
       >
         {copy.removeCancel}

@@ -21,7 +21,7 @@
   const accountHref = $derived(publicHref("/account"));
 </script>
 
-<Card id={id} class="scroll-mt-24">
+<Card id={id} tabindex={-1} class="scroll-mt-24">
   <h2 class="text-sm font-semibold text-fg">{heading}</h2>
   <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
 

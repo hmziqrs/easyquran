@@ -31,7 +31,7 @@ const SECTION_COMPONENTS = [
 
 const SETTINGS_DIR = "app/settings/";
 
-describe("settings sections stay inside the settings route chunk", () => {
+describe("settings route chunk isolation", () => {
   it("section components are referenced only from inside the settings route", () => {
     const outside = [...sources].filter(
       ([path, src]) =>
@@ -43,6 +43,17 @@ describe("settings sections stay inside the settings route chunk", () => {
       outside.map(([path]) => path),
       "settings section components may only be imported by the settings route",
     ).toEqual([]);
+  });
+
+  it("the settings shell statically imports every section (route-chunk contract, not per-section loaders)", () => {
+    const page = [...sources].find(([path]) => path.endsWith(`${SETTINGS_DIR}+page.svelte`));
+    expect(page, "settings +page.svelte should exist").toBeDefined();
+    for (const name of SECTION_COMPONENTS) {
+      expect(
+        page![1],
+        `+page.svelte must keep importing ${name} statically`,
+      ).toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}"`, "u"));
+    }
   });
 
   it("shared chrome and the reader tweaks panel never import settings modules", () => {

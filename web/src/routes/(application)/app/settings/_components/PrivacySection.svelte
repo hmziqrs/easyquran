@@ -6,6 +6,7 @@
   import { authState } from "$lib/auth/auth-state.svelte";
   import { createLogoutFlow } from "$lib/auth/flows.svelte";
   import { installPurgeHook } from "$lib/auth/purge-hook";
+  import { isConfigured } from "$lib/firebase";
   import { update } from "$lib/offline/update.svelte";
   import { consent } from "$lib/stores/consent.svelte";
   import { notifications } from "$lib/stores/notifications.svelte";
@@ -62,9 +63,21 @@
     if (logout.pending) return;
     await logout.run();
   }
+
+  function notificationsStatusLabel(): string {
+    if (!isConfigured) return copy.notificationsStatus.unavailable;
+    if (notifications.supported === null) return copy.notificationsStatus.checking;
+    if (!notifications.supported) return copy.notificationsStatus.browserUnsupported;
+    if (notifications.permission === "denied") return copy.notificationsStatus.blocked;
+    if (notifications.subscribed) return copy.notificationsStatus.on;
+    if (notifications.permission === "default") return copy.notificationsStatus.offUpdates;
+    return copy.notificationsStatus.off;
+  }
+
+  const notificationsLabel = $derived(notificationsStatusLabel());
 </script>
 
-<Card id={id} class="scroll-mt-24">
+<Card id={id} tabindex={-1} class="scroll-mt-24">
   <h2 class="text-sm font-semibold text-fg">{heading}</h2>
   <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
 
@@ -98,7 +111,7 @@
   <div class="flex items-center justify-between gap-2">
     <span class="text-xs text-fg-3">{copy.notifications}</span>
     <span class="text-end text-[11px] leading-tight text-fg-3">
-      {notifications.statusText}
+      {notificationsLabel}
     </span>
   </div>
 
@@ -139,7 +152,7 @@
       >
       {#if logout.genericError}
         <p role="alert" aria-live="assertive" class="text-xs text-destructive">
-          {logout.genericError}
+          {copy.signOutError}
         </p>
       {/if}
     </div>

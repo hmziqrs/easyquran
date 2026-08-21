@@ -14,6 +14,10 @@
     copy: OfflinePackCopy;
   } = $props();
 
+  const statusLabel = $derived(
+    copy.status({ status: offline.status, entries: offline.activePack?.entries ?? null }),
+  );
+
   async function toggle() {
     if (offline.activePack) await offline.disable();
     else await offline.enable();
@@ -31,7 +35,7 @@
 <section class="grid gap-1.5">
   <div class="flex items-center justify-between gap-2">
     <span class="text-xs text-fg-3">{copy.heading}</span>
-    <span class="text-right text-[11px] leading-tight text-fg-3">{offline.statusText}</span>
+    <span class="text-right text-[11px] leading-tight text-fg-3">{statusLabel}</span>
   </div>
   {#if offline.activePack}
     <div class="text-[11px] text-fg-4">

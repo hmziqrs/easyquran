@@ -65,7 +65,7 @@
     "flex h-7 w-9 items-center justify-center rounded-md border border-line-2 text-xs text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
 </script>
 
-<Card id={id} class="scroll-mt-24">
+<Card id={id} tabindex={-1} class="scroll-mt-24">
   <h2 class="text-sm font-semibold text-fg">{heading}</h2>
   <p class="mt-1 text-xs text-fg-3">{copy.intro}</p>
 

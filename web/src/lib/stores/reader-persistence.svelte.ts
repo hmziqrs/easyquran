@@ -135,7 +135,8 @@ function applyPresentation(s: ReaderCore["s"]): void {
   );
 }
 
-function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {  if (p.current !== undefined) s.current = p.current;
+function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
+  if (p.current !== undefined) s.current = p.current;
   if (p.fontSize !== undefined) s.fontSize = p.fontSize;
   if (p.arabicFont !== undefined) s.arabicFont = p.arabicFont;
   if (p.translationSize !== undefined) s.translationSize = p.translationSize;

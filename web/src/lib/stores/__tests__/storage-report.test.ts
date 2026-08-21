@@ -12,6 +12,7 @@ interface OfflineStoreMock {
   usage: number | null;
   quota: number | null;
   activePack: OfflinePackMirror | null;
+  refreshEstimate: () => Promise<void>;
 }
 
 const h = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const h = vi.hoisted(() => ({
     whenReady: vi.fn<() => Promise<void>>(),
     listArtifacts: vi.fn<() => Promise<StorageArtifactInfo[]>>(),
     deleteTranslation: vi.fn<(id: string) => Promise<void>>(),
+    onStatus: vi.fn<(cb: (s: string) => void) => () => void>(),
   },
   statsMock: {
     requestStorageStats: vi.fn<
@@ -29,6 +31,7 @@ const h = vi.hoisted(() => ({
     usage: null,
     quota: null,
     activePack: null,
+    refreshEstimate: () => Promise.resolve(),
   },
   AdminErrorMock: class extends Error {
     readonly failure: "arabic" | "busy";
@@ -42,6 +45,12 @@ const h = vi.hoisted(() => ({
 const workerMock = h.workerMock;
 const statsMock = h.statsMock;
 const offlineMock: OfflineStoreMock = h.offlineMock;
+
+let statusCb: ((s: string, detail?: string) => void) | null = null;
+
+function emitStatus(s: string): void {
+  statusCb?.(s, "detail");
+}
 
 vi.mock("$app/environment", () => ({ browser: true }));
 vi.mock("$lib/quran/worker-client", () => ({
@@ -75,9 +84,16 @@ function artifact(partial: Partial<StorageArtifactInfo> & { id: string }): Stora
 }
 
 beforeEach(() => {
+  statusCb = null;
   workerMock.whenReady.mockReset().mockResolvedValue(undefined);
   workerMock.listArtifacts.mockReset();
   workerMock.deleteTranslation.mockReset().mockResolvedValue(undefined);
+  workerMock.onStatus.mockReset().mockImplementation((cb: (s: string) => void) => {
+    statusCb = cb;
+    return () => {
+      statusCb = null;
+    };
+  });
   statsMock.requestStorageStats.mockReset().mockResolvedValue(null);
   offlineMock.usage = null;
   offlineMock.quota = null;
@@ -162,6 +178,108 @@ describe("storage report fan-in", () => {
     expect(workerMock.deleteTranslation).toHaveBeenCalledTimes(1);
     expect(workerMock.deleteTranslation).toHaveBeenCalledWith("en.sahih");
     expect(result).toEqual({ freedBytes: 3 * MB, failures: 0 });
+  });
+
+  it("clearAllTranslations refreshes once after the whole run, not per artifact", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation.mockResolvedValue(undefined);
+    const report = createStorageReport();
+    report.artifacts = [
+      artifact({ id: "en.sahih" }),
+      artifact({ id: "fr.hamid" }),
+      artifact({ id: "ur.jalandhry" }),
+    ];
+    await report.clearAllTranslations([]);
+    expect(workerMock.deleteTranslation).toHaveBeenCalledTimes(3);
+    expect(workerMock.listArtifacts).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts per-row failures without aborting the bulk run", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    workerMock.deleteTranslation
+      .mockRejectedValueOnce(new h.AdminErrorMock("busy"))
+      .mockResolvedValue(undefined);
+    const report = createStorageReport();
+    report.artifacts = [artifact({ id: "en.sahih", sizeBytes: 2 * MB }), artifact({ id: "fr.hamid" })];
+    const result = await report.clearAllTranslations([]);
+    expect(result).toEqual({ freedBytes: MB, failures: 1 });
+  });
+
+  it("hydrate() re-syncs from worker truth on every entry, not only the first", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    const report = createStorageReport();
+    report.hydrate();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(report.artifacts).toHaveLength(0);
+    workerMock.listArtifacts.mockResolvedValue([artifact({ id: "en.sahih" })]);
+    report.hydrate();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih"]);
+    report.dispose();
+  });
+
+  it("refreshes when the worker reports a status that changes storage truth", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    const report = createStorageReport();
+    report.hydrate();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(report.artifacts).toHaveLength(0);
+
+    emitStatus("downloading");
+    await new Promise((r) => setTimeout(r, 0));
+    const duringDownload = workerMock.listArtifacts.mock.calls.length;
+    expect(duringDownload).toBeGreaterThan(0);
+
+    workerMock.listArtifacts.mockResolvedValue([
+      artifact({ id: "en.sahih" }),
+      artifact({ id: "ur.jalandhry" }),
+    ]);
+    emitStatus("ready");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih", "ur.jalandhry"]);
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(duringDownload + 1);
+
+    emitStatus("translation-fetch-failed");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(duringDownload + 2);
+    report.dispose();
+  });
+
+  it("dispose detaches the worker status subscription", async () => {
+    workerMock.listArtifacts.mockResolvedValue([]);
+    const report = createStorageReport();
+    report.hydrate();
+    await new Promise((r) => setTimeout(r, 0));
+    report.dispose();
+    emitStatus("ready");
+    await new Promise((r) => setTimeout(r, 0));
+    const settled = workerMock.listArtifacts.mock.calls.length;
+    expect(settled).toBeGreaterThan(0);
+    emitStatus("ready");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(workerMock.listArtifacts.mock.calls.length).toBe(settled);
+  });
+
+  it("a stale in-flight listing cannot overwrite a newer refresh", async () => {
+    let resolveStale!: (list: StorageArtifactInfo[]) => void;
+    workerMock.listArtifacts
+      .mockImplementationOnce(
+        () =>
+          new Promise<StorageArtifactInfo[]>((resolve) => {
+            resolveStale = resolve;
+          }),
+      )
+      .mockResolvedValue([artifact({ id: "en.sahih" })]);
+    const report = createStorageReport();
+    const stale = report.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(resolveStale).toBeTypeOf("function");
+    const fresh = report.refresh();
+    await fresh;
+    expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih"]);
+    resolveStale([artifact({ id: "uthmani" })]);
+    await stale;
+    expect(report.artifacts.map((a) => a.id)).toEqual(["en.sahih"]);
   });
 });
 

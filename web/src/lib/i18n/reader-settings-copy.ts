@@ -46,15 +46,24 @@ import {
   reader_theme_derived_note,
 } from "$lib/i18n/m/reader-settings";
 import {
+  settings_storage_pack_bar_preparing,
+  settings_storage_pack_bar_ready,
   settings_storage_pack_busy,
   settings_storage_pack_heading,
   settings_storage_pack_retry,
   settings_storage_pack_routes,
   settings_storage_pack_saved,
+  settings_storage_pack_status_active,
+  settings_storage_pack_status_downloading,
+  settings_storage_pack_status_error,
+  settings_storage_pack_status_off,
+  settings_storage_pack_status_on,
+  settings_storage_pack_status_staging,
   settings_storage_pack_toggle_off,
   settings_storage_pack_toggle_on,
   settings_storage_pack_usage,
 } from "$lib/i18n/m/settings";
+import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
 import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
@@ -107,6 +116,14 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
     performanceReload: noArgs(reader_performance_reload),
     offlinePack: {
       heading: noArgs(settings_storage_pack_heading),
+      status: offlinePackStatus({
+        active: (entries: number) => settings_storage_pack_status_active({ entries }, options),
+        on: noArgs(settings_storage_pack_status_on),
+        downloading: noArgs(settings_storage_pack_status_downloading),
+        staging: noArgs(settings_storage_pack_status_staging),
+        error: noArgs(settings_storage_pack_status_error),
+        off: noArgs(settings_storage_pack_status_off),
+      }),
       routes: (entries: number, size: string) =>
         settings_storage_pack_routes({ entries, size }, options),
       saved: (when: string) => settings_storage_pack_saved({ when }, options),
@@ -115,6 +132,8 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       toggleOff: noArgs(settings_storage_pack_toggle_off),
       busy: noArgs(settings_storage_pack_busy),
       retry: noArgs(settings_storage_pack_retry),
+      barPreparing: noArgs(settings_storage_pack_bar_preparing),
+      barReady: noArgs(settings_storage_pack_bar_ready),
     },
     background: noArgs(reader_background),
     pop: noArgs(reader_pop),

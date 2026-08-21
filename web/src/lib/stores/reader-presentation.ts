@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 
+import { loadArabicFont } from "$lib/fonts/arabic-fonts";
 import {
   DEFAULT_ARABIC_FONT,
   DEFAULT_TRANSLATION_FAMILY,
@@ -18,6 +19,7 @@ export function applyReaderPresentation(
   translationFamily: TranslationFamily = DEFAULT_TRANSLATION_FAMILY,
 ): void {
   if (!browser) return;
+  void loadArabicFont(arabicFont);
   const root = document.documentElement;
   root.dataset.readerMode = mode;
   root.style.setProperty("--reader-arabic-size", `${fontSize}px`);

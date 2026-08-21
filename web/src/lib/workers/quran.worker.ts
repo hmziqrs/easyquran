@@ -462,11 +462,22 @@ export async function deleteStorageArtifact(sourceId: string): Promise<null> {
   if (isArabicSourceId(sourceId)) throw new Error("arabic");
   if (pendingTranslationRunners.has(sourceId)) throw new Error("busy");
   forgetTranslations([sourceId]);
-  const artifacts = await listCachedArtifacts();
-  const hit = artifacts.find((artifact) => artifact.id === sourceId);
-  if (hit) {
-    await deleteCachedArtifact(sourceId, hit.tag);
-    await clearLastUsed(sourceId);
+  // SAFETY: handlers run concurrently (void handleMessage), so a same-id
+  // ensureTranslation/read can register a download inside the awaits below and
+  // resurrect the artifact. Holding the pending slot for the whole delete makes
+  // any in-window runner observe this gate and reject busy instead.
+  const deletionGate = Promise.reject<QuranQueryRunner>(new Error("busy"));
+  void deletionGate.catch(() => {});
+  pendingTranslationRunners.set(sourceId, deletionGate);
+  try {
+    const artifacts = await listCachedArtifacts();
+    const hit = artifacts.find((artifact) => artifact.id === sourceId);
+    if (hit) {
+      await deleteCachedArtifact(sourceId, hit.tag);
+      await clearLastUsed(sourceId);
+    }
+  } finally {
+    pendingTranslationRunners.delete(sourceId);
   }
   return null;
 }
@@ -480,6 +491,9 @@ export const __artifactAdminTestHooks = {
   },
   clearInFlight(id: string): void {
     pendingTranslationRunners.delete(id);
+  },
+  pendingRunner(id: string): Promise<QuranQueryRunner> | null {
+    return pendingTranslationRunners.get(id) ?? null;
   },
   injectOpenDb(id: string, close: () => void): void {
     // SAFETY: the fake only carries the close() method deleteStorageArtifact calls via

@@ -446,3 +446,49 @@ Each shippable; gates per milestone: `pnpm check && pnpm lint && pnpm test && pn
   manual pre-push floor.
 - **Multi-writer reader blob** — existing debounced last-write-wins window, now with a
   second writer; noted, not redesigned.
+
+---
+
+## 12. Delivery divergences (recorded after implementation)
+
+Where shipped code departs from the sections above, current code wins; the reasons:
+
+1. **Route is SSR, not prerendered.** §1 assumed a load-free prerendered page. Reality:
+   `app/+layout.server.ts` has a server load that cascades, so a prerendered settings page
+   emits `/app/settings/__data.json` and `gen-offline-pack.ts` throws on the `/app/` prefix.
+   Shipped: `+page.ts` with `export const prerender = false` (SSR, same delivery class as
+   the translated reader routes — consistent with the project's standing divergence away
+   from SSG for app routes). Page itself stays load-free.
+2. **Localized settings URLs do not exist.** The plan's "hooks reroute already matches
+   `settings`" claim is true of the pattern but `hooks.server.ts` 404s non-canonical reader
+   locales and `parseReaderPath("/app/settings")` is null, so `/{en,ar}/app/settings` is not
+   published. All entries (Nav row, palette, `Mod+,`) use canonical `/app/settings`; the
+   shared locale switcher falls back to the localized reader home while on settings.
+3. **`?mode=`/`?more=` suppression** gates on `page.route.id` ending `/app/settings`, not
+   `routeContextFromParams` presence (the latter always returns a context and would also
+   suppress `?mode=` sync on `/app` home).
+4. **Palette/Nav labels stay English** (hardcoded-label precedent in palette sources and
+   Nav chrome copy injection); localizing palette entries remains a separate product
+   decision. Palette hrefs use the canonical generated `Pathname` — `resolveHref()` already
+   applies the base, so wrapping in `publicHref` would double-prefix.
+5. **`OfflinePackCopy` lives in `offline-pack-copy.ts`**, not the component's module script —
+   oxlint cannot resolve type exports from `.svelte` module scripts (svelte-check can). The
+   global overlay sibling is `OfflinePackBar.svelte` (the plan's `DownloadBar` name was
+   already taken by the Quran-scripts downloader).
+6. **`translationFamily` is session-only** (ReaderState, not Persisted) per §3.3's field
+   list — it survives navigation but resets to sans on reload. Persisting it means schema
+   v4.
+7. **SW pages stats measure `eq-pages-v1` directly** (cache keys + bodies), not the recency
+   map — recency also holds shell-hit keys absent from the cache and carries no byte sizes;
+   cache-direct is the same accounting `trimPages` itself uses.
+8. **Worker admin handlers are test-exposed via `__artifactAdminTestHooks`** (following the
+   existing `assertStaged*` precedent): driving the real message loop in vitest would
+   require a full wasm-sqlite boot of every planned Arabic source. The handlers themselves
+   are thin compositions over the tested `listCachedArtifacts`/`deleteCachedArtifact` path.
+9. **`reader.svelte.ts` gained additive passthroughs** (`arabicFont`, `translationSizePx`,
+   `translationFamily`) so `ReadingSection`/`SettingsDoc` can reach the new axes through the
+   existing `ReaderApi` — no logic moved.
+10. **Font re-registration on boot:** `applyReaderPresentation` calls `loadArabicFont` for
+    non-default fonts on every apply (hydrate + cross-tab re-apply), so a persisted
+    Scheherazade/Noto selection survives reloads. First paint still shows Amiri until the
+    lazy woff2 lands — inherent to keeping alternate mushaf bytes out of the bundle.
