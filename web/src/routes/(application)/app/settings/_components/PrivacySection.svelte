@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { updated } from "$app/state";
   import { Button } from "$lib/components/ui/button";
-  import { Card } from "$lib/components";
   import { authState } from "$lib/auth/auth-state.svelte";
   import { createLogoutFlow } from "$lib/auth/flows.svelte";
   import { installPurgeHook } from "$lib/auth/purge-hook";
@@ -32,10 +31,9 @@
     installPurgeHook(authState);
   });
 
-  const pill =
-    "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors duration-150 text-start";
+  const toggle = "rounded-lg border px-3.5 py-2.5 text-[13.5px] transition-colors duration-150";
   const on = "border-accent bg-accent-soft text-fg";
-  const off = "border-line-2 text-fg-2 hover:text-fg";
+  const off = "border-line-2 text-fg-2 hover:border-line hover:text-fg";
 
   function toggleAnalytics(): void {
     consent.setAnalytics(!consent.analytics);
@@ -76,86 +74,83 @@
   );
 </script>
 
-<Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-base font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
+<div id={id} tabindex="-1" class="scroll-mt-24">
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
 
-  <div class="mt-3 grid gap-2">
-    <button
-      type="button"
-      aria-pressed={consent.analytics}
-      onclick={toggleAnalytics}
-      class={cn(pill, consent.analytics ? on : off)}
-    >
-      <span>{copy.analytics}</span>
-      <span class="text-xs">{consent.analytics ? copy.on : copy.off}</span>
-    </button>
-    <div>
+  <div class="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.analytics}</span>
+      <button
+        type="button"
+        aria-pressed={consent.analytics}
+        onclick={toggleAnalytics}
+        class={cn(toggle, "shrink-0", consent.analytics ? on : off)}
+      >
+        {consent.analytics ? copy.on : copy.off}
+      </button>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <div class="min-w-0">
+        <span class="text-[14.5px] font-medium text-fg">{copy.performance}</span>
+        <p class="mt-0.5 text-[13.5px] leading-snug text-fg-3">{copy.performanceReload}</p>
+      </div>
       <button
         type="button"
         aria-pressed={consent.performance}
-        title={copy.performanceReload}
         onclick={togglePerformance}
-        class={cn(pill, consent.performance ? on : off)}
+        class={cn(toggle, "shrink-0", consent.performance ? on : off)}
       >
-        <span>{copy.performance}</span>
-        <span class="text-xs">{consent.performance ? copy.on : copy.off}</span>
-      </button>
-      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.performanceReload}</p>
-    </div>
-  </div>
-
-  <hr class="my-3 border-line" />
-
-  <div class="flex items-center justify-between gap-2">
-    <span class="text-sm text-fg-3">{copy.notifications}</span>
-    <span class="text-end text-xs leading-tight text-fg-3">
-      {notificationsLabel}
-    </span>
-  </div>
-
-  <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2" role="status">
-    <span class="text-sm text-fg-3">{copy.version}</span>
-    <div class="flex items-center gap-2">
-      {#if update.available}
-        <span class="text-xs leading-tight text-fg-3">{copy.updateAvailable}</span>
-      {:else if checking}
-        <span class="text-xs leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
-      {:else}
-        <span class="text-xs leading-tight text-fg-3">{copy.upToDate}</span>
-      {/if}
-      <button
-        type="button"
-        disabled={checking}
-        onclick={onCheckUpdates}
-        class={cn(
-          "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150",
-          update.available ? on : off,
-          checking && "cursor-not-allowed opacity-50",
-        )}
-      >
-        {update.available ? copy.reloadUpdate : copy.checkUpdates}
+        {consent.performance ? copy.on : copy.off}
       </button>
     </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.notifications}</span>
+      <span class="shrink-0 text-end text-[13.5px] leading-tight text-fg-3">
+        {notificationsLabel}
+      </span>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5" role="status">
+      <span class="text-[14.5px] font-medium text-fg">{copy.version}</span>
+      <div class="flex shrink-0 flex-wrap items-center gap-2.5">
+        {#if update.available}
+          <span class="text-[13.5px] leading-tight text-fg-3">{copy.updateAvailable}</span>
+        {:else if checking}
+          <span class="text-[13.5px] leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
+        {:else}
+          <span class="text-[13.5px] leading-tight text-fg-3">{copy.upToDate}</span>
+        {/if}
+        <button
+          type="button"
+          disabled={checking}
+          onclick={onCheckUpdates}
+          class={cn(toggle, update.available ? on : off, checking && "cursor-not-allowed opacity-50")}
+        >
+          {update.available ? copy.reloadUpdate : copy.checkUpdates}
+        </button>
+      </div>
+    </div>
+
+    {#if signedIn}
+      <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+        {#if logout.genericError}
+          <p role="alert" aria-live="assertive" class="text-[13.5px] text-destructive">
+            {copy.signOutError}
+          </p>
+        {/if}
+        <Button
+          variant="ghost"
+          size="sm"
+          class="ms-auto shrink-0"
+          disabled={logout.pending}
+          onclick={onSignOut}>{copy.signOut}</Button
+        >
+      </div>
+    {/if}
   </div>
 
-  <p class="mt-3 text-xs leading-snug text-fg-4">{copy.syncNote}</p>
-
-  {#if signedIn}
-    <hr class="my-3 border-line" />
-    <div class="flex flex-col gap-1.5">
-      <Button
-        variant="ghost"
-        size="sm"
-        class="self-start"
-        disabled={logout.pending}
-        onclick={onSignOut}>{copy.signOut}</Button
-      >
-      {#if logout.genericError}
-        <p role="alert" aria-live="assertive" class="text-xs text-destructive">
-          {copy.signOutError}
-        </p>
-      {/if}
-    </div>
-  {/if}
-</Card>
+  <p class="mt-4 text-[13.5px] leading-snug text-fg-3">{copy.syncNote}</p>
+</div>

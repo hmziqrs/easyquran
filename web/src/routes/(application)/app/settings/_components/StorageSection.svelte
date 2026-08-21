@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
-  import { Card, OfflinePack } from "$lib/components";
+  import { OfflinePack } from "$lib/components";
   import { isArabicSourceId } from "$lib/data/quran-types";
   import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
@@ -197,117 +197,122 @@
       persistDeclined = true;
     }
   }
+
+  const badge = "rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3";
+  const quiet =
+    "rounded-lg border border-line-2 px-3.5 py-2.5 text-[13.5px] text-fg-2 transition-colors hover:border-line hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+  const danger =
+    "rounded-lg border border-red-500/50 px-3.5 py-2.5 text-[13.5px] text-red-400 transition-colors hover:bg-red-500/10";
+  const dangerConfirm =
+    "rounded-lg border border-red-500/60 bg-red-500/10 px-3.5 py-2.5 text-[13.5px] text-red-400 transition-colors hover:bg-red-500/20";
 </script>
 
-<Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-base font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
+<div id={id} tabindex="-1" class="scroll-mt-24">
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
 
   {#if phase === "boot"}
-    <p class="mt-4 text-xs text-fg-3" role="status">{copy.loading}</p>
+    <p class="mt-4 text-[13.5px] text-fg-3" role="status">{copy.loading}</p>
   {:else if phase === "error"}
-    <div class="mt-4 grid gap-2">
-      <p class="text-xs text-fg-3">{copy.error}</p>
+    <div class="mt-4 grid gap-2.5">
+      <p class="text-[13.5px] text-fg-3">{copy.error}</p>
       <div>
-        <button
-          type="button"
-          onclick={() => report.refresh()}
-          class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-        >
+        <button type="button" onclick={() => report.refresh()} class={quiet}>
           {copy.retry}
         </button>
       </div>
     </div>
   {:else}
-    <section class="mt-4" aria-label={copy.usage}>
+    <section class="mb-6 mt-6" aria-label={copy.usage}>
       {#if quota !== null}
         <UsageBar layers={layers} labels={copy.layers} quotaBytes={quota} {usedLabel} />
-        <p class="mt-1.5 text-xs text-fg-2 tabular-nums">{usedLabel}</p>
+        <p class="mt-2 text-[13.5px] tabular-nums text-fg-2">{usedLabel}</p>
       {:else}
         <UsageBar layers={layers} labels={copy.layers} quotaBytes={null} {usedLabel} />
-        <p class="mt-1.5 text-xs text-fg-2">{copy.usage}</p>
+        <p class="mt-2 text-[13.5px] text-fg-2">{copy.usage}</p>
       {/if}
       {#if quotaHigh}
-        <p class="mt-1.5 text-xs text-red-400">{copy.quotaWarning}</p>
+        <p class="mt-2 text-[13.5px] text-red-400">{copy.quotaWarning}</p>
       {/if}
       {#if capHigh}
-        <p class="mt-1.5 text-xs text-fg-3">{copy.capNote}</p>
+        <p class="mt-2 text-[13.5px] text-fg-3">{copy.capNote}</p>
       {/if}
-      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.estimateNote}</p>
+      <p class="mt-2 text-[13.5px] leading-snug text-fg-3">{copy.estimateNote}</p>
     </section>
 
-    <section class="mt-5" aria-label={copy.persistHeading}>
-      <h3 class="text-sm font-medium text-fg-2" tabindex="-1" bind:this={persistHeading}>
-        {copy.persistHeading}
-      </h3>
-      <p
-        aria-live="polite"
-        class={cn("mt-1 text-xs leading-snug", report.persisted === false ? "text-fg-4" : "text-fg-3")}
-      >
-        {#if report.persisted === true}
-          {copy.persistGranted}
-        {:else if persistDeclined && report.persisted === false}
-          {copy.persistDeclined}
-        {:else if report.persisted === false}
-          {copy.persistDenied}
-        {:else}
-          {copy.persistUnavailable}
-        {/if}
-      </p>
-      {#if report.persisted === false}
-        <button
-          type="button"
-          disabled={persistBusy}
-          onclick={requestPersist}
-          class="mt-1.5 rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {copy.persistRequest}
-        </button>
+    <div class="divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+      {#if opfsAbsent}
+        <p class="px-4 py-3.5 text-[13.5px] text-fg-3 sm:px-5">{copy.opfsAbsent}</p>
       {/if}
-    </section>
 
-    {#if opfsAbsent}
-      <p class="mt-4 rounded-md border border-line bg-bg-2 px-3 py-2 text-xs text-fg-3">
-        {copy.opfsAbsent}
-      </p>
-    {/if}
-
-    {#if arabicArtifacts.length > 0}
-      <section class="mt-5" aria-label={copy.requiredGroup}>
-        <h3 class="text-sm font-medium text-fg-2">{copy.requiredGroup}</h3>
-        <p class="mt-1 text-xs leading-snug text-fg-4">{copy.requiredNote}</p>
-        <ul class="mt-1.5">
-          {#each arabicArtifacts as artifact (artifact.id)}
-            <li>
-              <div class="flex items-center gap-2 py-1.5">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="truncate text-xs text-fg">{artifactName(artifact.id)}</span>
-                    <span
-                      class="rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3"
-                    >
-                      {storeLabelFor(artifact.store)}
-                    </span>
-                  </div>
-                  <div class="text-xs text-fg-4">{formatBytes(artifact.sizeBytes)}</div>
-                </div>
-              </div>
-            </li>
-          {/each}
-        </ul>
+      <section aria-label={copy.persistHeading} class="divide-y divide-line">
+        <div class="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+          <div class="min-w-0">
+            <h3 class="text-[14.5px] font-medium text-fg" tabindex="-1" bind:this={persistHeading}>
+              {copy.persistHeading}
+            </h3>
+            <p aria-live="polite" class="mt-0.5 text-[13.5px] leading-snug text-fg-3">
+              {#if report.persisted === true}
+                {copy.persistGranted}
+              {:else if persistDeclined && report.persisted === false}
+                {copy.persistDeclined}
+              {:else if report.persisted === false}
+                {copy.persistDenied}
+              {:else}
+                {copy.persistUnavailable}
+              {/if}
+            </p>
+          </div>
+          {#if report.persisted === false}
+            <button
+              type="button"
+              disabled={persistBusy}
+              onclick={requestPersist}
+              class={cn(quiet, "shrink-0")}
+            >
+              {copy.persistRequest}
+            </button>
+          {/if}
+        </div>
       </section>
-    {/if}
 
-    <section class="mt-5" aria-label={copy.downloadsHeading}>
-      <h3 class="text-sm font-medium text-fg-2" tabindex="-1" bind:this={downloadsHeading}>
-        {copy.downloadsHeading}
-      </h3>
-      {#if translationArtifacts.length === 0}
-        <p class="mt-1.5 text-xs text-fg-4">{copy.empty}</p>
-      {:else}
-        <ul class="mt-0.5 divide-y divide-line">
+      {#if arabicArtifacts.length > 0}
+        <section aria-label={copy.requiredGroup} class="divide-y divide-line">
+          <div class="px-4 py-3.5 sm:px-5">
+            <h3 class="text-[14.5px] font-medium text-fg">{copy.requiredGroup}</h3>
+            <p class="mt-0.5 text-[13.5px] leading-snug text-fg-3">{copy.requiredNote}</p>
+          </div>
+          {#each arabicArtifacts as artifact (artifact.id)}
+            <div class="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span class="truncate text-[14.5px] text-fg">{artifactName(artifact.id)}</span>
+                <span class={badge}>{storeLabelFor(artifact.store)}</span>
+              </div>
+              <span class="shrink-0 text-end text-[13.5px] tabular-nums text-fg-3">
+                {formatBytes(artifact.sizeBytes)}
+              </span>
+            </div>
+          {/each}
+        </section>
+      {/if}
+
+      <section aria-label={copy.downloadsHeading} class="divide-y divide-line">
+        <div class="px-4 py-3.5 sm:px-5">
+          <h3
+            class="text-[14.5px] font-medium text-fg"
+            tabindex="-1"
+            bind:this={downloadsHeading}
+          >
+            {copy.downloadsHeading}
+          </h3>
+        </div>
+        {#if translationArtifacts.length === 0}
+          <div class="px-4 py-3.5 sm:px-5">
+            <p class="text-[13.5px] text-fg-3">{copy.empty}</p>
+          </div>
+        {:else}
           {#each translationArtifacts as artifact (artifact.id)}
-            <li>
+            <div class="px-4 sm:px-5">
               <StorageArtifactRow
                 {artifact}
                 name={artifactName(artifact.id)}
@@ -317,73 +322,73 @@
                 {locale}
                 onremove={removeOne}
               />
-            </li>
+            </div>
           {/each}
-        </ul>
-      {/if}
-      <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
-        {#if confirmingAll}
-          <span class="text-xs text-fg-3">{copy.removeAllConfirm}</span>
-          <button
-            type="button"
-            bind:this={confirmAllButton}
-            onclick={confirmRemoveAll}
-            onkeydown={onKeydown}
-            class="rounded-md border border-red-500/60 bg-red-500/10 px-2.5 py-1.5 text-sm text-red-400 transition-colors hover:bg-red-500/20"
-          >
-            {copy.removeConfirmAction}
-          </button>
-          <button
-            type="button"
-            onclick={cancelConfirmAll}
-            onkeydown={onKeydown}
-            class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
-          >
-            {copy.removeCancel}
-          </button>
-        {:else}
-          {#if translationArtifacts.length > 0}
+        {/if}
+        <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5" aria-live="polite">
+          {#if confirmingAll}
+            <span class="text-[13.5px] text-fg-3">{copy.removeAllConfirm}</span>
             <button
               type="button"
-              bind:this={removeAllButton}
-              onclick={() => (confirmingAll = true)}
-              class={cn(
-                "rounded-md border border-red-500/50 px-2.5 py-1.5 text-sm text-red-400 transition-colors hover:bg-red-500/10",
-              )}
+              bind:this={confirmAllButton}
+              onclick={confirmRemoveAll}
+              onkeydown={onKeydown}
+              class={dangerConfirm}
             >
-              {copy.removeAll}
+              {copy.removeConfirmAction}
             </button>
+            <button
+              type="button"
+              onclick={cancelConfirmAll}
+              onkeydown={onKeydown}
+              class={quiet}
+            >
+              {copy.removeCancel}
+            </button>
+          {:else}
+            {#if translationArtifacts.length > 0}
+              <button
+                type="button"
+                bind:this={removeAllButton}
+                onclick={() => (confirmingAll = true)}
+                class={danger}
+              >
+                {copy.removeAll}
+              </button>
+            {/if}
+            {#if actionNotice}
+              <span class="text-[13.5px] text-fg-3">{actionNotice}</span>
+            {/if}
           {/if}
-          {#if actionNotice}
-            <span class="text-xs text-fg-3">{actionNotice}</span>
-          {/if}
+        </div>
+      </section>
+
+      <section aria-label={copy.offlinePack.heading} class="divide-y divide-line">
+        <div class="px-4 py-3.5 sm:px-5">
+          <OfflinePack copy={copy.offlinePack} headingTag="h3" />
+          <p class="mt-1.5 text-[13.5px] leading-snug text-fg-3">{copy.offlinePackNote}</p>
+        </div>
+      </section>
+
+      <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+        <button
+          type="button"
+          disabled={!hasController || clearingPages}
+          title={hasController ? undefined : copy.clearPagesUnavailable}
+          onclick={clearPages}
+          class={quiet}
+        >
+          {copy.clearPages}
+        </button>
+        {#if clearedPages}
+          <span class="text-[13.5px] text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
+        {/if}
+        {#if !hasController}
+          <span class="sr-only">{copy.clearPagesUnavailable}</span>
         {/if}
       </div>
-    </section>
+    </div>
 
-    <section class="mt-5" aria-label={copy.offlinePack.heading}>
-      <OfflinePack copy={copy.offlinePack} headingTag="h3" />
-      <p class="mt-1.5 text-xs leading-snug text-fg-4">{copy.offlinePackNote}</p>
-    </section>
-
-    <section class="mt-5">
-      <button
-        type="button"
-        disabled={!hasController || clearingPages}
-        title={hasController ? undefined : copy.clearPagesUnavailable}
-        onclick={clearPages}
-        class="rounded-md border border-line-2 px-2.5 py-1.5 text-sm text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {copy.clearPages}
-      </button>
-      {#if !hasController}
-        <span class="sr-only">{copy.clearPagesUnavailable}</span>
-      {/if}
-      {#if clearedPages}
-        <span class="text-xs text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
-      {/if}
-    </section>
-
-    <p class="mt-5 text-xs leading-snug text-fg-4">{copy.retentionNote}</p>
+    <p class="mt-4 text-[13.5px] leading-snug text-fg-3">{copy.retentionNote}</p>
   {/if}
-</Card>
+</div>

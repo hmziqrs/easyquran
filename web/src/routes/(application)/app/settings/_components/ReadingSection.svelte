@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Card } from "$lib/components";
   import {
     ARABIC_FONTS,
     TRANSLATION_FAMILIES,
@@ -30,9 +29,9 @@
 
   const SAMPLE_ARABIC = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
 
-  const pill = "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150";
+  const pill = "rounded-lg border px-3.5 py-2 text-[13.5px] transition-colors duration-150";
   const pillOn = "border-accent bg-accent-soft text-fg";
-  const pillOff = "border-line-2 text-fg-2 hover:text-fg";
+  const pillOff = "border-line-2 text-fg-2 hover:border-line hover:text-fg";
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
@@ -62,17 +61,17 @@
   }
 
   const stepperButton =
-    "flex h-8 w-9 items-center justify-center rounded-md border border-line-2 text-sm text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
+    "flex h-9 w-10 items-center justify-center rounded-lg border border-line-2 text-[13.5px] text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
 </script>
 
-<Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-base font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
+<div id={id} tabindex="-1" class="scroll-mt-24">
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
 
-  <div class="mt-5 grid gap-6">
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.mode}</div>
-      <div class="flex gap-1.5">
+  <div class="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.mode}</span>
+      <div class="flex shrink-0 gap-1.5">
         {#each modes as mode (mode)}
           <button
             type="button"
@@ -84,9 +83,9 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.arabicFont}</div>
-      <div class="flex flex-wrap gap-1.5">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.arabicFont}</span>
+      <div class="flex shrink-0 flex-wrap gap-1.5">
         {#each ARABIC_FONTS as font (font.id)}
           <button
             type="button"
@@ -99,9 +98,13 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.arabicSize}</div>
-      <div class="flex items-center gap-2" role="group" aria-label={copy.arabicSize}>
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.arabicSize}</span>
+      <div
+        class="flex shrink-0 items-center gap-2.5"
+        role="group"
+        aria-label={copy.arabicSize}
+      >
         <button
           type="button"
           class={stepperButton}
@@ -109,7 +112,7 @@
           disabled={reader.arabicSizePx === `${ARABIC_FONT_MIN}px`}
           onclick={() => reader.smaller()}>−</button
         >
-        <span class="min-w-10 text-center text-sm tabular-nums text-fg-2" aria-live="polite"
+        <span class="min-w-12 text-center text-[13.5px] tabular-nums text-fg-2" aria-live="polite"
           >{reader.arabicSizePx}</span
         >
         <button
@@ -122,9 +125,9 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.translationFont}</div>
-      <div class="flex gap-1.5">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.translationFont}</span>
+      <div class="flex shrink-0 gap-1.5">
         {#each families as family (family)}
           <button
             type="button"
@@ -136,9 +139,13 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.translationSize}</div>
-      <div class="flex items-center gap-2" role="group" aria-label={copy.translationSize}>
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.translationSize}</span>
+      <div
+        class="flex shrink-0 items-center gap-2.5"
+        role="group"
+        aria-label={copy.translationSize}
+      >
         <button
           type="button"
           class={stepperButton}
@@ -146,7 +153,7 @@
           disabled={reader.translationSizePx === `${TRANSLATION_FONT_MIN}px`}
           onclick={() => reader.shrinkTranslation()}>−</button
         >
-        <span class="min-w-10 text-center text-sm tabular-nums text-fg-2" aria-live="polite"
+        <span class="min-w-12 text-center text-[13.5px] tabular-nums text-fg-2" aria-live="polite"
           >{reader.translationSizePx}</span
         >
         <button
@@ -159,15 +166,15 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{copy.preview}</div>
-      <div class="overflow-x-auto rounded-lg border border-line bg-bg-2 px-4 py-3">
+    <div class="px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{copy.preview}</span>
+      <div class="mt-2.5 overflow-x-auto rounded-xl border border-line bg-bg-2 px-4 py-3.5">
         <p class="preview-arabic" dir="rtl" lang="ar">{SAMPLE_ARABIC}</p>
         <p class="preview-translation" dir="auto">{copy.sample}</p>
       </div>
     </div>
   </div>
-</Card>
+</div>
 
 <style>
   .preview-arabic {

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
-  import { Card } from "$lib/components";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { ACCENTS, SURFACES, type ThemeMode } from "$lib/config/site";
   import type { CustomSeeds } from "$lib/theme/derive";
@@ -25,9 +24,11 @@
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const pill = "rounded-md border px-3 py-1.5 text-sm transition-colors duration-150";
+  const pill = "rounded-lg border px-3.5 py-2 text-[13.5px] transition-colors duration-150";
   const pillOn = "border-accent bg-accent-soft text-fg";
-  const pillOff = "border-line-2 text-fg-2 hover:text-fg";
+  const pillOff = "border-line-2 text-fg-2 hover:border-line hover:text-fg";
+  const quiet =
+    "rounded-lg border border-line-2 px-3.5 py-2.5 text-[13.5px] text-fg-2 transition-colors duration-150 hover:border-line hover:text-fg";
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
@@ -72,14 +73,14 @@
   });
 </script>
 
-<Card id={id} tabindex={-1} class="scroll-mt-24">
-  <h2 class="text-base font-semibold text-fg">{heading}</h2>
-  <p class="mt-1 text-sm text-fg-2">{copy.intro}</p>
+<div id={id} tabindex="-1" class="scroll-mt-24">
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
 
-  <div class="mt-5 grid gap-6">
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{panel.theme}</div>
-      <div class="flex gap-1.5">
+  <div class="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{panel.theme}</span>
+      <div class="flex shrink-0 gap-1.5">
         {#each themes as t (t)}
           <button
             type="button"
@@ -91,9 +92,9 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{panel.surface}</div>
-      <div class="grid gap-1 sm:grid-cols-2">
+    <div class="px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{panel.surface}</span>
+      <div class="mt-2.5 grid gap-2 sm:grid-cols-2">
         {#each SURFACES as s (s.id)}
           <button
             type="button"
@@ -101,19 +102,19 @@
             aria-pressed={prefs.surface === s.id}
             onclick={() => prefs.setSurface(s.id)}
             class={cn(
-              "flex items-center gap-2.5 rounded-lg border px-2 py-1.5 text-start transition-colors",
+              "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-start transition-colors",
               prefs.surface === s.id
                 ? "border-accent bg-accent-soft"
-                : "border-line hover:border-line-2",
+                : "border-line-2 bg-bg-1 hover:border-line hover:text-fg",
             )}
           >
             <span
-              class="size-5 flex-none rounded-md border border-line-2"
+              class="size-6 flex-none rounded-md border border-line-2"
               style={`background:${prefs.theme === "light" ? s.lightHex : s.darkHex}`}
             ></span>
             <span class="min-w-0">
-              <span class="block text-sm text-fg">{panel.surfaces[s.id].label}</span>
-              <span class="block truncate text-xs text-fg-4"
+              <span class="block text-[13.5px] text-fg">{panel.surfaces[s.id].label}</span>
+              <span class="block truncate text-[13.5px] text-fg-3"
                 >{panel.surfaces[s.id].note}</span
               >
             </span>
@@ -122,9 +123,9 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 text-sm text-fg-3">{panel.accent}</div>
-      <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span class="text-[14.5px] font-medium text-fg">{panel.accent}</span>
+      <div class="flex shrink-0 flex-wrap gap-2">
         {#each ACCENTS as a (a.id)}
           <button
             type="button"
@@ -142,55 +143,55 @@
       </div>
     </div>
 
-    <div>
-      <div class="mb-1.5 flex items-center justify-between">
-        <span class="text-sm text-fg-3">{panel.customColours}</span>
+    <div class="px-4 py-3.5 sm:px-5">
+      <div class="flex items-center justify-between gap-4">
+        <span class="text-[14.5px] font-medium text-fg">{panel.customColours}</span>
         {#if prefs.hasCustom}
           <button
             type="button"
-            class="text-sm text-fg-3 underline underline-offset-2 transition-colors hover:text-fg"
+            class="text-[13.5px] text-fg-3 underline underline-offset-2 transition-colors hover:text-fg"
             onclick={() => prefs.clearCustom()}>{panel.clear}</button
           >
         {/if}
       </div>
-      <div class="flex flex-col gap-1.5">
+      <div class="mt-2.5 flex flex-col gap-2">
         {#each seeds as s (s.key)}
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-3">
             <input
               type="color"
               aria-label={panel.colourInputLabel(panel.seedNames[s.key])}
               value={seedValue(s.key, s.fallbackVar)}
               oninput={(e) => prefs.setCustom(s.key, e.currentTarget.value)}
-              class="size-7 flex-none cursor-pointer rounded-md border border-line-2 bg-transparent p-0.5"
+              class="size-8 flex-none cursor-pointer rounded-md border border-line-2 bg-transparent p-0.5"
             />
-            <span class="flex-1 text-sm text-fg-2">{panel.seedNames[s.key]}</span>
-            <span class="font-mono text-xs text-fg-4">
+            <span class="flex-1 text-[13.5px] text-fg-2">{panel.seedNames[s.key]}</span>
+            <span class="font-mono text-[13.5px] tabular-nums text-fg-3">
               {prefs.custom[s.key] ?? panel.preset}
             </span>
             {#if prefs.custom[s.key]}
               <button
                 type="button"
                 aria-label={panel.resetToPresetLabel(panel.seedNames[s.key])}
-                class="text-fg-4 transition-colors hover:text-fg"
+                class="text-fg-3 transition-colors hover:text-fg"
                 onclick={() => prefs.setCustom(s.key, undefined)}>✕</button
               >
             {/if}
           </div>
         {/each}
       </div>
-      <p class="mt-1.5 text-xs leading-snug text-fg-4">
+      <p class="mt-2.5 text-[13.5px] leading-snug text-fg-3">
         {panel.derivedColours}
       </p>
     </div>
-
-    <div class="flex gap-1.5">
-      <button type="button" class={cn(pill, pillOff, "flex-1")} onclick={copyCss}>
-        {copied ? panel.copied : panel.copyCss}
-      </button>
-      <button type="button" class={cn(pill, pillOff, "flex-1")} onclick={() => prefs.reset()}>
-        {panel.reset}
-      </button>
-      <span class="sr-only" aria-live="polite">{copied ? panel.copied : ""}</span>
-    </div>
   </div>
-</Card>
+
+  <div class="mt-4 flex flex-wrap gap-2">
+    <button type="button" class={cn(quiet, "flex-1")} onclick={copyCss}>
+      {copied ? panel.copied : panel.copyCss}
+    </button>
+    <button type="button" class={cn(quiet, "flex-1")} onclick={() => prefs.reset()}>
+      {panel.reset}
+    </button>
+    <span class="sr-only" aria-live="polite">{copied ? panel.copied : ""}</span>
+  </div>
+</div>

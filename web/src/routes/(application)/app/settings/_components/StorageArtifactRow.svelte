@@ -23,7 +23,7 @@
 
   const badge = "rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3";
   const actionBtn =
-    "rounded-md border px-2.5 py-1.5 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded-lg border px-3 py-2 text-[13.5px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
 
   let {
     artifact,
@@ -119,10 +119,10 @@
   }
 </script>
 
-<div class="flex items-center gap-2 py-1.5">
+<div class="flex items-center gap-4 py-3">
   <div class="min-w-0 flex-1">
     <div class="flex flex-wrap items-center gap-1.5">
-      <span class="truncate text-xs text-fg">{name}</span>
+      <span class="truncate text-[14.5px] text-fg">{name}</span>
       {#if language}
         <span class={badge}>{language}</span>
       {/if}
@@ -137,12 +137,19 @@
         </span>
       {/if}
     </div>
-    <div class="text-xs text-fg-4">{formatBytes(artifact.sizeBytes)} · {lastUsedLabel}</div>
+    <div class="mt-0.5 text-[13.5px] text-fg-3">
+      <span class="tabular-nums">{formatBytes(artifact.sizeBytes)}</span> · {lastUsedLabel}
+    </div>
   </div>
 
-  <div class="flex items-center gap-1.5" aria-live="polite" aria-busy={busy} onfocusout={onCellFocusOut}>
+  <div
+    class="flex shrink-0 items-center gap-2"
+    aria-live="polite"
+    aria-busy={busy}
+    onfocusout={onCellFocusOut}
+  >
     {#if confirming}
-      <span class="text-xs text-fg-3">{copy.removeConfirmTitle(name)}</span>
+      <span class="text-[13.5px] text-fg-3">{copy.removeConfirmTitle(name)}</span>
       <button
         type="button"
         bind:this={confirmButton}
@@ -165,7 +172,7 @@
       </button>
     {:else}
       {#if errorText}
-        <span class="max-w-40 truncate text-xs text-red-400" title={errorText}>
+        <span class="max-w-48 truncate text-[13.5px] text-red-400" title={errorText}>
           {errorText}
         </span>
       {/if}

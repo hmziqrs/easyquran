@@ -92,18 +92,18 @@
   </svg>
 {/if}
 
-<ul class="mt-2 grid gap-1">
+<ul class="mt-3 grid gap-1.5">
   {#each layers as layer (layer.id)}
-    <li class="flex items-center gap-2 text-xs text-fg-3">
+    <li class="flex items-center gap-2.5 text-[13.5px] text-fg-3">
       <span
-        class="inline-block size-2 shrink-0 rounded-sm border border-line-2"
+        class="inline-block size-2.5 shrink-0 rounded-sm border border-line-2"
         style={`background:${
           layer.id === "other" ? "repeating-linear-gradient(45deg, var(--fg-4) 0 2px, var(--bg-2) 2px 4px)" : LAYER_FILL[layer.id]
         }`}
       ></span>
       <span class="min-w-0 flex-1 truncate">{labels[layer.id]}</span>
       <span class="tabular-nums text-fg-2">{formatBytes(layer.bytes)}</span>
-      <span class="w-10 text-end tabular-nums text-fg-4">{percent(layer.bytes)}</span>
+      <span class="w-12 text-end tabular-nums text-fg-3">{percent(layer.bytes)}</span>
     </li>
   {/each}
 </ul>

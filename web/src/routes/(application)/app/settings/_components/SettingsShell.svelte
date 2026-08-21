@@ -19,34 +19,37 @@
 
   function navItemClass(isActive: boolean): string {
     const base =
-      "flex items-center whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm transition-colors md:w-full md:rounded-md md:border-0 md:bg-transparent md:px-3 md:text-start";
+      "flex items-center whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13.5px] transition-colors lg:w-full lg:rounded-lg lg:border-0 lg:bg-transparent lg:py-2.5 lg:text-start";
     if (isActive) {
-      return cn(base, "border-accent bg-accent-soft font-medium text-fg md:bg-accent-soft");
+      return cn(base, "border-accent bg-accent-soft font-medium text-fg lg:bg-accent-soft");
     }
     return cn(
       base,
-      "border-line-2 bg-bg-1 text-fg-2 hover:border-line hover:text-fg md:hover:bg-bg-2",
+      "border-line-2 bg-bg-1 text-fg-2 hover:border-line hover:text-fg lg:hover:bg-bg-2",
     );
   }
 </script>
 
-<div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-  <h1 class="text-lg font-semibold text-fg">{copy.title}</h1>
+<div class="mx-auto max-w-[1180px] px-6 py-10 sm:px-7 sm:py-12">
+  <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg">{copy.title}</h1>
 
-  <div class="mt-5 flex flex-col gap-6 md:mt-6 md:flex-row md:gap-0">
+  <div class="mt-8 flex flex-col gap-6 lg:mt-10 lg:flex-row lg:gap-0">
     <nav
       aria-label={copy.sectionsLabel}
-      class="md:sticky md:top-24 md:w-56 md:shrink-0 md:self-start md:border-e md:pe-6"
+      class="lg:sticky lg:top-24 lg:w-60 lg:shrink-0 lg:self-start lg:border-e lg:pe-6"
     >
       <ul
-        class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 md:mx-0 md:block md:space-y-0.5 md:overflow-visible md:px-0 md:pb-0"
+        class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:block lg:space-y-0.5 lg:overflow-visible lg:px-0 lg:pb-0"
       >
         {#each sections as section (section.id)}
-          <li class="shrink-0 md:shrink">
+          <li class="shrink-0 lg:shrink">
             <a
               href={"#" + section.id}
               aria-current={section.id === active ? "page" : undefined}
-              class={navItemClass(section.id === active)}
+              class={cn(
+                navItemClass(section.id === active),
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+              )}
               onclick={(event) => {
                 event.preventDefault();
                 onSelect(section.id);
@@ -59,7 +62,7 @@
       </ul>
     </nav>
 
-    <div class="min-w-0 flex-1 md:ps-8" aria-live="polite">
+    <div class="min-w-0 flex-1 lg:ps-8" aria-live="polite">
       {@render children()}
     </div>
   </div>
