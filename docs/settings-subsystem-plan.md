@@ -492,15 +492,18 @@ Where shipped code departs from the sections above, current code wins; the reaso
     non-default fonts on every apply (hydrate + cross-tab re-apply), so a persisted
     Scheherazade/Noto selection survives reloads. First paint still shows Amiri until the
     lazy woff2 lands — inherent to keeping alternate mushaf bytes out of the bundle.
-11. **Pre-paint mirror covers the font id only.** `app.html` mirrors the `arabicFont` id
-    allowlist (pinned by the literal-sync guard) into `data-arabic-font`, but the
-    `--reader-arabic-family` stack applies at hydrate — the dataset write is the plan §3.2
-    hook and is deliberately unconsumed by CSS today; the visual outcome is the same
-    Amiri-first paint described in divergence 10.
+11. **No pre-paint arabicFont mirror in `app.html`.** The font-id allowlist mirror that
+    briefly shipped there was removed as dead code: the `data-arabic-font` write was
+    unconsumed by CSS, alternate-font bytes lazy-load at hydrate, and
+    `applyReaderPresentation` owns the `data-arabic-font` and `--reader-arabic-family`
+    writes (§3.2 already attributes the dataset to it). First paint is Amiri as in
+    divergence 10, and the literal-sync guard (`reader-fonts.test.ts`) pins the mirror's
+    absence — no `arabicFont` string, no `--reader-arabic-family`, no font-id literals in
+    `app.html` — alongside the `translationSize`/`fontSize` bounds it still mirrors.
 12. **Byte-unit wording.** `formatBytes` keeps Latin unit symbols (MB/GB) in the Arabic UI —
     unit symbols are standard in Arabic technical copy and match the ICU `{entries}` Latin
     digits used elsewhere; catalog prose keeps Arabic-script units (ميغابايت).
-11. **The purge no-controller window fallback (§2.5) was dropped.** "Clear cached pages &
+13. **The purge no-controller window fallback (§2.5) was dropped.** "Clear cached pages &
     data" stays a worker-message-only path (`purgeUserCaches()`); when
     `navigator.serviceWorker.controller === null` the button renders permanently disabled
     with the unavailable reason instead of falling back to a window-side
@@ -509,7 +512,7 @@ Where shipped code departs from the sections above, current code wins; the reaso
     no-controller state is session-transient (first claimed load ends it). §11's "window
     fallback gated to exactly that case" risk note is therefore resolved by the disabled UI
     alone.
-12. **§9 item 7's `lazy-sections.test.ts` raw-source chunk guard shipped as
+14. **§9 item 7's `lazy-sections.test.ts` raw-source chunk guard shipped as
     `route-isolation.test.ts` with the opposite chunk contract:** test 2 pins that
     `+page.svelte` statically imports all five sections (one settings chunk, no per-section
     loaders), and the chunk-regression mitigation named in §11 is a raw-source ban on static
@@ -519,7 +522,7 @@ Where shipped code departs from the sections above, current code wins; the reaso
     `stopPropagation` in the row confirm, exactly one polite announcer in the row, the
     arabic/busy/error outcome copy mapping, `result.failures` surfacing in remove-all, and
     the `readerSource.sourceId` + `stackedTranslations.ids` in-use join.
-13. **§5's "app version" row displays no version number.** The row surfaces the existing
+15. **§5's "app version" row displays no version number.** The row surfaces the existing
     `UpdateStore` (up-to-date / update-available status plus "Check for updates"), but there
     is no version string to show: `UpdateStore` exposes only booleans, SvelteKit's `updated`
     state carries no version, and the offline manifest's optional `appVersion` is the pack's
