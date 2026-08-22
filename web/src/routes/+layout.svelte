@@ -16,10 +16,8 @@
   import { AuthModalShell } from "$lib/components/auth";
   import { DownloadBar, UpdateToast } from "$lib/components/status";
   import { SITE } from "$lib/config/site";
-  import { startServiceWorker } from "$lib/boot/service-worker";
   import { startAnalytics } from "$lib/boot/analytics";
   import { startCrashReporting } from "$lib/boot/crash-reporting";
-  import { startOfflineEngine } from "$lib/boot/offline-engine";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
 
   let { children } = $props();
@@ -28,11 +26,23 @@
   let firstPaintComplete = false;
   let paintFrame = 0;
   let postPaintFrame = 0;
+  let offlineBootGeneration = 0;
+  let offlineBootPending = false;
   const ensureOfflineEngine = (pathname: string): void => {
     const canonicalPath = deLocalizeUrl(new URL(pathname, location.origin)).pathname;
     if (canonicalPath !== "/app" && !canonicalPath.startsWith("/app/")) return;
-    if (offlineTeardown) return;
-    offlineTeardown = startOfflineEngine();
+    if (offlineTeardown || offlineBootPending) return;
+    const generation = offlineBootGeneration;
+    offlineBootPending = true;
+    void import("$lib/boot/offline-engine")
+      .then(({ startOfflineEngine }) => {
+        if (generation !== offlineBootGeneration) return;
+        offlineTeardown = startOfflineEngine();
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (generation === offlineBootGeneration) offlineBootPending = false;
+      });
   };
 
   onMount(() => {
@@ -44,7 +54,7 @@
     online.hydrate();
     offline.hydrate();
 
-    const cleanups = [startServiceWorker(), startAnalytics(), startCrashReporting()];
+    const cleanups = [startAnalytics(), startCrashReporting()];
 
     const postAppReady = (): void => {
       const ctrl = navigator.serviceWorker?.controller;
@@ -71,6 +81,9 @@
       cancelAnimationFrame(paintFrame);
       cancelAnimationFrame(postPaintFrame);
       for (const teardown of cleanups) teardown();
+      offlineBootGeneration += 1;
+      offlineBootPending = false;
+      notifications.dispose();
       update.dispose();
       online.dispose();
       offlineTeardown?.();
@@ -79,7 +92,14 @@
   });
 
   beforeNavigate(({ willUnload, to }) => {
-    if (updated.current && !willUnload && to?.url) location.href = to.url.href;
+    if (
+      !("serviceWorker" in navigator) &&
+      updated.current &&
+      !willUnload &&
+      to?.url
+    ) {
+      location.href = to.url.href;
+    }
   });
 
   afterNavigate((navigation) => {

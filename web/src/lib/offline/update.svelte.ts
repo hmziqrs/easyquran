@@ -13,6 +13,7 @@ import { readRaw, removeRaw, writeRaw } from "$lib/storage";
 
 const RELOAD_GUARD = "easyquran.reload-guard";
 const PAINT_KEY = "easyquran.update.waiting";
+const UPDATE_CHECK_INTERVAL_MS = 5 * 60_000;
 
 class UpdateStore {
   #waiting = $state(false);
@@ -22,6 +23,9 @@ class UpdateStore {
   #registrationResolved = false;
   #channel: BroadcastChannel | null = null;
   #cleanups: Array<() => void> = [];
+  #lastUpdateCheckAt: number | null = null;
+  #updateCheckInFlight: Promise<void> | null = null;
+  #versionFallbackWired = false;
 
   get waiting(): boolean {
     return this.#waiting;
@@ -56,23 +60,21 @@ class UpdateStore {
     const painted = readRaw("local", PAINT_KEY) === "1";
     if (painted) this.#waiting = true;
 
-    const stopEffect = $effect.root(() => {
-      $effect(() => {
-        if (!updated.current) return;
-        void this.#onVersionChanged();
-      });
-    });
-    this.#cleanups.push(stopEffect);
-
     if ("serviceWorker" in navigator) {
       void this.#wireServiceWorker();
+    } else {
+      this.#wireVersionFallback();
     }
   }
 
   async #wireServiceWorker(): Promise<void> {
     const reg = await this.#getRegistration();
-    if (!reg) return;
+    if (!reg) {
+      this.#wireVersionFallback();
+      return;
+    }
     this.#syncWaiting(reg);
+    this.#lastUpdateCheckAt = Date.now();
     reg.addEventListener("updatefound", this.#onUpdateFound);
 
     const onControllerChange = (): void => {
@@ -83,10 +85,7 @@ class UpdateStore {
 
     const onVisibility = (): void => {
       if (document.visibilityState !== "visible") return;
-      void updated.check();
-      void this.#getRegistration().then((r) => {
-        if (r) void r.update().catch(() => {});
-      });
+      void this.#checkServiceWorkerUpdate();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -95,6 +94,46 @@ class UpdateStore {
       () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange),
       () => document.removeEventListener("visibilitychange", onVisibility),
     );
+  }
+
+  #wireVersionFallback(): void {
+    if (this.#versionFallbackWired) return;
+    this.#versionFallbackWired = true;
+    const check = (): void => {
+      void updated.check().catch(() => {});
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") check();
+    };
+    check();
+    document.addEventListener("visibilitychange", onVisibility);
+    this.#cleanups.push(() => document.removeEventListener("visibilitychange", onVisibility));
+  }
+
+  #checkServiceWorkerUpdate(): Promise<void> {
+    if (this.#updateCheckInFlight) return this.#updateCheckInFlight;
+    const now = Date.now();
+    if (
+      this.#lastUpdateCheckAt !== null &&
+      now - this.#lastUpdateCheckAt < UPDATE_CHECK_INTERVAL_MS
+    ) {
+      return Promise.resolve();
+    }
+    this.#lastUpdateCheckAt = now;
+    const run = (async (): Promise<void> => {
+      const reg = await this.#getRegistration();
+      if (!reg) return;
+      try {
+        await reg.update();
+      } catch {}
+      this.#syncWaiting(reg);
+    })();
+    this.#updateCheckInFlight = run;
+    const clearInFlight = (): void => {
+      if (this.#updateCheckInFlight === run) this.#updateCheckInFlight = null;
+    };
+    void run.then(clearInFlight, clearInFlight);
+    return run;
   }
 
   readonly #onUpdateFound = (): void => {
@@ -107,18 +146,6 @@ class UpdateStore {
       this.#syncWaiting(this.#registration);
     });
   };
-
-  async #onVersionChanged(): Promise<void> {
-    const reg = await this.#getRegistration();
-    if (!reg) {
-      this.#mirrorWaiting();
-      return;
-    }
-    try {
-      await reg.update();
-    } catch {}
-    this.#syncWaiting(reg);
-  }
 
   #syncWaiting(reg: ServiceWorkerRegistration | null | undefined): void {
     const next = reg?.waiting != null;
@@ -164,7 +191,7 @@ class UpdateStore {
       waiting.postMessage({ type: SKIP_WAITING });
       return;
     }
-    if (updated.current) window.location.reload();
+    if (!("serviceWorker" in navigator) && updated.current) window.location.reload();
   }
 
   dispose(): void {
@@ -173,6 +200,9 @@ class UpdateStore {
     this.#channel = null;
     this.#registration = null;
     this.#registrationResolved = false;
+    this.#lastUpdateCheckAt = null;
+    this.#updateCheckInFlight = null;
+    this.#versionFallbackWired = false;
     this.#hydrated = false;
   }
 }

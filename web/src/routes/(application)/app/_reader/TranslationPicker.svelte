@@ -10,7 +10,7 @@
     translationSegmentsFromId,
     type SurahRouteContext,
   } from "$lib/data/quran";
-  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
@@ -159,7 +159,7 @@
         </span>
       {/if}
     </li>
-    {#each catalogueStore.translations as t (t.id)}
+    {#each TRANSLATION_CATALOGUE as t (t.id)}
       {@const seg = translationSegmentsFromId(t.id)}
       {@const target = { id: t.id, lang: seg.lang, translator: seg.translator }}
       {@const href = hrefFor(position, target)}

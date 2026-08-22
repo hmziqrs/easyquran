@@ -108,6 +108,38 @@ describe("NotificationsStore.subscribe guards", () => {
   });
 });
 
+describe("NotificationsStore hydration", () => {
+  it("skips Messaging listeners and token refresh when unsupported", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+    messaging.isMessagingSupported.mockResolvedValue(false);
+
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+
+    expect(store.supported).toBe(false);
+    expect(store.subscribed).toBe(false);
+    expect(messaging.onForegroundMessage).not.toHaveBeenCalled();
+    expect(messaging.getFcmToken).not.toHaveBeenCalled();
+    expect(messaging.initMessaging).not.toHaveBeenCalled();
+    store.dispose();
+  });
+
+  it("wires once and refreshes an existing subscription when supported", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+
+    const store = createNotifications();
+    store.hydrate();
+    store.hydrate();
+    await flush();
+
+    expect(store.supported).toBe(true);
+    expect(messaging.onForegroundMessage).toHaveBeenCalledTimes(1);
+    expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+});
+
 describe("NotificationsStore.subscribe happy path", () => {
   it("registers the token, flips subscribed, and persists the record", async () => {
     messaging.getFcmToken.mockResolvedValue("abc-123");
@@ -139,6 +171,7 @@ describe("NotificationsStore #refreshToken dedup", () => {
     expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
     release("new-token");
     await flush();
+    store.dispose();
   });
 });
 
@@ -169,6 +202,7 @@ describe("NotificationsStore generation race-guard", () => {
     expect(store.subscribed).toBe(false);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     expect(stored).toEqual({ token: null, subscribed: false });
+    store.dispose();
   });
 });
 
@@ -183,6 +217,7 @@ describe("NotificationsStore foreground message", () => {
     foregroundCb?.({ messageId: "msg-1" } as MessagePayload);
     expect(store.lastMessage).toMatchObject({ messageId: "msg-1" });
     expect(store.messageSeq).toBe(before + 1);
+    store.dispose();
   });
 
   it("clearMessage nulls the last message", async () => {
@@ -194,6 +229,7 @@ describe("NotificationsStore foreground message", () => {
     expect(store.lastMessage).not.toBeNull();
     store.clearMessage();
     expect(store.lastMessage).toBeNull();
+    store.dispose();
   });
 });
 
@@ -211,6 +247,7 @@ describe("NotificationsStore.syncPermission", () => {
     expect(store.subscribed).toBe(false);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     expect(stored).toEqual({ token: null, subscribed: false });
+    store.dispose();
   });
 });
 

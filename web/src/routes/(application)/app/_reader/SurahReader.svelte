@@ -20,7 +20,7 @@
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
-  import { catalogueStore } from "$lib/quran/catalogue-store.svelte";
+  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import type { ReadTierStatus } from "$lib/quran/fetch";
   import { virtualPageWindow } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
@@ -123,7 +123,7 @@
     to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
     primarySourceId: () => (isTranslationSource ? sourceId : null),
-    catalogue: () => catalogueStore.translations,
+    catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${sourceId}:${initial.surah.num}`,
   });
   const stackedAnnouncement = $derived.by(() => {

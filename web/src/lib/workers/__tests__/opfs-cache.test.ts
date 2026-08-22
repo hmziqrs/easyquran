@@ -3,6 +3,8 @@ import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "$lib/workers
 import { openIdb } from "$lib/workers/idb";
 import {
   ACTIVE_SUFFIX,
+  ARTIFACT_META_DB,
+  ARTIFACT_META_STORE,
   activeFileName,
   clearPointer,
   decideLegacyAdoption,
@@ -12,6 +14,7 @@ import {
   filterSourceFiles,
   forgetSessionArtifact,
   idFromActiveFileName,
+  inspectCachedArtifacts,
   isActiveFileName,
   isTempFileName,
   listCachedArtifacts,
@@ -44,7 +47,11 @@ class FakeFileHandle {
   }
   async getFile() {
     return {
-      arrayBuffer: async () => this.bytes.buffer.slice(0),
+      size: this.bytes.byteLength,
+      arrayBuffer: async () => {
+        this.parent.arrayBufferReads += 1;
+        return this.bytes.buffer.slice(0);
+      },
     };
   }
   async createWritable() {
@@ -70,6 +77,8 @@ class FakeFileHandle {
 class FakeDirHandle {
   dirs = new Map<string, FakeDirHandle>();
   files = new Map<string, Uint8Array>();
+  arrayBufferReads = 0;
+  keyScans = 0;
   constructor(public name = "") {}
   async getDirectoryHandle(name: string, opts: { create?: boolean } = {}): Promise<FakeDirHandle> {
     if (this.files.has(name)) throw new DOMException(name, "TypeMismatchError");
@@ -88,6 +97,7 @@ class FakeDirHandle {
     return new FakeFileHandle(this, name);
   }
   async *keys(): AsyncIterable<string> {
+    this.keyScans += 1;
     for (const n of [...this.dirs.keys(), ...this.files.keys()]) yield n;
   }
   async removeEntry(name: string): Promise<void> {
@@ -105,6 +115,7 @@ class FakeDirHandle {
 
 interface FakeStore {
   data: Map<unknown, unknown>;
+  valueCursorReads: number;
 }
 interface FakeDB {
   name: string;
@@ -134,6 +145,7 @@ interface FakeStoreHandle {
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- fakes IDBObjectStore.delete; key is an opaque IDB valid key
   delete(key: unknown): FakeReq;
   openCursor(): FakeReq;
+  openKeyCursor(): FakeReq;
 }
 interface FakeTx {
   aborted: boolean;
@@ -168,7 +180,7 @@ function buildFakes(): FakeEnv {
   function makeStore(db: FakeDB, name: string): FakeStore {
     let store = db.stores.get(name);
     if (!store) {
-      store = { data: new Map() };
+      store = { data: new Map(), valueCursorReads: 0 };
       db.stores.set(name, store);
     }
     return store;
@@ -236,6 +248,43 @@ function buildFakes(): FakeEnv {
           const cursor: FakeCursor = {
             key,
             value: store.data.get(key),
+            continue: () => {
+              i += 1;
+              queueMicrotask(fire);
+            },
+          };
+          store.valueCursorReads += 1;
+          req.result = cursor;
+          req.onsuccess?.(req);
+        };
+        queueMicrotask(fire);
+        return req;
+      },
+      openKeyCursor: () => {
+        const req: FakeReq = {
+          result: null,
+          error: null,
+          onsuccess: null,
+          onerror: null,
+          onupgradeneeded: null,
+        };
+        const keys = [...store.data.keys()];
+        let i = 0;
+        track(req);
+        const fire = () => {
+          if (tx.aborted) return;
+          if (i >= keys.length) {
+            req.result = null;
+            try {
+              req.onsuccess?.(req);
+            } finally {
+              release(req);
+            }
+            return;
+          }
+          const cursor: FakeCursor = {
+            key: keys[i]!,
+            value: undefined,
             continue: () => {
               i += 1;
               queueMicrotask(fire);
@@ -326,8 +375,13 @@ function buildFakes(): FakeEnv {
     reset: () => {
       root.dirs.clear();
       root.files.clear();
+      root.arrayBufferReads = 0;
+      root.keyScans = 0;
       for (const db of dbByName.values()) {
-        for (const store of db.stores.values()) store.data.clear();
+        for (const store of db.stores.values()) {
+          store.data.clear();
+          store.valueCursorReads = 0;
+        }
       }
     },
   };
@@ -433,6 +487,27 @@ async function breakNextPointerPut(): Promise<() => void> {
   };
   return () => {
     pointerDb.transaction = origTransaction;
+  };
+}
+
+async function breakMetadataPuts(): Promise<() => void> {
+  const metaDb = reinterpretAs<FakeDB>(await openIdb(ARTIFACT_META_DB, ARTIFACT_META_STORE));
+  const origTransaction = metaDb.transaction.bind(metaDb);
+  metaDb.transaction = (store: string, mode: IDBTransactionMode): FakeTx => {
+    const tx = origTransaction(store, mode);
+    const origObjectStore = tx.objectStore.bind(tx);
+    tx.objectStore = (): FakeStoreHandle => {
+      const handle = origObjectStore(store);
+      // SAFETY: test override intentionally replaces FakeStoreHandle.put with a never-returning failure stub.
+      handle.put = ((..._args: unknown[]) => {
+        throw new Error("metadata interrupted");
+      }) as FakeStoreHandle["put"];
+      return handle;
+    };
+    return tx;
+  };
+  return () => {
+    metaDb.transaction = origTransaction;
   };
 }
 
@@ -614,6 +689,12 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     expect(art.store).toBe("opfs");
     expect(art.bytes.byteLength).toBe(16);
 
+    const top = await env.root.getDirectoryHandle("easyquran", { create: false });
+    const sourceDir = await top.getDirectoryHandle(spec.id, { create: false });
+    // Persisted temp validation reads bytes once. Promotion verifies File.size;
+    // it must not materialize the complete active SQLite file again.
+    expect(sourceDir.arrayBufferReads).toBe(1);
+
     const active = await readSeed(spec.id, activeFileName(spec.id), env.root);
     expect(active).not.toBeNull();
     expect(active!.byteLength).toBe(16);
@@ -750,6 +831,23 @@ describe("ensureArtifact crash-safe OPFS flow", () => {
     expect(ids).not.toContain(spec.id);
   });
 
+  it("reuses one OPFS tree snapshot for boot inventory and temp cleanup", async () => {
+    const spec = makeSpec(16);
+    await seedFile(spec.id, activeFileName(spec.id), PAYLOAD(16), env.root);
+    await seedFile(spec.id, tempFileName(spec.id), PAYLOAD(4), env.root);
+    await writePointer({ sourceId: spec.id, activeFile: activeFileName(spec.id) });
+
+    const top = await env.root.getDirectoryHandle("easyquran", { create: false });
+    const sourceDir = await top.getDirectoryHandle(spec.id, { create: false });
+    const inspection = await inspectCachedArtifacts();
+    await sweepAbandonedTemps(inspection.abandonedTemps);
+
+    expect(top.keyScans).toBe(1);
+    expect(sourceDir.keyScans).toBe(1);
+    expect(inspection.artifacts.map((artifact) => artifact.id)).toEqual([spec.id]);
+    expect(await readSeed(spec.id, tempFileName(spec.id), env.root)).toBeNull();
+  });
+
   it("deleteCachedArtifact clears the pointer and active file; the boot sweep owns temp cleanup", async () => {
     const spec = makeSpec(16);
     setFetchPayload(PAYLOAD(16));
@@ -866,6 +964,68 @@ describe("ensureArtifact session fallback", () => {
 
     forgetSessionArtifact(spec.id);
     expect(await listCachedArtifacts()).toEqual([]);
+  });
+});
+
+describe("IDB inventory metadata", () => {
+  let env: ReturnType<typeof installFakes>;
+  // SAFETY: test snapshots optional global fetch before stubbing it and restores same value in afterEach.
+  const realFetch = (globalThis as { fetch?: unknown }).fetch;
+
+  beforeEach(() => {
+    env = installFakes();
+    // SAFETY: test removes optional mocked storage property to force IDB fallback.
+    delete (globalThis.navigator as { storage?: unknown }).storage;
+  });
+  afterEach(() => {
+    // SAFETY: restores optional fetch snapshot captured above.
+    (globalThis as { fetch?: unknown }).fetch = realFetch;
+    // SAFETY: test removes optional mocked indexedDB property during teardown.
+    delete (globalThis as { indexedDB?: unknown }).indexedDB;
+  });
+
+  it("inventories keys and metadata without value-cursor cloning Quran bytes", async () => {
+    const spec = makeSpec(16);
+    setFetchPayload(PAYLOAD(16));
+    const artifact = await ensureArtifact(spec);
+    expect(artifact.store).toBe("idb");
+
+    const inspection = await inspectCachedArtifacts();
+    expect(inspection.artifacts).toEqual([
+      { id: spec.id, store: "idb", tag: spec.id, sizeBytes: spec.sizeBytes },
+    ]);
+
+    const quranDb = reinterpretAs<FakeDB>(await openIdb(QURAN_DB, QURAN_STORE));
+    expect(quranDb.stores.get(QURAN_STORE)?.valueCursorReads).toBe(0);
+    expect(env.root.keyScans).toBe(0);
+  });
+
+  it("keeps legacy bytes discoverable with unknown size when metadata is absent", async () => {
+    const spec = makeSpec(16);
+    const quranDb = reinterpretAs<FakeDB>(await openIdb(QURAN_DB, QURAN_STORE));
+    quranDb.stores.get(QURAN_STORE)!.data.set(`${spec.id}:${spec.id}`, PAYLOAD(16).buffer);
+
+    const inspection = await inspectCachedArtifacts();
+    expect(inspection.artifacts).toEqual([
+      { id: spec.id, store: "idb", tag: spec.id, sizeBytes: 0 },
+    ]);
+    expect(quranDb.stores.get(QURAN_STORE)?.valueCursorReads).toBe(0);
+  });
+
+  it("keeps persisted bytes authoritative when metadata write is interrupted", async () => {
+    const spec = makeSpec(16);
+    setFetchPayload(PAYLOAD(16));
+    const restore = await breakMetadataPuts();
+    try {
+      await expect(ensureArtifact(spec)).resolves.toMatchObject({ store: "idb" });
+    } finally {
+      restore();
+    }
+
+    const inspection = await inspectCachedArtifacts();
+    expect(inspection.artifacts).toEqual([
+      { id: spec.id, store: "idb", tag: spec.id, sizeBytes: 0 },
+    ]);
   });
 });
 

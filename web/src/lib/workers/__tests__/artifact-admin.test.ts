@@ -92,6 +92,7 @@ interface FakeTx {
     // eslint-disable-next-line anti-slop/no-unknown-parameters -- fakes IDBObjectStore.delete; key is an opaque IDB valid key and the real caller is production idb.ts
     delete(key: unknown): FakeReq;
     openCursor(): FakeReq;
+    openKeyCursor(): FakeReq;
   };
   oncomplete: (() => void) | null;
   onerror: (() => void) | null;
@@ -148,6 +149,36 @@ function makeDB(name: string): FakeDB {
               req.result = {
                 key,
                 value,
+                continue: () => {
+                  index++;
+                  advance();
+                },
+              };
+            } else {
+              req.result = null;
+            }
+            queueMicrotask(() => req.onsuccess?.(req));
+          };
+          advance();
+          return req;
+        },
+        openKeyCursor: () => {
+          const keys = [...data.keys()];
+          let index = 0;
+          const req: FakeReq = {
+            result: null,
+            error: null,
+            onsuccess: null,
+            onerror: null,
+            onupgradeneeded: null,
+          };
+          const advance = (): void => {
+            if (index < keys.length) {
+              // eslint-disable-next-line anti-slop/no-unknown-parameters -- cursor payload mirrors the opaque IDBCursor key the production key-cursor contract exposes
+              const key = keys[index]!;
+              req.result = {
+                key,
+                value: undefined,
                 continue: () => {
                   index++;
                   advance();
@@ -291,6 +322,11 @@ describe("worker listStorageArtifacts joins cached artifacts with lastUsed", () 
     });
     seedIdbRecord("easyquran-meta", "lastUsed", "en.sahih", 1_700_000_000_000);
     seedIdbRecord("easyquran-quran", "artifacts", "fr.hamid:fr.hamid", new ArrayBuffer(5 * MB));
+    seedIdbRecord("easyquran-artifact-meta", "artifacts", "fr.hamid:fr.hamid", {
+      id: "fr.hamid",
+      tag: "fr.hamid",
+      sizeBytes: 5 * MB,
+    });
     await flush();
 
     const artifacts = await worker.listStorageArtifacts();

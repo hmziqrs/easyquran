@@ -90,7 +90,9 @@ export default defineConfig({
     paraglideVitePlugin(paraglideOptions),
     sveltekit({
       version: {
-        pollInterval: 5 * 60_000,
+        // Service-worker registration owns proactive update detection. SvelteKit still performs
+        // its navigation-error version check, while no-SW browsers check from UpdateStore.
+        pollInterval: 0,
       },
       compilerOptions: {
         runes: ({ filename }) =>

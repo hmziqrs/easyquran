@@ -1,8 +1,8 @@
 import { loadQuranData } from "$lib/data/quran-data-client";
+import { QURAN } from "$lib/config/site";
 import { quran } from "$lib/stores/quran.svelte";
 
-import { bakedTranslationCatalogue } from "./catalogue";
-import { bakedManifest } from "./manifest";
+import { TRANSLATION_CATALOGUE } from "./catalogue";
 import { quranWorker } from "./worker-client";
 
 export function bootOfflineEngine(): () => void {
@@ -19,9 +19,7 @@ export function bootOfflineEngine(): () => void {
     try {
       const quranData = await loadQuranData();
       if (!active) return;
-      const manifest = bakedManifest();
-      const catalogue = bakedTranslationCatalogue();
-      await quranWorker.start(manifest, quranData.coordinates, catalogue);
+      await quranWorker.start(QURAN.scripts, quranData.coordinates, TRANSLATION_CATALOGUE);
     } catch (e) {
       if (!active) return;
       quran.status = "error";

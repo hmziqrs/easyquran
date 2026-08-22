@@ -1,5 +1,5 @@
 import { LOCAL_BOOT_BUDGET_MS } from "$lib/quran/fetch";
-import type { ResolvedManifest } from "$lib/quran/manifest";
+import type { ArtifactSpec } from "$lib/data/quran-types";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -75,16 +75,16 @@ class FakeWorker {
   }
 }
 
-const MANIFEST: ResolvedManifest = {
-  scripts: [{ id: "uthmani", sizeBytes: 1, downloadUrl: "https://x/uthmani" }],
-};
+const ARTIFACTS: readonly ArtifactSpec[] = [
+  { id: "uthmani", sizeBytes: 1, downloadUrl: "https://x/uthmani" },
+];
 
 function mockFetchSurah(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson(SURAH1));
 }
 
 async function startReady(): Promise<FakeWorker> {
-  const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+  const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
   const fake = FakeWorker.last!;
   const init = fake.posted.find(
     (m): m is Extract<WorkerRequest, { type: "init" }> => m.type === "init",
@@ -153,7 +153,7 @@ describe("arabic fallback chain (worker + boot budget)", () => {
 
   it("does not call the API when the worker becomes ready inside the boot budget", async () => {
     const fetchMock = mockFetchSurah();
-    const started = quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
     const fake = FakeWorker.last!;
     const p = quranWorker.readSurah(1, "uthmani");
     await vi.advanceTimersByTimeAsync(50);
@@ -174,7 +174,7 @@ describe("arabic fallback chain (worker + boot budget)", () => {
 
   it("falls through to the API when the boot budget expires before readiness", async () => {
     const fetchMock = mockFetchSurah();
-    void quranWorker.start(MANIFEST, QURAN_DATA.coordinates);
+    void quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
     const p = quranWorker.readSurah(1, "uthmani");
     await vi.advanceTimersByTimeAsync(LOCAL_BOOT_BUDGET_MS);
     const surah = await p;

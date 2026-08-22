@@ -30,7 +30,7 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
     "src/lib/workers/download.ts",
     "src/lib/workers/opfs-cache.ts",
     "src/lib/workers/quran.worker.ts",
-    "src/lib/quran/manifest.ts",
+    "src/lib/data/translations.ts",
     "src/lib/quran/wire.ts",
     "src/lib/config/site.ts",
     "src/lib/data/quran-types.ts",
@@ -61,7 +61,7 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
   });
 
   it("baked metadata modules never fetch API catalogues", () => {
-    for (const rel of ["src/lib/quran/manifest.ts", "src/lib/quran/catalogue.ts"]) {
+    for (const rel of ["src/lib/data/translations.ts", "src/lib/quran/catalogue.ts"]) {
       const source = read(rel);
       expect(source).not.toMatch(/fetch|\/scripts|apiBase.*\/sources/);
     }

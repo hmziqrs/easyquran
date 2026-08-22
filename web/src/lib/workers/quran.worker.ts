@@ -4,14 +4,15 @@ import {
   OpenerPackaging,
   QuranScript,
   STACKED_MAX_EXTRAS,
+  type ArtifactSpec,
   type CanonicalQuranCoordinates,
   type DownloadableSpec,
   type QuranRangeText,
   type QuranReaderSource,
   type QuranSourceId,
   type QuranSurahText,
-  type SourceCatalogueEntry,
   type SurahNormalization,
+  type TranslationCatalogueEntry,
 } from "$lib/data/quran-types";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
 import {
@@ -26,7 +27,6 @@ import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { uniq } from "es-toolkit";
 
-import type { ResolvedManifest } from "../quran/manifest";
 import type { StorageArtifactInfo, WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
 import {
   buildCanonicalSearchCorpus,
@@ -46,6 +46,7 @@ import {
   deleteCachedArtifact,
   ensureArtifact,
   forgetSessionArtifact,
+  inspectCachedArtifacts,
   listCachedArtifacts,
   QURAN_ROW_COUNT,
   sweepAbandonedTemps,
@@ -76,8 +77,10 @@ interface WorkerSourceState {
 const sources = new Map<QuranSourceId, WorkerSourceState>();
 let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
-let storedCatalogue: SourceCatalogueEntry[] = [];
-let bootPromise: Promise<void> | null = null;
+let storedCatalogue: readonly TranslationCatalogueEntry[] = [];
+let storedCatalogueById: ReadonlyMap<string, TranslationCatalogueEntry> = new Map();
+let bootPromise: Promise<readonly CachedArtifactInfo[]> | null = null;
+let bootInventory: readonly CachedArtifactInfo[] = Object.freeze([]);
 const TRANSLATION_DB_CAP = STACKED_MAX_EXTRAS + 2;
 const translationDbs = new Map<string, Database>();
 const pendingTranslationRunners = new Map<string, Promise<QuranQueryRunner>>();
@@ -184,9 +187,9 @@ export async function __initValidatorRuntime(): Promise<void> {
 }
 
 async function bootArabic(
-  manifest: ResolvedManifest,
+  artifacts: readonly ArtifactSpec[],
   coordinates: CanonicalQuranCoordinates,
-): Promise<void> {
+): Promise<readonly CachedArtifactInfo[]> {
   status("init");
   sqlite3 = await init();
 
@@ -195,8 +198,8 @@ async function bootArabic(
     DEFAULT_QURAN_SOURCE_PLAN.search.display,
   ]);
   for (const sourceId of plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN)) {
-    const spec = manifest.scripts.find((artifact) => artifact.id === sourceId);
-    if (!spec) throw new Error(`manifest missing Quran source ${sourceId}`);
+    const spec = artifacts.find((artifact) => artifact.id === sourceId);
+    if (!spec) throw new Error(`artifact list missing Quran source ${sourceId}`);
     const profile = resolveSourceProfile(spec.id);
     status("downloading", sourceId);
     const artifact = await ensureArtifact(spec, progressEmitter(spec), {
@@ -215,32 +218,41 @@ async function bootArabic(
     if (!persistent) database.close();
   }
 
-  // Sweep orphan .sqlite.tmp files BEFORE flipping ready: while ready is false
+  // One inventory drives temp cleanup, cached IDs, and initial pruning. Sweep
+  // orphan .sqlite.tmp files BEFORE flipping ready: while ready is false
   // no readTranslation can have started an ensureArtifact stage, so no temp here
   // is in flight (the worker processes messages concurrently via void
   // handleMessage, so this must hold before any staging can start). The prune
   // path no longer deletes temps (it raced in-flight staging), so this boot
   // sweep is the sole temp-cleanup owner.
-  await sweepAbandonedTemps();
+  const inspection = await inspectCachedArtifacts();
+  await sweepAbandonedTemps(inspection.abandonedTemps);
+  cachedTranslationIds.clear();
+  for (const artifact of inspection.artifacts) {
+    if (!isArabicSourceId(artifact.id)) cachedTranslationIds.add(artifact.id);
+  }
   ready = true;
   status("ready");
+  return inspection.artifacts;
 }
 
 async function initialize(
-  manifest: ResolvedManifest,
+  artifacts: readonly ArtifactSpec[],
   coordinates: CanonicalQuranCoordinates,
-  catalogue?: SourceCatalogueEntry[],
-): Promise<void> {
-  if (catalogue !== undefined) storedCatalogue = catalogue;
-  if (ready) return;
-  if (bootPromise !== null) {
-    await bootPromise;
-    return;
+  catalogue?: readonly TranslationCatalogueEntry[],
+): Promise<readonly CachedArtifactInfo[]> {
+  if (catalogue !== undefined) {
+    storedCatalogue = catalogue;
+    storedCatalogueById = new Map(catalogue.map((entry) => [entry.id, entry]));
   }
-  bootPromise = bootArabic(manifest, coordinates);
+  if (ready) return bootInventory;
+  if (bootPromise !== null) {
+    return await bootPromise;
+  }
+  bootPromise = bootArabic(artifacts, coordinates);
   try {
-    await bootPromise;
-    await refreshCachedTranslationIds();
+    bootInventory = await bootPromise;
+    return bootInventory;
   } finally {
     bootPromise = null;
   }
@@ -285,19 +297,14 @@ function translationSpec(sourceId: string): DownloadableSpec {
   if (storedCatalogue.length === 0) {
     throw new Error("translation catalogue unavailable");
   }
-  const entry = storedCatalogue.find((candidate) =>
-    candidate.kind === "translation"
-      ? candidate.entry.id === sourceId
-      : candidate.spec.id === sourceId,
-  );
-  if (!entry || entry.kind !== "translation") {
+  const entry = storedCatalogueById.get(sourceId);
+  if (!entry) {
     throw new Error(`translation source ${sourceId} is not in the catalogue`);
   }
-  const t = entry.entry;
   return Object.freeze({
-    id: t.id,
-    sizeBytes: t.sizeBytes,
-    downloadUrl: t.downloadUrl,
+    id: entry.id,
+    sizeBytes: entry.sizeBytes,
+    downloadUrl: entry.downloadUrl,
   });
 }
 
@@ -381,14 +388,6 @@ async function fetchTranslationRunner(sourceId: string): Promise<QuranQueryRunne
 
 function hasTranslationCached(sourceId: string): boolean {
   return translationDbs.has(sourceId) || cachedTranslationIds.has(sourceId);
-}
-
-async function refreshCachedTranslationIds(): Promise<void> {
-  try {
-    const artifacts = await listCachedArtifacts();
-    cachedTranslationIds.clear();
-    for (const a of artifacts) if (!isArabicSourceId(a.id)) cachedTranslationIds.add(a.id);
-  } catch {}
 }
 
 async function ensureTranslation(sourceId: string): Promise<void> {
@@ -573,7 +572,7 @@ type Handler<K extends WorkerRequest["type"]> = (
 
 const handlers = {
   init: async (m) => {
-    await initialize(m.manifest, m.coordinates, m.catalogue);
+    await initialize(m.artifacts, m.coordinates, m.catalogue);
     return null;
   },
   hasTranslation: (m) => hasTranslationCached(m.source),
@@ -613,6 +612,7 @@ async function handleMessage(event: MessageEvent<WorkerRequest>): Promise<void> 
         pinnedArabicIds: PINNED_ARABIC,
         pinnedTranslationIds,
         catalogue: storedCatalogue,
+        inventory: bootInventory,
       }).then(
         (r) => forgetTranslations(r.evicted),
         () => {},

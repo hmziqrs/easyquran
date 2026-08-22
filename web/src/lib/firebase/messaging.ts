@@ -35,7 +35,7 @@ export async function isMessagingSupported(): Promise<boolean> {
 }
 
 export function initMessaging(): Promise<Messaging | null> {
-  if (!browser || !isConfigured) return Promise.resolve(null);
+  if (!browser || !isConfigured || !FCM_VAPID_KEY) return Promise.resolve(null);
   if (!messagingPromise) {
     messagingPromise = (async () => {
       try {

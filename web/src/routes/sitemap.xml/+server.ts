@@ -6,7 +6,7 @@ import {
 } from "$lib/components/i18n/reader-prerender.server";
 import { SITE } from "$lib/config/site";
 import { translationSegmentsFromId, type SurahRouteContext } from "$lib/data/quran";
-import rawTranslations from "$lib/data/translations.json";
+import { TRANSLATIONS } from "$lib/data/translations";
 import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
 import { MARKETING_PUBLICATIONS, marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
 import type { QuranReaderHref } from "$lib/i18n/reader";
@@ -32,14 +32,10 @@ const ARABIC: SurahRouteContext = { kind: "arabic" };
 
 type TranslationEntry = { lang: string; ctx: SurahRouteContext };
 
-// SAFETY: translations.json is the generated catalogue whose every row is an array of strings
-// (baked at build time); only row[0], the translation id, is read here.
-const translations: TranslationEntry[] = (rawTranslations as readonly (readonly string[])[]).map(
-  (row) => {
-    const { lang, translator } = translationSegmentsFromId(row[0] ?? "");
+const translations: TranslationEntry[] = TRANSLATIONS.map((translation) => {
+    const { lang, translator } = translationSegmentsFromId(translation.id);
     return { lang, ctx: { kind: "translation", lang, translator } };
-  },
-);
+  });
 
 function alternatesBlock(
   arabicLoc: string,

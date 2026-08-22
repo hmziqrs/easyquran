@@ -12,7 +12,7 @@ import type {
   SurahNormalization,
 } from "$lib/data/quran-types";
 import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
+import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
 import {
   FetchHttpError,
   FetchTimeoutError,
@@ -23,6 +23,7 @@ import { fetchRangeChunks, type RangeJsonFetcher } from "$lib/quran/range-fetch"
 import { decodeTranslationRangeText, type AyahCoordinateValidator } from "$lib/quran/wire";
 import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { requireRangeEntry, surahRouteNav, toRangePageData } from "$lib/server/quran-page-shape";
+import { getCachedTranslationRange } from "$lib/server/translation-range-cache";
 import { error } from "@sveltejs/kit";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
@@ -83,14 +84,16 @@ async function fetchTranslationRange(
   fetcher: TranslationFetcher,
 ): Promise<QuranRangeText> {
   try {
-    return await fetchRangeChunks({
-      base: requireApiBase(),
-      source: sourceId,
-      from,
-      to,
-      decode: (raw) => decodeTranslationRangeText(raw, validateServerCoordinate),
-      fetchImpl: serverJsonFetcher(fetcher),
-    });
+    return await getCachedTranslationRange(sourceId, from, to, () =>
+      fetchRangeChunks({
+        base: requireApiBase(),
+        source: sourceId,
+        from,
+        to,
+        decode: (raw) => decodeTranslationRangeText(raw, validateServerCoordinate),
+        fetchImpl: serverJsonFetcher(fetcher),
+      }),
+    );
   } catch (e) {
     if (e instanceof MalformedDataError) {
       throw new Error(`[quran-translation] malformed range for ${sourceId} ${from}-${to}`);
@@ -106,7 +109,7 @@ async function fetchTranslationRange(
 }
 
 function requireTranslationSource(sourceId: string, lang: string, translator: string): void {
-  if (!findCatalogueEntry(bakedTranslationCatalogue(), sourceId)) {
+  if (!TRANSLATION_CATALOGUE_BY_ID.has(sourceId)) {
     throw error(404, `Unknown translation: ${lang}.${translator}`);
   }
 }

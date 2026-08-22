@@ -9,6 +9,8 @@ import { createIdbStore, hasOpfs, openIdb } from "./storage";
 export const ROOT_DIR = "easyquran";
 export const QURAN_DB = "easyquran-quran";
 export const QURAN_STORE = "artifacts";
+export const ARTIFACT_META_DB = "easyquran-artifact-meta";
+export const ARTIFACT_META_STORE = "artifacts";
 export const POINTER_DB = "easyquran-pointers";
 export const POINTER_STORE = "opfsPointers";
 
@@ -25,6 +27,17 @@ export interface CachedArtifact {
 export interface CachedArtifactInfo {
   readonly id: string;
   readonly store: CacheStore;
+  readonly tag: string;
+  readonly sizeBytes: number;
+}
+
+export interface CacheInspection {
+  readonly artifacts: readonly CachedArtifactInfo[];
+  readonly abandonedTemps: ReadonlyArray<{ readonly tag: string; readonly name: string }>;
+}
+
+interface IdbArtifactMetadata {
+  readonly id: string;
   readonly tag: string;
   readonly sizeBytes: number;
 }
@@ -239,6 +252,19 @@ async function readOpfsFile(tag: string, name: string): Promise<Uint8Array<Array
   }
 }
 
+async function readOpfsFileSize(tag: string, name: string): Promise<number | null> {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const top = await root.getDirectoryHandle(ROOT_DIR, { create: false });
+    const dir = await top.getDirectoryHandle(tag, { create: false });
+    const fh = await dir.getFileHandle(name);
+    return (await fh.getFile()).size;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "NotFoundError") return null;
+    throw err;
+  }
+}
+
 async function writeOpfsFile(
   tag: string,
   name: string,
@@ -314,10 +340,12 @@ async function listOpfsTree(): Promise<{ tag: string; name: string }[]> {
   return out;
 }
 
-export async function sweepAbandonedTemps(): Promise<void> {
-  const files = await listOpfsTree();
+export async function sweepAbandonedTemps(
+  knownTemps?: ReadonlyArray<{ readonly tag: string; readonly name: string }>,
+): Promise<void> {
+  const files = knownTemps ?? (await listOpfsTree()).filter((f) => isTempFileName(f.name));
   await Promise.all(
-    files.filter((f) => isTempFileName(f.name)).map((f) => removeOpfsFile(f.tag, f.name)),
+    files.map((f) => removeOpfsFile(f.tag, f.name)),
   );
 }
 
@@ -410,13 +438,16 @@ async function ensureOpfsArtifact(
     }
 
     await moveOpfsFile(spec.id, temp, active);
-    await writePointer({ sourceId: spec.id, activeFile: active });
-
-    const reopened = await readOpfsFile(spec.id, active);
-    if (!reopened) {
+    const promotedSize = await readOpfsFileSize(spec.id, active);
+    if (promotedSize === null) {
       throw new Error(`[opfs-cache] ${spec.id}: active file missing after switch`);
     }
-    await verifyBytes(reopened, dl);
+    if (promotedSize !== spec.sizeBytes) {
+      throw new Error(
+        `[opfs-cache] ${spec.id}: active size ${promotedSize} ≠ expected ${spec.sizeBytes}`,
+      );
+    }
+    await writePointer({ sourceId: spec.id, activeFile: active });
 
     if (decision.removeOldFile && decision.oldFile) {
       await removeOpfsFile(spec.id, decision.oldFile);
@@ -450,6 +481,7 @@ async function ensureIdbArtifact(
     try {
       await verifyBytes(cached, dl);
       forgetSessionArtifact(spec.id);
+      await writeIdbArtifactMetadata(spec.id, spec.id, cached.byteLength);
       void stampLastUsed(spec.id);
       return { bytes: cached, store: "idb", downloaded: false };
     } catch {}
@@ -462,14 +494,30 @@ async function ensureIdbArtifact(
     return { bytes, store: "session", downloaded: true };
   }
   forgetSessionArtifact(spec.id);
+  await writeIdbArtifactMetadata(spec.id, spec.id, bytes.byteLength);
   await stampLastUsed(spec.id);
   return { bytes, store: "idb", downloaded: true };
 }
 
-async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
+async function writeIdbArtifactMetadata(id: string, tag: string, sizeBytes: number): Promise<void> {
+  try {
+    await runTxVoid(
+      await openIdb(ARTIFACT_META_DB, ARTIFACT_META_STORE),
+      ARTIFACT_META_STORE,
+      "readwrite",
+      (store) => {
+        store.put({ id, tag, sizeBytes } satisfies IdbArtifactMetadata, `${tag}:${id}`);
+      },
+    );
+  } catch {}
+}
+
+async function listOpfsArtifacts(
+  files: readonly { tag: string; name: string }[],
+  pointers: ReadonlyMap<string, ActivePointer>,
+): Promise<CachedArtifactInfo[]> {
   const out: CachedArtifactInfo[] = [];
   if (!hasOpfs()) return out;
-  const [files, pointers] = await Promise.all([listOpfsTree(), readAllPointers()]);
   const { sources } = filterSourceFiles({ pointers, files });
   for (const s of sources) {
     let sizeBytes = 0;
@@ -487,25 +535,81 @@ async function listOpfsArtifacts(): Promise<CachedArtifactInfo[]> {
   return out;
 }
 
-async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
-  const out: CachedArtifactInfo[] = [];
+function parseCompoundArtifactKey(key: IDBValidKey): { tag: string; id: string } | null {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB keys are polymorphic; artifact store writes string compound keys only
+  if (typeof key !== "string") return null;
+  const sep = key.indexOf(":");
+  if (sep <= 0) return null;
+  return { tag: key.slice(0, sep), id: key.slice(sep + 1) };
+}
+
+async function readIdbArtifactMetadata(): Promise<Map<string, IdbArtifactMetadata>> {
+  const out = new Map<string, IdbArtifactMetadata>();
   try {
-    const db = await openIdb(QURAN_DB, QURAN_STORE);
+    const db = await openIdb(ARTIFACT_META_DB, ARTIFACT_META_STORE);
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(QURAN_STORE, "readonly");
-      const req = tx.objectStore(QURAN_STORE).openCursor();
+      const tx = db.transaction(ARTIFACT_META_STORE, "readonly");
+      const req = tx.objectStore(ARTIFACT_META_STORE).openCursor();
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return;
-        // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB cursor keys are polymorphic (IDBValidKey); non-string keys map to "" which the ":" separator check below discards
-        const compound = typeof cur.key === "string" ? cur.key : "";
-        const sep = compound.indexOf(":");
-        if (sep > 0) {
-          const tag = compound.slice(0, sep);
-          const id = compound.slice(sep + 1);
-          const v = cur.value;
-          const sizeBytes = v instanceof ArrayBuffer ? v.byteLength : 0;
-          out.push({ id, store: "idb", tag, sizeBytes });
+        const key = parseCompoundArtifactKey(cur.key);
+        // SAFETY: IDB values are untyped. Validate every field before use.
+        const value = cur.value as Partial<IdbArtifactMetadata> | undefined;
+        if (
+          key &&
+          value &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB metadata boundary validation
+          typeof value.id === "string" &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB metadata boundary validation
+          typeof value.tag === "string" &&
+          // eslint-disable-next-line anti-slop/no-runtime-typeof -- IDB metadata boundary validation
+          typeof value.sizeBytes === "number" &&
+          Number.isSafeInteger(value.sizeBytes) &&
+          value.sizeBytes >= 0 &&
+          value.id === key.id &&
+          value.tag === key.tag
+        ) {
+          out.set(`${key.tag}:${key.id}`, {
+            id: value.id,
+            tag: value.tag,
+            sizeBytes: value.sizeBytes,
+          });
+        }
+        cur.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(idbError(tx.error, "transaction"));
+    });
+  } catch {}
+  return out;
+}
+
+async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
+  const out: CachedArtifactInfo[] = [];
+  try {
+    const [db, metadata] = await Promise.all([
+      openIdb(QURAN_DB, QURAN_STORE),
+      readIdbArtifactMetadata(),
+    ]);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(QURAN_STORE, "readonly");
+      // Key cursor is critical: value cursors structured-clone every complete
+      // SQLite ArrayBuffer merely to inventory IDs. Byte keys remain authority;
+      // missing legacy metadata reports size 0 so retention uses baked sizes.
+      const req = tx.objectStore(QURAN_STORE).openKeyCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) return;
+        const parsed = parseCompoundArtifactKey(cur.key);
+        if (parsed) {
+          const meta = metadata.get(`${parsed.tag}:${parsed.id}`);
+          out.push({
+            id: parsed.id,
+            store: "idb",
+            tag: parsed.tag,
+            sizeBytes: meta?.sizeBytes ?? 0,
+          });
         }
         cur.continue();
       };
@@ -518,15 +622,28 @@ async function listIdbArtifacts(): Promise<CachedArtifactInfo[]> {
   return out;
 }
 
-export async function listCachedArtifacts(): Promise<CachedArtifactInfo[]> {
-  const [opfs, idb] = await Promise.all([listOpfsArtifacts(), listIdbArtifacts()]);
+export async function inspectCachedArtifacts(): Promise<CacheInspection> {
+  const [files, pointers, idb] = await Promise.all([
+    listOpfsTree(),
+    readAllPointers(),
+    listIdbArtifacts(),
+  ]);
+  const filtered = filterSourceFiles({ pointers, files });
+  const opfs = await listOpfsArtifacts(files, pointers);
   const byId = new Map<string, CachedArtifactInfo>();
   for (const [id, sizeBytes] of sessionArtifacts) {
     byId.set(id, { id, store: "session", tag: id, sizeBytes });
   }
   for (const info of idb) byId.set(info.id, info);
   for (const info of opfs) byId.set(info.id, info);
-  return [...byId.values()];
+  return {
+    artifacts: Object.freeze([...byId.values()]),
+    abandonedTemps: Object.freeze(filtered.abandonedTemps),
+  };
+}
+
+export async function listCachedArtifacts(): Promise<CachedArtifactInfo[]> {
+  return [...(await inspectCachedArtifacts()).artifacts];
 }
 
 export async function deleteCachedArtifact(id: string, tag: string): Promise<void> {
@@ -543,5 +660,12 @@ export async function deleteCachedArtifact(id: string, tag: string): Promise<voi
     await runTxVoid(await openIdb(QURAN_DB, QURAN_STORE), QURAN_STORE, "readwrite", (s) => {
       s.delete(`${tag}:${id}`);
     });
+  } catch {}
+  try {
+    await idbDelete(
+      await openIdb(ARTIFACT_META_DB, ARTIFACT_META_STORE),
+      ARTIFACT_META_STORE,
+      `${tag}:${id}`,
+    );
   } catch {}
 }

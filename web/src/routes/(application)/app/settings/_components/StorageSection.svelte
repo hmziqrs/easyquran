@@ -3,7 +3,7 @@
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { OfflinePack } from "$lib/components";
   import { isArabicSourceId } from "$lib/data/quran-types";
-  import { bakedTranslationCatalogue, findCatalogueEntry } from "$lib/quran/catalogue";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
   import { purgeUserCaches } from "$lib/offline/messages";
   import type { StorageArtifactInfo } from "$lib/quran/protocol";
@@ -32,7 +32,6 @@
     copy: SettingsCopy["storage"];
   } = $props();
 
-  const catalogue = bakedTranslationCatalogue();
   // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
   const locale = getLocale() as UiLocale;
 
@@ -111,8 +110,8 @@
     if (isArabicSourceId(sourceId)) {
       return copy.scripts[sourceProfile(sourceId).script];
     }
-    const entry = findCatalogueEntry(catalogue, sourceId);
-    if (entry && entry.kind === "translation") return entry.entry.name;
+    const entry = TRANSLATION_CATALOGUE_BY_ID.get(sourceId);
+    if (entry) return entry.name;
     return sourceId;
   }
 
@@ -132,9 +131,9 @@
 
   function artifactLanguage(sourceId: string): string | null {
     if (isArabicSourceId(sourceId)) return null;
-    const entry = findCatalogueEntry(catalogue, sourceId);
-    if (entry && entry.kind === "translation") {
-      return localizedLanguageName(entry.entry.languageCode, entry.entry.language);
+    const entry = TRANSLATION_CATALOGUE_BY_ID.get(sourceId);
+    if (entry) {
+      return localizedLanguageName(entry.languageCode, entry.language);
     }
     return null;
   }

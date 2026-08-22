@@ -2,6 +2,7 @@ import { QURAN } from "$lib/config/site";
 import { isArabicSourceId } from "$lib/data/quran-types";
 import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "$lib/data/quran-types";
 
+import { quranApiAvailability } from "./api-availability";
 import { fetchJsonWithTimeout, type JsonDocument, MalformedDataError } from "./fetch";
 import { fetchRangeChunks } from "./range-fetch";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
@@ -27,15 +28,17 @@ export const quranApi = {
     num: number,
     signal?: AbortSignal,
   ): Promise<QuranSurahText> {
-    const body = await fetchJsonWithTimeout(`${requireBase()}/sources/${sourceId}/surah/${num}`, {
-      headers: { accept: "application/json" },
-      signal,
-    });
-    const decoded = isArabicSourceId(sourceId)
-      ? decodeQuranSurahText(unwrapEnvelope(body))
-      : decodeTranslationSurahText(unwrapEnvelope(body));
-    if (!decoded) throw new MalformedDataError("malformed surah");
-    return decoded;
+    return quranApiAvailability.run(async () => {
+      const body = await fetchJsonWithTimeout(`${requireBase()}/sources/${sourceId}/surah/${num}`, {
+        headers: { accept: "application/json" },
+        signal,
+      });
+      const decoded = isArabicSourceId(sourceId)
+        ? decodeQuranSurahText(unwrapEnvelope(body))
+        : decodeTranslationSurahText(unwrapEnvelope(body));
+      if (!decoded) throw new MalformedDataError("malformed surah");
+      return decoded;
+    }, signal);
   },
 
   async readRange(
@@ -48,15 +51,19 @@ export const quranApi = {
     const decode = isArabicSourceId(sourceId)
       ? (raw: JsonDocument) => decodeQuranRangeText(raw, validateCoordinate)
       : (raw: JsonDocument) => decodeTranslationRangeText(raw, validateCoordinate);
-    return fetchRangeChunks({
-      base: requireBase(),
-      source: String(sourceId),
-      from,
-      to,
-      decode,
-      fetchImpl: fetchJsonWithTimeout,
+    return quranApiAvailability.run(
+      () =>
+        fetchRangeChunks({
+          base: requireBase(),
+          source: String(sourceId),
+          from,
+          to,
+          decode,
+          fetchImpl: fetchJsonWithTimeout,
+          signal,
+        }),
       signal,
-    });
+    );
   },
 
   async search(
@@ -69,19 +76,21 @@ export const quranApi = {
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(opts.limit ?? DEFAULT_LIMIT));
     url.searchParams.set("offset", String(opts.offset ?? DEFAULT_OFFSET));
-    const body = await fetchJsonWithTimeout(url.toString(), {
-      headers: { accept: "application/json" },
-      signal,
-    });
-    const payload = decodeSearchResponse(unwrapEnvelope(body), validateCoordinate);
-    if (!payload) throw new MalformedDataError("malformed search response");
-    return {
-      query,
-      total: payload.total ?? payload.results.length,
-      limit: payload.limit ?? opts.limit ?? DEFAULT_LIMIT,
-      offset: payload.offset ?? opts.offset ?? DEFAULT_OFFSET,
-      results: payload.results,
-      source: SearchProvider.Api,
-    };
+    return quranApiAvailability.run(async () => {
+      const body = await fetchJsonWithTimeout(url.toString(), {
+        headers: { accept: "application/json" },
+        signal,
+      });
+      const payload = decodeSearchResponse(unwrapEnvelope(body), validateCoordinate);
+      if (!payload) throw new MalformedDataError("malformed search response");
+      return {
+        query,
+        total: payload.total ?? payload.results.length,
+        limit: payload.limit ?? opts.limit ?? DEFAULT_LIMIT,
+        offset: payload.offset ?? opts.offset ?? DEFAULT_OFFSET,
+        results: payload.results,
+        source: SearchProvider.Api,
+      };
+    }, signal);
   },
 };

@@ -262,24 +262,41 @@ describe("OfflineStore.enable", () => {
     expect(fetchSpy).toHaveBeenCalled();
   });
 
-  it("bootCheck triggers enable() when the manifest pack id differs from active", async () => {
+  it("reuses bootCheck's manifest when the active pack is outdated", async () => {
     const active: ActivePack = { packId: "old", entries: 1, bytes: 5, savedAt: 1 };
     metaMock.getActivePack.mockResolvedValue(active);
     const caches = installFakeCaches();
     caches.seed("eq-pack-old", 1);
     vi.stubGlobal("caches", caches);
+    const packBody = JSON.stringify({
+      version: 1,
+      entries: { "/app/1/__data.json": 0 },
+      bodies: ["payload"],
+    });
     const manifestBody = JSON.stringify({
       pack: "/offline/pack.new.json",
-      bytes: 5,
+      bytes: new TextEncoder().encode(packBody).byteLength,
       entries: 1,
     });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(manifestBody, { status: 200 }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch test double discriminates string RequestInfo supplied by OfflineStore
+      if (typeof url === "string" && url.includes("manifest.json")) {
+        return Promise.resolve(new Response(manifestBody, { status: 200 }));
+      }
+      return Promise.resolve(new Response(packBody, { status: 200 }));
+    });
 
     const store = createOfflineStore();
-    const enableSpy = vi.spyOn(store, "enable").mockResolvedValue(undefined);
     store.hydrate();
-    await flushMany();
+    await vi.waitFor(() => {
+      expect(metaMock.setActivePack).toHaveBeenCalledTimes(1);
+    });
 
-    expect(enableSpy).toHaveBeenCalledTimes(1);
+    const fetchedUrls = fetchSpy.mock.calls.map(([url]) => {
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch spy records RequestInfo | URL; production calls under test use string URLs
+      return typeof url === "string" ? url : "";
+    });
+    expect(fetchedUrls.filter((url) => url.includes("manifest.json"))).toHaveLength(1);
+    expect(fetchedUrls.filter((url) => url.includes("pack.new.json"))).toHaveLength(1);
   });
 });

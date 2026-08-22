@@ -7,10 +7,12 @@ import type {
   QuranRangeText,
   QuranReaderSource,
   QuranSurahText,
-  SourceCatalogueEntry,
+  ArtifactSpec,
+  TranslationCatalogueEntry,
   SurahLink,
   SurahNormalization,
 } from "$lib/data/quran-types";
+import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
 
 import { quranApi } from "./api-client";
 import {
@@ -21,7 +23,6 @@ import {
   type ReadFailure,
   type ReadTierStatus,
 } from "./fetch";
-import type { ResolvedManifest } from "./manifest";
 import type {
   StorageArtifactInfo,
   WorkerEvent,
@@ -40,7 +41,6 @@ import {
   decodeTranslationSurahText,
   type AyahCoordinateValidator,
 } from "./wire";
-import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
 
 interface Pending {
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- stores Promise resolvers for request<T> across every T; the worker reply is validated by each caller's decode() fn
@@ -56,10 +56,39 @@ let worker: Worker | null = null;
 let seq = 0;
 let isReady = false;
 let startPromise: Promise<void> | null = null;
+let desiredPinnedTranslations: readonly string[] | null = null;
+let pinnedSyncPromise: Promise<void> | null = null;
+let pinnedSyncGeneration = 0;
 
 const pending = new Map<number, Pending>();
 const statusListeners = new Set<(s: WorkerStatus, detail?: string) => void>();
 const progressListeners = new Set<(p: DownloadProgress) => void>();
+
+function equalStrings(a: readonly string[] | null, b: readonly string[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function syncPinnedTranslations(): Promise<void> {
+  if (pinnedSyncPromise) return pinnedSyncPromise;
+  const generation = pinnedSyncGeneration;
+  const run = (async (): Promise<void> => {
+    await quranWorker.whenReady();
+    let sent: readonly string[] | null = null;
+    while (generation === pinnedSyncGeneration && desiredPinnedTranslations) {
+      if (equalStrings(sent, desiredPinnedTranslations)) return;
+      const current = [...desiredPinnedTranslations];
+      await request<null>((id) => ({ id, type: "setPinnedTranslations", ids: current }));
+      sent = current;
+    }
+  })();
+  pinnedSyncPromise = run;
+  const clear = (): void => {
+    if (pinnedSyncPromise === run) pinnedSyncPromise = null;
+  };
+  void run.then(clear, clear);
+  return run;
+}
 
 function failAll(err: Error): void {
   for (const p of pending.values()) {
@@ -274,11 +303,7 @@ function failChain<T>(args: SourceFallbackArgs<T>, state: FallbackState): never 
     workerFailure: state.workerFailure,
     apiFailure: state.apiFailure,
   });
-  throw new ReadChainError(
-    `${args.errorMessage}${detail}`,
-    state.workerFailure,
-    state.apiFailure,
-  );
+  throw new ReadChainError(`${args.errorMessage}${detail}`, state.workerFailure, state.apiFailure);
 }
 
 type ReadLeg<T> =
@@ -455,9 +480,8 @@ export const quranWorker = {
     return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(() => undefined);
   },
   setPinnedTranslations(ids: readonly string[]): Promise<void> {
-    return request<null>((id) => ({ id, type: "setPinnedTranslations", ids })).then(
-      () => undefined,
-    );
+    desiredPinnedTranslations = [...ids];
+    return syncPinnedTranslations();
   },
 
   listArtifacts(): Promise<StorageArtifactInfo[]> {
@@ -498,9 +522,9 @@ export const quranWorker = {
   },
 
   start(
-    manifest: ResolvedManifest,
+    artifacts: readonly ArtifactSpec[],
     coordinates: CanonicalQuranCoordinates,
-    catalogue?: readonly SourceCatalogueEntry[],
+    catalogue?: readonly TranslationCatalogueEntry[],
   ): Promise<void> {
     if (startPromise) return startPromise;
     const attempt = (async () => {
@@ -522,7 +546,7 @@ export const quranWorker = {
       await request<null>((id) => ({
         id,
         type: "init",
-        manifest,
+        artifacts: [...artifacts],
         coordinates,
         catalogue: catalogue ? [...catalogue] : undefined,
       }));
@@ -539,6 +563,9 @@ export const quranWorker = {
   },
 
   dispose(): void {
+    pinnedSyncGeneration += 1;
+    desiredPinnedTranslations = null;
+    pinnedSyncPromise = null;
     resetWorker(new Error("quran worker disposed"));
   },
 
@@ -693,20 +720,11 @@ export function createRangeReaderCoordinator(): RangeReaderCoordinator {
 
   return {
     installServer(key, snapshot) {
-      const prevKey = currentKey;
       currentKey = key;
       displayed = snapshot;
       degraded = snapshot.ayahs.length === 0;
       failure = undefined;
-      let read: boolean;
-      if (prevKey === null) {
-        read = degraded;
-      } else if (equalRangeKey(prevKey, key)) {
-        read = degraded;
-      } else {
-        read = true;
-      }
-      return { read };
+      return { read: degraded };
     },
     applyClientResult(key, snapshot) {
       if (currentKey === null || !equalRangeKey(key, currentKey)) {

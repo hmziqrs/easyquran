@@ -4,7 +4,7 @@ interface FakeRegistration {
   waiting: { postMessage: (message: { type: string }) => void } | null;
   addEventListener: () => void;
   removeEventListener: () => void;
-  update: () => void;
+  update: () => Promise<void> | void;
 }
 
 const { updatedMock, registerSwMock } = vi.hoisted(() => ({
@@ -158,6 +158,53 @@ describe("UpdateStore.hydrate", () => {
     const store = createUpdate();
     store.hydrate();
     expect(store.waiting).toBe(true);
+    store.dispose();
+  });
+
+  it("uses SvelteKit version checks only when service workers are unavailable", async () => {
+    const store = createUpdate();
+    store.hydrate();
+    await flush();
+
+    expect(updatedMock.check).toHaveBeenCalledTimes(1);
+    expect(registerSwMock).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    expect(updatedMock.check).toHaveBeenCalledTimes(2);
+    store.dispose();
+  });
+
+  it("throttles foreground service-worker update checks to five minutes", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const reg = {
+      waiting: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      update: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    };
+    registerSwMock.mockResolvedValue(reg);
+    setServiceWorker({
+      controller: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    const store = createUpdate();
+    store.hydrate();
+    await flush();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    expect(reg.update).not.toHaveBeenCalled();
+    expect(updatedMock.check).not.toHaveBeenCalled();
+
+    now += 5 * 60_000;
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    expect(reg.update).toHaveBeenCalledTimes(1);
+    expect(updatedMock.check).not.toHaveBeenCalled();
+    store.dispose();
   });
 });
 
@@ -192,7 +239,7 @@ describe("UpdateStore.apply", () => {
     expectNoReload();
   });
 
-  it("reloads directly when there is no waiting worker but updated.current is set", async () => {
+  it("does not let SvelteKit version state override service-worker ownership", async () => {
     registerSwMock.mockResolvedValue({
       waiting: null,
       addEventListener: vi.fn(),
@@ -211,7 +258,17 @@ describe("UpdateStore.apply", () => {
     await flush();
     store.apply();
 
+    expectNoReload();
+    store.dispose();
+  });
+
+  it("reloads directly from SvelteKit version state without service-worker support", () => {
+    updatedMock.current = true;
+    const store = createUpdate();
+    store.hydrate();
+    store.apply();
     expectReload(1);
+    store.dispose();
   });
 });
 
