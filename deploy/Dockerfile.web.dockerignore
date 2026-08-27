@@ -6,7 +6,14 @@
 !web/build
 !web/server.ts
 
+# Runtime source modules imported by server.ts (bun runs TS directly, so these are
+# resolved from /app at boot). Keep in sync with server.ts's non-build imports — a
+# missed line crashes the container at startup, not at build time.
+!web/src/lib/accept-parse.ts
+!web/src/lib/config/site-structure.ts
+
 # Never ship secrets or source maps' sibling env files even if they land in build/.
+# Must stay BELOW the re-include lines above: rules are last-match-wins.
 **/.env
 **/.env.*
 !**/.env.example
