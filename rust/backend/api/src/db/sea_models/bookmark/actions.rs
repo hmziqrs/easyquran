@@ -176,7 +176,7 @@ impl Entity {
                 r#"DELETE FROM bookmarks
                    WHERE id = ? AND user_id = ?
                      AND (julianday(updated_at) IS NULL
-                          OR julianday(updated_at) <= julianday(?)) "#,
+                          OR julianday(updated_at) <= julianday(?))"#,
                 [id.into(), user_id.into(), lww_timestamp(updated_at).into()],
             ))
             .await

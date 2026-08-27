@@ -71,6 +71,17 @@
   // still loading (rows/folders exist but cannot render yet).
   const firstSyncPending = $derived(waitingForFirstSync || (authed && quranData === null));
 
+  // Anon catalog wait: anonRows stays empty until the quran catalog lands, so
+  // the empty state would flash — hold the loading skeleton instead.
+  const anonCatalogPending = $derived(!authed && quranData === null);
+
+  // Persistent online sync failure before any snapshot: surface an inline note
+  // alongside the skeleton. Offline keeps copy.offline (existing behavior);
+  // a healthy or not-yet-failed first sync keeps the bare skeleton.
+  const syncFailedWhileOnline = $derived(
+    waitingForFirstSync && online.online && bookmarks.status.phase === "error",
+  );
+
   interface AnonRow {
     readonly key: string;
     readonly surah: number;
@@ -147,6 +158,12 @@
 </svelte:head>
 
 <div lang={copy.locale} dir={copy.direction}>
+  {#snippet loadingRows()}
+    <span class="sr-only">{copy.loading}</span>
+    <Skeleton class="h-16 w-full" />
+    <Skeleton class="h-16 w-full" />
+    <Skeleton class="h-16 w-full" />
+  {/snippet}
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg"
@@ -162,12 +179,11 @@
     {#if authed}
       {#if firstSyncPending}
         <div class="mt-6 flex flex-col gap-3" role="status">
-          <span class="sr-only">{copy.loading}</span>
-          <Skeleton class="h-16 w-full" />
-          <Skeleton class="h-16 w-full" />
-          <Skeleton class="h-16 w-full" />
+          {@render loadingRows()}
           {#if waitingForFirstSync && !online.online}
             <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.offline}</p>
+          {:else if syncFailedWhileOnline}
+            <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.syncError}</p>
           {/if}
         </div>
       {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
@@ -222,7 +238,11 @@
         {/if}
       {/if}
     {:else}
-      {#if anonRows.length === 0}
+      {#if anonCatalogPending}
+        <div class="mt-6 flex flex-col gap-3" role="status">
+          {@render loadingRows()}
+        </div>
+      {:else if anonRows.length === 0}
         <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.empty}</p>
       {:else}
         <ul class="mt-6 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">

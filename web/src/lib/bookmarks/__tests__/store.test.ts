@@ -205,14 +205,17 @@ describe("BookmarksStore — authed toggles", () => {
   it("toggle enqueues a bookmark.upsert, then adds the row once the write is durable", async () => {
     const rig = makeRig([], true);
     rig.store.toggle(1, 1);
-    // Payload is captured synchronously; the optimistic row lands only after
-    // the durable enqueue resolves (durability-before-view contract).
+    // Payload is captured synchronously; the durable row lands only after the
+    // enqueue resolves (durability-before-view contract), but the pending
+    // overlay already reads the verse as marked.
     expect(rig.engine.enqueued).toHaveLength(1);
-    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    expect(rig.store.isBookmarked(1, 1)).toBe(true);
+    expect(rig.store.bookmarks).toHaveLength(0);
     await flush();
 
     expect(rig.store.isBookmarked(1, 1)).toBe(true);
     expect(rig.store.isMarkedKey("1:1")).toBe(true);
+    expect(rig.store.bookmarks).toHaveLength(1);
     const payload = rig.engine.enqueued[0]!;
     expect(payload.kind).toBe("bookmark.upsert");
     if (payload.kind !== "bookmark.upsert") return;
@@ -263,6 +266,24 @@ describe("BookmarksStore — authed toggles", () => {
     expect(rig.engine.enqueued.map((m) => m.kind)).toEqual(["bookmark.upsert", "bookmark.delete"]);
     expect(rig.engine.enqueued[1]).toMatchObject({ kind: "bookmark.delete", id: entityId });
     expect(rig.store.isBookmarked(1, 1)).toBe(false);
+  });
+
+  it("reads follow the pending overlay during the durability window", async () => {
+    const rig = makeRig([], true);
+    rig.store.toggle(1, 1);
+    // Upsert enqueued but not yet durable: the verse already reads as marked...
+    expect(rig.store.isBookmarked(1, 1)).toBe(true);
+    expect(rig.store.isMarkedKey("1:1")).toBe(true);
+    // ...so the second fire enqueues the compensating delete, not a new upsert.
+    rig.store.toggle(1, 1);
+    expect(rig.engine.enqueued.map((m) => m.kind)).toEqual(["bookmark.upsert", "bookmark.delete"]);
+    // The delete retired the overlay row: unmarked again during that window.
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    expect(rig.store.isMarkedKey("1:1")).toBe(false);
+
+    await flush();
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    expect(rig.store.bookmarks).toHaveLength(0);
   });
 
   it("remove() on a durable-but-unapplied pending row enqueues the compensating delete and retires the overlay", async () => {

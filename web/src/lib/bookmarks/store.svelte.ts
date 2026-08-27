@@ -148,9 +148,21 @@ export class BookmarksStore {
     return groups;
   }
 
-  /** Authed server view. */
+  /**
+   * Effective row for a verse: the pending overlay wins over the durable view,
+   * mirroring toggle's read. During the durability window (upsert enqueued but
+   * not yet applied) the verse already reads as marked, and once a delete
+   * retires the overlay row it reads as unmarked — so reads and toggle can
+   * never disagree about the same verse.
+   */
+  #effectiveRow(surah: number, ayah: number): Bookmark | undefined {
+    const pending = [...this.#pendingById.values()].find((b) => b.surah === surah && b.ayah === ayah);
+    return pending ?? this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
+  }
+
+  /** Authed server view (pending overlay included). */
   isBookmarked(surah: number, ayah: number): boolean {
-    return this.#bookmarks.some((b) => b.surah === surah && b.ayah === ayah);
+    return this.#effectiveRow(surah, ayah) !== undefined;
   }
 
   /** Legacy local view (anonymous users). */
@@ -184,8 +196,7 @@ export class BookmarksStore {
     // Consult the pending overlay too: a double-fire before the optimistic row
     // lands must read as "on", so the second fire cancels the same entity
     // instead of minting a second upsert that the server would re-add.
-    const pending = [...this.#pendingById.values()].find((b) => b.surah === surah && b.ayah === ayah);
-    const existing = pending ?? this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
+    const existing = this.#effectiveRow(surah, ayah);
     if (existing) {
       this.remove(existing.id);
       return;
@@ -209,8 +220,9 @@ export class BookmarksStore {
       },
       () => {
         // A snapshot (or a rapid re-toggle) may have landed the verse already;
-        // the store keeps one row per verse.
-        if (this.isBookmarked(surah, ayah)) return;
+        // the store keeps one row per verse. Durable view only — this row's
+        // overlay entry lives until its drain ack.
+        if (this.#bookmarks.some((b) => b.surah === surah && b.ayah === ayah)) return;
         this.#bookmarks = [...this.#bookmarks, bookmark];
       },
       { bookmark },

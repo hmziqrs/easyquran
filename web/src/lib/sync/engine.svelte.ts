@@ -226,21 +226,24 @@ export class SyncEngine {
   }
 
   async #flushPass(domainFilter: string | undefined): Promise<void> {
+    // Targets first: an offline branch must only penalize the domains this
+    // flush actually targets, and a flush naming no registered domain (and no
+    // filter) is a full no-op — no phase, lastError, or retry mutation.
+    const targets = this.#targets(domainFilter);
+    if (targets.length === 0) return;
     this.#cancelRetry();
     if (!this.#isOnline()) {
       this.#phase = "error";
       this.#lastError = "offline";
-      // Offline fails every registered domain alike: grow each one's backoff
+      // Offline fails the flush's target domains alike: grow each one's backoff
       // (reset on success / online transition as elsewhere) so the retry timer
       // spaces out instead of refiring every ~2s with zero network calls.
-      for (const domain of this.#domains) {
+      for (const domain of targets) {
         this.#failures.set(domain.name, (this.#failures.get(domain.name) ?? 0) + 1);
       }
       this.#scheduleRetry();
       return;
     }
-    const targets = this.#targets(domainFilter);
-    if (targets.length === 0) return;
     this.#phase = "syncing";
     let failed = false;
     for (const domain of targets) {

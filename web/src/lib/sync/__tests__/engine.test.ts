@@ -173,6 +173,48 @@ describe("SyncEngine.flush", () => {
     expect(rig.engine.pending).toBe(1);
   });
 
+  it("an offline flush naming no registered domain is a full no-op", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a], online: false });
+    await rig.outbox.enqueue("bookmarks", "x");
+    await rig.engine.hydrate();
+
+    await rig.engine.flush("nonexistent");
+
+    expect(rig.engine.phase).toBe("idle");
+    expect(rig.engine.lastError).toBeNull();
+    expect(rig.engine.pending).toBe(1);
+  });
+
+  it("an offline domain-filtered flush grows backoff only for its target domains", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const bookmarks = fakeDomain("bookmarks");
+    const notes = fakeDomain("notes");
+    notes.error = new Error("boom");
+    const rig = makeEngine({ domains: [bookmarks, notes], online: false });
+    await rig.outbox.enqueue("bookmarks", "x");
+    await rig.outbox.enqueue("notes", "y");
+    await rig.engine.hydrate();
+
+    // Offline filtered flush: only bookmarks' failure count grows — notes must
+    // not inherit one (phase/error still record the offline round).
+    await rig.engine.flush("bookmarks");
+    expect(rig.engine.phase).toBe("error");
+    expect(rig.engine.lastError).toBe("offline");
+
+    rig.setOnline(true); // flag only: no transition listener ran, failures stay
+    await vi.advanceTimersByTimeAsync(2_000); // retry: bookmarks drains, notes fails
+    expect(bookmarks.batches).toHaveLength(1);
+    expect(notes.batches).toHaveLength(1);
+
+    // notes started from zero failures (the filtered offline flush never
+    // touched it), so its own first retry lands at the 2s base cadence — not
+    // the 4s a borrowed failure count would impose.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(notes.batches).toHaveLength(2);
+  });
+
   it("coalesces a flush issued while another is in flight", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
