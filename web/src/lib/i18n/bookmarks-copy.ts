@@ -10,6 +10,7 @@ import {
   reader_bookmarks_folder_empty,
   reader_bookmarks_folders_heading,
   reader_bookmarks_local_only,
+  reader_bookmarks_loading,
   reader_bookmarks_move_label,
   reader_bookmarks_move_to,
   reader_bookmarks_new_folder_label,
@@ -61,6 +62,7 @@ export interface BookmarksCopy {
   readonly synced: string;
   readonly syncError: string;
   readonly localOnly: string;
+  readonly loading: string;
 }
 
 /**
@@ -105,5 +107,6 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     synced: noArgs(reader_bookmarks_synced),
     syncError: noArgs(reader_bookmarks_sync_error),
     localOnly: noArgs(reader_bookmarks_local_only),
+    loading: noArgs(reader_bookmarks_loading),
   };
 }

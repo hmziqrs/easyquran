@@ -250,5 +250,6 @@
   "reader_bookmarks_synced": "Synced",
   "reader_bookmarks_sync_error": "Sync failed — will retry",
   "reader_bookmarks_local_only": "Stored in this browser",
+  "reader_bookmarks_loading": "Loading your bookmarks…",
   "reader_bookmarks_move_label": "Move {reference} to a folder"
 }

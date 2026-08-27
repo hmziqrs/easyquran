@@ -11,6 +11,7 @@
   import { parseVerseKey } from "$lib/bookmarks/schema";
   import { getBookmarksCopy } from "$lib/i18n/bookmarks-copy";
   import { Button } from "$lib/components/ui/button";
+  import { Skeleton } from "$lib/components/ui/skeleton";
   import BookmarkRow from "./_components/BookmarkRow.svelte";
   import FoldersPanel from "./_components/FoldersPanel.svelte";
   import SyncIndicator from "./_components/SyncIndicator.svelte";
@@ -35,8 +36,11 @@
     readonly rows: readonly Bookmark[];
   }
 
+  // Store-side grouping: orphaned folderIds land under null, never hidden.
+  const byFolder = $derived(bookmarks.bookmarksByFolder());
+
   function rowsFor(folderId: string | null): readonly Bookmark[] {
-    return [...bookmarks.bookmarksIn(folderId)].sort((a, b) =>
+    return [...(byFolder.get(folderId) ?? [])].sort((a, b) =>
       b.updatedAt.localeCompare(a.updatedAt),
     );
   }
@@ -53,6 +57,18 @@
   });
 
   const hasAnyBookmark = $derived(bookmarks.bookmarks.length > 0);
+
+  // Authed but no snapshot yet (first sync in flight or debounced): show a
+  // loading skeleton instead of a premature "No bookmarks". A sync error stops
+  // waiting (the indicator surfaces it), and any local optimistic row or folder
+  // means there is real content to render.
+  const firstSyncPending = $derived(
+    authed &&
+      bookmarks.status.lastSyncAt === null &&
+      bookmarks.status.phase !== "error" &&
+      !hasAnyBookmark &&
+      sortedFolders.length === 0,
+  );
 
   interface AnonRow {
     readonly key: string;
@@ -102,7 +118,7 @@
   }
 
   function countIn(folderId: string): number {
-    return bookmarks.bookmarksIn(folderId).length;
+    return byFolder.get(folderId)?.length ?? 0;
   }
 
   function removeAnon(key: string): void {
@@ -143,7 +159,14 @@
     </div>
 
     {#if authed}
-      {#if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
+      {#if firstSyncPending}
+        <div class="mt-6 flex flex-col gap-3" role="status">
+          <span class="sr-only">{copy.loading}</span>
+          <Skeleton class="h-16 w-full" />
+          <Skeleton class="h-16 w-full" />
+          <Skeleton class="h-16 w-full" />
+        </div>
+      {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
         <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.empty}</p>
       {:else if quranData !== null}
         <FoldersPanel

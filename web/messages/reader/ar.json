@@ -250,5 +250,6 @@
   "reader_bookmarks_synced": "تمت المزامنة",
   "reader_bookmarks_sync_error": "تعذّرت المزامنة — ستتم إعادة المحاولة",
   "reader_bookmarks_local_only": "محفوظة في هذا المتصفح",
+  "reader_bookmarks_loading": "جارٍ تحميل علاماتك المرجعية…",
   "reader_bookmarks_move_label": "نقل {reference} إلى مجلد"
 }

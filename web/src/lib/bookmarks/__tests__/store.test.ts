@@ -1,6 +1,6 @@
 import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "$lib/sync";
 import type { VerseKey } from "$lib/data/quran";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createBookmarksStore, type SyncEngineLike } from "../store.svelte";
 import type { BookmarksMutation, BookmarksSnapshot } from "../schema";
@@ -8,10 +8,18 @@ import type { BookmarksMutation, BookmarksSnapshot } from "../schema";
 vi.mock("$app/environment", () => ({ browser: true }));
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
 
+const MARKER_KEY = "eq.bookmarks.legacy-migrated.7";
+
+/** Let the async marker write (post-enqueue continuation) settle. */
+async function flush(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 interface FakeEngine {
   readonly engine: SyncEngineLike;
   readonly enqueued: BookmarksMutation[];
   readonly flushed: Array<string | undefined>;
+  readonly cleared: string[];
   readonly started: number;
   respondWithStatus(status: SyncStatus): void;
 }
@@ -19,11 +27,13 @@ interface FakeEngine {
 function fakeEngine(): FakeEngine {
   const enqueued: BookmarksMutation[] = [];
   const flushed: Array<string | undefined> = [];
+  const cleared: string[] = [];
   const handle: FakeEngine & { started: number; status: SyncStatus } = {
     started: 0,
     status: { phase: "idle", pending: 0, lastSyncAt: null, lastError: null },
     enqueued,
     flushed,
+    cleared,
     respondWithStatus(status: SyncStatus) {
       handle.status = status;
     },
@@ -33,6 +43,9 @@ function fakeEngine(): FakeEngine {
         enqueued.push(payload as BookmarksMutation);
         // SAFETY: test double — a minimal SyncMutation shape; the store never reads the returned mutation.
         return { id: `m${enqueued.length}`, seq: enqueued.length } as SyncMutation<P>;
+      },
+      async clear(domain?: string) {
+        if (domain !== undefined) cleared.push(domain);
       },
       async flush(domain?: string) {
         flushed.push(domain);
@@ -91,14 +104,14 @@ interface Rig {
   readonly engine: FakeEngine;
   readonly reader: FakeReader;
   readonly registered: RegisteredSyncDomain[];
-  setAuthed(value: boolean): void;
+  setAuthed(value: boolean, userId?: number): void;
 }
 
-function makeRig(initialLegacyKeys: VerseKey[] = [], authed = false): Rig {
+function makeRig(initialLegacyKeys: VerseKey[] = [], authed = false, userId = 7): Rig {
   const engine = fakeEngine();
   const reader = fakeReader(initialLegacyKeys);
   const registered: RegisteredSyncDomain[] = [];
-  const state = { authenticated: authed };
+  const state = { authenticated: authed, user: authed ? { id: userId } : null };
   const store = createBookmarksStore({
     engine: engine.engine,
     auth: {
@@ -115,11 +128,20 @@ function makeRig(initialLegacyKeys: VerseKey[] = [], authed = false): Rig {
     engine,
     reader,
     registered,
-    setAuthed(value: boolean) {
+    setAuthed(value: boolean, nextUserId = userId) {
       state.authenticated = value;
+      state.user = value ? { id: nextUserId } : null;
     },
   };
 }
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const SNAP: BookmarksSnapshot = {
   folders: [
@@ -286,7 +308,8 @@ describe("BookmarksStore — server snapshots", () => {
 describe("BookmarksStore — auth transitions and migration", () => {
   it("hydrate with a session registers the domain, migrates legacy keys and flushes", async () => {
     const rig = makeRig(["2:255", "112:1"], true);
-      rig.store.hydrate();
+    rig.store.hydrate();
+    await flush();
 
     expect(rig.registered).toHaveLength(1);
     expect(rig.registered[0]!.name).toBe("bookmarks");
@@ -302,36 +325,160 @@ describe("BookmarksStore — auth transitions and migration", () => {
 
   it("hydrate is idempotent and a no-op while anonymous", async () => {
     const rig = makeRig(["1:1"], false);
-      rig.store.hydrate();
-      rig.store.hydrate();
+    rig.store.hydrate();
+    rig.store.hydrate();
     expect(rig.registered).toEqual([]);
     expect(rig.engine.enqueued).toEqual([]);
   });
 
   it("the registered adapter routes applyServer into store state", async () => {
     const rig = makeRig([], true);
-      rig.store.hydrate();
+    rig.store.hydrate();
+    await flush();
     rig.registered[0]!.applyServer(SNAP);
     expect(rig.store.bookmarks).toHaveLength(2);
   });
 
-  it("logout clears the server view; re-login migrates only unseen legacy keys", async () => {
+  it("writes the durable per-account marker only after the migration enqueues resolve", async () => {
     const rig = makeRig(["2:255"], true);
-      rig.store.hydrate();
+    rig.store.hydrate();
+    expect(localStorage.getItem(MARKER_KEY)).toBeNull(); // not yet: enqueues unresolved
+
+    await flush();
+    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
+  });
+
+  it("a fresh store instance (reload) over the same localStorage skips migration", async () => {
+    const first = makeRig(["2:255", "112:1"], true);
+    first.store.hydrate();
+    await flush();
+    expect(first.engine.enqueued).toHaveLength(2);
+
+    const second = makeRig(["2:255", "112:1"], true);
+    second.store.hydrate();
+    await flush();
+
+    expect(second.engine.enqueued).toEqual([]);
+    expect(second.engine.flushed).toEqual(["bookmarks"]);
+  });
+
+  it("logout clears the queue durably, resets the view and the in-session guard; re-login skips the marked account", async () => {
+    const rig = makeRig(["2:255"], true);
+    rig.store.hydrate();
+    await flush();
     expect(rig.engine.enqueued).toHaveLength(1);
 
     rig.store.applyServer(SNAP);
+    rig.store.toggle(112, 1); // optimistic row + queued delete
     rig.setAuthed(false);
     rig.store.onAuthChanged(false);
+
     expect(rig.store.bookmarks).toEqual([]);
     expect(rig.store.folders).toEqual([]);
+    expect(rig.engine.cleared).toEqual(["bookmarks"]);
 
-    // New legacy bookmark while signed out.
+    // Re-login as the same account: the durable marker gates re-migration.
     rig.reader.setKeys(["2:255", "3:26"]);
     rig.setAuthed(true);
     rig.store.onAuthChanged(true);
+    await flush();
 
-    const kinds = rig.engine.enqueued.map((m) => `${m.kind}:${"surah" in m ? m.surah : ""}`);
-    expect(kinds).toEqual(["bookmark.upsert:2", "bookmark.upsert:3"]);
+    expect(rig.engine.enqueued).toHaveLength(2); // only the pre-logout toggle
+    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
+  });
+
+  it("migrates again for a different account id", async () => {
+    const first = makeRig(["2:255"], true, 7);
+    first.store.hydrate();
+    await flush();
+    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
+
+    const second = makeRig(["2:255"], true, 9);
+    second.store.hydrate();
+    await flush();
+
+    expect(second.engine.enqueued).toHaveLength(1);
+    expect(localStorage.getItem("eq.bookmarks.legacy-migrated.9")).toBe("1");
+  });
+});
+
+describe("BookmarksStore — optimistic overlay", () => {
+  function drainedOf(rig: Rig, payload: BookmarksMutation): SyncMutation<BookmarksMutation>[] {
+    const index = rig.engine.enqueued.indexOf(payload);
+    // SAFETY: test builds this from a just-enqueued payload; the id mirrors the fake engine's allocation.
+    return [{ id: `m${index + 1}`, domain: "bookmarks", seq: index + 1, payload, queuedAt: 0 }];
+  }
+
+  it("a stale snapshot cannot flicker away in-flight optimistic edits", async () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP);
+
+    // Mid-flight edits: remove b1 (2:255) and add 1:1 optimistically.
+    rig.store.toggle(2, 255);
+    rig.store.toggle(1, 1);
+    const removePayload = rig.engine.enqueued[0]!;
+    const addPayload = rig.engine.enqueued[1]!;
+
+    // An older round acks with a stale snapshot that still contains b1 and
+    // knows nothing of the 1:1 add: both edits must survive.
+    rig.store.applyServer(SNAP, drainedOf(rig, { kind: "folder.upsert", id: "unrelated", name: "x", updatedAt: "2026-01-01T00:00:00Z" }));
+
+    expect(rig.store.isBookmarked(2, 255)).toBe(false);
+    expect(rig.store.isBookmarked(1, 1)).toBe(true);
+    expect(rig.store.bookmarks).toHaveLength(2);
+
+    // The toggle's own drain ack arrives with the fresh server truth.
+    const fresh: BookmarksSnapshot = {
+      folders: SNAP.folders,
+      bookmarks: [
+        { id: "b2", folderId: null, surah: 112, ayah: 1, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z" },
+        { id: "b4", folderId: null, surah: 1, ayah: 1, createdAt: "2026-01-05T00:00:00Z", updatedAt: "2026-01-05T00:00:00Z" },
+      ],
+    };
+    rig.store.applyServer(fresh, [
+      ...drainedOf(rig, removePayload),
+      ...drainedOf(rig, addPayload),
+    ]);
+
+    // Overlay entries for the drained entities are retired; server rows win.
+    expect(rig.store.bookmarks.map((b) => b.id)).toEqual(["b2", "b4"]);
+    expect(rig.store.isBookmarked(2, 255)).toBe(false);
+  });
+
+  it("logout drops the overlay along with the view", async () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP);
+    rig.store.toggle(1, 1);
+
+    rig.setAuthed(false);
+    rig.store.onAuthChanged(false);
+
+    // Re-login + a fresh snapshot: no zombie optimistic rows reappear.
+    rig.setAuthed(true);
+    rig.store.onAuthChanged(true);
+    rig.store.applyServer(SNAP);
+
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    expect(rig.store.bookmarks).toHaveLength(2);
+  });
+});
+
+describe("BookmarksStore — view grouping", () => {
+  it("files orphaned folderId rows under the unfiled group instead of hiding them", () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP);
+    rig.store.applyServer({
+      folders: SNAP.folders,
+      bookmarks: [
+        ...SNAP.bookmarks,
+        { id: "orphan", folderId: "ghost", surah: 3, ayah: 26, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+      ],
+    });
+
+    const groups = rig.store.bookmarksByFolder();
+    expect(groups.get(null)!.map((b) => b.id)).toEqual(["b2", "orphan"]);
+    expect(groups.get("f1")!.map((b) => b.id)).toEqual(["b1"]);
+    // Exact-match helper stays untouched for existing consumers.
+    expect(rig.store.bookmarksIn("ghost")).toHaveLength(1);
   });
 });

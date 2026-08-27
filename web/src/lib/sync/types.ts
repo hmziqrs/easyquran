@@ -18,7 +18,7 @@ export type SyncMutationId = string;
 export interface SyncMutation<P = unknown> {
   readonly id: SyncMutationId;
   readonly domain: string;
-  /** Per-domain monotonic sequence number; defines FIFO replay order. */
+  /** Durable insertion key allocated by the storage (FIFO within a domain = ascending seq). */
   readonly seq: number;
   readonly payload: P;
   readonly queuedAt: number;
@@ -40,8 +40,26 @@ export interface SyncDomain<P = unknown, S = unknown> {
   readonly name: string;
   /** Push `mutations` (in FIFO order) and return the pulled server state. */
   sync(mutations: SyncMutation<P>[], signal?: AbortSignal): Promise<SyncRoundResult<S>>;
-  /** Apply the pulled server state to the domain's local store. */
-  applyServer(state: S): void;
+  /**
+   * Apply the pulled server state to the domain's local store. `drained` is the
+   * batch whose mutations were just removed from the queue (post-removal call
+   * order), letting the domain retire optimistic overlay entries for those
+   * entities instead of dropping every in-flight local edit.
+   */
+  applyServer(state: S, drained?: SyncMutation<P>[]): void;
+}
+
+/**
+ * Thrown by a domain's `sync` when it must not run right now (e.g. its account
+ * signed out). The engine treats it as a skip: no failure count, no backoff
+ * escalation, and the domain's drain loop stops for that round. The throw must
+ * happen before any network request.
+ */
+export class SyncPausedError extends Error {
+  constructor(message = "sync paused") {
+    super(message);
+    this.name = "SyncPausedError";
+  }
 }
 
 export type SyncPhase = "idle" | "syncing" | "error";

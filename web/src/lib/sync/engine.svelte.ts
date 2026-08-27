@@ -1,7 +1,14 @@
 import { browser } from "$app/environment";
 import { trailingDebounce, type Debounced } from "$lib/storage";
 import { createOutbox, type Outbox } from "./outbox";
-import type { SyncDomain, SyncMutation, SyncPhase, SyncStatus } from "./types";
+import {
+  SyncPausedError,
+  type SyncDomain,
+  type SyncMutation,
+  type SyncPhase,
+  type SyncRoundResult,
+  type SyncStatus,
+} from "./types";
 
 /**
  * A domain with its payload/state generics erased. `SyncDomain` declares its
@@ -27,6 +34,14 @@ export function syncRetryDelayMs(failures: number): number {
 function defaultOnline(): boolean {
   return browser ? navigator.onLine : false;
 }
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- err is a caught throw of unknown provenance; this formatter is the boundary that narrows it to a displayable message string.
+function messageOf(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : String(err);
+}
+
+/** #drainDomain outcome: "failed" keeps the queue and backs off, "paused" skips the domain for this round without penalty. */
+type DrainOutcome = "drained" | "failed" | "paused";
 
 export interface SyncEngineOptions {
   readonly outbox?: Outbox;
@@ -55,7 +70,8 @@ export class SyncEngine {
 
   #running: Promise<void> | null = null;
   #coalesced = false;
-  #consecutiveFailures = 0;
+  /** Per-domain consecutive failure counts; a poisoned domain never stretches a healthy domain's retry cadence. */
+  #failures = new Map<string, number>();
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #started = false;
   #wasOnline = false;
@@ -146,7 +162,7 @@ export class SyncEngine {
     const onConnectivity = (): void => {
       const nowOnline = this.#isOnline();
       if (!this.#wasOnline && nowOnline) {
-        this.#consecutiveFailures = 0;
+        this.#failures.clear();
         void this.flush();
       }
       this.#wasOnline = nowOnline;
@@ -193,7 +209,9 @@ export class SyncEngine {
   async #flushPass(domainFilter: string | undefined): Promise<void> {
     this.#cancelRetry();
     if (!this.#isOnline()) {
-      this.#recordFailure("offline");
+      this.#phase = "error";
+      this.#lastError = "offline";
+      this.#scheduleRetry();
       return;
     }
     const targets = this.#targets(domainFilter);
@@ -201,13 +219,19 @@ export class SyncEngine {
     this.#phase = "syncing";
     let failed = false;
     for (const domain of targets) {
-      if (!(await this.#drainDomain(domain))) failed = true;
+      const outcome = await this.#drainDomain(domain);
+      if (outcome === "failed") {
+        this.#failures.set(domain.name, (this.#failures.get(domain.name) ?? 0) + 1);
+        failed = true;
+      } else if (outcome === "drained") {
+        this.#failures.delete(domain.name);
+      }
     }
     if (failed) {
-      // Keep lastError from the failing domain; mutations stay queued.
-      this.#recordFailure(null);
+      // Keep lastError from the failing domain; its mutations stay queued.
+      this.#phase = "error";
+      this.#scheduleRetry();
     } else {
-      this.#consecutiveFailures = 0;
       this.#phase = "idle";
       this.#lastError = null;
     }
@@ -218,36 +242,64 @@ export class SyncEngine {
     return this.#domains.filter((d) => d.name === domainFilter);
   }
 
-  /** Drain one domain in FIFO batches until empty; false = it failed (queue kept). */
-  async #drainDomain(domain: RegisteredSyncDomain): Promise<boolean> {
+  /**
+   * Drain one domain in FIFO batches until empty. Every step is guarded: a
+   * `take`/`remove` storage throw or a `sync`/`applyServer` domain throw marks
+   * the round failed (phase "error" + retry scheduled) instead of wedging the
+   * phase at "syncing". A `SyncPausedError` from `sync` skips the domain for
+   * this round with no failure count and no backoff growth.
+   */
+  async #drainDomain(domain: RegisteredSyncDomain): Promise<DrainOutcome> {
     for (;;) {
-      const batch = await this.#outbox.take(domain.name, FLUSH_BATCH);
-      if (batch.length === 0) return true;
+      let batch: SyncMutation[];
       try {
-        const result = await domain.sync(batch);
+        batch = await this.#outbox.take(domain.name, FLUSH_BATCH);
+      } catch (err) {
+        this.#lastError = messageOf(err);
+        return "failed";
+      }
+      if (batch.length === 0) return "drained";
+      let result: SyncRoundResult<unknown>;
+      try {
+        result = await domain.sync(batch);
+      } catch (err) {
+        if (err instanceof SyncPausedError) return "paused";
+        this.#lastError = messageOf(err);
+        return "failed";
+      }
+      try {
         await this.#outbox.remove(domain.name, batch.map((m) => m.id));
         this.#pending = Math.max(0, this.#pending - batch.length);
         this.#lastSyncAt = Date.now();
         this.#lastError = null;
-        domain.applyServer(result.state);
       } catch (err) {
-        this.#lastError = err instanceof Error && err.message ? err.message : String(err);
-        return false;
+        this.#lastError = messageOf(err);
+        return "failed";
+      }
+      try {
+        // Post-removal call: `drained` lets the domain retire exactly these
+        // optimistic entries (its queue slots are already gone). A throw here
+        // is a local-view problem only — record it, keep the batch removed.
+        domain.applyServer(result.state, batch);
+      } catch (err) {
+        this.#lastError = messageOf(err);
+        return "failed";
       }
     }
   }
 
-  #recordFailure(message: string | null): void {
-    this.#phase = "error";
-    if (message !== null) this.#lastError = message;
-    this.#consecutiveFailures += 1;
-    this.#scheduleRetry();
+  /** Durable wipe of one domain's queue (e.g. its account signed out); `pending` follows. */
+  async clear(domain: string): Promise<void> {
+    const removed = await this.#outbox.clear(domain);
+    this.#pending = Math.max(0, this.#pending - removed);
   }
 
   #scheduleRetry(): void {
     this.#cancelRetry();
     if (this.#pending <= 0) return;
-    const base = syncRetryDelayMs(this.#consecutiveFailures);
+    let worst = 0;
+    for (const count of this.#failures.values()) worst = Math.max(worst, count);
+    const base = syncRetryDelayMs(Math.max(1, worst));
     const jitter = Math.round(base * RETRY_JITTER_FRACTION * Math.random());
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;

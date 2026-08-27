@@ -1,6 +1,6 @@
 import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "$lib/sync/engine.svelte";
-import { createOutbox, memoryQueueStorage, type Outbox } from "$lib/sync/outbox";
-import type { SyncDomain, SyncMutation, SyncRoundResult } from "$lib/sync/types";
+import { createOutbox, memoryQueueStorage, type Outbox, type QueueStorage } from "$lib/sync/outbox";
+import { SyncPausedError, type SyncDomain, type SyncMutation, type SyncRoundResult } from "$lib/sync/types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/environment", () => ({ browser: true }));
@@ -9,17 +9,23 @@ interface FakeDomain {
   readonly domain: SyncDomain<string, string>;
   /** One entry per sync() call, in call order; each holds the batch in FIFO order. */
   readonly batches: SyncMutation[][];
+  /** One entry per applyServer() call: the drained-batch argument, in order. */
+  readonly drainedBatches: Array<SyncMutation[] | undefined>;
   /** States handed to applyServer, in order. */
   readonly states: string[];
   error: Error | null;
+  applyError: Error | null;
 }
 
 function fakeDomain(name: string): FakeDomain {
   const batches: SyncMutation[][] = [];
+  const drainedBatches: Array<SyncMutation[] | undefined> = [];
   const states: string[] = [];
   const handle: FakeDomain = {
     error: null,
+    applyError: null,
     batches,
+    drainedBatches,
     states,
     domain: {
       name,
@@ -28,8 +34,10 @@ function fakeDomain(name: string): FakeDomain {
         if (handle.error) throw handle.error;
         return { applied: mutations.length, state: `${name}#${mutations.length}` };
       },
-      applyServer(state: string): void {
+      applyServer(state: string, drained?: SyncMutation<string>[]): void {
         states.push(state);
+        drainedBatches.push(drained);
+        if (handle.applyError) throw handle.applyError;
       },
     },
   };
@@ -249,6 +257,125 @@ describe("SyncEngine scheduling", () => {
     await rig.engine.hydrate();
 
     expect(rig.engine.pending).toBe(2);
+  });
+});
+
+describe("SyncEngine drain robustness", () => {
+  it("hands applyServer the drained batch after removing it from the queue", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.enqueue("bookmarks", "m1");
+    await rig.engine.enqueue("bookmarks", "m2");
+
+    await rig.engine.flush();
+
+    expect(a.states).toEqual(["bookmarks#2"]);
+    expect(a.drainedBatches).toHaveLength(1);
+    expect(a.drainedBatches[0]!.map((m) => m.payload)).toEqual(["m1", "m2"]);
+  });
+
+  it("SyncPausedError skips the domain: no error phase, no retry growth, loop stops", async () => {
+    vi.useFakeTimers();
+    const paused = fakeDomain("paused");
+    paused.error = new SyncPausedError("signed out");
+    const healthy = fakeDomain("healthy");
+    const rig = makeEngine({ domains: [paused, healthy] });
+    await rig.engine.enqueue("paused", "x");
+    await rig.engine.enqueue("healthy", "y");
+
+    await rig.engine.flush();
+
+    // sync() was entered once and bailed before any transport work; the queue stays.
+    expect(paused.batches).toHaveLength(1);
+    expect(rig.engine.pending).toBe(1);
+    expect(healthy.batches).toHaveLength(1);
+    expect(rig.engine.phase).toBe("idle");
+    expect(rig.engine.lastError).toBeNull();
+
+    // The enqueue debounce re-enters sync once more, which pauses again —
+    // still no error phase, and the queue is untouched.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(paused.batches).toHaveLength(2);
+    expect(rig.engine.phase).toBe("idle");
+
+    // No failure count was recorded, so no backoff retry hammers the paused domain.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(paused.batches).toHaveLength(2);
+  });
+
+  it("isolates backoff per domain: a poisoned domain never stretches a healthy one", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const bad = fakeDomain("bad");
+    bad.error = new Error("boom");
+    const good = fakeDomain("good");
+    const rig = makeEngine({ domains: [bad, good] });
+    await rig.outbox.enqueue("bad", "x");
+    await rig.engine.hydrate();
+
+    await rig.engine.flush(); // bad failure #1 -> retry in 2s
+    await vi.advanceTimersByTimeAsync(2_000); // retry -> bad failure #2 (4s next)
+    await vi.advanceTimersByTimeAsync(4_000); // retry -> bad failure #3 (8s next)
+    expect(bad.batches).toHaveLength(3);
+
+    // good's first failure must start at the 2s base cadence, not bad's 8s.
+    bad.error = null;
+    good.error = new Error("later");
+    await rig.outbox.enqueue("good", "y");
+    await rig.engine.hydrate();
+    await rig.engine.flush(); // bad drains clean, good fails (#1 -> 2s retry)
+    expect(bad.batches).toHaveLength(4);
+    expect(good.batches).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(good.batches).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1); // 2s: good's own base retry
+    expect(good.batches).toHaveLength(2);
+  });
+
+  it("a take() throw fails the round, sets phase error, and schedules a retry", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const a = fakeDomain("bookmarks");
+    let takeAttempts = 0;
+    const failing: QueueStorage = {
+      ...memoryQueueStorage(),
+      async read() {
+        takeAttempts += 1;
+        throw new Error("idb gone");
+      },
+    };
+    const outbox = createOutbox(failing);
+    const engine = createSyncEngine({ outbox, domains: [a.domain], online: () => true });
+    await outbox.enqueue("bookmarks", "x");
+    await engine.hydrate();
+
+    await engine.flush();
+
+    expect(takeAttempts).toBeGreaterThanOrEqual(1);
+    expect(engine.phase).toBe("error");
+    expect(engine.lastError).toBe("idb gone");
+    expect(engine.pending).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(2_000); // retry re-attempts the take
+    expect(takeAttempts).toBeGreaterThanOrEqual(2);
+  });
+
+  it("an applyServer throw keeps the drained batch removed and only records the error", async () => {
+    const a = fakeDomain("bookmarks");
+    a.applyError = new Error("view exploded");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.enqueue("bookmarks", "m1");
+
+    await rig.engine.flush();
+
+    expect(rig.engine.phase).toBe("error");
+    expect(rig.engine.lastError).toBe("view exploded");
+    // The server accepted the batch; the queue slot is gone and pending settled.
+    expect(await rig.outbox.count("bookmarks")).toBe(0);
+    expect(rig.engine.pending).toBe(0);
+    expect(rig.engine.lastSyncAt).not.toBeNull();
+    expect(a.states).toEqual(["bookmarks#1"]);
   });
 });
 

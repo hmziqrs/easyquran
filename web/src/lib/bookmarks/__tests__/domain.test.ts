@@ -1,5 +1,5 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "$lib/auth/auth-client";
-import type { SyncMutation } from "$lib/sync";
+import { SyncPausedError, type SyncMutation } from "$lib/sync";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createBookmarksDomain, type BookmarkAuthLike } from "../domain";
@@ -66,10 +66,20 @@ afterEach(() => {
 });
 
 describe("createBookmarksDomain.sync", () => {
+  it("throws SyncPausedError before any request while signed out", async () => {
+    const fake = fakeAuth();
+    const domain = createBookmarksDomain(fake.auth, { authenticated: false });
+
+    const batch = [mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1)];
+    await expect(domain.sync(batch)).rejects.toBeInstanceOf(SyncPausedError);
+    await expect(domain.sync(batch)).rejects.toThrow("bookmarks sync paused");
+    expect(fake.calls).toHaveLength(0);
+  });
+
   it("posts mutation payloads verbatim under `mutations` and returns the decoded round", async () => {
     const fake = fakeAuth();
     fake.respondWith({ ok: true, status: 200, data: okBody(), error: null, rotated: false });
-    const domain = createBookmarksDomain(fake.auth);
+    const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     const batch = [
       mutation({ kind: "bookmark.upsert", id: "b1", folderId: null, surah: 1, ayah: 1, updatedAt: "2026-01-01T00:00:00Z" }, 1),
@@ -100,7 +110,7 @@ describe("createBookmarksDomain.sync", () => {
   it("sends an empty mutations array for a pure pull", async () => {
     const fake = fakeAuth();
     fake.respondWith({ ok: true, status: 200, data: okBody(), error: null, rotated: false });
-    const domain = createBookmarksDomain(fake.auth);
+    const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     await domain.sync([]);
     expect(fake.calls[0]![1].body).toEqual({ mutations: [] });
@@ -108,7 +118,7 @@ describe("createBookmarksDomain.sync", () => {
 
   it("throws on any non-2xx so the engine keeps the queue", async () => {
     const fake = fakeAuth();
-    const domain = createBookmarksDomain(fake.auth);
+    const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     for (const status of [400, 401, 409, 500, 503]) {
       fake.respondWith({ ok: false, status, data: null, error: { type: "AUTH_ERROR" }, rotated: false });
@@ -120,7 +130,7 @@ describe("createBookmarksDomain.sync", () => {
 
   it("throws on a 200 with an unreadable body (never an empty snapshot)", async () => {
     const fake = fakeAuth();
-    const domain = createBookmarksDomain(fake.auth);
+    const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     fake.respondWith({ ok: true, status: 200, data: null, error: null, rotated: false });
     await expect(domain.sync([])).rejects.toThrow("unreadable snapshot");

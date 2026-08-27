@@ -1,5 +1,5 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "$lib/auth/auth-client";
-import type { SyncDomain, SyncMutation, SyncRoundResult } from "$lib/sync";
+import { SyncPausedError, type SyncDomain, type SyncMutation, type SyncRoundResult } from "$lib/sync";
 import { decodeBookmarksEnvelope, type BookmarksMutation, type BookmarksSnapshot } from "./schema";
 
 /**
@@ -10,6 +10,11 @@ export interface BookmarkAuthLike {
   unsafeRequest<T>(path: string, init: UnsafeRequestInit): Promise<AuthRequestResult<T>>;
 }
 
+/** Auth status seam the domain pauses itself on (logged out → no transport call). */
+export interface BookmarkAuthStateLike {
+  readonly authenticated: boolean;
+}
+
 const SYNC_PATH = "/bookmark/v1/sync";
 
 export const BOOKMARKS_DOMAIN = "bookmarks";
@@ -17,18 +22,22 @@ export const BOOKMARKS_DOMAIN = "bookmarks";
 /**
  * The bookmarks sync domain: pushes queued mutations (payloads verbatim, FIFO
  * order preserved by the engine) and returns the decoded server snapshot as the
- * round state. Any non-2xx throws so the engine keeps the queue and backs off;
- * the same applies to an unreadable body (treated as a failed round, not as an
- * empty snapshot — an empty snapshot would erase the local view).
+ * round state. While signed out it throws SyncPausedError before any request —
+ * the engine skips the domain without failure counts or backoff. Any non-2xx
+ * throws so the engine keeps the queue and backs off; the same applies to an
+ * unreadable body (treated as a failed round, not as an empty snapshot — an
+ * empty snapshot would erase the local view).
  */
 export function createBookmarksDomain(
   auth: BookmarkAuthLike,
+  state: BookmarkAuthStateLike,
 ): SyncDomain<BookmarksMutation, BookmarksSnapshot> {
   return {
     name: BOOKMARKS_DOMAIN,
     async sync(
       mutations: SyncMutation<BookmarksMutation>[],
     ): Promise<SyncRoundResult<BookmarksSnapshot>> {
+      if (!state.authenticated) throw new SyncPausedError("bookmarks sync paused: signed out");
       const res = await auth.unsafeRequest<unknown>(SYNC_PATH, {
         method: "POST",
         body: { mutations: mutations.map((mutation) => mutation.payload) },

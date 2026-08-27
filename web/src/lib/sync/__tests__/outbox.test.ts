@@ -1,4 +1,4 @@
-import { createOutbox, idbQueueStorage, memoryQueueStorage, type Outbox } from "$lib/sync/outbox";
+import { createOutbox, idbQueueStorage, memoryQueueStorage, type Outbox, type SyncMutationDraft } from "$lib/sync/outbox";
 import type { SyncMutation } from "$lib/sync/types";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -38,28 +38,53 @@ describe("Outbox (memory backend)", () => {
     expect(await outbox.count("bookmarks")).toBe(2);
   });
 
-  it("isolates domains in count/all/take", async () => {
+  it("isolates domains in count/all/take and orders FIFO by insertion", async () => {
     const outbox = createOutbox(memoryQueueStorage());
     await seed(outbox, "bookmarks", 2);
     await seed(outbox, "notes", 1);
+    await seed(outbox, "bookmarks", 1);
 
-    expect(await outbox.count("bookmarks")).toBe(2);
+    expect(await outbox.count("bookmarks")).toBe(3);
     expect(await outbox.count("notes")).toBe(1);
-    expect((await outbox.all()).length).toBe(3);
-    expect((await outbox.take("notes", 10)).map((m) => m.seq)).toEqual([1]);
+    expect((await outbox.all()).map((m) => `${m.domain}:${String(m.payload)}:${m.seq}`)).toEqual([
+      "bookmarks:p0:1",
+      "bookmarks:p1:2",
+      "notes:p0:3",
+      "bookmarks:p0:4",
+    ]);
+    expect((await outbox.take("notes", 10)).map((m) => m.seq)).toEqual([3]);
   });
 
-  it("allocates monotonic per-domain seqs that are never reused after removal", async () => {
+  it("allocates storage-scoped keys that are never reused after removal", async () => {
     const outbox = createOutbox(memoryQueueStorage());
     const first = await seed(outbox, "bookmarks", 2);
     const notesFirst = await outbox.enqueue("notes", "n0");
 
+    // Keys come from one storage-scoped generator (like IDB autoincrement), so
+    // they are unique across domains and never reused.
     expect(first.map((m) => m.seq)).toEqual([1, 2]);
-    expect(notesFirst.seq).toBe(1);
+    expect(notesFirst.seq).toBe(3);
 
     await outbox.remove("bookmarks", [first[0]!.id]);
     const next = await outbox.enqueue("bookmarks", "p2");
-    expect(next.seq).toBe(3);
+    expect(next.seq).toBe(4);
+  });
+
+  it("keeps key allocation unique under two outbox instances over one storage", async () => {
+    const storage = memoryQueueStorage();
+    const tabA = createOutbox(storage);
+    const tabB = createOutbox(storage);
+
+    const interleaved = await Promise.all([
+      tabA.enqueue("bookmarks", "a0"),
+      tabB.enqueue("bookmarks", "b0"),
+      tabA.enqueue("bookmarks", "a1"),
+      tabB.enqueue("bookmarks", "b1"),
+    ]);
+
+    const seqs = interleaved.map((m) => m.seq).sort((a, b) => a - b);
+    expect(seqs).toEqual([1, 2, 3, 4]);
+    expect((await tabA.take("bookmarks", 10)).map((m) => m.seq)).toEqual([1, 2, 3, 4]);
   });
 
   it("reads back an enqueued mutation immediately (durability before return)", async () => {
@@ -72,7 +97,7 @@ describe("Outbox (memory backend)", () => {
     expect((await reader.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["x"]);
   });
 
-  it("serializes concurrent enqueues into unique monotonic seqs", async () => {
+  it("serializes concurrent enqueues into unique keys in FIFO order", async () => {
     const outbox = createOutbox(memoryQueueStorage());
     const mutations = await Promise.all(
       Array.from({ length: 20 }, (_, i) => outbox.enqueue("bookmarks", i)),
@@ -85,21 +110,28 @@ describe("Outbox (memory backend)", () => {
     );
   });
 
+  it("clear(domain) empties only that domain and reports the removed count", async () => {
+    const outbox = createOutbox(memoryQueueStorage());
+    await seed(outbox, "bookmarks", 2);
+    await seed(outbox, "notes", 1);
+
+    expect(await outbox.clear("bookmarks")).toBe(2);
+    expect(await outbox.count("bookmarks")).toBe(0);
+    expect(await outbox.count("notes")).toBe(1);
+    expect(await outbox.clear("bookmarks")).toBe(0);
+  });
+
   it("falls back to the memory backend outside the browser", async () => {
     const outbox = createOutbox();
     expect(outbox.storage.kind).toBe("memory");
     await outbox.enqueue("bookmarks", "x");
     expect(await outbox.count("bookmarks")).toBe(1);
   });
-
-  it("rejects domain names containing the key separator", async () => {
-    const outbox = createOutbox(memoryQueueStorage());
-    await expect(outbox.enqueue("bad:domain", "x")).rejects.toThrow(/must not contain/);
-  });
 });
 
-// --- Minimal indexedDB fake: exactly the IDBFactory subset idb.ts + the
-// --- outbox's cursor read use (open, tx, put/get/delete, openCursor).
+// --- Minimal indexedDB fake: exactly the IDBFactory subset the outbox uses
+// --- (open with version + upgrade, tx, autoincrement put, index cursors,
+// --- delete, store introspection for the shape assertions below).
 
 interface FakeReq<T> {
   result: T;
@@ -107,18 +139,25 @@ interface FakeReq<T> {
 }
 
 interface FakeCursor {
-  key: string;
-  value: unknown;
+  key: string | number;
+  primaryKey: number;
+  value: SyncMutationDraft;
   continue(): void;
 }
 
+interface FakeIndex {
+  openCursor(range?: { readonly lower: string; readonly upper: string }): FakeReq<FakeCursor | null>;
+}
+
 interface FakeStore {
-  data: Map<string, unknown>;
-  get(key: string): FakeReq<unknown>;
-  // eslint-disable-next-line anti-slop/no-unknown-parameters -- fake of IDBObjectStore.put; value is the opaque structured-clone payload idbPut passes through (its own param is `unknown`).
-  put(value: unknown, key: string): FakeReq<string>;
-  delete(key: string): FakeReq<undefined>;
+  autoIncrement: boolean;
+  indexNames: readonly string[];
+  data: Map<number, SyncMutationDraft>;
   openCursor(): FakeReq<FakeCursor | null>;
+  put(value: SyncMutationDraft, key?: number): FakeReq<number>;
+  delete(key: number): FakeReq<undefined>;
+  index(name: string): FakeIndex;
+  createIndex(name: string, keyPath: "domain"): FakeIndex;
 }
 
 interface FakeTx {
@@ -129,8 +168,11 @@ interface FakeTx {
 }
 
 interface FakeDB {
+  version: number;
+  stores: Map<string, FakeStore>;
   objectStoreNames: { contains(name: string): boolean };
-  createObjectStore(name: string): FakeStore;
+  createObjectStore(name: string, options?: { autoIncrement?: boolean }): FakeStore;
+  deleteObjectStore(name: string): void;
   transaction(name: string): FakeTx;
 }
 
@@ -151,54 +193,95 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
     return req;
   }
 
-  function makeStore(): FakeStore {
-    const data = new Map<string, unknown>();
-    return {
+  function makeStore(autoIncrement: boolean): FakeStore {
+    const data = new Map<number, SyncMutationDraft>();
+    const indexes = new Map<string, FakeIndex>();
+    const nextKey = (): number => {
+      let max = 0;
+      for (const key of data.keys()) if (key > max) max = key;
+      return max + 1;
+    };
+    const cursorReq = (
+      keyOf: (key: number, record: SyncMutationDraft) => string | number,
+      matches?: (key: number, record: SyncMutationDraft) => boolean,
+    ): FakeReq<FakeCursor | null> => {
+      const req: FakeReq<FakeCursor | null> = { result: null, onsuccess: null };
+      const rows = [...data.entries()]
+        .filter(([key, record]) => matches?.(key, record) ?? true)
+        .sort((a, b) => a[0] - b[0]);
+      let index = 0;
+      const advance = (): void => {
+        if (index >= rows.length) {
+          req.result = null;
+        } else {
+          const [key, record] = rows[index]!;
+          req.result = {
+            key: keyOf(key, record),
+            primaryKey: key,
+            value: record,
+            continue: () => {
+              index += 1;
+              advance();
+            },
+          };
+        }
+        queueMicrotask(() => req.onsuccess?.(req));
+      };
+      advance();
+      return req;
+    };
+    const openStoreCursor = (): FakeReq<FakeCursor | null> => cursorReq((key) => key);
+    const makeIndex = (): FakeIndex => ({
+      openCursor(range) {
+        return cursorReq(
+          (_key, record) => record.domain,
+          (_key, record) => range === undefined || record.domain === range.lower,
+        );
+      },
+    });
+    const store: FakeStore = {
+      autoIncrement,
+      get indexNames() {
+        return [...indexes.keys()];
+      },
       data,
-      get: (key) => makeReq(data.get(key)),
+      openCursor: () => openStoreCursor(),
       put: (value, key) => {
-        data.set(key, value);
-        return makeReq(key);
+        const allocated = key ?? nextKey();
+        data.set(allocated, value);
+        return makeReq(allocated);
       },
       delete: (key) => {
         data.delete(key);
         return makeReq(undefined);
       },
-      openCursor: () => {
-        // No makeReq here: only advance() may schedule onsuccess callbacks, one per cursor step.
-        const req: FakeReq<FakeCursor | null> = { result: null, onsuccess: null };
-        const keys = [...data.keys()].sort();
-        let index = 0;
-        const advance = (): void => {
-          if (index >= keys.length) {
-            req.result = null;
-          } else {
-            const key = keys[index]!;
-            req.result = {
-              key,
-              value: data.get(key),
-              continue: () => {
-                index += 1;
-                advance();
-              },
-            };
-          }
-          queueMicrotask(() => req.onsuccess?.(req));
-        };
-        advance();
-        return req;
+      index: (name) => {
+        const existing = indexes.get(name);
+        if (existing === undefined) throw new Error(`fake idb: no index "${name}"`);
+        return existing;
+      },
+      createIndex: (name, _keyPath) => {
+        const created = makeIndex();
+        indexes.set(name, created);
+        return created;
       },
     };
+    return store;
   }
 
-  function makeDB(): FakeDB {
+  function makeDB(version: number): FakeDB {
     const stores = new Map<string, FakeStore>();
     return {
+      version,
+      stores,
       objectStoreNames: { contains: (name) => stores.has(name) },
-      createObjectStore: (name) => {
-        const store = makeStore();
+      createObjectStore: (name, options) => {
+        const store = makeStore(options?.autoIncrement === true);
         stores.set(name, store);
         return store;
+      },
+      deleteObjectStore: (name) => {
+        stores.delete(name);
       },
       transaction: (name) => {
         const store = stores.get(name);
@@ -216,11 +299,12 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
   }
 
   const idb = {
-    open(name: string, _version: number): FakeOpenRequest {
+    open(name: string, version: number): FakeOpenRequest {
       const existing = dbByName.get(name);
-      const db = existing ?? makeDB();
-      const isNew = existing === undefined;
-      if (isNew) dbByName.set(name, db);
+      const upgrade = existing === undefined || version > existing.version;
+      const db = existing ?? makeDB(version);
+      if (upgrade) db.version = version;
+      if (existing === undefined) dbByName.set(name, db);
       const req: FakeOpenRequest = {
         result: db,
         error: null,
@@ -229,42 +313,79 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
         onupgradeneeded: null,
       };
       queueMicrotask(() => {
-        if (isNew) req.onupgradeneeded?.(req);
+        if (upgrade) req.onupgradeneeded?.(req);
         req.onsuccess?.(req);
       });
       return req;
     },
   };
 
-  // SAFETY: test seam — globalThis is widened to a plain indexedDB slot so this in-file fake (exactly the IDBFactory subset the outbox reads) can replace the real factory for the test run.
-  (globalThis as { indexedDB: unknown }).indexedDB = idb;
+  // SAFETY: test seam — globalThis is widened to plain indexedDB/IDBKeyRange slots so this in-file fake (exactly the IDBFactory subset the outbox reads) can replace the real globals for the test run.
+  const globals = globalThis as { indexedDB: unknown; IDBKeyRange: unknown };
+  globals.indexedDB = idb;
+  globals.IDBKeyRange = {
+    only: (value: string) => ({ lower: value, upper: value }),
+  };
   return dbByName;
 }
 
 describe("Outbox (idb backend)", () => {
+  let dbs: Map<string, FakeDB>;
+
   beforeEach(() => {
-    installFakeIndexedDB();
+    dbs = installFakeIndexedDB();
   });
 
   afterEach(() => {
-    // SAFETY: teardown of the test seam — globalThis is widened to the optional indexedDB slot; delete is a no-op when no fake was installed.
-    delete (globalThis as { indexedDB?: unknown }).indexedDB;
+    // SAFETY: teardown of the test seam — globalThis is widened to the optional indexedDB/IDBKeyRange slots; delete is a no-op when no fake was installed.
+    const globals = globalThis as { indexedDB?: unknown; IDBKeyRange?: unknown };
+    delete globals.indexedDB;
+    delete globals.IDBKeyRange;
   });
 
-  it("stores FIFO via padded keys, isolates domains, and survives a second outbox instance", async () => {
+  it("creates the store with autoincrement keys and a by_domain index at v2", async () => {
     const outbox = createOutbox(idbQueueStorage());
-    await seed(outbox, "bookmarks", 3);
-    await outbox.enqueue("notes", "n0");
+    await outbox.enqueue("bookmarks", "x");
 
-    expect((await outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["p0", "p1", "p2"]);
+    const db = dbs.get("easyquran-sync");
+    expect(db).toBeDefined();
+    expect(db!.version).toBe(2);
+    const store = db!.stores.get("outbox")!;
+    expect(store.autoIncrement).toBe(true);
+    expect(store.indexNames).toContain("by_domain");
+  });
+
+  it("stores FIFO by insertion, isolates domains, and keeps keys unique across instances", async () => {
+    const tabA = createOutbox(idbQueueStorage());
+    const tabB = createOutbox(idbQueueStorage());
+
+    const interleaved = await Promise.all([
+      tabA.enqueue("bookmarks", "p0"),
+      tabB.enqueue("bookmarks", "p1"),
+      tabA.enqueue("notes", "n0"),
+      tabB.enqueue("bookmarks", "p2"),
+    ]);
+
+    const seqs = interleaved.map((m) => m.seq).sort((a, b) => a - b);
+    expect(seqs).toEqual([1, 2, 3, 4]);
+
+    expect((await tabA.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["p0", "p1", "p2"]);
+    expect(await tabB.count("notes")).toBe(1);
+
+    const firstBatch = await tabA.take("bookmarks", 1);
+    await tabA.remove("bookmarks", [firstBatch[0]!.id]);
+    expect((await tabB.take("bookmarks", 10)).map((m) => m.seq)).toEqual([2, 4]);
+    expect((await tabA.all()).length).toBe(3);
+  });
+
+  it("clear(domain) removes only that domain's rows", async () => {
+    const outbox = createOutbox(idbQueueStorage());
+    await seed(outbox, "bookmarks", 2);
+    await seed(outbox, "notes", 1);
+
+    const removed = await outbox.clear("bookmarks");
+    expect(removed).toBe(2);
+    expect(await outbox.count("bookmarks")).toBe(0);
     expect(await outbox.count("notes")).toBe(1);
-
-    const reopened = createOutbox(idbQueueStorage());
-    expect((await reopened.take("bookmarks", 10)).length).toBe(3);
-
-    const firstBatch = await outbox.take("bookmarks", 1);
-    await outbox.remove("bookmarks", [firstBatch[0]!.id]);
-    expect((await reopened.take("bookmarks", 10)).map((m) => m.seq)).toEqual([2, 3]);
-    expect((await outbox.all()).length).toBe(3);
   });
 });
