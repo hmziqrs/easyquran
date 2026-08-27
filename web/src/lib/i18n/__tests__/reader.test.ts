@@ -8,6 +8,7 @@ import {
 } from "$lib/data/quran";
 import type { UiLocale } from "$lib/i18n/locales";
 import {
+  bookmarksPageHref,
   readerHomeHrefFor,
   readerHrefFor,
   type LocalizedReaderHref,
@@ -46,6 +47,15 @@ describe("reader localized hrefs", () => {
     expectTypeOf(english).toEqualTypeOf<"/en/app">();
     expectTypeOf(arabic).toEqualTypeOf<"/ar/app">();
     expectTypeOf(readerHrefFor("ar", "/app/al-fatihah")).toEqualTypeOf<LocalizedReaderHref<"ar">>();
+  });
+
+  it("emits the canonical unlocalized /app/bookmarks nav href (settings/search precedent)", () => {
+    const href = bookmarksPageHref();
+    // /{en,ar}/app/bookmarks is not a published route — hooks.server 404s a
+    // locale-prefixed variant on hard load, so nav/footer hrefs must stay bare.
+    expect(href).toBe("/app/bookmarks");
+    expect(href).not.toMatch(/^\/(?:en|ar)\//u);
+    expectTypeOf(href).toEqualTypeOf<"/app/bookmarks">();
   });
 
   it("preserves translation segments, query, and fragment byte-for-byte", () => {

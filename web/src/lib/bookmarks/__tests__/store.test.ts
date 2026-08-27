@@ -21,6 +21,8 @@ interface FakeEngine {
   readonly flushed: Array<string | undefined>;
   readonly cleared: string[];
   readonly started: number;
+  /** When true, the next enqueue() rejects (simulated durable-storage failure). */
+  failNext: boolean;
   respondWithStatus(status: SyncStatus): void;
 }
 
@@ -30,6 +32,7 @@ function fakeEngine(): FakeEngine {
   const cleared: string[] = [];
   const handle: FakeEngine & { started: number; status: SyncStatus } = {
     started: 0,
+    failNext: false,
     status: { phase: "idle", pending: 0, lastSyncAt: null, lastError: null },
     enqueued,
     flushed,
@@ -39,6 +42,10 @@ function fakeEngine(): FakeEngine {
     },
     engine: {
       async enqueue<P>(_domain: string, payload: P) {
+        if (handle.failNext) {
+          handle.failNext = false;
+          throw new Error("idb full");
+        }
         // SAFETY: test double — the only producer is BookmarksStore.#enqueue, whose payloads are BookmarksMutation by construction.
         enqueued.push(payload as BookmarksMutation);
         // SAFETY: test double — a minimal SyncMutation shape; the store never reads the returned mutation.
@@ -195,13 +202,17 @@ describe("BookmarksStore — anonymous view", () => {
 });
 
 describe("BookmarksStore — authed toggles", () => {
-  it("toggle adds optimistically and enqueues a bookmark.upsert", () => {
+  it("toggle enqueues a bookmark.upsert, then adds the row once the write is durable", async () => {
     const rig = makeRig([], true);
     rig.store.toggle(1, 1);
+    // Payload is captured synchronously; the optimistic row lands only after
+    // the durable enqueue resolves (durability-before-view contract).
+    expect(rig.engine.enqueued).toHaveLength(1);
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    await flush();
 
     expect(rig.store.isBookmarked(1, 1)).toBe(true);
     expect(rig.store.isMarkedKey("1:1")).toBe(true);
-    expect(rig.engine.enqueued).toHaveLength(1);
     const payload = rig.engine.enqueued[0]!;
     expect(payload.kind).toBe("bookmark.upsert");
     if (payload.kind !== "bookmark.upsert") return;
@@ -214,22 +225,38 @@ describe("BookmarksStore — authed toggles", () => {
     expect(rig.store.bookmarksIn(null)).toHaveLength(1);
   });
 
-  it("toggle removes an existing bookmark and enqueues a bookmark.delete", () => {
+  it("toggle removes an existing bookmark and enqueues a bookmark.delete", async () => {
     const rig = makeRig([], true);
     rig.store.applyServer(SNAP);
     rig.store.toggle(2, 255);
+    await flush();
 
     expect(rig.store.isBookmarked(2, 255)).toBe(false);
     expect(rig.store.bookmarks).toHaveLength(1);
     expect(rig.engine.enqueued).toHaveLength(1);
     expect(rig.engine.enqueued[0]!).toEqual({ kind: "bookmark.delete", id: "b1", updatedAt: expect.any(String) });
   });
+
+  it("a rejected enqueue applies no optimistic view and leaves no overlay behind", async () => {
+    const rig = makeRig([], true);
+    rig.engine.failNext = true;
+    rig.store.toggle(1, 1);
+    await flush();
+
+    // No durable write happened: the view never shows the toggle...
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    expect(rig.engine.enqueued).toEqual([]);
+    // ...and a later snapshot lands unfiltered (no orphaned overlay entries).
+    rig.store.applyServer(SNAP);
+    expect(rig.store.bookmarks).toHaveLength(2);
+  });
 });
 
 describe("BookmarksStore — folders and moves", () => {
-  it("createFolder enqueues folder.upsert and stores the trimmed name", () => {
+  it("createFolder enqueues folder.upsert and stores the trimmed name", async () => {
     const rig = makeRig([], true);
     const folder = rig.store.createFolder("  Tafsir  ");
+    await flush();
 
     expect(folder?.name).toBe("Tafsir");
     expect(rig.store.folders).toHaveLength(1);
@@ -243,32 +270,36 @@ describe("BookmarksStore — folders and moves", () => {
     expect(rig.engine.enqueued).toEqual([]);
   });
 
-  it("renameFolder enqueues an upsert with the new name", () => {
+  it("renameFolder enqueues an upsert with the new name", async () => {
     const rig = makeRig([], true);
     const folder = rig.store.createFolder("Old");
     if (!folder) throw new Error("folder missing");
+    await flush();
     rig.store.renameFolder(folder.id, "New");
+    await flush();
 
     expect(rig.store.folderById(folder.id)?.name).toBe("New");
     expect(rig.engine.enqueued[1]).toMatchObject({ kind: "folder.upsert", id: folder.id, name: "New" });
   });
 
-  it("deleteFolder detaches children optimistically and enqueues folder.delete", () => {
+  it("deleteFolder detaches children and enqueues folder.delete", async () => {
     const rig = makeRig([], true);
     rig.store.applyServer(SNAP);
 
     rig.store.deleteFolder("f1");
+    await flush();
 
     expect(rig.store.folders).toEqual([]);
     expect(rig.store.bookmarksIn(null)).toHaveLength(2);
     expect(rig.engine.enqueued).toEqual([{ kind: "folder.delete", id: "f1", updatedAt: expect.any(String) }]);
   });
 
-  it("moveToFolder enqueues an upsert with the new folderId; unknown folder is a no-op", () => {
+  it("moveToFolder enqueues an upsert with the new folderId; unknown folder is a no-op", async () => {
     const rig = makeRig([], true);
     rig.store.applyServer(SNAP);
 
     rig.store.moveToFolder("b2", "f1");
+    await flush();
     expect(rig.store.bookmarksIn("f1")).toHaveLength(2);
     expect(rig.engine.enqueued[0]).toMatchObject({ kind: "bookmark.upsert", id: "b2", folderId: "f1", surah: 112, ayah: 1 });
 

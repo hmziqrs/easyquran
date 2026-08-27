@@ -173,13 +173,15 @@ export function readerHomeHrefFor<const Locale extends UiLocale>(locale: Locale)
   return localizeReaderHref(locale, "/app") as `/${Locale}/app`;
 }
 
-/** Locale-prefixed href of the /app/bookmarks page (footer links from any surface). */
-export function bookmarksPageHrefFor<const Locale extends UiLocale>(
-  locale: Locale,
-): `/${Locale}/app/bookmarks` {
-  assertUiLocale(locale);
-  // SAFETY: localizeReaderHref verified its output equals `/${locale}` + "/app/bookmarks", so the value is exactly the template type.
-  return localizeReaderHref(locale, "/app/bookmarks") as `/${Locale}/app/bookmarks`;
+/**
+ * Canonical href of the /app/bookmarks page for nav/footer links. Deliberately
+ * NOT locale-prefixed: /{en,ar}/app/bookmarks is not a published route (the
+ * reroute in hooks.ts only maps localized reader routes), so a prefixed href
+ * 404s on hard load. This matches the /app/settings and /app/search precedent
+ * (Nav.svelte, the search palette sources).
+ */
+export function bookmarksPageHref(): "/app/bookmarks" {
+  return "/app/bookmarks";
 }
 
 export function readerHrefFor<const Locale extends UiLocale>(

@@ -10,7 +10,7 @@
   import { SUPPORTED_UI_LOCALES, UI_LOCALES } from "$lib/i18n/locales";
   import { footerLinksFor } from "$lib/i18n/footer-links";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { bookmarksPageHrefFor, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
+  import { bookmarksPageHref, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { marketingHomeHref, type LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
@@ -57,7 +57,7 @@
     })),
   );
   const footerLinks = $derived(
-    footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref, bookmarksPageHrefFor(copy.locale)),
+    footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref, bookmarksPageHref()),
   );
   const knownMoreIds = (ids: readonly string[]): string[] =>
     ids.filter((id) => TRANSLATION_CATALOGUE_BY_ID.has(id));

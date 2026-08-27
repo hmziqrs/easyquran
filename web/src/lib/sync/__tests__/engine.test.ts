@@ -437,6 +437,48 @@ describe("SyncEngine pull-only rounds", () => {
   });
 });
 
+describe("SyncEngine coalescing", () => {
+  it("picks up a mutation enqueued after take() of an in-flight drain (coalesced pass)", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const batches: SyncMutation[][] = [];
+    let blockFirst = true;
+    const gated: SyncDomain<string, string> = {
+      name: "gated",
+      async sync(mutations: SyncMutation<string>[]): Promise<SyncRoundResult<string>> {
+        batches.push(mutations);
+        if (blockFirst) {
+          blockFirst = false;
+          await gate;
+        }
+        return { applied: mutations.length, state: "s" };
+      },
+      applyServer(): void {},
+    };
+    const outbox = createOutbox(memoryQueueStorage());
+    const engine = createSyncEngine({ outbox, domains: [gated], online: () => true });
+    await outbox.enqueue("gated", "m1");
+    await engine.hydrate();
+
+    const first = engine.flush();
+    // Wait until the drain is inside sync([m1]) — past its take().
+    await vi.waitFor(() => expect(batches.length).toBe(1));
+    // m2 lands after the take of the running pass; its flush coalesces.
+    await engine.enqueue("gated", "m2");
+    const second = engine.flush();
+    expect(second).toBe(first);
+    release();
+    await first;
+
+    // The coalesced extra pass drains the late mutation in the same round; it
+    // then finishes with its own pull-only round (one pull per flush call).
+    expect(batches.map((batch) => batch.map((m) => m.payload))).toEqual([["m1"], ["m2"], []]);
+    expect(engine.pending).toBe(0);
+  });
+});
+
 describe("SyncEngine.start", () => {
   it("flushes on a false->true online transition and tears every listener down", async () => {
     vi.useFakeTimers();

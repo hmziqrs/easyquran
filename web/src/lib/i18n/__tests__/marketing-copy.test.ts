@@ -112,6 +112,15 @@ describe("marketing copy resolvers", () => {
     ]);
   });
 
+  it("footer bookmarks link stays the canonical unlocalized /app/bookmarks in every locale", () => {
+    // /{en,ar}/app/bookmarks is not a published route (404 on hard load); the
+    // marketing footer must emit the same bare path the app footer does.
+    for (const locale of ["en", "ar"] as const) {
+      const bookmarks = marketingFooterLinks(locale).product.find((link) => link.id === "bookmarks");
+      expect(bookmarks?.href).toBe("/app/bookmarks");
+    }
+  });
+
   it("uses typed parameterized messages for control labels", () => {
     const english = resolveAppearanceCopy("en");
     const arabic = resolveAppearanceCopy("ar");
@@ -142,7 +151,15 @@ describe("marketing locale links", () => {
 
     expect(links.company).toEqual([]);
     expect(links.legal).toEqual([]);
-    expect(links.product.every((link) => link.href.startsWith("/ar/"))).toBe(true);
+    // The bookmarks link is the one app-surface path in the product column:
+    // /app/bookmarks has no localized published route, so it stays bare for
+    // every locale (see bookmarksPageHref).
+    expect(links.product.find((link) => link.id === "bookmarks")?.href).toBe("/app/bookmarks");
+    expect(
+      links.product
+        .filter((link) => link.id !== "bookmarks")
+        .every((link) => link.href.startsWith("/ar/")),
+    ).toBe(true);
   });
 
   it("marks one locale switch link current", () => {

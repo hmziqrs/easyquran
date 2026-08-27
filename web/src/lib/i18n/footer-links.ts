@@ -2,7 +2,8 @@
 // same spec: marketing pages resolve through `marketingHref`, so an unpublished locale drops the
 // link instead of hard-coding "en". Callers supply the labels (message-free module), the reader
 // href, which differs per surface: marketing links at the reader home, the reader keeps its
-// current translation context, and the bookmarks-page href (locale-prefixed /app/bookmarks).
+// current translation context, and the bookmarks-page href (canonical unlocalized /app/bookmarks —
+// localized /{en,ar}/app/bookmarks is not a published route; see bookmarksPageHref).
 import { marketingHref } from "$lib/i18n/marketing";
 import type { MarketingPageId } from "$lib/i18n/marketing";
 import type { FooterLink, MarketingFooterLinks, MarketingLocale } from "$lib/i18n/marketing-copy";

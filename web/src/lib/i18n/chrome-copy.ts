@@ -50,7 +50,7 @@ import type {
   NavResolvedCopy,
 } from "$lib/i18n/marketing-copy";
 import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
-import { bookmarksPageHrefFor } from "$lib/i18n/reader";
+import { bookmarksPageHref } from "$lib/i18n/reader";
 
 /**
  * Site chrome: the copy every marketing page renders. This is the localization floor — everything
@@ -73,7 +73,7 @@ export function marketingFooterLinks(locale: MarketingLocale): MarketingFooterLi
     locale,
     footerLinkLabels(locale),
     marketingReaderHomeHref(locale),
-    bookmarksPageHrefFor(locale),
+    bookmarksPageHref(),
   );
 }
 

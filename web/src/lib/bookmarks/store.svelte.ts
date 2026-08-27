@@ -184,23 +184,32 @@ export class BookmarksStore {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    this.#bookmarks = [...this.#bookmarks, bookmark];
-    this.#enqueue({
-      kind: "bookmark.upsert",
-      id: bookmark.id,
-      folderId: null,
-      surah,
-      ayah,
-      updatedAt: bookmark.updatedAt,
-    });
+    this.#enqueue(
+      {
+        kind: "bookmark.upsert",
+        id: bookmark.id,
+        folderId: null,
+        surah,
+        ayah,
+        updatedAt: bookmark.updatedAt,
+      },
+      () => {
+        // A snapshot (or a rapid re-toggle) may have landed the verse already;
+        // the store keeps one row per verse.
+        if (this.isBookmarked(surah, ayah)) return;
+        this.#bookmarks = [...this.#bookmarks, bookmark];
+      },
+      bookmark,
+    );
   }
 
   remove(bookmarkId: string): void {
     if (!this.authed) return;
     const existing = this.#bookmarks.find((b) => b.id === bookmarkId);
     if (!existing) return;
-    this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
-    this.#enqueue({ kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() });
+    this.#enqueue({ kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() }, () => {
+      this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
+    });
   }
 
   moveToFolder(bookmarkId: string, folderId: string | null): void {
@@ -209,15 +218,20 @@ export class BookmarksStore {
     const existing = this.#bookmarks.find((b) => b.id === bookmarkId);
     if (!existing || existing.folderId === folderId) return;
     const updated: Bookmark = { ...existing, folderId, updatedAt: nowIso() };
-    this.#bookmarks = this.#bookmarks.map((b) => (b.id === bookmarkId ? updated : b));
-    this.#enqueue({
-      kind: "bookmark.upsert",
-      id: updated.id,
-      folderId,
-      surah: updated.surah,
-      ayah: updated.ayah,
-      updatedAt: updated.updatedAt,
-    });
+    this.#enqueue(
+      {
+        kind: "bookmark.upsert",
+        id: updated.id,
+        folderId,
+        surah: updated.surah,
+        ayah: updated.ayah,
+        updatedAt: updated.updatedAt,
+      },
+      () => {
+        this.#bookmarks = this.#bookmarks.map((b) => (b.id === bookmarkId ? updated : b));
+      },
+      updated,
+    );
   }
 
   createFolder(name: string): BookmarkFolder | null {
@@ -228,8 +242,10 @@ export class BookmarksStore {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    this.#folders = [...this.#folders, folder];
-    this.#enqueue({ kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt });
+    this.#enqueue({ kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt }, () => {
+      if (this.#folders.some((existing) => existing.id === folder.id)) return;
+      this.#folders = [...this.#folders, folder];
+    });
     return folder;
   }
 
@@ -238,17 +254,19 @@ export class BookmarksStore {
     const existing = this.#folders.find((folder) => folder.id === id);
     if (!existing) return;
     const renamed: BookmarkFolder = { ...existing, name: name.trim(), updatedAt: nowIso() };
-    this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
-    this.#enqueue({ kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt });
+    this.#enqueue({ kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt }, () => {
+      this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
+    });
   }
 
   deleteFolder(id: string): void {
     if (!this.authed) return;
     if (!this.#folders.some((folder) => folder.id === id)) return;
-    this.#folders = this.#folders.filter((folder) => folder.id !== id);
-    // Server detaches children on folder.delete; mirror it optimistically.
-    this.#bookmarks = this.#bookmarks.map((b) => (b.folderId === id ? { ...b, folderId: null } : b));
-    this.#enqueue({ kind: "folder.delete", id, updatedAt: nowIso() });
+    this.#enqueue({ kind: "folder.delete", id, updatedAt: nowIso() }, () => {
+      this.#folders = this.#folders.filter((folder) => folder.id !== id);
+      // Server detaches children on folder.delete; mirror it.
+      this.#bookmarks = this.#bookmarks.map((b) => (b.folderId === id ? { ...b, folderId: null } : b));
+    });
   }
 
   /**
@@ -379,17 +397,30 @@ export class BookmarksStore {
     }
   }
 
-  #enqueue(payload: BookmarksMutation): void {
+  /**
+   * Queue a mutation, then apply its optimistic view ONLY once the queue write
+   * is durable — engine.enqueue resolves after the outbox write, so the view
+   * can never run ahead of durability (a reload right after a toggle replays a
+   * queued mutation, never a lost one). A rejected enqueue (storage failure)
+   * applies nothing and retires the overlay entry, so view and queue stay in
+   * step; a logout before resolution drops the apply along with the queue.
+   */
+  #enqueue(payload: BookmarksMutation, apply: () => void, pendingRow?: Bookmark): void {
     if (payload.kind === "bookmark.delete") {
       this.#pendingDeletes.add(payload.id);
       this.#pendingById.delete(payload.id);
-    } else if (payload.kind === "bookmark.upsert") {
-      const row = this.#bookmarks.find((bookmark) => bookmark.id === payload.id);
-      if (row !== undefined) this.#pendingById.set(payload.id, row);
+    } else if (payload.kind === "bookmark.upsert" && pendingRow !== undefined) {
+      this.#pendingById.set(payload.id, pendingRow);
     }
-    // Enqueue persists before resolving; a storage failure would only surface as
-    // a temporary optimistic drift, corrected by the next server snapshot.
-    void this.#engine.enqueue("bookmarks", payload).catch(() => undefined);
+    void this.#engine.enqueue("bookmarks", payload).then(
+      () => {
+        if (this.authed) apply();
+      },
+      () => {
+        this.#pendingById.delete(payload.id);
+        this.#pendingDeletes.delete(payload.id);
+      },
+    );
   }
 }
 

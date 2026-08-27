@@ -1,3 +1,4 @@
+import { createSyncEngine, type RegisteredSyncDomain } from "$lib/sync/engine.svelte";
 import { createOutbox, idbQueueStorage, memoryQueueStorage, type Outbox, type SyncMutationDraft } from "$lib/sync/outbox";
 import type { SyncMutation } from "$lib/sync/types";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -416,5 +417,47 @@ describe("Outbox (idb backend)", () => {
     expect(db.txLog).toEqual(["readwrite"]);
     expect(await outbox.count("bookmarks")).toBe(0);
     expect(await outbox.count("notes")).toBe(1);
+  });
+
+  it("a durable enqueue survives a reload: a fresh engine over the same storage pushes it", async () => {
+    const batches: SyncMutation[][] = [];
+    const states: string[] = [];
+    const domain: RegisteredSyncDomain = {
+      name: "bookmarks",
+      async sync(mutations: SyncMutation[]): Promise<{ applied: number; state: string }> {
+        batches.push(mutations);
+        return { applied: mutations.length, state: `s${mutations.length}` };
+      },
+      applyServer(state: string): void {
+        states.push(state);
+      },
+    };
+
+    // Tab 1: toggle → engine.enqueue. The await proves the write is durable in
+    // IndexedDB before the promise resolves; the tab dies before any flush.
+    const tab1 = createSyncEngine({
+      outbox: createOutbox(idbQueueStorage()),
+      domains: [domain],
+      online: () => true,
+    });
+    const mutation = await tab1.enqueue("bookmarks", "m1");
+    expect(batches).toHaveLength(0);
+
+    // Tab 2 (hard reload): fresh engine + outbox instances, same fake IDB.
+    const tab2 = createSyncEngine({
+      outbox: createOutbox(idbQueueStorage()),
+      domains: [domain],
+      online: () => true,
+    });
+    await tab2.hydrate();
+    expect(tab2.pending).toBe(1);
+
+    await tab2.flush();
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.map((m) => m.id)).toEqual([mutation.id]);
+    expect(batches[0]!.map((m) => m.payload)).toEqual(["m1"]);
+    expect(tab2.pending).toBe(0);
+    expect(states).toEqual(["s1"]);
   });
 });
