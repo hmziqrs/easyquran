@@ -9,6 +9,7 @@
   import { SITE } from "$lib/config/site";
   import { SUPPORTED_UI_LOCALES, UI_LOCALES } from "$lib/i18n/locales";
   import { footerLinksFor } from "$lib/i18n/footer-links";
+  import { setAppLocale } from "$lib/i18n/app-locale";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { bookmarksPageHref, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
@@ -27,6 +28,9 @@
   let { data, children } = $props();
   let menuOpen = $state(false);
   const copy = getReaderUiCopy();
+  // De-localized app pages (/app/bookmarks, ...) cannot recover this locale from their own URL;
+  // publish it so their copy follows the same locale the nav/footer render.
+  setAppLocale(copy.locale);
   const SETTINGS_PATH = "/app/settings";
   const isNonReaderAppRoute = $derived(
     (page.route.id ?? "").endsWith("/app/settings") ||

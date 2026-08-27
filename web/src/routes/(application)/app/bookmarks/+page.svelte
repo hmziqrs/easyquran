@@ -9,6 +9,7 @@
   import { bookmarks } from "$lib/bookmarks/store.svelte";
   import type { Bookmark, BookmarkFolder } from "$lib/bookmarks/schema";
   import { parseVerseKey } from "$lib/bookmarks/schema";
+  import { appLocale } from "$lib/i18n/app-locale";
   import { getBookmarksCopy } from "$lib/i18n/bookmarks-copy";
   import { Button } from "$lib/components/ui/button";
   import { Skeleton } from "$lib/components/ui/skeleton";
@@ -20,7 +21,10 @@
   // no translation segments to build, so it always resolves the Arabic reader.
   const ARABIC_CTX = surahRouteContext("uthmani");
 
-  const copy = getBookmarksCopy();
+  // This URL is never locale-prefixed, so getLocale() would fall back to the
+  // base locale even right after a client-side nav from /ar/app/**; the layout's
+  // published locale keeps the page's copy aligned with the nav/footer chrome.
+  const copy = getBookmarksCopy(appLocale());
 
   let quranData = $state<QuranData | null>(peekQuranData() ?? null);
 
