@@ -9,6 +9,9 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
     isBookmarked(key: VerseKey): boolean {
       return !!core.s.bookmarks[key];
     },
+    get bookmarkedKeys(): VerseKey[] {
+      return Object.keys(core.s.bookmarks);
+    },
     toggleBookmark(key: VerseKey): void {
       if (core.s.bookmarks[key]) delete core.s.bookmarks[key];
       else core.s.bookmarks[key] = true;

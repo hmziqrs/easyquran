@@ -21,6 +21,7 @@ import {
   footer_whats_inside,
   nav_account,
   nav_appearance,
+  nav_bookmarks,
   nav_change_language,
   nav_close_panel,
   nav_language,
@@ -49,6 +50,7 @@ import type {
   NavResolvedCopy,
 } from "$lib/i18n/marketing-copy";
 import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
+import { bookmarksPageHrefFor } from "$lib/i18n/reader";
 
 /**
  * Site chrome: the copy every marketing page renders. This is the localization floor — everything
@@ -67,7 +69,12 @@ export interface ChromeResolvedCopy {
 }
 
 export function marketingFooterLinks(locale: MarketingLocale): MarketingFooterLinks {
-  return footerLinksFor(locale, footerLinkLabels(locale), marketingReaderHomeHref(locale));
+  return footerLinksFor(
+    locale,
+    footerLinkLabels(locale),
+    marketingReaderHomeHref(locale),
+    bookmarksPageHrefFor(locale),
+  );
 }
 
 function footerLinkLabels(locale: MarketingLocale): FooterLinkLabels {
@@ -100,6 +107,7 @@ export function resolveChromeCopy(locale: MarketingLocale): ChromeResolvedCopy {
       account: nav_account(undefined, { locale }),
       signIn: nav_sign_in(undefined, { locale }),
       settings: nav_settings(undefined, { locale }),
+      bookmarks: nav_bookmarks(undefined, { locale }),
       openPanel: nav_open_panel(undefined, { locale }),
       closePanel: nav_close_panel(undefined, { locale }),
       sitePanel: nav_site_panel(undefined, { locale }),

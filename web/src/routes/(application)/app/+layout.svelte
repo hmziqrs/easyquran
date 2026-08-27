@@ -10,11 +10,13 @@
   import { SUPPORTED_UI_LOCALES, UI_LOCALES } from "$lib/i18n/locales";
   import { footerLinksFor } from "$lib/i18n/footer-links";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
+  import { bookmarksPageHrefFor, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { marketingHomeHref, type LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { reader } from "$lib/stores/reader.svelte";
+  import { authState } from "$lib/auth/auth-state.svelte";
+  import { bookmarks } from "$lib/bookmarks/store.svelte";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { modeParamMatches, parseModeParam, withModeParam } from "$lib/reader/mode-param";
   import { moreParamMatches, parseMoreParam, withMoreParam } from "$lib/reader/more-param";
@@ -28,7 +30,8 @@
   const SETTINGS_PATH = "/app/settings";
   const isNonReaderAppRoute = $derived(
     (page.route.id ?? "").endsWith("/app/settings") ||
-      (page.route.id ?? "").endsWith("/app/search"),
+      (page.route.id ?? "").endsWith("/app/search") ||
+      (page.route.id ?? "").endsWith("/app/bookmarks"),
   );
 
   const canonicalReaderHref = $derived.by<QuranReaderHref>(() => {
@@ -53,7 +56,9 @@
       current: locale === copy.locale,
     })),
   );
-  const footerLinks = $derived(footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref));
+  const footerLinks = $derived(
+    footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref, bookmarksPageHrefFor(copy.locale)),
+  );
   const knownMoreIds = (ids: readonly string[]): string[] =>
     ids.filter((id) => TRANSLATION_CATALOGUE_BY_ID.has(id));
 
@@ -63,6 +68,7 @@
 
   onMount(() => {
     reader.hydrate(parseModeParam(page.url) ?? undefined);
+    bookmarks.hydrate();
     const moreIds = knownMoreIds(parseMoreParam(page.url));
     if (moreIds.length) stackedTranslations.setIds(moreIds);
     document.documentElement.dataset.readerHydrated = "true";
@@ -120,6 +126,14 @@
     const primary = lang && translator ? translationIdFromSegments(lang, translator) : null;
     const pinned = primary ? [primary, ...ids] : [...ids];
     void quranWorker.setPinnedTranslations(pinned).catch(() => {});
+  });
+
+  // Bookmark sync follows the session: anon→authed migrates legacy local
+  // bookmarks and starts the engine; authed→anon drops the server view. The
+  // effect body must not depend on store state, hence untrack.
+  $effect(() => {
+    const authed = authState.authenticated;
+    untrack(() => bookmarks.onAuthChanged(authed));
   });
 
   // Registered asynchronously so `@tanstack/hotkeys` stays out of the initial bundle — same

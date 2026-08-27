@@ -19,6 +19,7 @@ import {
   footer_social_x,
   footer_terms,
   footer_whats_inside,
+  nav_bookmarks,
   nav_change_language,
   nav_language,
   nav_search_page,
@@ -457,6 +458,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       language: noArgs(nav_language),
       changeLanguage: noArgs(nav_change_language),
       settings: noArgs(nav_settings),
+      bookmarks: noArgs(nav_bookmarks),
       themeNames: {
         dark: noArgs(reader_dark),
         light: noArgs(reader_light),

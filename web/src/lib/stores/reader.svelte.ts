@@ -52,6 +52,7 @@ export interface ReaderApi {
   readonly isReadingMode: boolean;
   setMode(mode: ReaderMode): void;
   isBookmarked(key: VerseKey): boolean;
+  readonly bookmarkedKeys: readonly VerseKey[];
   toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
   setNote(key: VerseKey, v: string): void;
@@ -151,6 +152,9 @@ export function createReader(): ReaderApi {
     setMode: (mode: ReaderMode) => settings.setMode(mode),
 
     isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
+    get bookmarkedKeys(): readonly VerseKey[] {
+      return annotations.bookmarkedKeys;
+    },
     toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
     getNote: (key: VerseKey) => annotations.getNote(key),
     setNote: (key: VerseKey, v: string) => annotations.setNote(key, v),

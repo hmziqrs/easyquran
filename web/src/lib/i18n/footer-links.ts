@@ -1,8 +1,8 @@
 // Single source for the footer link columns. Both surfaces render the same three columns from the
 // same spec: marketing pages resolve through `marketingHref`, so an unpublished locale drops the
-// link instead of hard-coding "en". Callers supply the labels (message-free module) and the reader
+// link instead of hard-coding "en". Callers supply the labels (message-free module), the reader
 // href, which differs per surface: marketing links at the reader home, the reader keeps its
-// current translation context.
+// current translation context, and the bookmarks-page href (locale-prefixed /app/bookmarks).
 import { marketingHref } from "$lib/i18n/marketing";
 import type { MarketingPageId } from "$lib/i18n/marketing";
 import type { FooterLink, MarketingFooterLinks, MarketingLocale } from "$lib/i18n/marketing-copy";
@@ -50,13 +50,14 @@ export function footerLinksFor(
   locale: MarketingLocale,
   labels: FooterLinkLabels,
   readerHref: `/${string}`,
+  bookmarksHref: `/${string}`,
 ): MarketingFooterLinks {
   const home = marketingHref("home", locale) ?? "/";
 
   return {
     product: [
       { id: "read", href: readerHref, label: labels.readQuran },
-      { id: "bookmarks", href: readerHref, label: labels.bookmarks },
+      { id: "bookmarks", href: bookmarksHref, label: labels.bookmarks },
       { id: "inside", href: `${home}#today`, label: labels.whatsInside },
     ],
     company: marketingColumn(COMPANY_LINKS, locale, labels),

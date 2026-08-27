@@ -36,6 +36,7 @@ export interface NavResolvedCopy {
   account: string;
   signIn: string;
   settings: string;
+  bookmarks: string;
   openPanel: string;
   closePanel: string;
   sitePanel: string;

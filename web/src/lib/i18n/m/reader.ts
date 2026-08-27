@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 143 messages. Import this barrel, never
+// 170 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -14,6 +14,33 @@ export { reader_ayahs } from "$lib/paraglide/messages/reader_ayahs.js";
 export { reader_blocked } from "$lib/paraglide/messages/reader_blocked.js";
 export { reader_bookmark } from "$lib/paraglide/messages/reader_bookmark.js";
 export { reader_bookmark_verse } from "$lib/paraglide/messages/reader_bookmark_verse.js";
+export { reader_bookmarks_ayah } from "$lib/paraglide/messages/reader_bookmarks_ayah.js";
+export { reader_bookmarks_cancel } from "$lib/paraglide/messages/reader_bookmarks_cancel.js";
+export { reader_bookmarks_create_folder } from "$lib/paraglide/messages/reader_bookmarks_create_folder.js";
+export { reader_bookmarks_delete_folder } from "$lib/paraglide/messages/reader_bookmarks_delete_folder.js";
+export { reader_bookmarks_delete_folder_confirm } from "$lib/paraglide/messages/reader_bookmarks_delete_folder_confirm.js";
+export { reader_bookmarks_empty } from "$lib/paraglide/messages/reader_bookmarks_empty.js";
+export { reader_bookmarks_folder_empty } from "$lib/paraglide/messages/reader_bookmarks_folder_empty.js";
+export { reader_bookmarks_folders_heading } from "$lib/paraglide/messages/reader_bookmarks_folders_heading.js";
+export { reader_bookmarks_local_only } from "$lib/paraglide/messages/reader_bookmarks_local_only.js";
+export { reader_bookmarks_move_label } from "$lib/paraglide/messages/reader_bookmarks_move_label.js";
+export { reader_bookmarks_move_to } from "$lib/paraglide/messages/reader_bookmarks_move_to.js";
+export { reader_bookmarks_new_folder_label } from "$lib/paraglide/messages/reader_bookmarks_new_folder_label.js";
+export { reader_bookmarks_new_folder_placeholder } from "$lib/paraglide/messages/reader_bookmarks_new_folder_placeholder.js";
+export { reader_bookmarks_offline } from "$lib/paraglide/messages/reader_bookmarks_offline.js";
+export { reader_bookmarks_open } from "$lib/paraglide/messages/reader_bookmarks_open.js";
+export { reader_bookmarks_pending } from "$lib/paraglide/messages/reader_bookmarks_pending.js";
+export { reader_bookmarks_remove } from "$lib/paraglide/messages/reader_bookmarks_remove.js";
+export { reader_bookmarks_remove_label } from "$lib/paraglide/messages/reader_bookmarks_remove_label.js";
+export { reader_bookmarks_rename } from "$lib/paraglide/messages/reader_bookmarks_rename.js";
+export { reader_bookmarks_rename_label } from "$lib/paraglide/messages/reader_bookmarks_rename_label.js";
+export { reader_bookmarks_save } from "$lib/paraglide/messages/reader_bookmarks_save.js";
+export { reader_bookmarks_sign_in } from "$lib/paraglide/messages/reader_bookmarks_sign_in.js";
+export { reader_bookmarks_sign_in_note } from "$lib/paraglide/messages/reader_bookmarks_sign_in_note.js";
+export { reader_bookmarks_sync_error } from "$lib/paraglide/messages/reader_bookmarks_sync_error.js";
+export { reader_bookmarks_synced } from "$lib/paraglide/messages/reader_bookmarks_synced.js";
+export { reader_bookmarks_title } from "$lib/paraglide/messages/reader_bookmarks_title.js";
+export { reader_bookmarks_uncategorized } from "$lib/paraglide/messages/reader_bookmarks_uncategorized.js";
 export { reader_browse } from "$lib/paraglide/messages/reader_browse.js";
 export { reader_browse_ayah } from "$lib/paraglide/messages/reader_browse_ayah.js";
 export { reader_browse_juz } from "$lib/paraglide/messages/reader_browse_juz.js";

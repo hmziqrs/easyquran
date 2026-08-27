@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { bookmarks } from "$lib/bookmarks/store.svelte";
   import { reader } from "$lib/stores/reader.svelte";
   import { tafsirFor } from "$lib/data/quran";
   import { Icon, type IconName } from "$lib/components/icon";
@@ -18,7 +19,8 @@
 
   const tafsir = $derived(tafsirFor(vKey));
   const copy = getReaderUiCopy();
-  const bookmarked = $derived(reader.isBookmarked(vKey));
+  // Unified view: authed sessions read the synced bookmarks store, anonymous ones the legacy local map.
+  const bookmarked = $derived(bookmarks.isMarkedKey(vKey));
   const noteOpen = $derived(reader.openNote === vKey);
   const hasNote = $derived(reader.getNote(vKey).length > 0);
 
@@ -84,7 +86,7 @@
     {/snippet}
 
     {@render verseAction({
-      onclick: () => reader.toggleBookmark(vKey),
+      onclick: () => bookmarks.toggleVerse(vKey),
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
       ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
       icon: "bookmark",
