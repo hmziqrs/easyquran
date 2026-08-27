@@ -1,5 +1,7 @@
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement};
+use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement,
+};
 use std::{env, time::Duration};
 use tracing::{error, info, instrument};
 

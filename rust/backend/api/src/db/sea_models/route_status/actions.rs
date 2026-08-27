@@ -172,7 +172,8 @@ impl Entity {
         let mut cache = route_cache()
             .lock()
             .map_err(|e| format!("route cache lock poisoned: {e}"))?;
-        cache.retain(|k, _| !(k.starts_with(known_routes_key) || k.starts_with(blocked_routes_key)));
+        cache
+            .retain(|k, _| !(k.starts_with(known_routes_key) || k.starts_with(blocked_routes_key)));
 
         for route in routes {
             cache.insert(

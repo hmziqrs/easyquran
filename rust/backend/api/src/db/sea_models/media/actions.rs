@@ -246,7 +246,12 @@ impl Entity {
                         })
                         .collect();
 
-                    Ok(PaginatedList::new(results_with_usage, total, page, Self::PER_PAGE))
+                    Ok(PaginatedList::new(
+                        results_with_usage,
+                        total,
+                        page,
+                        Self::PER_PAGE,
+                    ))
                 }
                 Err(err) => Err(err.into()),
             },

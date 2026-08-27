@@ -21,8 +21,9 @@ where
     let limit: i64 = page_size as i64;
     let offset: i64 = (current_page.saturating_sub(1) * page_size) as i64;
 
-    let count_sql =
-        format!("SELECT CAST(COUNT(*) AS INTEGER) AS total FROM (\n{data_sql}\n) AS __ruxlog_inner");
+    let count_sql = format!(
+        "SELECT CAST(COUNT(*) AS INTEGER) AS total FROM (\n{data_sql}\n) AS __ruxlog_inner"
+    );
     let count_stmt =
         Statement::from_sql_and_values(DatabaseBackend::Sqlite, count_sql, params.clone());
     let total = CountRow::find_by_statement(count_stmt)

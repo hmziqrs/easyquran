@@ -1,4 +1,3 @@
-
 use ruxlog::db::sea_connect::try_connect;
 use ruxlog::services::seed;
 

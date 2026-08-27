@@ -77,10 +77,7 @@ mod tests {
     fn json_roundtrip_preserves_flat_shape() {
         let list = PaginatedList::new(vec![1_u32, 2, 3], 9, 1, 3);
         let json = serde_json::to_string(&list).unwrap();
-        assert_eq!(
-            json,
-            r#"{"data":[1,2,3],"total":9,"page":1,"per_page":3}"#
-        );
+        assert_eq!(json, r#"{"data":[1,2,3],"total":9,"page":1,"per_page":3}"#);
         let back: PaginatedList<u32> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, list);
     }
@@ -89,10 +86,7 @@ mod tests {
     fn json_roundtrip_empty() {
         let list: PaginatedList<i32> = PaginatedList::new(vec![], 0, 1, 20);
         let json = serde_json::to_string(&list).unwrap();
-        assert_eq!(
-            json,
-            r#"{"data":[],"total":0,"page":1,"per_page":20}"#
-        );
+        assert_eq!(json, r#"{"data":[],"total":0,"page":1,"per_page":20}"#);
         let back: PaginatedList<i32> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, list);
     }
@@ -145,7 +139,6 @@ mod tests {
         assert!(!list.has_next_page());
     }
 
-
     #[test]
     fn has_previous_page_false_on_first_page() {
         let list = PaginatedList::new(vec![1_u32, 2, 3], 9, 1, 3);
@@ -162,7 +155,10 @@ mod tests {
     fn map_preserves_metadata_and_transforms_items() {
         let list = PaginatedList::new(vec![1_u32, 2, 3], 9, 1, 3);
         let mapped = list.map(|n| format!("x{n}"));
-        assert_eq!(mapped.data, vec!["x1".to_string(), "x2".into(), "x3".into()]);
+        assert_eq!(
+            mapped.data,
+            vec!["x1".to_string(), "x2".into(), "x3".into()]
+        );
         assert_eq!(mapped.total, 9);
         assert_eq!(mapped.page, 1);
         assert_eq!(mapped.per_page, 3);

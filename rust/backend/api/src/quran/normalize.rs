@@ -43,7 +43,8 @@ fn is_combining_mark(ch: char) -> bool {
     // searchable tokens (۞→199, ۩→15). See docs/quran-system.md (Normalization).
     matches!(
         ch,
-        '\u{064B}'..='\u{0658}' // harakat + maddah U+0653 / hamza-above U+0654 (intra-cluster).
+        '\u{064B}'
+            ..='\u{0658}' // harakat + maddah U+0653 / hamza-above U+0654 (intra-cluster).
             | '\u{0670}' // SUPERSCRIPT ALEF (consonant-chair role).
             | '\u{0640}' // TATWEEL.
             | '\u{06DD}' // END OF AYAH (0 occurrences in our corpora; stripped).
@@ -130,7 +131,10 @@ mod tests {
             "/../../../web/src/lib/quran/__fixtures__/parity.json"
         ));
         let corpus: ParityCorpus = serde_json::from_str(json).expect("parity.json must parse");
-        assert!(!corpus.normalize.is_empty(), "corpus must carry normalize cases");
+        assert!(
+            !corpus.normalize.is_empty(),
+            "corpus must carry normalize cases"
+        );
         for case in &corpus.normalize {
             let (got, _) = normalize_arabic(&case.input);
             assert_eq!(got, case.expected, "parity case input={:?}", case.input);

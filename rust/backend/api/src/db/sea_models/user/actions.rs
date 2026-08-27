@@ -684,7 +684,12 @@ impl Entity {
                 Ok(results) => {
                     let users_with_relations =
                         results.into_iter().map(|r| r.into_relation()).collect();
-                    Ok(PaginatedList::new(users_with_relations, total, page, Self::PER_PAGE))
+                    Ok(PaginatedList::new(
+                        users_with_relations,
+                        total,
+                        page,
+                        Self::PER_PAGE,
+                    ))
                 }
                 Err(err) => Err(err.into()),
             },

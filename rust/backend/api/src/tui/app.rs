@@ -380,9 +380,8 @@ impl App {
                 self.start_seed_all(tx);
             }
             KeyCode::Char('3') => {
-                self.selected_seed_mode = Some(crate::services::seed_config::SeedMode::Static {
-                    value: 1000,
-                });
+                self.selected_seed_mode =
+                    Some(crate::services::seed_config::SeedMode::Static { value: 1000 });
                 self.push_log("Selected: PRESET seed mode (demo - seed: 1000)".to_string());
                 self.start_seed_all(tx);
             }

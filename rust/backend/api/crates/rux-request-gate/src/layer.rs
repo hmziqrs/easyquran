@@ -578,7 +578,9 @@ mod tests {
         );
         // Host bits truncated to the /64 network.
         assert_eq!(
-            canonical_unit_key(IpAddr::V6(Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 0x1))),
+            canonical_unit_key(IpAddr::V6(Ipv6Addr::new(
+                0x2001, 0x0db8, 0, 0, 0, 0, 0, 0x1
+            ))),
             "2001:db8::/64"
         );
         // Every address in the same /64 collapses to one unit.

@@ -3,8 +3,8 @@ use axum::response::IntoResponse;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::state::AppState;
 
-pub use rux_request_gate::{PathKey, RateLimitLayer};
 use rux_request_gate::{ClientIpIdentitySource, IdentitySource, RequestIdentity};
+pub use rux_request_gate::{PathKey, RateLimitLayer};
 
 fn blocked_response(info: rux_request_gate::BlockInfo) -> axum::response::Response {
     ErrorResponse::new(ErrorCode::RateLimited)
@@ -208,7 +208,9 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         r.extensions_mut()
-            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::new(ip, 31337)));
+            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::new(
+                ip, 31337,
+            )));
         r.extensions_mut()
             .insert(RequestIdentity::External(ext_ip()));
         r

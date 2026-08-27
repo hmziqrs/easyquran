@@ -1,6 +1,6 @@
 use base64::Engine;
-use http::HeaderMap;
 use hmac::{Hmac, Mac};
+use http::HeaderMap;
 use sha2::Sha256;
 
 pub const MAX_SKEW_SECS: i64 = 5 * 60;

@@ -515,7 +515,10 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
         let body = axum::body::to_bytes(resp.into_body(), 64).await.unwrap();
         let s = std::str::from_utf8(&body).unwrap();
-        assert!(s.contains("198.51.100.7"), "trusted peer: header wins, got: {s}");
+        assert!(
+            s.contains("198.51.100.7"),
+            "trusted peer: header wins, got: {s}"
+        );
     }
 
     #[tokio::test]

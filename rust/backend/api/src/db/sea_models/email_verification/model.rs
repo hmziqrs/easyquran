@@ -54,5 +54,4 @@ impl Model {
         let delay_time = self.updated_at + Entity::DELAY_TIME;
         Utc::now().fixed_offset() < delay_time
     }
-
 }

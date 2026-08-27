@@ -319,7 +319,10 @@ mod tests {
                 }
             }
         }
-        assert!(scanned > 0, "expected at least one shipped template to scan");
+        assert!(
+            scanned > 0,
+            "expected at least one shipped template to scan"
+        );
     }
 
     #[test]

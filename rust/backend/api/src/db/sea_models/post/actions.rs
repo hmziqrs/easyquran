@@ -554,7 +554,12 @@ impl Entity {
             })
             .collect();
 
-        Ok(PaginatedList::new(posts_with_relations, total, page, Self::PER_PAGE))
+        Ok(PaginatedList::new(
+            posts_with_relations,
+            total,
+            page,
+            Self::PER_PAGE,
+        ))
     }
 
     pub async fn find_published_paginated(

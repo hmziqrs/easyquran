@@ -9,8 +9,7 @@ use crate::config::QuranSettings;
 
 use super::store::{
     ArtifactFile, Artifacts, Bismillah, CatalogueEntry, Corpus, HizbQuarter, Juz, Manzil, Page,
-    QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script, SURA_COUNT,
-    VERSE_COUNT,
+    QuranMeta, QuranStore, Range, Ruku, Sajda, SajdaKind, Script, SURA_COUNT, VERSE_COUNT,
 };
 
 struct CorpusRow {

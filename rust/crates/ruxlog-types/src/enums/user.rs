@@ -77,4 +77,3 @@ impl From<UserRole> for i32 {
         role.to_i32()
     }
 }
-

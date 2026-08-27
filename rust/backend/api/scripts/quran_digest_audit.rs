@@ -2,7 +2,8 @@
 
 use sha2::{Digest, Sha256};
 
-const GOLDEN_UTHMANI_CORPUS: &str = "32cc746d817cad9fd4366c7597bfceb177e7649233616c0a80309074b2eb99ee";
+const GOLDEN_UTHMANI_CORPUS: &str =
+    "32cc746d817cad9fd4366c7597bfceb177e7649233616c0a80309074b2eb99ee";
 const GOLDEN_SIMPLE_CLEAN_CORPUS: &str =
     "375934722ccbfab0d97754df464deac0dcffe962dc0632cc1ce5c6ca25dcea67";
 const GOLDEN_UTHMANI_FILE: &str =

@@ -311,7 +311,9 @@ mod tests {
         // snapshot itself must record the attempt path taken (error surfaces to
         // the middleware's existing error log).
         assert!(
-            RouteBlockerService::record_route_pattern(&db, "/unknown/route").await.is_err(),
+            RouteBlockerService::record_route_pattern(&db, "/unknown/route")
+                .await
+                .is_err(),
             "unknown pattern + broken DB must surface the write error"
         );
         reset_snapshot_for_tests();

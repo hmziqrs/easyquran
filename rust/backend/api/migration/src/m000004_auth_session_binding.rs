@@ -14,8 +14,7 @@ const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS auth_session_binding (
     created_at INTEGER NOT NULL
 )";
 
-const CREATE_USER_INDEX: &str =
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_session_binding_user \
+const CREATE_USER_INDEX: &str = "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_session_binding_user \
      ON auth_session_binding (user_session_id)";
 
 #[async_trait::async_trait]
@@ -79,11 +78,10 @@ mod tests {
             ))
             .await
             .unwrap();
-        rows.into_iter()
-            .any(|r| {
-                let n: Option<String> = r.try_get_by_index(1).ok();
-                n.as_deref() == Some(name)
-            })
+        rows.into_iter().any(|r| {
+            let n: Option<String> = r.try_get_by_index(1).ok();
+            n.as_deref() == Some(name)
+        })
     }
 
     #[tokio::test]
@@ -135,7 +133,10 @@ mod tests {
                  VALUES ('t2', 10, 1)",
             )
             .await;
-        assert!(err.is_err(), "UNIQUE(user_session_id) must reject a second tower for the same audit row");
+        assert!(
+            err.is_err(),
+            "UNIQUE(user_session_id) must reject a second tower for the same audit row"
+        );
 
         // Distinct user_session_id with its own tower is fine, and tower PK is unique.
         db.execute_unprepared(
