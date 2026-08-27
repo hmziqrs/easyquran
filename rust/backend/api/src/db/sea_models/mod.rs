@@ -40,4 +40,7 @@ pub mod notification;
 pub mod passkey_credential;
 pub mod user_oauth_identity;
 
+pub mod bookmark;
+pub mod bookmark_folder;
+
 pub use crate::utils::color as color_utils;

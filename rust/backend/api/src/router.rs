@@ -39,7 +39,7 @@ use crate::modules::billing_v1;
 
 use crate::modules::passkey_v1;
 use crate::modules::{apple_auth_v1, facebook_auth_v1, github_auth_v1};
-use crate::modules::{device_v1, notification_v1};
+use crate::modules::{bookmark_v1, device_v1, notification_v1};
 
 use crate::utils::sanitize::xml_escape;
 
@@ -160,6 +160,10 @@ pub fn router(state: AppState) -> Router<AppState> {
         .nest(
             "/notification/v1",
             notification_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+        )
+        .nest(
+            "/bookmark/v1",
+            bookmark_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         );
 
     #[cfg(feature = "openapi")]

@@ -6,6 +6,7 @@ mod m000003_translation_popularity;
 mod m000004_auth_session_binding;
 mod m000005_device_notification_oauth;
 mod m000006_email_code_unique_user;
+mod m000007_bookmarks;
 
 pub struct Migrator;
 
@@ -28,6 +29,10 @@ impl MigratorTrait for Migrator {
             // (surfaced as DB_003 "Duplicate entry" on resend) — and enforces the
             // same 1:1 invariant on forgot_passwords.
             Box::new(m000006_email_code_unique_user::Migration),
+            // m000007 ships the offline-sync bookmark tables owned by
+            // bookmark_v1; IF NOT EXISTS keeps any DB already carrying them
+            // untouched.
+            Box::new(m000007_bookmarks::Migration),
         ]
     }
 }
