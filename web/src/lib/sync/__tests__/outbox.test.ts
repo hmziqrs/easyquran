@@ -142,6 +142,7 @@ interface FakeCursor {
   key: string | number;
   primaryKey: number;
   value: SyncMutationDraft;
+  delete(): void;
   continue(): void;
 }
 
@@ -170,10 +171,12 @@ interface FakeTx {
 interface FakeDB {
   version: number;
   stores: Map<string, FakeStore>;
+  /** One entry per transaction, in open order: the mode the caller requested. */
+  readonly txLog: string[];
   objectStoreNames: { contains(name: string): boolean };
   createObjectStore(name: string, options?: { autoIncrement?: boolean }): FakeStore;
   deleteObjectStore(name: string): void;
-  transaction(name: string): FakeTx;
+  transaction(name: string, mode?: IDBTransactionMode): FakeTx;
 }
 
 interface FakeOpenRequest {
@@ -219,6 +222,9 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
             key: keyOf(key, record),
             primaryKey: key,
             value: record,
+            delete: () => {
+              data.delete(key);
+            },
             continue: () => {
               index += 1;
               advance();
@@ -271,9 +277,11 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
 
   function makeDB(version: number): FakeDB {
     const stores = new Map<string, FakeStore>();
+    const txLog: string[] = [];
     return {
       version,
       stores,
+      txLog,
       objectStoreNames: { contains: (name) => stores.has(name) },
       createObjectStore: (name, options) => {
         const store = makeStore(options?.autoIncrement === true);
@@ -283,16 +291,20 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
       deleteObjectStore: (name) => {
         stores.delete(name);
       },
-      transaction: (name) => {
+      transaction: (name, mode) => {
         const store = stores.get(name);
         if (!store) throw new Error(`fake idb: no store "${name}"`);
+        txLog.push(mode ?? "readonly");
         const tx: FakeTx = {
           objectStore: () => store,
           oncomplete: null,
           onerror: null,
           onabort: null,
         };
-        queueMicrotask(() => tx.oncomplete?.());
+        // Macrotask, not microtask: cursor-walk requests schedule microtask
+        // onsuccess chains; oncomplete must land after the whole walk so a
+        // clear() counting deletions via the cursor resolves with the count.
+        setTimeout(() => tx.oncomplete?.(), 0);
         return tx;
       },
     };
@@ -385,6 +397,23 @@ describe("Outbox (idb backend)", () => {
 
     const removed = await outbox.clear("bookmarks");
     expect(removed).toBe(2);
+    expect(await outbox.count("bookmarks")).toBe(0);
+    expect(await outbox.count("notes")).toBe(1);
+  });
+
+  it("clear(domain) wipes in one readwrite transaction (no read-then-delete window)", async () => {
+    const outbox = createOutbox(idbQueueStorage());
+    await seed(outbox, "bookmarks", 2);
+    await seed(outbox, "notes", 1);
+    const db = dbs.get("easyquran-sync")!;
+
+    db.txLog.length = 0;
+    const removed = await outbox.clear("bookmarks");
+
+    // Exactly one transaction, and it is the write itself: a cross-tab enqueue
+    // between a separate read and delete (the old shape) cannot reappear.
+    expect(removed).toBe(2);
+    expect(db.txLog).toEqual(["readwrite"]);
     expect(await outbox.count("bookmarks")).toBe(0);
     expect(await outbox.count("notes")).toBe(1);
   });

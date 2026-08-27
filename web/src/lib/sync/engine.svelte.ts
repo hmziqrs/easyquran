@@ -150,8 +150,9 @@ export class SyncEngine {
   /**
    * Wire the external flush triggers: online-poll transition (false -> true),
    * window online/offline events, document visibilitychange, and a periodic
-   * flush while online with pending work. Returns a teardown that removes every
-   * listener and timer. No-ops (with a noop teardown) outside the browser.
+   * round while online (push queued work, or one pull when idle). Returns a
+   * teardown that removes every listener and timer. No-ops (with a noop
+   * teardown) outside the browser.
    */
   start(): () => void {
     if (!browser || this.#started) return () => {};
@@ -171,8 +172,11 @@ export class SyncEngine {
     const onlinePoll = setInterval(onConnectivity, ONLINE_POLL_MS);
     teardowns.push(() => clearInterval(onlinePoll));
 
+    // Periodic round while online: drains queued mutations and — with an empty
+    // queue — pulls once (pull-on-reconnect cadence; 1 req/domain/30s stays far
+    // inside the API's 100 req/60s limit).
     const periodic = setInterval(() => {
-      if (this.#isOnline() && this.#pending > 0) void this.flush();
+      if (this.#isOnline()) void this.flush();
     }, PERIODIC_FLUSH_MS);
     teardowns.push(() => clearInterval(periodic));
 
@@ -248,8 +252,15 @@ export class SyncEngine {
    * the round failed (phase "error" + retry scheduled) instead of wedging the
    * phase at "syncing". A `SyncPausedError` from `sync` skips the domain for
    * this round with no failure count and no backoff growth.
+   *
+   * A domain whose queue is ALREADY empty when this drain starts still runs one
+   * pull-only round — `sync([])` + `applyServer` — so a returning user with
+   * nothing queued (nothing to push) still receives server state (first-visit
+   * pull, reconnect pull). Exactly one pull per flush call; after pushing
+   * batches the last push response already carried the pull.
    */
   async #drainDomain(domain: RegisteredSyncDomain): Promise<DrainOutcome> {
+    let pushedAny = false;
     for (;;) {
       let batch: SyncMutation[];
       try {
@@ -258,7 +269,8 @@ export class SyncEngine {
         this.#lastError = messageOf(err);
         return "failed";
       }
-      if (batch.length === 0) return "drained";
+      const pullOnly = batch.length === 0;
+      if (pullOnly && pushedAny) return "drained";
       let result: SyncRoundResult<unknown>;
       try {
         result = await domain.sync(batch);
@@ -268,8 +280,10 @@ export class SyncEngine {
         return "failed";
       }
       try {
-        await this.#outbox.remove(domain.name, batch.map((m) => m.id));
-        this.#pending = Math.max(0, this.#pending - batch.length);
+        if (!pullOnly) {
+          await this.#outbox.remove(domain.name, batch.map((m) => m.id));
+          this.#pending = Math.max(0, this.#pending - batch.length);
+        }
         this.#lastSyncAt = Date.now();
         this.#lastError = null;
       } catch (err) {
@@ -285,6 +299,8 @@ export class SyncEngine {
         this.#lastError = messageOf(err);
         return "failed";
       }
+      if (pullOnly) return "drained";
+      pushedAny = true;
     }
   }
 

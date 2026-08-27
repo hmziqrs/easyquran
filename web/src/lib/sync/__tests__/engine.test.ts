@@ -201,7 +201,9 @@ describe("SyncEngine.flush", () => {
     await first;
     await second;
 
-    expect(calls).toBe(1);
+    // Push round + the coalesced flush's pull-only round (new contract: an
+    // empty queue still syncs once per flush call).
+    expect(calls).toBe(2);
     expect(engine.pending).toBe(0);
   });
 });
@@ -313,24 +315,25 @@ describe("SyncEngine drain robustness", () => {
     await rig.outbox.enqueue("bad", "x");
     await rig.engine.hydrate();
 
-    await rig.engine.flush(); // bad failure #1 -> retry in 2s
-    await vi.advanceTimersByTimeAsync(2_000); // retry -> bad failure #2 (4s next)
-    await vi.advanceTimersByTimeAsync(4_000); // retry -> bad failure #3 (8s next)
+    await rig.engine.flush(); // bad failure #1 -> retry in 2s; good pull-only round
+    await vi.advanceTimersByTimeAsync(2_000); // retry -> bad failure #2 (4s next); good pulls
+    await vi.advanceTimersByTimeAsync(4_000); // retry -> bad failure #3 (8s next); good pulls
     expect(bad.batches).toHaveLength(3);
+    expect(good.batches).toEqual([[], [], []]); // healthy sibling pulls once per round
 
     // good's first failure must start at the 2s base cadence, not bad's 8s.
     bad.error = null;
     good.error = new Error("later");
     await rig.outbox.enqueue("good", "y");
     await rig.engine.hydrate();
-    await rig.engine.flush(); // bad drains clean, good fails (#1 -> 2s retry)
+    await rig.engine.flush(); // bad pushes clean, good fails (#1 -> 2s retry)
     expect(bad.batches).toHaveLength(4);
-    expect(good.batches).toHaveLength(1);
+    expect(good.batches).toHaveLength(4); // 3 pulls + 1 failed push
 
     await vi.advanceTimersByTimeAsync(1_999);
-    expect(good.batches).toHaveLength(1);
+    expect(good.batches).toHaveLength(4);
     await vi.advanceTimersByTimeAsync(1); // 2s: good's own base retry
-    expect(good.batches).toHaveLength(2);
+    expect(good.batches).toHaveLength(5);
   });
 
   it("a take() throw fails the round, sets phase error, and schedules a retry", async () => {
@@ -376,6 +379,61 @@ describe("SyncEngine drain robustness", () => {
     expect(rig.engine.pending).toBe(0);
     expect(rig.engine.lastSyncAt).not.toBeNull();
     expect(a.states).toEqual(["bookmarks#1"]);
+  });
+});
+
+describe("SyncEngine pull-only rounds", () => {
+  it("flushes an empty queue as one pull-only round: sync([]), applyServer, lastSyncAt set", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.hydrate();
+
+    await rig.engine.flush();
+
+    expect(a.batches).toEqual([[]]);
+    expect(a.states).toEqual(["bookmarks#0"]);
+    expect(a.drainedBatches).toEqual([[]]);
+    expect(rig.engine.lastSyncAt).not.toBeNull();
+    expect(rig.engine.phase).toBe("idle");
+    expect(rig.engine.pending).toBe(0);
+  });
+
+  it("never loops on empty: one sync round per flush call", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+
+    await rig.engine.flush();
+    expect(a.batches).toHaveLength(1);
+
+    await rig.engine.flush();
+    expect(a.batches).toHaveLength(2);
+  });
+
+  it("the periodic timer pulls while online even with nothing queued", async () => {
+    vi.useFakeTimers();
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    const teardown = rig.engine.start();
+    await rig.engine.hydrate();
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(a.batches).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(a.batches).toEqual([[]]);
+
+    teardown();
+  });
+
+  it("enqueue-then-flush pushes exactly once; the push response is the pull (no extra round)", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.enqueue("bookmarks", "m1");
+
+    await rig.engine.flush();
+
+    expect(a.batches.map((batch) => batch.map((m) => m.payload))).toEqual([["m1"]]);
+    expect(a.states).toEqual(["bookmarks#1"]);
+    expect(rig.engine.pending).toBe(0);
   });
 });
 

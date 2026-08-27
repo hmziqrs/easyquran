@@ -387,6 +387,22 @@ describe("BookmarksStore — auth transitions and migration", () => {
     expect(localStorage.getItem(MARKER_KEY)).toBe("1");
   });
 
+  it("a snapshot from a round mid-flight at logout never repopulates the view", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    await flush();
+    rig.store.applyServer(SNAP);
+    expect(rig.store.bookmarks).toHaveLength(2);
+
+    rig.setAuthed(false);
+    rig.store.onAuthChanged(false);
+    // The in-flight round completes after the logout reset.
+    rig.store.applyServer(SNAP);
+
+    expect(rig.store.bookmarks).toEqual([]);
+    expect(rig.store.folders).toEqual([]);
+  });
+
   it("migrates again for a different account id", async () => {
     const first = makeRig(["2:255"], true, 7);
     first.store.hydrate();

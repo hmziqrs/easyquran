@@ -263,8 +263,12 @@ export class BookmarksStore {
    * — snapshot rows for pending-deleted entities are dropped, pending upserts
    * win their verse — so a stale snapshot can never flicker an optimistic
    * toggle away.
+   *
+   * No-op while signed out: a round that was mid-flight at logout must not
+   * repopulate the old account's view after the logout reset.
    */
   applyServer(snapshot: BookmarksSnapshot, drained?: readonly SyncMutation<BookmarksMutation>[]): void {
+    if (!this.authed) return;
     if (drained !== undefined) {
       for (const mutation of drained) {
         this.#pendingById.delete(mutation.payload.id);

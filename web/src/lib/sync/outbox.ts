@@ -215,14 +215,27 @@ export function idbQueueStorage(): QueueStorage {
     },
     async clear(domain) {
       const opened = await db();
-      const rows = await readRange(opened, domain, Number.POSITIVE_INFINITY);
-      const seqs = rows.map((mutation) => mutation.seq);
-      if (seqs.length > 0) {
-        await runTxVoid(opened, OUTBOX_STORE, "readwrite", (store) => {
-          for (const seq of seqs) store.delete(seq);
-        });
-      }
-      return rows.length;
+      // One readwrite tx over the whole by_domain range: a cross-tab enqueue
+      // cannot slip between a read tx and a delete tx — IDB serializes any
+      // concurrent store write against this transaction, so the wipe is atomic.
+      return await new Promise<number>((resolve, reject) => {
+        let removed = 0;
+        const tx = opened.transaction(OUTBOX_STORE, "readwrite");
+        const request = tx
+          .objectStore(OUTBOX_STORE)
+          .index(BY_DOMAIN_INDEX)
+          .openCursor(IDBKeyRange.only(domain));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor === null) return; // resolution rides on tx.oncomplete
+          cursor.delete();
+          removed += 1;
+          cursor.continue();
+        };
+        tx.oncomplete = () => resolve(removed);
+        tx.onerror = () => reject(idbError(tx.error, "outbox clear"));
+        tx.onabort = () => reject(idbError(tx.error, "outbox clear abort"));
+      });
     },
   };
 }
