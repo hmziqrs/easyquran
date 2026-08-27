@@ -1,8 +1,11 @@
 // Offline-sync bookmark rounds over HTTP: one POST /bookmark/v1/sync does
 // push-then-pull (LWW mutations applied FIFO, then a full snapshot back as
-// server truth). Covers auth, empty rounds, replay idempotency, LWW upserts
-// and deletes, folder-delete detaching children to root, validation caps,
-// and cross-user isolation of client-minted ids.
+// server truth) inside a single transaction. Covers auth, empty rounds, replay
+// idempotency, LWW upserts and deletes, verse-collapse of two-uuid collisions
+// (one verse = one row), folder-delete detaching children to root,
+// same-batch delete-then-reference of a dead folder, mixed-format legacy
+// timestamps resolving by instant, validation caps, and cross-user isolation
+// of client-minted ids.
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -26,7 +29,7 @@ use migration::{Migrator, MigratorTrait};
 use rux_auth::AuthSession as GenAuthSession;
 use ruxlog::db::sea_models::user::{self, UserRole};
 use ruxlog::services::auth::AuthBackend;
-use sea_orm::ActiveModelTrait;
+use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseBackend, Statement};
 
 // ruxlog is built without cfg(test) when linked into an integration test
 // binary; pin the env once so is_production() takes the dev path.
@@ -263,6 +266,14 @@ async fn post_sync(app: &axum::Router, cookie: &str, body: Value) -> (StatusCode
 const FOLDER_ID: &str = "11111111-1111-4111-8111-111111111111";
 const BMARK_IN_FOLDER: &str = "22222222-2222-4222-8222-222222222222";
 const BMARK_ROOT: &str = "33333333-3333-4333-8333-333333333333";
+// Two uuids two devices minted for the SAME verse (verse-collapse tests).
+const BMARK_VERSE_A: &str = "55555555-5555-4555-8555-555555555555";
+const BMARK_VERSE_B: &str = "66666666-6666-4666-8666-666666666666";
+const BMARK_AFTER_FOLDER_DELETE: &str = "77777777-7777-4777-8777-777777777777";
+const BMARK_LEGACY_OLDER: &str = "88888888-8888-4888-8888-888888888888";
+const BMARK_RFC3339: &str = "99999999-9999-4999-8999-999999999999";
+const BMARK_LEGACY_NEWER: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const BMARK_STALE: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 // Strictly ordered client clocks.
 const T0: &str = "2026-08-26T10:00:00.000000Z";
 const T1: &str = "2026-08-27T10:00:00.000000Z";
@@ -306,6 +317,216 @@ fn find<'a>(items: &'a Value, id: &str) -> &'a Value {
         .iter()
         .find(|item| item["id"] == json!(id))
         .unwrap_or_else(|| panic!("item {id} present in {items}"))
+}
+
+// Seed a row with a raw LEGACY updated_at ('YYYY-MM-DD HH:MM:SS' — the shape
+// CURRENT_TIMESTAMP defaults produce) so LWW must resolve by instant, not by
+// comparing the TEXT lexemes against the canonical RFC3339-micros pushes.
+async fn raw_insert_legacy_bookmark(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i32,
+    id: &str,
+    surah: i32,
+    ayah: i32,
+    updated_at: &str,
+) {
+    db.execute(Statement::from_string(
+        DatabaseBackend::Sqlite,
+        format!(
+            "INSERT INTO bookmarks (id, user_id, surah, ayah, created_at, updated_at) \
+             VALUES ('{id}', {user_id}, {surah}, {ayah}, '{updated_at}', '{updated_at}')"
+        ),
+    ))
+    .await
+    .expect("raw legacy bookmark insert");
+}
+
+#[tokio::test]
+async fn verse_collision_newer_uuid_collapses_the_older_row() {
+    let (app, cookie) = logged_in_app().await;
+
+    // Device 1 mints BMARK_VERSE_A; device 2 later mints BMARK_VERSE_B for the
+    // SAME verse. The newer mutation wins and the older rival row is
+    // collapsed away — the snapshot holds exactly one row for the verse.
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_VERSE_A, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_VERSE_B, Value::Null, 1, 1, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(body["skipped"], json!(0));
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(1),
+        "one verse = one live row: {body}"
+    );
+    assert_eq!(
+        body["bookmarks"][0]["id"],
+        json!(BMARK_VERSE_B),
+        "the newer uuid survives the collapse"
+    );
+
+    // Deleting the visible bookmark cannot resurrect the collapsed rival.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_delete(BMARK_VERSE_B, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(
+        body["bookmarks"],
+        json!([]),
+        "no resurrection via the collapsed rival row"
+    );
+}
+
+#[tokio::test]
+async fn verse_collision_stale_uuid_is_skipped_original_survives() {
+    let (app, cookie) = logged_in_app().await;
+
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_VERSE_B, Value::Null, 1, 1, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // A second uuid for the same verse with an OLDER timestamp is stale: the
+    // newer row survives untouched and the push counts as skipped.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_VERSE_A, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    assert_eq!(body["skipped"], json!(1));
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        body["bookmarks"][0]["id"],
+        json!(BMARK_VERSE_B),
+        "the original newer row survives the stale rival"
+    );
+}
+
+#[tokio::test]
+async fn same_batch_folder_delete_then_upsert_with_dead_folder_lands_in_root() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, _) = post_sync(&app, &cookie, json!({ "mutations": seeded_round() })).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Same round: the folder dies first, then a bookmark references the dead
+    // folderId. The tx-serialized resolve must file it under root, not trip
+    // the FK — 200, applied, no partial state.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            folder_delete(FOLDER_ID, T2),
+            bookmark_upsert(BMARK_AFTER_FOLDER_DELETE, json!(FOLDER_ID), 4, 4, T2),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(2));
+    assert_eq!(body["folders"], json!([]), "folder is gone");
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(3));
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_AFTER_FOLDER_DELETE)["folderId"],
+        Value::Null,
+        "upsert referencing the dead folderId lands in root"
+    );
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_IN_FOLDER)["folderId"],
+        Value::Null,
+        "the folder's earlier children are detached too"
+    );
+}
+
+#[tokio::test]
+async fn mixed_format_timestamps_resolve_lww_by_instant() {
+    let state = state().await;
+    Migrator::up(&state.sea_db, None).await.expect("migrations");
+    let u = seed_user(&state, "legacy").await;
+    let cookie = login_cookie(&state, &u).await;
+    let sea_db = state.sea_db.clone();
+    let app = router_with_state(state);
+
+    // Legacy row OLDER than the incoming RFC3339 push: the verse-collapse
+    // delete consumes it and the push applies.
+    raw_insert_legacy_bookmark(
+        &sea_db,
+        u.id,
+        BMARK_LEGACY_OLDER,
+        7,
+        7,
+        "2026-01-05 12:00:00",
+    )
+    .await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert(BMARK_RFC3339, Value::Null, 7, 7, "2026-01-05T12:00:01.000000Z"),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(1),
+        "the older legacy row was collapsed away: {body}"
+    );
+    assert_eq!(body["bookmarks"][0]["id"], json!(BMARK_RFC3339));
+
+    // Legacy row NEWER than the incoming push: lexically ' ' < 'T' would rank
+    // the legacy text OLDER and wrongly collapse it, but by instant it is
+    // newer — the push is stale and the legacy row survives.
+    raw_insert_legacy_bookmark(
+        &sea_db,
+        u.id,
+        BMARK_LEGACY_NEWER,
+        8,
+        8,
+        "2026-01-05 12:30:00",
+    )
+    .await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert(BMARK_STALE, Value::Null, 8, 8, "2026-01-05T12:00:01.000000Z"),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    assert_eq!(body["skipped"], json!(1));
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_LEGACY_NEWER)["surah"],
+        json!(8),
+        "the newer-instant legacy row survives the older RFC3339 push"
+    );
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(2),
+        "no third row minted for verse (8, 8)"
+    );
 }
 
 #[tokio::test]

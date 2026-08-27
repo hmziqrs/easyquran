@@ -1,11 +1,12 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
+use sea_orm::{DatabaseTransaction, TransactionTrait};
 use serde_json::json;
 use tracing::instrument;
 
 use crate::{
     db::sea_models::{bookmark, bookmark_folder},
-    error::{ErrorCode, ErrorResponse},
+    error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::auth::AuthSession,
     AppState,
@@ -35,12 +36,12 @@ fn ensure_kind_fields(m: &SyncMutation) -> Result<(), ErrorResponse> {
 /// folder ids file the bookmark under root (folder_id = NULL) instead of
 /// tripping the FK or leaking another user's folder.
 async fn resolve_folder_id<'a>(
-    db: &sea_orm::DatabaseConnection,
+    tx: &DatabaseTransaction,
     user_id: i32,
     folder_id: Option<&'a str>,
 ) -> Result<Option<&'a str>, ErrorResponse> {
     match folder_id {
-        Some(fid) if bookmark_folder::Entity::owned_by_user(db, user_id, fid).await? => {
+        Some(fid) if bookmark_folder::Entity::owned_by_user(tx, user_id, fid).await? => {
             Ok(Some(fid))
         }
         _ => Ok(None),
@@ -50,7 +51,7 @@ async fn resolve_folder_id<'a>(
 /// Apply one mutation, LWW-resolved. Returns 1 when a row changed (applied),
 /// 0 when skipped by LWW or the ownership guard.
 async fn apply_mutation(
-    db: &sea_orm::DatabaseConnection,
+    tx: &DatabaseTransaction,
     user_id: i32,
     m: &SyncMutation,
 ) -> Result<u64, ErrorResponse> {
@@ -58,22 +59,59 @@ async fn apply_mutation(
         MutationKind::FolderUpsert => {
             // ensure_kind_fields guaranteed Some(name) for folder.upsert.
             let name = m.name.as_deref().unwrap_or_default();
-            bookmark_folder::Entity::upsert_lww(db, user_id, &m.id, name, m.updated_at).await
+            bookmark_folder::Entity::upsert_lww(tx, user_id, &m.id, name, m.updated_at).await
         }
         MutationKind::FolderDelete => {
-            bookmark_folder::Entity::delete_lww(db, user_id, &m.id, m.updated_at).await
+            bookmark_folder::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
         }
         MutationKind::BookmarkUpsert => {
-            let folder_id = resolve_folder_id(db, user_id, m.folder_id.as_deref()).await?;
+            let folder_id = resolve_folder_id(tx, user_id, m.folder_id.as_deref()).await?;
             let surah = m.surah.unwrap_or_default();
             let ayah = m.ayah.unwrap_or_default();
-            bookmark::Entity::upsert_lww(db, user_id, &m.id, folder_id, surah, ayah, m.updated_at)
+            bookmark::Entity::upsert_lww(tx, user_id, &m.id, folder_id, surah, ayah, m.updated_at)
                 .await
         }
         MutationKind::BookmarkDelete => {
-            bookmark::Entity::delete_lww(db, user_id, &m.id, m.updated_at).await
+            bookmark::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
         }
     }
+}
+
+/// One full round inside the caller's transaction: apply every mutation
+/// (LWW-resolved), then read the snapshot from the SAME transaction — the
+/// response can never observe a half-applied round.
+async fn sync_round(
+    tx: &DatabaseTransaction,
+    user_id: i32,
+    mutations: &[SyncMutation],
+) -> DbResult<(
+    u64,
+    u64,
+    Vec<bookmark_folder::FolderListItem>,
+    Vec<bookmark::BookmarkListItem>,
+)> {
+    let mut applied: u64 = 0;
+    let mut skipped: u64 = 0;
+    for m in mutations {
+        if apply_mutation(tx, user_id, m).await? > 0 {
+            applied += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    let folders: Vec<bookmark_folder::FolderListItem> =
+        bookmark_folder::Entity::list_for_user(tx, user_id)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+    let bookmarks: Vec<bookmark::BookmarkListItem> = bookmark::Entity::list_for_user(tx, user_id)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    Ok((applied, skipped, folders, bookmarks))
 }
 
 #[debug_handler]
@@ -92,28 +130,19 @@ pub async fn sync(
         ensure_kind_fields(m)?;
     }
 
-    let mut applied: u64 = 0;
-    let mut skipped: u64 = 0;
-    for m in mutations {
-        if apply_mutation(&state.sea_db, user.id, m).await? > 0 {
-            applied += 1;
-        } else {
-            skipped += 1;
+    // Push and pull share ONE transaction: the resolve_folder_id
+    // SELECT-then-insert sequence can no longer race a concurrent folder
+    // delete into an FK violation (SQLite serializes writers inside the tx),
+    // and any error rolls the whole round back — no partial state survives.
+    let tx = state.sea_db.begin().await.map_err_to_response()?;
+    let (applied, skipped, folders, bookmarks) = match sync_round(&tx, user.id, mutations).await {
+        Ok(round) => round,
+        Err(err) => {
+            tx.rollback().await.map_err_to_response()?;
+            return Err(err);
         }
-    }
-
-    let folders: Vec<bookmark_folder::FolderListItem> =
-        bookmark_folder::Entity::list_for_user(&state.sea_db, user.id)
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect();
-    let bookmarks: Vec<bookmark::BookmarkListItem> =
-        bookmark::Entity::list_for_user(&state.sea_db, user.id)
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect();
+    };
+    tx.commit().await.map_err_to_response()?;
 
     Ok((
         StatusCode::OK,

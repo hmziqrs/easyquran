@@ -7,6 +7,7 @@ mod m000004_auth_session_binding;
 mod m000005_device_notification_oauth;
 mod m000006_email_code_unique_user;
 mod m000007_bookmarks;
+mod m000008_bookmark_verse_unique;
 
 pub struct Migrator;
 
@@ -33,6 +34,13 @@ impl MigratorTrait for Migrator {
             // bookmark_v1; IF NOT EXISTS keeps any DB already carrying them
             // untouched.
             Box::new(m000007_bookmarks::Migration),
+            // m000008 makes (user_id, surah, ayah) the bookmark identity: it
+            // normalizes legacy CURRENT_TIMESTAMP-shaped updated_at rows into
+            // the canonical LWW wire format, dedupes existing verse groups
+            // (keep MAX(updated_at), tie-break max(rowid)), then enforces
+            // UNIQUE (user_id, surah, ayah) so two devices can't mint two live
+            // rows for one verse.
+            Box::new(m000008_bookmark_verse_unique::Migration),
         ]
     }
 }
