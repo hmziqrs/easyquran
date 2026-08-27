@@ -24,7 +24,9 @@ impl Entity {
     /// by another user and only overwrites when the incoming timestamp is
     /// strictly newer. Timestamps compare through julianday() so a legacy
     /// CURRENT_TIMESTAMP-shaped row and a canonical RFC3339-micros row resolve
-    /// by actual instant (datetime() would truncate sub-second precision).
+    /// by actual instant (datetime() would truncate sub-second precision). A
+    /// corrupt stored timestamp (julianday NULL) counts as oldest, so the row
+    /// is overwritable instead of immortal.
     #[instrument(skip(conn), fields(user_id = user_id, folder_id = id))]
     pub async fn upsert_lww(
         conn: &DatabaseTransaction,
@@ -43,7 +45,8 @@ impl Entity {
                        name = excluded.name,
                        updated_at = excluded.updated_at
                    WHERE bookmark_folders.user_id = excluded.user_id
-                     AND julianday(excluded.updated_at) > julianday(bookmark_folders.updated_at)"#,
+                     AND (julianday(bookmark_folders.updated_at) IS NULL
+                          OR julianday(excluded.updated_at) > julianday(bookmark_folders.updated_at))"#,
                 [
                     id.into(),
                     user_id.into(),
@@ -58,10 +61,12 @@ impl Entity {
     }
 
     /// Last-writer-wins delete: refuses to remove a row newer than the delete
-    /// marker (julianday() ranks legacy and canonical TEXT by instant).
-    /// Applied deletes first detach child bookmarks to root (folder_id
-    /// = NULL). Returns rows affected by the DELETE itself (1 = applied,
-    /// 0 = skipped — absent row, foreign row, or newer row).
+    /// marker (julianday() ranks legacy and canonical TEXT by instant). A
+    /// corrupt timestamp (julianday NULL) counts as oldest, so the row is
+    /// deletable instead of immortal. Applied deletes first detach child
+    /// bookmarks to root (folder_id = NULL). Returns rows affected by the
+    /// DELETE itself (1 = applied, 0 = skipped — absent row, foreign row, or
+    /// newer row).
     #[instrument(skip(conn), fields(user_id = user_id, folder_id = id))]
     pub async fn delete_lww(
         conn: &DatabaseTransaction,
@@ -74,7 +79,8 @@ impl Entity {
                 DatabaseBackend::Sqlite,
                 r#"DELETE FROM bookmark_folders
                    WHERE id = ? AND user_id = ?
-                     AND julianday(updated_at) <= julianday(?) "#,
+                     AND (julianday(updated_at) IS NULL
+                          OR julianday(updated_at) <= julianday(?)) "#,
                 [id.into(), user_id.into(), lww_timestamp(updated_at).into()],
             ))
             .await

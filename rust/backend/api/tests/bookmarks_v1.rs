@@ -2,10 +2,11 @@
 // push-then-pull (LWW mutations applied FIFO, then a full snapshot back as
 // server truth) inside a single transaction. Covers auth, empty rounds, replay
 // idempotency, LWW upserts and deletes, verse-collapse of two-uuid collisions
-// (one verse = one row), folder-delete detaching children to root,
-// same-batch delete-then-reference of a dead folder, mixed-format legacy
-// timestamps resolving by instant, validation caps, and cross-user isolation
-// of client-minted ids.
+// (one verse = one row), same-id verse MOVES vs non-destructive stale skips,
+// folder-delete detaching children to root, same-batch delete-then-reference
+// of a dead folder, mixed-format legacy timestamps resolving by instant,
+// corrupt (unparseable) timestamps treated as oldest, validation caps, and
+// cross-user isolation of client-minted ids.
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -274,6 +275,15 @@ const BMARK_LEGACY_OLDER: &str = "88888888-8888-4888-8888-888888888888";
 const BMARK_RFC3339: &str = "99999999-9999-4999-8999-999999999999";
 const BMARK_LEGACY_NEWER: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const BMARK_STALE: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const BMARK_MOVER: &str = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const BMARK_V2_RIVAL: &str = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const BMARK_FRESH: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+// Rows seeded with corrupt (unparseable) updated_at via raw SQL —
+// julianday() is NULL for these, the NULL-oldest LWW rule must handle them.
+const CORRUPT_RIVAL: &str = "12121212-1212-4121-8121-121212121212";
+const CORRUPT_TARGET: &str = "13131313-1313-4131-8131-131313131313";
+const CORRUPT_SAME_ID: &str = "14141414-1414-4141-8141-141414141414";
+const CORRUPT_FOLDER: &str = "15151515-1515-4151-8151-151515151515";
 // Strictly ordered client clocks.
 const T0: &str = "2026-08-26T10:00:00.000000Z";
 const T1: &str = "2026-08-27T10:00:00.000000Z";
@@ -319,10 +329,12 @@ fn find<'a>(items: &'a Value, id: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("item {id} present in {items}"))
 }
 
-// Seed a row with a raw LEGACY updated_at ('YYYY-MM-DD HH:MM:SS' — the shape
-// CURRENT_TIMESTAMP defaults produce) so LWW must resolve by instant, not by
-// comparing the TEXT lexemes against the canonical RFC3339-micros pushes.
-async fn raw_insert_legacy_bookmark(
+// Seed a row with an ARBITRARY raw updated_at — a LEGACY
+// 'YYYY-MM-DD HH:MM:SS' (the shape CURRENT_TIMESTAMP defaults produce) or
+// outright corrupt text — so LWW must resolve via julianday() by instant, and
+// unparseable rows exercise the NULL-oldest rule instead of comparing TEXT
+// lexemes against the canonical RFC3339-micros pushes.
+async fn raw_insert_bookmark(
     db: &sea_orm::DatabaseConnection,
     user_id: i32,
     id: &str,
@@ -338,7 +350,26 @@ async fn raw_insert_legacy_bookmark(
         ),
     ))
     .await
-    .expect("raw legacy bookmark insert");
+    .expect("raw bookmark insert");
+}
+
+// Folder-flavoured variant of raw_insert_bookmark.
+async fn raw_insert_folder(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i32,
+    id: &str,
+    name: &str,
+    updated_at: &str,
+) {
+    db.execute(Statement::from_string(
+        DatabaseBackend::Sqlite,
+        format!(
+            "INSERT INTO bookmark_folders (id, user_id, name, created_at, updated_at) \
+             VALUES ('{id}', {user_id}, '{name}', '{updated_at}', '{updated_at}')"
+        ),
+    ))
+    .await
+    .expect("raw folder insert");
 }
 
 #[tokio::test]
@@ -424,6 +455,87 @@ async fn verse_collision_stale_uuid_is_skipped_original_survives() {
 }
 
 #[tokio::test]
+async fn same_id_newer_push_moves_the_row_between_verses() {
+    let (app, cookie) = logged_in_app().await;
+
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_MOVER, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The id is the row's identity and the verse a mutable attribute: a newer
+    // push under the SAME id legitimately MOVES the row to the new verse.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_MOVER, Value::Null, 4, 4, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(body["skipped"], json!(0));
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(1),
+        "the move leaves exactly one row: {body}"
+    );
+    let moved = find(&body["bookmarks"], BMARK_MOVER);
+    assert_eq!(
+        moved["surah"],
+        json!(4),
+        "the row now lives on the new verse"
+    );
+    assert_eq!(moved["ayah"], json!(4));
+}
+
+#[tokio::test]
+async fn same_id_stale_push_skips_without_destroying_either_verse() {
+    let (app, cookie) = logged_in_app().await;
+
+    // Verse (4, 4) carries an older rival row; BMARK_MOVER lives on verse
+    // (1, 1) with the NEWEST timestamp.
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert(BMARK_V2_RIVAL, Value::Null, 4, 4, T0),
+            bookmark_upsert(BMARK_MOVER, Value::Null, 1, 1, T2),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Stale push: BMARK_MOVER re-points at verse (4, 4) with a ts OLDER than
+    // its own stored row. The skip must be total — under the old statement
+    // order the verse-collapse DELETE ran before the LWW check and killed
+    // (4, 4)'s older rival, then the upsert was refused: a "skipped" push
+    // that still destroyed the target verse's row.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_MOVER, Value::Null, 4, 4, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    assert_eq!(body["skipped"], json!(1));
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_MOVER)["surah"],
+        json!(1),
+        "the same-id row stays on its old verse"
+    );
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_V2_RIVAL)["surah"],
+        json!(4),
+        "the target verse's older rival survives the skip untouched"
+    );
+}
+
+#[tokio::test]
 async fn same_batch_folder_delete_then_upsert_with_dead_folder_lands_in_root() {
     let (app, cookie) = logged_in_app().await;
     let (status, _) = post_sync(&app, &cookie, json!({ "mutations": seeded_round() })).await;
@@ -468,7 +580,7 @@ async fn mixed_format_timestamps_resolve_lww_by_instant() {
 
     // Legacy row OLDER than the incoming RFC3339 push: the verse-collapse
     // delete consumes it and the push applies.
-    raw_insert_legacy_bookmark(
+    raw_insert_bookmark(
         &sea_db,
         u.id,
         BMARK_LEGACY_OLDER,
@@ -497,7 +609,7 @@ async fn mixed_format_timestamps_resolve_lww_by_instant() {
     // Legacy row NEWER than the incoming push: lexically ' ' < 'T' would rank
     // the legacy text OLDER and wrongly collapse it, but by instant it is
     // newer — the push is stale and the legacy row survives.
-    raw_insert_legacy_bookmark(
+    raw_insert_bookmark(
         &sea_db,
         u.id,
         BMARK_LEGACY_NEWER,
@@ -527,6 +639,90 @@ async fn mixed_format_timestamps_resolve_lww_by_instant() {
         Some(2),
         "no third row minted for verse (8, 8)"
     );
+}
+
+#[tokio::test]
+async fn corrupt_timestamp_rows_are_overwritable_and_deletable() {
+    let state = state().await;
+    Migrator::up(&state.sea_db, None).await.expect("migrations");
+    let u = seed_user(&state, "corrupt").await;
+    let cookie = login_cookie(&state, &u).await;
+    let sea_db = state.sea_db.clone();
+    let app = router_with_state(state);
+
+    // A verse rival whose updated_at does not parse (julianday = NULL) counts
+    // as OLDEST: an upsert with a normal ts must overwrite it instead of
+    // letting the incomparable row block the mutation.
+    raw_insert_bookmark(&sea_db, u.id, CORRUPT_RIVAL, 10, 10, "not-a-date").await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_FRESH, Value::Null, 10, 10, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(
+        body["applied"],
+        json!(1),
+        "a corrupt-ts rival cannot block the upsert"
+    );
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        body["bookmarks"][0]["id"],
+        json!(BMARK_FRESH),
+        "the corrupt rival was collapsed away"
+    );
+
+    // delete_lww kills a corrupt-ts row — it is deletable, not immortal.
+    raw_insert_bookmark(&sea_db, u.id, CORRUPT_TARGET, 11, 11, "garbage").await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_delete(CORRUPT_TARGET, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1), "a corrupt-ts row is deletable");
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(1));
+
+    // upsert_lww overwrites a corrupt-ts row under the SAME id: the incom-
+    // parable stored ts never poses as "newer" to block its own replacement.
+    raw_insert_bookmark(&sea_db, u.id, CORRUPT_SAME_ID, 12, 12, "garbage").await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(CORRUPT_SAME_ID, Value::Null, 12, 12, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(
+        body["applied"],
+        json!(1),
+        "a corrupt-ts same-id row cannot block its own overwrite"
+    );
+    assert!(
+        find(&body["bookmarks"], CORRUPT_SAME_ID)["updatedAt"].is_string(),
+        "the row now carries a canonical ts"
+    );
+
+    // Folders follow the same NULL-oldest rule for both upsert and delete.
+    raw_insert_folder(&sea_db, u.id, CORRUPT_FOLDER, "Corrupt", "garbage").await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            folder_upsert(CORRUPT_FOLDER, "Fixed", T1),
+            folder_delete(CORRUPT_FOLDER, T2),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(
+        body["applied"],
+        json!(2),
+        "corrupt-ts folder is overwritable then deletable"
+    );
+    assert_eq!(body["folders"], json!([]));
 }
 
 #[tokio::test]

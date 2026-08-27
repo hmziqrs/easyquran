@@ -100,6 +100,12 @@ async fn sync_round(
         }
     }
 
+    // Snapshot is unbounded by design: every round returns the user's ENTIRE
+    // folder + bookmark set (full pull, server truth). Fine at bookmark scale
+    // — rows are tiny and bounded by one account's history. If scale ever
+    // demands it, the pagination seam is exactly these two list_for_user
+    // reads (swap for a cursor variant); the LWW mutation core above stays
+    // untouched.
     let folders: Vec<bookmark_folder::FolderListItem> =
         bookmark_folder::Entity::list_for_user(tx, user_id)
             .await?

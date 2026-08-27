@@ -18,17 +18,26 @@ pub struct Migration;
 // Normalization target = chrono to_rfc3339_opts(SecondsFormat::Micros, true):
 // 'YYYY-MM-DDTHH:MM:SS.ffffffZ'. %f renders 'SS.SSS'; suffixing '000' before
 // substr fixes the fraction at 6 digits. Rows already carrying the canonical
-// leading '____-__-__T' shape are left untouched.
+// leading '____-__-__T' shape are left untouched — and so are corrupt rows:
+// strftime() returns NULL for an unparseable value, and assigning NULL to the
+// NOT NULL column would abort the migration mid-flight, so the guarded
+// `IS NOT NULL` predicate leaves garbage timestamps exactly as they are. The
+// dedupe's ORDER BY tolerates them (TEXT comparison stays deterministic;
+// corrupt text just wins or loses lexically), and the runtime LWW statements
+// treat a NULL-julianday row as oldest (see the bookmark actions) — corrupt
+// rows stay killable instead of blocking the migration.
 
 const NORMALIZE_BOOKMARKS: &str = "UPDATE bookmarks SET updated_at = \
      strftime('%Y-%m-%dT%H:%M:%S', updated_at) \
      || '.' || substr(strftime('%f', updated_at) || '000', 4, 6) || 'Z' \
-     WHERE updated_at NOT LIKE '____-__-__T%'";
+     WHERE updated_at NOT LIKE '____-__-__T%' \
+       AND strftime('%Y-%m-%dT%H:%M:%S', updated_at) IS NOT NULL";
 
 const NORMALIZE_BOOKMARK_FOLDERS: &str = "UPDATE bookmark_folders SET updated_at = \
      strftime('%Y-%m-%dT%H:%M:%S', updated_at) \
      || '.' || substr(strftime('%f', updated_at) || '000', 4, 6) || 'Z' \
-     WHERE updated_at NOT LIKE '____-__-__T%'";
+     WHERE updated_at NOT LIKE '____-__-__T%' \
+       AND strftime('%Y-%m-%dT%H:%M:%S', updated_at) IS NOT NULL";
 
 // Correlated keeper-subquery form (no window functions): for every row, its
 // verse group's keeper is the MAX(updated_at) row, ties broken by max(rowid);
@@ -311,6 +320,42 @@ mod tests {
             "second run rewrites nothing (NOT LIKE guard + IF NOT EXISTS)"
         );
         assert_eq!(count_scalar(&db, "SELECT COUNT(*) FROM bookmarks").await, 1);
+    }
+
+    #[tokio::test]
+    async fn garbage_timestamp_rows_survive_the_migration() {
+        let db = mem_db().await;
+        create_fixture_tables(&db).await;
+        // Unparseable updated_at: strftime() yields NULL, so an unguarded
+        // normalization would try to write NULL into the NOT NULL column and
+        // abort the whole migration. The guarded UPDATE must leave the row
+        // untouched instead.
+        db.execute_unprepared(
+            "INSERT INTO bookmarks (id, user_id, surah, ayah, created_at, updated_at) \
+             VALUES ('corrupt', 1, 6, 6, 'not-a-date', 'not-a-date'), \
+             ('valid', 1, 6, 6, '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+
+        assert_eq!(
+            text_scalar(&db, "SELECT updated_at FROM bookmarks WHERE id = 'corrupt'").await,
+            "not-a-date",
+            "unparseable rows are left untouched, not aborted on"
+        );
+        assert_eq!(
+            count_scalar(
+                &db,
+                "SELECT COUNT(*) FROM bookmarks WHERE surah = 6 AND ayah = 6"
+            )
+            .await,
+            1,
+            "the dedupe still collapses the shared verse to one keeper deterministically"
+        );
+        assert!(index_exists(&db, "bookmarks", "idx_bookmarks_user_verse").await);
     }
 
     #[tokio::test]
