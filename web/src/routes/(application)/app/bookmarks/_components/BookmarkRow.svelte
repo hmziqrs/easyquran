@@ -26,6 +26,15 @@
 
   const reference = $derived(`${surahName} ${bookmark.surah}:${bookmark.ayah}`);
 
+  // Orphan folderId (folder deleted server-side, snapshot raced): fall back to
+  // the root option so the select matches the "Unfiled" grouping instead of
+  // showing nothing selected.
+  const moveValue = $derived.by<string>(() => {
+    const id = bookmark.folderId;
+    if (id === null) return "";
+    return folders.some((folderOption) => folderOption.id === id) ? id : "";
+  });
+
   const ghostButton =
     "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 text-[12.5px] text-fg-2 transition-colors hover:border-line hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 </script>
@@ -59,7 +68,7 @@
     >
     <select
       id="bookmarks-move-{bookmark.id}"
-      value={bookmark.folderId ?? ""}
+      value={moveValue}
       onchange={(event) => {
         const value = (event.currentTarget as HTMLSelectElement).value;
         onMove(bookmark.id, value === "" ? null : value);

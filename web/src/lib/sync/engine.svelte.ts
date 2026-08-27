@@ -144,7 +144,21 @@ export class SyncEngine {
 
   /** Load persisted queue depth into `pending` (call once at boot / on register). */
   async hydrate(): Promise<void> {
-    this.#pending = (await this.#outbox.all()).length;
+    await this.#resyncPending();
+  }
+
+  /**
+   * Re-read the durable queue depth into `pending` instead of trusting local
+   * arithmetic alone: another tab sharing the storage may have drained (or
+   * queued) entries this engine never saw. A storage read failure keeps the
+   * last known count — the next round retries.
+   */
+  async #resyncPending(): Promise<void> {
+    try {
+      this.#pending = (await this.#outbox.all()).length;
+    } catch {
+      // Keep the local count; the outbox read is best-effort here.
+    }
   }
 
   /**
@@ -208,6 +222,7 @@ export class SyncEngine {
       this.#coalesced = false;
       await this.#flushPass(domainFilter);
     } while (this.#coalesced);
+    await this.#resyncPending();
   }
 
   async #flushPass(domainFilter: string | undefined): Promise<void> {
@@ -215,6 +230,12 @@ export class SyncEngine {
     if (!this.#isOnline()) {
       this.#phase = "error";
       this.#lastError = "offline";
+      // Offline fails every registered domain alike: grow each one's backoff
+      // (reset on success / online transition as elsewhere) so the retry timer
+      // spaces out instead of refiring every ~2s with zero network calls.
+      for (const domain of this.#domains) {
+        this.#failures.set(domain.name, (this.#failures.get(domain.name) ?? 0) + 1);
+      }
       this.#scheduleRetry();
       return;
     }

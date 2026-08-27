@@ -250,6 +250,40 @@ describe("BookmarksStore — authed toggles", () => {
     rig.store.applyServer(SNAP);
     expect(rig.store.bookmarks).toHaveLength(2);
   });
+
+  it("a double-fire before the optimistic apply cancels the same entity instead of minting a second upsert", async () => {
+    const rig = makeRig([], true);
+    rig.store.toggle(1, 1);
+    const entityId = rig.engine.enqueued[0]!.id;
+    // Second fire lands before the first enqueue's optimistic apply: the
+    // pending overlay must read as "on" for the verse.
+    rig.store.toggle(1, 1);
+    await flush();
+
+    expect(rig.engine.enqueued.map((m) => m.kind)).toEqual(["bookmark.upsert", "bookmark.delete"]);
+    expect(rig.engine.enqueued[1]).toMatchObject({ kind: "bookmark.delete", id: entityId });
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+  });
+
+  it("remove() on a durable-but-unapplied pending row enqueues the compensating delete and retires the overlay", async () => {
+    const rig = makeRig([], true);
+    rig.store.toggle(1, 1);
+    const entityId = rig.engine.enqueued[0]!.id; // in #pendingById, not yet in #bookmarks
+    rig.store.remove(entityId);
+    await flush();
+
+    expect(rig.engine.enqueued[1]).toMatchObject({ kind: "bookmark.delete", id: entityId });
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+    // Overlay retired as a delete: a stale snapshot carrying the row cannot
+    // resurrect it.
+    rig.store.applyServer({
+      folders: [],
+      bookmarks: [
+        { id: entityId, folderId: null, surah: 1, ayah: 1, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+      ],
+    });
+    expect(rig.store.isBookmarked(1, 1)).toBe(false);
+  });
 });
 
 describe("BookmarksStore — folders and moves", () => {
@@ -393,6 +427,30 @@ describe("BookmarksStore — auth transitions and migration", () => {
     expect(second.engine.flushed).toEqual(["bookmarks"]);
   });
 
+  it("a false edge before any true edge (cold-load unknown status) never wipes the durable queue", async () => {
+    const rig = makeRig(["2:255"], false);
+    rig.store.hydrate(); // anon boot: no-op
+    // The layout effect maps status "unknown" → authenticated === false before
+    // the probe resolves; that edge must not run the logout path.
+    rig.store.onAuthChanged(false);
+
+    expect(rig.engine.cleared).toEqual([]);
+    expect(rig.engine.enqueued).toEqual([]);
+
+    // The probe resolves authed afterwards: sync starts normally.
+    rig.setAuthed(true);
+    rig.store.onAuthChanged(true);
+    await flush();
+
+    expect(rig.engine.flushed).toEqual(["bookmarks"]);
+    expect(rig.engine.enqueued).toHaveLength(1); // legacy migration ran
+
+    // A real true→false transition still clears.
+    rig.setAuthed(false);
+    rig.store.onAuthChanged(false);
+    expect(rig.engine.cleared).toEqual(["bookmarks"]);
+  });
+
   it("logout clears the queue durably, resets the view and the in-session guard; re-login skips the marked account", async () => {
     const rig = makeRig(["2:255"], true);
     rig.store.hydrate();
@@ -494,6 +552,10 @@ describe("BookmarksStore — optimistic overlay", () => {
 
   it("logout drops the overlay along with the view", async () => {
     const rig = makeRig([], true);
+    // Establish the true authed edge first (production always has one — the
+    // probe resolving or a login) so the later false edge is a real logout.
+    rig.store.hydrate();
+    await flush();
     rig.store.applyServer(SNAP);
     rig.store.toggle(1, 1);
 
@@ -507,6 +569,48 @@ describe("BookmarksStore — optimistic overlay", () => {
 
     expect(rig.store.isBookmarked(1, 1)).toBe(false);
     expect(rig.store.bookmarks).toHaveLength(2);
+  });
+
+  it("an in-flight folder create/rename survives a stale pull-only snapshot", async () => {
+    const rig = makeRig([], true);
+    const folder = rig.store.createFolder("Tafsir");
+    await flush();
+    rig.store.renameFolder(folder!.id, "Tafsir 2");
+    await flush();
+    expect(rig.store.folderById(folder!.id)?.name).toBe("Tafsir 2");
+
+    // A pull-only round (periodic/visibility) whose snapshot predates both
+    // edits must not erase the folder or flicker the old name back.
+    rig.store.applyServer({ folders: [], bookmarks: [] });
+    expect(rig.store.folders.map((f) => f.name)).toEqual(["Tafsir 2"]);
+
+    // The drain ack retires the overlay: server truth lands unfiltered.
+    const acked = rig.engine.enqueued;
+    rig.store.applyServer(
+      { folders: [{ ...folder!, name: "Tafsir 2" }], bookmarks: [] },
+      acked.map((payload, index) => ({
+        id: `m${index + 1}`,
+        domain: "bookmarks",
+        seq: index + 1,
+        payload,
+        queuedAt: 0,
+      })),
+    );
+    expect(rig.store.folders.map((f) => f.name)).toEqual(["Tafsir 2"]);
+    rig.store.applyServer({ folders: [], bookmarks: [] });
+    expect(rig.store.folders).toEqual([]);
+  });
+
+  it("an in-flight folder delete is not resurrected by a stale snapshot", async () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP); // f1 exists server-side
+
+    rig.store.deleteFolder("f1");
+    await flush();
+
+    // Stale snapshot still lists f1: the pending-delete overlay filters it.
+    rig.store.applyServer(SNAP);
+    expect(rig.store.folders).toEqual([]);
   });
 });
 

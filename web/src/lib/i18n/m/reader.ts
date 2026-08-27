@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 171 messages. Import this barrel, never
+// 170 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -25,12 +25,11 @@ export { reader_bookmarks_folders_heading } from "$lib/paraglide/messages/reader
 export { reader_bookmarks_loading } from "$lib/paraglide/messages/reader_bookmarks_loading.js";
 export { reader_bookmarks_local_only } from "$lib/paraglide/messages/reader_bookmarks_local_only.js";
 export { reader_bookmarks_move_label } from "$lib/paraglide/messages/reader_bookmarks_move_label.js";
-export { reader_bookmarks_move_to } from "$lib/paraglide/messages/reader_bookmarks_move_to.js";
 export { reader_bookmarks_new_folder_label } from "$lib/paraglide/messages/reader_bookmarks_new_folder_label.js";
 export { reader_bookmarks_new_folder_placeholder } from "$lib/paraglide/messages/reader_bookmarks_new_folder_placeholder.js";
 export { reader_bookmarks_offline } from "$lib/paraglide/messages/reader_bookmarks_offline.js";
-export { reader_bookmarks_open } from "$lib/paraglide/messages/reader_bookmarks_open.js";
 export { reader_bookmarks_pending } from "$lib/paraglide/messages/reader_bookmarks_pending.js";
+export { reader_bookmarks_pending_one } from "$lib/paraglide/messages/reader_bookmarks_pending_one.js";
 export { reader_bookmarks_remove } from "$lib/paraglide/messages/reader_bookmarks_remove.js";
 export { reader_bookmarks_remove_label } from "$lib/paraglide/messages/reader_bookmarks_remove_label.js";
 export { reader_bookmarks_rename } from "$lib/paraglide/messages/reader_bookmarks_rename.js";

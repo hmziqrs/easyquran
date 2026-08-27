@@ -58,17 +58,18 @@
 
   const hasAnyBookmark = $derived(bookmarks.bookmarks.length > 0);
 
-  // Authed but no snapshot yet (first sync in flight or debounced): show a
-  // loading skeleton instead of a premature "No bookmarks". A sync error stops
-  // waiting (the indicator surfaces it), and any local optimistic row or folder
-  // means there is real content to render.
-  const firstSyncPending = $derived(
+  // Authed but no first snapshot yet: keep the skeleton up — even when the
+  // round failed (offline first visit must not flash "No bookmarks"), and any
+  // local optimistic row or folder means there is real content to render.
+  const waitingForFirstSync = $derived(
     authed &&
       bookmarks.status.lastSyncAt === null &&
-      bookmarks.status.phase !== "error" &&
       !hasAnyBookmark &&
       sortedFolders.length === 0,
   );
+  // Same skeleton for the blank window after sync while the quran catalog is
+  // still loading (rows/folders exist but cannot render yet).
+  const firstSyncPending = $derived(waitingForFirstSync || (authed && quranData === null));
 
   interface AnonRow {
     readonly key: string;
@@ -165,6 +166,9 @@
           <Skeleton class="h-16 w-full" />
           <Skeleton class="h-16 w-full" />
           <Skeleton class="h-16 w-full" />
+          {#if waitingForFirstSync && !online.online}
+            <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.offline}</p>
+          {/if}
         </div>
       {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
         <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.empty}</p>

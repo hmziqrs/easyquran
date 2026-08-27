@@ -82,6 +82,16 @@ export class BookmarksStore {
   #pendingById = new Map<string, Bookmark>();
   /** Entity ids optimistically deleted, awaiting their drain ack. */
   #pendingDeletes = new Set<string>();
+  /** Optimistic folder upserts awaiting their drain ack, by folder entity id. */
+  #pendingFoldersById = new Map<string, BookmarkFolder>();
+  /** Folder entity ids optimistically deleted, awaiting their drain ack. */
+  #pendingFolderDeletes = new Set<string>();
+  /**
+   * Last authed edge seen (null = no edge yet). AuthState boots "unknown"
+   * with authenticated === false, so a false edge before any true edge is the
+   * probe not having landed — never a logout.
+   */
+  #lastAuthed: boolean | null = null;
 
   constructor(deps: BookmarksStoreDeps) {
     this.#engine = deps.engine;
@@ -171,7 +181,11 @@ export class BookmarksStore {
       this.#reader.toggleBookmark(verseKeyOf(surah, ayah));
       return;
     }
-    const existing = this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
+    // Consult the pending overlay too: a double-fire before the optimistic row
+    // lands must read as "on", so the second fire cancels the same entity
+    // instead of minting a second upsert that the server would re-add.
+    const pending = [...this.#pendingById.values()].find((b) => b.surah === surah && b.ayah === ayah);
+    const existing = pending ?? this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
     if (existing) {
       this.remove(existing.id);
       return;
@@ -199,14 +213,18 @@ export class BookmarksStore {
         if (this.isBookmarked(surah, ayah)) return;
         this.#bookmarks = [...this.#bookmarks, bookmark];
       },
-      bookmark,
+      { bookmark },
     );
   }
 
   remove(bookmarkId: string): void {
     if (!this.authed) return;
-    const existing = this.#bookmarks.find((b) => b.id === bookmarkId);
-    if (!existing) return;
+    // A durable-but-unapplied row lives only in the pending overlay
+    // (#pendingById has it, #bookmarks does not): still enqueue the
+    // compensating bookmark.delete for that pending row's id — #enqueue's
+    // delete branch retires the overlay entry — instead of no-op'ing.
+    const durable = this.#bookmarks.find((b) => b.id === bookmarkId);
+    if (durable === undefined && !this.#pendingById.has(bookmarkId)) return;
     this.#enqueue({ kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() }, () => {
       this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
     });
@@ -230,7 +248,7 @@ export class BookmarksStore {
       () => {
         this.#bookmarks = this.#bookmarks.map((b) => (b.id === bookmarkId ? updated : b));
       },
-      updated,
+      { bookmark: updated },
     );
   }
 
@@ -245,7 +263,7 @@ export class BookmarksStore {
     this.#enqueue({ kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt }, () => {
       if (this.#folders.some((existing) => existing.id === folder.id)) return;
       this.#folders = [...this.#folders, folder];
-    });
+    }, { folder });
     return folder;
   }
 
@@ -256,7 +274,7 @@ export class BookmarksStore {
     const renamed: BookmarkFolder = { ...existing, name: name.trim(), updatedAt: nowIso() };
     this.#enqueue({ kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt }, () => {
       this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
-    });
+    }, { folder: renamed });
   }
 
   deleteFolder(id: string): void {
@@ -276,11 +294,12 @@ export class BookmarksStore {
    * updatedAt so a cross-device migration never shows two rows for one verse.
    *
    * `drained` carries the mutations the engine just removed from the queue:
-   * their optimistic overlay entries are retired first, so only still-in-flight
-   * local edits survive the snapshot. The rest of the overlay is applied on top
-   * — snapshot rows for pending-deleted entities are dropped, pending upserts
-   * win their verse — so a stale snapshot can never flicker an optimistic
-   * toggle away.
+   * their optimistic overlay entries (bookmarks and folders alike) are
+   * retired first, so only still-in-flight local edits survive the snapshot.
+   * The rest of the overlay is applied on top — snapshot rows for
+   * pending-deleted entities are dropped, pending upserts win their verse (or,
+   * for folders, their id) — so a stale snapshot can never flicker an
+   * optimistic toggle or folder edit away.
    *
    * No-op while signed out: a round that was mid-flight at logout must not
    * repopulate the old account's view after the logout reset.
@@ -288,9 +307,13 @@ export class BookmarksStore {
   applyServer(snapshot: BookmarksSnapshot, drained?: readonly SyncMutation<BookmarksMutation>[]): void {
     if (!this.authed) return;
     if (drained !== undefined) {
+      // DEFERRED: a drain in another tab does not retire this tab's overlay
+      // entries (no cross-tab retire signal exists yet).
       for (const mutation of drained) {
         this.#pendingById.delete(mutation.payload.id);
         this.#pendingDeletes.delete(mutation.payload.id);
+        this.#pendingFoldersById.delete(mutation.payload.id);
+        this.#pendingFolderDeletes.delete(mutation.payload.id);
       }
     }
     const newestPerVerse = new Map<string, Bookmark>();
@@ -303,7 +326,14 @@ export class BookmarksStore {
     for (const pending of this.#pendingById.values()) {
       newestPerVerse.set(verseKeyOf(pending.surah, pending.ayah), pending);
     }
-    this.#folders = [...snapshot.folders];
+    // Folder mirror of the bookmark overlay: a pull-only round whose snapshot
+    // predates a local create/rename/delete must not erase or resurrect it.
+    this.#folders = [
+      ...snapshot.folders.filter(
+        (folder) => !this.#pendingFolderDeletes.has(folder.id) && !this.#pendingFoldersById.has(folder.id),
+      ),
+      ...this.#pendingFoldersById.values(),
+    ];
     this.#bookmarks = [...newestPerVerse.values()];
   }
 
@@ -315,28 +345,40 @@ export class BookmarksStore {
   }
 
   /**
-   * Auth transition edge, driven by an $effect over authState.authenticated in
-   * the app layout. false→true: migrate legacy bookmarks + start syncing.
-   * true→false: drop the server view (the anon view owns the screen again),
-   * durably clear this domain's queue so nothing flushes into the next account,
-   * and reset the in-session migration guard (the durable per-account marker
-   * still gates re-login migration).
+   * Auth transition edge, driven by an $effect over authState in the app
+   * layout (which no-ops while the probe status is "unknown"). false→true:
+   * migrate legacy bookmarks + start syncing. true→false: drop the server view
+   * (the anon view owns the screen again), durably clear this domain's queue
+   * so nothing flushes into the next account, and reset the in-session
+   * migration guard (the durable per-account marker still gates re-login
+   * migration).
+   *
+   * Belt and braces for the layout's unknown-status guard: the logout path
+   * only runs on a true authenticated→unauthenticated transition. A false
+   * edge before any true edge is the boot-time "unknown" status resolving,
+   * not a logout — running the logout path there would wipe the durable outbox
+   * of an authed user on every cold load.
    */
   onAuthChanged(authed: boolean): void {
     if (authed) {
       void this.#beginSync();
       return;
     }
+    if (this.#lastAuthed !== true) return;
+    this.#lastAuthed = false;
     this.#syncActive = false;
     this.#folders = [];
     this.#bookmarks = [];
     this.#migratedKeys.clear();
     this.#pendingById.clear();
     this.#pendingDeletes.clear();
+    this.#pendingFoldersById.clear();
+    this.#pendingFolderDeletes.clear();
     void this.#engine.clear("bookmarks").catch(() => undefined);
   }
 
   async #beginSync(): Promise<void> {
+    this.#lastAuthed = true;
     if (this.#syncActive) return;
     this.#syncActive = true;
     await this.#migrateLegacy();
@@ -405,12 +447,22 @@ export class BookmarksStore {
    * applies nothing and retires the overlay entry, so view and queue stay in
    * step; a logout before resolution drops the apply along with the queue.
    */
-  #enqueue(payload: BookmarksMutation, apply: () => void, pendingRow?: Bookmark): void {
+  #enqueue(
+    payload: BookmarksMutation,
+    apply: () => void,
+    overlay?: { bookmark?: Bookmark; folder?: BookmarkFolder },
+  ): void {
     if (payload.kind === "bookmark.delete") {
       this.#pendingDeletes.add(payload.id);
       this.#pendingById.delete(payload.id);
-    } else if (payload.kind === "bookmark.upsert" && pendingRow !== undefined) {
-      this.#pendingById.set(payload.id, pendingRow);
+    } else if (payload.kind === "folder.delete") {
+      this.#pendingFolderDeletes.add(payload.id);
+      this.#pendingFoldersById.delete(payload.id);
+    } else if (payload.kind === "bookmark.upsert" && overlay?.bookmark !== undefined) {
+      this.#pendingById.set(payload.id, overlay.bookmark);
+    } else if (payload.kind === "folder.upsert" && overlay?.folder !== undefined) {
+      this.#pendingFoldersById.set(payload.id, overlay.folder);
+      this.#pendingFolderDeletes.delete(payload.id);
     }
     void this.#engine.enqueue("bookmarks", payload).then(
       () => {
@@ -419,6 +471,8 @@ export class BookmarksStore {
       () => {
         this.#pendingById.delete(payload.id);
         this.#pendingDeletes.delete(payload.id);
+        this.#pendingFoldersById.delete(payload.id);
+        this.#pendingFolderDeletes.delete(payload.id);
       },
     );
   }

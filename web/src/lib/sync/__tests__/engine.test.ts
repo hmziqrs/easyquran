@@ -250,6 +250,30 @@ describe("SyncEngine scheduling", () => {
     expect(rig.engine.lastError).toBe("boom");
   });
 
+  it("consecutive offline failures grow the retry delay (no network calls made)", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a], online: false });
+    await rig.outbox.enqueue("bookmarks", "x");
+    await rig.engine.hydrate();
+
+    // Two offline rounds: failure #1 schedules 2s, failure #2 reschedules at
+    // the grown 4s cadence (syncRetryDelayMs(2)).
+    await rig.engine.flush();
+    expect(a.batches).toHaveLength(0);
+    await rig.engine.flush();
+    expect(a.batches).toHaveLength(0);
+
+    rig.setOnline(true); // flag only: no transition listener ran, failures stay
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(a.batches).toHaveLength(0); // a flat 2s cadence would have fired by now
+    await vi.advanceTimersByTimeAsync(1); // 4s: the grown retry fires and drains
+    expect(a.batches).toHaveLength(1);
+    expect(a.batches[0]!.map((m) => m.payload)).toEqual(["x"]);
+    expect(rig.engine.pending).toBe(0);
+  });
+
   it("hydrates pending count from the outbox", async () => {
     const rig = makeEngine();
     await rig.outbox.enqueue("bookmarks", "x");
@@ -259,6 +283,29 @@ describe("SyncEngine scheduling", () => {
     await rig.engine.hydrate();
 
     expect(rig.engine.pending).toBe(2);
+  });
+
+  it("re-syncs pending from the durable outbox after a round (another tab drained it)", async () => {
+    const a = fakeDomain("bookmarks");
+    const storage = memoryQueueStorage();
+    const thisTab = createOutbox(storage);
+    const otherTab = createOutbox(storage);
+    const engine = createSyncEngine({ outbox: thisTab, domains: [a.domain], online: () => true });
+    await thisTab.enqueue("bookmarks", "x");
+    await engine.hydrate();
+    expect(engine.pending).toBe(1);
+
+    // The other tab clears the shared queue; this engine's local arithmetic
+    // still says 1.
+    expect(await otherTab.clear("bookmarks")).toBe(1);
+    expect(engine.pending).toBe(1);
+
+    await engine.flush();
+
+    // Pull-only round (this tab's take saw an empty queue); pending now
+    // reflects the durable truth.
+    expect(a.batches).toEqual([[]]);
+    expect(engine.pending).toBe(0);
   });
 });
 

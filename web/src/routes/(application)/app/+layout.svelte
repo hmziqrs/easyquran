@@ -130,8 +130,15 @@
 
   // Bookmark sync follows the session: anon→authed migrates legacy local
   // bookmarks and starts the engine; authed→anon drops the server view. The
-  // effect body must not depend on store state, hence untrack.
+  // effect body must not depend on store state, hence untrack. Status
+  // "unknown" (probe not yet resolved) is NOT an anon edge: acting on it would
+  // run the logout path — wiping the durable outbox — for every authed cold
+  // load; the store's onAuthChanged guards the same seam a second time.
+  // DEFERRED: an authed cold-load still shows the anon legacy view until the
+  // probe resolves.
   $effect(() => {
+    const status = authState.status;
+    if (status === "unknown") return;
     const authed = authState.authenticated;
     untrack(() => bookmarks.onAuthChanged(authed));
   });

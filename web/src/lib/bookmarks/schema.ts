@@ -53,11 +53,28 @@ export interface BookmarksSyncEnvelope extends BookmarksSnapshot {
   readonly skipped: number;
 }
 
+/**
+ * Manual UUID v4 (8-4-4-4-12 lowercase hex, version 4 + variant bits set) for
+ * insecure origins where crypto.randomUUID is missing: the server validator
+ * only accepts dashed-hex UUIDs, so a non-UUID fallback id would 422 every
+ * sync round forever. Entropy source: crypto.getRandomValues when present,
+ * else Math.random (best available there).
+ */
+function fallbackUuidV4(): string {
+  const bytes = new Uint8Array(16);
+  if ("getRandomValues" in crypto) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40; // version 4
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80; // variant 10xx
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}
+
 /** Entity id (bookmark/folder row). Distinct from the engine's queue-entry mutation id. */
 export function newBookmarkEntityId(): string {
   // `in` (not typeof): randomUUID is missing on insecure origins (LAN http dev).
   if ("randomUUID" in crypto) return crypto.randomUUID();
-  return `bm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return fallbackUuidV4();
 }
 
 /**

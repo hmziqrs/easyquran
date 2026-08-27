@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   AYAH_MAX,
@@ -6,6 +6,7 @@ import {
   decodeBookmark,
   decodeBookmarkFolder,
   decodeBookmarksEnvelope,
+  newBookmarkEntityId,
   parseVerseKey,
   verseKeyOf,
 } from "../schema";
@@ -101,6 +102,37 @@ describe("decodeBookmark", () => {
     expect(decodeBookmark(bookmarkWire({ folderId: "" }))).toBeNull();
     expect(decodeBookmark(bookmarkWire({ id: "" }))).toBeNull();
     expect(decodeBookmark(bookmarkWire({ updatedAt: null }))).toBeNull();
+  });
+});
+
+describe("newBookmarkEntityId fallback (insecure origins, no randomUUID)", () => {
+  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("emits UUID-v4-shaped ids from getRandomValues when randomUUID is missing", () => {
+    vi.stubGlobal(
+      "crypto",
+      {
+        getRandomValues(arr: Uint8Array): Uint8Array {
+          for (let i = 0; i < arr.length; i += 1) arr[i] = Math.floor(Math.random() * 256);
+          return arr;
+        },
+      },
+    );
+    const first = newBookmarkEntityId();
+    const second = newBookmarkEntityId();
+    expect(first).toMatch(UUID_V4);
+    expect(second).toMatch(UUID_V4);
+    expect(first).not.toBe(second);
+  });
+
+  it("still emits UUID-v4 shape from Math.random alone", () => {
+    vi.stubGlobal("crypto", {});
+    expect(newBookmarkEntityId()).toMatch(UUID_V4);
+    expect(newBookmarkEntityId()).toMatch(UUID_V4);
   });
 });
 

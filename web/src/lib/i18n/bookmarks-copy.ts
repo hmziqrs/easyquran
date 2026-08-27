@@ -12,12 +12,11 @@ import {
   reader_bookmarks_local_only,
   reader_bookmarks_loading,
   reader_bookmarks_move_label,
-  reader_bookmarks_move_to,
   reader_bookmarks_new_folder_label,
   reader_bookmarks_new_folder_placeholder,
   reader_bookmarks_offline,
-  reader_bookmarks_open,
   reader_bookmarks_pending,
+  reader_bookmarks_pending_one,
   reader_bookmarks_remove,
   reader_bookmarks_remove_label,
   reader_bookmarks_rename,
@@ -51,8 +50,6 @@ export interface BookmarksCopy {
   readonly deleteFolderConfirm: (name: string) => string;
   readonly remove: string;
   readonly removeLabel: string;
-  readonly open: string;
-  readonly moveTo: string;
   readonly moveLabel: (reference: string) => string;
   readonly ayah: (ayah: number) => string;
   readonly signInNote: string;
@@ -96,14 +93,14 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     deleteFolderConfirm: (name) => reader_bookmarks_delete_folder_confirm({ name }, options),
     remove: noArgs(reader_bookmarks_remove),
     removeLabel: noArgs(reader_bookmarks_remove_label),
-    open: noArgs(reader_bookmarks_open),
-    moveTo: noArgs(reader_bookmarks_move_to),
     moveLabel: (reference) => reader_bookmarks_move_label({ reference }, options),
     ayah: (ayah) => reader_bookmarks_ayah({ ayah }, options),
     signInNote: noArgs(reader_bookmarks_sign_in_note),
     signIn: noArgs(reader_bookmarks_sign_in),
     offline: noArgs(reader_bookmarks_offline),
-    pending: (count) => reader_bookmarks_pending({ count }, options),
+    // Singular/plural: en has no dual; ar folds 0/2+ into the plural form
+    // ("{count} من التغييرات…") and uses the explicit singular for exactly 1.
+    pending: (count) => (count === 1 ? noArgs(reader_bookmarks_pending_one) : reader_bookmarks_pending({ count }, options)),
     synced: noArgs(reader_bookmarks_synced),
     syncError: noArgs(reader_bookmarks_sync_error),
     localOnly: noArgs(reader_bookmarks_local_only),
