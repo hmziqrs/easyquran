@@ -75,13 +75,6 @@
   // the empty state would flash — hold the loading skeleton instead.
   const anonCatalogPending = $derived(!authed && quranData === null);
 
-  // Persistent online sync failure before any snapshot: surface an inline note
-  // alongside the skeleton. Offline keeps copy.offline (existing behavior);
-  // a healthy or not-yet-failed first sync keeps the bare skeleton.
-  const syncFailedWhileOnline = $derived(
-    waitingForFirstSync && online.online && bookmarks.status.phase === "error",
-  );
-
   interface AnonRow {
     readonly key: string;
     readonly surah: number;
@@ -180,10 +173,10 @@
       {#if firstSyncPending}
         <div class="mt-6 flex flex-col gap-3" role="status">
           {@render loadingRows()}
+          <!-- Offline note only; an online sync failure surfaces solely in the
+               header SyncIndicator, never duplicated inline. -->
           {#if waitingForFirstSync && !online.online}
             <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.offline}</p>
-          {:else if syncFailedWhileOnline}
-            <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.syncError}</p>
           {/if}
         </div>
       {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}

@@ -156,8 +156,10 @@ export class BookmarksStore {
    * never disagree about the same verse.
    */
   #effectiveRow(surah: number, ayah: number): Bookmark | undefined {
-    const pending = [...this.#pendingById.values()].find((b) => b.surah === surah && b.ayah === ayah);
-    return pending ?? this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
+    for (const pending of this.#pendingById.values()) {
+      if (pending.surah === surah && pending.ayah === ayah) return pending;
+    }
+    return this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
   }
 
   /** Authed server view (pending overlay included). */
