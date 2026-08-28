@@ -1,9 +1,12 @@
 import { offlinePackStatus, type OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import type { UiDirection, UiLocale } from "$lib/i18n/locales";
 import { uiDirection } from "$lib/i18n/locales";
+import type { AppearanceMode, PaletteId } from "$lib/config/site";
+import type { SurfaceResolvedCopy } from "$lib/i18n/marketing-copy";
 import { QuranScript } from "$lib/data/quran-types";
 import { reader_new_version_ready, reader_reload_open_tabs } from "$lib/i18n/m/reader";
 import { getLocale } from "$lib/paraglide/runtime.js";
+import { theme_dark, theme_light, theme_system } from "$lib/i18n/m/theme";
 import {
   settings_account_device_note,
   settings_account_intro,
@@ -13,6 +16,15 @@ import {
   settings_account_signed_in_heading,
   settings_account_signed_out_note,
   settings_appearance_intro,
+  settings_palette,
+  settings_palette_ink_label,
+  settings_palette_ink_note,
+  settings_palette_sacred_label,
+  settings_palette_sacred_note,
+  settings_palette_sapphire_label,
+  settings_palette_sapphire_note,
+  settings_palette_sepia_label,
+  settings_palette_sepia_note,
   settings_privacy_check_updates,
   settings_privacy_intro,
   settings_privacy_sign_out,
@@ -136,6 +148,14 @@ import { getReaderSettingsCopy, type ReaderSettingsCopy } from "$lib/i18n/reader
 
 export type { ReaderSettingsCopy };
 
+/** Palette + appearance option copy (docs/design-system.md §25/§59). */
+export interface AppearancePanelCopy {
+  readonly appearanceLabel: string;
+  readonly paletteLabel: string;
+  readonly appearanceNames: Readonly<Record<AppearanceMode, string>>;
+  readonly palettes: Readonly<Record<PaletteId, SurfaceResolvedCopy>>;
+}
+
 export interface SettingsCopy {
   readonly locale: UiLocale;
   readonly direction: UiDirection;
@@ -205,9 +225,13 @@ export interface SettingsCopy {
     readonly offlinePackNote: string;
     readonly offlinePack: OfflinePackCopy;
   };
+  /**
+   * §25 architecture: Palette (sacred/ink/sepia/sapphire) and Appearance (light/dark/system) are
+   * separate settings on top of the reader panel copy (custom seeds, copy-CSS, reset).
+   */
   readonly appearance: {
     readonly intro: string;
-    readonly panel: ReaderSettingsCopy;
+    readonly panel: ReaderSettingsCopy & AppearancePanelCopy;
   };
   readonly reading: {
     readonly intro: string;
@@ -380,7 +404,34 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
     },
     appearance: {
       intro: noArgs(settings_appearance_intro),
-      panel: getReaderSettingsCopy(locale),
+      panel: {
+        ...getReaderSettingsCopy(locale),
+        appearanceLabel: noArgs(settings_section_appearance),
+        paletteLabel: noArgs(settings_palette),
+        appearanceNames: {
+          light: noArgs(theme_light),
+          dark: noArgs(theme_dark),
+          system: noArgs(theme_system),
+        },
+        palettes: {
+          sacred: {
+            label: noArgs(settings_palette_sacred_label),
+            note: noArgs(settings_palette_sacred_note),
+          },
+          ink: {
+            label: noArgs(settings_palette_ink_label),
+            note: noArgs(settings_palette_ink_note),
+          },
+          sepia: {
+            label: noArgs(settings_palette_sepia_label),
+            note: noArgs(settings_palette_sepia_note),
+          },
+          sapphire: {
+            label: noArgs(settings_palette_sapphire_label),
+            note: noArgs(settings_palette_sapphire_note),
+          },
+        },
+      },
     },
     reading: {
       intro: noArgs(settings_reading_intro),

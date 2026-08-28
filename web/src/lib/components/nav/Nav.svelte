@@ -244,13 +244,13 @@
           type="button"
           onclick={() => prefs.toggleTheme()}
           aria-label={copy.toggleTheme}
-          class="flex w-full items-center justify-between rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-sm text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg"
+          class="flex w-full items-center justify-between rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-sm text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
         >
           <span class="inline-flex items-center gap-2.5">
             <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={16} />
-            {copy.theme}
+            {copy.appearance}
           </span>
-          <span class="text-xs text-fg-3">{copy.themeNames[prefs.theme]}</span>
+          <span class="text-xs text-muted">{copy.themeNames[prefs.theme]}</span>
         </button>
       </section>
 

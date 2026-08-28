@@ -44,6 +44,20 @@ describe("deriveTokens — background ramp", () => {
       expect(Math.abs(lum(t["--fg"]!) - lum(seed))).toBeGreaterThan(0.5);
     }
   });
+
+  it("emits the §4 contract alongside the legacy ramp, consistently", () => {
+    const t = deriveTokens({ bg: "#101820" });
+    expect(t["--background"]).toBe("#101820");
+    expect(t["--foreground"]).toBe(t["--fg"]);
+    expect(t["--foreground-secondary"]).toBe(t["--fg-2"]);
+    expect(t["--muted"]).toBe(t["--fg-3"]);
+    expect(t["--border"]).toBe(t["--line"]);
+    expect(t["--border-strong"]).toBe(t["--line-2"]);
+    expect(lum(t["--surface"]!)).toBeGreaterThan(lum("#101820"));
+    expect(lum(t["--surface-raised"]!)).toBeGreaterThan(lum(t["--surface"]!));
+    // §42: the reader sits darker than the app background at night.
+    expect(lum(t["--reader-background"]!)).toBeLessThan(lum("#101820"));
+  });
 });
 
 describe("deriveTokens — accent", () => {
@@ -57,6 +71,23 @@ describe("deriveTokens — accent", () => {
     expect(t["--accent-soft"]).toBe("rgba(63, 191, 166, 0.13)");
     expect(t["--accent-line"]).toBe("rgba(63, 191, 166, 0.32)");
     expect(t["--ring"]).toBe("#3fbfa6");
+  });
+
+  it("maps the interactive seed onto the primary family", () => {
+    const t = deriveTokens({ accent: "#3fbfa6" });
+    expect(t["--primary"]).toBe("#3fbfa6");
+    expect(t["--focus-ring"]).toBe("#3fbfa6");
+    expect(t["--primary-foreground"]).toBe("#ffffff");
+  });
+});
+
+describe("deriveTokens — pop", () => {
+  it("maps the pop seed onto the editorial accent family", () => {
+    const t = deriveTokens({ pop: "#d9af6a" });
+    expect(t["--accent"]).toBe("#d9af6a");
+    expect(t["--accent-strong"]).toBe("#d9af6a");
+    expect(t["--pop"]).toBe("#d9af6a");
+    expect(t["--pop-soft"]).toBe("rgba(217, 175, 106, 0.13)");
   });
 });
 

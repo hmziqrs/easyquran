@@ -1,18 +1,54 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Self-hosted fonts only — never a CDN (offline/SW constraint). */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/newsreader";
+@import "@fontsource/noto-sans-arabic/400.css";
+@import "@fontsource/noto-sans-arabic/600.css";
 @import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/amiri";
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
 
 @theme {
+  /* §10 Typography roles: Inter = UI, Newsreader = editorial display, Noto Sans Arabic = Arabic UI. */
   --font-sans:
-    "Figtree Variable", "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    "Inter Variable", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Newsreader Variable", "Newsreader", Georgia, serif;
+  --font-arabic-ui: "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  /* Quran stack resolves to the reader's runtime font choice; Amiri is the pre-hydration fallback. */
+  --font-quran: var(--reader-arabic-family, var(--font-arabic));
   --font-mono:
     "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
 
+  /* §11 type scale (size / line-height + weight role). Legacy xs–4xl utilities stay untouched
+     this round; new role utilities are additive until chrome-sweep migrates consumers. */
+  --text-display-xl: 4rem;
+  --text-display-xl--line-height: 4.25rem;
+  --text-display-l: 3.25rem;
+  --text-display-l--line-height: 3.625rem;
+  --text-h1: 2.5rem;
+  --text-h1--line-height: 2.875rem;
+  --text-h2: 2rem;
+  --text-h2--line-height: 2.4375rem;
+  --text-h3: 1.5rem;
+  --text-h3--line-height: 1.9375rem;
+  --text-body-xl: 1.25rem;
+  --text-body-xl--line-height: 2rem;
+  --text-body-l: 1.125rem;
+  --text-body-l--line-height: 1.8125rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.625rem;
+  --text-body-s: 0.875rem;
+  --text-body-s--line-height: 1.375rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+
+  /* Legacy sizes — unchanged. */
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.9375rem;
@@ -22,10 +58,12 @@
   --text-3xl: 3.75rem;
   --text-4xl: 5rem;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* §13 Radius: buttons/inputs 10–12, cards 12–18, feature cards 18–24, chips pill. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
 
   --breakpoint-3xl: 1440px;
 
@@ -38,323 +76,487 @@
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-bg-1: var(--bg-1);
-  --color-bg-2: var(--bg-2);
-  --color-bg-3: var(--bg-3);
-  --color-bg-elev: var(--bg-elev);
-
-  --color-line: var(--line);
-  --color-line-2: var(--line-2);
-  --color-line-3: var(--line-3);
-
-  --color-fg: var(--fg);
-  --color-fg-2: var(--fg-2);
-  --color-fg-3: var(--fg-3);
-  --color-fg-4: var(--fg-4);
-
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-accent-line: var(--accent-line);
-  --color-accent-fg: var(--accent-fg);
-
-  --color-pop: var(--pop);
-  --color-pop-soft: var(--pop-soft);
-
-  --color-ok: var(--ok);
-
+  /* ── §4 semantic contract → utilities ───────────────────────────────────────────────────── */
   --color-background: var(--background);
+  --color-background-subtle: var(--background-subtle);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  /* bg-muted keeps shadcn's "quiet hover surface" meaning; the contract's muted TEXT is the
+     --muted token and its utility below. */
+  --color-muted: var(--surface-hover);
+  --color-muted-foreground: var(--muted);
+  --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-primary-soft: var(--primary-soft);
+  /* Editorial accent (gold family). The `accent-*` Tailwind utilities stay INTERACTIVE (primary)
+     for back-compat — use gold-* to reach the editorial accent. */
+  --color-gold: var(--accent);
+  --color-gold-strong: var(--accent-strong);
+  --color-gold-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-focus-ring: var(--focus-ring);
+  --color-reader-background: var(--reader-background);
+  --color-quran-foreground: var(--quran-foreground);
+  --color-translation-foreground: var(--translation-foreground);
+  --color-reader-divider: var(--reader-divider);
 
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  /* §14 elevation — borders and tonal surfaces over shadows; dark mode keeps almost none. */
+  --shadow-sm: var(--elev-sm);
+  --shadow-md: var(--elev-md);
+
+  /* ── Legacy token names, aliased to the new contract so the existing tree keeps rendering ── */
+  --color-bg: var(--background);
+  --color-bg-1: var(--surface);
+  --color-bg-2: var(--background-subtle);
+  --color-bg-3: var(--surface-hover);
+  --color-bg-elev: var(--surface-raised);
+
+  --color-line: var(--border);
+  --color-line-2: var(--border-strong);
+  --color-line-3: var(--border-strong);
+
+  --color-fg: var(--foreground);
+  --color-fg-2: var(--foreground-secondary);
+  --color-fg-3: var(--muted);
+  --color-fg-4: var(--muted);
+
+  --color-accent: var(--primary);
+  --color-accent-soft: var(--primary-soft);
+  --color-accent-line: var(--border-strong);
+  --color-accent-foreground: var(--primary-foreground);
+
+  --color-pop: var(--accent);
+  --color-pop-soft: var(--accent-soft);
+
+  --color-ok: var(--success);
+
+  /* ── shadcn aliases over the contract ───────────────────────────────────────────────────── */
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface-raised);
+  --color-popover-foreground: var(--foreground);
+  --color-secondary: var(--surface-hover);
+  --color-secondary-foreground: var(--foreground);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--background);
+  --color-input: var(--border-strong);
+  --color-ring: var(--focus-ring);
+
+  --color-sidebar: var(--background);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-accent: var(--surface-hover);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--focus-ring);
 }
 
+/* ── §5–§8 palette blocks — verbatim from docs/design-system.md ─────────────────────────────
+   Palette and mode are separate attributes (§4): <html data-palette="sacred" data-mode="dark">.
+   :root doubles as the sacred-dark default so no-JS/SSR markup always has a complete contract. */
 :root,
-[data-theme="dark"] {
-  --bg: oklch(0.155 0.006 172);
-  --bg-1: oklch(0.191 0.007 172);
-  --bg-2: oklch(0.223 0.008 172);
-  --bg-3: oklch(0.256 0.009 172);
-  --bg-elev: oklch(0.126 0.005 172);
+[data-palette="sacred"][data-mode="dark"] {
+  --background: #0D1210;
+  --background-subtle: #111814;
 
-  --line: oklch(0.96 0.02 172 / 0.1);
-  --line-2: oklch(0.96 0.02 172 / 0.15);
-  --line-3: oklch(0.96 0.02 172 / 0.23);
+  --surface: #151D19;
+  --surface-raised: #1A231F;
+  --surface-hover: #202A25;
 
-  --fg: oklch(0.985 0.002 172);
-  --fg-2: oklch(0.838 0.008 172);
-  --fg-3: oklch(0.712 0.01 172);
-  --fg-4: oklch(0.605 0.01 172);
+  --foreground: #F0EFE9;
+  --foreground-secondary: #BCC2BD;
+  --muted: #89938D;
 
-  --accent: #3fbfa6;
-  --accent-soft: rgba(63, 191, 166, 0.13);
-  --accent-line: rgba(63, 191, 166, 0.32);
-  --accent-fg: #06120f;
+  --border: #29332E;
+  --border-strong: #39443E;
 
-  --pop: #d9af6a;
-  --pop-soft: rgba(217, 175, 106, 0.12);
+  --primary: #77BDA4;
+  --primary-hover: #91CEB9;
+  --primary-foreground: #0D1210;
+  --primary-soft: #17372C;
 
-  --ok: #7fd1b8;
+  --accent: #D0B06B;
+  --accent-strong: #D0B06B;
+  --accent-soft: #332A19;
 
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.58 0.22 27);
+  --success: #78BD91;
+  --warning: #D9B55E;
+  --danger: #DF7777;
 
-  --sidebar: var(--bg);
-  --sidebar-foreground: var(--fg);
-  --sidebar-accent: var(--accent-soft);
-  --sidebar-accent-foreground: var(--accent);
-  --sidebar-border: var(--line);
-  --sidebar-ring: var(--accent);
+  --focus-ring: #91CEB9;
+
+  --reader-background: #111713;
+  --quran-foreground: #F4F2EA;
+  --translation-foreground: #C2C6C1;
+  --reader-divider: #28332D;
 
   color-scheme: dark;
 }
 
-[data-theme="light"] {
-  --bg: oklch(0.995 0.002 172);
-  --bg-1: oklch(1 0 0);
-  --bg-2: oklch(0.977 0.004 172);
-  --bg-3: oklch(0.955 0.006 172);
-  --bg-elev: oklch(0.988 0.003 172);
+[data-palette="sacred"][data-mode="light"] {
+  --background: #F8F7F2;
+  --background-subtle: #F2F0E9;
 
-  --line: oklch(0.905 0.008 172);
-  --line-2: oklch(0.872 0.01 172);
-  --line-3: oklch(0.805 0.012 172);
+  --surface: #FFFEFA;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #F1F0E9;
 
-  --fg: oklch(0.16 0.012 172);
-  --fg-2: oklch(0.35 0.012 172);
-  --fg-3: oklch(0.475 0.012 172);
-  --fg-4: oklch(0.578 0.011 172);
+  --foreground: #18211D;
+  --foreground-secondary: #505A54;
+  --muted: #68716B;
 
-  --accent: #0e7c6b;
-  --accent-soft: rgba(14, 124, 107, 0.1);
-  --accent-line: rgba(14, 124, 107, 0.28);
-  --accent-fg: #ffffff;
+  --border: #DDDCD3;
+  --border-strong: #C9C7BD;
 
-  --pop: #b98a4b;
-  --pop-soft: rgba(185, 138, 75, 0.1);
+  --primary: #145A43;
+  --primary-hover: #104B38;
+  --primary-foreground: #FFFFFF;
+  --primary-soft: #E6F0EB;
 
-  --ok: #2f8f6e;
+  --accent: #B6914C;
+  --accent-strong: #715625;
+  --accent-soft: #F3EAD8;
 
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.97 0.01 17);
+  --success: #397A57;
+  --warning: #8A681E;
+  --danger: #B34A4A;
+
+  --focus-ring: #2D7B61;
+
+  --reader-background: #FFFEFA;
+  --quran-foreground: #17201C;
+  --translation-foreground: #4D5751;
+  --reader-divider: #E5E2D9;
 
   color-scheme: light;
 }
 
-[data-accent="emerald"] {
-  --accent: #3fbfa6;
-  --accent-soft: rgba(63, 191, 166, 0.13);
-  --accent-line: rgba(63, 191, 166, 0.32);
-  --accent-fg: #06120f;
-}
-[data-theme="light"][data-accent="emerald"] {
-  --accent: #0e7c6b;
-  --accent-soft: rgba(14, 124, 107, 0.1);
-  --accent-line: rgba(14, 124, 107, 0.28);
-  --accent-fg: #ffffff;
-}
-[data-accent="gold"] {
-  --accent: #d9af6a;
-  --accent-soft: rgba(217, 175, 106, 0.14);
-  --accent-line: rgba(217, 175, 106, 0.32);
-  --accent-fg: #1a1408;
-}
-[data-theme="light"][data-accent="gold"] {
-  --accent: #b98a4b;
-  --accent-soft: rgba(185, 138, 75, 0.1);
-  --accent-line: rgba(185, 138, 75, 0.3);
-  --accent-fg: #ffffff;
-}
-[data-accent="azure"] {
-  --accent: #6fb0e8;
-  --accent-soft: rgba(111, 176, 232, 0.14);
-  --accent-line: rgba(111, 176, 232, 0.32);
-  --accent-fg: #06121f;
-}
-[data-theme="light"][data-accent="azure"] {
-  --accent: #2563b8;
-  --accent-soft: rgba(37, 99, 184, 0.1);
-  --accent-line: rgba(37, 99, 184, 0.3);
-  --accent-fg: #ffffff;
-}
-[data-accent="plum"] {
-  --accent: #c08cff;
-  --accent-soft: rgba(192, 140, 255, 0.14);
-  --accent-line: rgba(192, 140, 255, 0.32);
-  --accent-fg: #160a24;
-}
-[data-theme="light"][data-accent="plum"] {
-  --accent: #7a3fd6;
-  --accent-soft: rgba(122, 63, 214, 0.1);
-  --accent-line: rgba(122, 63, 214, 0.3);
-  --accent-fg: #ffffff;
+[data-palette="ink"][data-mode="light"] {
+  --background: #F7F7F5;
+  --background-subtle: #EFEFED;
+
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #F0F0EE;
+
+  --foreground: #121212;
+  --foreground-secondary: #4B4B4B;
+  --muted: #686868;
+
+  --border: #DADADA;
+  --border-strong: #BDBDBD;
+
+  --primary: #111111;
+  --primary-hover: #2A2A2A;
+  --primary-foreground: #FFFFFF;
+  --primary-soft: #ECECEC;
+
+  --accent: #777777;
+  --accent-strong: #4B4B4B;
+  --accent-soft: #F1F1F1;
+
+  --success: #356B4B;
+  --warning: #775F25;
+  --danger: #A33F3F;
+
+  --focus-ring: #111111;
+
+  --reader-background: #FFFFFF;
+  --quran-foreground: #101010;
+  --translation-foreground: #444444;
+  --reader-divider: #E6E6E6;
+
+  color-scheme: light;
 }
 
-[data-theme="dark"][data-surface="paper"] {
-  --bg: #151210;
-  --bg-1: #1d1916;
-  --bg-2: #262019;
-  --bg-3: #2e271f;
-  --bg-elev: #0f0d0b;
-  --line: rgba(255, 244, 224, 0.09);
-  --line-2: rgba(255, 244, 224, 0.14);
-  --line-3: rgba(255, 244, 224, 0.22);
-  --fg: #f5efe6;
-  --fg-2: #d6cdc0;
-  --fg-3: #b0a698;
-  --fg-4: #8a8073;
-}
-[data-theme="light"][data-surface="paper"] {
-  --bg: #faf6ef;
-  --bg-1: #fffdf8;
-  --bg-2: #f2ece1;
-  --bg-3: #eae2d4;
-  --bg-elev: #fdfaf4;
-  --line: rgba(60, 45, 25, 0.14);
-  --line-2: rgba(60, 45, 25, 0.2);
-  --line-3: rgba(60, 45, 25, 0.3);
-  --fg: #241d14;
-  --fg-2: #4a3f31;
-  --fg-3: #6b5f4e;
-  --fg-4: #918471;
+[data-palette="ink"][data-mode="dark"] {
+  --background: #000000;
+  --background-subtle: #080808;
+
+  --surface: #0D0D0D;
+  --surface-raised: #151515;
+  --surface-hover: #1A1A1A;
+
+  --foreground: #F5F5F5;
+  --foreground-secondary: #C8C8C8;
+  --muted: #9A9A9A;
+
+  --border: #292929;
+  --border-strong: #3D3D3D;
+
+  --primary: #F2F2F2;
+  --primary-hover: #FFFFFF;
+  --primary-foreground: #090909;
+  --primary-soft: #1D1D1D;
+
+  --accent: #C8C8C8;
+  --accent-strong: #C8C8C8;
+  --accent-soft: #1A1A1A;
+
+  --success: #79B991;
+  --warning: #D8BA70;
+  --danger: #E07B7B;
+
+  --focus-ring: #FFFFFF;
+
+  --reader-background: #050505;
+  --quran-foreground: #F5F5F5;
+  --translation-foreground: #C6C6C6;
+  --reader-divider: #242424;
+
+  color-scheme: dark;
 }
 
-[data-theme="dark"][data-surface="slate"] {
-  --bg: #0d1117;
-  --bg-1: #161b22;
-  --bg-2: #1e2430;
-  --bg-3: #262d3a;
-  --bg-elev: #090d12;
-  --line: rgba(220, 235, 255, 0.1);
-  --line-2: rgba(220, 235, 255, 0.15);
-  --line-3: rgba(220, 235, 255, 0.24);
-  --fg: #e6edf3;
-  --fg-2: #c2ccd6;
-  --fg-3: #9aa6b2;
-  --fg-4: #75818e;
-}
-[data-theme="light"][data-surface="slate"] {
-  --bg: #f6f8fa;
-  --bg-1: #ffffff;
-  --bg-2: #eef1f5;
-  --bg-3: #e3e8ee;
-  --bg-elev: #fbfcfd;
-  --line: rgba(20, 35, 55, 0.12);
-  --line-2: rgba(20, 35, 55, 0.18);
-  --line-3: rgba(20, 35, 55, 0.28);
-  --fg: #10151b;
-  --fg-2: #333c47;
-  --fg-3: #55606d;
-  --fg-4: #7d8794;
+[data-palette="sepia"][data-mode="light"] {
+  --background: #F4ECD8;
+  --background-subtle: #EEE2C8;
+
+  --surface: #FFF9E9;
+  --surface-raised: #FFFCF3;
+  --surface-hover: #EFE4CF;
+
+  --foreground: #2E271C;
+  --foreground-secondary: #5F5342;
+  --muted: #70624F;
+
+  --border: #D9C9AA;
+  --border-strong: #C2AD87;
+
+  --primary: #6E4F27;
+  --primary-hover: #5B401F;
+  --primary-foreground: #FFF9E9;
+  --primary-soft: #EADCBF;
+
+  --accent: #A47B36;
+  --accent-strong: #684B1F;
+  --accent-soft: #EEE0C2;
+
+  --success: #52704A;
+  --warning: #806021;
+  --danger: #9D493D;
+
+  --focus-ring: #6E4F27;
+
+  --reader-background: #FBF3DF;
+  --quran-foreground: #2B2419;
+  --translation-foreground: #5E5140;
+  --reader-divider: #DDCFB4;
+
+  color-scheme: light;
 }
 
-[data-theme="dark"][data-surface="mocha"] {
-  --bg: #17110e;
-  --bg-1: #201814;
-  --bg-2: #2b211a;
-  --bg-3: #342820;
-  --bg-elev: #100b09;
-  --line: rgba(255, 238, 220, 0.09);
-  --line-2: rgba(255, 238, 220, 0.14);
-  --line-3: rgba(255, 238, 220, 0.22);
-  --fg: #f4ebe3;
-  --fg-2: #d7c9bc;
-  --fg-3: #b3a294;
-  --fg-4: #8b7a6c;
-}
-[data-theme="light"][data-surface="mocha"] {
-  --bg: #f7f1ea;
-  --bg-1: #fffcf8;
-  --bg-2: #efe6db;
-  --bg-3: #e6dacc;
-  --bg-elev: #fbf7f1;
-  --line: rgba(70, 45, 25, 0.14);
-  --line-2: rgba(70, 45, 25, 0.2);
-  --line-3: rgba(70, 45, 25, 0.3);
-  --fg: #241a12;
-  --fg-2: #4b3b2d;
-  --fg-3: #6d5b4a;
-  --fg-4: #93806d;
+[data-palette="sepia"][data-mode="dark"] {
+  --background: #18130E;
+  --background-subtle: #1C160F;
+
+  --surface: #211A13;
+  --surface-raised: #292017;
+  --surface-hover: #30251A;
+
+  --foreground: #F0E5CF;
+  --foreground-secondary: #C9B99A;
+  --muted: #9D8C6F;
+
+  --border: #403324;
+  --border-strong: #574632;
+
+  --primary: #D1AE71;
+  --primary-hover: #E0BF82;
+  --primary-foreground: #1B1309;
+  --primary-soft: #3A2C1B;
+
+  --accent: #E0C48B;
+  --accent-strong: #E0C48B;
+  --accent-soft: #332719;
+
+  --success: #90B47D;
+  --warning: #E0BC6F;
+  --danger: #DB8274;
+
+  --focus-ring: #D1AE71;
+
+  --reader-background: #1C160F;
+  --quran-foreground: #F0E5CF;
+  --translation-foreground: #CBBEA4;
+  --reader-divider: #3B3023;
+
+  color-scheme: dark;
 }
 
-[data-theme="dark"][data-surface="contrast"] {
-  --bg: #000000;
-  --bg-1: #0d0d0d;
-  --bg-2: #1a1a1a;
-  --bg-3: #262626;
-  --bg-elev: #000000;
-  --line: rgba(255, 255, 255, 0.16);
-  --line-2: rgba(255, 255, 255, 0.24);
-  --line-3: rgba(255, 255, 255, 0.36);
-  --fg: #ffffff;
-  --fg-2: #e0e0e0;
-  --fg-3: #bdbdbd;
-  --fg-4: #9e9e9e;
-}
-[data-theme="light"][data-surface="contrast"] {
-  --bg: #ffffff;
-  --bg-1: #ffffff;
-  --bg-2: #f0f0f0;
-  --bg-3: #e3e3e3;
-  --bg-elev: #ffffff;
-  --line: rgba(0, 0, 0, 0.22);
-  --line-2: rgba(0, 0, 0, 0.3);
-  --line-3: rgba(0, 0, 0, 0.42);
-  --fg: #000000;
-  --fg-2: #1f1f1f;
-  --fg-3: #3d3d3d;
-  --fg-4: #5c5c5c;
+[data-palette="sapphire"][data-mode="light"] {
+  --background: #F7F8FA;
+  --background-subtle: #EEF1F5;
+
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #EEF2F7;
+
+  --foreground: #171C24;
+  --foreground-secondary: #4E5968;
+  --muted: #667384;
+
+  --border: #D9DFE7;
+  --border-strong: #BEC7D2;
+
+  --primary: #244E8A;
+  --primary-hover: #1D4277;
+  --primary-foreground: #FFFFFF;
+  --primary-soft: #E8EEF8;
+
+  --accent: #A28759;
+  --accent-strong: #6F5A37;
+  --accent-soft: #F1EBDD;
+
+  --success: #39705A;
+  --warning: #80611F;
+  --danger: #AE4747;
+
+  --focus-ring: #3567A9;
+
+  --reader-background: #FFFFFF;
+  --quran-foreground: #18202A;
+  --translation-foreground: #4A5666;
+  --reader-divider: #E3E7ED;
+
+  color-scheme: light;
 }
 
+[data-palette="sapphire"][data-mode="dark"] {
+  --background: #0B1018;
+  --background-subtle: #0E1520;
+
+  --surface: #111824;
+  --surface-raised: #172131;
+  --surface-hover: #1B2738;
+
+  --foreground: #EFF3F8;
+  --foreground-secondary: #B9C3D0;
+  --muted: #8895A5;
+
+  --border: #273446;
+  --border-strong: #394A60;
+
+  --primary: #8FB5EA;
+  --primary-hover: #A6C7F2;
+  --primary-foreground: #0A111B;
+  --primary-soft: #1A2A3F;
+
+  --accent: #D2B47C;
+  --accent-strong: #D2B47C;
+  --accent-soft: #302719;
+
+  --success: #80BFA0;
+  --warning: #D7B66E;
+  --danger: #E07A7A;
+
+  --focus-ring: #A6C7F2;
+
+  --reader-background: #0E151F;
+  --quran-foreground: #F1F4F8;
+  --translation-foreground: #C0CAD6;
+  --reader-divider: #263447;
+
+  color-scheme: dark;
+}
+
+/* ── §14 elevation: light keeps the doc's two soft shadows; dark uses almost none and
+     elevates through surface luminance + border contrast instead. ─────────────────────────── */
 :root,
-[data-theme="dark"] {
-  --background: var(--bg);
-  --foreground: var(--fg);
-  --card: var(--bg-1);
-  --card-foreground: var(--fg);
-  --popover: var(--bg-2);
-  --popover-foreground: var(--fg);
-  --primary: var(--accent);
-  --primary-foreground: var(--accent-fg);
-  --secondary: var(--bg-2);
-  --secondary-foreground: var(--fg);
-  --muted: var(--bg-2);
-  --muted-foreground: var(--fg-3);
-  --accent-foreground: var(--accent-fg);
-  --border: var(--line);
-  --input: var(--line-2);
-  --ring: var(--accent);
-  --radius: 0.45rem;
+[data-mode="dark"] {
+  --elev-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --elev-md: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+[data-mode="light"] {
+  --elev-sm:
+    0 1px 2px rgb(20 30 25 / 0.03),
+    0 6px 18px rgb(20 30 25 / 0.03);
+  --elev-md:
+    0 2px 4px rgb(20 30 25 / 0.04),
+    0 12px 32px rgb(20 30 25 / 0.06);
+}
+
+/* ── Migration shim: legacy runtime token names resolve from the new contract. ───────────────
+   These keep every `var(--bg…)`, `var(--line…)`, `var(--fg…)`, shadcn alias and the --radius
+   anchor working until the sweep areas retire them. They must stay BELOW the palette blocks. */
+:root {
+  /* §12 spacing — 8px rhythm with a 4px micro-step (consumed via var(), Tailwind's spacing
+     multiplier already provides the equivalent utilities). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  --bg: var(--background);
+  --bg-1: var(--surface);
+  --bg-2: var(--background-subtle);
+  --bg-3: var(--surface-hover);
+  --bg-elev: var(--surface-raised);
+
+  --line: var(--border);
+  --line-2: var(--border-strong);
+  --line-3: var(--border-strong);
+
+  --fg: var(--foreground);
+  --fg-2: var(--foreground-secondary);
+  --fg-3: var(--muted);
+  --fg-4: var(--muted);
+
+  --pop: var(--accent);
+  --pop-soft: var(--accent-soft);
+
+  /* Editorial hairline for markers/revealed-ayah — derived from the gold accent. */
+  --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-fg: var(--background);
+
+  --ok: var(--success);
+
+  --destructive: var(--danger);
+  --destructive-foreground: var(--background);
+
+  /* shadcn runtime aliases */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-hover);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: var(--muted);
+  --accent-foreground: var(--primary-foreground);
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+  --radius: 12px;
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--focus-ring);
 }
 
 @layer base {
   * {
-    border-color: var(--line);
+    border-color: var(--border);
   }
   html {
-    background: var(--bg);
-    color: var(--fg);
+    background: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
@@ -364,8 +566,8 @@
   body {
     font-size: var(--text-base);
     line-height: 1.6;
-    background: var(--bg);
-    color: var(--fg);
+    background: var(--background);
+    color: var(--foreground);
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -374,10 +576,14 @@
   h3,
   h4 {
     margin: 0;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    color: var(--fg);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    color: var(--foreground);
+  }
+  h1,
+  h2 {
+    font-family: var(--font-display);
   }
   p {
     margin: 0;
@@ -389,22 +595,22 @@
     max-width: 100%;
   }
   ::selection {
-    background: var(--accent-soft);
-    color: var(--fg);
+    background: var(--primary-soft);
+    color: var(--foreground);
   }
   :focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--line-3) transparent;
+    scrollbar-color: var(--border-strong) transparent;
   }
 }
 
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 60%, transparent);
   }
   70% {
     box-shadow: 0 0 0 8px transparent;
@@ -447,7 +653,7 @@
 @utility eyebrow {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--fg-3);
+  color: var(--muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -463,6 +669,9 @@
   line-height: 2.1;
   font-size: 1.75rem;
   font-feature-settings: "calt", "liga";
+}
+@utility arabic-ui {
+  font-family: var(--font-arabic-ui);
 }
 
 @utility ayah-marker {
@@ -484,7 +693,7 @@
 }
 
 @utility reading-text {
-  font-family: var(--font-arabic);
+  font-family: var(--reader-arabic-family, var(--font-arabic));
   direction: rtl;
   text-align: justify;
   text-align-last: center;

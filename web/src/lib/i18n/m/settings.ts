@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 109 messages. Import this barrel, never
+// 118 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "$lib/paraglide/messages/settings_account_device_note.js";
@@ -18,6 +18,15 @@ export { settings_notifications_busy } from "$lib/paraglide/messages/settings_no
 export { settings_notifications_disable } from "$lib/paraglide/messages/settings_notifications_disable.js";
 export { settings_notifications_enable } from "$lib/paraglide/messages/settings_notifications_enable.js";
 export { settings_notifications_unsupported } from "$lib/paraglide/messages/settings_notifications_unsupported.js";
+export { settings_palette } from "$lib/paraglide/messages/settings_palette.js";
+export { settings_palette_ink_label } from "$lib/paraglide/messages/settings_palette_ink_label.js";
+export { settings_palette_ink_note } from "$lib/paraglide/messages/settings_palette_ink_note.js";
+export { settings_palette_sacred_label } from "$lib/paraglide/messages/settings_palette_sacred_label.js";
+export { settings_palette_sacred_note } from "$lib/paraglide/messages/settings_palette_sacred_note.js";
+export { settings_palette_sapphire_label } from "$lib/paraglide/messages/settings_palette_sapphire_label.js";
+export { settings_palette_sapphire_note } from "$lib/paraglide/messages/settings_palette_sapphire_note.js";
+export { settings_palette_sepia_label } from "$lib/paraglide/messages/settings_palette_sepia_label.js";
+export { settings_palette_sepia_note } from "$lib/paraglide/messages/settings_palette_sepia_note.js";
 export { settings_privacy_check_updates } from "$lib/paraglide/messages/settings_privacy_check_updates.js";
 export { settings_privacy_intro } from "$lib/paraglide/messages/settings_privacy_intro.js";
 export { settings_privacy_sign_out } from "$lib/paraglide/messages/settings_privacy_sign_out.js";

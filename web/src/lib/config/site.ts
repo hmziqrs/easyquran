@@ -46,6 +46,59 @@ export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
 export type SurfaceId = "ink" | "paper" | "slate" | "mocha" | "contrast";
 
+// ── Design-system palette + appearance model (docs/design-system.md §4, §25, §59) ──────────
+// `palette` (sacred/ink/sepia/sapphire) and `mode` (light/dark/system) are separate settings.
+// The legacy theme/surface/accent prefs above stay exported because settings-document.ts and the
+// i18n copy resolvers still consume them; they are synced from the new fields, never the reverse.
+
+/** Palette attribute values — must match the `[data-palette="…"]` selectors in layout.css. */
+export type PaletteId = "sacred" | "ink" | "sepia" | "sapphire";
+
+/** Appearance setting (§25): the tri-state the user picks; `system` resolves via matchMedia. */
+export type AppearanceMode = "light" | "dark" | "system";
+
+export const APPEARANCE_MODES: readonly AppearanceMode[] = ["light", "dark", "system"] as const;
+
+export interface PaletteDef {
+  id: PaletteId;
+  /** Preview swatch for light mode = the palette's `--background` (§5–§8 light blocks). */
+  lightHex: string;
+  /** Preview swatch for dark mode = the palette's `--background` (§5–§8 dark blocks). */
+  darkHex: string;
+}
+
+export const PALETTES: PaletteDef[] = [
+  { id: "sacred", lightHex: "#F8F7F2", darkHex: "#0D1210" },
+  { id: "ink", lightHex: "#F7F7F5", darkHex: "#000000" },
+  { id: "sepia", lightHex: "#F4ECD8", darkHex: "#18130E" },
+  { id: "sapphire", lightHex: "#F7F8FA", darkHex: "#0B1018" },
+];
+
+/** Back-compat migration for stored `surface` prefs → the new palette ids. */
+export const SURFACE_TO_PALETTE = {
+  ink: "ink",
+  paper: "sepia",
+  slate: "sapphire",
+  mocha: "sacred",
+  contrast: "ink",
+} as const satisfies Record<SurfaceId, PaletteId>;
+
+/** Reverse mapping so the legacy `surface` field (still decoded by settings-document.ts) tracks the palette. */
+export const PALETTE_TO_SURFACE = {
+  sacred: "mocha",
+  ink: "ink",
+  sepia: "paper",
+  sapphire: "slate",
+} as const satisfies Record<PaletteId, SurfaceId>;
+
+export const DEFAULT_PALETTE: PaletteId = "sacred";
+export const DEFAULT_MODE: AppearanceMode = "system";
+
+export function paletteDef(id: PaletteId): PaletteDef {
+  // SAFETY: PALETTES is a closed literal with exactly one entry per PaletteId.
+  return PALETTES.find((p) => p.id === id) as PaletteDef;
+}
+
 export interface AccentDef {
   id: AccentId;
   hex: string;

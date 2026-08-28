@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="%lang%" dir="%dir%" data-theme="dark" data-surface="ink" data-accent="emerald">
+<html lang="%lang%" dir="%dir%" data-palette="sacred" data-mode="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0D1210" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F8F7F2" media="(prefers-color-scheme: light)" />
 
     <script>
       (function () {
@@ -13,13 +13,23 @@
           var p = JSON.parse(localStorage.getItem("easyquran.prefs") || "{}");
           var r = JSON.parse(localStorage.getItem("easyquran.reader") || "{}");
           var d = document.documentElement;
-          if (p.theme) d.dataset.theme = p.theme;
-          if (p.surface) d.dataset.surface = p.surface;
-          if (p.accent) d.dataset.accent = p.accent;
+          // §4 palette + §25 appearance: legacy surface/theme prefs migrate once, pre-paint.
+          var S2P = { ink: "ink", paper: "sepia", slate: "sapphire", mocha: "sacred", contrast: "ink" };
+          var palette = p.palette || S2P[p.surface] || "sacred";
+          var mode = p.mode || p.theme;
+          if (mode !== "light" && mode !== "dark") {
+            mode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          d.dataset.palette = palette;
+          d.dataset.mode = mode;
+          delete d.dataset.theme;
+          delete d.dataset.surface;
+          delete d.dataset.accent;
+          // Custom seeds (pre-hydration approximation of derive.ts; prefs.apply() completes it).
           var c = p.custom || {};
-          if (c.bg) d.style.setProperty("--bg", c.bg);
-          if (c.accent) d.style.setProperty("--accent", c.accent);
-          if (c.pop) d.style.setProperty("--pop", c.pop);
+          if (c.bg) d.style.setProperty("--background", c.bg);
+          if (c.accent) d.style.setProperty("--primary", c.accent);
+          if (c.pop) d.style.setProperty("--accent", c.pop);
           var qm = new URLSearchParams(location.search).get("mode");
           var rm =
             qm === "verse" || qm === "reading"

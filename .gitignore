@@ -39,3 +39,5 @@ DEPLOYMENT.md
 .claude/skills
 .agents/skills
 rust/data/
+
+.z-workflow/

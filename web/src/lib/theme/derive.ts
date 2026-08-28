@@ -57,12 +57,33 @@ const shift = (c: Rgb, t: number): Rgb => (t >= 0 ? mix(c, WHITE, t) : mix(c, BL
 const rgba = ({ r, g, b }: Rgb, a: number): string =>
   `rgba(${toChannel(r)}, ${toChannel(g)}, ${toChannel(b)}, ${a})`;
 
+// A custom background seed overrides the §4 semantic contract's background/surface/foreground half
+// (docs/design-system.md §4) plus the legacy --bg/--line/--fg ramp it replaced.
 function backgroundTokens(seed: Rgb) {
   const light = isLight(seed);
   const dir = light ? -1 : 1;
   const ink = light ? BLACK : WHITE;
 
+  const subtle = shift(seed, dir * (light ? 0.03 : 0.03));
+  const surface = shift(seed, light ? 0.05 : 0.055);
+  const raised = shift(seed, light ? 0.1 : 0.09);
+  const hover = shift(seed, dir * (light ? 0.055 : 0.1));
+
   return {
+    // §4 contract
+    "--background": toHex(seed),
+    "--background-subtle": toHex(subtle),
+    "--surface": toHex(surface),
+    "--surface-raised": toHex(raised),
+    "--surface-hover": toHex(hover),
+    "--foreground": toHex(mix(seed, ink, light ? 0.92 : 0.97)),
+    "--foreground-secondary": toHex(mix(seed, ink, light ? 0.76 : 0.8)),
+    "--muted": toHex(mix(seed, ink, light ? 0.6 : 0.64)),
+    "--border": rgba(ink, light ? 0.12 : 0.09),
+    "--border-strong": rgba(ink, light ? 0.18 : 0.14),
+    "--reader-background": toHex(light ? raised : shift(seed, -0.2)),
+
+    // legacy ramp (aliased consumers)
     "--bg": toHex(seed),
     "--bg-1": toHex(shift(seed, dir * (light ? 0.0 : 0.055))),
     "--bg-2": toHex(shift(seed, dir * (light ? 0.035 : 0.1))),
@@ -80,9 +101,18 @@ function backgroundTokens(seed: Rgb) {
   };
 }
 
+// A custom accent seed overrides the interactive (primary) family plus the legacy --accent ramp.
 function accentTokens(seed: Rgb) {
   const onLight = isLight(seed);
   return {
+    // §4 contract
+    "--primary": toHex(seed),
+    "--primary-hover": toHex(shift(seed, onLight ? -0.08 : 0.08)),
+    "--primary-foreground": onLight ? toHex(mix(seed, BLACK, 0.88)) : "#ffffff",
+    "--primary-soft": rgba(seed, onLight ? 0.12 : 0.16),
+    "--focus-ring": toHex(seed),
+
+    // legacy ramp
     "--accent": toHex(seed),
     "--accent-soft": rgba(seed, 0.13),
     "--accent-line": rgba(seed, 0.32),
@@ -91,8 +121,17 @@ function accentTokens(seed: Rgb) {
   };
 }
 
+// A custom pop seed overrides the editorial accent (gold family) plus the legacy --pop pair.
+// When an interactive accent seed is also present it keeps ownership of --primary/--focus-ring;
+// the editorial `--accent` always follows the pop seed per the §4 contract.
 function popTokens(seed: Rgb) {
   return {
+    // §4 contract
+    "--accent": toHex(seed),
+    "--accent-strong": toHex(seed),
+    "--accent-soft": rgba(seed, 0.13),
+
+    // legacy pair
     "--pop": toHex(seed),
     "--pop-soft": rgba(seed, 0.13),
   };

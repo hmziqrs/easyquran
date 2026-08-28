@@ -1,9 +1,15 @@
 import { browser } from "$app/environment";
 import {
   ACCENTS,
-  DEFAULTS,
+  DEFAULT_MODE,
+  DEFAULT_PALETTE,
+  PALETTES,
+  PALETTE_TO_SURFACE,
   SURFACES,
+  SURFACE_TO_PALETTE,
   type AccentId,
+  type AppearanceMode,
+  type PaletteId,
   type SurfaceId,
   type ThemeMode,
 } from "$lib/config/site";
@@ -13,6 +19,27 @@ import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
 const STORAGE_KEY = "easyquran.prefs";
 
 const CUSTOM_PROPS = [
+  // §4 semantic contract (docs/design-system.md) — custom seeds override these directly…
+  "--background",
+  "--background-subtle",
+  "--surface",
+  "--surface-raised",
+  "--surface-hover",
+  "--foreground",
+  "--foreground-secondary",
+  "--muted",
+  "--border",
+  "--border-strong",
+  "--reader-background",
+  "--primary",
+  "--primary-hover",
+  "--primary-foreground",
+  "--primary-soft",
+  "--focus-ring",
+  "--accent",
+  "--accent-strong",
+  "--accent-soft",
+  // …and the legacy ramp below is kept so older sheets/aliases stay consistent until swept.
   "--bg",
   "--bg-1",
   "--bg-2",
@@ -25,8 +52,6 @@ const CUSTOM_PROPS = [
   "--fg-2",
   "--fg-3",
   "--fg-4",
-  "--accent",
-  "--accent-soft",
   "--accent-line",
   "--accent-fg",
   "--ring",
@@ -35,9 +60,19 @@ const CUSTOM_PROPS = [
 ] as const;
 
 export interface Prefs {
+  /**
+   * Legacy persisted mode (dark|light). Kept because settings-document.ts (frozen this round)
+   * decodes it; the store always keeps it equal to the *resolved* appearance mode.
+   */
   theme: ThemeMode;
+  /** Legacy surface id. Kept in sync with `palette` via PALETTE_TO_SURFACE for older sync paths. */
   surface: SurfaceId;
+  /** Legacy accent id. Palettes own accent colors now; this field only round-trips old prefs. */
   accent: AccentId;
+  /** Design-system palette (§4). Optional so the frozen settings-document decoder stays assignable. */
+  palette?: PaletteId;
+  /** Appearance setting (§25): light/dark/system. `theme` mirrors the resolved value. */
+  mode?: AppearanceMode;
   custom: CustomSeeds;
   instantResume: boolean;
 }
@@ -61,23 +96,66 @@ function cleanCustom(raw: unknown): CustomSeeds {
   return out;
 }
 
+function systemPrefersDark(): boolean {
+  if (!browser) return true;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/** Resolves the §25 appearance setting to the concrete light/dark value the CSS attributes need. */
+export function resolveMode(mode: AppearanceMode, fallback: ThemeMode): ThemeMode {
+  if (mode === "system") return systemPrefersDark() ? "dark" : "light";
+  return mode === "light" || mode === "dark" ? mode : fallback;
+}
+
 function load(): Prefs {
-  const base: Prefs = { ...DEFAULTS, instantResume: false, custom: {} };
+  const base: Prefs = {
+    theme: "dark",
+    surface: PALETTE_TO_SURFACE[DEFAULT_PALETTE],
+    accent: "emerald",
+    palette: DEFAULT_PALETTE,
+    mode: DEFAULT_MODE,
+    instantResume: false,
+    custom: {},
+  };
   if (!browser) return base;
   const stored = asObject(readJSON(STORAGE_KEY));
-  const surface = stored?.surface;
-  const accent = stored?.accent;
+  if (!stored) return base;
+
+  // Back-compat (§25 migration): surface→palette, theme→mode; explicit new fields win.
+  const legacySurface = SURFACES.find((s) => s.id === stored.surface)?.id;
+  const mode: AppearanceMode =
+    asLiteral(stored.mode, ["light", "dark", "system"] as const) ??
+    asLiteral(stored.theme, ["light", "dark"] as const) ??
+    DEFAULT_MODE;
+  const palette: PaletteId =
+    PALETTES.find((p) => p.id === stored.palette)?.id ??
+    (legacySurface ? SURFACE_TO_PALETTE[legacySurface] : undefined) ??
+    DEFAULT_PALETTE;
   return {
-    theme: asLiteral(stored?.theme, ["dark", "light"] as const) ?? base.theme,
-    surface: SURFACES.find((s) => s.id === surface)?.id ?? base.surface,
-    accent: ACCENTS.find((a) => a.id === accent)?.id ?? base.accent,
-    custom: cleanCustom(stored?.custom),
-    instantResume: stored?.instantResume === true,
+    theme: resolveMode(mode, base.theme),
+    surface: PALETTE_TO_SURFACE[palette],
+    accent: ACCENTS.find((a) => a.id === stored.accent)?.id ?? base.accent,
+    palette,
+    mode,
+    custom: cleanCustom(stored.custom),
+    instantResume: stored.instantResume === true,
+  };
+}
+
+function loadDefaults(): Prefs {
+  return {
+    theme: "dark",
+    surface: PALETTE_TO_SURFACE[DEFAULT_PALETTE],
+    accent: "emerald",
+    palette: DEFAULT_PALETTE,
+    mode: DEFAULT_MODE,
+    instantResume: false,
+    custom: {},
   };
 }
 
 class PrefsStore {
-  #prefs = $state<Prefs>({ ...DEFAULTS, instantResume: false, custom: {} });
+  #prefs = $state<Prefs>(loadDefaults());
   #hydrated = false;
 
   hydrate(): void {
@@ -88,19 +166,31 @@ class PrefsStore {
       this.#prefs = load();
       this.apply();
     });
+    // §25 "System": follow the OS while no explicit light/dark choice is active.
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", () => {
+      if (this.#prefs.mode === "system") this.apply();
+    });
   }
 
   get current(): Readonly<Prefs> {
     return this.#prefs;
   }
+  /** The concrete active mode (never "system"). Nav and legacy consumers read this. */
   get theme(): ThemeMode {
-    return this.#prefs.theme;
+    return resolveMode(this.mode, this.#prefs.theme);
   }
   get surface(): SurfaceId {
     return this.#prefs.surface;
   }
   get accent(): AccentId {
     return this.#prefs.accent;
+  }
+  get palette(): PaletteId {
+    return this.#prefs.palette ?? DEFAULT_PALETTE;
+  }
+  get mode(): AppearanceMode {
+    return this.#prefs.mode ?? DEFAULT_MODE;
   }
   get instantResume(): boolean {
     return this.#prefs.instantResume;
@@ -118,18 +208,20 @@ class PrefsStore {
   }
 
   css(): string {
-    const selector =
-      `[data-theme="${this.#prefs.theme}"][data-surface="${this.#prefs.surface}"]` +
-      `[data-accent="${this.#prefs.accent}"]`;
+    const selector = `[data-palette="${this.palette}"][data-mode="${this.theme}"]`;
     return tokensToCss(this.customTokens, selector);
   }
 
   apply(): void {
     if (!browser) return;
     const el = document.documentElement;
-    el.dataset.theme = this.#prefs.theme;
-    el.dataset.surface = this.#prefs.surface;
-    el.dataset.accent = this.#prefs.accent;
+    el.dataset.palette = this.palette;
+    el.dataset.mode = this.theme;
+    // Legacy attribute names are gone from layout.css; scrub them so stale markup from a cached
+    // app.html can't resurrect the retired [data-theme]/[data-surface]/[data-accent] blocks.
+    delete el.dataset.theme;
+    delete el.dataset.surface;
+    delete el.dataset.accent;
 
     const tokens = this.customTokens;
     for (const prop of CUSTOM_PROPS) {
@@ -140,7 +232,10 @@ class PrefsStore {
   }
 
   set(patch: PrefPatch): void {
-    this.#prefs = { ...this.#prefs, ...patch };
+    const next: Prefs = { ...this.#prefs, ...patch };
+    if (next.palette) next.surface = PALETTE_TO_SURFACE[next.palette];
+    if (patch.mode) next.theme = resolveMode(patch.mode, next.theme);
+    this.#prefs = next;
     if (browser) {
       writeJSON(STORAGE_KEY, this.#prefs);
       this.apply();
@@ -148,11 +243,19 @@ class PrefsStore {
     }
   }
 
+  /** @deprecated legacy name — sets the appearance mode (light/dark). Prefer setMode. */
   setTheme(theme: ThemeMode): void {
-    this.set({ theme });
+    this.setMode(theme);
   }
+  setMode(mode: AppearanceMode): void {
+    this.set({ mode, theme: resolveMode(mode, this.theme) });
+  }
+  /** @deprecated legacy name — palettes replaced surfaces; kept for older callers. */
   setSurface(surface: SurfaceId): void {
-    this.set({ surface });
+    this.setPalette(SURFACE_TO_PALETTE[surface]);
+  }
+  setPalette(palette: PaletteId): void {
+    this.set({ palette });
   }
   setAccent(accent: AccentId): void {
     const { accent: _dropped, ...rest } = this.#prefs.custom;
@@ -162,7 +265,7 @@ class PrefsStore {
     this.set({ instantResume: value });
   }
   toggleTheme(): void {
-    this.set({ theme: this.#prefs.theme === "dark" ? "light" : "dark" });
+    this.setMode(this.theme === "dark" ? "light" : "dark");
   }
 
   setCustom(key: keyof CustomSeeds, hex: string | undefined): void {
@@ -177,7 +280,7 @@ class PrefsStore {
   }
 
   reset(): void {
-    this.set({ ...DEFAULTS, instantResume: false, custom: {} });
+    this.set(loadDefaults());
   }
 }
 
