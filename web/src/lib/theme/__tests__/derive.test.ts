@@ -58,16 +58,43 @@ describe("deriveTokens — background ramp", () => {
 
   it("emits the §4 contract alongside the legacy ramp, consistently", () => {
     const t = deriveTokens({ bg: "#101820" });
-    expect(t["--background"]).toBe("#101820");
+    // Plan 01: the ground is neutral — a chromatic seed is quantised to its grey twin, so
+    // --background keeps the seed's luminance but loses its tint entirely.
+    const bg = parseHex(t["--background"]!)!;
+    expect(bg.r).toBe(bg.g);
+    expect(bg.g).toBe(bg.b);
+    expect(luminance(bg)).toBeCloseTo(lum("#101820"), 2);
     expect(t["--foreground"]).toBe(t["--fg"]);
     expect(t["--foreground-secondary"]).toBe(t["--fg-2"]);
     expect(t["--muted"]).toBe(t["--fg-3"]);
     expect(t["--border"]).toBe(t["--line"]);
     expect(t["--border-strong"]).toBe(t["--line-2"]);
-    expect(lum(t["--surface"]!)).toBeGreaterThan(lum("#101820"));
+    expect(lum(t["--surface"]!)).toBeGreaterThan(lum(t["--background"]!));
     expect(lum(t["--surface-raised"]!)).toBeGreaterThan(lum(t["--surface"]!));
     // §42: the reader sits darker than the app background at night.
-    expect(lum(t["--reader-background"]!)).toBeLessThan(lum("#101820"));
+    expect(lum(t["--reader-background"]!)).toBeLessThan(lum(t["--background"]!));
+  });
+
+  it("produces zero-chroma ground ramps from any seed (plan 01 neutral ground)", () => {
+    const hexGroundTokens = [
+      "--background",
+      "--background-subtle",
+      "--surface",
+      "--surface-raised",
+      "--surface-hover",
+      "--foreground",
+      "--foreground-secondary",
+      "--muted",
+      "--reader-background",
+    ];
+    for (const seed of ["#808080", "#3fbfa6", "#f4ecd8", "#0b1018"]) {
+      const t = deriveTokens({ bg: seed });
+      for (const token of hexGroundTokens) {
+        const c = parseHex(t[token]!)!;
+        expect(c.r, `${token} from ${seed}`).toBe(c.g);
+        expect(c.g, `${token} from ${seed}`).toBe(c.b);
+      }
+    }
   });
 });
 
@@ -89,6 +116,15 @@ describe("deriveTokens — accent", () => {
     expect(t["--primary"]).toBe("#3fbfa6");
     expect(t["--focus-ring"]).toBe("#3fbfa6");
     expect(t["--primary-foreground"]).toBe("#ffffff");
+  });
+
+  it("derives --on-hue-1 by luminance, never assumes white (plan 01)", () => {
+    // A bright-yellow accent seed is light: its on-colour must be dark.
+    const yellow = deriveTokens({ accent: "#f5d76e" });
+    expect(lum(yellow["--on-hue-1"]!)).toBeLessThan(0.1);
+    expect(yellow["--on-hue-1"]).toBe(yellow["--primary-foreground"]);
+    // A deep accent seed takes white.
+    expect(deriveTokens({ accent: "#3b2a1a" })["--on-hue-1"]).toBe("#ffffff");
   });
 });
 

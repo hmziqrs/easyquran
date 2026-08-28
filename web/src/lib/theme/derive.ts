@@ -155,9 +155,24 @@ const shift = (c: Rgb, t: number): Rgb => (t >= 0 ? mix(c, WHITE, t) : mix(c, BL
 const rgba = ({ r, g, b }: Rgb, a: number): string =>
   `rgba(${toChannel(r)}, ${toChannel(g)}, ${toChannel(b)}, ${a})`;
 
+/* ── plan 01: the ground is zero-chroma ──────────────────────────────────────────────────────
+   A custom bg seed may be chromatic, but the migrated contract's ground is neutral. The seed
+   is quantised to the grey of identical sRGB luminance before the ramp is derived, so every
+   ground token comes out with r === g === b no matter what the user picked. */
+
+const linearToChannel = (y: number): number =>
+  y <= 0.0031308 ? y * 12.92 : 1.055 * y ** (1 / 2.4) - 0.055;
+
+/** The neutral twin of a colour: the grey with the same WCAG luminance. */
+function toNeutral(seed: Rgb): Rgb {
+  const c = toChannel(linearToChannel(luminance(seed)) * 255);
+  return { r: c, g: c, b: c };
+}
+
 // A custom background seed overrides the §4 semantic contract's background/surface/foreground half
 // (docs/design-system.md §4) plus the legacy --bg/--line/--fg ramp it replaced.
-function backgroundTokens(seed: Rgb) {
+function backgroundTokens(raw: Rgb) {
+  const seed = toNeutral(raw);
   const light = isLight(seed);
   const dir = light ? -1 : 1;
   const ink = light ? BLACK : WHITE;
@@ -200,21 +215,27 @@ function backgroundTokens(seed: Rgb) {
 }
 
 // A custom accent seed overrides the interactive (primary) family plus the legacy --accent ramp.
+// Plan 01: the accent doubles as hue-1, and its on-colour is derived by luminance (isLight),
+// never assumed white — amber/lime fills need near-black text.
 function accentTokens(seed: Rgb) {
   const onLight = isLight(seed);
+  const on = onLight ? toHex(mix(seed, BLACK, 0.88)) : "#ffffff";
   return {
     // §4 contract
     "--primary": toHex(seed),
     "--primary-hover": toHex(shift(seed, onLight ? -0.08 : 0.08)),
-    "--primary-foreground": onLight ? toHex(mix(seed, BLACK, 0.88)) : "#ffffff",
+    "--primary-foreground": on,
     "--primary-soft": rgba(seed, onLight ? 0.12 : 0.16),
     "--focus-ring": toHex(seed),
+
+    // hue-1 entry of the plan 01 hue set
+    "--on-hue-1": on,
 
     // legacy ramp
     "--accent": toHex(seed),
     "--accent-soft": rgba(seed, 0.13),
     "--accent-line": rgba(seed, 0.32),
-    "--accent-fg": onLight ? toHex(mix(seed, BLACK, 0.88)) : "#ffffff",
+    "--accent-fg": on,
     "--ring": toHex(seed),
   };
 }
