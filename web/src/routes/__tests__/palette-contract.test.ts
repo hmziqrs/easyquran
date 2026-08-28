@@ -88,4 +88,9 @@ describe("layout.css palette contract", () => {
   it("keeps the border utility alive (border-border/divide-border consumers)", () => {
     expect(css).toContain("--color-border: var(--border);");
   });
+
+  it("maps text-muted to the foreground-side --muted token, never a surface (§4/§9)", () => {
+    expect(css).toContain("--color-muted: var(--muted);");
+    expect(css).not.toContain("--color-muted: var(--surface-hover);");
+  });
 });

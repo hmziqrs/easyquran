@@ -95,9 +95,9 @@
   --color-surface-hover: var(--surface-hover);
   --color-foreground: var(--foreground);
   --color-foreground-secondary: var(--foreground-secondary);
-  /* bg-muted keeps shadcn's "quiet hover surface" meaning; the contract's muted TEXT is the
-     --muted token and its utility below. */
-  --color-muted: var(--surface-hover);
+  /* `text-muted` is the muted TEXT color (§4 --muted, ≥4.5:1 on --background per §9). There is
+     no muted-background utility in the contract — quiet surfaces are --surface-hover. */
+  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted);
   --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
