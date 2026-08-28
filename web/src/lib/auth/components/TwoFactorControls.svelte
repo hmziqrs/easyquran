@@ -54,23 +54,23 @@
 </script>
 
 {#if !verified}
-  <p class="text-sm text-fg-2">{VERIFY_EMAIL_NEXT}</p>
+  <p class="text-sm text-foreground-secondary">{VERIFY_EMAIL_NEXT}</p>
 {:else if showVerifyPanel && flow.setupData}
-  <section class="flex flex-col gap-4 rounded-xl border border-line-2 bg-bg-2 p-5">
+  <section class="flex flex-col gap-4 rounded-xl border border-border-strong bg-background-subtle p-5">
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-semibold">Enter your authenticator code</h3>
-      <p class="text-sm text-fg-2">
+      <p class="text-sm text-foreground-secondary">
         Add this secret to your authenticator app, then enter the 6-digit code it generates.
       </p>
     </div>
     <div class="flex flex-col gap-1">
-      <span class="text-xs font-medium uppercase tracking-wide text-fg-3">Secret (keep private)</span>
-      <code class="break-all rounded-lg bg-bg-1 px-3 py-2 font-mono text-sm">{flow.setupData.secret}</code>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted">Secret (keep private)</span>
+      <code class="break-all rounded-md bg-surface px-3 py-2 font-mono text-sm">{flow.setupData.secret}</code>
     </div>
     {#if flow.setupData.backupCodes.length > 0}
       <details class="flex flex-col gap-1.5">
-        <summary class="cursor-pointer text-sm font-medium text-fg-2">Show backup codes</summary>
-        <p class="text-xs text-fg-3">Save these once. They will not be shown again.</p>
+        <summary class="cursor-pointer text-sm font-medium text-foreground-secondary">Show backup codes</summary>
+        <p class="text-xs text-muted">Save these once. They will not be shown again.</p>
         <ul class="grid grid-cols-2 gap-1 font-mono text-sm">
           {#each flow.setupData.backupCodes as code (code)}
             <li>{code}</li>
@@ -117,7 +117,7 @@
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-semibold">Two-factor authentication</h3>
-      <p class="text-sm text-fg-2">Add a second step at sign-in using an authenticator app.</p>
+      <p class="text-sm text-foreground-secondary">Add a second step at sign-in using an authenticator app.</p>
     </div>
     {#if flow.genericError}
       <p role="alert" class="text-sm text-destructive">{flow.genericError}</p>
@@ -130,7 +130,7 @@
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-semibold">Two-factor authentication is on</h3>
-      <p class="text-sm text-fg-2">
+      <p class="text-sm text-foreground-secondary">
         Enter your authenticator code to remove the second step at sign-in.
       </p>
     </div>
@@ -173,7 +173,7 @@
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-semibold">Two-factor authentication is off</h3>
-      <p class="text-sm text-fg-2">Two-factor authentication has been disabled.</p>
+      <p class="text-sm text-foreground-secondary">Two-factor authentication has been disabled.</p>
     </div>
     {#if flow.genericError}
       <p role="alert" class="text-sm text-destructive">{flow.genericError}</p>

@@ -51,7 +51,7 @@
 </script>
 
 <div class="flex flex-col gap-1.5">
-  <Label for={id} class="text-[13px] font-medium text-fg-2">{label}</Label>
+  <Label for={id} class="text-[13px] font-medium text-foreground-secondary">{label}</Label>
   <div class="relative">
     <Input
       class={cn("peer h-11 rounded-lg", leadingIcon && "ps-10", trailing && "pe-11", className)}
@@ -72,7 +72,7 @@
     />
     {#if leadingIcon}
       <span
-        class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5 text-fg-4 transition-colors peer-focus:text-accent"
+        class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5 text-muted transition-colors peer-focus:text-primary"
       >
         {@render leadingIcon()}
       </span>
@@ -86,6 +86,6 @@
   {#if error}
     <span id={errorId} role="alert" class="text-xs text-destructive">{error}</span>
   {:else if hint}
-    <span id={hintId} class="text-xs text-fg-3">{hint}</span>
+    <span id={hintId} class="text-xs text-muted">{hint}</span>
   {/if}
 </div>

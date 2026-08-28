@@ -44,27 +44,25 @@
       data-slot="auth-dialog"
       lang={copy.locale}
       dir={copy.direction}
-      class="fixed left-1/2 top-[10vh] z-[91] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+      class="fixed left-1/2 top-[10vh] z-[91] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface-raised outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
     >
       <DialogPrimitive.Title class="sr-only">{copy.dialogTitle}</DialogPrimitive.Title>
       <DialogPrimitive.Description class="sr-only"
         >{copy.dialogDescription}</DialogPrimitive.Description
       >
       <DialogPrimitive.Close
-        class="absolute end-3.5 top-3.5 inline-flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="absolute end-3.5 top-3.5 inline-flex size-9 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         aria-label={copy.close}><Icon name="x" size={18} /></DialogPrimitive.Close
       >
       <div class="max-h-[82vh] overflow-y-auto px-6 py-7">
         <Tabs value={tab} onValueChange={(v) => (tab = v as "login" | "register")} class="flex flex-col gap-5">
-          <TabsList class="flex gap-5 border-b border-border-strong">
+          <TabsList class="self-start">
             <TabsTrigger
               value="login"
-              class="relative -mb-px px-1"
               >{copy.signIn}</TabsTrigger
             >
             <TabsTrigger
               value="register"
-              class="relative -mb-px px-1"
               >{copy.createAccount}</TabsTrigger
             >
           </TabsList>

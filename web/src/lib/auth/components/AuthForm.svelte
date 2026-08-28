@@ -38,7 +38,7 @@
       ? "text-[22px] font-semibold leading-tight tracking-[-0.01em]"
       : "text-[28px] font-semibold leading-tight tracking-[-0.02em]",
   );
-  let subheadingClass = $derived(variant === "modal" ? "text-[14px] text-fg-2" : "text-[15px] text-fg-2");
+  let subheadingClass = $derived(variant === "modal" ? "text-[14px] text-foreground-secondary" : "text-[15px] text-foreground-secondary");
 
   let formEl: HTMLFormElement | null = $state(null);
 
@@ -63,11 +63,11 @@
   </div>
 
   {#if serverError}
-    <p role="alert" aria-live="assertive" class="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm text-destructive">
+    <p role="alert" aria-live="assertive" class="rounded-md border border-danger/30 bg-danger/5 px-3.5 py-2.5 text-sm text-danger">
       {serverError}
     </p>
   {:else if successNotice}
-    <p role="status" aria-live="polite" class="rounded-lg border border-accent/30 bg-accent-soft px-3.5 py-2.5 text-sm text-accent">
+    <p role="status" aria-live="polite" class="rounded-md border border-primary/30 bg-primary-soft px-3.5 py-2.5 text-sm text-primary">
       {successNotice}
     </p>
   {/if}
@@ -81,7 +81,7 @@
   </Button>
 
   {#if footer}
-    <div class="flex flex-col gap-1.5 text-center text-sm text-fg-2">
+    <div class="flex flex-col gap-1.5 text-center text-sm text-foreground-secondary">
       {@render footer()}
     </div>
   {/if}

@@ -55,13 +55,13 @@
 
 <section aria-label={copy.moreSignInOptionsAria} class="flex flex-col gap-3">
   <div class="flex items-center gap-3" aria-hidden="true">
-    <span class="h-px flex-1 bg-line-2"></span>
+    <span class="h-px flex-1 bg-border-strong"></span>
     <span class="eyebrow">{copy.orContinueWith}</span>
-    <span class="h-px flex-1 bg-line-2"></span>
+    <span class="h-px flex-1 bg-border-strong"></span>
   </div>
 
   {#if socialError}
-    <p role="alert" aria-live="assertive" class="text-center text-sm text-destructive">
+    <p role="alert" aria-live="assertive" class="text-center text-sm text-danger">
       {socialError}
     </p>
   {/if}
@@ -76,7 +76,7 @@
         disabled={socialPending}
         onclick={() => begin(p.id)}
       >
-        <OAuthIcon provider={p.id} size={16} class="absolute left-[18px] top-1/2 -translate-y-1/2" />
+        <OAuthIcon provider={p.id} size={16} class="absolute start-[18px] top-1/2 -translate-y-1/2" />
         <span>{oauth[p.id].pending ? copy.pleaseWait : copy.continueWithProvider(p.label)}</span>
       </Button>
     {/each}
@@ -92,7 +92,7 @@
         <KeyIcon
           weight="fill"
           size={16}
-          class="absolute left-[18px] top-1/2 -translate-y-1/2"
+          class="absolute start-[18px] top-1/2 -translate-y-1/2"
           aria-hidden="true"
         />
         <span>{passkey.pending ? copy.pleaseWait : copy.continueWithPasskey}</span>

@@ -106,7 +106,7 @@
       {/snippet}
     </totpForm.Field>
     {#snippet footer()}
-      <button type="button" class="text-accent hover:underline" onclick={cancelTotp}>
+      <button type="button" class="text-primary hover:underline" onclick={cancelTotp}>
         {copy.useDifferentAccount}
       </button>
     {/snippet}
@@ -205,7 +205,7 @@
     {#snippet footer()}
       <span>
         {copy.haveAccountPrompt}
-        <a href="/login" class="text-accent hover:underline">{copy.signIn}</a>
+        <a href="/login" class="text-primary hover:underline">{copy.signIn}</a>
       </span>
     {/snippet}
   </AuthForm>

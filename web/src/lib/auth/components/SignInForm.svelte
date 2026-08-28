@@ -98,7 +98,7 @@
       {/snippet}
     </totpForm.Field>
     {#snippet footer()}
-      <button type="button" class="text-accent hover:underline" onclick={cancelTotp}>
+      <button type="button" class="text-primary hover:underline" onclick={cancelTotp}>
         {copy.useDifferentAccount}
       </button>
     {/snippet}
@@ -155,11 +155,11 @@
     {#snippet footer()}
       <span>
         {copy.forgotPasswordPrompt}
-        <a href="/forgot-password" class="text-accent hover:underline">{copy.resetPasswordLink}</a>
+        <a href="/forgot-password" class="text-primary hover:underline">{copy.resetPasswordLink}</a>
       </span>
       <span>
         {copy.noAccountPrompt}
-        <a href="/register" class="text-accent hover:underline">{copy.createOneLink}</a>
+        <a href="/register" class="text-primary hover:underline">{copy.createOneLink}</a>
       </span>
     {/snippet}
   </AuthForm>

@@ -60,7 +60,7 @@
     <button
       type="button"
       aria-label={visible ? copy.hidePasswordAria : copy.showPasswordAria}
-      class="inline-flex h-8 w-8 items-center justify-center rounded-md text-fg-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      class="inline-flex h-8 w-8 items-center justify-center rounded-pill text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       onclick={() => (visible = !visible)}
     >
       {#if visible}
