@@ -22,7 +22,7 @@
 
 {#if suggestions.length > 0}
   <section aria-label={copy.sectionSurahs} class="flex flex-col gap-1.5">
-    <h2 class="text-[14.5px] font-medium text-fg">{copy.sectionSurahs}</h2>
+    <h2 class="text-[14.5px] font-medium text-foreground">{copy.sectionSurahs}</h2>
     <ul class="flex flex-wrap gap-1.5">
       {#each suggestions as suggestion (suggestion.num)}
         {@const href = hrefFor(suggestion.num)}
@@ -30,14 +30,14 @@
           {#if href !== null}
             <a
               href={href}
-              class="flex items-baseline gap-1.5 rounded-full border border-line-2 bg-bg-1 px-3 py-1.5 text-[12.5px] text-fg-2 transition-colors hover:border-line hover:text-fg"
+              class="flex items-baseline gap-1.5 rounded-pill border border-border-strong bg-surface px-3 py-1.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground"
             >
               <span class="truncate">{suggestion.num}. {suggestion.transliteration}</span>
-              <span lang="ar" dir="rtl" class="font-arabic text-fg-3">{suggestion.arabic}</span>
+              <span lang="ar" dir="rtl" class="font-arabic text-muted">{suggestion.arabic}</span>
             </a>
           {:else}
             <span
-              class="flex items-baseline gap-1.5 rounded-full border border-line-2 bg-bg-1 px-3 py-1.5 text-[12.5px] text-fg-3"
+              class="flex items-baseline gap-1.5 rounded-pill border border-border-strong bg-surface px-3 py-1.5 text-[12.5px] text-muted"
             >
               <span class="truncate">{suggestion.num}. {suggestion.transliteration}</span>
             </span>

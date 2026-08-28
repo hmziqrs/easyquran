@@ -147,7 +147,8 @@ describe("TranslationPicker rows", () => {
     h.emit({ script: UNCACHED, loaded: 50, total: 200 });
     await settle();
 
-    const bar = row(UNCACHED).querySelector("div.bg-accent");
+    // Selector tracks the plan-06 token sweep: the fill is bg-primary (was the bg-accent alias).
+    const bar = row(UNCACHED).querySelector("div.bg-primary");
     expect(bar?.getAttribute("style")).toContain("25%");
     const button = downloadButton(UNCACHED);
     expect(button).toBeUndefined();

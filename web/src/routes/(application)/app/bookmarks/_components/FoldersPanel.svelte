@@ -26,9 +26,9 @@
   let confirmingId = $state<string | null>(null);
 
   const actionButton =
-    "rounded-lg border border-line-2 px-2.5 py-1.5 text-[12.5px] text-fg-2 transition-colors hover:border-line hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+    "rounded-lg border border-border-strong px-2.5 py-1.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
   const dangerButton =
-    "rounded-lg border border-line-2 px-2.5 py-1.5 text-[12.5px] text-pop transition-colors hover:border-pop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+    "rounded-lg border border-border-strong px-2.5 py-1.5 text-[12.5px] text-pop transition-colors hover:border-pop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 
   function submitCreate(): void {
     const name = newName;
@@ -53,7 +53,7 @@
 
 <section class="mt-6" aria-labelledby="bookmarks-folders">
   <div class="flex items-baseline justify-between gap-3">
-    <h2 id="bookmarks-folders" class="text-[17px] font-semibold tracking-[-0.02em] text-fg"
+    <h2 id="bookmarks-folders" class="text-[17px] font-semibold tracking-[-0.02em] text-foreground"
       >{copy.foldersHeading}</h2
     >
   </div>
@@ -71,12 +71,12 @@
       bind:value={newName}
       maxlength={100}
       placeholder={copy.newFolderPlaceholder}
-      class="h-9 rounded-lg border-line-2 bg-bg-1 text-[13.5px] text-fg"
+      class="h-9 rounded-lg border-border-strong bg-surface text-caption text-foreground"
     />
     <button
       type="submit"
       disabled={newName.trim().length === 0}
-      class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-2 px-3 text-[13px] font-medium text-fg-2 transition-colors hover:border-line hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40"
+      class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-strong px-3 text-[13px] font-medium text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-40"
     >
       <Icon name="plus" size={14} />
       {copy.createFolder}
@@ -84,7 +84,7 @@
   </form>
 
   {#if folders.length > 0}
-    <ul class="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+    <ul class="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
       {#each folders as folder (folder.id)}
         <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
           {#if renamingId === folder.id}
@@ -100,7 +100,7 @@
                 id="bookmarks-rename-{folder.id}"
                 bind:value={renameValue}
                 maxlength={100}
-                class="h-8 max-w-56 rounded-lg border-line-2 bg-bg-1 text-[13.5px] text-fg"
+                class="h-8 max-w-56 rounded-lg border-border-strong bg-surface text-caption text-foreground"
               />
               <button type="submit" class={actionButton}>{copy.save}</button>
               <button
@@ -110,7 +110,7 @@
               >
             </form>
           {:else if confirmingId === folder.id}
-            <span class="min-w-0 flex-1 text-[13.5px] text-fg-2"
+            <span class="min-w-0 flex-1 text-caption text-foreground-secondary"
               >{copy.deleteFolderConfirm(folder.name)}</span
             >
             <button type="button" class={dangerButton} onclick={() => onDelete(folder.id)}
@@ -122,10 +122,10 @@
               onclick={() => (confirmingId = null)}>{copy.cancel}</button
             >
           {:else}
-            <span class="inline-flex min-w-0 flex-1 items-center gap-2 text-[14px] text-fg">
-              <Icon name="rows" size={14} class="shrink-0 text-fg-4" />
+            <span class="inline-flex min-w-0 flex-1 items-center gap-2 text-[14px] text-foreground">
+              <Icon name="rows" size={14} class="shrink-0 text-muted" />
               <span class="truncate">{folder.name}</span>
-              <span class="shrink-0 text-[12px] tabular-nums text-fg-3"
+              <span class="shrink-0 text-[12px] tabular-nums text-muted"
                 >{countIn(folder.id)}</span
               >
             </span>

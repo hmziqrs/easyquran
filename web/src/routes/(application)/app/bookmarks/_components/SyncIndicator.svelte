@@ -21,12 +21,12 @@
   }
 
   function dotClass(): string {
-    if (isOnline && status.phase !== "error") return "bg-accent";
+    if (isOnline && status.phase !== "error") return "bg-primary";
     return "bg-pop";
   }
 </script>
 
-<span role="status" class="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-fg-3">
-  <span class={cn("inline-block size-1.5 rounded-full", dotClass())} aria-hidden="true"></span>
+<span role="status" class="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-muted">
+  <span class={cn("inline-block size-1.5 rounded-pill", dotClass())} aria-hidden="true"></span>
   {label()}
 </span>

@@ -50,12 +50,12 @@
 
 <section
   aria-label={copy.filterTitle}
-  class="flex flex-col gap-3 rounded-xl border border-line-2 bg-bg-1 p-4"
+  class="flex flex-col gap-3 rounded-xl border border-border-strong bg-surface p-4"
 >
-  <h2 class="text-[14.5px] font-medium text-fg">{copy.filterTitle}</h2>
+  <h2 class="text-[14.5px] font-medium text-foreground">{copy.filterTitle}</h2>
 
   <label
-    class="flex items-center gap-2 rounded-[9px] border border-line bg-bg-2 px-3 py-2 transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
+    class="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 transition-colors focus-within:border-border-strong focus-within:ring-2 focus-within:ring-focus-ring/40"
   >
     <span class="sr-only">{copy.filterPlaceholder}</span>
     <input
@@ -63,18 +63,18 @@
       value={filter}
       oninput={(event) => (filter = event.currentTarget.value)}
       placeholder={copy.filterPlaceholder}
-      class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-fg shadow-none outline-none placeholder:text-fg-3 focus:ring-0"
+      class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground shadow-none outline-none placeholder:text-muted focus:ring-0"
     />
   </label>
 
   {#if grouped.length === 0}
-    <p class="px-1 py-2 text-[12.5px] text-fg-3" role="status">{copy.filterNone}</p>
+    <p class="px-1 py-2 text-[12.5px] text-muted" role="status">{copy.filterNone}</p>
   {/if}
 
   <div class="flex max-h-[420px] flex-col gap-3 overflow-y-auto">
     {#each grouped as group (group.language)}
       <section>
-        <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-fg-4">
+        <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted">
           {group.language}
         </div>
         <ul class="flex flex-col gap-0.5">
@@ -96,7 +96,7 @@
 
   <a
     href={publicHref(SETTINGS_PATH)}
-    class="text-[12.5px] text-fg-3 underline-offset-4 transition-colors hover:text-fg hover:underline"
+    class="text-[12.5px] text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline"
   >
     {copy.manageStorage}
   </a>

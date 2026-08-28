@@ -163,13 +163,13 @@
   {/snippet}
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg"
+      <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground"
         >{copy.title}</h1
       >
       {#if authed}
         <SyncIndicator copy={copy} status={bookmarks.status} online={online.online} />
       {:else}
-        <span class="text-[12px] text-fg-3">{copy.localOnly}</span>
+        <span class="text-[12px] text-muted">{copy.localOnly}</span>
       {/if}
     </div>
 
@@ -180,11 +180,11 @@
           <!-- Offline note only; an online sync failure surfaces solely in the
                header SyncIndicator, never duplicated inline. -->
           {#if waitingForFirstSync && !online.online}
-            <p class="max-w-[70ch] text-[13.5px] leading-relaxed text-fg-3">{copy.offline}</p>
+            <p class="max-w-[70ch] text-caption leading-relaxed text-muted">{copy.offline}</p>
           {/if}
         </div>
       {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
-        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.empty}</p>
+        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.empty}</p>
       {:else if quranData !== null}
         <FoldersPanel
           {copy}
@@ -200,18 +200,18 @@
             {#each groups as group (group.id ?? "unfiled")}
               <section
                 aria-labelledby="bookmarks-group-{group.id ?? `unfiled`}"
-                class="overflow-hidden rounded-xl border border-line-2 bg-bg-1"
+                class="overflow-hidden rounded-xl border border-border-strong bg-surface"
               >
                 <h2
                   id="bookmarks-group-{group.id ?? `unfiled`}"
-                  class="eyebrow mb-0 border-b border-line px-4 py-3 sm:px-5"
+                  class="eyebrow mb-0 border-b border-border px-4 py-3 sm:px-5"
                   >{group.label}
-                  <span class="ms-1 font-mono text-[11px] text-fg-4">{group.rows.length}</span>
+                  <span class="ms-1 font-mono text-[11px] text-muted">{group.rows.length}</span>
                 </h2>
                 {#if group.rows.length === 0}
-                  <p class="px-4 py-3.5 text-[13.5px] text-fg-3 sm:px-5">{copy.folderEmpty}</p>
+                  <p class="px-4 py-3.5 text-caption text-muted sm:px-5">{copy.folderEmpty}</p>
                 {:else}
-                  <ul class="divide-y divide-line">
+                  <ul class="divide-y divide-border">
                     {#each group.rows as bookmark (bookmark.id)}
                       {@const meta = rowMeta(bookmark)}
                       {#if meta !== null}
@@ -240,22 +240,22 @@
           {@render loadingRows()}
         </div>
       {:else if anonRows.length === 0}
-        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.empty}</p>
+        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.empty}</p>
       {:else}
-        <ul class="mt-6 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+        <ul class="mt-6 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
           {#each anonRows as row (row.key)}
             <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-              <span class="min-w-0 flex-1 truncate text-[14px] font-medium text-fg">
+              <span class="min-w-0 flex-1 truncate text-[14px] font-medium text-foreground">
                 <a
                   href={row.href}
-                  class="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  class="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                   >{row.name}
-                  <span class="font-normal text-fg-2">{copy.ayah(row.ayah)}</span></a
+                  <span class="font-normal text-foreground-secondary">{copy.ayah(row.ayah)}</span></a
                 >
               </span>
               <button
                 type="button"
-                class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 text-[12.5px] text-fg-2 transition-colors hover:border-line hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 aria-label="{copy.removeLabel}: {row.surah}:{row.ayah}"
                 onclick={() => removeAnon(row.key)}
               >
@@ -267,9 +267,9 @@
       {/if}
 
       <div
-        class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-2 bg-bg-2 px-4 py-3.5 sm:px-5"
+        class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-strong bg-background-subtle px-4 py-3.5 sm:px-5"
       >
-        <p class="max-w-[60ch] text-[13.5px] leading-relaxed text-fg-2">{copy.signInNote}</p>
+        <p class="max-w-[60ch] text-caption leading-relaxed text-foreground-secondary">{copy.signInNote}</p>
         <Button variant="ghost" size="sm" onclick={openSignIn}>{copy.signIn}</Button>
       </div>
     {/if}

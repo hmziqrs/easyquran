@@ -55,29 +55,29 @@
     {@const fraction = reader.progressFor(lr.num) ?? (total > 0 ? Math.min(1, lr.n / total) : 0)}
     {@const label = peekTranslationName(lr.sourceId)}
     <Card class="max-w-xl">
-      <p class="text-xs font-medium uppercase tracking-wide text-fg-3">Continue reading</p>
-      <h2 class="mt-3 text-2xl font-semibold text-fg">
+      <p class="text-caption font-semibold uppercase tracking-wide text-muted">Continue reading</p>
+      <h2 class="mt-3 text-2xl font-semibold text-foreground">
         {surah?.name ?? `Surah ${lr.num}`}
       </h2>
-      <p class="mt-1 text-sm text-fg-2">
+      <p class="mt-1 text-sm text-foreground-secondary">
         {surah?.transliteration ?? ""}{surah?.meaning ? ` · ${surah.meaning}` : ""}
       </p>
-      <p class="mt-3 text-sm text-fg-2">
-        <span class="font-medium text-fg">{lr.num}:{lr.n}</span>{label ? ` · ${label}` : ""}
+      <p class="mt-3 text-sm text-foreground-secondary">
+        <span class="font-medium text-foreground">{lr.num}:{lr.n}</span>{label ? ` · ${label}` : ""}
       </p>
       {#if total > 0}
         <div
-          class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-bg-3"
+          class="mt-4 h-1.5 w-full overflow-hidden rounded-pill bg-surface-hover"
           role="progressbar"
           aria-valuenow={lr.n}
           aria-valuemax={total}
         >
-          <div class="h-full rounded-full bg-accent" style:width="{Math.round(fraction * 100)}%"></div>
+          <div class="h-full rounded-pill bg-primary" style:width="{Math.round(fraction * 100)}%"></div>
         </div>
       {/if}
       <div class="mt-6 flex items-center gap-3">
         <Button onclick={() => resumeToLastRead({ kind: "arabic" })} arrow>Continue</Button>
-        <label class="ms-auto flex cursor-pointer select-none items-center gap-2 text-xs text-fg-3">
+        <label class="ms-auto flex cursor-pointer select-none items-center gap-2 text-xs text-muted">
           <input
             type="checkbox"
             class="h-4 w-4 accent-primary"
@@ -91,19 +91,19 @@
     {@const others = reader.recentReads.filter((r) => r.num !== lr.num || r.sourceId !== lr.sourceId)}
     {#if others.length > 0}
       <div class="mt-6 max-w-xl">
-        <p class="text-xs font-medium uppercase tracking-wide text-fg-3">Recent</p>
-        <div class="mt-1 flex flex-col divide-y divide-line rounded-lg border border-line bg-bg-1">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted">Recent</p>
+        <div class="mt-1 flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
           {#each others as r (r.num + ":" + r.n + ":" + (r.sourceId ?? ""))}
             {@const rsurah = quranData?.surahByNum(r.num)}
             <button
               type="button"
-              class="flex items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-bg-2"
+              class="flex items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-surface-hover"
               onclick={() => resumeToVerse(r.num, r.n, r.sourceId, { kind: "arabic" })}
             >
-              <span class="text-sm font-medium text-fg">{rsurah?.name ?? `Surah ${r.num}`}</span>
-              <span class="text-sm text-fg-2">{r.num}:{r.n}</span>
+              <span class="text-sm font-medium text-foreground">{rsurah?.name ?? `Surah ${r.num}`}</span>
+              <span class="text-sm text-foreground-secondary">{r.num}:{r.n}</span>
               {#if peekTranslationName(r.sourceId)}
-                <span class="ms-auto text-xs text-fg-3">{peekTranslationName(r.sourceId)}</span>
+                <span class="ms-auto text-xs text-muted">{peekTranslationName(r.sourceId)}</span>
               {/if}
             </button>
           {/each}
@@ -112,8 +112,8 @@
     {/if}
   {:else}
     <Card class="max-w-xl">
-      <h2 class="text-2xl font-semibold text-fg">Start reading</h2>
-      <p class="mt-1 text-sm text-fg-2">
+      <h2 class="text-2xl font-semibold text-foreground">Start reading</h2>
+      <p class="mt-1 text-sm text-foreground-secondary">
         Pick a place to begin. Your spot is saved automatically as you read.
       </p>
       <div class="mt-5 flex flex-wrap gap-2">

@@ -36,27 +36,27 @@
   });
 
   const ghostButton =
-    "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 text-[12.5px] text-fg-2 transition-colors hover:border-line hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+    "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 </script>
 
 <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-  <Icon name="bookmark" size={15} class="shrink-0 text-accent" />
+  <Icon name="bookmark" size={15} class="shrink-0 text-primary" />
   <span class="flex min-w-0 flex-1 flex-col gap-0.5">
     {#if href}
       <a
         href={href}
-        class="truncate text-[14px] font-medium text-fg underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        class="truncate text-[14px] font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >{surahName}
-        <span class="font-normal text-fg-2">{copy.ayah(bookmark.ayah)}</span></a
+        <span class="font-normal text-foreground-secondary">{copy.ayah(bookmark.ayah)}</span></a
       >
     {:else}
-      <span class="truncate text-[14px] font-medium text-fg"
+      <span class="truncate text-[14px] font-medium text-foreground"
         >{surahName}
-        <span class="font-normal text-fg-2">{copy.ayah(bookmark.ayah)}</span></span
+        <span class="font-normal text-foreground-secondary">{copy.ayah(bookmark.ayah)}</span></span
       >
     {/if}
     {#if folder}
-      <span class="w-fit rounded-full border border-line-2 bg-bg-2 px-2 py-0.5 text-[11.5px] text-fg-3"
+      <span class="w-fit rounded-pill border border-border-strong bg-background-subtle px-2 py-0.5 text-[11.5px] text-muted"
         >{folder.name}</span
       >
     {/if}

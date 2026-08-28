@@ -25,8 +25,8 @@
 
 <ReaderShell>
   {#snippet header()}
-    <h1 class="text-sm font-medium text-fg-2">{copy.seo.juzIndexTitle}</h1>
-    <span class="ms-auto font-mono text-[12px] text-fg-3"
+    <h1 class="text-sm font-medium text-foreground-secondary">{copy.seo.juzIndexTitle}</h1>
+    <span class="ms-auto font-mono text-[12px] text-muted"
       >{copy.range.juzCount(data.ajzur.length)}</span
     >
   {/snippet}
@@ -37,15 +37,15 @@
         <a
           href={publicHref(readerHrefFor(copy.locale, juzPathFor(arabicCtx, juz.index)))}
           data-sveltekit-preload-data="hover"
-          class="flex items-center gap-3 rounded-lg border border-line px-4 py-3 transition-colors hover:bg-bg-2"
+          class="flex items-center gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-surface-hover"
         >
           <span
-            class="flex h-7 min-w-7 items-center justify-center rounded-full border border-line px-2 text-[11px] text-fg-3"
+            class="flex h-7 min-w-7 items-center justify-center rounded-pill border border-border px-2 text-[11px] text-muted"
           >
             {juz.index}
           </span>
-          <span class="text-sm font-medium text-fg">{copy.range.item("juz", juz.index)}</span>
-          <span class="ms-auto font-mono text-[12px] text-fg-3">{juz.first} – {juz.last}</span>
+          <span class="text-sm font-medium text-foreground">{copy.range.item("juz", juz.index)}</span>
+          <span class="ms-auto font-mono text-[12px] text-muted">{juz.first} – {juz.last}</span>
         </a>
       </li>
     {/each}

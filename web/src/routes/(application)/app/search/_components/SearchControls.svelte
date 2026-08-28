@@ -34,7 +34,7 @@
       aria-busy={searching}
       autocomplete="off"
       spellcheck="false"
-      class="h-11 w-full rounded-xl border border-line-2 bg-bg-2 px-4 text-[14.5px] text-fg shadow-none outline-none transition-colors placeholder:text-fg-3 focus:border-line-3 focus:ring-2 focus:ring-accent/40"
+      class="h-11 w-full rounded-xl border border-border-strong bg-background-subtle px-4 text-[14.5px] text-foreground shadow-none outline-none transition-colors placeholder:text-muted focus:border-border-strong focus:ring-2 focus:ring-focus-ring/40"
     />
   </div>
 
@@ -43,25 +43,25 @@
       type="button"
       onclick={onTogglePicker}
       aria-expanded={pickerOpen}
-      class="flex items-center gap-1.5 rounded-full border border-line-2 bg-bg-1 px-3.5 py-1.5 text-[13px] text-fg-2 transition-colors hover:border-line hover:text-fg"
+      class="flex items-center gap-1.5 rounded-pill border border-border-strong bg-surface px-3.5 py-1.5 text-[13px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground"
     >
       {copy.filterOpen}
       {#if selected.length > 0}
-        <span class="text-fg-4">·</span>
-        <span class="text-fg-3">{copy.filterSelected(selected.length)}</span>
+        <span class="text-muted">·</span>
+        <span class="text-muted">{copy.filterSelected(selected.length)}</span>
       {/if}
     </button>
 
     {#each selected as chip (chip.id)}
       <span
-        class="flex items-center gap-1 rounded-full border border-line-2 bg-bg-2 px-3 py-1 text-[12.5px] text-fg-2"
+        class="flex items-center gap-1 rounded-pill border border-border-strong bg-background-subtle px-3 py-1 text-[12.5px] text-foreground-secondary"
       >
         <span class="max-w-[220px] truncate">{chip.name}</span>
         <button
           type="button"
           onclick={() => onRemove(chip.id)}
           aria-label={`${chip.name} ×`}
-          class="p-0.5 text-fg-3 transition-colors hover:text-fg"
+          class="p-0.5 text-muted transition-colors hover:text-foreground"
         >
           ×
         </button>

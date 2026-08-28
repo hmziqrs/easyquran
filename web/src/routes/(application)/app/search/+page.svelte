@@ -117,7 +117,7 @@
 
 <div lang={copy.locale} dir={copy.direction}>
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
-    <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg">{copy.title}</h1>
+    <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
 
     <div class="mt-5 flex flex-col gap-4 sm:mt-6">
       <SearchControls
@@ -152,12 +152,12 @@
       <div class="mt-2 flex flex-col gap-6" aria-label={copy.resultsLabel}>
         {#if committedTooShort}
           {#if engine.inputQuery.length === 0}
-            <p class="text-[13.5px] text-fg-3">{copy.emptyIdle}</p>
+            <p class="text-caption text-muted">{copy.emptyIdle}</p>
           {:else}
-            <p class="text-[13.5px] text-fg-3">{copy.tooShort}</p>
+            <p class="text-caption text-muted">{copy.tooShort}</p>
           {/if}
         {:else if orderedSections.length === 0}
-          <p class="text-[13.5px] text-fg-3">{copy.pickPrompt}</p>
+          <p class="text-caption text-muted">{copy.pickPrompt}</p>
         {:else}
           {#each orderedSections as section (section.id)}
             <ResultSection

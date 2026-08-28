@@ -33,12 +33,12 @@
     <a
       href={href}
       onclick={opened}
-      class="w-fit text-[12px] font-medium text-fg-3 underline-offset-4 transition-colors hover:text-fg hover:underline"
+      class="w-fit text-[12px] font-medium text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline"
     >
       {label}
     </a>
   {:else}
-    <span class="w-fit text-[12px] font-medium text-fg-3">{label}</span>
+    <span class="w-fit text-[12px] font-medium text-muted">{label}</span>
   {/if}
 
   {#if hit.text.length > 0}
