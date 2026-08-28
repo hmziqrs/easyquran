@@ -25,7 +25,9 @@
 
 <div
   class={cn(
-    "relative overflow-hidden rounded-lg p-8 md:p-10 lg:p-12",
+    /* Large panel → --radius-xl 14px (plan 06: sheets and popovers; Panel is the
+       biggest callout block). */
+    "relative overflow-hidden rounded-xl p-8 md:p-10 lg:p-12",
     variants[variant],
     className,
   )}

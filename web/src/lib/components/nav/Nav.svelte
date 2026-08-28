@@ -166,7 +166,7 @@
   aria-label={copy.primaryLabel}
   style:top={navTop}
   class={cn(
-    "sticky z-50 border-b border-border bg-background/86 backdrop-blur-xl backdrop-saturate-150",
+    "sticky z-50 border-b border-border bg-surface",
     collapsible && "transition-[top] duration-200 ease-out",
   )}
 >
@@ -196,7 +196,7 @@
         inert={open || undefined}
         aria-hidden={open || undefined}
         onclick={onAccountClick}
-        class="inline-flex size-11 items-center justify-center rounded-md border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name="user" size={18} title={accountLabel} />
       </a>
@@ -208,7 +208,7 @@
         aria-label={open ? copy.closePanel : copy.openPanel}
         title={open ? copy.closePanel : copy.openPanel}
         bind:this={toggleBtn}
-        class="inline-flex size-11 items-center justify-center rounded-md border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
       </button>
@@ -244,7 +244,7 @@
           type="button"
           onclick={() => prefs.toggleTheme()}
           aria-label={copy.toggleTheme}
-          class="flex w-full items-center justify-between rounded-md border border-border-strong bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="flex w-full items-center justify-between rounded-pill border border-border-strong bg-surface px-3.5 py-3 text-body text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
         >
           <span class="inline-flex items-center gap-2.5">
             <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={16} />
@@ -258,7 +258,7 @@
         <h2 class="eyebrow mb-0">{copy.searchPage}</h2>
         <a
           href={searchRowHref}
-          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="flex w-full items-center gap-2.5 rounded-pill border border-border bg-surface px-3.5 py-3 text-body text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="search" size={16} />
           {copy.searchPage}
@@ -269,7 +269,7 @@
         <h2 class="eyebrow mb-0">{copy.bookmarks}</h2>
         <a
           href={bookmarksRowHref}
-          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="flex w-full items-center gap-2.5 rounded-pill border border-border bg-surface px-3.5 py-3 text-body text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="bookmark" size={16} />
           {copy.bookmarks}
@@ -280,7 +280,7 @@
         <h2 class="eyebrow mb-0">{copy.settings}</h2>
         <a
           href={settingsRowHref}
-          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="flex w-full items-center gap-2.5 rounded-pill border border-border bg-surface px-3.5 py-3 text-body text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="rows" size={16} />
           {copy.settings}
@@ -300,7 +300,7 @@
                 aria-label={`${copy.changeLanguage}: ${item.label}`}
                 data-sveltekit-reload
                 class={cn(
-                  "rounded-md border px-3 py-2 text-center text-body-s transition-colors",
+                  "rounded-pill border px-3 py-2 text-center text-body transition-colors",
                   item.current
                     ? "border-primary bg-primary-soft text-primary"
                     : "border-border-strong text-foreground-secondary hover:bg-surface-hover hover:text-foreground",
@@ -313,7 +313,7 @@
 
       {#if online.hydrated && !online.online}
         <p
-          class="flex items-center gap-2 rounded-md border border-border bg-surface px-3.5 py-3 text-caption text-muted"
+          class="flex items-center gap-2 rounded-pill border border-border bg-surface px-3.5 py-3 text-caption text-muted"
           role="status"
         >
           <span class="inline-block size-1.5 rounded-full bg-warning" aria-hidden="true"></span>

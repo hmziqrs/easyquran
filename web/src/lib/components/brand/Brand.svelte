@@ -8,20 +8,25 @@
     homeHref = "/",
     homeLabel = `${SITE.name} · home`,
   }: { class?: string; homeHref?: `/${string}`; homeLabel?: string } = $props();
+
+  const brand = SITE.name.toLowerCase();
 </script>
 
+<!-- Board wordmark (design/PillLightCobalt.dc.html band 1): an 8px-radius ق holder on the
+     primary fill + the split-tracking name — same mark MarketingHeader and the footer
+     render inline. Replaces the rotated-diamond + mono lockup. -->
 <a
   class={cn("group inline-flex items-center gap-2.5", className)}
   href={publicHref(homeHref)}
   aria-label={homeLabel}
 >
-  <!-- radius audit (plan 03): 2px kept as a justified one-off — a 10px rotated diamond logo
-       mark; the nearest token (8px icon holder) over-rounds it. Not an icon holder. -->
   <span
-    class="size-2.5 rotate-45 rounded-[2px] bg-primary shadow-[0_0_0_3px_var(--primary-soft)] transition-transform duration-[400ms] ease-out group-hover:rotate-[135deg]"
-    aria-hidden="true"
-  ></span>
-  <span class="font-mono text-sm tracking-tight"
-    ><b class="font-medium">Easy</b><span class="font-normal text-muted">Quran</span></span
+    class="flex size-9 items-center justify-center rounded-sm bg-primary font-arabic text-[19px] font-bold leading-none text-primary-foreground"
+    lang="ar"
+    dir="rtl"
+    aria-hidden="true">ق</span
+  >
+  <span class="text-[22px] font-extrabold tracking-[-0.035em] text-foreground"
+    >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
   >
 </a>
