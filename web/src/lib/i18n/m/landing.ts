@@ -2,14 +2,34 @@
 //
 // Marketing home page, including its SEO metadata.
 //
-// 31 messages. Import this barrel, never
+// 52 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
-export { landing_badge } from "$lib/paraglide/messages/landing_badge.js";
-export { landing_coming } from "$lib/paraglide/messages/landing_coming.js";
+export { landing_closing_bismillah } from "$lib/paraglide/messages/landing_closing_bismillah.js";
+export { landing_closing_cta } from "$lib/paraglide/messages/landing_closing_cta.js";
+export { landing_closing_intro } from "$lib/paraglide/messages/landing_closing_intro.js";
+export { landing_closing_note } from "$lib/paraglide/messages/landing_closing_note.js";
+export { landing_closing_title } from "$lib/paraglide/messages/landing_closing_title.js";
 export { landing_hero_intro } from "$lib/paraglide/messages/landing_hero_intro.js";
-export { landing_hero_title } from "$lib/paraglide/messages/landing_hero_title.js";
-export { landing_primary_cta } from "$lib/paraglide/messages/landing_primary_cta.js";
+export { landing_hero_title_full } from "$lib/paraglide/messages/landing_hero_title_full.js";
+export { landing_hero_title_highlight } from "$lib/paraglide/messages/landing_hero_title_highlight.js";
+export { landing_hero_title_lead } from "$lib/paraglide/messages/landing_hero_title_lead.js";
+export { landing_hero_title_tail } from "$lib/paraglide/messages/landing_hero_title_tail.js";
+export { landing_index_eyebrow } from "$lib/paraglide/messages/landing_index_eyebrow.js";
+export { landing_index_intro } from "$lib/paraglide/messages/landing_index_intro.js";
+export { landing_index_see_all } from "$lib/paraglide/messages/landing_index_see_all.js";
+export { landing_index_title } from "$lib/paraglide/messages/landing_index_title.js";
+export { landing_metric_bookmarks } from "$lib/paraglide/messages/landing_metric_bookmarks.js";
+export { landing_metric_bookmarks_empty } from "$lib/paraglide/messages/landing_metric_bookmarks_empty.js";
+export { landing_metric_bookmarks_note } from "$lib/paraglide/messages/landing_metric_bookmarks_note.js";
+export { landing_metric_juz } from "$lib/paraglide/messages/landing_metric_juz.js";
+export { landing_metric_juz_note } from "$lib/paraglide/messages/landing_metric_juz_note.js";
+export { landing_metric_pages } from "$lib/paraglide/messages/landing_metric_pages.js";
+export { landing_metric_pages_note } from "$lib/paraglide/messages/landing_metric_pages_note.js";
+export { landing_metric_surahs } from "$lib/paraglide/messages/landing_metric_surahs.js";
+export { landing_metric_surahs_note } from "$lib/paraglide/messages/landing_metric_surahs_note.js";
+export { landing_metric_yours } from "$lib/paraglide/messages/landing_metric_yours.js";
+export { landing_often_opened } from "$lib/paraglide/messages/landing_often_opened.js";
 export { landing_roadmap_audio_body } from "$lib/paraglide/messages/landing_roadmap_audio_body.js";
 export { landing_roadmap_audio_title } from "$lib/paraglide/messages/landing_roadmap_audio_title.js";
 export { landing_roadmap_content_body } from "$lib/paraglide/messages/landing_roadmap_content_body.js";
@@ -21,18 +41,19 @@ export { landing_roadmap_native_title } from "$lib/paraglide/messages/landing_ro
 export { landing_roadmap_sync_body } from "$lib/paraglide/messages/landing_roadmap_sync_body.js";
 export { landing_roadmap_sync_title } from "$lib/paraglide/messages/landing_roadmap_sync_title.js";
 export { landing_roadmap_title } from "$lib/paraglide/messages/landing_roadmap_title.js";
+export { landing_search_button } from "$lib/paraglide/messages/landing_search_button.js";
+export { landing_search_label } from "$lib/paraglide/messages/landing_search_label.js";
+export { landing_search_placeholder } from "$lib/paraglide/messages/landing_search_placeholder.js";
 export { landing_secondary_cta } from "$lib/paraglide/messages/landing_secondary_cta.js";
-export { landing_today_eyebrow } from "$lib/paraglide/messages/landing_today_eyebrow.js";
-export { landing_today_intro } from "$lib/paraglide/messages/landing_today_intro.js";
-export { landing_today_title } from "$lib/paraglide/messages/landing_today_title.js";
-export { landing_value_authentic_body } from "$lib/paraglide/messages/landing_value_authentic_body.js";
-export { landing_value_authentic_title } from "$lib/paraglide/messages/landing_value_authentic_title.js";
-export { landing_value_free_body } from "$lib/paraglide/messages/landing_value_free_body.js";
-export { landing_value_free_title } from "$lib/paraglide/messages/landing_value_free_title.js";
-export { landing_value_instant_body } from "$lib/paraglide/messages/landing_value_instant_body.js";
-export { landing_value_instant_title } from "$lib/paraglide/messages/landing_value_instant_title.js";
-export { landing_value_size_body } from "$lib/paraglide/messages/landing_value_size_body.js";
-export { landing_value_size_title } from "$lib/paraglide/messages/landing_value_size_title.js";
+export { landing_why_eyebrow } from "$lib/paraglide/messages/landing_why_eyebrow.js";
+export { landing_why_intro } from "$lib/paraglide/messages/landing_why_intro.js";
+export { landing_why_step1_body } from "$lib/paraglide/messages/landing_why_step1_body.js";
+export { landing_why_step1_title } from "$lib/paraglide/messages/landing_why_step1_title.js";
+export { landing_why_step2_body } from "$lib/paraglide/messages/landing_why_step2_body.js";
+export { landing_why_step2_title } from "$lib/paraglide/messages/landing_why_step2_title.js";
+export { landing_why_step3_body } from "$lib/paraglide/messages/landing_why_step3_body.js";
+export { landing_why_step3_title } from "$lib/paraglide/messages/landing_why_step3_title.js";
+export { landing_why_title } from "$lib/paraglide/messages/landing_why_title.js";
 export { seo_home_description } from "$lib/paraglide/messages/seo_home_description.js";
 export { seo_home_image_alt } from "$lib/paraglide/messages/seo_home_image_alt.js";
 export { seo_home_title } from "$lib/paraglide/messages/seo_home_title.js";

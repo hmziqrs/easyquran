@@ -2,7 +2,7 @@
 //
 // Site chrome rendered on every marketing page: nav, footer, brand, skip link, locale switcher. Includes the appearance-panel trigger label, the only appearance string a page needs before the panel opens.
 //
-// 41 messages. Import this barrel, never
+// 47 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { brand_home_label } from "$lib/paraglide/messages/brand_home_label.js";
@@ -26,22 +26,28 @@ export { footer_terms } from "$lib/paraglide/messages/footer_terms.js";
 export { footer_whats_inside } from "$lib/paraglide/messages/footer_whats_inside.js";
 export { locale_ar_endonym } from "$lib/paraglide/messages/locale_ar_endonym.js";
 export { locale_en_endonym } from "$lib/paraglide/messages/locale_en_endonym.js";
+export { nav_about } from "$lib/paraglide/messages/nav_about.js";
 export { nav_account } from "$lib/paraglide/messages/nav_account.js";
 export { nav_appearance } from "$lib/paraglide/messages/nav_appearance.js";
 export { nav_bookmarks } from "$lib/paraglide/messages/nav_bookmarks.js";
 export { nav_change_language } from "$lib/paraglide/messages/nav_change_language.js";
 export { nav_close_panel } from "$lib/paraglide/messages/nav_close_panel.js";
+export { nav_header_search } from "$lib/paraglide/messages/nav_header_search.js";
+export { nav_juz } from "$lib/paraglide/messages/nav_juz.js";
 export { nav_language } from "$lib/paraglide/messages/nav_language.js";
 export { nav_offline_detail } from "$lib/paraglide/messages/nav_offline_detail.js";
 export { nav_offline_label } from "$lib/paraglide/messages/nav_offline_label.js";
 export { nav_offline_title } from "$lib/paraglide/messages/nav_offline_title.js";
 export { nav_open_panel } from "$lib/paraglide/messages/nav_open_panel.js";
+export { nav_pages } from "$lib/paraglide/messages/nav_pages.js";
 export { nav_primary_label } from "$lib/paraglide/messages/nav_primary_label.js";
 export { nav_search_page } from "$lib/paraglide/messages/nav_search_page.js";
 export { nav_search_quran } from "$lib/paraglide/messages/nav_search_quran.js";
 export { nav_settings } from "$lib/paraglide/messages/nav_settings.js";
 export { nav_sign_in } from "$lib/paraglide/messages/nav_sign_in.js";
 export { nav_site_panel } from "$lib/paraglide/messages/nav_site_panel.js";
+export { nav_start_reading } from "$lib/paraglide/messages/nav_start_reading.js";
+export { nav_surahs } from "$lib/paraglide/messages/nav_surahs.js";
 export { nav_theme } from "$lib/paraglide/messages/nav_theme.js";
 export { nav_toggle_theme } from "$lib/paraglide/messages/nav_toggle_theme.js";
 export { skip_to_content } from "$lib/paraglide/messages/skip_to_content.js";

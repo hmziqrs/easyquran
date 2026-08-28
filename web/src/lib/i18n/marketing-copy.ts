@@ -2,7 +2,6 @@
 // only needs a type or a URL must be able to import this without pulling a single localized string.
 // Resolved copy lives in the per-namespace modules — chrome-copy.ts, appearance-copy.ts,
 // landing-copy.ts. See docs/quran-system.md (Part 2, Message chunking).
-import type { IconName } from "$lib/components/icon";
 import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
 import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import type { AccentId, SurfaceId, ThemeMode } from "$lib/config/site";
@@ -111,35 +110,61 @@ export interface TweaksResolvedCopy {
   accents: Record<AccentId, string>;
 }
 
-export interface LandingCard {
+/** Hue slot index into the --hue-N / --on-hue-N / --hue-N-soft token set (plan 05: presentation never lives in copy). */
+export type LandingHue = 1 | 2 | 3 | 4;
+
+export interface LandingStep {
   id: string;
-  icon: IconName;
-  chip: string;
+  hue: LandingHue;
   title: string;
   body: string;
 }
 
 export interface LandingRoadmapItem {
   id: string;
+  hue: LandingHue;
   title: string;
   body: string;
 }
 
 export interface LandingResolvedCopy {
-  badge: string;
-  heroTitle: string;
+  heroTitleFull: string;
+  heroTitleLead: string;
+  heroTitleHighlight: string;
+  heroTitleTail: string;
   heroIntro: string;
-  primaryCta: string;
   secondaryCta: string;
-  todayEyebrow: string;
-  todayTitle: string;
-  todayIntro: string;
-  values: LandingCard[];
+  searchLabel: string;
+  searchPlaceholder: string;
+  searchButton: string;
+  oftenOpened: string;
+  metricSurahs: string;
+  metricSurahsNote: string;
+  metricJuz: string;
+  metricJuzNote: string;
+  metricPages: string;
+  metricPagesNote: string;
+  metricBookmarks: string;
+  metricBookmarksNote: string;
+  metricBookmarksEmpty: string;
+  metricYours: string;
+  indexEyebrow: string;
+  indexTitle: string;
+  indexIntro: string;
+  indexSeeAll: string;
+  whyEyebrow: string;
+  whyTitle: string;
+  whyIntro: string;
+  steps: LandingStep[];
   roadmapEyebrow: string;
   roadmapTitle: string;
   roadmapIntro: string;
-  coming: string;
   roadmap: LandingRoadmapItem[];
+  closingBismillah: string;
+  closingTitle: string;
+  closingIntro: string;
+  closingCta: string;
+  closingNote: string;
 }
 
 export interface MarketingSeoCopy {

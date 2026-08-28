@@ -82,8 +82,8 @@ describe("marketing copy resolvers", () => {
 
     expect(english.direction).toBe("ltr");
     expect(arabic.direction).toBe("rtl");
-    expect(arabicLanding.heroTitle).not.toBe(englishLanding.heroTitle);
-    expect(englishLandingAgain.heroTitle).toBe(englishLanding.heroTitle);
+    expect(arabicLanding.heroTitleFull).not.toBe(englishLanding.heroTitleFull);
+    expect(englishLandingAgain.heroTitleFull).toBe(englishLanding.heroTitleFull);
     expect(resolveLandingSeoCopy("ar").title).not.toBe(resolveLandingSeoCopy("en").title);
   });
 
@@ -91,7 +91,7 @@ describe("marketing copy resolvers", () => {
     const english = resolveLandingCopy("en");
     const arabic = resolveLandingCopy("ar");
 
-    expect(arabic.values.map((item) => item.id)).toEqual(english.values.map((item) => item.id));
+    expect(arabic.steps.map((item) => item.id)).toEqual(english.steps.map((item) => item.id));
     expect(arabic.roadmap.map((item) => item.id)).toEqual(english.roadmap.map((item) => item.id));
   });
 
