@@ -58,4 +58,30 @@
       </div>
     </section>
   {/each}
+
+  <section class="flex flex-col gap-6 border-b border-line py-11 last:border-b-0">
+    <div class="flex flex-col gap-2">
+      <h2 class="text-[26px] tracking-[-0.02em]">Visual checks</h2>
+      <p class="max-w-[62ch] text-[15px] leading-[1.6] text-fg-3">
+        Host pages for the plan 07 harness — captured headlessly across the palette × mode ×
+        width matrix, never linked from the live site.
+      </p>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <a
+        href="/design/tokens"
+        class="group flex flex-col gap-3 rounded-[14px] border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
+      >
+        <div class="flex items-baseline gap-2">
+          <span class="font-mono text-xs text-accent">V1</span>
+          <span class="text-[17px] font-semibold">Token sweep</span>
+        </div>
+        <p class="text-[14px] leading-[1.6] text-fg-2">
+          Every semantic token as a labelled swatch with its computed value, in all eight
+          palette × mode combinations.
+        </p>
+      </a>
+    </div>
+  </section>
 </div>

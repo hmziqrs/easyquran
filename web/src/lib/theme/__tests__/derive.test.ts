@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveTokens, isLight, luminance, parseHex, tokensToCss, toHex } from "../derive";
+import {
+  contrastRatio,
+  deriveTokens,
+  isLight,
+  luminance,
+  oklchToRgb,
+  parseColor,
+  parseHex,
+  parseOklch,
+  tokensToCss,
+  toHex,
+} from "../derive";
 
 const lum = (hex: string) => luminance(parseHex(hex)!);
 
@@ -112,5 +123,85 @@ describe("helpers", () => {
   it("emits a paste-ready rule under the given selector", () => {
     const css = tokensToCss({ "--accent": "#fff" }, '[data-theme="dark"]');
     expect(css).toBe('[data-theme="dark"] {\n  --accent: #fff;\n}');
+  });
+});
+
+describe("parseOklch", () => {
+  it("accepts plain numbers, percentages, and hue units", () => {
+    expect(parseOklch("oklch(0.52 0.21 262)")).toEqual({ l: 0.52, c: 0.21, h: 262 });
+    expect(parseOklch("oklch(52% 0.21 262deg)")).toEqual({ l: 0.52, c: 0.21, h: 262 });
+    expect(parseOklch("oklch(0.5 0 0)")).toEqual({ l: 0.5, c: 0, h: 0 });
+  });
+
+  it("treats none as zero on any channel", () => {
+    expect(parseOklch("oklch(none 0.2 262)")).toEqual({ l: 0, c: 0.2, h: 262 });
+    expect(parseOklch("oklch(0.52 0.21 none)")).toEqual({ l: 0.52, c: 0.21, h: 0 });
+  });
+
+  it("normalises radian, gradian and turn hues to degrees", () => {
+    expect(parseOklch("oklch(0.5 0.1 1.5707963267948966rad)")?.h).toBeCloseTo(90, 5);
+    expect(parseOklch("oklch(0.5 0.1 100grad)")?.h).toBeCloseTo(90, 5);
+    expect(parseOklch("oklch(0.5 0.1 0.25turn)")?.h).toBeCloseTo(90, 5);
+  });
+
+  it("rejects anything else rather than guessing", () => {
+    expect(parseOklch("oklch(0.52 0.21 262 / 0.5)")).toBeNull(); // alpha: composite unknown
+    expect(parseOklch("oklch(0.52)")).toBeNull();
+    expect(parseOklch("#ffffff")).toBeNull();
+    expect(parseOklch("")).toBeNull();
+  });
+});
+
+describe("oklchToRgb / parseColor", () => {
+  it("hits the sRGB primaries through the OKLab matrices", () => {
+    expect(toHex(oklchToRgb({ l: 1, c: 0, h: 0 }))).toBe("#ffffff");
+    expect(toHex(oklchToRgb({ l: 0, c: 0, h: 0 }))).toBe("#000000");
+    // Chroma 0 must stay achromatic on every channel — the neutral-ground invariant.
+    for (const l of [0.165, 0.52, 0.885, 0.98]) {
+      const grey = oklchToRgb({ l, c: 0, h: 0 });
+      expect(grey.r).toBe(grey.g);
+      expect(grey.g).toBe(grey.b);
+    }
+  });
+
+  it("converts the plan 01 accents close to their hex neighbours", () => {
+    // Cobalt oklch(0.52 0.21 262) sits near #2f5fe0; assert the achromatic anchor instead of
+    // an exact hex (matrix rounding shifts the exact value by design).
+    const cobalt = oklchToRgb({ l: 0.52, c: 0.21, h: 262 });
+    expect(cobalt.b).toBeGreaterThan(cobalt.r);
+    expect(luminance(cobalt)).toBeGreaterThan(0.05);
+  });
+
+  it("clamps out-of-gamut colors into range instead of wrapping", () => {
+    const neon = oklchToRgb({ l: 0.95, c: 0.32, h: 110 });
+    for (const v of [neon.r, neon.g, neon.b]) {
+      expect(v).toBeLessThanOrEqual(255);
+      expect(v).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("parseColor accepts hex and oklch, rejects the rest", () => {
+    expect(toHex(parseColor("#3fbfa6")!)).toBe("#3fbfa6");
+    expect(toHex(parseColor("oklch(1 0 0)")!)).toBe("#ffffff");
+    expect(parseColor("var(--primary)")).toBeNull();
+    expect(parseColor("rgb(1 2 3)")).toBeNull();
+  });
+});
+
+describe("contrastRatio", () => {
+  it("computes the WCAG extremes", () => {
+    expect(contrastRatio(parseHex("#000000")!, parseHex("#ffffff")!)).toBeCloseTo(21, 0);
+    expect(contrastRatio(parseHex("#ffffff")!, parseHex("#ffffff")!)).toBeCloseTo(1, 10);
+  });
+
+  it("is symmetric in its arguments", () => {
+    const a = parseHex("#18211D")!;
+    const b = parseHex("#F8F7F2")!;
+    expect(contrastRatio(a, b)).toBe(contrastRatio(b, a));
+  });
+
+  it("keeps white readable on the plan 01 cobalt accent", () => {
+    const accent = oklchToRgb({ l: 0.52, c: 0.21, h: 262 });
+    expect(contrastRatio(parseHex("#ffffff")!, accent)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -65,6 +65,7 @@
     "happy-dom": "^20.11.1",
     "oxlint-plugin-anti-slop": "github:dmmulroy/anti-slop#9b80d9a5c317d3af94d88a577bdbde4d9a45f7be",
     "phosphor-svelte": "^3.1.0",
+    "puppeteer": "^25.9.0",
     "svelte": "^5.56.1",
     "svelte-check": "^4.6.0",
     "tailwindcss": "^4.3.0",
