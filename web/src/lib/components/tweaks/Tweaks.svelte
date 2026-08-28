@@ -123,8 +123,10 @@
     return cn(pill, active ? on : off);
   }
 
-  function swatchHex(lightHex: string, darkHex: string): string {
-    return prefs.theme === "light" ? lightHex : darkHex;
+  /* Swatch renders the ACCENT, not the ground (plan 00 D1) — shared ground means
+     identical ground swatches; the accent is the only visible difference left. */
+  function accentSwatch(accent: { light: string; dark: string }): string {
+    return prefs.theme === "light" ? accent.light : accent.dark;
   }
 
   function resolveHex(varName: string): string {
@@ -259,8 +261,8 @@
                 )}
               >
                 <span
-                  class="size-5 flex-none rounded-md border border-border-strong"
-                  style={`background:${swatchHex(p.lightHex, p.darkHex)}`}
+                  class="size-5 flex-none rounded-sm border border-border-strong"
+                  style={`background:${accentSwatch(p.accentHex)}`}
                 ></span>
                 <span class="min-w-0">
                   <span class="block text-caption text-foreground">{paletteCopy.palettes[p.id].label}</span>

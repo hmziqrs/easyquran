@@ -23,18 +23,20 @@
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const pill = "rounded-md border px-3.5 py-2 text-[13.5px] transition-colors duration-150";
+  const pill = "rounded-pill border px-3.5 py-2 text-caption transition-colors duration-150";
   const pillOn = "border-primary bg-primary-soft text-foreground";
   const pillOff = "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
   const quiet =
-    "rounded-md border border-border-strong px-3.5 py-2.5 text-[13.5px] text-foreground-secondary transition-colors duration-150 hover:border-border hover:text-foreground";
+    "rounded-pill border border-border-strong px-3.5 py-2.5 text-caption text-foreground-secondary transition-colors duration-150 hover:border-border hover:text-foreground";
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
   }
 
-  function swatchHex(lightHex: string, darkHex: string): string {
-    return prefs.theme === "light" ? lightHex : darkHex;
+  /* Swatch renders the ACCENT, not the ground (plan 00 D1): every palette shares one
+     neutral ground, so ground swatches would be four identical squares. */
+  function accentSwatch(accent: { light: string; dark: string }): string {
+    return prefs.theme === "light" ? accent.light : accent.dark;
   }
 
   function resolveHex(varName: string): string {
@@ -107,19 +109,19 @@
             aria-pressed={prefs.palette === p.id}
             onclick={() => prefs.setPalette(p.id)}
             class={cn(
-              "flex items-center gap-3 rounded-md border px-3 py-2.5 text-start transition-colors",
+              "flex items-center gap-3 rounded-pill border px-3 py-2.5 text-start transition-colors",
               prefs.palette === p.id
                 ? "border-primary bg-primary-soft"
                 : "border-border-strong bg-surface hover:border-border hover:text-foreground",
             )}
           >
             <span
-              class="size-6 flex-none rounded-md border border-border-strong"
-              style={`background:${swatchHex(p.lightHex, p.darkHex)}`}
+              class="size-6 flex-none rounded-sm border border-border-strong"
+              style={`background:${accentSwatch(p.accentHex)}`}
             ></span>
             <span class="min-w-0">
-              <span class="block text-[13.5px] text-foreground">{panel.palettes[p.id].label}</span>
-              <span class="block truncate text-[13.5px] text-muted"
+              <span class="block text-caption text-foreground">{panel.palettes[p.id].label}</span>
+              <span class="block truncate text-caption text-muted"
                 >{panel.palettes[p.id].note}</span
               >
             </span>
@@ -134,7 +136,7 @@
         {#if prefs.hasCustom}
           <button
             type="button"
-            class="text-[13.5px] text-muted underline underline-offset-2 transition-colors hover:text-foreground"
+            class="text-caption text-muted underline underline-offset-2 transition-colors hover:text-foreground"
             onclick={() => prefs.clearCustom()}>{panel.clear}</button
           >
         {/if}
@@ -147,10 +149,10 @@
               aria-label={panel.colourInputLabel(panel.seedNames[s.key])}
               value={seedValue(s.key, s.fallbackVar)}
               oninput={(e) => prefs.setCustom(s.key, e.currentTarget.value)}
-              class="size-8 flex-none cursor-pointer rounded-md border border-border-strong bg-transparent p-0.5"
+              class="size-8 flex-none cursor-pointer rounded-sm border border-border-strong bg-transparent p-0.5"
             />
-            <span class="flex-1 text-[13.5px] text-foreground-secondary">{panel.seedNames[s.key]}</span>
-            <span class="font-mono text-[13.5px] tabular-nums text-muted">
+            <span class="flex-1 text-caption text-foreground-secondary">{panel.seedNames[s.key]}</span>
+            <span class="font-mono text-caption tabular-nums text-muted">
               {prefs.custom[s.key] ?? panel.preset}
             </span>
             {#if prefs.custom[s.key]}
@@ -164,7 +166,7 @@
           </div>
         {/each}
       </div>
-      <p class="mt-2.5 text-[13.5px] leading-snug text-muted">
+      <p class="mt-2.5 text-caption leading-snug text-muted">
         {panel.derivedColours}
       </p>
     </div>

@@ -61,17 +61,42 @@ export const APPEARANCE_MODES: readonly AppearanceMode[] = ["light", "dark", "sy
 
 export interface PaletteDef {
   id: PaletteId;
-  /** Preview swatch for light mode = the palette's `--background` (§5–§8 light blocks). */
+  /**
+   * Ground preview swatches (plan 00 D1). Under the shared neutral ground every palette's
+   * ground is identical, so these are no longer what the picker renders — kept in sync with
+   * layout.css for any diagnostic use. The picker draws `accentHex`.
+   */
   lightHex: string;
-  /** Preview swatch for dark mode = the palette's `--background` (§5–§8 dark blocks). */
   darkHex: string;
+  /** Accent preview swatch per mode — what the appearance picker actually shows (plan 06). */
+  accentHex: { light: string; dark: string };
 }
 
 export const PALETTES: PaletteDef[] = [
-  { id: "sacred", lightHex: "#F8F7F2", darkHex: "#0D1210" },
-  { id: "ink", lightHex: "#F7F7F5", darkHex: "#000000" },
-  { id: "sepia", lightHex: "#F4ECD8", darkHex: "#18130E" },
-  { id: "sapphire", lightHex: "#F7F8FA", darkHex: "#0B1018" },
+  {
+    id: "sacred",
+    lightHex: "#f8f8f8",
+    darkHex: "#0e0e0e",
+    accentHex: { light: "#1a5cdf", dark: "#1957d2" },
+  },
+  {
+    id: "ink",
+    lightHex: "#f8f8f8",
+    darkHex: "#0e0e0e",
+    accentHex: { light: "#161616", dark: "#f3f3f3" },
+  },
+  {
+    id: "sepia",
+    lightHex: "#f8f8f8",
+    darkHex: "#0e0e0e",
+    accentHex: { light: "#c7007c", dark: "#b90073" },
+  },
+  {
+    id: "sapphire",
+    lightHex: "#f8f8f8",
+    darkHex: "#0e0e0e",
+    accentHex: { light: "#00864e", dark: "#007a49" },
+  },
 ];
 
 /** Back-compat migration for stored `surface` prefs → the new palette ids. */
