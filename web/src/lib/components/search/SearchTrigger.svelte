@@ -22,7 +22,7 @@
   inert={isInert || undefined}
   aria-hidden={isInert || undefined}
   class={cn(
-    "inline-flex h-[38px] w-[38px] items-center justify-center rounded-pill border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+    "inline-flex h-[38px] w-[38px] items-center justify-center rounded-pill border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
     className,
   )}
 >

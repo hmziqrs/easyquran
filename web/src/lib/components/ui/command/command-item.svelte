@@ -13,7 +13,7 @@
   bind:ref
   data-slot="command-item"
   class={cn(
-    "flex cursor-default select-none items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-fg-2 outline-none data-selected:bg-bg-2 data-selected:text-fg data-disabled:pointer-events-none data-disabled:opacity-50",
+    "flex cursor-default select-none items-center gap-3 rounded-md px-2.5 py-2 text-sm text-foreground-secondary outline-none data-selected:bg-surface-hover data-selected:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
     className,
   )}
   {...restProps}

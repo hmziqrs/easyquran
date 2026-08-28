@@ -132,9 +132,14 @@
       <Cmd.Group heading={section.group.label} value={section.group.id}>
         {#each section.entries as entry (entry.id)}
           {#snippet body()}
-            <Icon name={entry.icon} size={15} class="shrink-0 text-fg-4" />
+            <!-- 8px-radius square icon holder (plan 06 palette geometry). -->
+            <span
+              class="flex size-7 flex-none items-center justify-center rounded-sm bg-background-subtle text-foreground-secondary"
+            >
+              <Icon name={entry.icon} size={15} />
+            </span>
             <span class="flex min-w-0 flex-col gap-0.5">
-              <span class="truncate text-fg">{entry.label}</span>
+              <span class="truncate text-foreground">{entry.label}</span>
               {#if entry.preview?.dir}
                 <HighlightedText
                   text={entry.preview.text}
@@ -149,7 +154,7 @@
                   class="line-clamp-2 text-[19px] leading-[1.9]"
                 />
               {:else if entry.detail}
-                <span class="truncate text-[11.5px] text-fg-3">{entry.detail}</span>
+                <span class="truncate text-[11.5px] text-foreground-secondary">{entry.detail}</span>
               {/if}
             </span>
             {#if entry.arabic}
@@ -184,11 +189,11 @@
   </Cmd.List>
 
   <div
-    class="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-[11px] text-fg-4"
+    class="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-[11px] text-muted"
   >
     <span class="truncate">
-      Try <code class="text-fg-3">2:255</code>, <code class="text-fg-3">juz 5</code>,
-      <code class="text-fg-3">page 100</code>
+      Try <code class="text-foreground-secondary">2:255</code>, <code class="text-foreground-secondary">juz 5</code>,
+      <code class="text-foreground-secondary">page 100</code>
     </span>
     <span class="flex flex-none items-center gap-1.5">
       <Cmd.Shortcut>↵</Cmd.Shortcut>

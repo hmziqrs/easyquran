@@ -11,16 +11,22 @@
   }: CommandPrimitive.InputProps = $props();
 </script>
 
-<div data-slot="command-input-wrapper" class="flex items-center gap-2.5 border-b border-line px-4">
-  <Icon name="search" size={16} class="shrink-0 text-fg-3" />
-  <CommandPrimitive.Input
-    bind:ref
-    bind:value
-    data-slot="command-input"
-    class={cn(
-      "h-12 w-full bg-transparent text-[15px] text-fg outline-none placeholder:text-fg-4 disabled:cursor-not-allowed disabled:opacity-50",
-      className,
-    )}
-    {...restProps}
-  />
+<!-- Pill input inside the 10px block (plan 06: the command palette is a block, its
+     input is a control, so it takes the control pill). -->
+<div data-slot="command-input-wrapper" class="border-b border-border p-3">
+  <div
+    class="flex h-11 items-center gap-2.5 rounded-pill border border-border bg-background-subtle px-4 focus-within:border-border-strong"
+  >
+    <Icon name="search" size={16} class="shrink-0 text-muted" />
+    <CommandPrimitive.Input
+      bind:ref
+      bind:value
+      data-slot="command-input"
+      class={cn(
+        "w-full bg-transparent text-body text-foreground outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      {...restProps}
+    />
+  </div>
 </div>
