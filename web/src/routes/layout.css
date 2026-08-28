@@ -673,6 +673,41 @@
   --elev-md: none;
 }
 
+/* ── §15 Responsive ramp (plan 04): the boards are fixed 1440px, so the band model's
+   gutter and vertical rhythm below that width are DESIGNED HERE, once — pages never
+   invent their own breakpoints. Breakpoints deliberately equal Tailwind's md/lg/xl
+   (768/1024/1280). Consume via the utilities the Band component emits:
+   `px-(--gutter)` / `py-(--band-pad)` / `py-(--band-pad-tight)` — single utilities, no
+   per-breakpoint variants, so a caller's own px-*/py-* override wins through
+   tailwind-merge cleanly. Gutter 20→72, band padding 48→96 (tight 40→64; the boards
+   only draw the 96/72 desktop step). */
+:root {
+  --gutter: 20px;
+  --band-pad: 48px;
+  --band-pad-tight: 40px;
+}
+@media (min-width: 768px) {
+  :root {
+    --gutter: 32px;
+    --band-pad: 64px;
+    --band-pad-tight: 48px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --gutter: 48px;
+    --band-pad: 80px;
+    --band-pad-tight: 56px;
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --gutter: 72px;
+    --band-pad: 96px;
+    --band-pad-tight: 64px;
+  }
+}
+
 /* ── Migration shim: legacy runtime token names resolve from the new contract. ───────────────
    These keep every `var(--bg…)`, `var(--line…)`, `var(--fg…)`, shadcn alias and the --radius
    anchor working until the sweep areas retire them. They must stay BELOW the palette blocks. */

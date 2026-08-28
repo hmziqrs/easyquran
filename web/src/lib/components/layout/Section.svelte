@@ -1,9 +1,16 @@
 <script lang="ts">
   import { cn } from "$lib/utils";
-  import Container from "./Container.svelte";
+  import Band from "./Band.svelte";
   import type { HTMLAttributes } from "svelte/elements";
   import type { Snippet } from "svelte";
 
+  /**
+   * DEPRECATED (plan 04): the contained-section model the band model replaces. Kept
+   * rendering-identical, reimplemented over `Band` (tone="page" paints nothing,
+   * pad="none" + its own legacy padding, contentClass restores the old fixed px-6
+   * gutter in place of the §15 ramp), so no existing call site moves. New surfaces
+   * use `Band` directly.
+   */
   let {
     width = "default",
     border = true,
@@ -20,9 +27,14 @@
   } & HTMLAttributes<HTMLElement> = $props();
 </script>
 
-<section
-  class={cn(tight ? "py-12" : "py-16 md:py-24", border && "border-t border-border", className)}
+<Band
+  tone="page"
+  pad="none"
+  {width}
+  rule={border}
+  class={cn(tight ? "py-12" : "py-16 md:py-24", className)}
+  contentClass="px-6"
   {...rest}
 >
-  <Container {width}>{@render children()}</Container>
-</section>
+  {@render children()}
+</Band>
