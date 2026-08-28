@@ -1,6 +1,5 @@
 <script lang="ts">
   import { SITE } from "$lib/config/site";
-  import { Icon } from "$lib/components/icon";
   import { externalLinkAttrs } from "$lib/utils";
   import type { OwnerPublic } from "$lib/types/owner";
   import type {
@@ -10,6 +9,12 @@
   } from "$lib/i18n/marketing-copy";
   import { publicHref } from "$lib/i18n/public-href";
 
+  /**
+   * Board band 8: surface ground, hairline rule, a 380px brand column plus three
+   * link columns under text-micro headings, and the credit row (real owner data —
+   * the boards' [YOUR NAME] placeholder never ships). The Qur'an quotation stays:
+   * verbatim, explicitly lang="ar" dir="rtl" (marketing-surface-guard).
+   */
   let {
     owner,
     year,
@@ -24,38 +29,30 @@
 
   const brand = SITE.name.toLowerCase();
 
-  const colHeading = "eyebrow mb-0";
-  const link = "text-body-s text-foreground-secondary transition-colors hover:text-foreground";
+  const colHeading = "text-micro text-muted";
+  const link = "text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground";
 </script>
 
-<footer class="border-t border-border bg-surface-raised">
-  <div class="mx-auto max-w-[1180px] px-6 sm:px-7">
+<footer class="border-t border-border bg-surface">
+  <div class="mx-auto w-full max-w-[1440px] px-5 md:px-8 lg:px-12 xl:px-18">
     <div
-      class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-9"
+      class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[380px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-10"
     >
       <div class="col-span-2 flex flex-col gap-3 md:col-span-1">
         <div class="flex items-center gap-2.5">
           <span
-            class="flex size-7 items-center justify-center rounded-sm bg-primary font-arabic text-[16px] leading-none text-primary-foreground"
+            class="flex size-[30px] items-center justify-center rounded-full bg-primary font-arabic text-[16px] font-bold leading-none text-primary-foreground"
             lang="ar"
             dir="rtl"
             aria-hidden="true">ق</span
           >
-          <span class="text-body-l font-semibold tracking-[-0.02em] text-foreground">{brand}</span>
+          <span class="text-[19px] font-extrabold tracking-[-0.035em] text-foreground"
+            >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
+          >
         </div>
-        <p class="max-w-[30ch] text-body-s leading-relaxed text-foreground-secondary">
+        <p class="max-w-[34ch] text-body text-foreground-secondary">
           {copy.blurb}
         </p>
-        <div class="flex items-center gap-2">
-          <a
-            href={owner.x}
-            aria-label={copy.socialX}
-            {...externalLinkAttrs(owner.x, { me: true })}
-            class="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-border-strong hover:text-foreground"
-          >
-            <Icon name="x-brand" size={15} />
-          </a>
-        </div>
       </div>
 
       {#snippet linkColumn(heading: string, ariaLabel: string, items: FooterLink[])}
@@ -80,21 +77,20 @@
       {/if}
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-5 pb-11">
-      <span class="text-body-s text-muted">
+    <div class="flex flex-wrap items-center gap-5 pb-11">
+      <span class="text-body text-muted">
         © {year} {brand}. {copy.builtBy}
         <a
           class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
           href={SITE.makerUrl}
           {...externalLinkAttrs(SITE.makerUrl)}>oxlabs.dev</a
-        > · {copy.projectBy}
-        <a
+        > · <a
           class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
-          href={SITE.ownerUrl}
-          {...externalLinkAttrs(SITE.ownerUrl)}>hmziq.rs</a
-        >.
+          href={owner.x}
+          {...externalLinkAttrs(owner.x, { me: true })}>@{owner.xHandle}</a
+        >
       </span>
-      <span lang="ar" dir="rtl" class="font-arabic text-body-l leading-none text-muted">
+      <span lang="ar" dir="rtl" class="ms-auto font-arabic text-body-l leading-none text-muted">
         وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ
       </span>
     </div>

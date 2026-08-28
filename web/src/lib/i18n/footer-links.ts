@@ -59,7 +59,9 @@ export function footerLinksFor(
     product: [
       { id: "read", href: readerHref, label: labels.readQuran },
       { id: "bookmarks", href: bookmarksHref, label: labels.bookmarks },
-      { id: "inside", href: `${home}#today`, label: labels.whatsInside },
+      // "What's inside" targets the landing's why band (plan 05) — the old #today
+      // section is gone; the why band is the reader-contents story now.
+      { id: "inside", href: `${home}#why`, label: labels.whatsInside },
     ],
     company: marketingColumn(COMPANY_LINKS, locale, labels),
     legal: marketingColumn(LEGAL_LINKS, locale, labels),
