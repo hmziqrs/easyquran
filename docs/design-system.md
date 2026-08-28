@@ -1,2526 +1,669 @@
 # EasyQuran Design System
 
-> **Audited, themeable design system for a modern Quran reading and study product**  
-> Version: 1.0 · August 2026
+> **The pill / cobalt system** — version 2.0 · August 2026
+> This document describes what is **in the code now**, not aspirations.
+> Migration history and per-phase rationale: `docs/plan/` (README + plans 00–08).
 
 ---
 
-## 0. Executive Summary
+## 0. Executive summary
 
-This system synthesizes the strongest patterns from five Quran/Islamic products without copying any one of them directly:
+The app moved off the v1 "Sacred Editorial" direction (forest/ivory/antique gold,
+Newsreader + Inter, 10–18px radii, tinted grounds) onto a **pill / cobalt** system:
 
-- [Ayah](https://www.getayah.com/#quran) — bilingual editorial language, generous whitespace, learning/progress cues, restrained presentation.
-- [Quran.com](https://quran.com/) — mature Quran-reader information architecture, reading modes, study tools, personalization, search, translations, word-by-word, audio, Light/Dark/Sepia support.
-- [Niyat](https://niyatapp.com/) — warm ivory surfaces, forest-green brand language, calm cards, soft dividers, high-quality mobile Quran presentation.
-- [Quran Companion](https://quran-companion.co/prophets) — chronology, prophets, relationships, timelines, filters, connected-study patterns.
-- [Quran Gate](https://qurangate.app/) — habits, streaks, reading progress, sequential continuation, ritual/progress mechanics.
+| Layer | Now |
+| --- | --- |
+| Ground | One **zero-chroma neutral ground** shared by every palette, per mode |
+| Accents | 4 palettes: **sacred = cobalt**, **ink = neutral**, **sepia = magenta**, **sapphire = emerald** |
+| Hue slots | 4 fixed hues (cobalt/emerald/purple/amber→ember), identical across palettes, **mode-dependent** |
+| Dark fills | **White-on-colour**: dark-mode accents are *darker* than light-mode ones, carrying white text |
+| Typography | **Nunito** (self-hosted, variable) for UI + display; Noto Sans Arabic for Arabic UI; Amiri for the Quran column |
+| Geometry | **Pill controls** (999px), 8px icon holders, 10px blocks, 14px large panels, 16px headline highlight |
+| Layout | Full-bleed **Band** model; responsive ramp as a **utility ladder** (gutter 20/32/48/72, band pad 48/64/80/96) |
+| Elevation | **None** — separation is borders and tonal surface steps, never shadows |
+| Muted floor | `--muted` at L 0.52 (light) / 0.625 (dark) is contrast-derived — do not raise |
+| Icons | Lucide line icons, 18/20/24; directional glyphs mirror automatically under RTL |
 
-The resulting direction is called **Sacred Editorial**:
+The Quran reading surface stays deliberately quiet: the reading column inherits the
+neutral ground (only **sepia** keeps a warm reader in both modes), and the Quran text
+is the highest-contrast element on the page in every palette and mode.
 
-> **A calm reading room, not a SaaS dashboard.**
+### Section anchors
 
-The Quran remains the focal point. UI chrome should recede. Arabic typography, whitespace, hierarchy, and reading comfort should do more visual work than decoration.
-
-### Core visual formula
-
-| Layer        | Direction                                                                    |
-| ------------ | ---------------------------------------------------------------------------- |
-| Brand        | Deep forest green + warm ivory + muted antique gold                          |
-| Typography   | Newsreader for editorial moments, Inter for UI, dedicated Arabic/Quran fonts |
-| Surfaces     | Warm, low-contrast, subtly layered                                           |
-| Geometry     | Soft but not bubbly; mostly 10–18px radii                                    |
-| Icons        | Lucide-style thin line icons                                                 |
-| Quran reader | Border-light, spacious, book-like                                            |
-| Dark mode    | Warm charcoal rather than generic blue-black                                 |
-| Motion       | Quiet, brief, functional                                                     |
-| Decoration   | Rare and subtle                                                              |
-| Study tools  | Functional density only where needed                                         |
-
-The default theme is **Sacred Editorial**, but the component architecture is deliberately palette-agnostic. Four full palette families are defined later:
-
-1. **Sacred Editorial** — forest / ivory / antique gold
-2. **Ink** — strict black / white / graphite
-3. **Mushaf Sepia** — parchment / umber / bronze
-4. **Midnight Sapphire** — slate / deep navy / cool blue / brass
-
-Every palette supports both light and dark mode.
+Section numbers in this document are **stable anchors cited from source code**
+(`web/src/**` comments and `web/src/routes/layout.css` section markers cite e.g.
+"§4", "§61"). Numbers with no section here are v1 sections retired by the migration;
+their content, where still relevant, lives in the nearest numbered section below or in
+`docs/plan/`. Do not renumber.
 
 ---
 
-# 1. Audit of the Original Proposal
+## 1. Provenance and migration record
 
-The first design direction was strong, but a deep consistency audit revealed several things that should be corrected before implementation.
+- v1.0 (this document's predecessor) specified "Sacred Editorial" and was implemented
+  in an earlier run: token file `web/src/routes/layout.css`, primitives in
+  `web/src/lib/components/ui/**`, palette contract tests.
+- The 2026 migration (`docs/plan/00`–`08`) moved that system to the pill/cobalt
+  direction defined by two boards in the untracked `design/` directory:
+  `PillLightCobalt.dc.html` (light) and `white-on-colour-deep-cobalt.html` (dark).
+- Phase order (plan 08): visual harness → hue tokens inert → neutral ground →
+  accents/`--accent` repoint → Nunito ramp → radius/primitives/state matrix →
+  Band/RTL sweep → landing rebuild → app chrome/reader tokens → **this document**.
+- Rollback notes, risk register, and per-phase commit discipline: plan 08.
+  Decision record (palette id remap, white-on-colour, mode-dependent hues): plan 00.
 
-## 1.1 What was already strong
-
-### A. The reference weighting was directionally correct
-
-The best division of responsibilities remains:
-
-- **Niyat + Ayah** → visual language
-- **Quran.com** → reader and study UX architecture
-- **Quran Companion** → connected study, chronology, relationships
-- **Quran Gate** → progress and habit mechanics
-
-Trying to visually blend all five equally would create a confused product. The system should have one visual voice while borrowing behavior patterns from the others.
-
-### B. The warm background + forest-primary direction fits long-form Quran reading
-
-A slightly warm neutral is less sterile than pure white and makes the Quran surface feel more intentional. It also prevents the design from looking like a generic productivity product.
-
-### C. Separating Quran typography from UI Arabic typography is essential
-
-The Quran text should never inherit a generic Arabic UI font. Quran rendering is a specialized layer with its own font, line-height, glyph handling, Tajweed behavior, and layout requirements.
-
-### D. The proposal correctly avoided cardifying every ayah
-
-A Quran reader should not look like a feed of 114 SaaS cards. Verse boundaries can be communicated using whitespace, subtle dividers, hover states, and verse markers.
-
-### E. Gold was correctly treated as a secondary sacred/accent color
-
-Gold should not become the normal CTA color. Its strongest use is for sacred metadata, small ceremonial accents, Makki labels, ornament, and carefully selected featured content.
+Every machine guard landed with the change it guards and is enumerated in §61.
 
 ---
 
-# 2. Audit Corrections
+## 2. What changed from v1 (delta)
 
-## 2.1 Accessibility correction: muted text
-
-The old light-mode muted color was:
-
-```css
-#7B837E
-```
-
-against:
-
-```css
-#F8F7F2
-```
-
-Its contrast is roughly **3.63:1**, which is too low for ordinary small text.
-
-The corrected muted token is:
-
-```css
---muted: #68716B;
-```
-
-Contrast against the default background is roughly **4.70:1**, making it suitable for normal text at standard sizes.
-
-### Rule
-
-Never intentionally make metadata unreadable to make the interface look “soft.” Visual hierarchy should come from weight, size, spacing, and chroma—not insufficient contrast.
+| v1 (Sacred Editorial) | v2 (pill/cobalt) |
+| --- | --- |
+| Per-palette tinted grounds | One shared **zero-chroma ground**; palette choice moves only the accent family |
+| `sacred` = forest green | `sacred` = **cobalt** oklch(0.52 0.21 262) |
+| `sepia` = parchment/umber | `sepia` = **magenta** 352 accent, warm *reader* kept |
+| `sapphire` = navy/brass | `sapphire` = **emerald** 162 |
+| `ink` = graphite accent | `ink` = **ground-inverted neutral** (white on near-black / near-black on white) |
+| Editorial gold `--accent` | `--accent` = the **hue-2 family** (emerald); gold retired as a colour, name kept as alias |
+| Newsreader display + Inter UI | **Nunito Variable** everywhere (self-hosted `@fontsource-variable/nunito`) |
+| Radii 10–18px | **Pill 999** controls; 8/10/14/16 for holders/blocks/panels/highlight |
+| Soft shadows | `--elev-sm/md = none`; borders + tonal surfaces |
+| Fixed containers per page | Full-bleed **Band** + responsive utility ladder |
+| Physical CSS directions | Logical properties everywhere (`ms-`/`pe-`/`start-`/`text-start`), machine-guarded |
 
 ---
 
-## 2.2 Accessibility correction: gold
+## 3. Design principles
 
-The original light gold:
-
-```css
-#B6914C
-```
-
-is attractive as decoration, but it only reaches roughly **2.74:1** against the warm page background.
-
-Therefore gold is split into two roles:
-
-```css
---accent: #B6914C;        /* decorative / large graphical use */
---accent-strong: #715625; /* text, icons, labels */
---accent-soft: #F3EAD8;
-```
-
-`#715625` on `#F3EAD8` is roughly **5.74:1**.
-
-### Rule
-
-Never use decorative gold as body copy or small metadata text.
+1. **The ground is neutral; colour is a decision.** All chrome sits on the same
+   zero-chromatic grey scale per mode; hue appears only where it means something
+   (primary action, hue slots, status).
+2. **White-on-colour in the dark.** Dark fills are deep colour carrying white text —
+   dark accents are *darker* than their light-mode counterparts (plan 00 D2), never
+   pastel-on-dark.
+3. **Pills for controls, blocks for content.** Anything you act with is a pill;
+   anything you read sits in 8/10/14px blocks.
+4. **Separation without shadow.** Hairline borders and surface luminance steps.
+   The elevation tokens exist and resolve to `none`.
+5. **Contrast is a gate, not a hope.** 96 token pairs across all 8 palette×mode
+   blocks are asserted in `pnpm test` (§9).
+6. **RTL is a first-class mode.** Logical properties; directional icons mirror in
+   the icon component, not at call sites (§50).
+7. **Semantic tokens only in components** (§61). No hex, no Tailwind default-palette
+   classes on migrated surfaces.
 
 ---
 
-## 2.3 Accessibility correction: dark primary buttons
+## 4. Theme architecture — the semantic contract
 
-The old proposal implicitly kept white button text in both modes.
+Implemented in `web/src/routes/layout.css`; machine-guarded by
+`web/src/routes/__tests__/palette-contract.test.ts`.
 
-That fails when dark mode uses a light mint primary such as:
-
-```css
-#77BDA4
-```
-
-White on that green is only roughly **2.19:1**.
-
-Dark mode therefore gets an explicit semantic foreground:
-
-```css
---primary: #77BDA4;
---primary-foreground: #0D1210;
-```
-
-This reaches roughly **8.64:1**.
-
-### Rule
-
-Components must never assume `color: white` on `background: primary`.
-
-They must use:
-
-```css
-color: var(--primary-foreground);
-```
-
----
-
-## 2.4 The original sidebar was slightly too “dashboard-like”
-
-A permanent 240–264px sidebar is reasonable for study/explore views, but not ideal as the default reading posture.
-
-### Revised shell behavior
-
-- Home / Explore / Collections: expanded sidebar is allowed.
-- Quran index: compact rail or expanded sidebar.
-- Quran reading: sidebar collapses automatically.
-- Focus mode: all nonessential chrome disappears.
-- Mobile: use bottom navigation + contextual top bar.
-
-The application shell adapts to the task rather than forcing every page into one desktop admin layout.
-
----
-
-## 2.5 The typography system needed stricter role boundaries
-
-Four font families can be justified here, but only if their roles never overlap randomly.
-
-### Correct role model
-
-| Role                       | Font                              |
-| -------------------------- | --------------------------------- |
-| English UI                 | Inter                             |
-| Editorial/display headings | Newsreader                        |
-| Arabic UI labels           | Noto Sans Arabic                  |
-| Quran text                 | QPC Hafs / appropriate Quran font |
-
-### Never do this
-
-- Newsreader in settings menus
-- Quran font in navigation
-- Noto Sans Arabic for rendered Quran text
-- Random serif subtitles throughout the application
-
-Newsreader should feel special because it is **not everywhere**.
-
----
-
-## 2.6 Bilingual Arabic eyebrows were at risk of becoming a gimmick
-
-This pattern is beautiful:
-
-```text
-الْقُرْآن
-THE QURAN
-```
-
-But repeating it on every card would become ornamental noise.
-
-### Revised rule
-
-Use bilingual editorial labels on:
-
-- major landing-page sections
-- page introductions
-- Prophet/topic editorial headers
-- key empty/onboarding states
-
-Avoid them on:
-
-- buttons
-- every Surah row
-- preference forms
-- dense tables
-- every dashboard card
-
-A good maximum is roughly **one bilingual eyebrow per major viewport section**.
-
----
-
-## 2.7 Radius hierarchy was too broad
-
-The previous system exposed too many radii. That often leads to arbitrary component styling.
-
-### Revised radius set
-
-```css
---radius-sm: 8px;
---radius-md: 12px;
---radius-lg: 18px;
---radius-xl: 24px;
---radius-pill: 999px;
-```
-
-Usage:
-
-- inputs / buttons → 10–12px
-- normal cards → 12–18px
-- hero/featured cards → 18–24px
-- chips → pill
-
-Do not make ordinary content cards 28px rounded unless they are intentionally large feature surfaces.
-
----
-
-## 2.8 Progress mechanics needed quieter hierarchy
-
-Quran Gate-inspired progress is useful, but EasyQuran should not feel like a fitness tracker.
-
-### Revised rule
-
-The home screen may prominently show **one** progress surface at a time:
-
-- continue reading, or
-- daily goal, or
-- active plan
-
-Secondary metrics such as streak, reading time, and ayahs read should be visually subordinate.
-
-The spiritual content should outrank the metric.
-
----
-
-# 3. Design Principles
-
-## Principle 1 — Quran first
-
-If the Quran is visible, it should be the strongest visual element on the page.
-
-The visual hierarchy should generally be:
-
-1. Quran Arabic
-2. Current reading context / Surah
-3. Translation
-4. Study material
-5. Controls
-6. Metadata
-
----
-
-## Principle 2 — Calm is created by subtraction
-
-Do not simulate calm using only beige backgrounds and rounded corners.
-
-Calm comes from:
-
-- fewer simultaneous controls
-- strong content hierarchy
-- generous whitespace
-- minimal border noise
-- restrained motion
-- consistent alignment
-- predictable navigation
-
----
-
-## Principle 3 — Study density and reading serenity are different modes
-
-Reading and studying are related but not identical tasks.
-
-### Reading mode
-
-- narrow content column
-- minimal controls
-- generous vertical spacing
-- hidden advanced actions
-- persistent audio only if active
-
-### Study mode
-
-- tabs / side panel allowed
-- related Hadith / Tafsir / notes / word data
-- compare mode allowed
-- denser navigation
-- additional metadata
-
-Do not compromise reading serenity just so all study tools remain visible at all times.
-
----
-
-## Principle 4 — Semantic tokens, never component colors
-
-A button should not know that the brand is green.
-
-It should know:
-
-```css
-background: var(--primary);
-color: var(--primary-foreground);
-```
-
-This is what makes alternate themes possible.
-
----
-
-## Principle 5 — Sacred does not mean ornamental
-
-Islamic identity should come primarily from:
-
-- Quran typography
-- Arabic language
-- editorial composition
-- intentional color
-- content itself
-
-not from repeated mosque silhouettes, crescents, stars, arches, gradients, gold borders, or arabesque textures.
-
----
-
-# 4. Theme Architecture
-
-Treat **palette** and **mode** as separate concepts.
+**Two independent attributes on `<html>`:**
 
 ```html
-<html data-palette="sacred" data-mode="light">
+<html data-palette="sacred" data-mode="dark">
 ```
 
-Examples:
+- `data-palette` ∈ `sacred | ink | sepia | sapphire` (§25)
+- `data-mode` ∈ `light | dark` (resolved from the `light | dark | system` setting)
 
-```html
-<html data-palette="ink" data-mode="dark">
-<html data-palette="sepia" data-mode="light">
-<html data-palette="sapphire" data-mode="dark">
-```
+**Eight blocks** (`[data-palette="X"][data-mode="Y"]`) define the full contract.
+`:root` doubles as the sacred-dark block so no-JS/SSR markup always resolves a
+complete token set — every token must exist in `:root`.
 
-This makes it possible to switch palette without rewriting components.
+**Contract tokens** (per block):
 
-## Semantic token contract
+| Token | Role |
+| --- | --- |
+| `--background`, `--background-subtle` | Page ground and its one quiet step |
+| `--surface`, `--surface-raised`, `--surface-hover` | Cards/surfaces, popovers/overlays, hover tint |
+| `--foreground`, `--foreground-secondary`, `--muted` | Text ramp; `--muted` is text-side, never a surface (§9) |
+| `--border`, `--border-strong` | Hairline and strong divider |
+| `--primary`, `--primary-hover`, `--primary-foreground`, `--primary-soft` | Accent family (§5) |
+| `--accent`, `--accent-strong`, `--accent-soft` | The **hue-2 family** (§8) |
+| `--success`, `--warning`, `--danger` | Status — one set per mode, shared by all palettes |
+| `--focus-ring` | Keyboard focus outline colour (= `--primary`) |
+| `--reader-background`, `--quran-foreground`, `--translation-foreground`, `--reader-divider` | Reading surface (§42) |
+| `--hue-1..4`, `--hue-N-soft`, `--on-hue-N`, `--hue-N-legible` | Hue slots (§6) |
+| `--elev-sm`, `--elev-md` | Elevation — both `none` (§14) |
 
-Every theme must provide:
+Neutral ground values (identical in every palette within a mode):
 
-```css
---background;
---background-subtle;
---surface;
---surface-raised;
---surface-hover;
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--background` | `oklch(0.980 0 0)` | `oklch(0.165 0 0)` |
+| `--background-subtle` | `oklch(0.968 0 0)` | `oklch(0.190 0 0)` |
+| `--surface` / `--surface-raised` | `#ffffff` / `#ffffff` | `oklch(0.238 0 0)` / `oklch(0.262 0 0)` |
+| `--surface-hover` | `oklch(0.953 0 0)` | `oklch(0.285 0 0)` |
+| `--foreground` | `oklch(0.20 0 0)` | `oklch(0.965 0 0)` |
+| `--foreground-secondary` | `oklch(0.40 0 0)` | `oklch(0.775 0 0)` |
+| `--muted` | `oklch(0.52 0 0)` | `oklch(0.625 0 0)` |
+| `--border` / `--border-strong` | `oklch(0.885 0 0)` / `oklch(0.82 0 0)` | `oklch(0.305 0 0)` / `oklch(0.375 0 0)` |
 
---foreground;
---foreground-secondary;
---muted;
-
---border;
---border-strong;
-
---primary;
---primary-hover;
---primary-foreground;
---primary-soft;
-
---accent;
---accent-strong;
---accent-soft;
-
---success;
---warning;
---danger;
-
---focus-ring;
-
---reader-background;
---quran-foreground;
---translation-foreground;
---reader-divider;
-```
-
-No component should use a raw hex color except specialized Quran/Tajweed rendering.
+Custom themes (user colour seeds in prefs) derive through
+`web/src/lib/theme/derive.ts`, which quantises a background seed to its
+luminance-equal grey before ramping — custom grounds are also zero-chroma — and
+derives an `--on-hue-1` for the accent seed. The utility layer (`@theme inline` in
+layout.css) maps every contract token to its Tailwind colour utility
+(`bg-background`, `text-foreground`, `border-border`, …), plus shadcn aliases and
+legacy v1 aliases (§8) so un-migrated code keeps rendering.
 
 ---
 
-# 5. Theme 01 — Sacred Editorial
+## 5. Palettes and accent families
 
-**Recommended default.**
+Palette ids are **remapped, never renamed** — prefs storage depends on them
+(plan 00 D1; `prefs.test.ts` pins this).
 
-Character:
+| id | Accent | Light `--primary` | Dark `--primary` | Notes |
+| --- | --- | --- | --- | --- |
+| `sacred` | Cobalt | `oklch(0.52 0.21 262)` | `oklch(0.50 0.20 262)` | Default; `:root` block is sacred-dark |
+| `ink` | Neutral | `oklch(0.20 0 0)` | — ground-inverted | On-accent = ground inversion (white on near-black light; near-black on white dark) |
+| `sepia` | Magenta | `oklch(0.54 0.23 352)` | `oklch(0.50 0.23 352)` | Keeps a **warm reader** in both modes (§42) |
+| `sapphire` | Emerald | `oklch(0.53 0.16 162)` | `oklch(0.50 0.14 162)` | Light value is the board's 0.54 nudged to clear the 4.5:1 gate |
 
-> warm · scholarly · premium · gentle · modern
+- `--primary-hover` is ±0.04 L: darker in light mode, lighter in dark mode; the
+  white-on-fill pair stays ≥4.5:1 in all eight blocks.
+- `--primary-soft` is an opaque tint — light `oklch(0.95 0.045 H)`, dark
+  `oklch(0.30 0.055 H)` (chroma 0 for ink).
+- `--focus-ring` = `--primary` in every palette.
+- **Dark accents are darker than light accents** — the white-on-colour decision.
+  In dark mode a deep fill carries white text; a lighter fill would need dark text
+  and read as a pastel chip, which this system does not do.
 
-## Light
-
-```css
-[data-palette="sacred"][data-mode="light"] {
-  --background: #F8F7F2;
-  --background-subtle: #F2F0E9;
-
-  --surface: #FFFEFA;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #F1F0E9;
-
-  --foreground: #18211D;
-  --foreground-secondary: #505A54;
-  --muted: #68716B;
-
-  --border: #DDDCD3;
-  --border-strong: #C9C7BD;
-
-  --primary: #145A43;
-  --primary-hover: #104B38;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #E6F0EB;
-
-  --accent: #B6914C;
-  --accent-strong: #715625;
-  --accent-soft: #F3EAD8;
-
-  --success: #397A57;
-  --warning: #8A681E;
-  --danger: #B34A4A;
-
-  --focus-ring: #2D7B61;
-
-  --reader-background: #FFFEFA;
-  --quran-foreground: #17201C;
-  --translation-foreground: #4D5751;
-  --reader-divider: #E5E2D9;
-}
-```
-
-## Dark
-
-```css
-[data-palette="sacred"][data-mode="dark"] {
-  --background: #0D1210;
-  --background-subtle: #111814;
-
-  --surface: #151D19;
-  --surface-raised: #1A231F;
-  --surface-hover: #202A25;
-
-  --foreground: #F0EFE9;
-  --foreground-secondary: #BCC2BD;
-  --muted: #89938D;
-
-  --border: #29332E;
-  --border-strong: #39443E;
-
-  --primary: #77BDA4;
-  --primary-hover: #91CEB9;
-  --primary-foreground: #0D1210;
-  --primary-soft: #17372C;
-
-  --accent: #D0B06B;
-  --accent-strong: #D0B06B;
-  --accent-soft: #332A19;
-
-  --success: #78BD91;
-  --warning: #D9B55E;
-  --danger: #DF7777;
-
-  --focus-ring: #91CEB9;
-
-  --reader-background: #111713;
-  --quran-foreground: #F4F2EA;
-  --translation-foreground: #C2C6C1;
-  --reader-divider: #28332D;
-}
-```
-
-### Use when
-
-- You want the strongest Islamic/editorial identity.
-- You want the site to feel warmer than Quran.com without becoming ornamental.
-- The product is reading-first.
+The picker swatch contract is `PaletteDef.accentHex { light, dark }` in
+`web/src/lib/config/site.ts` (the shared ground made the old ground preview useless):
+sacred `#1a5cdf`/`#1957d2`, ink `#161616`/`#f3f3f3`, sepia `#c7007c`/`#b90073`,
+sapphire `#00864e`/`#007a49`. Display names live **only** in messages
+(`settings_palette_*`, `tweaks_palette_*` — Cobalt/Ink/Magenta/Emerald, en+ar),
+never in `site.ts`.
 
 ---
 
-# 6. Theme 02 — Ink
+## 6. Hue slots
 
-A highly neutral black/white option for testing whether the design works **without relying on brand color**.
+Sixteen additive tokens per block: `--hue-N`, `--hue-N-soft`, `--on-hue-N`,
+`--hue-N-legible` for N = 1..4. The set is **identical across palettes** and
+**mode-dependent** (plan 00 D3): no amber can carry white on the dark ground, so
+dark swaps amber for ember.
 
-Character:
+| Slot | Light | Dark | On-fill |
+| --- | --- | --- | --- |
+| `--hue-1` cobalt | `oklch(0.52 0.21 262)` | `oklch(0.50 0.20 262)` | white |
+| `--hue-2` emerald | `oklch(0.53 0.16 162)` | `oklch(0.50 0.14 162)` | white |
+| `--hue-3` purple | `oklch(0.50 0.24 300)` | `oklch(0.48 0.23 300)` | white |
+| `--hue-4` amber / ember | `oklch(0.78 0.16 78)` | `oklch(0.53 0.16 55)` | **near-black** `oklch(0.20 0 0)` in light; white in dark |
 
-> editorial · timeless · stark · minimal · typographic
-
-This is also the best palette for auditing hierarchy. If the interface looks good in Ink, the layout is doing real work rather than depending on decorative color.
-
-## Light
-
-```css
-[data-palette="ink"][data-mode="light"] {
-  --background: #F7F7F5;
-  --background-subtle: #EFEFED;
-
-  --surface: #FFFFFF;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #F0F0EE;
-
-  --foreground: #121212;
-  --foreground-secondary: #4B4B4B;
-  --muted: #686868;
-
-  --border: #DADADA;
-  --border-strong: #BDBDBD;
-
-  --primary: #111111;
-  --primary-hover: #2A2A2A;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #ECECEC;
-
-  --accent: #777777;
-  --accent-strong: #4B4B4B;
-  --accent-soft: #F1F1F1;
-
-  --success: #356B4B;
-  --warning: #775F25;
-  --danger: #A33F3F;
-
-  --focus-ring: #111111;
-
-  --reader-background: #FFFFFF;
-  --quran-foreground: #101010;
-  --translation-foreground: #444444;
-  --reader-divider: #E6E6E6;
-}
-```
-
-## Dark / OLED
-
-```css
-[data-palette="ink"][data-mode="dark"] {
-  --background: #000000;
-  --background-subtle: #080808;
-
-  --surface: #0D0D0D;
-  --surface-raised: #151515;
-  --surface-hover: #1A1A1A;
-
-  --foreground: #F5F5F5;
-  --foreground-secondary: #C8C8C8;
-  --muted: #9A9A9A;
-
-  --border: #292929;
-  --border-strong: #3D3D3D;
-
-  --primary: #F2F2F2;
-  --primary-hover: #FFFFFF;
-  --primary-foreground: #090909;
-  --primary-soft: #1D1D1D;
-
-  --accent: #C8C8C8;
-  --accent-strong: #C8C8C8;
-  --accent-soft: #1A1A1A;
-
-  --success: #79B991;
-  --warning: #D8BA70;
-  --danger: #E07B7B;
-
-  --focus-ring: #FFFFFF;
-
-  --reader-background: #050505;
-  --quran-foreground: #F5F5F5;
-  --translation-foreground: #C6C6C6;
-  --reader-divider: #242424;
-}
-```
-
-### Use when
-
-- You want maximum typographic purity.
-- You are testing whether the layout itself is beautiful.
-- You want an OLED-friendly pure-black mode.
-- You want a restrained alternative to “Islamic green.”
-
-### Important
-
-Do not add decorative gray gradients. The appeal of this palette comes from type, rhythm, and proportion.
+- Softs: light `oklch(0.95 0.045 H)`-family tints; dark deep fills `oklch(0.30 0.05 H)`.
+- `--hue-N-legible` is the colour for text/numerals *on* a soft: in light mode it is
+  simply `--hue-N`; in dark mode it is an L≈0.78 version of the hue, because on the
+  dark soft chips the deep fill disappears and the base hue would sink into it.
+  (Light `--hue-4-legible` on its soft is intentionally below 4.5:1 — the boards
+  draw it as 15px/800 numerals; the contrast gate deliberately does not pair them.)
+- Consumers: `MetricCard` (`hue={1|2|3|4}`), landing surah-number chips and badges,
+  roadmap/steps accents. Consume via `var(--hue-N)` / `--hue-N-soft` /
+  `--hue-N-legible` + `--on-hue-N` for on-fill pairs.
 
 ---
 
-# 7. Theme 03 — Mushaf Sepia
+## 7. Zero-chroma ground
 
-Inspired by printed pages and long-form reading rather than a “vintage website.”
+Every palette's ground within a mode is byte-identical and has chroma 0 (asserted by
+the palette contract test via OKLCH parsing). Palette choice therefore moves only:
+the primary family, the reader warmth (sepia), and nothing else. Consequences:
 
-Character:
-
-> paper · contemplative · traditional · warm · low-fatigue
-
-Quran.com currently exposes Light, Dark, and Sepia reading themes, and Quran Foundation’s Tajweed font guidance also explicitly accounts for Light/Dark/Sepia theme palettes. This makes Sepia especially practical for a Quran reader.
-
-## Light
-
-```css
-[data-palette="sepia"][data-mode="light"] {
-  --background: #F4ECD8;
-  --background-subtle: #EEE2C8;
-
-  --surface: #FFF9E9;
-  --surface-raised: #FFFCF3;
-  --surface-hover: #EFE4CF;
-
-  --foreground: #2E271C;
-  --foreground-secondary: #5F5342;
-  --muted: #70624F;
-
-  --border: #D9C9AA;
-  --border-strong: #C2AD87;
-
-  --primary: #6E4F27;
-  --primary-hover: #5B401F;
-  --primary-foreground: #FFF9E9;
-  --primary-soft: #EADCBF;
-
-  --accent: #A47B36;
-  --accent-strong: #684B1F;
-  --accent-soft: #EEE0C2;
-
-  --success: #52704A;
-  --warning: #806021;
-  --danger: #9D493D;
-
-  --focus-ring: #6E4F27;
-
-  --reader-background: #FBF3DF;
-  --quran-foreground: #2B2419;
-  --translation-foreground: #5E5140;
-  --reader-divider: #DDCFB4;
-}
-```
-
-## Dark
-
-```css
-[data-palette="sepia"][data-mode="dark"] {
-  --background: #18130E;
-  --background-subtle: #1C160F;
-
-  --surface: #211A13;
-  --surface-raised: #292017;
-  --surface-hover: #30251A;
-
-  --foreground: #F0E5CF;
-  --foreground-secondary: #C9B99A;
-  --muted: #9D8C6F;
-
-  --border: #403324;
-  --border-strong: #574632;
-
-  --primary: #D1AE71;
-  --primary-hover: #E0BF82;
-  --primary-foreground: #1B1309;
-  --primary-soft: #3A2C1B;
-
-  --accent: #E0C48B;
-  --accent-strong: #E0C48B;
-  --accent-soft: #332719;
-
-  --success: #90B47D;
-  --warning: #E0BC6F;
-  --danger: #DB8274;
-
-  --focus-ring: #D1AE71;
-
-  --reader-background: #1C160F;
-  --quran-foreground: #F0E5CF;
-  --translation-foreground: #CBBEA4;
-  --reader-divider: #3B3023;
-}
-```
-
-### Use when
-
-- Reading comfort is the dominant priority.
-- You want a visual relationship to physical Quran pages without fake textures.
-- You want an alternative to both green and monochrome.
+- Site chrome never re-tints per palette; a "palette" is an accent decision.
+- Surface separation must come from borders and the surface ladder (§14), not tint.
+- `--background-subtle` is the one quiet panel step; `Band tone="panel"` uses it.
 
 ---
 
-# 8. Theme 04 — Midnight Sapphire
+## 8. Accent naming — `--color-accent` vs `--accent` (load-bearing)
 
-A cooler, more contemporary theme that still avoids generic “developer dark mode.”
+Two similarly named things exist and both are depended upon. **Do not "fix" either.**
 
-Character:
+1. **`--accent` (custom property)** — the *secondary hue* role. Defined in every
+   palette block as `var(--hue-2)` (emerald family): `--accent`, `--accent-strong`,
+   `--accent-soft = --hue-2-soft`. The v1 editorial gold is retired; the meaning of
+   this token is now "hue-2", and e.g. the Chip accent tone and marker dot resolve
+   through it.
+2. **`--color-accent` (Tailwind utility token, `@theme inline`)** — maps to
+   `var(--primary)`. The `accent-*` *utilities* (`bg-accent`, `text-accent`, …) are
+   **interactive/primary** colour for back-compat with shadcn-sourced components.
+   `bg-accent` renders the palette's primary fill, identical to `bg-primary`.
 
-> scholarly · contemporary · cool · refined · nocturnal
+So: `--accent` = hue-2 (secondary), `accent-*` utility = primary. A component using
+`bg-accent` and a component using `var(--accent)` are referencing **different
+colours** by design. The split is pre-existing (the utility mapping predates the
+migration) and the migration made it load-bearing — retiring the utilities was
+noted as a possible future cleanup (plan-06 judge round 1, nit 3) but has not been
+done; until then this section is the contract.
 
-## Light
-
-```css
-[data-palette="sapphire"][data-mode="light"] {
-  --background: #F7F8FA;
-  --background-subtle: #EEF1F5;
-
-  --surface: #FFFFFF;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #EEF2F7;
-
-  --foreground: #171C24;
-  --foreground-secondary: #4E5968;
-  --muted: #667384;
-
-  --border: #D9DFE7;
-  --border-strong: #BEC7D2;
-
-  --primary: #244E8A;
-  --primary-hover: #1D4277;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #E8EEF8;
-
-  --accent: #A28759;
-  --accent-strong: #6F5A37;
-  --accent-soft: #F1EBDD;
-
-  --success: #39705A;
-  --warning: #80611F;
-  --danger: #AE4747;
-
-  --focus-ring: #3567A9;
-
-  --reader-background: #FFFFFF;
-  --quran-foreground: #18202A;
-  --translation-foreground: #4A5666;
-  --reader-divider: #E3E7ED;
-}
-```
-
-## Dark
-
-```css
-[data-palette="sapphire"][data-mode="dark"] {
-  --background: #0B1018;
-  --background-subtle: #0E1520;
-
-  --surface: #111824;
-  --surface-raised: #172131;
-  --surface-hover: #1B2738;
-
-  --foreground: #EFF3F8;
-  --foreground-secondary: #B9C3D0;
-  --muted: #8895A5;
-
-  --border: #273446;
-  --border-strong: #394A60;
-
-  --primary: #8FB5EA;
-  --primary-hover: #A6C7F2;
-  --primary-foreground: #0A111B;
-  --primary-soft: #1A2A3F;
-
-  --accent: #D2B47C;
-  --accent-strong: #D2B47C;
-  --accent-soft: #302719;
-
-  --success: #80BFA0;
-  --warning: #D7B66E;
-  --danger: #E07A7A;
-
-  --focus-ring: #A6C7F2;
-
-  --reader-background: #0E151F;
-  --quran-foreground: #F1F4F8;
-  --translation-foreground: #C0CAD6;
-  --reader-divider: #263447;
-}
-```
-
-### Use when
-
-- You want a cooler visual identity.
-- You want to distinguish the product from the common cream/green Quran aesthetic.
-- Dark mode is a major use case.
+Related legacy aliases (defined in `@theme inline`, kept so un-migrated code
+renders): `gold/gold-strong/gold-soft` → the `--accent` (hue-2) family;
+`pop/pop-soft` → same; `bg*/line*/fg*` → contract equivalents; `ok` → `--success`.
+Remaining legal alias users: the `(account)` route, `design/` board variants, and
+the UsageBar legend (`var(--pop-soft)`). New code uses contract names.
 
 ---
 
-# 9. Theme Contrast Audit
+## 9. Contrast floors
 
-Approximate WCAG contrast checks were run against each palette background.
+Machine-gated by `web/src/routes/__tests__/token-contrast.test.ts` (96 pairs across
+all 8 blocks; the shared evaluator also powers `node scripts/visual/contrast.ts`).
 
-| Theme          | Primary text | Secondary | Muted | Primary | Primary button | Accent chip |
-| -------------- | -----------: | --------: | ----: | ------: | -------------: | ----------: |
-| Sacred Light   |        15.37 |      6.68 |  4.70 |    7.61 |           8.16 |        5.74 |
-| Sacred Dark    |        16.41 |     10.43 |  5.96 |    8.64 |           8.64 |        6.80 |
-| Ink Light      |        17.46 |      8.13 |  5.19 |   17.60 |          18.88 |        7.72 |
-| Ink Dark       |        19.26 |     12.55 |  7.46 |   18.76 |          17.79 |       10.40 |
-| Sepia Light    |        12.53 |      6.36 |  5.03 |    6.35 |           7.11 |        6.15 |
-| Sepia Dark     |        14.77 |      9.57 |  5.63 |    8.79 |           8.75 |        8.61 |
-| Sapphire Light |        16.09 |      6.69 |  4.54 |    7.81 |           8.29 |        5.53 |
-| Sapphire Dark  |        17.11 |     10.69 |  6.25 |    9.05 |           8.99 |        7.38 |
+| Pair | Floor |
+| --- | --- |
+| `--foreground` / background | ≥ 7 |
+| `--foreground-secondary` / background | ≥ 4.5 |
+| `--muted` / background **and** / surface | ≥ 4.5 |
+| `--primary-foreground` / `--primary` | ≥ 4.5 |
+| Quran / translation on reader ground | ≥ 7 / ≥ 4.5 |
+| borders / background | ≥ 1.1 (see below) |
+| `--on-hue-N` / `--hue-N` | ≥ 4.5 (auto-activates per block) |
 
-All normal text tokens are designed to meet or exceed the normal-text 4.5:1 target against the base background.
-
-Do not assume every arbitrary token pairing is accessible. Component pairings still need to be tested in Storybook/Playwright/axe.
-
----
-
-# 10. Typography
-
-## English UI
-
-```css
---font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-```
-
-Use for:
-
-- navigation
-- buttons
-- controls
-- translations
-- forms
-- settings
-- metadata
-- dense study interfaces
+- The `--muted` lightness values (0.52 light / 0.625 dark) are the **contrast floor
+  for 13.5px secondary text**, not cosmetics — never raise them.
+- Border floor is 1.1:1, not a higher figure: the plan's own border tokens measure
+  1.33:1 (light) and 1.44:1 (dark), so a 1.5 floor would contradict the tokens; the
+  boards win. 1.1 still catches border==background and undefined-border bugs.
+- Guard behaviour: an additive hue pair that is defined in *any* block but missing in
+  another **fails** that block (no silent per-block skips).
 
 ---
 
-## Editorial display
+## 10. Typography roles — fonts
 
-```css
---font-display: "Newsreader", Georgia, serif;
-```
+All self-hosted via Fontsource (`web/src/routes/layout.css`); a CDN font reference
+(`fonts.googleapis.com` / `fonts.gstatic.com`) is machine-banned — offline reading
+depends on it.
 
-Use for:
+| Stack | Token | Faces |
+| --- | --- | --- |
+| UI + display | `--font-sans` | **Nunito Variable**, Nunito, `ui-rounded`, system-ui, -apple-system, "Segoe UI", sans-serif |
+| Arabic UI | `--font-arabic-ui` | Noto Sans Arabic (400/600), Segoe UI, Tahoma |
+| Quran text | `--font-quran` | resolves the reader's runtime font choice; Amiri pre-hydration (`--font-arabic`: Amiri, Scheherazade New, Traditional Arabic, Geeza Pro) |
+| Mono | `--font-mono` | Geist Mono Variable, ui-monospace, JetBrains Mono, SF Mono, Menlo |
 
-- home hero
-- section headings
-- Surah introductions
-- Prophet profiles
-- topic pages
-- Daily Ayah editorial cards
-- major empty states
-
-Do not use Newsreader for everyday UI controls.
-
----
-
-## Arabic UI
-
-```css
---font-arabic-ui: "Noto Sans Arabic", sans-serif;
-```
-
-Use for Arabic interface labels and non-Quran Arabic prose.
+- One Latin face: there is **no display face**; headings are Nunito 800 via the ramp.
+  `--font-display`/`--font-serif`/Inter/Newsreader are machine-banned
+  (`fonts.test.ts`).
+- `ui-rounded` is the fallback chosen for character match — a slow font load
+  degrades to something with the same feel.
+- Arabic next to Latin: Amiri renders small next to Nunito at equal nominal size, so
+  the boards run Arabic at ≈1.4×. `--font-size-arabic-ratio: 1.4`; the `.arabic`
+  utility applies family + RTL + ratio (+ lh 2.1). `font-arabic` is family-only for
+  fixed-size cases (the reading column has its own tuned sizing, out of scope here).
+- The offline pack picks up the Nunito woff2 set (5 subsets) through the service
+  worker's build manifest; Inter/Newsreader ship nowhere.
 
 ---
 
-## Quran text
+## 11. Type ramp
 
-Use a dedicated Quran font stack, preferably Quran Foundation/QPC resources appropriate to the selected script and rendering mode.
+Sizes/line-heights/weights/tracking are one contract; tracking is part of the role,
+not a per-use decision. Per-role weight and tracking ride the `text-*` utility — do
+**not** add `font-semibold`/`tracking-*` next to a ramp class (an explicit `font-*`
+utility wins; that is the override hatch, use it deliberately).
 
-```css
---font-quran: "UthmanicHafs", serif;
-```
+| Role | Size/line | Weight | Tracking |
+| --- | --- | --- | --- |
+| `text-display-xl` | 76px / 1.06 | 800 | −0.04em |
+| `text-h1` | 40px / 1.1 | 800 | −0.035em |
+| `text-h2` | 26px / 1.2 | 800 | −0.03em |
+| `text-h3` | 20px / 1.25 | 800 | −0.025em |
+| `text-body-xl` | 20px / 1.55 | 600 | — |
+| `text-body-l` | 17.5px / 1.6 | 600 | — |
+| `text-body` | 15px / 1.5 | 600 | — |
+| `text-caption` | 13.5px / 1.45 | 600 | — |
+| `text-micro` | 13px / 1.4 | 800 | +0.1em |
 
-Possible reader script modes include:
-
-- Uthmani / QPC Hafs
-- IndoPak
-- Tajweed-capable font rendering
-- physical Mushaf/page-layout mode where applicable
-
-Quran Foundation documentation notes that larger font scales eventually need relaxed line wrapping instead of strict physical Mushaf line fidelity. Treat accessibility as more important than reproducing line boundaries when the user deliberately selects large type.
-
----
-
-# 11. Type Scale
-
-```text
-Display XL    64 / 68    Newsreader 500
-Display L     52 / 58    Newsreader 500
-H1            40 / 46    Newsreader 500
-H2            32 / 39    Newsreader 500
-H3            24 / 31    Newsreader 550
-
-Body XL       20 / 32    Inter 400
-Body L        18 / 29    Inter 400
-Body          16 / 26    Inter 400
-Body S        14 / 22    Inter 400
-Caption       12 / 18    Inter 500
-Micro         11 / 16    Inter 600
-```
-
-## Quran reader scale
-
-Suggested default:
-
-```text
-Desktop       36px / 2.20
-Tablet        34px / 2.20
-Mobile        30px / 2.15
-```
-
-User options should allow significantly larger values.
-
-### Reader width
-
-Translation prose:
-
-```text
-~60–75 characters per line
-```
-
-Quran Arabic should be judged separately because script shape and word spacing make Latin line-length heuristics inappropriate.
+- `text-display-l` and `text-body-s` are retired roles kept as aliases of their
+  nearest neighbours (h1 / body) for one release — prefer the real roles.
+- Base `h1–h4` elements are weight 800; body element weight stays 400 so the Quran
+  column (Amiri 400/700) never gets synthetic bold — ramp weights arrive via role
+  classes.
+- Board-only sizes (16.5/15.5/14.5 nav text, 44px metric numerals, 24px row Arabic,
+  36px closing Bismillah) are not ramp roles — use arbitrary values or the nearest
+  role, per the boards.
+- Legacy `xs–4xl` utilities are unchanged; label uses the `body-s` role (alias of
+  body).
 
 ---
 
-# 12. Spacing
+## 12. Spacing
 
-Use an 8px base rhythm with a 4px micro-step.
-
-```css
---space-1: 4px;
---space-2: 8px;
---space-3: 12px;
---space-4: 16px;
---space-5: 20px;
---space-6: 24px;
---space-8: 32px;
---space-10: 40px;
---space-12: 48px;
---space-16: 64px;
---space-20: 80px;
---space-24: 96px;
---space-32: 128px;
-```
-
-### Typical usage
-
-| Context                   |  Spacing |
-| ------------------------- | -------: |
-| icon ↔ label              |      8px |
-| form control group        |  12–16px |
-| card padding              |  20–24px |
-| reader ayah vertical gap  |  28–40px |
-| page section gap          |  64–96px |
-| editorial landing section | 80–128px |
+8px rhythm with a 4px micro-step, consumed through Tailwind's spacing scale and
+`var()`. Band vertical rhythm and gutter are not free-form: they are the §15 ladder.
 
 ---
 
-# 13. Radius and Shape
+## 13. Radius and shape
 
-```css
---radius-sm: 8px;
---radius-md: 12px;
---radius-lg: 18px;
---radius-xl: 24px;
---radius-pill: 999px;
-```
+| Token | Value | Use |
+| --- | --- | --- |
+| `--radius-sm` | 8px | Icon holders (the square behind an icon; metric numeral squares) |
+| `--radius-md` | 10px | Blocks — rows, cards, panels, popovers, sheets, toolbars |
+| `--radius-lg` | 10px | Same meaning as md (collapsed from 18 in v1); prefer `rounded-md` |
+| `--radius-xl` | 14px | Large panels only (modals, toasts, side panels) |
+| `--radius-pill` | 999px | Controls — buttons, inputs, tabs, chips, icon buttons |
+| `--radius-highlight` | 16px | Headline highlight span (a pill at 76px becomes a lozenge and swallows the words) |
 
-### Shape rules
-
-- buttons → 10–12px
-- text inputs → 10–12px
-- normal cards → 12–18px
-- feature cards → 18–24px
-- chips → pill
-- Quran ayahs → usually **no card radius because they are not cards**
-
----
-
-# 14. Borders and Elevation
-
-Prefer borders and tonal surfaces over shadows.
-
-## Light elevation
-
-```css
---shadow-sm:
-  0 1px 2px rgb(20 30 25 / 0.03),
-  0 6px 18px rgb(20 30 25 / 0.03);
-
---shadow-md:
-  0 2px 4px rgb(20 30 25 / 0.04),
-  0 12px 32px rgb(20 30 25 / 0.06);
-```
-
-## Dark elevation
-
-Use almost no drop shadow.
-
-Elevation should primarily come from:
-
-1. surface luminance
-2. border contrast
-3. backdrop separation
+- A pill at 999px on any control height renders a true pill; that is the point.
+- `rounded-full` remains **only** for genuinely round things: status/marker dots,
+  spinners, blur orbs. (≈20 legacy pill-shaped `rounded-full` uses in application
+  routes were swept to `rounded-pill` in plan 06.)
+- Literal `rounded-[Npx]` is banned in `ui/` components (geometry guard); the one
+  documented exception is Brand's 2px rotated diamond.
 
 ---
 
-# 15. Application Shell
+## 14. Elevation
 
-## Desktop
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ Brand        Search Quran…                 Theme  Lang  User │
-├───────────┬──────────────────────────────────────────────────┤
-│           │                                                  │
-│ Context   │                    CONTENT                       │
-│ nav       │                                                  │
-│           │                                                  │
-└───────────┴──────────────────────────────────────────────────┘
-```
-
-### Dimensions
-
-```text
-Header:           64px
-Expanded sidebar: 240–256px
-Collapsed rail:   64–72px
-Main max width:   1280px
-Reader max width: 760–860px depending on mode
-```
-
-### Adaptive behavior
-
-| Page             | Navigation behavior       |
-| ---------------- | ------------------------- |
-| Home             | expanded sidebar optional |
-| Quran index      | expanded or compact rail  |
-| Explore          | expanded sidebar          |
-| Prophet/timeline | expanded sidebar          |
-| Reading          | compact/collapsed         |
-| Focus reading    | hidden                    |
+`--elev-sm` and `--elev-md` are `none` in every block (dark mode keeps almost
+nothing). The `shadow-sm`/`shadow-md` utilities resolve to none — do not add new
+shadow usage. Separation = hairline borders + surface luminance steps
+(background → subtle → surface → raised). Overlays keep a mode-invariant
+`bg-black/55` scrim; that is a scrim, not elevation.
 
 ---
 
-# 16. Navigation
+## 15. Responsive ramp — the Band ladder
 
-Primary navigation:
+The band model's gutter and vertical rhythm below the 1440px boards are designed
+once, as the **utility ladder the `Band` component emits** — not custom properties:
 
-```text
-Read
-Explore
-Topics
-Prophets
-Collections
-```
+| | base (<768) | md (768) | lg (1024) | xl (1280) |
+| --- | --- | --- | --- | --- |
+| Gutter | 20 (`px-5`) | 32 (`md:px-8`) | 48 (`lg:px-12`) | 72 (`xl:px-18`) |
+| Band pad | 48 (`py-12`) | 64 (`md:py-16`) | 80 (`lg:py-20`) | 96 (`xl:py-24`) |
+| Tight pad | 40 (`py-10`) | 48 (`md:py-12`) | 56 (`lg:py-14`) | 64 (`xl:py-16`) |
 
-Secondary:
+Rules:
 
-```text
-Bookmarks
-History
-Settings
-```
-
-Active item:
-
-```css
-background: var(--primary-soft);
-color: var(--primary);
-```
-
-Never communicate active state using color alone. Use at least one of:
-
-- icon emphasis
-- inset marker
-- text weight
-- selected background
+- **Never re-introduce responsive custom props** for the ramp: the viteplus CSS
+  stage deterministically drops or mangles `@media` rungs that re-declare ramp
+  properties on `:root`/`html` (layout area round-1 major; six probe builds). The
+  compiled-CSS guard bans it. Responsive values ride Tailwind's md/lg/xl variants.
+- Pages consume `Band`'s `pad`/`width` props — they never invent breakpoints.
+- A caller overriding the ladder must override **all its rungs** (Section does:
+  `px-6 md:px-6 lg:px-6 xl:px-6`) — tailwind-merge resolves per-variant, so a bare
+  `px-6` would leave the md/lg/xl rungs alive.
+- The tight ramp stays below the default pad at every width.
 
 ---
 
-# 17. Search / Command Palette
+## 16. Band, Section, Container
 
-Search is a first-class Quran navigation primitive.
+`web/src/lib/components/layout/Band.svelte` — the full-bleed primitive:
 
-```text
-⌕ Search surahs, ayahs, topics, prophets…                 ⌘ K
-```
+- `tone`: `page` (transparent — the page ground already is `--background`) |
+  `panel` (`bg-background-subtle`) | `surface` (`bg-surface`) |
+  `accent` (`bg-primary text-primary-foreground` — fill and on-fill text are an
+  inseparable pair).
+- `pad`: `default` | `tight` | `none` (the §15 ladders).
+- `width`: `default` 1200 | `narrow` 880 | `wide` 1440 | `full` (gutter only, no
+  cap). Boards' canvas = 1440 = `wide`.
+- `rule`: hairline top border for where the tone does not change.
+- `contentClass`: escape hatch for the inner column.
+- A band owns its container: never wrap one in a `Container`, never pass one in.
+  Bands never gain horizontal margin — a band with side margins is a card again.
+- Separation between bands is the tone changing.
 
-Suggested control:
-
-```text
-height: 44–48px
-radius: 12px
-```
-
-Results are grouped semantically:
-
-```text
-SURAH
-Al-Baqarah
-البقرة
-
-AYAH
-2:255 — Ayatul Kursi
-
-TOPIC
-Patience
-
-PROPHET
-Musa عليه السلام
-```
-
-The search UI may become a full command palette on desktop and full-screen search on mobile.
+`Section` is the deprecated output-identical wrapper over `Band` (kept for one
+release; landing pages port straight to `Band`). `Container` still exists for
+non-band contexts. The gapless metric strip is a `pad="none" width="full"` band with
+a `px-0`-ladder, `gap-0` grid (1 col <768, 2×2 md, 4 ≥1024) — gapless at every
+width is a hard rule.
 
 ---
 
-# 18. Quran Index
+## 19. Badges (Chip, static form)
 
-Niyat’s mobile Quran list demonstrates the value of a restrained list with:
+`web/src/lib/components/chip/Chip.svelte` without `onclick`. Sizing: 24px height,
+8px inline padding, 11px/16 medium, **pill radius**. Tones (first match):
 
-- number marker
-- English name
-- Arabic name
-- ayah count
-- Makki/Madani label
-- search and Surah/Juz/Bookmark switching
+| Tone | Classes |
+| --- | --- |
+| `active` | `bg-primary text-primary-foreground` |
+| `accent` | `bg-gold-soft text-gold-strong` — i.e. the `--accent` **hue-2** soft pair (§8); "Makki gold" is v1 vocabulary, the render is hue-2 |
+| `ghost` | transparent, secondary text |
+| default | `bg-surface` + `--border` hairline, secondary text |
 
-For desktop, keep that scanning efficiency rather than converting all 114 Surahs into oversized cards.
-
-```text
-╭────────────────────────────────────────────────────────────╮
-│ 02    Al-Baqarah                         البقرة            │
-│       The Cow · 286 ayahs                 Madani           │
-╰────────────────────────────────────────────────────────────╯
-```
-
-### Default row
-
-- no heavy shadow
-- subtle divider
-- 64–76px minimum row height
-
-### Hover
-
-```css
-background: var(--surface-hover);
-```
-
-### Selected
-
-```css
-background: var(--primary-soft);
-```
-
-plus a small logical-inline selection marker.
+Leading marker `dot`: 6px round dot in `--accent` (hue-2). Machine-guarded by
+`chip.test.ts`.
 
 ---
 
-# 19. Makki / Madani Badges
+## 21. Ayah interaction
 
-Do not encode meaning using color alone.
-
-Use text + optional icon.
-
-### Makki
-
-```css
-background: var(--accent-soft);
-color: var(--accent-strong);
-```
-
-### Madani
-
-```css
-background: var(--primary-soft);
-color: var(--primary);
-```
-
-Dimensions:
-
-```text
-height: 24px
-padding-inline: 8px
-font: 11/16 medium
-radius: pill
-```
+Hover affordance on an ayah row is a **quiet surface tint** (`--surface-hover`),
+transparent at rest, suppressed in continuous reading mode. State is never colour
+alone (§51). The reading column itself (verse row structure, Arabic sizing, nav
+logic) is out of scope for the design system by explicit fence (plan 00 D4) — it
+inherits tokens only.
 
 ---
 
-# 20. Quran Reader
+## 22. Bismillah / surah openers
 
-The reader is the core product surface.
-
-```text
-← Quran                       Al-Baqarah                    ⚙
-
-                        سُورَةُ الْبَقَرَةِ
-                           Al-Baqarah
-                            The Cow
-
-                               ﷽
-
-──────────────────────────────────────────────────────────────
-
-2:1                                                     ⋯  ♡  ▶
-
-                           الٓمٓ
-
-Alif, Lam, Meem.
-
-Sahih International
-
-──────────────────────────────────────────────────────────────
-```
-
-### Hierarchy
-
-1. Quran Arabic
-2. translation
-3. source/translation metadata
-4. actions
-
-### Critical rule
-
-Do not show every available action all the time.
+Ceremonial but minimal: 42–48px Arabic, generous block margin (≈40–52px), no
+ornament, no panel, no border — the same treatment in the surah and range readers.
+The landing closing band renders a `lang="ar" dir="rtl"` Bismillah at 36px.
 
 ---
 
-# 21. Ayah Interaction
+## 25. Reader settings and the palette/appearance model
 
-Desktop default actions:
-
-```text
-▶ Listen
-♡ Save
-▣ Note
-⋯ More
-```
-
-Additional actions:
-
-```text
-Tafsir
-Word by word
-Transliteration
-Repeat
-Share
-Copy Arabic
-Copy translation
-Add to collection
-Compare
-Open Study Mode
-```
-
-### Default
-
-```css
-background: transparent;
-```
-
-### Hover
-
-```css
-background: var(--surface-hover);
-```
-
-### Playing
-
-```css
-background: var(--primary-soft);
-border-inline-start: 3px solid var(--primary);
-```
-
-### Bookmarked
-
-Use icon + accessible label. A gold/accent icon is acceptable, but the state must not depend exclusively on color.
+- **Two separate settings** (stored in prefs, `web/src/lib/stores/prefs.svelte.ts`):
+  - `palette` ∈ `sacred | ink | sepia | sapphire` (§5; ids are storage-frozen —
+    remapped, never renamed)
+  - `appearance` ∈ `light | dark | system`; `system` resolves via `matchMedia`;
+    `mode` mirrors the resolved value. Back-compat migration: legacy `surface` →
+    palette, `theme` → mode (`SURFACE_TO_PALETTE` in `site.ts`); explicit new
+    fields win.
+- The appearance pickers (settings `AppearanceSection`, reader `Tweaks`) render the
+  **accent swatch** (`PaletteDef.accentHex`), rounded-sm — under the shared neutral
+  ground a ground preview would show four identical grey chips.
+- Palette display names live only in messages (`settings_palette_*` /
+  `tweaks_palette_*`, en+ar: Cobalt/Ink/Magenta/Emerald).
+- Reader typography controls (Arabic family/size) are unchanged by the design
+  system; the reader inherits ground/hue tokens and only sepia warms (§42).
 
 ---
 
-# 22. Bismillah
+## 33. Filter chips (Chip, interactive form)
 
-Treat the Bismillah ceremonially but minimally.
-
-```text
-                              ﷽
-```
-
-Suggested:
-
-```text
-font-size: 42–48px
-margin-block: 40–52px
-```
-
-Avoid:
-
-- giant mosque illustrations
-- patterned backgrounds
-- luminous gradients
-- thick gold frames
+`Chip` with `onclick` renders a `<button type="button">`; state is exposed as
+`aria-pressed`, never colour alone (§51). Geometry identical to §19. State matrix
+(plan 03): hover = `--surface-hover` on the **inactive** chip only (no
+`border-strong` — that is the row pattern), so the active primary fill is never
+washed out by a hover surface; focus-visible = 2px `--focus-ring` outline, offset 2.
 
 ---
 
-# 23. Word-by-Word Mode
+## 34. State matrix (all interactive primitives)
 
-```text
-        ٱلْحَمْدُ
-         praise
-```
+| Primitive | Hover | Active | Focus-visible | Disabled |
+| --- | --- | --- | --- | --- |
+| Button primary | `--primary-hover` | `translate-y-px` | 2px `--focus-ring` outline, offset 2 | `opacity-50 pointer-events-none` |
+| Button secondary/ghost/quiet, chip, tab | `--surface-hover` (+`border-strong` on secondary only) | `translate-y-px` (buttons/icon-buttons) | same | same |
+| Icon button | `--surface-hover` (ghost) | `translate-y-px` | same | same |
+| Coloured card (MetricCard) | `brightness(1.08)` — no second fill per hue | — (non-interactive by design) | — | — |
 
-### Interaction
-
-```css
-border-radius: 6px;
-```
-
-Hover/focus:
-
-```css
-background: var(--primary-soft);
-```
-
-Currently playing word:
-
-```css
-background: var(--accent-soft);
-color: var(--accent-strong);
-```
-
-### Accessibility
-
-- word targets should remain at least ~44px high on touch screens where practical
-- provide keyboard focus
-- audio state must be represented beyond color
-- Arabic word and gloss need proper language/`dir` attributes
+Every button variant carries a hover state (guarded). Tab/mode-toggle active =
+primary fill, with a `data-active:hover` override so hover never washes the fill.
 
 ---
 
-# 24. Reader Modes
+## 35. Buttons
 
-Quran.com’s current direction validates separating multiple ways of reading rather than forcing one layout to do everything.
-
-Recommended EasyQuran modes:
-
-### Verse mode
-
-Arabic + per-ayah translation + actions.
-
-### Translation book mode
-
-Continuous translation reading with verse references integrated into prose.
-
-### Mushaf/page mode
-
-Physical-page-oriented layout where font/rendering supports it.
-
-### Word-by-word mode
-
-Interactive word study.
-
-### Study mode
-
-Focused ayah with Tafsir, Hadith, reflections, related verses, word details, notes, and compare tools.
+`web/src/lib/components/ui/button/` (§35 contract + plan 03 geometry/state matrix).
+Base: `rounded-pill`. Sizes: sm `px-4` (compact, dense/inline contexts — the 44px
+rule applies to core CTAs), md `px-6`, lg `px-7`. Variants: primary (accent fill +
+`--primary-foreground`), secondary (border + `--surface-hover` hover), ghost, quiet
+(gains a hover background), link. The legacy interactive-accent CTA maps onto the
+primary role. Height floor 44px on core CTAs (§51). Semantic tokens only (§61).
+Guarded by `primitives.test.ts`.
 
 ---
 
-# 25. Reader Settings
+## 36. Icons and icon buttons
 
-Use a drawer on desktop and bottom sheet on mobile.
-
-```text
-Reading settings
-
-SCRIPT
-○ Uthmani
-○ IndoPak
-○ Tajweed
-
-ARABIC SIZE
-−      36      +
-
-TRANSLATION
-Sahih International ▾
-
-TRANSLATION SIZE
-−      16      +
-
-DISPLAY
-☑ Transliteration
-☑ Word by word
-
-PALETTE
-Sacred Editorial ▾
-
-MODE
-○ Light   ○ Dark   ○ System
-```
-
-### Important architecture
-
-`Palette` and `Mode` are separate settings.
-
-Do not label the palette dropdown “Theme” if “Dark/Light” is also called theme elsewhere.
-
-Use:
-
-- **Palette:** Sacred / Ink / Sepia / Sapphire
-- **Appearance:** Light / Dark / System
+- One line family: **Lucide**. Sizes 18/20/24; stroke width via CSS (overrides the
+  presentation attribute).
+- Icon buttons (`ui/icon-button/`): **pill** radius at all sizes (999 on a square is
+  the boards' circular toggle), 44px targets (§51), accessible name required —
+  rendered as `aria-label`; state matrix per §34/§35. Ghost hover = `--surface-hover`.
+- **Directional glyphs mirror under RTL inside `Icon.svelte`** (path-level
+  `scale(-1,1)` translate; `arrow-right` is the only directional glyph). Call sites
+  must NOT pass their own `rotate-180` for direction — that double-flips. Consumer
+  rotations for other purposes (±90 chevrons) still compose.
 
 ---
 
-# 26. Tajweed and Theme Compatibility
+## 37. Inputs
 
-Quran Foundation’s current font-rendering guidance includes Light, Dark, and Sepia Tajweed palettes. COLRv1 browsers can use CSS `font-palette`, while Firefox may require theme-specific OT-SVG font files depending on the rendering path.
-
-### Implication for EasyQuran
-
-Do not assume that switching arbitrary application colors automatically makes Tajweed colors readable.
-
-For each palette:
-
-1. test Quran/Tajweed colors separately
-2. ensure rule colors remain distinguishable
-3. test against `--reader-background`
-4. provide a known-good fallback palette
-
-Recommended mapping:
-
-| App palette    | Tajweed base                 |
-| -------------- | ---------------------------- |
-| Sacred Light   | Light                        |
-| Sacred Dark    | Dark                         |
-| Ink Light      | Light                        |
-| Ink Dark       | Dark                         |
-| Sepia Light    | Sepia                        |
-| Sepia Dark     | Dark, then visually validate |
-| Sapphire Light | Light                        |
-| Sapphire Dark  | Dark                         |
+- `input.svelte`: 44px height, **pill radius**, `px-4` — controls are pills.
+- `textarea.svelte`: the multiline variant keeps `rounded-md` (10px) — a multiline
+  pill is a lozenge; blocks are for content.
+- Labels use the `body-s` typography role (§11 alias).
+- Semantic tokens only (§61); works across all 4 palettes × light/dark.
 
 ---
 
-# 27. Home Screen
+## 38. Tabs and segmented controls
 
-Avoid a crowded dashboard.
-
-```text
-السَّلَامُ عَلَيْكُمْ
-
-Continue your reading.
-
-Al-Baqarah
-Ayah 152 of 286
-
-[ Continue reading → ]
-
-────────────────────────────────────────
-
-AYAH OF THE DAY
-
-إِنَّ مَعَ الْعُسْرِ يُسْرًا
-
-Indeed, with hardship comes ease.
-
-Ash-Sharh · 94:6
-
-────────────────────────────────────────
-
-Explore
-[ Topics ] [ Prophets ] [ Timeline ]
-```
-
-Progress metrics can follow below, but should not dominate the first viewport.
+Tabs are content destinations, rendered as **pill triggers** in a plain `gap-2` row
+(the v1 hairline is gone). Active trigger = **primary fill** +
+`--primary-foreground`; a `data-active:hover` override keeps hover from washing the
+fill. 44px pill targets (§51). Mode toggles in reader chrome follow the same
+active-fill pattern.
 
 ---
 
-# 28. Continue Reading Card
+## 42. Reader surface
 
-```text
-╭──────────────────────────────────────────────╮
-│ CONTINUE READING                             │
-│                                              │
-│ Al-Baqarah                      البقرة       │
-│ Ayah 152 of 286                              │
-│                                              │
-│ ████████████████░░░░░░  53%                 │
-│                                              │
-│ Continue →                                   │
-╰──────────────────────────────────────────────╯
-```
+Reading-column tokens derive from the **neutral ground, not a tint**:
 
-This is one of the few places where a stronger primary-colored feature surface is appropriate.
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--reader-background` | `#ffffff` | `oklch(0.190 0 0)` |
+| `--quran-foreground` | `oklch(0.16 0 0)` | `oklch(0.975 0 0)` |
+| `--translation-foreground` | `oklch(0.40 0 0)` | `oklch(0.775 0 0)` |
+| `--reader-divider` | `oklch(0.905 0 0)` | `oklch(0.275 0 0)` |
 
-Do not place multiple equally strong progress cards beside it.
-
----
-
-# 29. Daily Ayah
-
-```text
-A MOMENT TO REFLECT
-
-              وَهُوَ مَعَكُمْ أَيْنَ مَا كُنتُمْ
-
-       “And He is with you wherever you are.”
-
-                       Al-Hadid · 57:4
-
-                      Read context →
-```
-
-This card should use whitespace as the main aesthetic device.
-
-No carousel dots unless it is actually a carousel.
+- Dark reader ground sits just under `--surface` (0.190 < 0.238) so the column
+  **recesses**; the Quran text stays the highest-contrast element on the page in
+  both modes.
+- **Sepia exception**: `sepia` keeps a warm reader in **both** modes
+  (light `#FBF3DF` ground, warm browns) under its magenta chrome — reading comfort
+  is a feature, not decoration (plan 06 step 2, option a; CSS-commented in
+  layout.css). All other palettes are neutral in both modes.
+- Status colours are one set per mode, shared by every palette (the ground is
+  shared; per-palette status variants were drift): light `#397A57/#8A681E/#B34A4A`,
+  dark `#78BD91/#D9B55E/#DF7777`. Status tokens are not in the contrast gate.
 
 ---
 
-# 30. Topics
+## 43. Colour accents and decoration
 
-Editorial card:
-
-```text
-┌────────────────────────┐
-│ PATIENCE               │
-│                        │
-│ Sabr                    │
-│ الصبر                   │
-│                        │
-│ 102 verses             │
-└────────────────────────┘
-```
-
-Suggested topics:
-
-```text
-Mercy
-Patience
-Prayer
-Forgiveness
-Parents
-Marriage
-Justice
-Creation
-Death
-Paradise
-Knowledge
-Prophets
-```
-
-Use a 2–4 column grid depending on viewport.
+Decoration is rare and structural: hue-slot chips and badges (§6), the marker dot
+(§19), the headline highlight span (16px radius, primary fill). No gradients, no
+ornament, no drop shadows. Colour means something (action = primary, hue slot =
+categorical, status = status) or it is not there.
 
 ---
 
-# 31. Prophet Explorer
+## 50. Bidirectional / RTL layout rules
 
-Quran Companion’s connected-study model is particularly useful here.
-
-```text
-PROPHET
-
-Musa
-موسى عليه السلام
-
-Mentioned across multiple surahs
-
-Story · Timeline · Surahs · Relationships
-
-Born in Egypt
-     ↓
-Raised in Pharaoh's household
-     ↓
-Leaves Egypt
-     ↓
-Receives revelation
-     ↓
-Returns to Pharaoh
-```
-
-Relationship cards:
-
-```text
-Harun
-Brother
-
-Fir'awn
-Opponent
-
-Bani Isra'il
-Nation
-```
-
-The design should prioritize connected information rather than turning every relation into a decorative collectible card.
+- Logical properties everywhere on migrated surfaces (machine-guarded by
+  `logical-properties.test.ts` over layout + marketing): `ms-/me-/ps-/pe-`,
+  `start-/end-`, `text-start`, `border-s/border-e`. Physical `ml-/mr-/pl-/pr-/left-N/
+  right-N/text-left|right` are banned in guarded trees.
+- On a `dir="rtl"` element logical axes resolve against that element — `ml-auto` on
+  an RTL span is a right-push; use the logical property that keeps the *visual*
+  intent (the GlobalSearchPalette bilingual row is the worked example: outer span
+  `ms-auto` inheriting row direction, inner `dir="rtl"` span for shaping).
+- **Stays physical, deliberately**: `left-1/2 -translate-x-1/2` centering (logical
+  insets break centering under RTL) and `data-[side=left|right]:…` (side = physical
+  screen edge).
+- Directional icon glyphs mirror inside `Icon.svelte` (§36).
+- Locale switches are full navigations; per-render locale reads are sufficient.
 
 ---
 
-# 32. Historical Timeline
+## 51. Accessibility baseline
 
-```text
-CREATION ─ EARLY PROPHETS ─ IBRAHIM ─ MUSA ─ ISA ─ MUHAMMAD ﷺ
-```
-
-Events:
-
-```text
-━━━━━━━━●━━━━━━━━━━━━━━━━━━━━━━
-
-       The Flood
-       Nuh عليه السلام
-
-       Hud 11:25–49
-       Al-Mu'minun 23:23–30
-```
-
-### Color rule
-
-Era differentiation should primarily use:
-
-- labels
-- position
-- subtle soft backgrounds
-
-not a rainbow palette.
+- **44px targets** on core interactive controls (buttons, tabs, inputs, icon
+  buttons); sm stays compact for dense table/inline contexts (documented carve-out).
+- Icon-only controls must carry an accessible name (`aria-label`).
+- Interactive state is exposed semantically (`aria-pressed`), never colour alone.
+- `focus-visible` everywhere: 2px `--focus-ring` outline, 2px offset — never remove
+  without a replacement.
+- Contrast per §9 is a gate, including hue pairs and all 8 blocks.
+- Reduced-motion, screen-reader and keyboard paths are preserved by the primitives;
+  overlays are dismissible and scrimmed (§14).
 
 ---
 
-# 33. Filter Chips
+## 59. The direction, in one page
 
-```text
-[ All eras ]
-[ Early Meccan ]
-[ Middle Meccan ]
-[ Late Meccan ]
-[ Medinan ]
-```
+A neutral, near-grey canvas at every palette; one decisive accent per palette
+(cobalt / neutral / magenta / emerald) plus four fixed hue slots for categorical
+colour; deep dark fills that carry white; Nunito at 800 for display and 600 for
+body; pill controls on 8/10/14px blocks; full-bleed bands on a 20/32/48/72 gutter
+ladder; no shadows; hairlines and tonal steps; logical properties for both
+directions; and a reading surface that stays quieter than the chrome around it —
+except in sepia, where the page you read is warm on purpose.
 
-Active:
-
-```css
-background: var(--primary);
-color: var(--primary-foreground);
-```
-
-Inactive:
-
-```css
-background: var(--surface);
-border: 1px solid var(--border);
-color: var(--foreground-secondary);
-```
+If code and this document disagree, **the code and its guards win**; fix the
+document (or file the bug) — never edit prose to override a gate.
 
 ---
 
-# 34. Progress and Habit Layer
-
-Quran Gate demonstrates useful patterns such as:
-
-- sequential reading progress
-- daily goal
-- streak
-- 90-day activity visualization
-- lifetime reading metrics
-
-EasyQuran should make them quieter.
-
-```text
-Your Quran journey
-
-18 day streak
-1,842 ayahs read
-9h 42m reading
-
-██████████
-██████████
-███████░░░
-```
-
-### Rules
-
-- never shame a broken streak
-- never use aggressive red warning language
-- no fake urgency
-- no confetti during ordinary Quran reading
-- celebration can be subtle for meaningful milestones
-- content should remain more visually prominent than scorekeeping
-
----
-
-# 35. Buttons
-
-## Primary
-
-```css
-.button-primary {
-  min-height: 44px;
-  padding-inline: 18px;
-  border-radius: 10px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-weight: 550;
-}
-```
-
-## Secondary
-
-```css
-background: var(--surface);
-border: 1px solid var(--border);
-color: var(--foreground);
-```
-
-## Ghost
-
-Transparent until hover/focus.
-
-## Accent/gold button
-
-Avoid as a general CTA pattern.
-
-Reserve accent color for exceptional or ceremonial contexts.
-
----
-
-# 36. Icons
-
-Use one icon family consistently, preferably Lucide or a similarly restrained line set.
-
-```text
-Standard UI: 20px
-Navigation: 18px
-Feature: 24px
-Stroke: ~1.75
-```
-
-Do not mix:
-
-- filled Material icons
-- outline Lucide icons
-- emojis
-- custom heavy icons
-
-in the same visual layer.
-
----
-
-# 37. Inputs
-
-```text
-height: 44px
-radius: 10–12px
-border: 1px solid var(--border)
-background: var(--surface)
-```
-
-Focus:
-
-```css
-outline: 2px solid var(--focus-ring);
-outline-offset: 2px;
-```
-
-Do not remove browser focus indication without replacing it.
-
----
-
-# 38. Tabs and Segmented Controls
-
-## Tabs
-
-Use for content destinations:
-
-```text
-Translation   Tafsir   Hadith   Notes
-───────────
-```
-
-## Segmented control
-
-Use for mutually exclusive view modes:
-
-```text
-[ Quranic order | Revelation order ]
-```
-
-Do not use pill segmented controls for six or seven unrelated navigation destinations.
-
----
-
-# 39. Drawers, Dialogs, and Bottom Sheets
-
-## Dialog
-
-Use for:
-
-- destructive confirmation
-- share
-- quick small action
-
-## Right drawer
-
-Use for:
-
-- Tafsir
-- reader settings
-- verse information
-- bookmarks
-- collection editing
-
-Suggested width:
-
-```text
-420–480px desktop
-```
-
-## Bottom sheet
-
-Use on mobile for the same contextual actions.
-
----
-
-# 40. Tafsir / Study Layout
-
-Desktop split view:
-
-```text
-QURAN READER                       TAFSIR
-────────────────                  ───────────────
-Arabic                             Source selector
-Translation                        Ayah reference
-                                   Tafsir content
-Arabic
-Translation
-```
-
-Suggested split:
-
-```text
-Reader 60–65%
-Study panel 35–40%
-```
-
-Or retain the 760–860px reader and overlay a 420–480px side drawer if preserving reader measure is more important.
-
----
-
-# 41. Focus Reading Mode
-
-This should be a signature feature.
-
-When active:
-
-- sidebar disappears
-- top navigation reduces to Back / Surah / settings
-- ayah actions are hidden until interaction
-- reader centers
-- study tools close
-- search is removed from immediate view
-- inactive audio bar collapses
-
-Suggested width:
-
-```text
-max-width: 720–780px
-```
-
-Focus mode should work in every palette.
-
----
-
-# 42. Reader Surface
-
-A tiny luminance difference between app and reader creates a book-like surface without texture.
-
-Example Sacred Light:
-
-```text
-App:    #F8F7F2
-Reader: #FFFEFA
-```
-
-Example Sacred Dark:
-
-```text
-App:    #0D1210
-Reader: #111713
-```
-
-Avoid fake paper grain behind Quran glyphs because it reduces clarity and complicates contrast.
-
----
-
-# 43. Decorative Language
-
-Allowed:
-
-- one subtle arch frame around a featured Ayah
-- small 8-point star as a section ornament
-- hairline geometric divider
-- low-opacity corner motif
-
-Avoid:
-
-- large mosque silhouettes behind text
-- gold gradients
-- glowing crescents
-- patterned Quran reading backgrounds
-- decorative geometry in every card
-
-The Quran script itself already provides substantial visual richness.
-
----
-
-# 44. Editorial Section Pattern
-
-Signature pattern:
-
-```text
-الْأَنْبِيَاء
-04 · PROPHETS
-
-Stories connected across revelation.
-────────────────────────────────────────────
-```
-
-Alternative compact version:
-
-```text
-الْقُرْآن · THE QURAN
-```
-
-Limit this treatment to major editorial moments.
-
----
-
-# 45. Audio Player
-
-Sticky player:
-
-```text
-╭─────────────────────────────────────────────────────────╮
-│ ▶  2:255    Mishary Alafasy       ━━━━━━━────   03:14 │
-│    Repeat verse   1×                    Volume     ⌃    │
-╰─────────────────────────────────────────────────────────╯
-```
-
-Recommended:
-
-```text
-Desktop: 64px collapsed
-Mobile:  60–64px collapsed
-Expanded mobile: 120–160px
-```
-
-Do not reserve a large permanent audio bar if playback has not started.
-
----
-
-# 46. Motion
-
-```text
-Hover                 120ms
-Button                 140ms
-Popover                160ms
-Drawer                 220ms
-Page transition        220–240ms
-```
-
-Curve:
-
-```css
-cubic-bezier(.2, .8, .2, 1)
-```
-
-Respect:
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  /* remove nonessential transforms/transitions */
-}
-```
-
-Avoid bounce, springy card movement, parallax during reading, and looping ambient animations.
-
----
-
-# 47. Responsive Layout
-
-```text
-sm    640
-md    768
-lg   1024
-xl   1280
-2xl  1536
-```
-
-Containers:
-
-```css
-/* desktop */
-width: min(100% - 64px, 1280px);
-
-/* tablet */
-width: calc(100% - 48px);
-
-/* mobile */
-width: calc(100% - 32px);
-```
-
----
-
-# 48. Mobile Navigation
-
-Bottom navigation:
-
-```text
-Read        Explore        Search        Saved
- ▱             ◇             ⌕             ♡
-```
-
-Keep it to four primary destinations.
-
-Settings/profile belongs in the contextual top bar.
-
----
-
-# 49. Mobile Reader Header
-
-```text
-‹                              ⋯
-
-             البقرة
-           Al-Baqarah
-            The Cow
-
-       286 Ayahs · Madani
-```
-
-As the user scrolls, this can collapse into:
-
-```text
-‹  Al-Baqarah · 2:37                      ⋯
-```
-
----
-
-# 50. Bidirectional / Arabic Layout Rules
-
-This product must treat RTL as a first-class design constraint.
-
-### Required
-
-- set `dir="rtl"` directly on Quran/Arabic regions
-- use logical CSS properties (`margin-inline`, `padding-inline`, `border-inline-start`)
-- do not globally flip icons that should remain semantically fixed
-- test mixed Arabic + Latin verse references
-- isolate translation text in its own direction context
-- use locale-aware numerals intentionally rather than accidentally
-
-### Example
-
-```html
-<p lang="ar" dir="rtl" class="quran-text">...</p>
-<p lang="en" dir="ltr" class="translation">...</p>
-```
-
----
-
-# 51. Accessibility Baseline
-
-Minimum requirements:
-
-- WCAG AA normal text contrast where applicable
-- 44×44px touch targets for core interactive controls
-- visible keyboard focus
-- skip-to-content support
-- headings in semantic order
-- button names for icon-only actions
-- screen-reader labels for playback state
-- no state conveyed only by color
-- `aria-current` for current Surah/navigation
-- reduced-motion support
-- zoom up to 200% without loss of core function
-- large Quran text mode allowed to reflow instead of forcing Mushaf line fidelity
-
----
-
-# 52. Component Inventory
-
-## Shell
-
-```text
-AppShell
-AppHeader
-Sidebar
-NavigationRail
-MobileNavigation
-PageContainer
-ReaderContainer
-```
-
-## Primitives
-
-```text
-Button
-IconButton
-Badge
-Chip
-Tabs
-SegmentedControl
-Dropdown
-Popover
-Tooltip
-Dialog
-Drawer
-BottomSheet
-Divider
-Skeleton
-Toast
-```
-
-## Search
-
-```text
-SearchInput
-CommandPalette
-SearchResultGroup
-SearchResultItem
-```
-
-## Content surfaces
-
-```text
-Card
-EditorialCard
-FeatureCard
-StatCard
-EmptyState
-```
-
-## Quran
-
-```text
-SurahRow
-SurahHeader
-Ayah
-AyahMarker
-AyahActions
-QuranWord
-Bismillah
-Translation
-TranslationSource
-ReaderToolbar
-ReaderSettings
-AudioPlayer
-StudyPanel
-TafsirPanel
-HadithPanel
-ComparePanel
-```
-
-## Home / habit
-
-```text
-ContinueReadingCard
-DailyAyah
-ReadingGoal
-ReadingProgress
-StreakCalendar
-ReadingStats
-```
-
-## Explore
-
-```text
-TopicCard
-ProphetCard
-ProphetRelationship
-Timeline
-TimelineEvent
-ConnectionCard
-```
-
----
-
-# 53. Three Signature EasyQuran Components
-
-These should give EasyQuran its own identity.
-
-## 53.1 AyahCanvas
-
-A nearly borderless Quran reading surface driven by Arabic typography, spacing, subtle ayah separators, and contextual actions.
-
-This should become the product’s most recognizable interaction surface.
-
----
-
-## 53.2 SacredHeader
-
-```text
-الْقُرْآن
-THE QURAN
-
-Read. Understand. Return.
-```
-
-Composition:
-
-- Arabic eyebrow
-- small numbered/English category label when useful
-- Newsreader title
-- restrained supporting copy
-
----
-
-## 53.3 ConnectionCard
-
-```text
-A CONNECTION
-
-Musa appears across
-many Surahs.
-
-Explore his story across
-revelation →
-
-موسى عليه السلام
-```
-
-This brings Quran Companion-style connected study into the product without turning the whole experience into a timeline app.
-
----
-
-# 54. Things to Avoid
-
-## Visual anti-patterns
-
-- generic emerald-to-teal gradients
-- every card having a shadow
-- every container having 24–32px radius
-- excessive Islamic ornament
-- giant hero mosque photography behind text
-- translucent glass panels in the Quran reader
-- overly desaturated metadata that fails contrast
-- gold used as ordinary body text
-- pure white Quran text on pure black as the only dark mode
-- multicolor dashboards
-- card grids for content that is better scanned as a list
-
-## UX anti-patterns
-
-- permanent verse action toolbars
-- study controls invading reading mode
-- hiding the selected translation source
-- losing the reader’s position when switching views
-- making theme changes reset reading preferences
-- using streak guilt or punitive language
-- requiring horizontal scrolling for enlarged Quran text
-
----
-
-# 55. Recommended Implementation Order
-
-## Phase 1 — Foundations
-
-1. semantic tokens
-2. Sacred + Ink palettes
-3. typography
-4. spacing / radii / border / focus tokens
-5. Button / Input / IconButton / Chip / Tabs
-
-## Phase 2 — Quran core
-
-1. AppShell
-2. Quran index
-3. Surah header
-4. AyahCanvas
-5. reader settings
-6. audio player
-7. word-by-word
-8. Focus Reading
-
-## Phase 3 — Study
-
-1. Study Mode shell
-2. Tafsir panel
-3. Hadith panel
-4. notes / collections
-5. compare mode
-
-## Phase 4 — Explore
-
-1. topics
-2. prophets
-3. chronology
-4. relationships
-5. ConnectionCard
-
-## Phase 5 — Habit
-
-1. Continue Reading
-2. reading goal
-3. history
-4. streak / activity view
-
-## Phase 6 — Additional palettes
-
-1. Sepia
-2. Sapphire
-3. Tajweed validation per palette
-
----
-
-# 56. Theme QA Checklist
-
-Every component must be reviewed in:
-
-```text
-Sacred Light
-Sacred Dark
-Ink Light
-Ink Dark
-Sepia Light
-Sepia Dark
-Sapphire Light
-Sapphire Dark
-```
-
-For each combination verify:
-
-- normal text contrast
-- selected states
-- hover states
-- disabled states
-- focus rings
-- primary button foreground
-- destructive button contrast
-- icon-only actions
-- tooltip/popover surface hierarchy
-- Quran text clarity
-- translation contrast
-- Tajweed colors
-- audio playback state
-- bookmark state
-- Makki/Madani labels
-- skeleton/loading states
-
----
-
-# 57. Visual QA Checklist
-
-A screen is visually healthy when:
-
-- there is one obvious focal point
-- no more than one primary CTA competes in a region
-- surfaces differ intentionally rather than randomly
-- headings use consistent font roles
-- card radii come from the shared scale
-- icon sizes are consistent
-- accent/gold is scarce
-- alignment follows one grid
-- spacing is more prominent than borders
-- the Quran is visually stronger than controls
-
----
-
-# 58. Reader QA Checklist
-
-Before considering the reader complete, verify:
-
-- Arabic remains readable at all supported sizes
-- large type reflows gracefully
-- translation does not exceed comfortable measure
-- changing translation does not shift control placement unpredictably
-- opening Study Mode preserves the current ayah
-- returning from Study Mode preserves scroll position
-- audio follows the currently visible/selected ayah
-- keyboard users can reach ayah actions
-- touch users can open actions without precision tapping
-- Focus Mode actually removes distraction
-- dark mode does not create excessively harsh white-on-black contrast
-
----
-
-# 59. Final Recommended Direction
-
-For the initial public design, ship:
-
-### Default
-
-```text
-Palette: Sacred Editorial
-Appearance: System
-```
-
-### Reader alternatives
-
-Expose:
-
-```text
-Sacred Editorial
-Ink
-Mushaf Sepia
-Midnight Sapphire
-```
-
-with:
-
-```text
-Light
-Dark
-System
-```
-
-separately.
-
-This gives the user meaningful visual choice without fragmenting the product into different design systems.
-
-## Final weighting of inspirations
-
-```text
-Niyat              35% visual warmth / Quran-list restraint
-Ayah               20% editorial typography / bilingual framing
-Quran.com          25% reader + study UX architecture
-Quran Companion    10% connected-study model
-Quran Gate         10% progress / habit mechanics
-```
-
-The weighting is intentionally not 1:1 with the earlier draft. After the deeper audit, Quran.com deserves slightly more influence because its current 2026 reader separates reading, Study Mode, personalization, translation-focused reading, compare, collections, and related study tools more explicitly than a purely aesthetic review suggests.
-
----
-
-# 60. Reference Notes
-
-The design system above is an original synthesis. The source products were used as references for interaction and visual direction, not as assets to copy.
-
-### Ayah
-
-- [Ayah](https://www.getayah.com/)
-- Strong bilingual Arabic/English section framing.
-- Quran tab and word-by-word learning are part of its current product direction.
-- Uses restrained editorial composition and progress language.
-
-### Quran.com
-
-- [Quran.com](https://quran.com/)
-- [Build Your Personalized Quran Experience](https://quran.com/es/explore/build-your-personalized-quran-experience)
-- [New Study Mode](https://quran.com/product-updates/new-study-mode-on-quran-com)
-- [New Translation Reading Mode](https://quran.com/product-updates/new-translation-reading-mode-read-like-a-book)
-- [Product Updates](https://quran.com/product-updates)
-- Current personalization includes multiple reading views and Light/Dark/Sepia appearance choices.
-- Study Mode exposes deeper ayah/word exploration.
-- 2026 updates include collections, reading bookmarks, verse comparison, translation reading, multiple Surah information sources, and related Hadith within Study Mode.
-
-### Quran Foundation font documentation
-
-- [Integrating Quran Font Rendering](https://api-docs.quran.com/docs/tutorials/fonts/font-rendering/)
-- [Page Layout API Guide](https://api-docs.quran.com/docs/tutorials/fonts/page-layout/)
-- Tajweed rendering includes theme handling, including Light/Dark/Sepia palettes.
-- Large Quran font scaling may require relaxed wrapping instead of strict Mushaf line boundaries.
-
-### Niyat
-
-- [Niyat](https://niyatapp.com/)
-- Current presentation emphasizes a calm warm-neutral background, green primary language, Quran search, Surah/Juz/Bookmark organization, Arabic names, and Makki/Madani metadata.
-- Its public product language explicitly positions the Quran as a beautifully presented, low-distraction part of one calm Islamic companion.
-
-### Quran Companion
-
-- [Quran Companion](https://quran-companion.co/)
-- [Chronological Reader](https://quran-companion.co/reader)
-- [Prophets](https://quran-companion.co/prophets)
-- Useful patterns include chronological vs Quranic ordering, Meccan/Medinan era filters, historical timeline, Prophets Explorer, relationship maps, parallel narratives, and character connections.
-
-### Quran Gate
-
-- [Quran Gate](https://qurangate.app/)
-- Current behavior design centers sequential reading, daily goals, streaks, activity tracking, and progress mechanics.
-- Its own product writing emphasizes a calm rather than punitive ritual, which is the correct principle to preserve even if EasyQuran does not implement app gating.
-
----
-
-# 61. Short Design Brief for an AI/Coding Agent
-
-If this document is being handed to an implementation agent, the minimum instruction is:
-
-> Build EasyQuran using the semantic tokens and component rules in this document. The Quran reader is the highest-priority surface. Default to Sacred Editorial, but never hard-code Sacred colors into components; all components must work under Sacred, Ink, Sepia, and Sapphire palettes in light and dark mode. Preserve strict typography roles, accessible contrast, restrained radius/shadow usage, RTL correctness, and a reading-first hierarchy. Study tools may become dense, but Quran Reading and Focus Reading must remain visually quiet. Avoid gradients, glassmorphism, excessive Islamic ornament, generic SaaS dashboard styling, and aggressive gamification.
-
----
-
-**End of design system.**
+## 61. Agent brief — rules with teeth
+
+For anyone (human or AI) changing UI code:
+
+1. **Semantic tokens only.** No hard-coded colours (hex/rgb/hsl/oklch) in component
+   code — colour literals live in `layout.css` token blocks and `site.ts` swatch
+   data only. No Tailwind default-palette classes on migrated surfaces. Guarded by
+   `primitives.test.ts` (§61 suite), `landing-guard.test.ts`, `geometry.test.ts`.
+2. **Never rename palette ids** (`sacred/ink/sepia/sapphire`) — prefs storage.
+   Guarded by `prefs.test.ts`.
+3. **Never raise `--muted`** past 0.52/0.625 — contrast floor (§9). Guarded by
+   `token-contrast.test.ts`.
+4. **No CDN fonts**, no `--font-display`/`--font-serif`/Inter/Newsreader.
+   Guarded by `fonts.test.ts`.
+5. **Controls are pills**; `rounded-full` only for dots/spinners/orbs; no
+   `rounded-[Npx]` literals in `ui/`. Guarded by `geometry.test.ts`.
+6. **Ramp weight/tracking ride the `text-*` role** — no `font-semibold`/`tracking-*`
+   beside a ramp class (§11).
+7. **Band owns its container** — never `Container` inside a band; the metric strip
+   stays gapless at every width; override the whole §15 ladder or none of it.
+   Guarded by `logical-properties.test.ts` (band model + compiled-CSS ladder +
+   logical-props bans).
+8. **Reader fence**: reading column layout, verse rows, Arabic font stack, page/juz
+   nav logic are out of scope — reader inherits tokens; sepia warms (§42).
+9. **Reader nav hrefs** use the `surah*For(ctx,…)` family only; never hand-built
+   `/app/` strings. Guarded by `nav-guard.test.ts`.
+10. **No nested ternaries** anywhere; lookup tables or early-return functions
+    (repo lint rule).
+11. **Keyboard shortcuts** go through `registerHotkey()` in
+    `web/src/lib/hotkeys.svelte.ts`, dynamically imported (repo rule).
+12. **No responsive custom props for the ramp** (§15) — the compiled-css guard fails
+    the build.
+13. Gates that must stay green untouched: `nav-guard`, `prefs`, `reader-fonts`,
+    `settings-document`, `surah-reader`, `VerseRow.stacking`, `page-heights`,
+    `catalogue-sha-guard`, `route-isolation`, `usage-bar-guard`,
+    `auth-form-focus`.
+14. Three gates green before every commit: `pnpm check`, `pnpm lint`, `pnpm test`
+    (run in `web/`; if lint reports TS2307 on `server.ts`, run `pnpm build` first —
+    the adapter output is a gitignored build artifact).
+
+Visual verification harness: `web/scripts/visual/` (capture / states / contrast /
+reference; matrix = 4 palettes × 2 modes × 5 widths). Token sweep host lives at
+`/design/tokens`. Plan 07 defines the V1–V11 checks.

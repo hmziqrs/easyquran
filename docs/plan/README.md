@@ -1,5 +1,9 @@
 # Design-system migration — master plan
 
+> **Status: landed (all 8 areas + phase 9).** `docs/design-system.md` is now v2.0 and
+> documents the pill/cobalt system this migration produced; "v1.0 Sacred Editorial"
+> below refers to the pre-migration document that this plan replaced.
+
 Migrating the web app from **Sacred Editorial** (`docs/design-system.md`, v1.0) to the
 direction signed off on 2026-08-29.
 
