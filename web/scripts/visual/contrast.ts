@@ -107,14 +107,30 @@ export interface ContrastReport {
 export function evaluateContrast(css: string): ContrastReport {
   const rows: ContrastRow[] = [];
   const blocks = paletteBlocks(css);
+  // Additive pairs activate the moment both tokens are defined in ANY block. After that,
+  // a block that misses them is a FAILURE, not a skip — otherwise plan 01 could define the
+  // hue set in 7/8 blocks and the gate would silently bless the eighth, exactly the
+  // "token missing from one of eight blocks" failure this gate exists to catch
+  // (judge round 1, major finding). Skips remain legal only while a pair is defined nowhere.
+  const activated = new Set<string>();
+  for (const pair of CONTRAST_PAIRS) {
+    if (!pair.additive) continue;
+    const defined = blocks.some((b) => b.tokens.has(pair.fg) && b.tokens.has(pair.bg));
+    if (defined) activated.add(`${pair.fg}|${pair.bg}`);
+  }
   for (const block of blocks) {
     for (const pair of CONTRAST_PAIRS) {
       const fgRaw = block.tokens.get(pair.fg);
       const bgRaw = block.tokens.get(pair.bg);
       const where = `${block.palette} ${block.mode}`;
       if (fgRaw === undefined || bgRaw === undefined) {
-        // Contract tokens must always exist (palette-contract guards that too); additive
-        // tokens are allowed to be absent until the plan that defines them lands.
+        const skip = pair.additive && !activated.has(`${pair.fg}|${pair.bg}`);
+        let message = `${where}: missing token ${fgRaw === undefined ? pair.fg : pair.bg}`;
+        if (skip) {
+          message = `${where}: ${pair.fg}/${pair.bg} not defined yet (additive token)`;
+        } else if (pair.additive) {
+          message += " (additive pair is defined in other blocks)";
+        }
         rows.push({
           palette: block.palette,
           mode: block.mode,
@@ -124,11 +140,8 @@ export function evaluateContrast(css: string): ContrastReport {
           bgRaw,
           ratio: null,
           min: pair.min,
-          status: pair.additive ? "skipped" : "fail",
-          message:
-            pair.additive
-              ? `${where}: ${pair.fg}/${pair.bg} not defined yet (additive token)`
-              : `${where}: missing token ${fgRaw === undefined ? pair.fg : pair.bg}`,
+          status: skip ? "skipped" : "fail",
+          message,
         });
         continue;
       }

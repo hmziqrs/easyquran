@@ -55,3 +55,43 @@ describe("token contrast gate", () => {
     }
   });
 });
+
+describe("hue-pair auto-activation (judge round 1: no per-block silent skip)", () => {
+  it("fails a block that misses a hue pair defined in any other block", () => {
+    // The 7/8-blocks trap: plan 01 defines the hue set everywhere except one block — the
+    // gate must go red on that block, not bless it as a skip.
+    const synthetic = [
+      '[data-palette="sacred"][data-mode="light"] {',
+      "  --hue-1: #000000;",
+      "  --on-hue-1: #ffffff;",
+      "}",
+      '[data-palette="sacred"][data-mode="dark"] {',
+      "}",
+    ].join("\n");
+    const result = evaluateContrast(synthetic);
+    expect(result.blockCount).toBe(2);
+    const hue1 = result.rows.filter((r) => r.fg === "--on-hue-1" && r.bg === "--hue-1");
+    expect(hue1.filter((r) => r.status === "skipped")).toEqual([]);
+    const failedBlocks = hue1.filter((r) => r.status === "fail").map((r) => r.mode);
+    expect(failedBlocks).toEqual(["dark"]);
+    const light = hue1.find((r) => r.mode === "light");
+    expect(light?.status).toBe("pass");
+    expect(light?.ratio).toBeCloseTo(21, 5); // #ffffff on #000000
+  });
+
+  it("still skips cleanly while a hue pair is defined nowhere", () => {
+    const synthetic = [
+      '[data-palette="ink"][data-mode="light"] {',
+      "}",
+      '[data-palette="ink"][data-mode="dark"] {',
+      "}",
+    ].join("\n");
+    const result = evaluateContrast(synthetic);
+    const skipped = result.rows.filter((r) => r.status === "skipped");
+    // 4 hue pairs × 2 blocks; every skip is a hue pair, never a contract pair.
+    expect(skipped.length).toBe(8);
+    for (const row of skipped) {
+      expect(row.fg).toMatch(/^--on-hue-[1-4]$/);
+    }
+  });
+});
