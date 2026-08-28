@@ -249,11 +249,8 @@
       class="flex h-12 flex-none items-center gap-[9px] rounded-pill border border-border px-[22px] text-[15.5px] font-extrabold text-foreground transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       {landing.indexSeeAll}
-      <Icon
-        name="arrow-right"
-        size={17}
-        class={locale === "ar" ? "rotate-180" : ""}
-      />
+      <!-- Icon mirrors arrow-right under RTL itself (plan 06) — no per-call flip. -->
+      <Icon name="arrow-right" size={17} />
     </a>
   </div>
   <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -374,11 +371,7 @@
       class="mt-2.5 gap-2.5 text-[17.5px] font-extrabold"
     >
       {landing.closingCta}
-      <Icon
-        name="arrow-right"
-        size={19}
-        class={locale === "ar" ? "rotate-180" : ""}
-      />
+      <Icon name="arrow-right" size={19} />
     </Button>
     <span class="text-body opacity-80">{landing.closingNote}</span>
   </div>
