@@ -208,7 +208,7 @@
                   {sessionDeviceLabel(s.userAgent)}
                   {#if s.isCurrent}
                     <span
-                      class="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent"
+                      class="ml-2 rounded-pill bg-accent-soft px-2 py-0.5 text-xs text-accent"
                     >This session</span>
                   {/if}
                 </span>

@@ -41,13 +41,13 @@
   </div>
 
   <div
-    class="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line-2 bg-bg-1/90 px-2 py-1.5 opacity-45 shadow-lg backdrop-blur transition-opacity duration-200 hover:opacity-100 focus-within:opacity-100"
+    class="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-pill border border-line-2 bg-bg-1/90 px-2 py-1.5 opacity-45 shadow-lg backdrop-blur transition-opacity duration-200 hover:opacity-100 focus-within:opacity-100"
   >
     <button
       type="button"
       aria-label="Smaller Arabic text"
       onclick={() => (size = clamp(size - 2))}
-      class="flex size-8 items-center justify-center rounded-full text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+      class="flex size-8 items-center justify-center rounded-pill text-[13px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
     >
       A&minus;
     </button>
@@ -55,7 +55,7 @@
       type="button"
       aria-label="Larger Arabic text"
       onclick={() => (size = clamp(size + 2))}
-      class="flex size-8 items-center justify-center rounded-full text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+      class="flex size-8 items-center justify-center rounded-pill text-[15px] text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
     >
       A+
     </button>
@@ -63,14 +63,14 @@
     <button
       type="button"
       aria-label="Search"
-      class="flex size-8 items-center justify-center rounded-full text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+      class="flex size-8 items-center justify-center rounded-pill text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
     >
       <Icon name="search" size={15} />
     </button>
     <button
       type="button"
       aria-label="Play recitation"
-      class="flex size-8 items-center justify-center rounded-full text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+      class="flex size-8 items-center justify-center rounded-pill text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
     >
       <Icon name="play" size={15} />
     </button>

@@ -20,7 +20,7 @@
   >
     <div class="flex flex-col items-start gap-6">
       <span
-        class="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3.5 py-[7px] text-[13px] font-medium text-accent"
+        class="inline-flex items-center gap-2 rounded-pill bg-accent-soft px-3.5 py-[7px] text-[13px] font-medium text-accent"
       >
         {HERO.badge}
       </span>
@@ -84,8 +84,8 @@
 
     <div class="grid gap-5 sm:grid-cols-2">
       {#each VALUES as v (v.title)}
-        <div class="flex flex-col gap-2.5 rounded-[14px] border border-line bg-bg-1 px-6 py-6">
-          <span class="flex size-8 items-center justify-center rounded-[9px] bg-accent-soft text-accent">
+        <div class="flex flex-col gap-2.5 rounded-xl border border-line bg-bg-1 px-6 py-6">
+          <span class="flex size-8 items-center justify-center rounded-sm bg-accent-soft text-accent">
             <Icon name={v.icon} size={15} />
           </span>
           <span class="text-[17px] font-semibold">{v.title}</span>
@@ -119,7 +119,7 @@
             <span class="flex items-center gap-2.5">
               <span class="text-[17px] font-semibold">{r.title}</span>
               <span
-                class="rounded-full border border-line-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-fg-4"
+                class="rounded-pill border border-line-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-fg-4"
                 >Coming</span
               >
             </span>

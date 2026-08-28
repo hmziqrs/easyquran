@@ -32,7 +32,7 @@
       </div>
 
       <span
-        class="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-[7px] text-[13px] font-medium text-fg-3"
+        class="inline-flex items-center gap-2 rounded-pill border border-line px-3.5 py-[7px] text-[13px] font-medium text-fg-3"
       >
         {HERO.badge}
       </span>
@@ -94,7 +94,7 @@
       </div>
       <ul class="flex w-full flex-col gap-3.5">
         {#each ROADMAP as r (r.title)}
-          <li class="flex flex-col gap-1 rounded-[12px] border border-line px-6 py-5">
+          <li class="flex flex-col gap-1 rounded-md border border-line px-6 py-5">
             <span class="text-[15.5px] font-semibold">{r.title}</span>
             <span class="text-[14px] leading-[1.6] text-fg-3">{r.body}</span>
           </li>

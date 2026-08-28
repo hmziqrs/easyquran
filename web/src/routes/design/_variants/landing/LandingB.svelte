@@ -75,7 +75,7 @@
       <span>Sample · {name}</span>
       <span dir="rtl" class="font-arabic text-sm normal-case tracking-normal text-fg-3">{arabicName}</span>
     </div>
-    <div dir="rtl" class="flex flex-col gap-2 rounded-[10px] border border-line bg-bg-2 px-6 py-6">
+    <div dir="rtl" class="flex flex-col gap-2 rounded-md border border-line bg-bg-2 px-6 py-6">
       {#each specimen as v, i (i)}
         <p class="font-arabic text-[20px] leading-[2] text-fg">{v}</p>
       {/each}

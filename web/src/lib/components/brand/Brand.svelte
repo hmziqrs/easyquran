@@ -15,6 +15,8 @@
   href={publicHref(homeHref)}
   aria-label={homeLabel}
 >
+  <!-- radius audit (plan 03): 2px kept as a justified one-off — a 10px rotated diamond logo
+       mark; the nearest token (8px icon holder) over-rounds it. Not an icon holder. -->
   <span
     class="size-2.5 rotate-45 rounded-[2px] bg-primary shadow-[0_0_0_3px_var(--primary-soft)] transition-transform duration-[400ms] ease-out group-hover:rotate-[135deg]"
     aria-hidden="true"

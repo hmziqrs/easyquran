@@ -9,12 +9,17 @@ import { describe, expect, it } from "vite-plus/test";
  */
 const chip = readFileSync(resolve(process.cwd(), "src/lib/components/chip/Chip.svelte"), "utf8");
 
-describe("chip §19/§33", () => {
+describe("chip §19/§33 + plan 03 geometry/state matrix", () => {
   it("badge sizing: 24px height, 8px inline padding, 11/16 medium, pill radius", () => {
     expect(chip).toContain("h-6");
     expect(chip).toContain("rounded-pill");
     expect(chip).toContain("text-[11px]");
     expect(chip).toContain("font-medium");
+  });
+
+  it("is a pill control — never a block radius (plan 03 geometry)", () => {
+    expect(chip).not.toContain("rounded-md");
+    expect(chip).not.toContain("rounded-lg");
   });
 
   it("active tone is primary/primary-foreground; inactive is surface/border (§33)", () => {
@@ -31,8 +36,14 @@ describe("chip §19/§33", () => {
     expect(chip).toContain('type="button"');
   });
 
-  it("interactive inactive state keeps a hover affordance", () => {
+  it("state matrix: inactive hover is --surface-hover only (no border-strong — that is the row pattern)", () => {
     expect(chip).toContain("hover:bg-surface-hover");
+    expect(chip).not.toContain("hover:border-border-strong");
+  });
+
+  it("the marker dot is the only genuinely-round element (status dot, not an icon holder)", () => {
+    expect(chip.match(/rounded-full/g)).toHaveLength(2);
+    expect(chip).toContain("size-1.5 rounded-full bg-gold");
   });
 
   it("contains no hard-coded palette color (§61)", () => {

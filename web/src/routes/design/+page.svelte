@@ -42,7 +42,7 @@
         {#each VARIANTS[g.kind] as v (v.id)}
           <a
             href={`/design/${g.kind}/${v.id}`}
-            class="group flex flex-col gap-3 rounded-[14px] border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
+            class="group flex flex-col gap-3 rounded-xl border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
           >
             <div class="flex items-baseline gap-2">
               <span class="font-mono text-xs text-accent">{v.id.toUpperCase()}</span>
@@ -71,7 +71,7 @@
     <div class="grid gap-4 md:grid-cols-3">
       <a
         href="/design/tokens"
-        class="group flex flex-col gap-3 rounded-[14px] border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
+        class="group flex flex-col gap-3 rounded-xl border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
       >
         <div class="flex items-baseline gap-2">
           <span class="font-mono text-xs text-accent">V1</span>

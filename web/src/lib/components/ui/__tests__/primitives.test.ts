@@ -19,6 +19,7 @@ const label = read("src/lib/components/ui/label/label.svelte");
 const tabsList = read("src/lib/components/ui/tabs/tabs-list.svelte");
 const tabsTrigger = read("src/lib/components/ui/tabs/tabs-trigger.svelte");
 const chip = read("src/lib/components/chip/Chip.svelte");
+const metricCard = read("src/lib/components/card/MetricCard.svelte");
 
 const PRIMITIVE_SOURCES = [
   ["button-variants.ts", button],
@@ -30,6 +31,7 @@ const PRIMITIVE_SOURCES = [
   ["tabs-list.svelte", tabsList],
   ["tabs-trigger.svelte", tabsTrigger],
   ["Chip.svelte", chip],
+  ["MetricCard.svelte", metricCard],
 ] as const;
 
 describe("primitives §61 — semantic tokens only", () => {
@@ -47,7 +49,7 @@ describe("primitives §61 — semantic tokens only", () => {
   }
 });
 
-describe("button §35", () => {
+describe("button §35 + plan 03 state matrix", () => {
   it("primary pairs primary background with primary-foreground and a token hover", () => {
     expect(button).toContain("bg-primary text-primary-foreground");
     expect(button).toContain("hover:bg-primary-hover");
@@ -62,10 +64,15 @@ describe("button §35", () => {
     expect(button).toMatch(/\bghost:\s*"bg-transparent text-foreground hover:bg-surface-hover"/);
   });
 
-  it("default size is a 44px target with §35 inline padding and radius token", () => {
+  it("default size is a 44px target with board pill padding and pill radius", () => {
     expect(button).toContain("min-h-11");
-    expect(button).toContain("px-[18px]");
-    expect(button).toContain("rounded-md");
+    expect(button).toContain("px-6");
+    expect(button).toContain("rounded-pill");
+  });
+
+  it("is a pill control — never a block radius (plan 03 geometry)", () => {
+    expect(button).not.toContain("rounded-md");
+    expect(button).not.toContain("rounded-lg");
   });
 
   it("focus uses the --focus-ring outline, not a removed indicator", () => {
@@ -73,9 +80,26 @@ describe("button §35", () => {
       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     );
   });
+
+  it("state matrix: active translate, disabled no-events + opacity, base owns focus-visible", () => {
+    expect(button).toContain("active:translate-y-px");
+    expect(button).toContain("disabled:pointer-events-none disabled:opacity-50");
+  });
+
+  it("every variant defines a hover state (focus-visible is owned by the base)", () => {
+    const matches = [
+      ...button.matchAll(
+        /(?:^|\s)"?(?:primary|secondary|ghost|accent|quiet|ink|outline-ink)"?:\s*"([^"]+)"/g
+      ),
+    ];
+    expect(matches.length).toBe(7);
+    for (const match of matches) {
+      expect(match[1], `${match[1]} must contain a hover: state`).toContain("hover:");
+    }
+  });
 });
 
-describe("icon button §36/§51", () => {
+describe("icon button §36/§51 + plan 03 geometry", () => {
   it("default is a 44px target", () => {
     expect(iconButton).toContain("size-11");
   });
@@ -87,10 +111,18 @@ describe("icon button §36/§51", () => {
     expect(iconButton.match(/\[&_svg\]:stroke-\[1\.75\]/g)).toHaveLength(3);
   });
 
-  it("keeps every size inside the §13 button radius band (no rounded-lg/xl)", () => {
+  it("is a pill control at every size (999px on a square = the board's circular icon button)", () => {
     const radii = iconButton.match(/rounded-(?:sm|md|lg|xl|pill)/g) ?? [];
     expect(radii.length).toBeGreaterThanOrEqual(3);
-    expect([...new Set(radii)]).toEqual(["rounded-md"]);
+    expect([...new Set(radii)]).toEqual(["rounded-pill"]);
+  });
+
+  it("state matrix: active translate + per-variant hover, focus ring in base", () => {
+    expect(iconButton).toContain("active:translate-y-px");
+    expect(iconButton).toContain("focus-visible:outline-focus-ring");
+    for (const match of iconButton.matchAll(/(?:ghost|secondary|primary):\s*\n?\s*"([^"]+)"/g)) {
+      expect(match[1]).toContain("hover:");
+    }
   });
 
   it("requires an accessible name rendered as aria-label", () => {
@@ -99,20 +131,21 @@ describe("icon button §36/§51", () => {
   });
 });
 
-describe("inputs §37", () => {
-  it("input is a 44px field with focus-ring outline and offset", () => {
+describe("inputs §37 + plan 03 geometry", () => {
+  it("input is a 44px PILL field with focus-ring outline and offset", () => {
     expect(input).toContain("h-11");
     expect(input).toContain("border-border bg-surface");
-    expect(input).toContain("rounded-md");
+    expect(input).toContain("rounded-pill");
     expect(input).toContain(
       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     );
     expect(input).not.toContain("ring-3");
   });
 
-  it("textarea follows the same field contract multiline", () => {
+  it("textarea is the multiline TEXT BLOCK — 10px block radius, never a pill lozenge", () => {
     expect(textarea).toContain("border-border bg-surface");
     expect(textarea).toContain("rounded-md");
+    expect(textarea).not.toContain("rounded-pill");
     expect(textarea).toContain("outline-focus-ring");
   });
 
@@ -121,15 +154,19 @@ describe("inputs §37", () => {
   });
 });
 
-describe("tabs §38", () => {
-  it("list is a hairline row, not a pill container", () => {
-    expect(tabsList).toContain("border-b border-border");
+describe("tabs §38 + plan 03 geometry", () => {
+  it("list is a plain pill row — no hairline, no container chrome", () => {
+    expect(tabsList).toContain("inline-flex items-center gap-2");
+    expect(tabsList).not.toContain("border-b");
   });
 
-  it("trigger is a 44px target with underline active state and focus ring", () => {
+  it("trigger is a 44px pill with primary-fill active state, hover and focus ring", () => {
     expect(tabsTrigger).toContain("min-h-11");
-    expect(tabsTrigger).toContain("data-[state=active]:border-primary");
-    expect(tabsTrigger).toContain("data-[state=active]:text-foreground");
+    expect(tabsTrigger).toContain("rounded-pill");
+    expect(tabsTrigger).toContain("hover:bg-surface-hover");
+    expect(tabsTrigger).toContain("data-[state=active]:bg-primary");
+    expect(tabsTrigger).toContain("data-[state=active]:text-primary-foreground");
+    expect(tabsTrigger).toContain("data-[state=active]:hover:bg-primary");
     expect(tabsTrigger).toContain("outline-focus-ring");
   });
 });

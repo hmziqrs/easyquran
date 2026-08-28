@@ -8,7 +8,7 @@ import { tv, type VariantProps } from "tailwind-variants";
  */
 export const iconButtonVariants = tv(
   {
-    base: "inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-transparent font-sans transition-[background-color,border-color,color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0",
+    base: "inline-flex shrink-0 cursor-pointer items-center justify-center border border-transparent bg-transparent font-sans transition-[background-color,border-color,color,transform] duration-150 ease-out active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0",
     variants: {
       variant: {
         ghost: "text-foreground-secondary hover:bg-surface-hover hover:text-foreground",
@@ -17,10 +17,11 @@ export const iconButtonVariants = tv(
         primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
       },
       size: {
-        /* §13: buttons keep the 10–12px radius at every size (rounded-md = 12px). */
-        sm: "size-9 rounded-md [&_svg]:size-[18px] [&_svg]:stroke-[1.75]",
-        md: "size-11 rounded-md [&_svg]:size-5 [&_svg]:stroke-[1.75]",
-        lg: "size-12 rounded-md [&_svg]:size-6 [&_svg]:stroke-[1.75]",
+        /* Plan 03 geometry: controls are pills — 999px on a square target renders the
+           board's circular icon button (44×44 moon toggle). */
+        sm: "size-9 rounded-pill [&_svg]:size-[18px] [&_svg]:stroke-[1.75]",
+        md: "size-11 rounded-pill [&_svg]:size-5 [&_svg]:stroke-[1.75]",
+        lg: "size-12 rounded-pill [&_svg]:size-6 [&_svg]:stroke-[1.75]",
       },
     },
     defaultVariants: { variant: "ghost", size: "md" },

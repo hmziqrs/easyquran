@@ -8,10 +8,9 @@
 		...restProps
 	}: TabsPrimitive.ListProps = $props();
 
-	/* §38 (docs/design-system.md): tabs are content destinations — an inline row over a
-	   hairline divider, not a pill container (pills belong to segmented controls). */
-	const listClass =
-		"inline-flex items-end gap-1 border-b border-border text-foreground-secondary";
+	/* §38 (docs/design-system.md) + plan 03 geometry: tabs are content destinations rendered
+	   as a row of PILL triggers (controls are 999px) — no container chrome, no hairline. */
+	const listClass = "inline-flex items-center gap-2 text-foreground-secondary";
 </script>
 
 <TabsPrimitive.List

@@ -33,7 +33,7 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" role="group" aria-label="Arabic text size">
+      <div class="flex items-center gap-0.5 rounded-md bg-bg-2 p-1" role="group" aria-label="Arabic text size">
         <button
           type="button"
           aria-label="Smaller Arabic text"
@@ -49,7 +49,7 @@
       </div>
       <button
         type="button"
-        class="flex h-[34px] flex-1 items-center justify-center gap-2 rounded-[9px] bg-accent-soft text-[13px] text-accent transition-[filter] hover:brightness-105"
+        class="flex h-[34px] flex-1 items-center justify-center gap-2 rounded-pill bg-accent-soft text-[13px] text-accent transition-[filter] hover:brightness-105"
       >
         <Icon name="play" size={14} /> Listen
       </button>
@@ -94,7 +94,7 @@
       >
         <div class="flex flex-col items-center gap-1 pt-1.5">
           <span
-            class="flex size-8 items-center justify-center rounded-full border border-accent-line font-arabic text-[13px] text-accent"
+            class="flex size-8 items-center justify-center rounded-pill border border-accent-line font-arabic text-[13px] text-accent"
           >
             {toArabicDigits(i + 1)}
           </span>

@@ -170,9 +170,9 @@
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {#each group.tokens as token (token)}
           {@const value = values[token]}
-          <div class="flex items-center gap-3 rounded-[10px] border border-line bg-bg-1 p-3">
+          <div class="flex items-center gap-3 rounded-md border border-line bg-bg-1 p-3">
             <div
-              class="h-11 w-11 shrink-0 rounded-[8px] border border-line"
+              class="h-11 w-11 shrink-0 rounded-sm border border-line"
               style="background: var({token})"
             ></div>
             <div class="flex min-w-0 flex-col gap-0.5">
@@ -201,7 +201,7 @@
       {#each PAIR_CHIPS as chip (chip.label)}
         {@const defined = Boolean(values[chip.fg]?.specified && values[chip.fill]?.specified)}
         <span
-          class="rounded-full px-4 py-2 text-[14px] font-medium"
+          class="rounded-pill px-4 py-2 text-[14px] font-medium"
           style="background: var({chip.fill}); color: var({chip.fg})"
         >
           {#if defined}Read me{:else}<span class="text-danger">pair not defined</span>{/if}

@@ -19,11 +19,12 @@
 		...restProps
 	}: Props = $props();
 
-	/* §37 (docs/design-system.md): 44px height, 10–12px radius, surface background, border,
-	   focus = 2px --focus-ring outline with 2px offset (never removed without replacement).
+	/* §37 (docs/design-system.md) + plan 03 geometry: 44px height, PILL radius (controls are
+	   999px), surface background, border, focus = 2px --focus-ring outline with 2px offset
+	   (never removed without replacement). px-4 keeps clear of the pill curve.
 	   Semantic tokens only (§61) — works across all 4 palettes × light/dark. */
 	const inputClass =
-		"border-border bg-surface text-foreground placeholder:text-muted-foreground h-11 w-full min-w-0 rounded-md border px-3 text-body-s transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
+		"border-border bg-surface text-foreground placeholder:text-muted-foreground h-11 w-full min-w-0 rounded-pill border px-4 text-body-s transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
 </script>
 
 {#if type === "file"}

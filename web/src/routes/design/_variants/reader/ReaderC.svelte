@@ -18,7 +18,7 @@
     <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-fg-4">
       Surah {surah.num} · {surahMeta(surah)}
     </span>
-    <div class="flex items-center gap-0.5 rounded-[9px] bg-bg-2 p-1" role="group" aria-label="Arabic text size">
+    <div class="flex items-center gap-0.5 rounded-md bg-bg-2 p-1" role="group" aria-label="Arabic text size">
       <button
         type="button"
         aria-label="Smaller Arabic text"
@@ -34,8 +34,8 @@
     </div>
   </div>
 
-  <div class="rounded-[18px] border border-line-3 bg-bg-1 p-2 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.6)]">
-    <div class="rounded-[12px] border border-accent-line">
+  <div class="rounded-xl border border-line-3 bg-bg-1 p-2 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.6)]">
+    <div class="rounded-md border border-accent-line">
       <div class="relative border-b border-accent-line px-6 py-5 text-center">
         <div
           aria-hidden="true"

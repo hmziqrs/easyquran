@@ -41,12 +41,13 @@
   }
 
   /* Interactive §33 chips keep the hover affordance on the INACTIVE state only, so the
-     active primary fill is not washed out by a hover surface. */
+     active primary fill is not washed out by a hover surface. Plan 03 state matrix:
+     chip hover = --surface-hover (no border-strong — that is the row pattern). */
   function interactive(): string {
     const focusClass =
       "cursor-pointer transition-colors ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
     if (active) return focusClass;
-    return `${focusClass} hover:bg-surface-hover hover:border-border-strong`;
+    return `${focusClass} hover:bg-surface-hover`;
   }
 </script>
 

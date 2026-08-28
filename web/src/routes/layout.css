@@ -83,12 +83,15 @@
   --text-3xl: 3.75rem;
   --text-4xl: 5rem;
 
-  /* §13 Radius: buttons/inputs 10–12, cards 12–18, feature cards 18–24, chips pill. */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* §13 Radius (plan 03 geometry): controls pill 999; icon holders 8; blocks (rows, cards,
+     panels, popovers, sheets) 10; large panels 14; headline highlight 16 (a pill at 76px
+     becomes a lozenge and swallows the words). */
+  --radius-sm: 8px; /* icon holder — the square behind an icon */
+  --radius-md: 10px; /* block */
+  --radius-lg: 10px; /* block (collapsed from 18 — same meaning as --radius-md) */
+  --radius-xl: 14px; /* large panels only */
   --radius-pill: 999px;
+  --radius-highlight: 16px;
 
   --breakpoint-3xl: 1440px;
 
@@ -729,7 +732,7 @@
   --accent-foreground: var(--primary-foreground);
   --input: var(--border-strong);
   --ring: var(--focus-ring);
-  --radius: 12px;
+  --radius: 10px;
 
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
