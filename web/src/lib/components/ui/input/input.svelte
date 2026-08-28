@@ -18,6 +18,12 @@
 		"data-slot": dataSlot = "input",
 		...restProps
 	}: Props = $props();
+
+	/* §37 (docs/design-system.md): 44px height, 10–12px radius, surface background, border,
+	   focus = 2px --focus-ring outline with 2px offset (never removed without replacement).
+	   Semantic tokens only (§61) — works across all 4 palettes × light/dark. */
+	const inputClass =
+		"border-border bg-surface text-foreground placeholder:text-muted-foreground h-11 w-full min-w-0 rounded-md border px-3 text-body-s transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
 </script>
 
 {#if type === "file"}
@@ -25,7 +31,8 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			"dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 h-8 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors file:h-6 file:text-sm file:font-medium focus-visible:ring-3 aria-invalid:ring-3 md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+			"file:inline-flex file:h-full file:border-0 file:bg-transparent file:px-0 file:font-medium file:text-foreground",
+			inputClass,
 			className
 		)}
 		type="file"
@@ -37,10 +44,7 @@
 	<input
 		bind:this={ref}
 		data-slot={dataSlot}
-		class={cn(
-			"dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 h-8 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors file:h-6 file:text-sm file:font-medium focus-visible:ring-3 aria-invalid:ring-3 md:text-sm file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-			className
-		)}
+		class={cn(inputClass, className)}
 		{type}
 		bind:value
 		{...restProps}

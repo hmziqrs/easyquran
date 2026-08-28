@@ -9,15 +9,18 @@
 		"data-slot": dataSlot = "textarea",
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
+
+	/* §37 (docs/design-system.md) applied to the multiline variant of the input contract:
+	   surface background, border, 10–12px radius, focus = 2px --focus-ring outline + offset.
+	   Semantic tokens only (§61). */
+	const textareaClass =
+		"border-border bg-surface text-foreground placeholder:text-muted-foreground flex field-sizing-content min-h-16 w-full rounded-md border px-3 py-2 text-body-s transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
 </script>
 
 <textarea
 	bind:this={ref}
 	data-slot={dataSlot}
-	class={cn(
-		"border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 rounded-lg border bg-transparent px-2.5 py-2 text-base transition-colors focus-visible:ring-3 aria-invalid:ring-3 md:text-sm placeholder:text-muted-foreground flex field-sizing-content min-h-16 w-full outline-none disabled:cursor-not-allowed disabled:opacity-50",
-		className
-	)}
+	class={cn(textareaClass, className)}
 	bind:value
 	{...restProps}
 ></textarea>
