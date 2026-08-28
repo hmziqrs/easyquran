@@ -131,6 +131,7 @@
   --color-accent-soft: var(--primary-soft);
   --color-accent-line: var(--border-strong);
   --color-accent-foreground: var(--primary-foreground);
+  --color-accent-fg: var(--accent-fg);
 
   --color-pop: var(--accent);
   --color-pop-soft: var(--accent-soft);
@@ -138,6 +139,7 @@
   --color-ok: var(--success);
 
   /* ── shadcn aliases over the contract ───────────────────────────────────────────────────── */
+  --color-border: var(--border);
   --color-card: var(--surface);
   --color-card-foreground: var(--foreground);
   --color-popover: var(--surface-raised);
@@ -520,9 +522,10 @@
   --pop: var(--accent);
   --pop-soft: var(--accent-soft);
 
-  /* Editorial hairline for markers/revealed-ayah — derived from the gold accent. */
+  /* Editorial hairline for markers/revealed-ayah — derived from the gold accent.
+     --accent-fg keeps the legacy interactive meaning: text on bg-accent (= primary). */
   --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
-  --accent-fg: var(--background);
+  --accent-fg: var(--primary-foreground);
 
   --ok: var(--success);
 

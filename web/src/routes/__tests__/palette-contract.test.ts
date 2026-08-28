@@ -78,8 +78,14 @@ describe("layout.css palette contract", () => {
 
   it("aliases the legacy interactive accent to the primary family", () => {
     expect(css).toContain("--color-accent: var(--primary);");
+    expect(css).toContain("--color-accent-fg: var(--accent-fg);");
+    expect(css).toContain("--accent-fg: var(--primary-foreground);");
     expect(css).toContain("--color-pop: var(--accent);");
     expect(css).toContain("--color-ok: var(--success);");
     expect(css).toContain("--color-muted-foreground: var(--muted);");
+  });
+
+  it("keeps the border utility alive (border-border/divide-border consumers)", () => {
+    expect(css).toContain("--color-border: var(--border);");
   });
 });
