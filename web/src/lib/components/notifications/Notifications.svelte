@@ -4,7 +4,7 @@
   import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
   import { cn } from "$lib/utils";
 
-  const pill = "rounded-md border px-3 py-1.5 text-xs transition-colors duration-150";
+  const pill = "rounded-pill border px-3 py-1.5 text-xs transition-colors duration-150";
 
   let {
     copy,
@@ -43,8 +43,8 @@
 
 <div class="grid gap-1.5">
   <div class="flex items-center justify-between gap-2">
-    <span class="text-xs text-fg-3">{copy.heading}</span>
-    <span class="text-end text-[11px] leading-tight text-fg-3">
+    <span class="text-xs text-muted">{copy.heading}</span>
+    <span class="text-end text-[11px] leading-tight text-muted">
       {statusLabel}
     </span>
   </div>
@@ -56,8 +56,8 @@
     class={cn(
       pill,
       notifications.subscribed
-        ? "border-line-2 text-fg-2 hover:text-fg"
-        : "border-accent bg-accent-soft text-fg hover:opacity-90",
+        ? "border-border-strong text-foreground-secondary hover:text-foreground"
+        : "border-primary bg-primary-soft text-foreground hover:opacity-90",
       disabled && "cursor-not-allowed opacity-50",
     )}
   >

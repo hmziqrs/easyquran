@@ -21,9 +21,9 @@
   <div
     role="status"
     aria-live="polite"
-    class="fixed left-1/2 top-4 z-[1002] flex w-[min(92vw,380px)] -translate-x-1/2 items-start gap-3 rounded-md border border-border bg-surface/95 p-3.5 shadow-md backdrop-blur"
+    class="fixed left-1/2 top-4 z-[1002] flex w-[min(92vw,380px)] -translate-x-1/2 items-start gap-3 rounded-xl border border-border bg-surface/95 p-3.5 backdrop-blur"
   >
-    <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
+    <div class="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary">
       <span class="text-base leading-none" aria-hidden="true">↑</span>
     </div>
     <div class="min-w-0 flex-1">
@@ -32,7 +32,7 @@
       <button
         type="button"
         onclick={reload}
-        class="mt-1.5 inline-flex items-center rounded-md bg-primary px-2.5 py-1 text-caption font-medium text-primary-foreground transition-[filter] duration-150 hover:brightness-[0.96]"
+        class="mt-1.5 inline-flex items-center rounded-pill bg-primary px-2.5 py-1 text-caption font-medium text-primary-foreground transition-[filter] duration-150 hover:brightness-[0.96]"
       >
         Reload open tabs
       </button>
@@ -41,7 +41,7 @@
       type="button"
       onclick={dismiss}
       aria-label="Dismiss update notification"
-      class="shrink-0 rounded-md px-1 text-muted transition-colors hover:text-foreground">✕</button
+      class="shrink-0 rounded-pill px-1 text-muted transition-colors hover:text-foreground">✕</button
     >
   </div>
 {/if}

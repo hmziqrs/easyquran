@@ -3,7 +3,7 @@
   import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
   import { cn, formatBytes } from "$lib/utils";
 
-  const pill = "rounded-md border px-3 py-1.5 text-caption transition-colors duration-150";
+  const pill = "rounded-pill border px-3 py-1.5 text-caption transition-colors duration-150";
 
   const working = $derived(offline.status === "downloading" || offline.status === "staging");
   const savedAt = $derived(offline.activePack?.savedAt ?? null);
@@ -57,7 +57,7 @@
     aria-pressed={!!offline.activePack}
     class={cn(
       pill,
-      "justify-self-start px-3.5 py-2 text-body-s",
+      "justify-self-start px-3.5 py-2 text-body",
       offline.activePack
         ? "border-border text-foreground-secondary hover:text-foreground"
         : "border-primary bg-primary-soft text-foreground hover:opacity-90",
