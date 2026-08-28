@@ -17,8 +17,8 @@
 
 <div
   class={cn(
-    "rounded-lg border border-line bg-bg-1 p-6 transition-colors duration-200",
-    interactive && "hover:border-line-2",
+    "rounded-lg border border-border bg-surface p-6 transition-colors duration-200",
+    interactive && "hover:border-border-strong",
     className,
   )}
   {...rest}

@@ -80,7 +80,7 @@
         <label class="ml-auto flex cursor-pointer select-none items-center gap-2 text-xs text-fg-3">
           <input
             type="checkbox"
-            class="h-4 w-4 accent-[var(--accent)]"
+            class="h-4 w-4 accent-primary"
             checked={prefs.instantResume}
             onchange={(e) => prefs.setInstantResume(e.currentTarget.checked)}
           />

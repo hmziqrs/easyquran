@@ -22,16 +22,16 @@
 <section class="pt-22 pb-7">
   <Container class="max-w-[1180px] flex flex-col items-center gap-[22px] text-center">
     <span
-      class="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3.5 py-[7px] text-[13px] font-medium text-accent"
+      class="inline-flex items-center gap-2 rounded-pill bg-primary-soft px-3.5 py-[7px] text-body-s font-medium text-primary"
     >
       {landing.badge}
     </span>
     <h1
-      class="max-w-[19ch] text-balance text-5xl leading-[1.05] tracking-tight md:text-6xl"
+      class="max-w-[19ch] text-balance text-display-l tracking-tight md:text-display-xl"
     >
       {landing.heroTitle}
     </h1>
-    <p class="max-w-[52ch] text-pretty text-[19px] leading-[1.6] text-fg-2">
+    <p class="max-w-[52ch] text-pretty text-body-xl text-foreground-secondary">
       {landing.heroIntro}
     </p>
     <div class="mt-1.5 flex flex-wrap justify-center gap-2.5">
@@ -50,18 +50,18 @@
 <section id="today" class="scroll-mt-20 py-16">
   <Container class="max-w-[1180px] flex flex-col gap-10">
     <div class="flex flex-col gap-3">
-      <Eyebrow class="text-accent">{landing.todayEyebrow}</Eyebrow>
-      <h2 class="max-w-[24ch] text-[32px] leading-[1.12] tracking-[-0.025em]">
+      <Eyebrow>{landing.todayEyebrow}</Eyebrow>
+      <h2 class="max-w-[24ch] text-h2">
         {landing.todayTitle}
       </h2>
-      <p class="max-w-[56ch] text-[17px] leading-[1.6] text-fg-2">
+      <p class="max-w-[56ch] text-body-l text-foreground-secondary">
         {landing.todayIntro}
       </p>
     </div>
     <div class="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
       {#each landing.values as value (value.id)}
         <div
-          class="flex flex-col gap-2 rounded-[14px] border border-line bg-bg-1 px-6 py-7 transition-colors hover:border-line-2"
+          class="flex flex-col gap-2 rounded-md border border-border bg-surface px-6 py-7 transition-colors hover:border-border-strong"
         >
           <div
             class="mb-2 flex size-8 items-center justify-center rounded-[9px] {value.chip}"
@@ -72,22 +72,22 @@
               class={locale === "ar" && value.icon === "arrow-right" ? "rotate-180" : ""}
             />
           </div>
-          <div class="text-[17px] font-semibold">{value.title}</div>
-          <p class="text-[14.5px] leading-[1.6] text-fg-2">{value.body}</p>
+          <div class="text-body-l font-semibold">{value.title}</div>
+          <p class="text-body-s leading-[1.6] text-foreground-secondary">{value.body}</p>
         </div>
       {/each}
     </div>
   </Container>
 </section>
 
-<section class="border-t border-line">
+<section class="border-t border-border">
   <Container class="max-w-[1180px] flex flex-col gap-8 py-[72px]">
     <div class="flex flex-col gap-3">
-      <Eyebrow class="text-accent">All 114 surahs</Eyebrow>
-      <h2 class="max-w-[24ch] text-[32px] leading-[1.12] tracking-[-0.025em]">
+      <Eyebrow>All 114 surahs</Eyebrow>
+      <h2 class="max-w-[24ch] text-h2">
         The whole Qur&rsquo;an, one tap away.
       </h2>
-      <p class="max-w-[56ch] text-[17px] leading-[1.6] text-fg-2">
+      <p class="max-w-[56ch] text-body-l text-foreground-secondary">
         Every chapter opens straight into the reader &mdash; no account, no loading screen.
       </p>
     </div>
@@ -96,22 +96,22 @@
         <li>
           <a
             href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
-            class="group flex items-center gap-3.5 rounded-[13px] border border-line bg-bg-1 px-4 py-3 transition-colors hover:border-accent-line hover:bg-bg-2"
+            class="group flex items-center gap-3.5 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-primary hover:bg-surface-hover"
           >
             <span
-              class="grid size-9 shrink-0 rotate-45 place-items-center rounded-[9px] border border-line-2 text-[12.5px] font-semibold text-fg-3 transition-colors group-hover:border-accent-line group-hover:text-accent"
+              class="grid size-9 shrink-0 rotate-45 place-items-center rounded-sm border border-border-strong text-caption font-semibold text-muted transition-colors group-hover:border-primary group-hover:text-primary"
             >
               <span class="-rotate-45">{s.num}</span>
             </span>
             <span class="flex min-w-0 flex-col">
-              <span class="truncate text-[15px] font-semibold">{s.name}</span>
-              <span class="truncate text-[12.5px] text-fg-3">
+              <span class="truncate text-body font-semibold">{s.name}</span>
+              <span class="truncate text-caption text-muted">
                 {s.meaning} · {s.ayahCount} ayahs · {s.place}
               </span>
             </span>
             <span
               dir="rtl"
-              class="ml-auto shrink-0 font-arabic text-[19px] leading-none text-fg-2 transition-colors group-hover:text-accent"
+              class="ms-auto shrink-0 font-arabic text-body-l leading-none text-foreground-secondary transition-colors group-hover:text-primary"
               >{s.arabic}</span
             >
           </a>
@@ -121,25 +121,25 @@
   </Container>
 </section>
 
-<section id="roadmap" class="scroll-mt-20 border-t border-line bg-bg-elev">
+<section id="roadmap" class="scroll-mt-20 border-t border-border bg-surface-raised">
   <Container class="max-w-[1180px] flex flex-col gap-10 py-[72px]">
     <div class="flex flex-col gap-3">
-      <Eyebrow class="text-fg-3">{landing.roadmapEyebrow}</Eyebrow>
-      <h2 class="max-w-[22ch] text-[32px] leading-[1.12] tracking-[-0.025em]">
+      <Eyebrow>{landing.roadmapEyebrow}</Eyebrow>
+      <h2 class="max-w-[22ch] text-h2">
         {landing.roadmapTitle}
       </h2>
-      <p class="max-w-[60ch] text-[17px] leading-[1.6] text-fg-2">
+      <p class="max-w-[60ch] text-body-l text-foreground-secondary">
         {landing.roadmapIntro}
       </p>
     </div>
     <div class="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
       {#each landing.roadmap as item (item.id)}
-        <div class="flex flex-col gap-2 rounded-[14px] border border-line bg-bg-1 px-6 py-7">
-          <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-fg-3"
+        <div class="flex flex-col gap-2 rounded-md border border-border bg-surface px-6 py-7">
+          <span class="text-micro uppercase tracking-[0.12em] text-muted"
             >{landing.coming}</span
           >
-          <div class="text-[17px] font-semibold">{item.title}</div>
-          <p class="text-[14.5px] leading-[1.6] text-fg-2">{item.body}</p>
+          <div class="text-body-l font-semibold">{item.title}</div>
+          <p class="text-body-s leading-[1.6] text-foreground-secondary">{item.body}</p>
         </div>
       {/each}
     </div>

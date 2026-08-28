@@ -166,7 +166,7 @@
   aria-label={copy.primaryLabel}
   style:top={navTop}
   class={cn(
-    "sticky z-50 border-b border-line bg-bg/86 backdrop-blur-xl backdrop-saturate-150",
+    "sticky z-50 border-b border-border bg-background/86 backdrop-blur-xl backdrop-saturate-150",
     collapsible && "transition-[top] duration-200 ease-out",
   )}
 >
@@ -178,13 +178,13 @@
     <div class="flex items-center gap-2">
       {#if online.hydrated && !online.online}
         <span
-          class="inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-bg-2 px-2.5 py-1 text-xs text-fg-2"
+          class="inline-flex items-center gap-1.5 rounded-pill border border-border-strong bg-background-subtle px-2.5 py-1 text-caption text-foreground-secondary"
           role="status"
           aria-label={copy.offlineLabel}
           title={copy.offlineTitle}
         >
           <span class="sr-only">{copy.offlineLabel}</span>
-          <span class="inline-block size-1.5 rounded-full bg-pop" aria-hidden="true"></span>
+          <span class="inline-block size-1.5 rounded-full bg-warning" aria-hidden="true"></span>
           <span class="hidden sm:inline">{copy.offlineLabel}</span>
         </span>
       {/if}
@@ -196,7 +196,7 @@
         inert={open || undefined}
         aria-hidden={open || undefined}
         onclick={onAccountClick}
-        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        class="inline-flex size-11 items-center justify-center rounded-md border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name="user" size={18} title={accountLabel} />
       </a>
@@ -208,7 +208,7 @@
         aria-label={open ? copy.closePanel : copy.openPanel}
         title={open ? copy.closePanel : copy.openPanel}
         bind:this={toggleBtn}
-        class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] border border-line-2 text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        class="inline-flex size-11 items-center justify-center rounded-md border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
       </button>
@@ -221,7 +221,7 @@
     type="button"
     aria-label={copy.closePanel}
     tabindex="-1"
-    class="fixed inset-0 top-[60px] z-40 cursor-default bg-bg/40 backdrop-blur-sm"
+    class="fixed inset-0 top-[60px] z-40 cursor-default bg-background/40 backdrop-blur-sm"
     transition:fade={{ duration: 150 }}
     onclick={close}
   ></button>
@@ -235,7 +235,7 @@
     bind:this={panelEl}
     onkeydown={onPanelKeydown}
     transition:fly={{ x: panelOffset, duration: 220, easing: cubicOut }}
-    class="fixed end-0 top-[60px] bottom-0 z-50 flex w-[340px] max-w-[88vw] flex-col border-s border-line bg-bg/95 backdrop-blur-xl"
+    class="fixed end-0 top-[60px] bottom-0 z-50 flex w-[340px] max-w-[88vw] flex-col border-s border-border bg-background/95 backdrop-blur-xl"
   >
     <div class="flex flex-col gap-6 p-5 sm:p-6">
       <section class="flex flex-col gap-3">
@@ -244,13 +244,13 @@
           type="button"
           onclick={() => prefs.toggleTheme()}
           aria-label={copy.toggleTheme}
-          class="flex w-full items-center justify-between rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-sm text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="flex w-full items-center justify-between rounded-md border border-border-strong bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
         >
           <span class="inline-flex items-center gap-2.5">
             <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={16} />
             {copy.appearance}
           </span>
-          <span class="text-xs text-muted">{copy.themeNames[prefs.theme]}</span>
+          <span class="text-caption text-muted">{copy.themeNames[prefs.theme]}</span>
         </button>
       </section>
 
@@ -258,7 +258,7 @@
         <h2 class="eyebrow mb-0">{copy.searchPage}</h2>
         <a
           href={searchRowHref}
-          class="flex w-full items-center gap-2.5 rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-sm text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="search" size={16} />
           {copy.searchPage}
@@ -269,7 +269,7 @@
         <h2 class="eyebrow mb-0">{copy.bookmarks}</h2>
         <a
           href={bookmarksRowHref}
-          class="flex w-full items-center gap-2.5 rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-sm text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="bookmark" size={16} />
           {copy.bookmarks}
@@ -280,7 +280,7 @@
         <h2 class="eyebrow mb-0">{copy.settings}</h2>
         <a
           href={settingsRowHref}
-          class="flex w-full items-center gap-2.5 rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-sm text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          class="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3.5 py-3 text-body-s text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Icon name="rows" size={16} />
           {copy.settings}
@@ -300,10 +300,10 @@
                 aria-label={`${copy.changeLanguage}: ${item.label}`}
                 data-sveltekit-reload
                 class={cn(
-                  "rounded-lg border px-3 py-2 text-center text-sm transition-colors",
+                  "rounded-md border px-3 py-2 text-center text-body-s transition-colors",
                   item.current
-                    ? "border-accent bg-accent-soft text-fg"
-                    : "border-line-2 text-fg-2 hover:bg-bg-2 hover:text-fg",
+                    ? "border-primary bg-primary-soft text-primary"
+                    : "border-border-strong text-foreground-secondary hover:bg-surface-hover hover:text-foreground",
                 )}
               >{item.label}</a>
             {/each}
@@ -313,10 +313,10 @@
 
       {#if online.hydrated && !online.online}
         <p
-          class="flex items-center gap-2 rounded-lg border border-line-2 bg-bg-1 px-3.5 py-3 text-xs text-fg-3"
+          class="flex items-center gap-2 rounded-md border border-border bg-surface px-3.5 py-3 text-caption text-muted"
           role="status"
         >
-          <span class="inline-block size-1.5 rounded-full bg-pop" aria-hidden="true"></span>
+          <span class="inline-block size-1.5 rounded-full bg-warning" aria-hidden="true"></span>
           {copy.offlineDetail}
         </p>
       {/if}

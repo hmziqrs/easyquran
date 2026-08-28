@@ -3,7 +3,7 @@
   import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
   import { cn, formatBytes } from "$lib/utils";
 
-  const pill = "rounded-md border px-3 py-1.5 text-xs transition-colors duration-150";
+  const pill = "rounded-md border px-3 py-1.5 text-caption transition-colors duration-150";
 
   const working = $derived(offline.status === "downloading" || offline.status === "staging");
   const savedAt = $derived(offline.activePack?.savedAt ?? null);
@@ -36,17 +36,17 @@
 
 <section class="grid gap-1.5">
   <div class="flex items-center justify-between gap-2">
-    <svelte:element this={headingTag} class="text-xs text-fg-3">{copy.heading}</svelte:element>
-    <span class="text-end text-[11px] leading-tight text-fg-3" aria-live="polite">{statusLabel}</span>
+    <svelte:element this={headingTag} class="text-caption text-muted">{copy.heading}</svelte:element>
+    <span class="text-end text-micro leading-tight text-muted" aria-live="polite">{statusLabel}</span>
   </div>
   {#if offline.activePack}
-    <div class="text-[11px] text-fg-4">
+    <div class="text-micro text-muted">
       {copy.routes(offline.activePack.entries, formatBytes(offline.activePack.bytes))}{#if savedAt}
         · {copy.saved(new Date(savedAt))}{/if}
     </div>
   {/if}
   {#if offline.quota != null}
-    <div class="text-[11px] text-fg-4">
+    <div class="text-micro text-muted">
       {copy.usage(formatBytes(offline.usage))}
     </div>
   {/if}
@@ -57,10 +57,10 @@
     aria-pressed={!!offline.activePack}
     class={cn(
       pill,
-      "justify-self-start px-3.5 py-2 text-[13.5px]",
+      "justify-self-start px-3.5 py-2 text-body-s",
       offline.activePack
-        ? "border-line-2 text-fg-2 hover:text-fg"
-        : "border-accent bg-accent-soft text-fg hover:opacity-90",
+        ? "border-border text-foreground-secondary hover:text-foreground"
+        : "border-primary bg-primary-soft text-foreground hover:opacity-90",
       offline.busy && "cursor-not-allowed opacity-50",
     )}
   >

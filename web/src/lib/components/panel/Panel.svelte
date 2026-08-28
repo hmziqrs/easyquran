@@ -14,16 +14,18 @@
     children: Snippet;
   } & HTMLAttributes<HTMLDivElement> = $props();
 
+  /* §61 semantic tokens only: accent = primary CTA panel, soft = quiet callout,
+     ink = inverted. All resolve per palette × mode via the §4 contract. */
   const variants = {
-    accent: "bg-accent text-accent-fg",
-    soft: "bg-accent-soft text-fg border border-accent-line",
-    ink: "bg-fg text-bg",
+    accent: "bg-primary text-primary-foreground",
+    soft: "bg-primary-soft text-foreground border border-border",
+    ink: "bg-foreground text-background",
   } as const;
 </script>
 
 <div
   class={cn(
-    "relative overflow-hidden rounded-2xl p-8 md:p-10 lg:p-12",
+    "relative overflow-hidden rounded-lg p-8 md:p-10 lg:p-12",
     variants[variant],
     className,
   )}

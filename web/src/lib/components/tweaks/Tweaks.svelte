@@ -115,7 +115,7 @@
     { key: "pop", fallbackVar: "--accent" },
   ];
 
-  const pill = "rounded-md border px-3 py-1 text-xs transition-colors duration-150";
+  const pill = "rounded-md border px-3 py-1 text-caption transition-colors duration-150";
   const on = "border-primary bg-primary-soft text-foreground";
   const off = "border-border-strong text-foreground-secondary hover:text-foreground";
 
@@ -213,14 +213,14 @@
       role="dialog"
       aria-modal="false"
       aria-label={copy.settings}
-      class="flex max-h-[min(80vh,640px)] w-[288px] flex-col overflow-hidden rounded-xl border border-border-strong bg-surface/95 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur"
+      class="flex max-h-[min(80vh,640px)] w-[288px] flex-col overflow-hidden rounded-xl border border-border-strong bg-surface/95 shadow-md backdrop-blur"
     >
       <div class="overflow-y-auto overflow-x-hidden p-3.5">
       <div class="mb-3 flex items-center justify-between gap-2">
-        <span class="font-mono text-xs uppercase tracking-wide text-muted">{copy.settings}</span>
+        <span class="eyebrow">{copy.settings}</span>
         <button
           type="button"
-          class="text-muted transition-colors hover:text-foreground"
+          class="rounded-md px-2 py-1 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
           onclick={() => (open = false)}
           bind:this={firstControl}
           aria-label={copy.closePanel}>✕</button
@@ -229,7 +229,7 @@
 
       <div class="grid grid-cols-1 gap-3.5">
         <div>
-          <div class="mb-1.5 text-xs text-muted">{paletteCopy.appearanceLabel}</div>
+          <div class="mb-1.5 text-caption text-muted">{paletteCopy.appearanceLabel}</div>
           <div class="flex gap-1.5">
             {#each APPEARANCE_MODES as m (m)}
               <button
@@ -243,7 +243,7 @@
         </div>
 
         <div>
-          <div class="mb-1.5 text-xs text-muted">{paletteCopy.paletteLabel}</div>
+          <div class="mb-1.5 text-caption text-muted">{paletteCopy.paletteLabel}</div>
           <div class="flex flex-col gap-1">
             {#each PALETTES as p (p.id)}
               <button
@@ -252,7 +252,7 @@
                 aria-pressed={prefs.palette === p.id}
                 onclick={() => prefs.setPalette(p.id)}
                 class={cn(
-                  "flex items-center gap-2.5 rounded-lg border px-2 py-1.5 text-start transition-colors",
+                  "flex items-center gap-2.5 rounded-md border px-2 py-1.5 text-start transition-colors",
                   prefs.palette === p.id
                     ? "border-primary bg-primary-soft"
                     : "border-border hover:border-border-strong",
@@ -263,8 +263,8 @@
                   style={`background:${swatchHex(p.lightHex, p.darkHex)}`}
                 ></span>
                 <span class="min-w-0">
-                  <span class="block text-xs text-foreground">{paletteCopy.palettes[p.id].label}</span>
-                  <span class="block truncate text-[11px] text-muted"
+                  <span class="block text-caption text-foreground">{paletteCopy.palettes[p.id].label}</span>
+                  <span class="block truncate text-micro text-muted"
                     >{paletteCopy.palettes[p.id].note}</span
                   >
                 </span>
@@ -275,11 +275,11 @@
 
         <div>
           <div class="mb-1.5 flex items-center justify-between">
-            <span class="text-xs text-muted">{copy.customColours}</span>
+            <span class="text-caption text-muted">{copy.customColours}</span>
             {#if prefs.hasCustom}
               <button
                 type="button"
-                class="text-[11px] text-muted underline underline-offset-2 transition-colors hover:text-foreground"
+                class="text-micro text-muted underline underline-offset-2 transition-colors hover:text-foreground"
                 onclick={() => prefs.clearCustom()}>{copy.clear}</button
               >
             {/if}
@@ -294,8 +294,8 @@
                   oninput={(e) => prefs.setCustom(s.key, e.currentTarget.value)}
                   class="size-7 flex-none cursor-pointer rounded-md border border-border-strong bg-transparent p-0.5"
                 />
-                <span class="flex-1 text-xs text-foreground-secondary">{copy.seedNames[s.key]}</span>
-                <span class="font-mono text-[11px] text-muted">
+                <span class="flex-1 text-caption text-foreground-secondary">{copy.seedNames[s.key]}</span>
+                <span class="font-mono text-micro text-muted">
                   {prefs.custom[s.key] ?? copy.preset}
                 </span>
                 {#if prefs.custom[s.key]}
@@ -309,7 +309,7 @@
               </div>
             {/each}
           </div>
-          <p class="mt-1.5 text-[11px] leading-snug text-muted">
+          <p class="mt-1.5 text-micro leading-snug text-muted">
             {copy.derivedColours}
           </p>
         </div>
@@ -335,7 +335,7 @@
         {/if}
 
         <div>
-          <div class="mb-1.5 text-xs text-muted">{copy.dataPrivacy}</div>
+          <div class="mb-1.5 text-caption text-muted">{copy.dataPrivacy}</div>
           <div class="flex flex-col gap-1.5">
             <button
               type="button"
@@ -381,7 +381,7 @@
     aria-label={triggerLabel}
     aria-expanded={open}
     aria-controls="tweaks-panel"
-    class="flex size-10 items-center justify-center rounded-full border border-border-strong bg-surface/95 text-foreground-secondary shadow-lg backdrop-blur transition-colors hover:text-foreground"
+    class="flex size-11 items-center justify-center rounded-pill border border-border-strong bg-surface/95 text-foreground-secondary shadow-md backdrop-blur transition-colors hover:text-foreground"
   >
     {#if open}<span class="text-sm">✕</span>{:else}<span class="text-lg leading-none">◐</span>{/if}
   </button>

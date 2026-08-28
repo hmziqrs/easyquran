@@ -48,13 +48,13 @@
 
 {#if visible}
   <div class="pointer-events-none fixed inset-x-0 top-0 z-[80] flex flex-col items-center gap-1.5 px-3 pt-3" role="status" aria-live="polite">
-    <div class="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-full bg-bg-1 px-3.5 py-2 text-xs text-fg shadow-lg ring-1 ring-black/10">
-      <span class="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-accent"></span>
+    <div class="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-pill border border-border bg-surface px-3.5 py-2 text-caption text-foreground shadow-md">
+      <span class="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-primary"></span>
       <span class="truncate">Preparing offline Quran{#if label}<span class="opacity-60"> · {label}</span>{/if}</span>
-      <span class="ml-auto tabular-nums opacity-70">{pct}%</span>
+      <span class="ms-auto tabular-nums opacity-70">{pct}%</span>
     </div>
-    <div class="h-1 w-full max-w-sm overflow-hidden rounded-full bg-bg-2 ring-1 ring-black/10">
-      <div class="h-full rounded-full bg-accent transition-[width] duration-150 ease-out" style={`width:${pct}%`}></div>
+    <div class="h-1 w-full max-w-sm overflow-hidden rounded-pill border border-border bg-background-subtle">
+      <div class="h-full rounded-pill bg-primary transition-[width] duration-150 ease-out" style={`width:${pct}%`}></div>
     </div>
   </div>
 {/if}

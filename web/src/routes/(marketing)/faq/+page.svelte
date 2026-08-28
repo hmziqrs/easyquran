@@ -27,36 +27,36 @@
 <Container class="max-w-[1180px] pt-[72px] pb-[96px]">
   <div class="flex w-full flex-col gap-[30px]">
   <div class="flex flex-col gap-3">
-    <Eyebrow class="text-accent">{copy.eyebrow}</Eyebrow>
-    <h1 class="text-[40px] leading-[1.1] tracking-[-0.03em] sm:text-[46px]">{copy.heading}</h1>
+    <Eyebrow>{copy.eyebrow}</Eyebrow>
+    <h1 class="text-h1">{copy.heading}</h1>
   </div>
 
-  <Accordion type="single" bind:value class="border-t border-line-2">
+  <Accordion type="single" bind:value class="border-t border-border-strong">
     {#each copy.entries as entry, i (entry.id)}
       {@const open = value === String(i)}
-      <AccordionItem value={String(i)} class="border-line-2">
+      <AccordionItem value={String(i)} class="border-border-strong">
         <AccordionTrigger
           class="flex-row items-center gap-[18px] rounded-none border-0 px-1 py-[22px] hover:no-underline [&_[data-slot=accordion-trigger-icon]]:hidden"
         >
-          <span class="flex-1 text-start text-[17.5px] font-medium text-fg">{entry.q}</span>
+          <span class="flex-1 text-start text-body-l font-medium text-foreground">{entry.q}</span>
           <Icon
             name={open ? "minus" : "plus"}
             size={19}
-            class="shrink-0 text-fg-3"
+            class="shrink-0 text-muted"
           />
         </AccordionTrigger>
         <AccordionContent class="px-1 pb-6 pe-[60px]">
-          <p class="text-base leading-[1.7] text-fg-2">{entry.a}</p>
+          <p class="text-body leading-[1.7] text-foreground-secondary">{entry.a}</p>
         </AccordionContent>
       </AccordionItem>
     {/each}
   </Accordion>
 
-  <p class="text-base text-fg-2">
+  <p class="text-body text-foreground-secondary">
     {copy.missingPrompt}
     <a
       href="/contact"
-      class="text-accent underline underline-offset-2 hover:text-accent/80"
+      class="text-primary underline underline-offset-2 hover:text-primary-hover"
     >
       {copy.missingLink}</a
     >.

@@ -42,7 +42,7 @@
       checked={selected}
       disabled={rtl}
       onchange={() => searchSelection.toggle(entry.id)}
-      class="h-4 w-4 flex-none accent-[var(--accent)]"
+      class="h-4 w-4 flex-none accent-primary"
     />
     <label for={`search-t-${entry.id}`} class="min-w-0 flex-1 truncate text-fg-2">
       {entry.name}

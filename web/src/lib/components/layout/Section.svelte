@@ -21,7 +21,7 @@
 </script>
 
 <section
-  class={cn(tight ? "py-12" : "py-16 md:py-24", border && "border-t border-line", className)}
+  class={cn(tight ? "py-12" : "py-16 md:py-24", border && "border-t border-border", className)}
   {...rest}
 >
   <Container {width}>{@render children()}</Container>

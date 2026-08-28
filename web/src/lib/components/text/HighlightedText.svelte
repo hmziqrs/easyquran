@@ -14,10 +14,10 @@
   const segments = $derived(highlightSegments(text, highlights));
 </script>
 
-<span {dir} class={cn("text-fg", className)}>
+<span {dir} class={cn("text-foreground", className)}>
   {#each segments as segment (`${segment.start}:${segment.end}:${segment.highlighted}`)}
     {#if segment.highlighted}
-      <mark class="rounded-sm bg-accent-soft text-inherit">{segment.text}</mark>
+      <mark class="rounded-sm bg-primary-soft text-inherit">{segment.text}</mark>
     {:else}
       {segment.text}
     {/if}

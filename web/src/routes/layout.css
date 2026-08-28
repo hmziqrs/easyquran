@@ -5,7 +5,6 @@
 @import "@fontsource-variable/newsreader";
 @import "@fontsource/noto-sans-arabic/400.css";
 @import "@fontsource/noto-sans-arabic/600.css";
-@import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/amiri";
 
@@ -23,30 +22,42 @@
     "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
 
-  /* §11 type scale (size / line-height + weight role). Legacy xs–4xl utilities stay untouched
-     this round; new role utilities are additive until chrome-sweep migrates consumers. */
+  /* §11 type scale (size / line-height / weight role). Legacy xs–4xl utilities stay untouched.
+     Per-role weights ride the text-* utility; an explicit font-* utility on the same element
+     still wins (Tailwind emits .text-* rules before .font-* rules). */
   --text-display-xl: 4rem;
   --text-display-xl--line-height: 4.25rem;
+  --text-display-xl--font-weight: 500;
   --text-display-l: 3.25rem;
   --text-display-l--line-height: 3.625rem;
+  --text-display-l--font-weight: 500;
   --text-h1: 2.5rem;
   --text-h1--line-height: 2.875rem;
+  --text-h1--font-weight: 500;
   --text-h2: 2rem;
   --text-h2--line-height: 2.4375rem;
+  --text-h2--font-weight: 500;
   --text-h3: 1.5rem;
   --text-h3--line-height: 1.9375rem;
+  --text-h3--font-weight: 550;
   --text-body-xl: 1.25rem;
   --text-body-xl--line-height: 2rem;
+  --text-body-xl--font-weight: 400;
   --text-body-l: 1.125rem;
   --text-body-l--line-height: 1.8125rem;
+  --text-body-l--font-weight: 400;
   --text-body: 1rem;
   --text-body--line-height: 1.625rem;
+  --text-body--font-weight: 400;
   --text-body-s: 0.875rem;
   --text-body-s--line-height: 1.375rem;
+  --text-body-s--font-weight: 400;
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.125rem;
+  --text-caption--font-weight: 500;
   --text-micro: 0.6875rem;
   --text-micro--line-height: 1rem;
+  --text-micro--font-weight: 600;
 
   /* Legacy sizes — unchanged. */
   --text-xs: 0.75rem;
@@ -655,7 +666,8 @@
 
 @utility eyebrow {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  /* §11 caption role: 12/18. */
+  font-size: var(--text-caption);
   color: var(--muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;

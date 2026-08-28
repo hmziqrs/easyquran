@@ -21,24 +21,24 @@
 
 <Container class="flex max-w-[1180px] flex-col gap-12 pt-[72px] pb-24">
   <div class="flex w-full flex-col gap-3 text-center">
-    <Eyebrow class="text-accent">{copy.eyebrow}</Eyebrow>
-    <h1 class="text-[40px] leading-[1.1] tracking-[-0.03em] sm:text-[46px]">{copy.heading}</h1>
-    <p class="mx-auto max-w-[60ch] text-[18px] leading-[1.65] text-fg-2">{copy.intro}</p>
+    <Eyebrow>{copy.eyebrow}</Eyebrow>
+    <h1 class="text-h1">{copy.heading}</h1>
+    <p class="mx-auto max-w-[60ch] text-body-xl text-foreground-secondary">{copy.intro}</p>
   </div>
 
   <div class="grid w-full gap-4 md:grid-cols-2">
     <a
       href="mailto:{data.owner.email}"
-      class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
+      class="group flex flex-col gap-4 rounded-lg border border-border bg-background-subtle p-7 transition-colors hover:border-primary"
     >
-      <div class="flex size-9 items-center justify-center rounded-[10px] bg-accent-soft text-accent">
+      <div class="flex size-9 items-center justify-center rounded-md bg-primary-soft text-primary">
         <Icon name="mail" size={17} />
       </div>
       <div class="flex flex-col gap-1.5">
-        <div class="text-[18px] font-semibold">{copy.emailTitle}</div>
-        <p class="text-[15px] leading-[1.6] text-fg-2">{copy.emailBody}</p>
+        <div class="text-body-l font-semibold">{copy.emailTitle}</div>
+        <p class="text-body leading-[1.6] text-foreground-secondary">{copy.emailBody}</p>
       </div>
-      <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
+      <div class="mt-auto flex items-center gap-2 text-body font-medium text-primary">
         {data.owner.email}
         <Icon
           name="arrow-right"
@@ -51,16 +51,16 @@
     <a
       href={data.owner.x}
       {...externalLinkAttrs(data.owner.x, { me: true })}
-      class="group flex flex-col gap-4 rounded-2xl border border-line-2 bg-bg-2 p-7 transition-colors hover:border-line-3"
+      class="group flex flex-col gap-4 rounded-lg border border-border bg-background-subtle p-7 transition-colors hover:border-primary"
     >
-      <div class="flex size-9 items-center justify-center rounded-[10px] bg-fg text-bg">
+      <div class="flex size-9 items-center justify-center rounded-md bg-foreground text-background">
         <Icon name="x-brand" size={15} />
       </div>
       <div class="flex flex-col gap-1.5">
-        <div class="text-[18px] font-semibold">{copy.xTitle}</div>
-        <p class="text-[15px] leading-[1.6] text-fg-2">{copy.xBody}</p>
+        <div class="text-body-l font-semibold">{copy.xTitle}</div>
+        <p class="text-body leading-[1.6] text-foreground-secondary">{copy.xBody}</p>
       </div>
-      <div class="mt-auto flex items-center gap-2 text-[15px] font-medium text-accent">
+      <div class="mt-auto flex items-center gap-2 text-body font-medium text-primary">
         {data.owner.xHandle}
         <Icon
           name="arrow-right"
@@ -71,8 +71,8 @@
     </a>
   </div>
 
-  <div class="flex w-full flex-col gap-[3px] rounded-xl border border-line bg-bg-2 px-[30px] py-5 text-center">
-    <span class="text-xs text-fg-3">{copy.replyLabel}</span>
-    <span class="text-[15px] text-fg">{copy.replyValue}</span>
+  <div class="flex w-full flex-col gap-[3px] rounded-md border border-border bg-background-subtle px-[30px] py-5 text-center">
+    <span class="text-caption text-muted">{copy.replyLabel}</span>
+    <span class="text-body text-foreground">{copy.replyValue}</span>
   </div>
 </Container>

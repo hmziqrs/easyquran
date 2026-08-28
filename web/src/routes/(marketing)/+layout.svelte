@@ -17,7 +17,7 @@
 <div lang={locale} dir={chrome.direction} data-marketing-root>
   <a
     href="#main"
-    class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[101] focus:rounded focus:bg-bg-1 focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:shadow-lg"
+    class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[101] focus:rounded focus:bg-surface focus:px-3 focus:py-2 focus:text-body-s focus:text-foreground focus:shadow-md"
   >{chrome.skipToContent}</a>
   <MarketingNav {locale} {chrome} />
   <main id="main" tabindex="-1">{@render children()}</main>

@@ -6,7 +6,7 @@
   const TRACK_HEIGHT = 14;
 
   const LAYER_FILL = {
-    arabic: "var(--accent)",
+    arabic: "var(--primary)",
     translations: "var(--pop)",
     pack: "var(--accent-line)",
     pages: "var(--bg-3)",
