@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 /* Self-hosted fonts only — never a CDN (offline/SW constraint). */
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/newsreader";
+@import "@fontsource-variable/nunito";
 @import "@fontsource/noto-sans-arabic/400.css";
 @import "@fontsource/noto-sans-arabic/600.css";
 @import "@fontsource-variable/geist-mono";
@@ -11,10 +10,11 @@
 @custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
 
 @theme {
-  /* §10 Typography roles: Inter = UI, Newsreader = editorial display, Noto Sans Arabic = Arabic UI. */
+  /* §10 Typography roles (plan 02): one Latin face — Nunito Variable — for UI and display;
+     Noto Sans Arabic = Arabic UI. `ui-rounded` is the closest system fallback in character,
+     so a slow font load degrades to something with the same feel. */
   --font-sans:
-    "Inter Variable", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: "Newsreader Variable", "Newsreader", Georgia, serif;
+    "Nunito Variable", "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-arabic-ui: "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
   /* Quran stack resolves to the reader's runtime font choice; Amiri is the pre-hydration fallback. */
   --font-quran: var(--reader-arabic-family, var(--font-arabic));
@@ -22,42 +22,56 @@
     "Geist Mono Variable", "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   --font-arabic: "Amiri", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif;
 
-  /* §11 type scale (size / line-height / weight role). Legacy xs–4xl utilities stay untouched.
+  /* Amiri renders small next to Nunito at the same nominal size — the boards run Arabic at
+     ≈1.4× the adjacent Latin size (plan 02). The `.arabic` utility applies it; the Quran
+     reading column has its own tuned sizing and is out of scope. */
+  --font-size-arabic-ratio: 1.4;
+
+  /* §11 type ramp (plan 02): sizes/line-heights/weights/tracking from the boards. Tracking
+     is part of the ramp, not a per-use decision: −0.04em at 76px, −0.035em at 40px,
+     −0.03em at 26px, −0.025em at 20px, +0.1em on micro, 0 below. Body weight is 600, not
+     400; headings 800. --text-display-l/--text-body-s are retired roles kept as aliases of
+     their nearest neighbour for one release. Legacy xs–4xl utilities stay untouched.
      Per-role weights ride the text-* utility; an explicit font-* utility on the same element
      still wins (Tailwind emits .text-* rules before .font-* rules). */
-  --text-display-xl: 4rem;
-  --text-display-xl--line-height: 4.25rem;
-  --text-display-xl--font-weight: 500;
-  --text-display-l: 3.25rem;
-  --text-display-l--line-height: 3.625rem;
-  --text-display-l--font-weight: 500;
-  --text-h1: 2.5rem;
-  --text-h1--line-height: 2.875rem;
-  --text-h1--font-weight: 500;
-  --text-h2: 2rem;
-  --text-h2--line-height: 2.4375rem;
-  --text-h2--font-weight: 500;
-  --text-h3: 1.5rem;
-  --text-h3--line-height: 1.9375rem;
-  --text-h3--font-weight: 550;
-  --text-body-xl: 1.25rem;
-  --text-body-xl--line-height: 2rem;
-  --text-body-xl--font-weight: 400;
-  --text-body-l: 1.125rem;
-  --text-body-l--line-height: 1.8125rem;
-  --text-body-l--font-weight: 400;
-  --text-body: 1rem;
-  --text-body--line-height: 1.625rem;
-  --text-body--font-weight: 400;
-  --text-body-s: 0.875rem;
-  --text-body-s--line-height: 1.375rem;
-  --text-body-s--font-weight: 400;
-  --text-caption: 0.75rem;
-  --text-caption--line-height: 1.125rem;
-  --text-caption--font-weight: 500;
-  --text-micro: 0.6875rem;
-  --text-micro--line-height: 1rem;
-  --text-micro--font-weight: 600;
+  --text-display-xl: 76px;
+  --text-display-xl--line-height: 1.06;
+  --text-display-xl--font-weight: 800;
+  --text-display-xl--letter-spacing: -0.04em;
+  --text-display-l: var(--text-h1);
+  --text-display-l--line-height: var(--text-h1--line-height);
+  --text-display-l--font-weight: var(--text-h1--font-weight);
+  --text-h1: 40px;
+  --text-h1--line-height: 1.1;
+  --text-h1--font-weight: 800;
+  --text-h1--letter-spacing: -0.035em;
+  --text-h2: 26px;
+  --text-h2--line-height: 1.2;
+  --text-h2--font-weight: 800;
+  --text-h2--letter-spacing: -0.03em;
+  --text-h3: 20px;
+  --text-h3--line-height: 1.25;
+  --text-h3--font-weight: 800;
+  --text-h3--letter-spacing: -0.025em;
+  --text-body-xl: 20px;
+  --text-body-xl--line-height: 1.55;
+  --text-body-xl--font-weight: 600;
+  --text-body-l: 17.5px;
+  --text-body-l--line-height: 1.6;
+  --text-body-l--font-weight: 600;
+  --text-body: 15px;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 600;
+  --text-body-s: var(--text-body);
+  --text-body-s--line-height: var(--text-body--line-height);
+  --text-body-s--font-weight: var(--text-body--font-weight);
+  --text-caption: 13.5px;
+  --text-caption--line-height: 1.45;
+  --text-caption--font-weight: 600;
+  --text-micro: 13px;
+  --text-micro--line-height: 1.4;
+  --text-micro--font-weight: 800;
+  --text-micro--letter-spacing: 0.1em;
 
   /* Legacy sizes — unchanged. */
   --text-xs: 0.75rem;
@@ -746,19 +760,17 @@
     min-height: 100vh;
     overflow-x: hidden;
   }
+  /* One face (plan 02): headings inherit --font-sans from html; the ramp's 800 weight is
+     the element default, text-h* role utilities override size/tracking per use. */
   h1,
   h2,
   h3,
   h4 {
     margin: 0;
-    font-weight: 500;
+    font-weight: 800;
     letter-spacing: -0.01em;
     line-height: 1.15;
     color: var(--foreground);
-  }
-  h1,
-  h2 {
-    font-family: var(--font-display);
   }
   p {
     margin: 0;
@@ -843,7 +855,9 @@
   direction: rtl;
   text-align: right;
   line-height: 2.1;
-  font-size: 1.75rem;
+  /* 1em in font-size = the parent's computed size, so this is the board ratio
+     (≈1.4×) over the adjacent Latin text — never a fixed px (plan 02). */
+  font-size: calc(var(--font-size-arabic-ratio) * 1em);
   font-feature-settings: "calt", "liga";
 }
 @utility arabic-ui {
