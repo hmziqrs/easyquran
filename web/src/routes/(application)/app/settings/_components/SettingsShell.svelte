@@ -20,16 +20,16 @@
 
   function navItemClass(isActive: boolean): string {
     const base =
-      "flex items-center gap-2.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13.5px] transition-colors";
+      "flex items-center gap-2.5 whitespace-nowrap rounded-pill border px-3.5 py-1.5 text-caption transition-colors";
     if (isActive) {
-      return cn(base, "border-accent bg-accent-soft font-medium text-fg");
+      return cn(base, "border-primary bg-primary-soft font-medium text-foreground");
     }
-    return cn(base, "border-line-2 bg-bg-1 text-fg-2 hover:border-line hover:text-fg");
+    return cn(base, "border-border-strong bg-surface text-foreground-secondary hover:border-border hover:text-foreground");
   }
 </script>
 
 <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
-  <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-fg">{copy.title}</h1>
+  <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
 
   <nav aria-label={copy.sectionsLabel} class="mt-5 sm:mt-6">
     <ul class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
@@ -40,7 +40,7 @@
             aria-current={section.id === active ? "page" : undefined}
             class={cn(
               navItemClass(section.id === active),
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
             )}
             onclick={(event) => {
               event.preventDefault();
@@ -52,7 +52,7 @@
               size={15}
               class={cn(
                 "shrink-0 transition-colors",
-                section.id === active ? "text-accent" : "text-fg-4",
+                section.id === active ? "text-primary" : "text-muted",
               )}
             />
             {section.label}

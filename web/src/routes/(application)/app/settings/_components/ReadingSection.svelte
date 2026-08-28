@@ -41,9 +41,9 @@
   ] as const;
 
   const pill =
-    "flex items-center rounded-lg border px-3.5 py-2 text-start text-[13.5px] transition-colors duration-150";
-  const pillOn = "border-accent bg-accent-soft text-fg";
-  const pillOff = "border-line-2 text-fg-2 hover:border-line hover:text-fg";
+    "flex items-center rounded-pill border px-3.5 py-2 text-start text-caption transition-colors duration-150";
+  const pillOn = "border-primary bg-primary-soft text-foreground";
+  const pillOff = "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
@@ -73,16 +73,16 @@
   }
 
   const stepperButton =
-    "flex h-9 w-10 items-center justify-center rounded-lg border border-line-2 text-[13.5px] text-fg-2 transition-colors hover:border-line hover:text-fg disabled:pointer-events-none disabled:opacity-40";
+    "flex h-9 w-10 items-center justify-center rounded-pill border border-border-strong text-caption text-foreground-secondary transition-colors hover:border-border hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
-  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
-  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-foreground">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
 
   <div class="mt-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,480px)] lg:items-start lg:gap-6">
     <aside class="lg:sticky lg:top-[76px] lg:order-2" aria-label={copy.preview}>
-      <div class="rounded-xl border border-line-2 bg-bg-2 px-5 py-4 sm:px-6 sm:py-5">
+      <div class="rounded-xl border border-border-strong bg-background-subtle px-5 py-4 sm:px-6 sm:py-5">
         <p class="eyebrow">{copy.preview}</p>
         {#if reader.mode === "verse"}
           <div class="mt-3.5 grid gap-5">
@@ -106,10 +106,10 @@
     </aside>
 
     <div
-      class="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1 lg:order-1 lg:mt-0"
+      class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface lg:order-1 lg:mt-0"
     >
       <div class="px-4 py-3.5 sm:px-5">
-        <span class="text-[14.5px] font-medium text-fg">{copy.mode}</span>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.mode}</span>
         <div class="mt-2.5 grid max-w-md gap-1.5">
           {#each modes as mode (mode)}
             <button
@@ -123,7 +123,7 @@
       </div>
 
       <div class="px-4 py-3.5 sm:px-5">
-        <span class="text-[14.5px] font-medium text-fg">{copy.arabicFont}</span>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.arabicFont}</span>
         <div class="mt-2.5 grid max-w-md gap-1.5">
           {#each ARABIC_FONTS as font (font.id)}
             <button
@@ -138,7 +138,7 @@
       </div>
 
       <div class="px-4 py-3.5 sm:px-5">
-        <span class="text-[14.5px] font-medium text-fg">{copy.arabicSize}</span>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.arabicSize}</span>
         <div class="mt-2.5 flex items-center gap-2.5" role="group" aria-label={copy.arabicSize}>
           <button
             type="button"
@@ -148,7 +148,7 @@
             onclick={() => reader.smaller()}>−</button
           >
           <span
-            class="min-w-12 text-center text-[13.5px] tabular-nums text-fg-2"
+            class="min-w-12 text-center text-caption tabular-nums text-foreground-secondary"
             aria-live="polite">{reader.arabicSizePx}</span
           >
           <button
@@ -162,7 +162,7 @@
       </div>
 
       <div class="px-4 py-3.5 sm:px-5">
-        <span class="text-[14.5px] font-medium text-fg">{copy.translationFont}</span>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.translationFont}</span>
         <div class="mt-2.5 grid max-w-md gap-1.5">
           {#each families as family (family)}
             <button
@@ -176,7 +176,7 @@
       </div>
 
       <div class="px-4 py-3.5 sm:px-5">
-        <span class="text-[14.5px] font-medium text-fg">{copy.translationSize}</span>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.translationSize}</span>
         <div
           class="mt-2.5 flex items-center gap-2.5"
           role="group"
@@ -190,7 +190,7 @@
             onclick={() => reader.shrinkTranslation()}>−</button
           >
           <span
-            class="min-w-12 text-center text-[13.5px] tabular-nums text-fg-2"
+            class="min-w-12 text-center text-caption tabular-nums text-foreground-secondary"
             aria-live="polite">{reader.translationSizePx}</span
           >
           <button

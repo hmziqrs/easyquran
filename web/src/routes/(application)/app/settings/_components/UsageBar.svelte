@@ -63,7 +63,7 @@
     preserveAspectRatio="none"
     role="img"
     aria-label={composedTitle}
-    class="block h-4 w-full overflow-hidden rounded-full border border-line-2 bg-bg-2"
+    class="block h-4 w-full overflow-hidden rounded-pill border border-border-strong bg-background-subtle"
   >
     <title>{composedTitle}</title>
     <defs>
@@ -96,16 +96,16 @@
 
 <ul class="mt-3 grid gap-1.5">
   {#each legendLayers as layer (layer.id)}
-    <li class="flex items-center gap-2.5 text-[13.5px] text-fg-3">
+    <li class="flex items-center gap-2.5 text-caption text-muted">
       <span
-        class="inline-block size-2.5 shrink-0 rounded-sm border border-line-2"
+        class="inline-block size-2.5 shrink-0 rounded-sm border border-border-strong"
         style={`background:${
           layer.id === "other" ? "repeating-linear-gradient(45deg, var(--fg-4) 0 2px, var(--bg-2) 2px 4px)" : LAYER_FILL[layer.id]
         }`}
       ></span>
       <span class="min-w-0 flex-1 truncate">{labels[layer.id]}</span>
-      <span class="tabular-nums text-fg-2">{formatBytes(layer.bytes)}</span>
-      <span class="w-9 shrink-0 text-end tabular-nums text-fg-4">{percent(layer.bytes)}</span>
+      <span class="tabular-nums text-foreground-secondary">{formatBytes(layer.bytes)}</span>
+      <span class="w-9 shrink-0 text-end tabular-nums text-muted">{percent(layer.bytes)}</span>
     </li>
   {/each}
 </ul>

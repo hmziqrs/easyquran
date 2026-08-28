@@ -21,9 +21,9 @@
     return rtf.format(Math.round(delta / MONTH_MS), "month");
   }
 
-  const badge = "rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3";
+  const badge = "rounded border border-border-strong px-1.5 py-0.5 text-xs leading-none text-muted";
   const actionBtn =
-    "rounded-lg border px-3 py-2 text-[13.5px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded-pill border px-3 py-2 text-caption transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
 
   let {
     artifact,
@@ -122,22 +122,22 @@
 <div class="flex items-center gap-4 py-3">
   <div class="min-w-0 flex-1">
     <div class="flex flex-wrap items-center gap-1.5">
-      <span class="truncate text-[14.5px] text-fg">{name}</span>
+      <span class="truncate text-[14.5px] text-foreground">{name}</span>
       {#if language}
         <span class={badge}>{language}</span>
       {/if}
-      <span class={cn(badge, artifact.store === "session" && "border-accent-line text-accent")}>
+      <span class={cn(badge, artifact.store === "session" && "border-primary-line text-primary")}>
         {storeLabel}
       </span>
       {#if inUse}
         <span
-          class="rounded border border-accent-line bg-accent-soft px-1.5 py-0.5 text-xs leading-none text-fg-2"
+          class="rounded border border-primary-line bg-primary-soft px-1.5 py-0.5 text-xs leading-none text-foreground-secondary"
         >
           {copy.inUse}
         </span>
       {/if}
     </div>
-    <div class="mt-0.5 text-[13.5px] text-fg-3">
+    <div class="mt-0.5 text-caption text-muted">
       <span class="tabular-nums">{formatBytes(artifact.sizeBytes)}</span> · {lastUsedLabel}
     </div>
   </div>
@@ -149,7 +149,7 @@
     onfocusout={onCellFocusOut}
   >
     {#if confirming}
-      <span class="text-[13.5px] text-fg-3">{copy.removeConfirmTitle(name)}</span>
+      <span class="text-caption text-muted">{copy.removeConfirmTitle(name)}</span>
       <button
         type="button"
         bind:this={confirmButton}
@@ -157,7 +157,7 @@
         aria-busy={busy}
         onclick={confirmRemove}
         onkeydown={onKeydown}
-        class={cn(actionBtn, "border-red-500/60 bg-red-500/10 text-red-400 hover:bg-red-500/20")}
+        class={cn(actionBtn, "border-danger/60 bg-danger/10 text-danger hover:bg-danger/20")}
       >
         {copy.removeConfirmAction}
       </button>
@@ -166,13 +166,13 @@
         disabled={busy}
         onclick={cancelConfirm}
         onkeydown={onKeydown}
-        class={cn(actionBtn, "border-line-2 text-fg-2 hover:text-fg")}
+        class={cn(actionBtn, "border-border-strong text-foreground-secondary hover:text-foreground")}
       >
         {copy.removeCancel}
       </button>
     {:else}
       {#if errorText}
-        <span class="max-w-48 truncate text-[13.5px] text-red-400" title={errorText}>
+        <span class="max-w-48 truncate text-caption text-danger" title={errorText}>
           {errorText}
         </span>
       {/if}
@@ -183,7 +183,7 @@
         title={inUse ? copy.inUse : copy.removeConfirmTitle(name)}
         aria-label={inUse ? `${copy.inUse} — ${copy.removeConfirmTitle(name)}` : copy.removeConfirmTitle(name)}
         onclick={startConfirm}
-        class={cn(actionBtn, "border-line-2 text-fg-3 hover:border-line hover:text-fg")}
+        class={cn(actionBtn, "border-border-strong text-muted hover:border-border hover:text-foreground")}
       >
         {copy.remove}
       </button>

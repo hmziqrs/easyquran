@@ -31,9 +31,9 @@
     installPurgeHook(authState);
   });
 
-  const toggle = "rounded-lg border px-3.5 py-2.5 text-[13.5px] transition-colors duration-150";
-  const on = "border-accent bg-accent-soft text-fg";
-  const off = "border-line-2 text-fg-2 hover:border-line hover:text-fg";
+  const toggle = "rounded-pill border px-3.5 py-2.5 text-caption transition-colors duration-150";
+  const on = "border-primary bg-primary-soft text-foreground";
+  const off = "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
 
   function toggleAnalytics(): void {
     consent.setAnalytics(!consent.analytics);
@@ -75,12 +75,12 @@
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
-  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
-  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-foreground">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
 
-  <div class="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+  <div class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
     <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
-      <span class="text-[14.5px] font-medium text-fg">{copy.analytics}</span>
+      <span class="text-[14.5px] font-medium text-foreground">{copy.analytics}</span>
       <button
         type="button"
         aria-pressed={consent.analytics}
@@ -93,8 +93,8 @@
 
     <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
       <div class="min-w-0">
-        <span class="text-[14.5px] font-medium text-fg">{copy.performance}</span>
-        <p class="mt-0.5 text-[13.5px] leading-snug text-fg-3">{copy.performanceReload}</p>
+        <span class="text-[14.5px] font-medium text-foreground">{copy.performance}</span>
+        <p class="mt-0.5 text-caption leading-snug text-muted">{copy.performanceReload}</p>
       </div>
       <button
         type="button"
@@ -107,21 +107,21 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
-      <span class="text-[14.5px] font-medium text-fg">{copy.notifications}</span>
-      <span class="shrink-0 text-end text-[13.5px] leading-tight text-fg-3">
+      <span class="text-[14.5px] font-medium text-foreground">{copy.notifications}</span>
+      <span class="shrink-0 text-end text-caption leading-tight text-muted">
         {notificationsLabel}
       </span>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5" role="status">
-      <span class="text-[14.5px] font-medium text-fg">{copy.version}</span>
+      <span class="text-[14.5px] font-medium text-foreground">{copy.version}</span>
       <div class="flex shrink-0 flex-wrap items-center gap-2.5">
         {#if update.available}
-          <span class="text-[13.5px] leading-tight text-fg-3">{copy.updateAvailable}</span>
+          <span class="text-caption leading-tight text-muted">{copy.updateAvailable}</span>
         {:else if checking}
-          <span class="text-[13.5px] leading-tight text-fg-3">{copy.notificationsStatus.checking}</span>
+          <span class="text-caption leading-tight text-muted">{copy.notificationsStatus.checking}</span>
         {:else}
-          <span class="text-[13.5px] leading-tight text-fg-3">{copy.upToDate}</span>
+          <span class="text-caption leading-tight text-muted">{copy.upToDate}</span>
         {/if}
         <button
           type="button"
@@ -137,7 +137,7 @@
     {#if signedIn}
       <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
         {#if logout.genericError}
-          <p role="alert" aria-live="assertive" class="text-[13.5px] text-destructive">
+          <p role="alert" aria-live="assertive" class="text-caption text-destructive">
             {copy.signOutError}
           </p>
         {/if}
@@ -152,5 +152,5 @@
     {/if}
   </div>
 
-  <p class="mt-4 text-[13.5px] leading-snug text-fg-3">{copy.syncNote}</p>
+  <p class="mt-4 text-caption leading-snug text-muted">{copy.syncNote}</p>
 </div>

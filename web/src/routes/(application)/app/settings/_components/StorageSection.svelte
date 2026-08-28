@@ -197,24 +197,24 @@
     }
   }
 
-  const badge = "rounded border border-line-2 px-1.5 py-0.5 text-xs leading-none text-fg-3";
+  const badge = "rounded border border-border-strong px-1.5 py-0.5 text-xs leading-none text-muted";
   const quiet =
-    "rounded-lg border border-line-2 px-3.5 py-2.5 text-[13.5px] text-fg-2 transition-colors hover:border-line hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded-lg border border-border-strong px-3.5 py-2.5 text-caption text-foreground-secondary transition-colors hover:border-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
   const danger =
-    "rounded-lg border border-red-500/50 px-3.5 py-2.5 text-[13.5px] text-red-400 transition-colors hover:bg-red-500/10";
+    "rounded-lg border border-danger/50 px-3.5 py-2.5 text-caption text-danger transition-colors hover:bg-danger/10";
   const dangerConfirm =
-    "rounded-lg border border-red-500/60 bg-red-500/10 px-3.5 py-2.5 text-[13.5px] text-red-400 transition-colors hover:bg-red-500/20";
+    "rounded-pill border border-danger/60 bg-danger/10 px-3.5 py-2.5 text-caption text-danger transition-colors hover:bg-danger/20";
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
-  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-fg">{heading}</h2>
-  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-fg-2">{copy.intro}</p>
+  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-foreground">{heading}</h2>
+  <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
 
   {#if phase === "boot"}
-    <p class="mt-4 text-[13.5px] text-fg-3" role="status">{copy.loading}</p>
+    <p class="mt-4 text-caption text-muted" role="status">{copy.loading}</p>
   {:else if phase === "error"}
     <div class="mt-4 grid gap-2.5">
-      <p class="text-[13.5px] text-fg-3">{copy.error}</p>
+      <p class="text-caption text-muted">{copy.error}</p>
       <div>
         <button type="button" onclick={() => report.refresh()} class={quiet}>
           {copy.retry}
@@ -224,40 +224,40 @@
   {:else}
     <section class="mb-6 mt-6" aria-label={copy.usage}>
       {#if quota !== null}
-        <p class="text-[15px] font-medium tabular-nums text-fg">{usedLabel}</p>
-        <p class="mt-0.5 text-[13.5px] tabular-nums text-fg-3">
+        <p class="text-[15px] font-medium tabular-nums text-foreground">{usedLabel}</p>
+        <p class="mt-0.5 text-caption tabular-nums text-muted">
           {copy.quotaNote(formatBytes(quota))}
         </p>
         <div class="mt-2.5">
           <UsageBar layers={layers} labels={copy.layers} usageBytes={usage} {usedLabel} />
         </div>
       {:else}
-        <p class="text-[15px] text-fg">{copy.usage}</p>
+        <p class="text-[15px] text-foreground">{copy.usage}</p>
         <div class="mt-2.5">
           <UsageBar layers={layers} labels={copy.layers} usageBytes={null} {usedLabel} />
         </div>
       {/if}
       {#if quotaHigh}
-        <p class="mt-2 text-[13.5px] text-red-400">{copy.quotaWarning}</p>
+        <p class="mt-2 text-caption text-danger">{copy.quotaWarning}</p>
       {/if}
       {#if capHigh}
-        <p class="mt-2 text-[13.5px] text-fg-3">{copy.capNote}</p>
+        <p class="mt-2 text-caption text-muted">{copy.capNote}</p>
       {/if}
-      <p class="mt-2 text-[13.5px] leading-snug text-fg-3">{copy.estimateNote}</p>
+      <p class="mt-2 text-caption leading-snug text-muted">{copy.estimateNote}</p>
     </section>
 
-    <div class="divide-y divide-line overflow-hidden rounded-xl border border-line-2 bg-bg-1">
+    <div class="divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
       {#if opfsAbsent}
-        <p class="px-4 py-3.5 text-[13.5px] text-fg-3 sm:px-5">{copy.opfsAbsent}</p>
+        <p class="px-4 py-3.5 text-caption text-muted sm:px-5">{copy.opfsAbsent}</p>
       {/if}
 
-      <section aria-label={copy.persistHeading} class="divide-y divide-line">
+      <section aria-label={copy.persistHeading} class="divide-y divide-border">
         <div class="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
           <div class="min-w-0">
-            <h3 class="text-[14.5px] font-medium text-fg" tabindex="-1" bind:this={persistHeading}>
+            <h3 class="text-[14.5px] font-medium text-foreground" tabindex="-1" bind:this={persistHeading}>
               {copy.persistHeading}
             </h3>
-            <p aria-live="polite" class="mt-0.5 text-[13.5px] leading-snug text-fg-3">
+            <p aria-live="polite" class="mt-0.5 text-caption leading-snug text-muted">
               {#if report.persisted === true}
                 {copy.persistGranted}
               {:else if persistDeclined && report.persisted === false}
@@ -283,18 +283,18 @@
       </section>
 
       {#if arabicArtifacts.length > 0}
-        <section aria-label={copy.requiredGroup} class="divide-y divide-line">
+        <section aria-label={copy.requiredGroup} class="divide-y divide-border">
           <div class="px-4 py-3.5 sm:px-5">
-            <h3 class="text-[14.5px] font-medium text-fg">{copy.requiredGroup}</h3>
-            <p class="mt-0.5 text-[13.5px] leading-snug text-fg-3">{copy.requiredNote}</p>
+            <h3 class="text-[14.5px] font-medium text-foreground">{copy.requiredGroup}</h3>
+            <p class="mt-0.5 text-caption leading-snug text-muted">{copy.requiredNote}</p>
           </div>
           {#each arabicArtifacts as artifact (artifact.id)}
             <div class="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
               <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                <span class="truncate text-[14.5px] text-fg">{artifactName(artifact.id)}</span>
+                <span class="truncate text-[14.5px] text-foreground">{artifactName(artifact.id)}</span>
                 <span class={badge}>{storeLabelFor(artifact.store)}</span>
               </div>
-              <span class="shrink-0 text-end text-[13.5px] tabular-nums text-fg-3">
+              <span class="shrink-0 text-end text-caption tabular-nums text-muted">
                 {formatBytes(artifact.sizeBytes)}
               </span>
             </div>
@@ -302,10 +302,10 @@
         </section>
       {/if}
 
-      <section aria-label={copy.downloadsHeading} class="divide-y divide-line">
+      <section aria-label={copy.downloadsHeading} class="divide-y divide-border">
         <div class="px-4 py-3.5 sm:px-5">
           <h3
-            class="text-[14.5px] font-medium text-fg"
+            class="text-[14.5px] font-medium text-foreground"
             tabindex="-1"
             bind:this={downloadsHeading}
           >
@@ -314,7 +314,7 @@
         </div>
         {#if translationArtifacts.length === 0}
           <div class="px-4 py-3.5 sm:px-5">
-            <p class="text-[13.5px] text-fg-3">{copy.empty}</p>
+            <p class="text-caption text-muted">{copy.empty}</p>
           </div>
         {:else}
           {#each translationArtifacts as artifact (artifact.id)}
@@ -333,7 +333,7 @@
         {/if}
         <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5" aria-live="polite">
           {#if confirmingAll}
-            <span class="text-[13.5px] text-fg-3">{copy.removeAllConfirm}</span>
+            <span class="text-caption text-muted">{copy.removeAllConfirm}</span>
             <button
               type="button"
               bind:this={confirmAllButton}
@@ -363,16 +363,16 @@
               </button>
             {/if}
             {#if actionNotice}
-              <span class="text-[13.5px] text-fg-3">{actionNotice}</span>
+              <span class="text-caption text-muted">{actionNotice}</span>
             {/if}
           {/if}
         </div>
       </section>
 
-      <section aria-label={copy.offlinePack.heading} class="divide-y divide-line">
+      <section aria-label={copy.offlinePack.heading} class="divide-y divide-border">
         <div class="px-4 py-3.5 sm:px-5">
           <OfflinePack copy={copy.offlinePack} headingTag="h3" />
-          <p class="mt-1.5 text-[13.5px] leading-snug text-fg-3">{copy.offlinePackNote}</p>
+          <p class="mt-1.5 text-caption leading-snug text-muted">{copy.offlinePackNote}</p>
         </div>
       </section>
 
@@ -387,7 +387,7 @@
           {copy.clearPages}
         </button>
         {#if clearedPages}
-          <span class="text-[13.5px] text-fg-3" aria-live="polite">{copy.clearPagesDone}</span>
+          <span class="text-caption text-muted" aria-live="polite">{copy.clearPagesDone}</span>
         {/if}
         {#if !hasController}
           <span class="sr-only">{copy.clearPagesUnavailable}</span>
@@ -395,6 +395,6 @@
       </div>
     </div>
 
-    <p class="mt-4 text-[13.5px] leading-snug text-fg-3">{copy.retentionNote}</p>
+    <p class="mt-4 text-caption leading-snug text-muted">{copy.retentionNote}</p>
   {/if}
 </div>
