@@ -232,16 +232,21 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
+  /* Status set (plan 06, area-1 punt): one per mode, shared by every palette —
+     the ground is shared, so per-palette status variants no longer mean anything. */
   --success: #78BD91;
   --warning: #D9B55E;
   --danger: #DF7777;
 
   --focus-ring: oklch(0.50 0.20 262);
 
-  --reader-background: #111713;
-  --quran-foreground: #F4F2EA;
-  --translation-foreground: #C2C6C1;
-  --reader-divider: #28332D;
+  /* Reader family (plan 06 step 1): derives from the neutral ground, not a tint.
+     Dark reader ground sits just under --surface (0.238) so the column recedes;
+     the Quran text stays the highest-contrast element on the page in both modes. */
+  --reader-background: oklch(0.190 0 0);
+  --quran-foreground: oklch(0.975 0 0);
+  --translation-foreground: oklch(0.775 0 0);
+  --reader-divider: oklch(0.275 0 0);
 
   /* Hue set (plan 01) — identical in every palette, mode-dependent (plan 00 D3: no amber
      can carry white on the dark ground, so dark swaps amber for ember at hue 55). */
@@ -298,10 +303,10 @@
 
   --focus-ring: oklch(0.52 0.21 262);
 
-  --reader-background: #FFFEFA;
-  --quran-foreground: #17201C;
-  --translation-foreground: #4D5751;
-  --reader-divider: #E5E2D9;
+  --reader-background: #ffffff;
+  --quran-foreground: oklch(0.16 0 0);
+  --translation-foreground: oklch(0.40 0 0);
+  --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 2 is the board's
      oklch(0.54 0.16 162) nudged to L 0.53: white on the board value measures 4.47:1 in the
@@ -359,10 +364,10 @@
 
   --focus-ring: oklch(0.20 0 0);
 
-  --reader-background: #FFFFFF;
-  --quran-foreground: #101010;
-  --translation-foreground: #444444;
-  --reader-divider: #E6E6E6;
+  --reader-background: #ffffff;
+  --quran-foreground: oklch(0.16 0 0);
+  --translation-foreground: oklch(0.40 0 0);
+  --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
@@ -410,16 +415,16 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #79B991;
-  --warning: #D8BA70;
-  --danger: #E07B7B;
+  --success: #78BD91;
+  --warning: #D9B55E;
+  --danger: #DF7777;
 
   --focus-ring: oklch(0.965 0 0);
 
-  --reader-background: #050505;
-  --quran-foreground: #F5F5F5;
-  --translation-foreground: #C6C6C6;
-  --reader-divider: #242424;
+  --reader-background: oklch(0.190 0 0);
+  --quran-foreground: oklch(0.975 0 0);
+  --translation-foreground: oklch(0.775 0 0);
+  --reader-divider: oklch(0.275 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
@@ -467,12 +472,15 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #52704A;
-  --warning: #806021;
-  --danger: #9D493D;
+  --success: #397A57;
+  --warning: #8A681E;
+  --danger: #B34A4A;
 
   --focus-ring: oklch(0.54 0.23 352);
 
+  /* Sepia warmth decision (plan 06 step 2, option a): the palette's accent moved to
+     magenta but its READING surface keeps the deliberate warm ground — reading comfort
+     is a feature, not decoration, and chrome around it stays neutral. */
   --reader-background: #FBF3DF;
   --quran-foreground: #2B2419;
   --translation-foreground: #5E5140;
@@ -524,12 +532,13 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #90B47D;
-  --warning: #E0BC6F;
-  --danger: #DB8274;
+  --success: #78BD91;
+  --warning: #D9B55E;
+  --danger: #DF7777;
 
   --focus-ring: oklch(0.51 0.22 352);
 
+  /* Warm reader ground, dark mode (plan 06 step 2, option a — see sepia light). */
   --reader-background: #1C160F;
   --quran-foreground: #F0E5CF;
   --translation-foreground: #CBBEA4;
@@ -582,16 +591,16 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #39705A;
-  --warning: #80611F;
-  --danger: #AE4747;
+  --success: #397A57;
+  --warning: #8A681E;
+  --danger: #B34A4A;
 
   --focus-ring: oklch(0.53 0.16 162);
 
-  --reader-background: #FFFFFF;
-  --quran-foreground: #18202A;
-  --translation-foreground: #4A5666;
-  --reader-divider: #E3E7ED;
+  --reader-background: #ffffff;
+  --quran-foreground: oklch(0.16 0 0);
+  --translation-foreground: oklch(0.40 0 0);
+  --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
@@ -639,16 +648,16 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #80BFA0;
-  --warning: #D7B66E;
-  --danger: #E07A7A;
+  --success: #78BD91;
+  --warning: #D9B55E;
+  --danger: #DF7777;
 
   --focus-ring: oklch(0.50 0.14 162);
 
-  --reader-background: #0E151F;
-  --quran-foreground: #F1F4F8;
-  --translation-foreground: #C0CAD6;
-  --reader-divider: #263447;
+  --reader-background: oklch(0.190 0 0);
+  --quran-foreground: oklch(0.975 0 0);
+  --translation-foreground: oklch(0.775 0 0);
+  --reader-divider: oklch(0.275 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
