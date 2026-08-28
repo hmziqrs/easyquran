@@ -104,8 +104,8 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-soft: var(--primary-soft);
-  /* Editorial accent (gold family). The `accent-*` Tailwind utilities stay INTERACTIVE (primary)
-     for back-compat — use gold-* to reach the editorial accent. */
+  /* Secondary hue (editorial gold retired, plan 01: --accent = the hue-2 family). The
+     `accent-*` Tailwind utilities stay INTERACTIVE (primary) for back-compat. */
   --color-gold: var(--accent);
   --color-gold-strong: var(--accent-strong);
   --color-gold-soft: var(--accent-soft);
@@ -170,329 +170,490 @@
   --color-sidebar-ring: var(--focus-ring);
 }
 
-/* ── §5–§8 palette blocks — verbatim from docs/design-system.md ─────────────────────────────
+/* ── palette blocks ─────────────────────────────────────────────────────────────────────────
    Palette and mode are separate attributes (§4): <html data-palette="sacred" data-mode="dark">.
-   :root doubles as the sacred-dark default so no-JS/SSR markup always has a complete contract. */
+   :root doubles as the sacred-dark default so no-JS/SSR markup always has a complete contract.
+   Plan 01: every palette shares one zero-chroma neutral ground; only the accent family and
+   (by mode) the hue set differ. --muted at 0.52/0.625 is the contrast floor for 13.5px
+   secondary text — do not raise it. */
 :root,
 [data-palette="sacred"][data-mode="dark"] {
-  --background: #0D1210;
-  --background-subtle: #111814;
+  --background: oklch(0.165 0 0);
+  --background-subtle: oklch(0.190 0 0);
 
-  --surface: #151D19;
-  --surface-raised: #1A231F;
-  --surface-hover: #202A25;
+  --surface: oklch(0.238 0 0);
+  --surface-raised: oklch(0.262 0 0);
+  --surface-hover: oklch(0.285 0 0);
 
-  --foreground: #F0EFE9;
-  --foreground-secondary: #BCC2BD;
-  --muted: #89938D;
+  --foreground: oklch(0.965 0 0);
+  --foreground-secondary: oklch(0.775 0 0);
+  --muted: oklch(0.625 0 0);
 
-  --border: #29332E;
-  --border-strong: #39443E;
+  --border: oklch(0.305 0 0);
+  --border-strong: oklch(0.375 0 0);
 
-  --primary: #77BDA4;
-  --primary-hover: #91CEB9;
-  --primary-foreground: #0D1210;
-  --primary-soft: #17372C;
+  /* Accent family (plan 01 remap: sacred → cobalt). Note the dark accent is DARKER than
+     the light one, not lighter — that is the white-on-colour decision (plan 00 D2). */
+  --primary: oklch(0.50 0.20 262);
+  --primary-hover: oklch(0.54 0.20 262);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.30 0.055 262);
 
-  --accent: #D0B06B;
-  --accent-strong: #D0B06B;
-  --accent-soft: #332A19;
+  /* The editorial-gold role is retired (plan 01): --accent now means "the secondary hue". */
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #78BD91;
   --warning: #D9B55E;
   --danger: #DF7777;
 
-  --focus-ring: #91CEB9;
+  --focus-ring: oklch(0.50 0.20 262);
 
   --reader-background: #111713;
   --quran-foreground: #F4F2EA;
   --translation-foreground: #C2C6C1;
   --reader-divider: #28332D;
 
+  /* Hue set (plan 01) — identical in every palette, mode-dependent (plan 00 D3: no amber
+     can carry white on the dark ground, so dark swaps amber for ember at hue 55). */
+  --hue-1: oklch(0.50 0.20 262);
+  --hue-1-soft: oklch(0.30 0.055 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.50 0.14 162);
+  --hue-2-soft: oklch(0.30 0.050 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.48 0.23 300);
+  --hue-3-soft: oklch(0.30 0.060 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.53 0.16 55);
+  --hue-4-soft: oklch(0.31 0.055 55);
+  --on-hue-4: #ffffff;
+  /* L≈0.78 versions for numerals on the dark soft chips, where the deep fill disappears.
+     In light mode --hue-N-legible just is --hue-N. */
+  --hue-1-legible: oklch(0.78 0.19 262);
+  --hue-2-legible: oklch(0.78 0.14 162);
+  --hue-3-legible: oklch(0.78 0.21 300);
+  --hue-4-legible: oklch(0.78 0.15 55);
+
   color-scheme: dark;
 }
 
 [data-palette="sacred"][data-mode="light"] {
-  --background: #F8F7F2;
-  --background-subtle: #F2F0E9;
+  --background: oklch(0.980 0 0);
+  --background-subtle: oklch(0.968 0 0);
 
-  --surface: #FFFEFA;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #F1F0E9;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: oklch(0.953 0 0);
 
-  --foreground: #18211D;
-  --foreground-secondary: #505A54;
-  --muted: #68716B;
+  --foreground: oklch(0.20 0 0);
+  --foreground-secondary: oklch(0.40 0 0);
+  --muted: oklch(0.52 0 0);
 
-  --border: #DDDCD3;
-  --border-strong: #C9C7BD;
+  --border: oklch(0.885 0 0);
+  --border-strong: oklch(0.82 0 0);
 
-  --primary: #145A43;
-  --primary-hover: #104B38;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #E6F0EB;
+  /* Accent family (plan 01 remap: sacred → cobalt). */
+  --primary: oklch(0.52 0.21 262);
+  --primary-hover: oklch(0.48 0.21 262);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.950 0.045 262);
 
-  --accent: #B6914C;
-  --accent-strong: #715625;
-  --accent-soft: #F3EAD8;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #397A57;
   --warning: #8A681E;
   --danger: #B34A4A;
 
-  --focus-ring: #2D7B61;
+  --focus-ring: oklch(0.52 0.21 262);
 
   --reader-background: #FFFEFA;
   --quran-foreground: #17201C;
   --translation-foreground: #4D5751;
   --reader-divider: #E5E2D9;
 
+  /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 2 is the board's
+     oklch(0.54 0.16 162) nudged to L 0.53: white on the board value measures 4.47:1 in the
+     contrast gate's Ottosson math and the gate is the binding contract. */
+  --hue-1: oklch(0.52 0.21 262);
+  --hue-1-soft: oklch(0.950 0.045 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.53 0.16 162);
+  --hue-2-soft: oklch(0.950 0.045 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.50 0.24 300);
+  --hue-3-soft: oklch(0.950 0.045 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.78 0.16 78);
+  --hue-4-soft: oklch(0.955 0.055 78);
+  --on-hue-4: oklch(0.20 0 0);
+  /* Bright fills need near-black (amber); every other hue takes white. */
+  --hue-1-legible: var(--hue-1);
+  --hue-2-legible: var(--hue-2);
+  --hue-3-legible: var(--hue-3);
+  --hue-4-legible: var(--hue-4);
+
   color-scheme: light;
 }
 
 [data-palette="ink"][data-mode="light"] {
-  --background: #F7F7F5;
-  --background-subtle: #EFEFED;
+  --background: oklch(0.980 0 0);
+  --background-subtle: oklch(0.968 0 0);
 
-  --surface: #FFFFFF;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #F0F0EE;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: oklch(0.953 0 0);
 
-  --foreground: #121212;
-  --foreground-secondary: #4B4B4B;
-  --muted: #686868;
+  --foreground: oklch(0.20 0 0);
+  --foreground-secondary: oklch(0.40 0 0);
+  --muted: oklch(0.52 0 0);
 
-  --border: #DADADA;
-  --border-strong: #BDBDBD;
+  --border: oklch(0.885 0 0);
+  --border-strong: oklch(0.82 0 0);
 
-  --primary: #111111;
-  --primary-hover: #2A2A2A;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #ECECEC;
+  /* Accent family (plan 01 remap: ink → neutral). The accent is the ink itself; on-accent
+     is ground-inverted (white on near-black in light, near-black on white in dark). */
+  --primary: oklch(0.20 0 0);
+  --primary-hover: oklch(0.28 0 0);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.953 0 0);
 
-  --accent: #777777;
-  --accent-strong: #4B4B4B;
-  --accent-soft: #F1F1F1;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #356B4B;
   --warning: #775F25;
   --danger: #A33F3F;
 
-  --focus-ring: #111111;
+  --focus-ring: oklch(0.20 0 0);
 
   --reader-background: #FFFFFF;
   --quran-foreground: #101010;
   --translation-foreground: #444444;
   --reader-divider: #E6E6E6;
 
+  /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
+  --hue-1: oklch(0.52 0.21 262);
+  --hue-1-soft: oklch(0.950 0.045 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.53 0.16 162);
+  --hue-2-soft: oklch(0.950 0.045 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.50 0.24 300);
+  --hue-3-soft: oklch(0.950 0.045 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.78 0.16 78);
+  --hue-4-soft: oklch(0.955 0.055 78);
+  --on-hue-4: oklch(0.20 0 0);
+  --hue-1-legible: var(--hue-1);
+  --hue-2-legible: var(--hue-2);
+  --hue-3-legible: var(--hue-3);
+  --hue-4-legible: var(--hue-4);
+
   color-scheme: light;
 }
 
 [data-palette="ink"][data-mode="dark"] {
-  --background: #000000;
-  --background-subtle: #080808;
+  --background: oklch(0.165 0 0);
+  --background-subtle: oklch(0.190 0 0);
 
-  --surface: #0D0D0D;
-  --surface-raised: #151515;
-  --surface-hover: #1A1A1A;
+  --surface: oklch(0.238 0 0);
+  --surface-raised: oklch(0.262 0 0);
+  --surface-hover: oklch(0.285 0 0);
 
-  --foreground: #F5F5F5;
-  --foreground-secondary: #C8C8C8;
-  --muted: #9A9A9A;
+  --foreground: oklch(0.965 0 0);
+  --foreground-secondary: oklch(0.775 0 0);
+  --muted: oklch(0.625 0 0);
 
-  --border: #292929;
-  --border-strong: #3D3D3D;
+  --border: oklch(0.305 0 0);
+  --border-strong: oklch(0.375 0 0);
 
-  --primary: #F2F2F2;
-  --primary-hover: #FFFFFF;
-  --primary-foreground: #090909;
-  --primary-soft: #1D1D1D;
+  /* Accent family (plan 01 remap: ink → neutral), dark: ground-inverted. */
+  --primary: oklch(0.965 0 0);
+  --primary-hover: oklch(1 0 0);
+  --primary-foreground: oklch(0.20 0 0);
+  --primary-soft: oklch(0.30 0 0);
 
-  --accent: #C8C8C8;
-  --accent-strong: #C8C8C8;
-  --accent-soft: #1A1A1A;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #79B991;
   --warning: #D8BA70;
   --danger: #E07B7B;
 
-  --focus-ring: #FFFFFF;
+  --focus-ring: oklch(0.965 0 0);
 
   --reader-background: #050505;
   --quran-foreground: #F5F5F5;
   --translation-foreground: #C6C6C6;
   --reader-divider: #242424;
 
+  /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
+  --hue-1: oklch(0.50 0.20 262);
+  --hue-1-soft: oklch(0.30 0.055 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.50 0.14 162);
+  --hue-2-soft: oklch(0.30 0.050 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.48 0.23 300);
+  --hue-3-soft: oklch(0.30 0.060 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.53 0.16 55);
+  --hue-4-soft: oklch(0.31 0.055 55);
+  --on-hue-4: #ffffff;
+  --hue-1-legible: oklch(0.78 0.19 262);
+  --hue-2-legible: oklch(0.78 0.14 162);
+  --hue-3-legible: oklch(0.78 0.21 300);
+  --hue-4-legible: oklch(0.78 0.15 55);
+
   color-scheme: dark;
 }
 
 [data-palette="sepia"][data-mode="light"] {
-  --background: #F4ECD8;
-  --background-subtle: #EEE2C8;
+  --background: oklch(0.980 0 0);
+  --background-subtle: oklch(0.968 0 0);
 
-  --surface: #FFF9E9;
-  --surface-raised: #FFFCF3;
-  --surface-hover: #EFE4CF;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: oklch(0.953 0 0);
 
-  --foreground: #2E271C;
-  --foreground-secondary: #5F5342;
-  --muted: #70624F;
+  --foreground: oklch(0.20 0 0);
+  --foreground-secondary: oklch(0.40 0 0);
+  --muted: oklch(0.52 0 0);
 
-  --border: #D9C9AA;
-  --border-strong: #C2AD87;
+  --border: oklch(0.885 0 0);
+  --border-strong: oklch(0.82 0 0);
 
-  --primary: #6E4F27;
-  --primary-hover: #5B401F;
-  --primary-foreground: #FFF9E9;
-  --primary-soft: #EADCBF;
+  /* Accent family (plan 01 remap: sepia → magenta). */
+  --primary: oklch(0.54 0.23 352);
+  --primary-hover: oklch(0.50 0.23 352);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.950 0.045 352);
 
-  --accent: #A47B36;
-  --accent-strong: #684B1F;
-  --accent-soft: #EEE0C2;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #52704A;
   --warning: #806021;
   --danger: #9D493D;
 
-  --focus-ring: #6E4F27;
+  --focus-ring: oklch(0.54 0.23 352);
 
   --reader-background: #FBF3DF;
   --quran-foreground: #2B2419;
   --translation-foreground: #5E5140;
   --reader-divider: #DDCFB4;
 
+  /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
+  --hue-1: oklch(0.52 0.21 262);
+  --hue-1-soft: oklch(0.950 0.045 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.53 0.16 162);
+  --hue-2-soft: oklch(0.950 0.045 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.50 0.24 300);
+  --hue-3-soft: oklch(0.950 0.045 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.78 0.16 78);
+  --hue-4-soft: oklch(0.955 0.055 78);
+  --on-hue-4: oklch(0.20 0 0);
+  --hue-1-legible: var(--hue-1);
+  --hue-2-legible: var(--hue-2);
+  --hue-3-legible: var(--hue-3);
+  --hue-4-legible: var(--hue-4);
+
   color-scheme: light;
 }
 
 [data-palette="sepia"][data-mode="dark"] {
-  --background: #18130E;
-  --background-subtle: #1C160F;
+  --background: oklch(0.165 0 0);
+  --background-subtle: oklch(0.190 0 0);
 
-  --surface: #211A13;
-  --surface-raised: #292017;
-  --surface-hover: #30251A;
+  --surface: oklch(0.238 0 0);
+  --surface-raised: oklch(0.262 0 0);
+  --surface-hover: oklch(0.285 0 0);
 
-  --foreground: #F0E5CF;
-  --foreground-secondary: #C9B99A;
-  --muted: #9D8C6F;
+  --foreground: oklch(0.965 0 0);
+  --foreground-secondary: oklch(0.775 0 0);
+  --muted: oklch(0.625 0 0);
 
-  --border: #403324;
-  --border-strong: #574632;
+  --border: oklch(0.305 0 0);
+  --border-strong: oklch(0.375 0 0);
 
-  --primary: #D1AE71;
-  --primary-hover: #E0BF82;
-  --primary-foreground: #1B1309;
-  --primary-soft: #3A2C1B;
+  /* Accent family (plan 01 remap: sepia → magenta), dark — darker than light (plan 00 D2). */
+  --primary: oklch(0.51 0.22 352);
+  --primary-hover: oklch(0.55 0.22 352);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.30 0.055 352);
 
-  --accent: #E0C48B;
-  --accent-strong: #E0C48B;
-  --accent-soft: #332719;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #90B47D;
   --warning: #E0BC6F;
   --danger: #DB8274;
 
-  --focus-ring: #D1AE71;
+  --focus-ring: oklch(0.51 0.22 352);
 
   --reader-background: #1C160F;
   --quran-foreground: #F0E5CF;
   --translation-foreground: #CBBEA4;
   --reader-divider: #3B3023;
 
+  /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
+  --hue-1: oklch(0.50 0.20 262);
+  --hue-1-soft: oklch(0.30 0.055 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.50 0.14 162);
+  --hue-2-soft: oklch(0.30 0.050 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.48 0.23 300);
+  --hue-3-soft: oklch(0.30 0.060 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.53 0.16 55);
+  --hue-4-soft: oklch(0.31 0.055 55);
+  --on-hue-4: #ffffff;
+  --hue-1-legible: oklch(0.78 0.19 262);
+  --hue-2-legible: oklch(0.78 0.14 162);
+  --hue-3-legible: oklch(0.78 0.21 300);
+  --hue-4-legible: oklch(0.78 0.15 55);
+
   color-scheme: dark;
 }
 
 [data-palette="sapphire"][data-mode="light"] {
-  --background: #F7F8FA;
-  --background-subtle: #EEF1F5;
+  --background: oklch(0.980 0 0);
+  --background-subtle: oklch(0.968 0 0);
 
-  --surface: #FFFFFF;
-  --surface-raised: #FFFFFF;
-  --surface-hover: #EEF2F7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: oklch(0.953 0 0);
 
-  --foreground: #171C24;
-  --foreground-secondary: #4E5968;
-  --muted: #667384;
+  --foreground: oklch(0.20 0 0);
+  --foreground-secondary: oklch(0.40 0 0);
+  --muted: oklch(0.52 0 0);
 
-  --border: #D9DFE7;
-  --border-strong: #BEC7D2;
+  --border: oklch(0.885 0 0);
+  --border-strong: oklch(0.82 0 0);
 
-  --primary: #244E8A;
-  --primary-hover: #1D4277;
-  --primary-foreground: #FFFFFF;
-  --primary-soft: #E8EEF8;
+  /* Accent family (plan 01 remap: sapphire → emerald). Hue 2 is the board's L 0.54 nudged
+     to 0.53 so white on it clears the 4.5:1 contrast gate. */
+  --primary: oklch(0.53 0.16 162);
+  --primary-hover: oklch(0.49 0.16 162);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.950 0.045 162);
 
-  --accent: #A28759;
-  --accent-strong: #6F5A37;
-  --accent-soft: #F1EBDD;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #39705A;
   --warning: #80611F;
   --danger: #AE4747;
 
-  --focus-ring: #3567A9;
+  --focus-ring: oklch(0.53 0.16 162);
 
   --reader-background: #FFFFFF;
   --quran-foreground: #18202A;
   --translation-foreground: #4A5666;
   --reader-divider: #E3E7ED;
 
+  /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
+  --hue-1: oklch(0.52 0.21 262);
+  --hue-1-soft: oklch(0.950 0.045 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.53 0.16 162);
+  --hue-2-soft: oklch(0.950 0.045 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.50 0.24 300);
+  --hue-3-soft: oklch(0.950 0.045 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.78 0.16 78);
+  --hue-4-soft: oklch(0.955 0.055 78);
+  --on-hue-4: oklch(0.20 0 0);
+  --hue-1-legible: var(--hue-1);
+  --hue-2-legible: var(--hue-2);
+  --hue-3-legible: var(--hue-3);
+  --hue-4-legible: var(--hue-4);
+
   color-scheme: light;
 }
 
 [data-palette="sapphire"][data-mode="dark"] {
-  --background: #0B1018;
-  --background-subtle: #0E1520;
+  --background: oklch(0.165 0 0);
+  --background-subtle: oklch(0.190 0 0);
 
-  --surface: #111824;
-  --surface-raised: #172131;
-  --surface-hover: #1B2738;
+  --surface: oklch(0.238 0 0);
+  --surface-raised: oklch(0.262 0 0);
+  --surface-hover: oklch(0.285 0 0);
 
-  --foreground: #EFF3F8;
-  --foreground-secondary: #B9C3D0;
-  --muted: #8895A5;
+  --foreground: oklch(0.965 0 0);
+  --foreground-secondary: oklch(0.775 0 0);
+  --muted: oklch(0.625 0 0);
 
-  --border: #273446;
-  --border-strong: #394A60;
+  --border: oklch(0.305 0 0);
+  --border-strong: oklch(0.375 0 0);
 
-  --primary: #8FB5EA;
-  --primary-hover: #A6C7F2;
-  --primary-foreground: #0A111B;
-  --primary-soft: #1A2A3F;
+  /* Accent family (plan 01 remap: sapphire → emerald), dark — darker than light (plan 00 D2). */
+  --primary: oklch(0.50 0.14 162);
+  --primary-hover: oklch(0.53 0.14 162);
+  --primary-foreground: #ffffff;
+  --primary-soft: oklch(0.30 0.050 162);
 
-  --accent: #D2B47C;
-  --accent-strong: #D2B47C;
-  --accent-soft: #302719;
+  --accent: var(--hue-2);
+  --accent-strong: var(--hue-2);
+  --accent-soft: var(--hue-2-soft);
 
   --success: #80BFA0;
   --warning: #D7B66E;
   --danger: #E07A7A;
 
-  --focus-ring: #A6C7F2;
+  --focus-ring: oklch(0.50 0.14 162);
 
   --reader-background: #0E151F;
   --quran-foreground: #F1F4F8;
   --translation-foreground: #C0CAD6;
   --reader-divider: #263447;
 
+  /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
+  --hue-1: oklch(0.50 0.20 262);
+  --hue-1-soft: oklch(0.30 0.055 262);
+  --on-hue-1: #ffffff;
+  --hue-2: oklch(0.50 0.14 162);
+  --hue-2-soft: oklch(0.30 0.050 162);
+  --on-hue-2: #ffffff;
+  --hue-3: oklch(0.48 0.23 300);
+  --hue-3-soft: oklch(0.30 0.060 300);
+  --on-hue-3: #ffffff;
+  --hue-4: oklch(0.53 0.16 55);
+  --hue-4-soft: oklch(0.31 0.055 55);
+  --on-hue-4: #ffffff;
+  --hue-1-legible: oklch(0.78 0.19 262);
+  --hue-2-legible: oklch(0.78 0.14 162);
+  --hue-3-legible: oklch(0.78 0.21 300);
+  --hue-4-legible: oklch(0.78 0.15 55);
+
   color-scheme: dark;
 }
 
-/* ── §14 elevation: light keeps the doc's two soft shadows; dark uses almost none and
-     elevates through surface luminance + border contrast instead. ─────────────────────────── */
+/* ── Elevation: the boards have no shadows at all (plan 01). The tokens stay so the
+     --shadow-sm/md utilities keep resolving, but elevation is borders + surface luminance. */
 :root,
 [data-mode="dark"] {
-  --elev-sm: 0 1px 2px rgb(0 0 0 / 0.5);
-  --elev-md: 0 2px 8px rgb(0 0 0 / 0.35);
+  --elev-sm: none;
+  --elev-md: none;
 }
 
 [data-mode="light"] {
-  --elev-sm:
-    0 1px 2px rgb(20 30 25 / 0.03),
-    0 6px 18px rgb(20 30 25 / 0.03);
-  --elev-md:
-    0 2px 4px rgb(20 30 25 / 0.04),
-    0 12px 32px rgb(20 30 25 / 0.06);
+  --elev-sm: none;
+  --elev-md: none;
 }
 
 /* ── Migration shim: legacy runtime token names resolve from the new contract. ───────────────
@@ -533,8 +694,8 @@
   --pop: var(--accent);
   --pop-soft: var(--accent-soft);
 
-  /* Editorial hairline for markers/revealed-ayah — derived from the gold accent.
-     --accent-fg keeps the legacy interactive meaning: text on bg-accent (= primary). */
+  /* Hairline for markers/revealed-ayah — derived from the secondary hue (was the gold
+     accent). --accent-fg keeps the legacy interactive meaning: text on bg-accent (= primary). */
   --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
   --accent-fg: var(--primary-foreground);
 
