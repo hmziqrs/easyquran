@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Container, Eyebrow, Icon, Seo } from "$lib/components";
+  import { Band, Eyebrow, Icon, Seo } from "$lib/components";
   import {
     Accordion,
     AccordionContent,
@@ -24,7 +24,7 @@
   inLanguage={locale}
 />
 
-<Container class="max-w-[1180px] pt-[72px] pb-[96px]">
+<Band>
   <div class="flex w-full flex-col gap-[30px]">
   <div class="flex flex-col gap-3">
     <Eyebrow>{copy.eyebrow}</Eyebrow>
@@ -62,4 +62,4 @@
     >.
   </p>
   </div>
-</Container>
+</Band>

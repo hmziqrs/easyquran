@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Container, Eyebrow, Icon, Seo } from "$lib/components";
+  import { Band, Eyebrow, Icon, Seo } from "$lib/components";
   import { resolveContactCopy } from "$lib/i18n/contact-copy";
   import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
   import { externalLinkAttrs } from "$lib/utils";
@@ -19,7 +19,7 @@
   inLanguage={locale}
 />
 
-<Container class="flex max-w-[1180px] flex-col gap-12 pt-[72px] pb-24">
+<Band contentClass="flex w-full flex-col gap-12">
   <div class="flex w-full flex-col gap-3 text-center">
     <Eyebrow>{copy.eyebrow}</Eyebrow>
     <h1 class="text-h1">{copy.heading}</h1>
@@ -75,4 +75,4 @@
     <span class="text-caption text-muted">{copy.replyLabel}</span>
     <span class="text-body text-foreground">{copy.replyValue}</span>
   </div>
-</Container>
+</Band>

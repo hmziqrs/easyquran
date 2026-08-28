@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Container, Eyebrow, Seo } from "$lib/components";
+  import { Band, Eyebrow, Seo } from "$lib/components";
   import { resolveTermsCopy } from "$lib/i18n/terms-copy";
   import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
 
@@ -10,7 +10,7 @@
 
 <Seo path="/terms" title={copy.seo.title} description={copy.seo.description} inLanguage={locale} />
 
-<Container class="max-w-[1180px] pt-[72px] pb-[96px]">
+<Band>
   <div class="flex w-full flex-col gap-[26px]">
   <div class="flex flex-col gap-2.5">
     <Eyebrow>{copy.eyebrow}</Eyebrow>
@@ -39,4 +39,4 @@
     >.
   </p>
   </div>
-</Container>
+</Band>
