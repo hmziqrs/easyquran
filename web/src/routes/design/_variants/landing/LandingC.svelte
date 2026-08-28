@@ -51,7 +51,7 @@
           <Icon name="book" size={13} />
           <span class="font-mono text-[11px]">{name}</span>
         </span>
-        <span dir="rtl" class="ml-auto font-arabic text-sm text-fg-3">{arabicName}</span>
+        <span dir="rtl" class="me-auto font-arabic text-sm text-fg-3">{arabicName}</span>
       </div>
 
       <div dir="rtl" class="flex flex-col">

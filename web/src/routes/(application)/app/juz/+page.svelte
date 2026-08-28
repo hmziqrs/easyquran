@@ -26,7 +26,7 @@
 <ReaderShell>
   {#snippet header()}
     <h1 class="text-sm font-medium text-fg-2">{copy.seo.juzIndexTitle}</h1>
-    <span class="ml-auto font-mono text-[12px] text-fg-3"
+    <span class="ms-auto font-mono text-[12px] text-fg-3"
       >{copy.range.juzCount(data.ajzur.length)}</span
     >
   {/snippet}
@@ -45,7 +45,7 @@
             {juz.index}
           </span>
           <span class="text-sm font-medium text-fg">{copy.range.item("juz", juz.index)}</span>
-          <span class="ml-auto font-mono text-[12px] text-fg-3">{juz.first} – {juz.last}</span>
+          <span class="ms-auto font-mono text-[12px] text-fg-3">{juz.first} – {juz.last}</span>
         </a>
       </li>
     {/each}

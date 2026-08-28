@@ -54,7 +54,7 @@
   <Label for={id} class="text-[13px] font-medium text-fg-2">{label}</Label>
   <div class="relative">
     <Input
-      class={cn("peer h-11 rounded-lg", leadingIcon && "pl-10", trailing && "pr-11", className)}
+      class={cn("peer h-11 rounded-lg", leadingIcon && "ps-10", trailing && "pe-11", className)}
       {id}
       name={name ?? id}
       {type}
@@ -72,13 +72,13 @@
     />
     {#if leadingIcon}
       <span
-        class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-fg-4 transition-colors peer-focus:text-accent"
+        class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5 text-fg-4 transition-colors peer-focus:text-accent"
       >
         {@render leadingIcon()}
       </span>
     {/if}
     {#if trailing}
-      <div class="absolute inset-y-0 right-0 flex items-center pr-1.5">
+      <div class="absolute inset-y-0 end-0 flex items-center pe-1.5">
         {@render trailing()}
       </div>
     {/if}

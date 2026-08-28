@@ -73,7 +73,7 @@
         const value = (event.currentTarget as HTMLSelectElement).value;
         onMove(bookmark.id, value === "" ? null : value);
       }}
-      class={cn(ghostButton, "h-8 appearance-none bg-transparent pr-6")}
+      class={cn(ghostButton, "h-8 appearance-none bg-transparent pe-6")}
     >
       <option value="">{copy.unfiled}</option>
       {#each folders as folderOption (folderOption.id)}

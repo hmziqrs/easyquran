@@ -55,7 +55,7 @@
     <div class="mx-auto grid w-full max-w-[860px] grid-cols-2 sm:grid-cols-4">
       {#each FACTS as f (f.label)}
         <div
-          class="flex flex-col items-center gap-1 border-line px-4 py-7 text-center [&:not(:last-child)]:border-r"
+          class="flex flex-col items-center gap-1 border-line px-4 py-7 text-center [&:not(:last-child)]:border-e"
         >
           <span class="font-arabic text-[30px] leading-none text-fg">{f.value}</span>
           <span class="text-[12.5px] text-fg-4">{f.label}</span>

@@ -77,7 +77,7 @@
       {/if}
       <div class="mt-6 flex items-center gap-3">
         <Button onclick={() => resumeToLastRead({ kind: "arabic" })} arrow>Continue</Button>
-        <label class="ml-auto flex cursor-pointer select-none items-center gap-2 text-xs text-fg-3">
+        <label class="ms-auto flex cursor-pointer select-none items-center gap-2 text-xs text-fg-3">
           <input
             type="checkbox"
             class="h-4 w-4 accent-primary"
@@ -97,13 +97,13 @@
             {@const rsurah = quranData?.surahByNum(r.num)}
             <button
               type="button"
-              class="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-2"
+              class="flex items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-bg-2"
               onclick={() => resumeToVerse(r.num, r.n, r.sourceId, { kind: "arabic" })}
             >
               <span class="text-sm font-medium text-fg">{rsurah?.name ?? `Surah ${r.num}`}</span>
               <span class="text-sm text-fg-2">{r.num}:{r.n}</span>
               {#if peekTranslationName(r.sourceId)}
-                <span class="ml-auto text-xs text-fg-3">{peekTranslationName(r.sourceId)}</span>
+                <span class="ms-auto text-xs text-fg-3">{peekTranslationName(r.sourceId)}</span>
               {/if}
             </button>
           {/each}

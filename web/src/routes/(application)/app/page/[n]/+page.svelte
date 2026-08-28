@@ -47,7 +47,7 @@
 <ReaderShell>
   {#snippet header()}
     <h1 class="text-sm font-medium text-fg-2">{copy.range.item("page", data.index)}</h1>
-    <span class="ml-auto font-mono text-[12px] text-fg-3">{extent}</span>
+    <span class="ms-auto font-mono text-[12px] text-fg-3">{extent}</span>
   {/snippet}
   <RangeReader {data} />
 </ReaderShell>

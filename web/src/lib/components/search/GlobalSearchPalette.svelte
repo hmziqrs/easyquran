@@ -153,8 +153,14 @@
               {/if}
             </span>
             {#if entry.arabic}
-              <span dir="rtl" class="ml-auto flex-none font-arabic text-[16px] leading-none">
-                {entry.arabic}
+              <!-- ms-auto on the OUTER span (which inherits the row direction) is what
+                   pushes the Arabic name to the row end in both locales; dir="rtl" stays
+                   on the inner span for text shaping, where it would otherwise reverse
+                   the logical margin's resolution. -->
+              <span class="ms-auto flex-none">
+                <span dir="rtl" class="font-arabic text-[16px] leading-none">
+                  {entry.arabic}
+                </span>
               </span>
             {/if}
           {/snippet}

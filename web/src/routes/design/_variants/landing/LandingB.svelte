@@ -63,7 +63,7 @@
           <dt class="text-[15.5px] font-semibold">{v.title}</dt>
           <dd class="col-start-2 text-[14.5px] leading-[1.6] text-fg-2 sm:col-start-3">
             {v.body}
-            <span class="ml-2 font-mono text-[11px] text-fg-4">{v.short}</span>
+            <span class="ms-2 font-mono text-[11px] text-fg-4">{v.short}</span>
           </dd>
         </div>
       {/each}

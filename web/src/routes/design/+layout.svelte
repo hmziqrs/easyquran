@@ -54,7 +54,7 @@
         </div>
       {/if}
 
-      <div class="ml-auto flex items-center gap-3 text-xs text-fg-4">
+      <div class="ms-auto flex items-center gap-3 text-xs text-fg-4">
         <a href="/" class="transition-colors hover:text-fg">live site →</a>
       </div>
     </div>
