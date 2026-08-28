@@ -1,0 +1,398 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Amiri:wght@400;700&display=swap">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Nunito", ui-rounded, "Segoe UI", system-ui, sans-serif;
+      background: oklch(0.980 0 0);
+      color: oklch(0.20 0 0);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: oklch(0.52 0.21 262); text-decoration: none; }
+    a:hover { color: oklch(0.52 0.21 262); }
+    p { margin: 0; }
+    h1, h2, h3 { margin: 0; text-wrap: balance; }
+    .arabic { font-family: "Amiri", "Scheherazade New", serif; direction: rtl; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; background: oklch(0.980 0 0);">
+
+  <!-- ── header: full width, ruled rather than floated ────────────────── -->
+  <div style="background: #ffffff; border-bottom: 1px solid oklch(0.885 0 0);">
+    <div style="display: flex; align-items: center; gap: 26px; height: 80px; padding: 0 72px;">
+      <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+        <div style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; background: oklch(0.52 0.21 262);">
+          <span class="arabic" style="font-size: 19px; font-weight: 700; color: #ffffff; line-height: 1;">ق</span>
+        </div>
+        <span style="font-size: 22px; font-weight: 800; letter-spacing: -0.035em;">easy<span style="color: oklch(0.52 0.21 262);">quran</span></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 24px; flex-shrink: 0; margin-left: 18px; font-size: 16.5px; font-weight: 700;">
+        <span style="color: oklch(0.20 0 0);">Surahs</span>
+        <span style="color: oklch(0.20 0 0);">Juz</span>
+        <span style="color: oklch(0.20 0 0);">Pages</span>
+        <span style="color: oklch(0.52 0 0);">Bookmarks</span>
+        <span style="color: oklch(0.52 0 0);">About</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 11px; flex-grow: 1; height: 44px; padding: 0 8px 0 20px; margin-left: 10px; border-radius: 999px; border: 1px solid oklch(0.885 0 0);">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="oklch(0.52 0 0)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0;"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4.5 4.5"></path></svg>
+        <span style="flex-grow: 1; font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">Search every surah and ayah…</span>
+        <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0; padding: 5px 9px; border-radius: 999px; background: oklch(0.953 0 0);">
+          <span style="font-size: 13px; font-weight: 700; color: oklch(0.52 0 0);">⌘</span>
+          <span style="font-size: 12.5px; font-weight: 700; color: oklch(0.52 0 0);">K</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+        <div style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; border: 1px solid oklch(0.885 0 0);"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="oklch(0.20 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"></path></svg></div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 24px; border-radius: 999px; background: oklch(0.52 0.21 262);">
+          <span style="font-size: 16px; font-weight: 800; color: #ffffff;">Start reading</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── hero ─────────────────────────────────────────────────────────── -->
+  
+  <div style="background: oklch(0.980 0 0);">
+    <div style="padding: 88px 72px;">
+
+      <div style="display: flex; flex-direction: column; align-items: center;">
+        <h1 style="font-size: 76px; line-height: 1.06; letter-spacing: -0.04em; font-weight: 800; text-align: center; max-width: 17ch;">
+          The <span style="display: inline-block; padding: 2px 20px 8px; border-radius: 16px; background: oklch(0.52 0.21 262); color: #ffffff;">simplest way</span> to read the Qur’an.
+        </h1>
+        <p style="margin-top: 26px; font-size: 20px; line-height: 1.55; font-weight: 600; color: oklch(0.40 0 0); text-align: center; max-width: 55ch; text-wrap: pretty;">
+          Open it, read, close it. Search, bookmarks and recitation are there when you need them — invisible when you don’t.
+        </p>
+        <div style="display: flex; align-items: center; gap: 16px; width: 820px; height: 76px; margin-top: 40px; padding: 0 8px 0 30px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="oklch(0.52 0 0)" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0;"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4.5 4.5"></path></svg>
+          <span style="flex-grow: 1; font-size: 19px; font-weight: 600; color: oklch(0.52 0 0);">Try “Al-Kahf”, “Ya-Sin”, or “2:255”…</span>
+          <div style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; height: 60px; padding: 0 34px; border-radius: 999px; background: oklch(0.52 0.21 262);">
+            <span style="font-size: 18px; font-weight: 800; color: #ffffff;">Search</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 22px;">
+          <span style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0); margin-right: 6px;">Often opened</span>
+          <span style="padding: 9px 16px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0); font-size: 14.5px; font-weight: 700; color: oklch(0.40 0 0);">Al-Fātiḥah</span>
+          <span style="padding: 9px 16px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0); font-size: 14.5px; font-weight: 700; color: oklch(0.40 0 0);">Al-Kahf</span>
+          <span style="padding: 9px 16px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0); font-size: 14.5px; font-weight: 700; color: oklch(0.40 0 0);">Yā-Sīn</span>
+          <span style="padding: 9px 16px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0); font-size: 14.5px; font-weight: 700; color: oklch(0.40 0 0);">Ar-Raḥmān</span>
+          <span style="padding: 9px 16px; border-radius: 999px; background: #ffffff; border: 1px solid oklch(0.885 0 0); font-size: 14.5px; font-weight: 700; color: oklch(0.40 0 0);">Al-Mulk</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── metric strip: four colours, edge to edge, no gaps ────────────── -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));">
+    
+      <div style="display: flex; flex-direction: column; justify-content: space-between; gap: 34px; padding: 40px 36px 42px; background: oklch(0.52 0.21 262);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 8px; background: oklch(1 0 0 / 0.20);"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h5.5A2.5 2.5 0 0 1 12 7v12.5a2 2 0 0 0-2-2H4Z"></path><path d="M20 4.5h-5.5A2.5 2.5 0 0 0 12 7v12.5a2 2 0 0 1 2-2h6Z"></path></svg></div>
+          <span style="font-size: 44px; line-height: 1; letter-spacing: -0.05em; font-weight: 800; color: #ffffff;">114</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800; color: #ffffff;">Surahs</span>
+          <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(1 0 0 / 0.88);">Every chapter, in the order of the mushaf</span>
+        </div>
+      </div>
+    
+      <div style="display: flex; flex-direction: column; justify-content: space-between; gap: 34px; padding: 40px 36px 42px; background: oklch(0.54 0.16 162);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 8px; background: oklch(1 0 0 / 0.20);"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8.5 4.5L12 12 3.5 7.5 12 3Z"></path><path d="m3.5 12 8.5 4.5 8.5-4.5"></path><path d="m3.5 16.5 8.5 4.5 8.5-4.5"></path></svg></div>
+          <span style="font-size: 44px; line-height: 1; letter-spacing: -0.05em; font-weight: 800; color: #ffffff;">30</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800; color: #ffffff;">Juz</span>
+          <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(1 0 0 / 0.88);">A part a day, if that suits you</span>
+        </div>
+      </div>
+    
+      <div style="display: flex; flex-direction: column; justify-content: space-between; gap: 34px; padding: 40px 36px 42px; background: oklch(0.50 0.24 300);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 8px; background: oklch(1 0 0 / 0.20);"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l5 5v13H6Z"></path><path d="M14 3v5h5"></path><path d="M9.5 13h6M9.5 17h4"></path></svg></div>
+          <span style="font-size: 44px; line-height: 1; letter-spacing: -0.05em; font-weight: 800; color: #ffffff;">604</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800; color: #ffffff;">Pages</span>
+          <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(1 0 0 / 0.88);">Follow the printed page exactly</span>
+        </div>
+      </div>
+    
+      <div style="display: flex; flex-direction: column; justify-content: space-between; gap: 34px; padding: 40px 36px 42px; background: oklch(0.78 0.16 78);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 8px; background: oklch(0 0 0 / 0.12);"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="oklch(0.17 0 0)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2Z"></path></svg></div>
+          <span style="font-size: 44px; line-height: 1; letter-spacing: -0.05em; font-weight: 800; color: oklch(0.17 0 0);">Yours</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800; color: oklch(0.17 0 0);">Bookmarks</span>
+          <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.20 0 0 / 0.78);">Pick up wherever you stopped</span>
+        </div>
+      </div>
+  </div>
+
+  <!-- ── directory band ───────────────────────────────────────────────── -->
+  
+  <div style="background: oklch(0.980 0 0);">
+    <div style="padding: 96px 72px;">
+
+      <div style="display: flex; align-items: flex-end; gap: 24px; margin-bottom: 34px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0.21 262);">The index</span>
+          <h2 style="font-size: 40px; line-height: 1.1; letter-spacing: -0.035em; font-weight: 800; max-width: 22ch;">Every chapter opens straight into the reader.</h2>
+          <p style="font-size: 17.5px; line-height: 1.6; font-weight: 600; color: oklch(0.40 0 0); max-width: 58ch; text-wrap: pretty;">No account, no loading screen, nothing to install — tap a surah and the Arabic is already on the page.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; flex-shrink: 0; height: 48px; margin-left: auto; padding: 0 22px; border-radius: 999px; border: 1px solid oklch(0.885 0 0);">
+          <span style="font-size: 15.5px; font-weight: 800; color: oklch(0.20 0 0);">See all 114</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="oklch(0.20 0 0)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M5 12h13"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 262); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.52 0.21 262);">1</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Al-Fātiḥah</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Opening · 7 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">الفاتحة</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 162); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.54 0.16 162);">2</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Al-Baqarah</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Cow · 286 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">البقرة</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 300); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.50 0.24 300);">3</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Āl ʿImrān</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Family of Imran · 200 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">آل عمران</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.955 0.055 78); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.78 0.16 78);">4</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">An-Nisāʾ</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Women · 176 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">النساء</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 262); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.52 0.21 262);">12</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Yūsuf</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">Joseph · 111 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">يوسف</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 162); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.54 0.16 162);">18</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Al-Kahf</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Cave · 110 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">الكهف</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 300); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.50 0.24 300);">19</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Maryam</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">Mary · 98 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">مريم</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.955 0.055 78); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.78 0.16 78);">36</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Yā-Sīn</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">Ya Sin · 83 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">يس</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 262); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.52 0.21 262);">55</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Ar-Raḥmān</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Merciful · 78 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">الرحمن</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 162); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.54 0.16 162);">67</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Al-Mulk</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Sovereignty · 30 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">الملك</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.950 0.045 300); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.50 0.24 300);">78</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">An-Nabaʾ</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">The Tidings · 40 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">النبأ</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; padding: 15px 18px; border-radius: 10px; background: #ffffff; border: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; flex-shrink: 0; padding: 0 10px; border-radius: 999px; background: oklch(0.955 0.055 78); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: oklch(0.78 0.16 78);">112</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="font-size: 16.5px; line-height: 1.3; font-weight: 800; letter-spacing: -0.02em;">Al-Ikhlāṣ</span>
+            <span style="font-size: 13.5px; line-height: 1.45; font-weight: 600; color: oklch(0.52 0 0);">Sincerity · 4 ayahs</span>
+          </span>
+          <span class="arabic" style="margin-left: auto; font-size: 24px; line-height: 1.6; color: oklch(0.40 0 0);">الإخلاص</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── why: the band that used to be a card ─────────────────────────── -->
+  
+  <div style="background: oklch(0.953 0 0);">
+    <div style="padding: 96px 72px;">
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0.21 262);">Why it is built this way</span>
+          <h2 style="font-size: 40px; line-height: 1.1; letter-spacing: -0.035em; font-weight: 800; max-width: 18ch;">Start with the text done right, then grow around it.</h2>
+          <p style="font-size: 17.5px; line-height: 1.6; font-weight: 600; color: oklch(0.40 0 0); max-width: 52ch; text-wrap: pretty;">
+            Most Qur’an apps try to do everything at once. easyquran works the other way around — a page that opens fast, shows the Uthmani script clearly, and then gets out of the way. The Arabic text and every translation come from Tanzil.net, used unchanged under their terms.
+          </p>
+          <div style="display: flex; align-items: center; align-self: flex-start; height: 52px; margin-top: 6px; padding: 0 26px; border-radius: 999px; background: oklch(0.52 0.21 262);">
+            <span style="font-size: 16.5px; font-weight: 800; color: #ffffff;">Why we built it</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: flex-start; gap: 20px; padding: 26px 0; ">
+            <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; background: oklch(0.52 0.21 262); font-size: 16px; font-weight: 800; color: #ffffff;">1</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Open it</span>
+              <span style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">No install, no account, no setup screen.</span>
+            </span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 20px; padding: 26px 0; border-top: 1px solid oklch(0.885 0 0);">
+            <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; background: oklch(0.54 0.16 162); font-size: 16px; font-weight: 800; color: #ffffff;">2</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Read it</span>
+              <span style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">Uthmani script, scaled to whatever your eyes want.</span>
+            </span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 20px; padding: 26px 0; border-top: 1px solid oklch(0.885 0 0);">
+            <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; background: oklch(0.50 0.24 300); font-size: 16px; font-weight: 800; color: #ffffff;">3</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Close it</span>
+              <span style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">Free, no ads, nothing tracking what you read.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── roadmap: columns divided by rules, not cards ─────────────────── -->
+  
+  <div style="background: oklch(0.980 0 0);">
+    <div style="padding: 96px 72px;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px;">
+        <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0.21 262);">On the way</span>
+        <h2 style="font-size: 40px; line-height: 1.1; letter-spacing: -0.035em; font-weight: 800;">A reader now. A platform next.</h2>
+        <p style="font-size: 17.5px; line-height: 1.6; font-weight: 600; color: oklch(0.40 0 0); max-width: 60ch;">Today the reader holds the full 114 chapters — and the four below are on the way.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid oklch(0.885 0 0);">
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 32px 32px 8px; ">
+          <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: oklch(0.950 0.045 262); font-size: 15px; font-weight: 800; color: oklch(0.52 0.21 262);">01</span>
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Native apps</span>
+          <p style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">Desktop and mobile apps, so it feels at home on every device.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 32px 32px 8px; border-left: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: oklch(0.950 0.045 162); font-size: 15px; font-weight: 800; color: oklch(0.54 0.16 162);">02</span>
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Sync across devices</span>
+          <p style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">An optional account carries your bookmarks, notes and last page wherever you read.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 32px 32px 8px; border-left: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: oklch(0.950 0.045 300); font-size: 15px; font-weight: 800; color: oklch(0.50 0.24 300);">03</span>
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Recitation, for real</span>
+          <p style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">Full audio recitation — for now the player is only a preview.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; padding: 32px 32px 8px; border-left: 1px solid oklch(0.885 0 0);">
+          <span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: oklch(0.955 0.055 78); font-size: 15px; font-weight: 800; color: oklch(0.78 0.16 78);">04</span>
+          <span style="font-size: 20px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 800;">Hadith, tafsir & translations</span>
+          <p style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">More to read beside the Qur’an, added carefully and each credited.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── closing: full-bleed colour ───────────────────────────────────── -->
+  
+  <div style="background: oklch(0.52 0.21 262);">
+    <div style="padding: 84px 72px;">
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 22px;">
+        <span class="arabic" style="font-size: 36px; line-height: 1.9; color: #ffffff;">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</span>
+        <h2 style="font-size: 40px; line-height: 1.1; letter-spacing: -0.035em; font-weight: 800; text-align: center; max-width: 24ch; color: #ffffff;">Five minutes after Fajr is all it takes.</h2>
+        <p style="font-size: 17.5px; line-height: 1.6; font-weight: 600; color: #ffffff; opacity: 0.85; text-align: center; max-width: 52ch;">No sign-up, no download, no setup. Open the reader and the text is already on the page.</p>
+        <div style="display: flex; align-items: center; gap: 10px; height: 56px; margin-top: 10px; padding: 0 30px; border-radius: 999px; background: #ffffff;">
+          <span style="font-size: 17.5px; font-weight: 800; color: oklch(0.52 0.21 262);">Start reading</span>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="oklch(0.52 0.21 262)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M5 12h13"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </div>
+        <span style="font-size: 15px; line-height: 1.5; font-weight: 600; color: #ffffff; opacity: 0.8;">Free forever. No account. No ads.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── footer ───────────────────────────────────────────────────────── -->
+  <div style="background: #ffffff; border-top: 1px solid oklch(0.885 0 0);">
+    <div style="padding: 52px 72px 44px;">
+      <div style="display: grid; grid-template-columns: 380px repeat(3, minmax(0, 1fr)); gap: 40px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: oklch(0.52 0.21 262);">
+              <span class="arabic" style="font-size: 16px; font-weight: 700; color: #ffffff; line-height: 1;">ق</span>
+            </div>
+            <span style="font-size: 19px; font-weight: 800; letter-spacing: -0.035em;">easy<span style="color: oklch(0.52 0.21 262);">quran</span></span>
+          </div>
+          <p style="font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0); max-width: 34ch;">A free Qur’an reader — growing into hadith, audio, deeds and native apps.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0 0);">Product</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">Read the Qur’an</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">Bookmarks</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">What’s inside</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0 0);">Company</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">About</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">FAQ</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">Contact</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font-size: 13px; line-height: 1.4; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: oklch(0.52 0 0);">Legal</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">Privacy Policy</span>
+          <span style="font-size: 15.5px; font-weight: 700; color: oklch(0.40 0 0);">Terms of Service</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; margin-top: 40px; padding-top: 22px; border-top: 1px solid oklch(0.885 0 0); font-size: 15px; line-height: 1.5; font-weight: 600; color: oklch(0.52 0 0);">
+        <span>© 2026 easyquran</span>
+        <span style="margin-left: auto;">Built by [YOUR NAME] · [@YOURHANDLE]</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
