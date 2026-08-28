@@ -96,19 +96,19 @@
 
 <div class="flex flex-col gap-3" aria-busy={isSearching}>
   {#await searchPromise}
-    <div class="text-sm text-fg-2" role="status" aria-live="polite">{copy.search.searching}</div>
+    <div class="text-sm text-foreground-secondary" role="status" aria-live="polite">{copy.search.searching}</div>
   {:then state}
     {#if state}
-      <div class="text-sm text-fg-2" role="status" aria-live="polite">{resultLabel(state.result)}</div>
+      <div class="text-sm text-foreground-secondary" role="status" aria-live="polite">{resultLabel(state.result)}</div>
       {#each state.result.results as r (searchHitKey(r))}
         {@const surah = searchHitSurah(r)}
         {@const text = searchHitText(r)}
         <button
           type="button"
           onclick={() => open(r, state.quranData)}
-          class="flex flex-col gap-2.5 rounded-[13px] border border-line bg-bg-1 px-6 py-5 text-left transition-colors hover:border-accent"
+          class="flex flex-col gap-2.5 rounded-md border border-border bg-surface px-6 py-5 text-start transition-colors hover:border-primary"
         >
-          <span class="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
+          <span class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {#if r.kind === SearchHitKind.Opener}
               {copy.search.surahOpener(
                 state.quranData.surahByNum(surah)?.name ?? copy.sidebar.mode("surah"),
@@ -124,12 +124,12 @@
           {#if text}
             <HighlightedArabic {text} highlights={r.highlights} />
           {:else}
-            <span class="text-sm text-fg-3">{copy.search.openSurah}</span>
+            <span class="text-sm text-muted-foreground">{copy.search.openSurah}</span>
           {/if}
         </button>
       {/each}
     {/if}
   {:catch}
-    <div class="text-sm text-fg-2" role="alert" aria-live="assertive">{copy.search.unavailable}</div>
+    <div class="text-sm text-foreground-secondary" role="alert" aria-live="assertive">{copy.search.unavailable}</div>
   {/await}
 </div>

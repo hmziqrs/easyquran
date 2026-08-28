@@ -77,7 +77,7 @@
 
 <nav
   aria-label={copy.shell.surahPagesLabel}
-  class="flex items-center justify-between gap-4 border-t border-line px-5 py-[22px] sm:px-9"
+  class="flex items-center justify-between gap-4 border-t border-border px-5 py-[22px] sm:px-9"
 >
   {#if previousHref && previousLabel}
     <a
@@ -85,7 +85,7 @@
       data-sveltekit-preload-data="hover"
       aria-label={previousLabel}
       title={previousLabel}
-      class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+      class="flex items-center gap-1.5 text-sm text-foreground-secondary transition-colors hover:text-foreground"
     >
       <span aria-hidden="true">←</span>
       {previousLabel}
@@ -99,7 +99,7 @@
       data-sveltekit-preload-data="hover"
       aria-label={nextLabel}
       title={nextLabel}
-      class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+      class="flex items-center gap-1.5 text-sm text-foreground-secondary transition-colors hover:text-foreground"
     >
       {nextLabel}
       <span aria-hidden="true">→</span>

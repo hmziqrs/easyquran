@@ -137,23 +137,23 @@
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
     <div
-      class="flex items-center gap-2.5 rounded-[11px] border border-line bg-bg-2 px-[13px] py-[11px] transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
+      class="flex items-center gap-2.5 rounded-[11px] border border-border bg-background-subtle px-[13px] py-[11px] transition-colors"
     >
-      <Icon name="search" size={15} class="flex-none text-fg-3" />
+      <Icon name="search" size={15} class="flex-none text-muted-foreground" />
       <Input
         type="text"
         value={reader.query}
         {oninput}
         placeholder={copy.sidebar.searchPlaceholder}
         aria-label={copy.sidebar.searchLabel}
-        class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-fg shadow-none focus-visible:border-0 focus-visible:ring-0 placeholder:text-fg-3"
+        class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-foreground shadow-none focus-visible:border-0 placeholder:text-muted-foreground"
       />
       {#if reader.hasQuery}
         <button
           type="button"
           onclick={() => reader.clearQuery()}
           aria-label={copy.sidebar.clearSearch}
-          class="flex-none text-fg-3 transition-colors hover:text-fg"
+          class="flex-none text-muted-foreground transition-colors hover:text-foreground"
         >
           <Icon name="x" size={15} />
         </button>
@@ -161,7 +161,7 @@
     </div>
 
     <div
-      class="grid grid-cols-4 gap-1 rounded-[10px] bg-bg-2 p-1"
+      class="grid grid-cols-4 gap-1 rounded-[10px] bg-background-subtle p-1"
       role="group"
       aria-label={copy.sidebar.browseLabel}
     >
@@ -172,7 +172,9 @@
           onclick={() => selectBrowse(b)}
           class={cn(
             "rounded-[7px] py-2 text-[12.5px] font-medium capitalize transition-colors",
-            reader.browseMode === b ? "bg-bg-3 text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
+            reader.browseMode === b
+              ? "bg-surface-hover text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground-secondary",
           )}
         >
           {browseLabel(b)}
@@ -184,7 +186,7 @@
   <SidebarContent bind:ref={contentEl}>
     {#if dataPromise}
       {#await dataPromise}
-        <p class="px-4 py-3 text-sm text-fg-3" aria-live="polite">
+        <p class="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">
           {copy.sidebar.loadingNavigation}
         </p>
       {:then quranData}
@@ -204,7 +206,7 @@
                   {#snippet body()}
                     <span class="flex min-w-0 flex-1 flex-col gap-1">
                       <span class="truncate text-sm font-medium">{s.num} · {s.name}</span>
-                      <span class="text-[11.5px] text-fg-3">{surahMeta(s)}</span>
+                      <span class="text-[11.5px] text-muted-foreground">{surahMeta(s)}</span>
                     </span>
                     <span dir="rtl" class="flex-none font-arabic text-[17px] leading-none">
                       {s.arabic}
@@ -242,7 +244,7 @@
                     {#if v}
                       {#snippet body()}
                         <span
-                          class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-[11px] text-fg-3"
+                          class="flex h-6 w-6 flex-none items-center justify-center rounded-pill border border-border text-[11px] text-muted-foreground"
                         >
                           {n}
                         </span>
@@ -288,11 +290,11 @@
                   {@const href = publicHref(rangeHref(reader.browseJuz, rg.index))}
                   {#snippet body()}
                     <span
-                      class="flex h-6 min-w-6 flex-none items-center justify-center rounded-full border border-line px-1.5 text-[10.5px] text-fg-3"
+                      class="flex h-6 min-w-6 flex-none items-center justify-center rounded-pill border border-border px-1.5 text-[10.5px] text-muted-foreground"
                     >
                       {copy.sidebar.rangeItem(reader.browseJuz ? "juz" : "page", rg.index)}
                     </span>
-                    <span class="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-foreground-secondary">
                       {quranData.surahByNum(num)?.name ?? `${copy.sidebar.mode("surah")} ${num}`} {num}:{n}
                     </span>
                   {/snippet}
@@ -304,7 +306,7 @@
           {/key}
         {/if}
       {:catch}
-        <p class="px-4 py-3 text-sm text-fg-3" role="alert">{copy.sidebar.navigationError}</p>
+        <p class="px-4 py-3 text-sm text-muted-foreground" role="alert">{copy.sidebar.navigationError}</p>
       {/await}
     {/if}
   </SidebarContent>
@@ -316,6 +318,6 @@
       </div>
       <StackedTranslationsPicker />
     </div>
-    <span class="px-1 text-[11px] text-fg-3">{copy.sidebar.tip}</span>
+    <span class="px-1 text-[11px] text-muted-foreground">{copy.sidebar.tip}</span>
   </SidebarFooter>
 </Sidebar>

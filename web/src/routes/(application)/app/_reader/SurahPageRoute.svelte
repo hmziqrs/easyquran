@@ -201,10 +201,10 @@
 
 <ReaderShell>
   {#snippet header()}
-    <span class="text-sm font-medium text-fg-2">
+    <span class="text-sm font-medium text-foreground-secondary">
       {surah.num}. {surah.name} · {copy.shell.pageOf(activeLocalPage, data.pageData.pageCount)}
     </span>
-    <span dir="rtl" lang="ar" class="ml-auto font-arabic text-base text-fg-3">
+    <span dir="rtl" lang="ar" class="ms-auto font-arabic text-base text-muted-foreground">
       {surah.arabic}
     </span>
   {/snippet}

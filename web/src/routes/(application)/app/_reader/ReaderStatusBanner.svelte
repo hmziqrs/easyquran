@@ -24,7 +24,7 @@
 
 <div
   role="status"
-  class="flex items-center justify-between gap-3 border-t border-line bg-bg-2 px-5 py-3 text-sm text-fg-2 sm:px-9"
+  class="flex items-center justify-between gap-3 border-t border-border bg-background-subtle px-5 py-3 text-sm text-foreground-secondary sm:px-9"
 >
   <span>
     {#if loadFailed && initialEmpty}
@@ -46,7 +46,7 @@
       type="button"
       onclick={onRetry}
       aria-label={copy.shell.retry}
-      class="shrink-0 rounded-full border border-line px-3 py-1 text-xs text-fg transition-colors hover:bg-bg-1"
+      class="shrink-0 rounded-pill border border-border px-3 py-1 text-xs text-foreground transition-colors hover:bg-surface"
     >
       {copy.shell.retry}
     </button>

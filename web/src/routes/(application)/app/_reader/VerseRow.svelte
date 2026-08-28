@@ -83,7 +83,7 @@
   id={ayahId}
   data-verse-key={vKey}
   tabindex={showTools ? -1 : 0}
-  class="verse-row group relative scroll-mt-24 border-b border-line px-5 pb-[22px] pt-[62px] transition-colors sm:px-9 {isRevealed
+  class="verse-row group relative scroll-mt-24 border-b border-reader-divider px-5 pb-[22px] pt-[62px] transition-colors sm:px-9 {isRevealed
     ? 'revealed-ayah'
     : ''}"
   onpointerenter={() => (hovered = true)}
@@ -95,7 +95,7 @@
     <span
       lang={page.params.lang}
       dir="auto"
-      class="verse-text verse-text--translation leading-[1.85] text-fg"
+      class="verse-text verse-text--translation leading-[1.85] text-translation-foreground"
       style="font-size:var(--reader-translation-size, 1.0625rem)"
     >
       {text}<span class="ayah-marker translation-marker" data-verse-anchor={vKey}>{n}</span>
@@ -104,7 +104,7 @@
     <span
       dir="rtl"
       lang="ar"
-      class="verse-text font-arabic leading-[2.15] text-fg"
+      class="verse-text font-arabic leading-[2.15] text-quran-foreground"
       style="font-size:var(--reader-arabic-size, 33px)"
     >
       {text}<span class="ayah-marker arabic-marker" data-verse-anchor={vKey}>{toArabicDigits(n)}</span>
@@ -138,7 +138,12 @@
 <style>
   .verse-text {
     display: block;
-    text-align: right;
+    text-align: start;
+  }
+
+  /* §21 ayah hover: quiet surface tint (transparent at rest); suppressed in continuous reading mode. */
+  .verse-row:hover {
+    background: var(--surface-hover);
   }
 
   .verse-row .verse-text {
@@ -162,6 +167,11 @@
     display: inline;
     padding: 0;
     border: 0;
+    background: transparent;
+  }
+
+  :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-row:hover {
+    background: transparent;
   }
 
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-text {
@@ -170,7 +180,8 @@
 
   .verse-extra {
     display: block;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--reader-divider);
+    color: var(--translation-foreground);
     font-family: var(--reader-translation-family, var(--font-sans));
     margin-top: 0.5rem;
     padding-top: 0.5rem;
@@ -178,18 +189,18 @@
   }
 
   .verse-extra-label {
-    color: var(--fg-3);
+    color: var(--muted);
     font-size: 0.8rem;
     margin-inline-end: 0.4rem;
   }
 
   .verse-extra--error {
-    color: var(--fg-3);
+    color: var(--muted);
     font-size: 0.95rem;
   }
 
   .verse-extra--skeleton {
-    background: var(--bg-2);
+    background: var(--background-subtle);
     border-radius: 0.25rem;
     height: 1.2rem;
   }

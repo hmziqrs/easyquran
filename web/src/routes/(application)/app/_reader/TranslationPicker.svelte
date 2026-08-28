@@ -106,9 +106,11 @@
   function rowClass(active: boolean, disabled = false): string {
     return cn(
       "flex items-center gap-2 rounded-[7px] px-3 py-2 text-[12.5px] transition-colors",
-      disabled && "cursor-not-allowed text-fg-4 opacity-60",
+      disabled && "cursor-not-allowed text-muted-foreground opacity-60",
       !disabled &&
-        (active ? "bg-bg-3 font-medium text-fg" : "text-fg-2 hover:bg-bg-2 hover:text-fg"),
+        (active
+          ? "bg-surface-hover font-medium text-foreground"
+          : "text-foreground-secondary hover:bg-background-subtle hover:text-foreground"),
     );
   }
 
@@ -122,16 +124,16 @@
 <details bind:this={detailsEl} class="group px-1">
   <summary
     title={copy.sources.source}
-    class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-[9px] border border-line bg-bg-2 px-3 py-2 text-[12.5px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
+    class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-[9px] border border-border bg-background-subtle px-3 py-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
   >
     <span class="flex min-w-0 items-center gap-2">
-      <span class="text-[10.5px] uppercase tracking-wide text-fg-4">{copy.sources.source}</span>
-      <span class="truncate font-medium text-fg">{summary}</span>
+      <span class="text-[10.5px] uppercase tracking-wide text-muted-foreground">{copy.sources.source}</span>
+      <span class="truncate font-medium text-foreground">{summary}</span>
     </span>
     <Icon
       name="arrow-right"
       size={13}
-      class="flex-none text-fg-3 transition-transform group-open:rotate-90"
+      class="flex-none text-muted-foreground transition-transform group-open:rotate-90"
     />
   </summary>
 
@@ -151,7 +153,7 @@
           class={rowClass(isArabicActive)}
         >
           <span class="truncate">{copy.sources.arabic}</span>
-          <span class="ml-auto text-[10.5px] text-fg-4">{copy.sources.original}</span>
+          <span class="ms-auto text-[10.5px] text-muted-foreground">{copy.sources.original}</span>
         </a>
       {:else}
         <span class={rowClass(false, true)}>
@@ -176,7 +178,7 @@
           >
             <span class="truncate">{t.language}{t.translator ? ` · ${t.translator}` : ""}</span>
             {#if preferred && !active}
-              <span class="ml-auto text-[10.5px] text-fg-4">{copy.sources.default}</span>
+              <span class="ms-auto text-[10.5px] text-muted-foreground">{copy.sources.default}</span>
             {/if}
           </a>
         {:else}
@@ -186,7 +188,7 @@
         {/if}
       </li>
     {:else}
-      <li class="px-3 py-2 text-[12px] text-fg-3" role="status">
+      <li class="px-3 py-2 text-[12px] text-muted-foreground" role="status">
         {copy.sources.noTranslations}
       </li>
     {/each}

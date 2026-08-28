@@ -61,7 +61,7 @@
 <div
   class="verse-toolbar absolute inset-x-5 top-[22px] flex items-center justify-between gap-2 opacity-100 sm:inset-x-9 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
 >
-  <span class="font-mono text-[11px] tracking-wide text-fg-3">{vKey}</span>
+  <span class="font-mono text-[11px] tracking-wide text-muted-foreground">{vKey}</span>
   <div class="flex items-center gap-0.5">
     {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string })}
       <Tooltip>
@@ -73,8 +73,8 @@
               onclick={onclick}
               aria-label={ariaLabel}
               class={cn(
-                "flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors hover:bg-bg-2",
-                activeClass ?? "text-fg-3 hover:text-fg",
+                "flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover",
+                activeClass ?? "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon name={icon} size={15} />
@@ -90,42 +90,42 @@
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
       ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
       icon: "bookmark",
-      activeClass: bookmarked ? "text-pop" : undefined,
+      activeClass: bookmarked ? "text-gold" : undefined,
     })}
     {@render verseAction({
       onclick: onCopy,
       label: copied ? copy.verse.copied : copy.verse.copy,
       ariaLabel: copy.verse.copyAyah,
       icon: copied ? "check" : "copy",
-      activeClass: copied ? "text-accent" : undefined,
+      activeClass: copied ? "text-primary" : undefined,
     })}
     {@render verseAction({
       onclick: onShare,
       label: sharedCopied ? copy.verse.copied : copy.verse.share,
       ariaLabel: copy.verse.shareVerse,
       icon: sharedCopied ? "check" : "share",
-      activeClass: sharedCopied ? "text-accent" : undefined,
+      activeClass: sharedCopied ? "text-primary" : undefined,
     })}
     {@render verseAction({
       onclick: () => (onToggleNote ? onToggleNote() : reader.toggleNote(vKey)),
       label: copy.verse.noteTafsir,
       ariaLabel: noteOpen ? copy.verse.closeNoteTafsir : copy.verse.openNoteTafsir,
       icon: "note",
-      activeClass: noteOpen || hasNote ? "text-accent" : undefined,
+      activeClass: noteOpen || hasNote ? "text-primary" : undefined,
     })}
   </div>
 </div>
 
 {#if noteOpen}
   <div class="verse-note mt-[20px] flex flex-col gap-3.5 animate-fade-up">
-    <div class="flex flex-col gap-1.5 rounded-[11px] bg-bg-2 px-[18px] py-4">
-      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-pop"
+    <div class="flex flex-col gap-1.5 rounded-[11px] bg-background-subtle px-[18px] py-4">
+      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
         >{copy.verse.tafsir}</span
       >
-      <span class="text-[14.5px] leading-[1.65] text-fg-2">{tafsir}</span>
+      <span class="text-[14.5px] leading-[1.65] text-foreground-secondary">{tafsir}</span>
     </div>
     <div class="flex flex-col gap-2">
-      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-fg-3">
+      <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
         {copy.verse.yourNote}
       </span>
       <Textarea
@@ -134,9 +134,9 @@
         rows={3}
         aria-label={copy.verse.yourNote}
         placeholder={copy.verse.notePlaceholder}
-        class="resize-y rounded-[11px] border-line bg-bg-3 px-3.5 py-3 text-[14.5px] leading-[1.6] text-fg"
+        class="resize-y rounded-md border-border bg-surface px-3.5 py-3 text-[14.5px] leading-[1.6] text-foreground"
       />
-      <span class="text-[12.5px] text-fg-3">{copy.verse.noteSaved}</span>
+      <span class="text-[12.5px] text-muted-foreground">{copy.verse.noteSaved}</span>
     </div>
   </div>
 {/if}

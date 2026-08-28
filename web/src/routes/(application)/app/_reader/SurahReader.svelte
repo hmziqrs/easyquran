@@ -766,15 +766,15 @@
       type="button"
       onclick={continueReading}
       aria-label={copy.shell.continueReading(reader.lastReadRef)}
-      class="flex items-center gap-3 rounded-[12px] bg-accent-soft px-[18px] py-[13px] text-left transition-[filter] duration-150 hover:brightness-[0.98]"
+      class="flex items-center gap-3 rounded-md bg-primary-soft px-[18px] py-[13px] text-start transition-[filter] duration-150 hover:brightness-[0.98]"
     >
-      <Icon name="play" size={15} class="flex-none text-accent" />
-      <span class="text-sm text-accent">{copy.shell.continueReading(reader.lastReadRef)}</span>
-      <span class="ml-auto text-[13px] text-accent">{copy.shell.jump} <span aria-hidden="true">→</span></span>
+      <Icon name="play" size={15} class="flex-none text-primary" />
+      <span class="text-sm text-primary">{copy.shell.continueReading(reader.lastReadRef)}</span>
+      <span class="ms-auto text-[13px] text-primary">{copy.shell.jump} <span aria-hidden="true">→</span></span>
     </button>
   {/if}
 
-  <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
+  <div class="overflow-hidden rounded-lg border border-border bg-reader-background">
     <ReaderHeader
       {initial}
       {visibleLocalPage}
@@ -805,7 +805,7 @@
                 {copy.shell.surahPageTitle(initial.surah.name, pageData.page.localPage, initial.pageCount)}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-                <p dir="rtl" lang="ar" class="surah-opener py-3 text-center text-fg-3">
+                <p dir="rtl" lang="ar" class="surah-opener text-center text-quran-foreground">
                   {headerText(pageData.normalization)}
                 </p>
               {/if}
@@ -881,21 +881,22 @@
     flex-direction: column;
   }
 
+  /* §22 Bismillah/opener: ceremonial but minimal — 42–48px, margin-block 40–52px, no ornament.
+     Size tracks the reader's Arabic setting (default 33px → ~45px) and never drops below 42px. */
   .surah-opener {
     font-family: var(--reader-arabic-family, var(--font-arabic));
+    font-size: max(42px, calc(var(--reader-arabic-size, 33px) * 1.35));
+    line-height: 1.9;
+    margin-block: 44px;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page {
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--reader-divider);
     padding: 2rem 1.25rem;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
     border-bottom: 0;
-  }
-
-  :global([data-reader-mode="reading"]) .reader-pages .surah-opener {
-    padding-top: 0;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="arabic"] .ayah-list {

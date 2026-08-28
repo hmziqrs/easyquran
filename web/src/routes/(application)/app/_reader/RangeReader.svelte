@@ -199,22 +199,26 @@
 >
   <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
   {#each groups as g (g.surah.num)}
-    <div class="overflow-hidden rounded-2xl border border-line bg-bg-1">
-      <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3 sm:px-9">
-        <span class="text-sm font-semibold text-fg">{g.surah.num}. {g.surah.name}</span>
+    <div class="overflow-hidden rounded-lg border border-border bg-reader-background">
+      <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3 sm:px-9">
+        <span class="text-sm font-semibold text-foreground">{g.surah.num}. {g.surah.name}</span>
         <button
           type="button"
           onclick={() => openSurah(g.surah)}
           aria-label={copy.range.fullSurah}
           title={copy.range.fullSurah}
-          class="flex items-center gap-2 text-[12.5px] text-accent transition-colors hover:brightness-110"
+          class="flex items-center gap-2 text-[12.5px] text-primary transition-colors hover:brightness-110"
         >
-          <span dir="rtl" class="font-arabic text-base">{g.surah.arabic}</span>
+          <span dir="rtl" lang="ar" class="font-arabic text-base">{g.surah.arabic}</span>
           <span>{copy.range.fullSurah}</span>
         </button>
       </div>
       {#if g.opener}
-        <p dir="rtl" class="border-b border-line px-5 py-4 text-center font-arabic text-fg-3 sm:px-9">
+        <p
+          dir="rtl"
+          lang="ar"
+          class="surah-opener border-b border-reader-divider px-5 text-center font-arabic text-quran-foreground sm:px-9"
+        >
           {g.opener}
         </p>
       {/if}
@@ -238,7 +242,7 @@
 
   {#if displayed.ayahs.length === 0}
     <div
-      class="rounded-2xl border border-line bg-bg-1 px-5 py-10 text-center text-sm text-fg-2 sm:px-9"
+      class="rounded-lg border border-border bg-surface px-5 py-10 text-center text-sm text-foreground-secondary sm:px-9"
       role={readStatus === "loading" ? "status" : "alert"}
       aria-live={readStatus === "loading" ? "polite" : "assertive"}
     >
@@ -254,7 +258,7 @@
 
   {#if prevHref || nextHref}
     <div
-      class="flex items-center justify-between gap-4 rounded-2xl border border-line bg-bg-1 px-5 py-[22px] sm:px-9"
+      class="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-5 py-[22px] sm:px-9"
     >
       {#if prevHref}
         <a
@@ -262,7 +266,7 @@
           data-sveltekit-preload-data="hover"
           aria-label={copy.range.item(data.kind, data.index - 1)}
           title={copy.range.item(data.kind, data.index - 1)}
-          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+          class="flex items-center gap-1.5 text-sm text-foreground-secondary transition-colors hover:text-foreground"
         >
           <span aria-hidden="true">←</span>
           {copy.range.item(data.kind, data.index - 1)}
@@ -276,7 +280,7 @@
           data-sveltekit-preload-data="hover"
           aria-label={copy.range.item(data.kind, data.index + 1)}
           title={copy.range.item(data.kind, data.index + 1)}
-          class="flex items-center gap-1.5 text-sm text-fg-2 transition-colors hover:text-fg"
+          class="flex items-center gap-1.5 text-sm text-foreground-secondary transition-colors hover:text-foreground"
         >
           {copy.range.item(data.kind, data.index + 1)}
           <span aria-hidden="true">→</span>
@@ -287,6 +291,13 @@
 </div>
 
 <style>
+  /* §22 Bismillah/opener: same ceremonial-but-minimal treatment as the Surah reader. */
+  .surah-opener {
+    font-size: max(42px, calc(var(--reader-arabic-size, 33px) * 1.35));
+    line-height: 1.9;
+    margin-block: 40px;
+  }
+
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .ayah-list {
     display: block;
     direction: rtl;

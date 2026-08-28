@@ -101,10 +101,10 @@
 
 <Sheet bind:open>
   <SheetTrigger
-    class="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] border border-line bg-bg-2 text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
+    class="flex h-9 w-9 flex-none items-center justify-center rounded-md border border-border bg-background-subtle text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
     aria-label={copy.stacked.open}
   >
-    <Icon name="rows" size={15} class="text-fg-3" />
+    <Icon name="rows" size={15} class="text-muted-foreground" />
   </SheetTrigger>
 
   <SheetContent side="right" class="gap-3">
@@ -114,7 +114,7 @@
 
     <div class="flex flex-col gap-2 px-4">
       <div class="flex items-center justify-between">
-        <span class="text-[11.5px] text-fg-3">
+        <span class="text-[11.5px] text-muted-foreground">
           {copy.stacked.count(selectedIds.length, STACKED_MAX_EXTRAS)}
         </span>
         {#if selectedIds.length > 0}
@@ -122,7 +122,7 @@
             type="button"
             onclick={clear}
             aria-label={copy.stacked.clear}
-            class="text-fg-3 transition-colors hover:text-fg"
+            class="text-muted-foreground transition-colors hover:text-foreground"
           >
             <Icon name="x" size={13} />
           </button>
@@ -130,38 +130,38 @@
       </div>
 
       <label
-        class="flex items-center gap-2 rounded-[9px] border border-line bg-bg-2 px-3 py-2 transition-colors focus-within:border-line-3 focus-within:ring-2 focus-within:ring-accent/40"
+        class="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 transition-colors"
       >
         <span class="sr-only">{copy.stacked.searchPlaceholder}</span>
-        <Icon name="search" size={13} class="flex-none text-fg-3" />
+        <Icon name="search" size={13} class="flex-none text-muted-foreground" />
         <input
           type="search"
           value={searchQuery}
           oninput={(e) => (searchQuery = e.currentTarget.value)}
           placeholder={copy.stacked.searchPlaceholder}
           aria-label={copy.stacked.searchPlaceholder}
-          class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-fg shadow-none outline-none placeholder:text-fg-3 focus:ring-0"
+          class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         />
       </label>
 
       {#if isFull}
-        <p class="text-[11.5px] text-fg-3">{copy.stacked.full(STACKED_MAX_EXTRAS)}</p>
+        <p class="text-[11.5px] text-muted-foreground">{copy.stacked.full(STACKED_MAX_EXTRAS)}</p>
       {/if}
     </div>
 
     <div class="flex flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4">
       {#if selectedIds.length > 0}
         <section>
-          <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-fg-4">
+          <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground">
             {copy.stacked.selected}
           </div>
           <ol class="flex flex-col gap-0.5">
             {#each selectedEntries as t, i (t.id)}
-              <li class="flex items-center gap-1 rounded-[7px] px-2 py-1.5 text-[12.5px] text-fg-2">
-                <span class="w-4 flex-none text-[10.5px] text-fg-4">{i + 1}</span>
+              <li class="flex items-center gap-1 rounded-[7px] px-2 py-1.5 text-[12.5px] text-foreground-secondary">
+                <span class="w-4 flex-none text-[10.5px] text-muted-foreground">{i + 1}</span>
                 <span class="min-w-0 flex-1 truncate">{selectedLabel(t)}</span>
                 {#if t.id === primaryId}
-                  <span class="flex-none rounded-full bg-bg-3 px-1.5 py-0.5 text-[10px] text-fg-3">
+                  <span class="flex-none rounded-pill bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     {copy.stacked.primaryBadge}
                   </span>
                 {/if}
@@ -170,7 +170,7 @@
                   onclick={() => reorder(t.id, -1)}
                   disabled={i === 0}
                   aria-label={copy.stacked.moveUp}
-                  class="flex-none p-1 text-fg-3 transition-colors hover:text-fg disabled:opacity-50"
+                  class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                 >
                   <Icon name="arrow-right" size={12} class="-rotate-90" />
                 </button>
@@ -179,7 +179,7 @@
                   onclick={() => reorder(t.id, 1)}
                   disabled={i === selectedEntries.length - 1}
                   aria-label={copy.stacked.moveDown}
-                  class="flex-none p-1 text-fg-3 transition-colors hover:text-fg disabled:opacity-50"
+                  class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                 >
                   <Icon name="arrow-right" size={12} class="rotate-90" />
                 </button>
@@ -187,7 +187,7 @@
                   type="button"
                   onclick={() => remove(t.id)}
                   aria-label={copy.stacked.remove}
-                  class="flex-none p-1 text-fg-3 transition-colors hover:text-fg"
+                  class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Icon name="x" size={12} />
                 </button>
@@ -196,14 +196,14 @@
           </ol>
         </section>
       {:else}
-        <p class="px-2 py-2 text-[12px] text-fg-3" role="status">
+        <p class="px-2 py-2 text-[12px] text-muted-foreground" role="status">
           {copy.stacked.noneSelected}
         </p>
       {/if}
 
       {#each grouped as g (g.language)}
         <section>
-          <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-fg-4">
+          <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground">
             {g.language}
           </div>
           <ul class="flex flex-col gap-0.5">
@@ -216,8 +216,8 @@
                   class={cn(
                     "flex items-center gap-2 rounded-[7px] px-3 py-2 text-[12.5px] transition-colors",
                     disabled
-                      ? "cursor-not-allowed text-fg-4 opacity-60"
-                      : "text-fg-2 hover:bg-bg-2 hover:text-fg",
+                      ? "cursor-not-allowed text-muted-foreground opacity-60"
+                      : "text-foreground-secondary hover:bg-background-subtle hover:text-foreground",
                   )}
                 >
                   <input
@@ -226,11 +226,11 @@
                     checked={checked}
                     disabled={disabled}
                     onchange={() => toggle(t.id)}
-                    class="h-4 w-4 flex-none accent-[var(--accent)]"
+                    class="h-4 w-4 flex-none accent-primary"
                   />
                   <span class="min-w-0 flex-1 truncate">{rowLabel(t)}</span>
                   {#if t.id === primaryId}
-                    <span class="flex-none rounded-full bg-bg-3 px-1.5 py-0.5 text-[10px] text-fg-3">
+                    <span class="flex-none rounded-pill bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">
                       {copy.stacked.primaryBadge}
                     </span>
                   {/if}
