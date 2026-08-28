@@ -90,7 +90,7 @@
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
       ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
       icon: "bookmark",
-      activeClass: bookmarked ? "text-gold" : undefined,
+      activeClass: bookmarked ? "text-primary" : undefined,
     })}
     {@render verseAction({
       onclick: onCopy,
@@ -118,7 +118,7 @@
 
 {#if noteOpen}
   <div class="verse-note mt-[20px] flex flex-col gap-3.5 animate-fade-up">
-    <div class="flex flex-col gap-1.5 rounded-[11px] bg-background-subtle px-[18px] py-4">
+    <div class="flex flex-col gap-1.5 rounded-md bg-background-subtle px-[18px] py-4">
       <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
         >{copy.verse.tafsir}</span
       >

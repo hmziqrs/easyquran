@@ -30,7 +30,7 @@
   <div class="flex items-start gap-4">
     <div
       aria-hidden="true"
-      class="flex h-16 w-16 flex-none items-center justify-center rounded-lg border border-gold-soft bg-gold-soft font-arabic text-lg text-gold-strong"
+      class="flex h-16 w-16 flex-none items-center justify-center rounded-sm bg-primary font-arabic text-lg font-bold text-primary-foreground"
     >
       {badge}
     </div>
@@ -53,7 +53,7 @@
   {#if clientMounted}
     <div class="flex flex-wrap items-center justify-end gap-2">
       <div
-        class="flex items-center gap-0.5 rounded-[9px] bg-background-subtle p-1"
+        class="flex items-center gap-0.5 rounded-md bg-background-subtle p-1"
         role="group"
         aria-label={copy.shell.arabicTextSizeLabel}
       >
@@ -61,7 +61,7 @@
           type="button"
           onclick={onSmaller}
           aria-label={copy.shell.smallerArabicTextLabel}
-          class="flex h-[26px] w-7 items-center justify-center rounded-md text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="flex h-[26px] w-7 items-center justify-center rounded-pill text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
         >
           A&minus;
         </button>
@@ -69,14 +69,14 @@
           type="button"
           onclick={onBigger}
           aria-label={copy.shell.largerArabicTextLabel}
-          class="flex h-[26px] w-7 items-center justify-center rounded-md text-[15px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          class="flex h-[26px] w-7 items-center justify-center rounded-pill text-[15px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
         >
           A+
         </button>
       </div>
 
       <div
-        class="flex items-center gap-0.5 rounded-[9px] bg-background-subtle p-1"
+        class="flex items-center gap-0.5 rounded-md bg-background-subtle p-1"
         role="group"
         aria-label={copy.shell.readingModeLabel}
       >
@@ -84,7 +84,7 @@
           type="button"
           aria-pressed={reader.isVerseMode}
           onclick={() => onChangeMode("verse")}
-          class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-surface-hover aria-pressed:text-foreground text-muted-foreground hover:text-foreground"
+          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
         >
           <Icon name="rows" size={13} />
           <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
@@ -94,7 +94,7 @@
           type="button"
           aria-pressed={reader.isReadingMode}
           onclick={() => onChangeMode("reading")}
-          class="flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors aria-pressed:bg-surface-hover aria-pressed:text-foreground text-muted-foreground hover:text-foreground"
+          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
         >
           <Icon name="continuous" size={13} />
           <span>{copy.shell.reading}</span>

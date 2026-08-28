@@ -157,7 +157,7 @@
           </div>
           <ol class="flex flex-col gap-0.5">
             {#each selectedEntries as t, i (t.id)}
-              <li class="flex items-center gap-1 rounded-[7px] px-2 py-1.5 text-[12.5px] text-foreground-secondary">
+              <li class="flex items-center gap-1 rounded-sm px-2 py-1.5 text-[12.5px] text-foreground-secondary">
                 <span class="w-4 flex-none text-[10.5px] text-muted-foreground">{i + 1}</span>
                 <span class="min-w-0 flex-1 truncate">{selectedLabel(t)}</span>
                 {#if t.id === primaryId}
@@ -214,10 +214,10 @@
                 <label
                   for={checkboxId(t)}
                   class={cn(
-                    "flex items-center gap-2 rounded-[7px] px-3 py-2 text-[12.5px] transition-colors",
+                    "flex items-center gap-2 rounded-sm px-3 py-2 text-[12.5px] transition-colors",
                     disabled
                       ? "cursor-not-allowed text-muted-foreground opacity-60"
-                      : "text-foreground-secondary hover:bg-background-subtle hover:text-foreground",
+                      : "text-foreground-secondary hover:bg-surface-hover hover:text-foreground",
                   )}
                 >
                   <input

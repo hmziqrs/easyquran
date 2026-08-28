@@ -105,12 +105,12 @@
 
   function rowClass(active: boolean, disabled = false): string {
     return cn(
-      "flex items-center gap-2 rounded-[7px] px-3 py-2 text-[12.5px] transition-colors",
+      "flex items-center gap-2 rounded-sm px-3 py-2 text-[12.5px] transition-colors",
       disabled && "cursor-not-allowed text-muted-foreground opacity-60",
       !disabled &&
         (active
           ? "bg-surface-hover font-medium text-foreground"
-          : "text-foreground-secondary hover:bg-background-subtle hover:text-foreground"),
+          : "text-foreground-secondary hover:bg-surface-hover hover:text-foreground"),
     );
   }
 
@@ -124,7 +124,7 @@
 <details bind:this={detailsEl} class="group px-1">
   <summary
     title={copy.sources.source}
-    class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-[9px] border border-border bg-background-subtle px-3 py-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
+    class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
   >
     <span class="flex min-w-0 items-center gap-2">
       <span class="text-[10.5px] uppercase tracking-wide text-muted-foreground">{copy.sources.source}</span>

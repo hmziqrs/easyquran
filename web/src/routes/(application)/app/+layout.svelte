@@ -187,7 +187,7 @@
 <div lang={copy.locale} dir={copy.direction} data-reader-root class="flex min-h-screen flex-col">
   <a
     href="#main"
-    class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[101] focus:rounded focus:bg-bg-1 focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:shadow-lg"
+    class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[101] focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:text-foreground"
   >{copy.skipToContent}</a>
   <Nav
     collapsible

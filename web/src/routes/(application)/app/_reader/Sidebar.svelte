@@ -137,7 +137,7 @@
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
     <div
-      class="flex items-center gap-2.5 rounded-[11px] border border-border bg-background-subtle px-[13px] py-[11px] transition-colors"
+      class="flex items-center gap-2.5 rounded-md border border-border bg-background-subtle px-[13px] py-[11px] transition-colors"
     >
       <Icon name="search" size={15} class="flex-none text-muted-foreground" />
       <Input
@@ -161,7 +161,7 @@
     </div>
 
     <div
-      class="grid grid-cols-4 gap-1 rounded-[10px] bg-background-subtle p-1"
+      class="grid grid-cols-4 gap-1 rounded-md bg-background-subtle p-1"
       role="group"
       aria-label={copy.sidebar.browseLabel}
     >
@@ -171,7 +171,7 @@
           aria-pressed={reader.browseMode === b}
           onclick={() => selectBrowse(b)}
           class={cn(
-            "rounded-[7px] py-2 text-[12.5px] font-medium capitalize transition-colors",
+            "rounded-sm py-2 text-[12.5px] font-medium capitalize transition-colors",
             reader.browseMode === b
               ? "bg-surface-hover text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground-secondary",
