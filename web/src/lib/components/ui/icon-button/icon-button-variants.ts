@@ -17,9 +17,10 @@ export const iconButtonVariants = tv(
         primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
       },
       size: {
+        /* §13: buttons keep the 10–12px radius at every size (rounded-md = 12px). */
         sm: "size-9 rounded-md [&_svg]:size-[18px] [&_svg]:stroke-[1.75]",
         md: "size-11 rounded-md [&_svg]:size-5 [&_svg]:stroke-[1.75]",
-        lg: "size-12 rounded-lg [&_svg]:size-6 [&_svg]:stroke-[1.75]",
+        lg: "size-12 rounded-md [&_svg]:size-6 [&_svg]:stroke-[1.75]",
       },
     },
     defaultVariants: { variant: "ghost", size: "md" },

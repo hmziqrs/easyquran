@@ -33,10 +33,16 @@ const PRIMITIVE_SOURCES = [
 ] as const;
 
 describe("primitives §61 — semantic tokens only", () => {
+  /* Bare white/black, every shaded family (`sky-500`, `slate-900`, …), and alpha forms
+     (`bg-black/5`) — semantic tokens never carry a \d{2,3} shade, so no false positives
+     (border-b-2 / outline-2 / text-[11px] style classes cannot match). */
+  const paletteClass =
+    /\b(?:bg|text|border|outline|fill|stroke)-(?:white|black|[a-z]+-\d{2,3})(?:\/\d+)?\b/;
+
   for (const [name, source] of PRIMITIVE_SOURCES) {
     it(`${name} contains no hard-coded palette color`, () => {
       expect(source.match(/#[0-9a-fA-F]{3,8}\b/), `${name} must not contain hex literals`).toBeNull();
-      expect(source.match(/(bg|text|border)-(red|blue|green|amber|zinc|neutral|gray|white|black|emerald|yellow)-\d/), `${name} must not use Tailwind palette colors`).toBeNull();
+      expect(source.match(paletteClass), `${name} must not use Tailwind palette colors`).toBeNull();
     });
   }
 });
@@ -79,6 +85,12 @@ describe("icon button §36/§51", () => {
     expect(iconButton).toContain("[&_svg]:size-5");
     expect(iconButton).toContain("[&_svg]:size-6");
     expect(iconButton.match(/\[&_svg\]:stroke-\[1\.75\]/g)).toHaveLength(3);
+  });
+
+  it("keeps every size inside the §13 button radius band (no rounded-lg/xl)", () => {
+    const radii = iconButton.match(/rounded-(?:sm|md|lg|xl|pill)/g) ?? [];
+    expect(radii.length).toBeGreaterThanOrEqual(3);
+    expect([...new Set(radii)]).toEqual(["rounded-md"]);
   });
 
   it("requires an accessible name rendered as aria-label", () => {
