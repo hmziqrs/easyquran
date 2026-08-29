@@ -368,7 +368,8 @@
       variant="ink"
       size="lg"
       href={publicHref(marketingReaderHomeHref(locale))}
-      class="mt-2.5 gap-2.5 text-[17.5px] font-extrabold"
+      data-visual="cta-closing"
+      class="mt-2.5 gap-2.5 text-[17.5px] font-extrabold focus-visible:outline-primary-foreground"
     >
       {landing.closingCta}
       <Icon name="arrow-right" size={19} />
