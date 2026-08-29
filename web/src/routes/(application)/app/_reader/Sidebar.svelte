@@ -173,7 +173,7 @@
           class={cn(
             "rounded-sm py-2 text-[12.5px] font-medium capitalize transition-colors",
             reader.browseMode === b
-              ? "bg-surface-hover text-foreground shadow-sm"
+              ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
               : "text-muted-foreground hover:text-foreground-secondary",
           )}
         >

@@ -22,15 +22,40 @@
 
   const copy = getReaderUiCopy();
   const badge = $derived(String(initial.surah.num).padStart(3, "0"));
+
+  // Reader CHROME only (the reading column stays neutral): the header band takes
+  // the hue-slot soft fill cycling by surah (§6), and the number chip renders the
+  // legible pair on it — the landing tile grammar. Palette × mode resolve the pair.
+  const HUE_SOFT = {
+    1: "var(--hue-1-soft)",
+    2: "var(--hue-2-soft)",
+    3: "var(--hue-3-soft)",
+    4: "var(--hue-4-soft)",
+  } as const;
+  const HUE_LEGIBLE = {
+    1: "var(--hue-1-legible)",
+    2: "var(--hue-2-legible)",
+    3: "var(--hue-3-legible)",
+    4: "var(--hue-4-legible)",
+  } as const;
+  type Hue = keyof typeof HUE_SOFT;
+
+  function hueFor(surahNum: number): Hue {
+    // SAFETY: ((surahNum-1) % 4) is 0–3 for any positive integer, so +1 is exactly 1–4.
+    return (((surahNum - 1) % 4) + 1) as Hue;
+  }
+  const hue = $derived(hueFor(initial.surah.num));
 </script>
 
 <div
   class="flex min-h-[229px] flex-wrap items-start justify-between gap-6 border-b border-border px-5 pb-[26px] pt-[30px] sm:min-h-0 sm:px-9"
+  style:background={HUE_SOFT[hue]}
 >
   <div class="flex items-start gap-4">
     <div
       aria-hidden="true"
-      class="flex h-16 w-16 flex-none items-center justify-center rounded-sm bg-primary font-arabic text-lg font-bold text-primary-foreground"
+      class="flex h-16 w-16 flex-none items-center justify-center rounded-sm font-arabic text-lg font-bold"
+      style:color={HUE_LEGIBLE[hue]}
     >
       {badge}
     </div>
