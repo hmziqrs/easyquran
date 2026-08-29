@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
+import { cn, RAMP_TEXT_ROLES } from "$lib/utils";
+import { buttonVariants } from "$lib/components/ui/button/button-variants";
 
 /**
  * Machine guard for the §35–§38 primitive contracts (docs/design-system.md), restyled onto
@@ -53,6 +55,33 @@ describe("button §35 + plan 03 state matrix", () => {
   it("primary pairs primary background with primary-foreground and a token hover", () => {
     expect(button).toContain("bg-primary text-primary-foreground");
     expect(button).toContain("hover:bg-primary-hover");
+  });
+
+  it("twMerge classifier keeps the on-fill text colour next to every ramp size role (vision r1 C3/C6)", () => {
+    /* tailwind-merge's default classifier files unknown text-<word> under text-COLOUR, so
+       the size role deleted the variant colour. cn() must keep BOTH for every role. */
+    for (const role of RAMP_TEXT_ROLES) {
+      const merged = cn("bg-primary text-primary-foreground", `min-h-11 px-6 text-${role}`);
+      expect(merged, `role ${role} must not eat text-primary-foreground`).toContain(
+        "text-primary-foreground"
+      );
+      expect(merged, `role ${role} must survive the merge itself`).toContain(`text-${role}`);
+    }
+  });
+
+  it("buttonVariants output carries the on-fill colour at every sized variant (composed through tv's own merge)", () => {
+    for (const size of ["sm", "md", "lg"] as const) {
+      for (const variant of ["primary", "accent"] as const) {
+        expect(buttonVariants({ variant, size })).toContain("text-primary-foreground");
+      }
+      expect(buttonVariants({ variant: "ink", size })).toContain("text-primary");
+      expect(buttonVariants({ variant: "ink", size })).not.toContain("text-primary-foreground");
+    }
+  });
+
+  it("ramp roles still conflict with explicit font sizes only, never with colours", () => {
+    expect(cn("text-body-s", "text-[15px]")).toBe("text-[15px]");
+    expect(cn("text-body-s", "text-primary")).toBe("text-body-s text-primary");
   });
 
   it("keeps the legacy accent CTA on the §35 primary role", () => {

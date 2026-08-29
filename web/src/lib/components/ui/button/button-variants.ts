@@ -1,4 +1,5 @@
 import { tv, type VariantProps } from "tailwind-variants";
+import { rampTwMergeConfig } from "$lib/utils";
 
 /**
  * §35 (docs/design-system.md) + plan 03 geometry/state matrix: primary/secondary/ghost
@@ -40,7 +41,7 @@ export const buttonVariants = tv(
     },
     defaultVariants: { variant: "primary", size: "md" },
   },
-  { twMerge: true },
+  { twMerge: true, twMergeConfig: rampTwMergeConfig },
 );
 
 export type ButtonVariant = VariantProps<typeof buttonVariants>["variant"];
