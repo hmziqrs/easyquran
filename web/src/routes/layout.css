@@ -358,9 +358,9 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #356B4B;
-  --warning: #775F25;
-  --danger: #A33F3F;
+  --success: #397A57;
+  --warning: #8A681E;
+  --danger: #B34A4A;
 
   --focus-ring: oklch(0.20 0 0);
 
