@@ -79,6 +79,9 @@
 
   let loadedPages = $state.raw<SurahLocalPageData[]>([]);
   const pages = $derived.by(() => {
+    // `initial` can be gone for one turn when a keyed swap / hot update tears the
+    // route down while a lazy read (history snapshot) still re-evaluates us.
+    if (!initial) return [];
     const byPage = new Map<number, SurahLocalPageData>();
     for (const pageData of [initial, ...loadedPages]) {
       const existing = byPage.get(pageData.page.localPage);
@@ -108,7 +111,7 @@
   let positionQueue = Promise.resolve();
   const heightCache = new PageHeightCache();
   const loadAheadPx = 900;
-  const visibleLocalPage = $derived(activeLocalPage ?? initial.page.localPage);
+  const visibleLocalPage = $derived(activeLocalPage ?? initial?.page.localPage ?? 1);
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
@@ -368,6 +371,10 @@
     url: string | URL = window.location.href,
     localPage = visibleLocalPage,
   ): void {
+    // Guard the whole write: after a keyed swap / hot update the prop can already
+    // be gone while beforeNavigate or a settled loadPage still calls in. A skipped
+    // history write is harmless; a snapshot of a half-torn reader is a crash.
+    if (!initial) return;
     const snapshot = historySnapshot(localPage);
     const next = withModeParam(url, reader.mode, window.location.href);
     const target = next.href;
@@ -390,6 +397,15 @@
       writeHistoryState();
     }, 180);
   }
+
+  onDestroy(() => {
+    // The timer must never fire into a torn-down reader (same guard class as
+    // writeHistoryState, but cheaper to stop at the source).
+    if (historyWriteTimer) {
+      clearTimeout(historyWriteTimer);
+      historyWriteTimer = null;
+    }
+  });
 
   async function restoreHistory(): Promise<void> {
     const saved =

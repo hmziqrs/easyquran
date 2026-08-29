@@ -62,11 +62,24 @@
 
   /* Boards' "Often opened" row — the five surahs readers open most. */
   const OFTEN_OPENED = [1, 18, 36, 55, 67];
+
+  // Route data can lack `surahs` for one render (dev hot swap keeps the old load
+  // output; the SW's stale-while-revalidate __data cache can serve a pre-rebuild
+  // payload). Degrade to an empty index instead of crashing hydration.
+  let surahs = $derived(data.surahs ?? []);
   let oftenOpened = $derived(
-    OFTEN_OPENED.map((num) => data.surahs.find((s) => s.num === num)).filter(
-      (s): s is (typeof data.surahs)[number] => s !== undefined,
+    OFTEN_OPENED.map((num) => surahs.find((s) => s.num === num)).filter(
+      (s): s is (typeof surahs)[number] => s !== undefined,
     ),
   );
+
+  // Same stale-payload guard for the metric strip; these mirror RANGE_COUNTS,
+  // the same constants the server load falls back to.
+  const FALLBACK_JUZ_COUNT = 30;
+  const FALLBACK_PAGE_COUNT = 604;
+  let surahCount = $derived(data.surahCount ?? surahs.length);
+  let juzCount = $derived(data.juzCount ?? FALLBACK_JUZ_COUNT);
+  let quranPageCount = $derived(data.pageCount ?? FALLBACK_PAGE_COUNT);
 
   /* ── Hero search ─────────────────────────────────────────────────────────── */
   const SEARCH_ACTION = publicHref("/app/search");
@@ -219,13 +232,13 @@
 <!-- ── band 3: metric strip — gapless, edge to edge, four hues ──────────── -->
 <Band pad="none" width="full" contentClass="px-0 md:px-0 lg:px-0 xl:px-0">
   <div class="grid grid-cols-1 gap-0 md:grid-cols-2 lg:grid-cols-4">
-    <MetricCard hue={1} value={String(data.surahCount)} label={landing.metricSurahs} caption={landing.metricSurahsNote}>
+    <MetricCard hue={1} value={String(surahCount)} label={landing.metricSurahs} caption={landing.metricSurahsNote}>
       <Icon name="book" />
     </MetricCard>
-    <MetricCard hue={2} value={String(data.juzCount)} label={landing.metricJuz} caption={landing.metricJuzNote}>
+    <MetricCard hue={2} value={String(juzCount)} label={landing.metricJuz} caption={landing.metricJuzNote}>
       <Icon name="continuous" />
     </MetricCard>
-    <MetricCard hue={3} value={String(data.pageCount)} label={landing.metricPages} caption={landing.metricPagesNote}>
+    <MetricCard hue={3} value={String(quranPageCount)} label={landing.metricPages} caption={landing.metricPagesNote}>
       <Icon name="note" />
     </MetricCard>
     <MetricCard hue={4} value={bookmarksValue} label={landing.metricBookmarks} caption={bookmarksCaption}>
@@ -254,7 +267,7 @@
     </a>
   </div>
   <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {#each data.surahs as s, i (s.num)}
+    {#each surahs as s, i (s.num)}
       {@const hue = hueAt(i)}
       <li>
         <a
