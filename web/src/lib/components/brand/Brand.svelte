@@ -7,13 +7,22 @@
     class: className = "",
     homeHref = "/",
     homeLabel = `${SITE.name} · home`,
-  }: { class?: string; homeHref?: `/${string}`; homeLabel?: string } = $props();
+    tone = "default",
+  }: {
+    class?: string;
+    homeHref?: `/${string}`;
+    homeLabel?: string;
+    /** `on-accent` renders the lockup for a primary-fill band: the holder flips to
+        the on-primary pair so both marks stay legible on the accent surface (§5 D2). */
+    tone?: "default" | "on-accent";
+  } = $props();
 
   const brand = SITE.name.toLowerCase();
+  const onAccent = $derived(tone === "on-accent");
 </script>
 
-<!-- Board wordmark (design/PillLightCobalt.dc.html band 1): an 8px-radius ق holder on the
-     primary fill + the split-tracking name — same mark MarketingHeader and the footer
+<!-- Board wordmark (design/PillLightCobalt.dc.html band 1): an 8px-radius ق holder on
+     the primary fill + the split-tracking name — same mark MarketingHeader and the footer
      render inline. Replaces the rotated-diamond + mono lockup. -->
 <a
   class={cn("group inline-flex items-center gap-2.5", className)}
@@ -21,12 +30,20 @@
   aria-label={homeLabel}
 >
   <span
-    class="flex size-9 items-center justify-center rounded-sm bg-primary font-arabic text-[19px] font-bold leading-none text-primary-foreground"
+    class={cn(
+      "flex size-9 items-center justify-center rounded-sm font-arabic text-[19px] font-bold leading-none",
+      onAccent ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+    )}
     lang="ar"
     dir="rtl"
     aria-hidden="true">ق</span
   >
-  <span class="text-[22px] font-extrabold tracking-[-0.035em] text-foreground"
-    >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
+  <span
+    class={cn(
+      "text-[22px] font-extrabold tracking-[-0.035em]",
+      onAccent ? "text-primary-foreground" : "text-foreground",
+    )}
+    >{#if onAccent}{brand}{:else}{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span
+      >{/if}</span
   >
 </a>

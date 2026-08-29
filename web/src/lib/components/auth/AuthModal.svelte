@@ -15,6 +15,8 @@
   import RegisterForm from "$lib/auth/components/RegisterForm.svelte";
   import OAuthButtons from "$lib/auth/components/OAuthButtons.svelte";
   import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import { Brand } from "$lib/components/brand";
+  import { marketingHomeHref } from "$lib/i18n/marketing-copy";
 
   const copy = getAuthCopy();
 
@@ -51,9 +53,14 @@
         >{copy.dialogDescription}</DialogPrimitive.Description
       >
       <DialogPrimitive.Close
-        class="absolute end-3.5 top-3.5 inline-flex size-9 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="absolute end-3.5 top-3.5 z-10 inline-flex size-9 items-center justify-center rounded-pill text-primary-foreground/80 transition-colors hover:bg-primary-foreground/15 hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
         aria-label={copy.close}><Icon name="x" size={18} /></DialogPrimitive.Close
       >
+      <!-- Brand band (recon: modal carried no logo): accent fill + on-accent lockup
+           flush with the card top; the tabs below keep their own labels. -->
+      <div class="bg-primary px-6 py-5">
+        <Brand tone="on-accent" homeHref={marketingHomeHref(copy.locale)} />
+      </div>
       <div class="max-h-[82vh] overflow-y-auto px-6 py-7">
         <Tabs value={tab} onValueChange={(v) => (tab = v as "login" | "register")} class="flex flex-col gap-5">
           <TabsList class="self-start">
