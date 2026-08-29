@@ -24,7 +24,9 @@
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   const pill = "rounded-pill border px-3.5 py-2 text-caption transition-colors duration-150";
-  const pillOn = "border-primary bg-primary-soft text-foreground";
+  /* §38: active mode toggle carries the primary fill (hover override keeps it). */
+  const pillOn =
+    "border-transparent bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground";
   const pillOff = "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
   const quiet =
     "rounded-pill border border-border-strong px-3.5 py-2.5 text-caption text-foreground-secondary transition-colors duration-150 hover:border-border hover:text-foreground";
@@ -111,7 +113,7 @@
             class={cn(
               "flex items-center gap-3 rounded-pill border px-3 py-2.5 text-start transition-colors",
               prefs.palette === p.id
-                ? "border-primary bg-primary-soft"
+                ? "border-primary bg-primary-soft ring-2 ring-primary ring-offset-2 ring-offset-surface"
                 : "border-border-strong bg-surface hover:border-border hover:text-foreground",
             )}
           >

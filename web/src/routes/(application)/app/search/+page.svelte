@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import type { QuranData } from "$lib/data/quran-data";
+  import { Icon } from "$lib/components/icon";
   import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import { MIN_QUERY_LEN } from "$lib/quran/search/normalize";
   import { getSearchCopy } from "$lib/i18n/search-copy";
@@ -151,13 +152,33 @@
 
       <div class="mt-2 flex flex-col gap-6" aria-label={copy.resultsLabel}>
         {#if committedTooShort}
-          {#if engine.inputQuery.length === 0}
-            <p class="text-caption text-muted">{copy.emptyIdle}</p>
-          {:else}
-            <p class="text-caption text-muted">{copy.tooShort}</p>
-          {/if}
+          <!-- Empty state carries the hue-2 soft/legible pair (§6) so the page is not
+               grey-on-grey before the first query. -->
+          <div class="flex items-center gap-3.5">
+            <span
+              class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
+              style:background="var(--hue-2-soft)"
+              aria-hidden="true"
+            >
+              <Icon name="search" size={20} />
+            </span>
+            {#if engine.inputQuery.length === 0}
+              <p class="text-caption text-muted">{copy.emptyIdle}</p>
+            {:else}
+              <p class="text-caption text-muted">{copy.tooShort}</p>
+            {/if}
+          </div>
         {:else if orderedSections.length === 0}
-          <p class="text-caption text-muted">{copy.pickPrompt}</p>
+          <div class="flex items-center gap-3.5">
+            <span
+              class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
+              style:background="var(--hue-2-soft)"
+              aria-hidden="true"
+            >
+              <Icon name="search" size={20} />
+            </span>
+            <p class="text-caption text-muted">{copy.pickPrompt}</p>
+          </div>
         {:else}
           {#each orderedSections as section (section.id)}
             <ResultSection

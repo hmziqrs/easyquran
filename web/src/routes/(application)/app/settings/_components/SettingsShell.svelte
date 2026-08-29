@@ -18,11 +18,16 @@
     children: Snippet;
   } = $props();
 
+  /* §38 tab grammar: the active section trigger carries the primary fill +
+     --primary-foreground; the hover override keeps the fill from washing out. */
   function navItemClass(isActive: boolean): string {
     const base =
       "flex items-center gap-2.5 whitespace-nowrap rounded-pill border px-3.5 py-1.5 text-caption transition-colors";
     if (isActive) {
-      return cn(base, "border-primary bg-primary-soft font-medium text-foreground");
+      return cn(
+        base,
+        "border-transparent bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+      );
     }
     return cn(base, "border-border-strong bg-surface text-foreground-secondary hover:border-border hover:text-foreground");
   }
@@ -52,7 +57,7 @@
               size={15}
               class={cn(
                 "shrink-0 transition-colors",
-                section.id === active ? "text-primary" : "text-muted",
+                section.id === active ? "text-primary-foreground" : "text-muted",
               )}
             />
             {section.label}

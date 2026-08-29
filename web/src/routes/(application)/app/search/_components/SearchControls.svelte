@@ -53,15 +53,17 @@
     </button>
 
     {#each selected as chip (chip.id)}
+      <!-- §33 active state: a selected filter chip carries the primary fill + white
+           text (tone mirrors Chip.svelte `active`), not the grey outline. -->
       <span
-        class="flex items-center gap-1 rounded-pill border border-border-strong bg-background-subtle px-3 py-1 text-[12.5px] text-foreground-secondary"
+        class="flex items-center gap-1 rounded-pill border border-transparent bg-primary px-3 py-1 text-[12.5px] font-medium text-primary-foreground"
       >
         <span class="max-w-[220px] truncate">{chip.name}</span>
         <button
           type="button"
           onclick={() => onRemove(chip.id)}
           aria-label={`${chip.name} ×`}
-          class="p-0.5 text-muted transition-colors hover:text-foreground"
+          class="p-0.5 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
         >
           ×
         </button>

@@ -12,6 +12,7 @@
   import { appLocale } from "$lib/i18n/app-locale";
   import { getBookmarksCopy } from "$lib/i18n/bookmarks-copy";
   import { Button } from "$lib/components/ui/button";
+  import { Icon } from "$lib/components/icon";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import BookmarkRow from "./_components/BookmarkRow.svelte";
   import FoldersPanel from "./_components/FoldersPanel.svelte";
@@ -161,6 +162,21 @@
     <Skeleton class="h-16 w-full" />
     <Skeleton class="h-16 w-full" />
   {/snippet}
+  {#snippet emptyState(text: string)}
+    <!-- Hue-2 soft/legible icon holder (§6) — the empty state matches the search
+         page's, instead of bare grey text. -->
+    <div class="mt-6 flex items-center gap-3.5">
+      <span
+        class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
+        style:background="var(--hue-2-soft)"
+        aria-hidden="true"
+      >
+        <Icon name="bookmark" size={20} />
+      </span>
+      <p class="max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{text}</p>
+    </div>
+  {/snippet}
+
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground"
@@ -184,7 +200,7 @@
           {/if}
         </div>
       {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
-        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.empty}</p>
+        {@render emptyState(copy.empty)}
       {:else if quranData !== null}
         <FoldersPanel
           {copy}
@@ -240,7 +256,7 @@
           {@render loadingRows()}
         </div>
       {:else if anonRows.length === 0}
-        <p class="mt-6 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.empty}</p>
+        {@render emptyState(copy.empty)}
       {:else}
         <ul class="mt-6 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
           {#each anonRows as row (row.key)}
@@ -270,7 +286,7 @@
         class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-strong bg-background-subtle px-4 py-3.5 sm:px-5"
       >
         <p class="max-w-[60ch] text-caption leading-relaxed text-foreground-secondary">{copy.signInNote}</p>
-        <Button variant="ghost" size="sm" onclick={openSignIn}>{copy.signIn}</Button>
+        <Button variant="primary" size="sm" onclick={openSignIn}>{copy.signIn}</Button>
       </div>
     {/if}
   </div>
