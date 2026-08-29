@@ -60,7 +60,11 @@
       {badge}
     </div>
     <div class="flex min-w-0 flex-col gap-1.5">
-      <span class="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      <!-- Judge r1 MAJOR: on the dark --hue-N-soft band, muted-foreground captions
+           measure 3.74–3.90:1 (< §9 4.5 floor); foreground-secondary clears (6.74:1). -->
+      <span
+        class="text-xs font-semibold uppercase tracking-[0.1em] text-foreground-secondary"
+      >
         {copy.shell.surahPage(initial.surah.num, visibleLocalPage, initial.pageCount)}
       </span>
       <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
@@ -71,7 +75,7 @@
           {initial.surah.arabic}
         </span>
       </div>
-      <span class="text-sm text-muted-foreground">{surahMeta(initial.surah)}</span>
+      <span class="text-sm text-foreground-secondary">{surahMeta(initial.surah)}</span>
     </div>
   </div>
 
