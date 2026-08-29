@@ -2,16 +2,30 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { Button, Card, Seo } from "$lib/components";
+  import { Button, Card, Icon, MetricCard, Panel, Seo } from "$lib/components";
   import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
   import { reader } from "$lib/stores/reader.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
+  import { bookmarks } from "$lib/bookmarks/store.svelte";
   import type { QuranData } from "$lib/data/quran-data";
+  import { RangeKind } from "$lib/data/quran-data";
   import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
   import { surahPathFor, surahRouteContext, type SurahRouteContext } from "$lib/data/quran";
   import { peekTranslationName } from "$lib/quran/catalogue";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import {
+    landing_metric_bookmarks,
+    landing_metric_bookmarks_empty,
+    landing_metric_bookmarks_note,
+    landing_metric_juz,
+    landing_metric_juz_note,
+    landing_metric_pages,
+    landing_metric_pages_note,
+    landing_metric_surahs,
+    landing_metric_surahs_note,
+    landing_metric_yours,
+  } from "$lib/i18n/m/landing";
   import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { resumeToLastRead, resumeToVerse } from "$lib/reader/resume";
@@ -21,6 +35,43 @@
   const copy = getReaderUiCopy();
 
   let quranData = $state<QuranData | undefined>(peekQuranData());
+
+  // Metric strip copy reuses the landing namespace (same numerals, same labels) —
+  // en+ar already shipped with the landing surface; no new copy.
+  const msgLocale = { locale: copy.locale };
+  const metrics = {
+    surahs: landing_metric_surahs(undefined, msgLocale),
+    surahsNote: landing_metric_surahs_note(undefined, msgLocale),
+    juz: landing_metric_juz(undefined, msgLocale),
+    juzNote: landing_metric_juz_note(undefined, msgLocale),
+    pages: landing_metric_pages(undefined, msgLocale),
+    pagesNote: landing_metric_pages_note(undefined, msgLocale),
+    bookmarks: landing_metric_bookmarks(undefined, msgLocale),
+    yours: landing_metric_yours(undefined, msgLocale),
+    bookmarksEmpty: landing_metric_bookmarks_empty(undefined, msgLocale),
+    bookmarksNote: landing_metric_bookmarks_note(undefined, msgLocale),
+  };
+
+  // Landing parity: constants mirror RANGE_COUNTS (same fallbacks as the marketing load).
+  const FALLBACK_SURAH_COUNT = 114;
+  const FALLBACK_JUZ_COUNT = 30;
+  const FALLBACK_PAGE_COUNT = 604;
+  const surahCount = $derived(quranData?.surahs.length ?? FALLBACK_SURAH_COUNT);
+  const juzCount = $derived(quranData?.ranges(RangeKind.Juz).length ?? FALLBACK_JUZ_COUNT);
+  const quranPageCount = $derived(quranData?.ranges(RangeKind.Page).length ?? FALLBACK_PAGE_COUNT);
+  const bookmarkCount = $derived.by(() => {
+    if (bookmarks.authed) return bookmarks.bookmarks.length;
+    return reader.bookmarkedKeys.length;
+  });
+
+  function bookmarkValue(): string {
+    if (bookmarkCount > 0) return String(bookmarkCount);
+    return metrics.yours;
+  }
+  function bookmarkCaption(): string {
+    if (bookmarkCount === 0) return metrics.bookmarksEmpty;
+    return metrics.bookmarksNote;
+  }
 
   function openSurah(num: number): void {
     reader.openVerse(num, 1);
@@ -111,17 +162,60 @@
       </div>
     {/if}
   {:else}
-    <Card class="max-w-xl">
-      <h2 class="text-2xl font-semibold text-foreground">Start reading</h2>
-      <p class="mt-1 text-sm text-foreground-secondary">
-        Pick a place to begin. Your spot is saved automatically as you read.
-      </p>
+    <!-- Landing grammar carried into the app: accent hero band (white pill CTAs on
+         the primary fill) + the gapless four-hue metric strip, same MetricCards the
+         marketing home renders. -->
+    <Panel variant="accent" class="max-w-5xl px-7 py-8 sm:px-9 sm:py-10">
+      <!-- Global h1–h4 rule pins --foreground; on the accent fill the heading must
+           opt back into the on-primary pair explicitly. -->
+      <h2 class="text-2xl font-semibold text-primary-foreground">Start reading</h2>
+      <p class="mt-1 text-sm opacity-85">Pick a place to begin. Your spot is saved automatically as you read.</p>
       <div class="mt-5 flex flex-wrap gap-2">
-        <Button variant="ghost" onclick={() => openSurah(1)}>Al-Fātiḥah</Button>
-        <Button variant="ghost" onclick={() => openSurah(2)}>Al-Baqarah</Button>
-        <Button variant="ghost" onclick={() => openSurah(36)}>Yā-Sīn</Button>
-        <Button variant="ghost" onclick={() => openSurah(67)}>Al-Mulk</Button>
+        <button
+          type="button"
+          onclick={() => openSurah(1)}
+          class="rounded-pill bg-primary-foreground px-5 py-2.5 text-[14px] font-bold text-primary transition-[filter] duration-150 ease-out hover:brightness-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
+        >
+          Al-Fātiḥah
+        </button>
+        <button
+          type="button"
+          onclick={() => openSurah(2)}
+          class="rounded-pill px-5 py-2.5 text-[14px] font-bold text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary-foreground/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
+        >
+          Al-Baqarah
+        </button>
+        <button
+          type="button"
+          onclick={() => openSurah(36)}
+          class="rounded-pill px-5 py-2.5 text-[14px] font-bold text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary-foreground/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
+        >
+          Yā-Sīn
+        </button>
+        <button
+          type="button"
+          onclick={() => openSurah(67)}
+          class="rounded-pill px-5 py-2.5 text-[14px] font-bold text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary-foreground/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
+        >
+          Al-Mulk
+        </button>
       </div>
-    </Card>
+    </Panel>
+    <div class="mt-4 max-w-5xl overflow-hidden rounded-xl border border-border">
+      <div class="grid grid-cols-1 gap-0 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard hue={1} value={String(surahCount)} label={metrics.surahs} caption={metrics.surahsNote}>
+          <Icon name="book" />
+        </MetricCard>
+        <MetricCard hue={2} value={String(juzCount)} label={metrics.juz} caption={metrics.juzNote}>
+          <Icon name="continuous" />
+        </MetricCard>
+        <MetricCard hue={3} value={String(quranPageCount)} label={metrics.pages} caption={metrics.pagesNote}>
+          <Icon name="note" />
+        </MetricCard>
+        <MetricCard hue={4} value={bookmarkValue()} label={metrics.bookmarks} caption={bookmarkCaption()}>
+          <Icon name="bookmark" />
+        </MetricCard>
+      </div>
+    </div>
   {/if}
 </div>
