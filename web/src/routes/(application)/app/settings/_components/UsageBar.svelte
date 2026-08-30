@@ -5,12 +5,17 @@
   const TRACK_UNITS = 400;
   const TRACK_HEIGHT = 14;
 
+  /* Scope-extension (run 3): the old map mixed legacy --pop/--pop-soft/--accent-line aliases,
+     which all resolve to --accent = hue-2 emerald → two green segments + a green hairline in
+     every palette. Content layers (arabic/translations/pack) now ride the primary family
+     ladder; infra layers stay on surface/muted neutrals. Guard (usage-bar-guard.test.ts)
+     requires each fill to be a bare var(--token). */
   const LAYER_FILL = {
     arabic: "var(--primary)",
-    translations: "var(--pop)",
-    pack: "var(--accent-line)",
+    translations: "var(--primary-soft)",
+    pack: "var(--primary-hover)",
     pages: "var(--bg-3)",
-    data: "var(--pop-soft)",
+    data: "var(--fg-4)",
     other: "var(--fg-4)",
   } satisfies Record<StorageLayer["id"], string>;
 

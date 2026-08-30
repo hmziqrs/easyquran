@@ -27,8 +27,11 @@
 
   const actionButton =
     "rounded-lg border border-border-strong px-2.5 py-1.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
+  /* Scope-extension (run 3): the destructive control was text-pop/hover:border-pop
+     (--accent = hue-2 emerald → green). Danger status tokens, matching the settings
+     storage-action grammar (border-danger + text-danger). */
   const dangerButton =
-    "rounded-lg border border-border-strong px-2.5 py-1.5 text-[12.5px] text-pop transition-colors hover:border-pop focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
+    "rounded-lg border border-border-strong px-2.5 py-1.5 text-[12.5px] text-danger transition-colors hover:border-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 
   function submitCreate(): void {
     const name = newName;

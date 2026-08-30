@@ -20,9 +20,13 @@
     return copy.synced;
   }
 
+  /* Scope-extension (run 3): the not-ok dot was bg-pop (--accent = hue-2 emerald) — a green
+     dot for offline/pending/error. Status grammar instead: error → danger, offline/pending →
+     muted; ok stays primary. */
   function dotClass(): string {
     if (isOnline && status.phase !== "error") return "bg-primary";
-    return "bg-pop";
+    if (status.phase === "error") return "bg-danger";
+    return "bg-muted";
   }
 </script>
 
