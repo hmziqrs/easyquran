@@ -731,8 +731,10 @@
   --pop: var(--accent);
   --pop-soft: var(--accent-soft);
 
-  /* Hairline for markers/revealed-ayah — derived from the secondary hue (was the gold
-     accent). --accent-fg keeps the legacy interactive meaning: text on bg-accent (= primary). */
+  /* Hairline in the secondary hue — legacy alias. (Run 3: the ayah marker and the
+     revealed-ayah flash moved to the primary family, so nothing in the reader consumes
+     this anymore.) --accent-fg keeps the legacy interactive meaning: text on bg-accent
+     (= primary). */
   --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
   --accent-fg: var(--primary-foreground);
 
@@ -847,8 +849,8 @@
 @keyframes revealed-ayah {
   0%,
   45% {
-    background-color: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--accent-line);
+    background-color: var(--primary-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 38%, transparent);
   }
   100% {
     background-color: transparent;
@@ -896,9 +898,11 @@
   padding: 0 0.32em;
   margin-inline-start: 0.4em;
   border-radius: 9999px;
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent);
+  /* Run 3: the marker rode --accent (gold → hue-2) and rendered green in every palette;
+     it now takes the palette accent pair (§35 primary fill + on-fill text), so sacred
+     reads cobalt. Solid fill, so the old --accent-line hairline is gone. */
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-family: var(--font-arabic);
   font-size: 0.6em;
   line-height: 1;
@@ -924,7 +928,7 @@
   }
   .revealed-ayah {
     animation: none;
-    background-color: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--accent-line);
+    background-color: var(--primary-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 38%, transparent);
   }
 }

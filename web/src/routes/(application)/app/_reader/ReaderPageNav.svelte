@@ -85,7 +85,7 @@
       data-sveltekit-preload-data="hover"
       aria-label={previousLabel}
       title={previousLabel}
-      class="flex items-center gap-1.5 text-sm font-medium text-primary transition-[filter] duration-150 ease-out hover:brightness-[1.1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="flex h-9 items-center gap-1.5 rounded-pill border border-transparent bg-surface-hover px-4 text-sm font-medium text-foreground transition-colors duration-150 ease-out hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       <span aria-hidden="true">←</span>
       {previousLabel}
@@ -99,7 +99,7 @@
       data-sveltekit-preload-data="hover"
       aria-label={nextLabel}
       title={nextLabel}
-      class="flex items-center gap-1.5 text-sm font-medium text-primary transition-[filter] duration-150 ease-out hover:brightness-[1.1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="flex h-9 items-center gap-1.5 rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       {nextLabel}
       <span aria-hidden="true">→</span>
