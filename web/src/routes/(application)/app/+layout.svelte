@@ -35,7 +35,8 @@
   const isNonReaderAppRoute = $derived(
     (page.route.id ?? "").endsWith("/app/settings") ||
       (page.route.id ?? "").endsWith("/app/search") ||
-      (page.route.id ?? "").endsWith("/app/bookmarks"),
+      (page.route.id ?? "").endsWith("/app/bookmarks") ||
+      (page.route.id ?? "").endsWith("/app/yours"),
   );
 
   const canonicalReaderHref = $derived.by<QuranReaderHref>(() => {

@@ -16,7 +16,7 @@ export interface MarketingSeoLinks {
   alternates: readonly SeoAlternate[];
 }
 
-export type ReaderEntryPage = "home" | "juz-index";
+export type ReaderEntryPage = "home" | "juz-index" | "surah-index" | "pages-index";
 
 function absoluteHref(path: string): string {
   return `${SITE.url}${path}`;
@@ -61,9 +61,16 @@ export function readerCanonicalUrl(quranHref: QuranReaderHref): string {
   return absoluteHref(readerCanonicalPath(quranHref));
 }
 
+const ENTRY_PATHS: Readonly<Record<Exclude<ReaderEntryPage, "home">, QuranReaderHref>> =
+  Object.freeze({
+    "juz-index": "/app/juz",
+    "surah-index": "/app/surah",
+    "pages-index": "/app/pages",
+  });
+
 /** Bounded reader indexes sit outside Quran-content route descriptors. */
 export function readerEntryPath(locale: UiLocale, page: ReaderEntryPage): PublicHref {
-  return page === "home" ? readerHomeHrefFor(locale) : readerHrefFor(locale, "/app/juz");
+  return page === "home" ? readerHomeHrefFor(locale) : readerHrefFor(locale, ENTRY_PATHS[page]);
 }
 
 export function readerCanonicalEntryPath(page: ReaderEntryPage): PublicHref {

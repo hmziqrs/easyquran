@@ -30,12 +30,21 @@ describe("localized reader prerender discovery", () => {
       readerHrefFor,
       readerEntryPath,
     );
-    expect(hrefs).toHaveLength(2_596);
-    expect(new Set(hrefs).size).toBe(2_596);
-    expect(hrefs.filter((href) => href.startsWith("/en/app"))).toHaveLength(1_298);
-    expect(hrefs.filter((href) => href.startsWith("/ar/app"))).toHaveLength(1_298);
-    const entryHrefs = new Set(["/en/app", "/en/app/juz", "/ar/app", "/ar/app/juz"]);
-    expect(hrefs.filter((href) => entryHrefs.has(href))).toHaveLength(4);
+    expect(hrefs).toHaveLength(2_600);
+    expect(new Set(hrefs).size).toBe(2_600);
+    expect(hrefs.filter((href) => href.startsWith("/en/app"))).toHaveLength(1_300);
+    expect(hrefs.filter((href) => href.startsWith("/ar/app"))).toHaveLength(1_300);
+    const entryHrefs = new Set([
+      "/en/app",
+      "/en/app/juz",
+      "/en/app/surah",
+      "/en/app/pages",
+      "/ar/app",
+      "/ar/app/juz",
+      "/ar/app/surah",
+      "/ar/app/pages",
+    ]);
+    expect(hrefs.filter((href) => entryHrefs.has(href))).toHaveLength(8);
     expect(hrefs.filter((href) => !entryHrefs.has(href))).toHaveLength(2_592);
     expect(hrefs.every((href) => !href.includes("/t/"))).toBe(true);
     expect(hrefs.every((href) => !href.endsWith(".md") && !href.endsWith(".txt"))).toBe(true);
@@ -57,7 +66,7 @@ describe("localized reader prerender discovery", () => {
 
     const container = target.querySelector<HTMLElement>("[data-reader-prerender-links]");
     expect(container?.hidden).toBe(true);
-    expect(container?.querySelectorAll("a")).toHaveLength(2_596);
+    expect(container?.querySelectorAll("a")).toHaveLength(2_600);
     expect(container?.querySelector('a[href="/ar/app/juz"]')).not.toBeNull();
     expect(container?.querySelector('a[href*="/t/"]')).toBeNull();
 

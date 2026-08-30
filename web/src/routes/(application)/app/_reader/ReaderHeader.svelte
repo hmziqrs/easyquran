@@ -104,6 +104,8 @@
         </button>
       </div>
 
+      <!-- The band above already carries the surah's hue slot, so the active mode pill
+           stays zero-chroma: ground-inverted (fg on bg), never the palette accent. -->
       <div
         class="flex items-center gap-0.5 rounded-md bg-background-subtle p-1"
         role="group"
@@ -113,7 +115,7 @@
           type="button"
           aria-pressed={reader.isVerseMode}
           onclick={() => onChangeMode("verse")}
-          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
+          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground aria-pressed:hover:text-background"
         >
           <Icon name="rows" size={13} />
           <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
@@ -123,7 +125,7 @@
           type="button"
           aria-pressed={reader.isReadingMode}
           onclick={() => onChangeMode("reading")}
-          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
+          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground aria-pressed:hover:text-background"
         >
           <Icon name="continuous" size={13} />
           <span>{copy.shell.reading}</span>

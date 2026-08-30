@@ -55,6 +55,17 @@ import {
   reader_downloading_quran,
   reader_full_surah,
   reader_home_label,
+  reader_index_juz_title,
+  reader_index_pages_title,
+  reader_index_quarter,
+  reader_index_sajda,
+  reader_index_sajda_count,
+  reader_index_surahs_title,
+  reader_index_yours_continue,
+  reader_index_yours_empty,
+  reader_index_yours_recent,
+  reader_index_yours_title,
+  reader_index_yours_view_all,
   reader_jump,
   reader_juz,
   reader_juz_count,
@@ -88,6 +99,7 @@ import {
   reader_opening,
   reader_original,
   reader_page_abbreviation,
+  reader_page_count,
   reader_page_item,
   reader_page_of,
   reader_page_unavailable,
@@ -122,12 +134,18 @@ import {
   reader_seo_juz_title,
   reader_seo_page_description,
   reader_seo_page_title,
+  reader_seo_pages_index_description,
+  reader_seo_pages_index_title,
   reader_seo_quran,
+  reader_seo_surah_index_description,
+  reader_seo_surah_index_title,
   reader_seo_surah_description_translation,
   reader_seo_surah_description_uthmani,
   reader_seo_surah_page_title,
   reader_seo_surah_title,
   reader_seo_translation_juz_description,
+  reader_seo_yours_description,
+  reader_seo_yours_title,
   reader_seo_translation_page_description,
   reader_share,
   reader_share_verse,
@@ -230,6 +248,21 @@ export interface ReaderUiCopy {
     readonly item: (kind: RangeKind, index: number) => string;
     readonly juzCount: (count: number) => string;
   };
+  /** Dedicated index pages (/app/surah, /app/juz, /app/pages, /app/yours). */
+  readonly index: {
+    readonly juzTitle: string;
+    readonly surahsTitle: string;
+    readonly pagesTitle: string;
+    readonly yoursTitle: string;
+    readonly yoursContinue: string;
+    readonly yoursRecent: string;
+    readonly yoursViewAll: string;
+    readonly yoursEmpty: string;
+    readonly pageCount: (count: number) => string;
+    readonly quarter: (index: number) => string;
+    readonly sajda: string;
+    readonly sajdaCount: (count: number) => string;
+  };
   readonly sources: {
     readonly source: string;
     readonly arabic: string;
@@ -287,6 +320,12 @@ export interface ReaderUiCopy {
     readonly quran: string;
     readonly juzIndexTitle: string;
     readonly juzIndexDescription: string;
+    readonly surahIndexTitle: string;
+    readonly surahIndexDescription: string;
+    readonly pagesIndexTitle: string;
+    readonly pagesIndexDescription: string;
+    readonly yoursTitle: string;
+    readonly yoursDescription: string;
     readonly juzTitle: (index: number, first: string, last: string) => string;
     readonly juzDescription: (index: number, first: string, last: string) => string;
     readonly pageTitle: (index: number, first: string, last: string) => string;
@@ -416,6 +455,20 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       item: rangeItem,
       juzCount: (count) => reader_juz_count({ count }, options),
     },
+    index: {
+      juzTitle: noArgs(reader_index_juz_title),
+      surahsTitle: noArgs(reader_index_surahs_title),
+      pagesTitle: noArgs(reader_index_pages_title),
+      yoursTitle: noArgs(reader_index_yours_title),
+      yoursContinue: noArgs(reader_index_yours_continue),
+      yoursRecent: noArgs(reader_index_yours_recent),
+      yoursViewAll: noArgs(reader_index_yours_view_all),
+      yoursEmpty: noArgs(reader_index_yours_empty),
+      pageCount: (count) => reader_page_count({ count }, options),
+      quarter: (index) => reader_index_quarter({ index }, options),
+      sajda: noArgs(reader_index_sajda),
+      sajdaCount: (count) => reader_index_sajda_count({ count }, options),
+    },
     sources: {
       source: noArgs(reader_source),
       arabic: noArgs(reader_arabic),
@@ -515,6 +568,12 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       quran: noArgs(reader_seo_quran),
       juzIndexTitle: noArgs(reader_seo_juz_index_title),
       juzIndexDescription: noArgs(reader_seo_juz_index_description),
+      surahIndexTitle: noArgs(reader_seo_surah_index_title),
+      surahIndexDescription: noArgs(reader_seo_surah_index_description),
+      pagesIndexTitle: noArgs(reader_seo_pages_index_title),
+      pagesIndexDescription: noArgs(reader_seo_pages_index_description),
+      yoursTitle: noArgs(reader_seo_yours_title),
+      yoursDescription: noArgs(reader_seo_yours_description),
       juzTitle: (index, first, last) => reader_seo_juz_title({ index, first, last }, options),
       juzDescription: (index, first, last) =>
         reader_seo_juz_description({ index, first, last }, options),

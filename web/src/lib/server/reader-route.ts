@@ -6,7 +6,7 @@ import { QURAN_DATA } from "$lib/server/quran-data";
 
 interface ReaderIndexRoute {
   readonly type: "index";
-  readonly page: "home" | "juz";
+  readonly page: "home" | "juz" | "surah" | "pages";
 }
 
 interface ArabicReaderRoute {
@@ -135,6 +135,8 @@ export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
   if (pathname.length > 256 || pathname.includes("%") || pathname.includes("//")) return null;
   if (pathname === "/app") return { type: "index", page: "home" };
   if (pathname === "/app/juz") return { type: "index", page: "juz" };
+  if (pathname === "/app/surah") return { type: "index", page: "surah" };
+  if (pathname === "/app/pages") return { type: "index", page: "pages" };
 
   let match = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)\/page\/([^/]+)$/u.exec(pathname);
   if (match) {
@@ -200,6 +202,10 @@ export function parseReaderRoute(
       return parseReaderPath("/app");
     case "/app/juz":
       return parseReaderPath("/app/juz");
+    case "/app/surah":
+      return parseReaderPath("/app/surah");
+    case "/app/pages":
+      return parseReaderPath("/app/pages");
     case "/app/[surah]":
       return surah ? parseReaderPath(`/app/${surah}`) : null;
     case "/app/[surah]/page/[localPage]":

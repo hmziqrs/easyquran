@@ -26,7 +26,7 @@
     landing_metric_surahs_note,
     landing_metric_yours,
   } from "$lib/i18n/m/landing";
-  import { readerHrefFor, readerHomeHrefFor } from "$lib/i18n/reader";
+  import { readerHrefFor, readerHomeHrefFor, yoursPageHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { resumeToLastRead, resumeToVerse } from "$lib/reader/resume";
   import { parseModeParam } from "$lib/reader/mode-param";
@@ -73,6 +73,15 @@
     return metrics.bookmarksNote;
   }
 
+  // The metric strip doubles as the index hub: each card opens its dedicated
+  // index page (/app/surah, /app/juz, /app/pages, /app/yours).
+  const indexHrefs = {
+    surahs: readerHrefFor(copy.locale, "/app/surah"),
+    juz: readerHrefFor(copy.locale, "/app/juz"),
+    pages: readerHrefFor(copy.locale, "/app/pages"),
+    yours: publicHref(yoursPageHref()),
+  };
+
   function openSurah(num: number): void {
     reader.openVerse(num, 1);
     const surah = quranData?.surahByNum(num);
@@ -106,7 +115,9 @@
     {@const fraction = reader.progressFor(lr.num) ?? (total > 0 ? Math.min(1, lr.n / total) : 0)}
     {@const label = peekTranslationName(lr.sourceId)}
     <Card class="max-w-xl">
-      <p class="text-caption font-semibold uppercase tracking-wide text-muted">Continue reading</p>
+      <p class="text-caption font-semibold uppercase tracking-wide text-muted">
+        {copy.index.yoursContinue}
+      </p>
       <h2 class="mt-3 text-2xl font-semibold text-foreground">
         {surah?.name ?? `Surah ${lr.num}`}
       </h2>
@@ -142,7 +153,7 @@
     {@const others = reader.recentReads.filter((r) => r.num !== lr.num || r.sourceId !== lr.sourceId)}
     {#if others.length > 0}
       <div class="mt-6 max-w-xl">
-        <p class="text-xs font-medium uppercase tracking-wide text-muted">Recent</p>
+        <p class="text-xs font-medium uppercase tracking-wide text-muted">{copy.index.yoursRecent}</p>
         <div class="mt-1 flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
           {#each others as r (r.num + ":" + r.n + ":" + (r.sourceId ?? ""))}
             {@const rsurah = quranData?.surahByNum(r.num)}
@@ -203,18 +214,38 @@
     </Panel>
     <div class="mt-4 max-w-5xl overflow-hidden rounded-xl border border-border">
       <div class="grid grid-cols-1 gap-0 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard hue={1} value={String(surahCount)} label={metrics.surahs} caption={metrics.surahsNote}>
-          <Icon name="book" />
-        </MetricCard>
-        <MetricCard hue={2} value={String(juzCount)} label={metrics.juz} caption={metrics.juzNote}>
-          <Icon name="continuous" />
-        </MetricCard>
-        <MetricCard hue={3} value={String(quranPageCount)} label={metrics.pages} caption={metrics.pagesNote}>
-          <Icon name="note" />
-        </MetricCard>
-        <MetricCard hue={4} value={bookmarkValue()} label={metrics.bookmarks} caption={bookmarkCaption()}>
-          <Icon name="bookmark" />
-        </MetricCard>
+        <a
+          href={indexHrefs.surahs}
+          class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <MetricCard hue={1} value={String(surahCount)} label={metrics.surahs} caption={metrics.surahsNote}>
+            <Icon name="book" />
+          </MetricCard>
+        </a>
+        <a
+          href={indexHrefs.juz}
+          class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <MetricCard hue={2} value={String(juzCount)} label={metrics.juz} caption={metrics.juzNote}>
+            <Icon name="continuous" />
+          </MetricCard>
+        </a>
+        <a
+          href={indexHrefs.pages}
+          class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <MetricCard hue={3} value={String(quranPageCount)} label={metrics.pages} caption={metrics.pagesNote}>
+            <Icon name="note" />
+          </MetricCard>
+        </a>
+        <a
+          href={indexHrefs.yours}
+          class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <MetricCard hue={4} value={bookmarkValue()} label={metrics.bookmarks} caption={bookmarkCaption()}>
+            <Icon name="bookmark" />
+          </MetricCard>
+        </a>
       </div>
     </div>
   {/if}

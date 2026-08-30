@@ -96,6 +96,10 @@ function* sitemapLines(): Generator<string> {
   yield plainReaderEntryUrl("home");
   yield "\n";
   yield plainReaderEntryUrl("juz-index");
+  yield "\n";
+  yield plainReaderEntryUrl("surah-index");
+  yield "\n";
+  yield plainReaderEntryUrl("pages-index");
   yield "\n</urlset>";
 }
 

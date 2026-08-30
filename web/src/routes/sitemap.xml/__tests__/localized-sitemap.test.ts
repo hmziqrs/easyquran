@@ -31,9 +31,11 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
     const xml = await GET().text();
     const readerLocs = locs(xml).filter((href) => href.includes("/app"));
 
-    expect(readerLocs).toHaveLength(1_298);
+    expect(readerLocs).toHaveLength(1_300);
     expect(readerLocs).toContain("https://easyquran.fyi/en/app");
     expect(readerLocs).toContain("https://easyquran.fyi/en/app/juz");
+    expect(readerLocs).toContain("https://easyquran.fyi/en/app/surah");
+    expect(readerLocs).toContain("https://easyquran.fyi/en/app/pages");
     expect(readerLocs.every((href) => href.startsWith("https://easyquran.fyi/en/app"))).toBe(true);
     expect(readerLocs.some((href) => href.includes("/ar/app"))).toBe(false);
     expect(readerLocs.some((href) => href === "https://easyquran.fyi/app")).toBe(false);

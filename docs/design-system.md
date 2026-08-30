@@ -15,7 +15,7 @@ Newsreader + Inter, 10–18px radii, tinted grounds) onto a **pill / cobalt** sy
 | --- | --- |
 | Ground | One **zero-chroma neutral ground** shared by every palette, per mode |
 | Accents | 4 palettes: **sacred = cobalt**, **ink = neutral**, **sepia = magenta**, **sapphire = emerald** |
-| Hue slots | 4 fixed hues (cobalt/emerald/purple/amber→ember), identical across palettes, **mode-dependent** |
+| Hue slots | 4 fixed hues (cobalt/emerald/purple/rose), identical across palettes, **mode-dependent** |
 | Dark fills | **White-on-colour**: dark-mode accents are *darker* than light-mode ones, carrying white text |
 | Typography | **Nunito** (self-hosted, variable) for UI + display; Noto Sans Arabic for Arabic UI; Amiri for the Quran column |
 | Geometry | **Pill controls** (999px), 8px icon holders, 10px blocks, 14px large panels, 16px headline highlight |
@@ -187,22 +187,20 @@ never in `site.ts`.
 
 Sixteen additive tokens per block: `--hue-N`, `--hue-N-soft`, `--on-hue-N`,
 `--hue-N-legible` for N = 1..4. The set is **identical across palettes** and
-**mode-dependent** (plan 00 D3): no amber can carry white on the dark ground, so
-dark swaps amber for ember.
+**mode-dependent**: dark values are the same L/C step-down the light ones use
+(the retired plan 00 D3 amber→ember swap is gone — hue 4 is rose in both modes).
 
 | Slot | Light | Dark | On-fill |
 | --- | --- | --- | --- |
 | `--hue-1` cobalt | `oklch(0.52 0.21 262)` | `oklch(0.50 0.20 262)` | white |
 | `--hue-2` emerald | `oklch(0.53 0.16 162)` | `oklch(0.50 0.14 162)` | white |
 | `--hue-3` purple | `oklch(0.50 0.24 300)` | `oklch(0.48 0.23 300)` | white |
-| `--hue-4` amber / ember | `oklch(0.78 0.16 78)` | `oklch(0.53 0.16 55)` | **near-black** `oklch(0.20 0 0)` in light; white in dark |
+| `--hue-4` rose | `oklch(0.52 0.19 25)` | `oklch(0.50 0.19 25)` | white |
 
 - Softs: light `oklch(0.95 0.045 H)`-family tints; dark deep fills `oklch(0.30 0.05 H)`.
 - `--hue-N-legible` is the colour for text/numerals *on* a soft: in light mode it is
   simply `--hue-N`; in dark mode it is an L≈0.78 version of the hue, because on the
   dark soft chips the deep fill disappears and the base hue would sink into it.
-  (Light `--hue-4-legible` on its soft is intentionally below 4.5:1 — the boards
-  draw it as 15px/800 numerals; the contrast gate deliberately does not pair them.)
 - Consumers: `MetricCard` (`hue={1|2|3|4}`), landing surah-number chips and badges,
   roadmap/steps accents. Consume via `var(--hue-N)` / `--hue-N-soft` /
   `--hue-N-legible` + `--on-hue-N` for on-fill pairs.

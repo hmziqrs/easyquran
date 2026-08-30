@@ -48,8 +48,8 @@
 
   let fill = $derived(FILL[hue]);
   let on = $derived(ON[hue]);
-  /* Boards: white at 20% over the fill (black/12 on light amber — on-hue-4 is near-black
-     there, so mixing the ON token tracks the board in every block without a colour prop). */
+  /* Boards: white at 20% over the fill (mixing the ON token tracks the board in every
+     block without a colour prop — every --on-hue-N is white since hue 4 went rose). */
   let holderBg = $derived(`color-mix(in oklab, ${on} 20%, transparent)`);
   let captionColor = $derived(`color-mix(in oklab, ${on} 88%, transparent)`);
 </script>

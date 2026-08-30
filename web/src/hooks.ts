@@ -8,7 +8,7 @@ const NUMBER = "[1-9][0-9]*";
 const PAGE_BEYOND_FIRST = "(?:[2-9]|[1-9][0-9]+)";
 const READER_ROUTE_PATTERNS = [
   new RegExp("^/app$", "u"),
-  new RegExp("^/app/juz$", "u"),
+  new RegExp("^/app/(?:juz|surah|pages)$", "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}/page/${NUMBER}$`, "u"),
   new RegExp(`^/app/(?:page|juz)/${NUMBER}$`, "u"),

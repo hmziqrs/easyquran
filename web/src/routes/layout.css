@@ -248,8 +248,9 @@
   --translation-foreground: oklch(0.775 0 0);
   --reader-divider: oklch(0.275 0 0);
 
-  /* Hue set (plan 01) — identical in every palette, mode-dependent (plan 00 D3: no amber
-     can carry white on the dark ground, so dark swaps amber for ember at hue 55). */
+  /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 4 is rose
+     (replaces the retired amber, whose yellow band read poorly in the reader); the
+     dark values are the same L/C step-down the other hues use. */
   --hue-1: oklch(0.50 0.20 262);
   --hue-1-soft: oklch(0.30 0.055 262);
   --on-hue-1: #ffffff;
@@ -259,15 +260,15 @@
   --hue-3: oklch(0.48 0.23 300);
   --hue-3-soft: oklch(0.30 0.060 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.53 0.16 55);
-  --hue-4-soft: oklch(0.31 0.055 55);
+  --hue-4: oklch(0.50 0.19 25);
+  --hue-4-soft: oklch(0.30 0.055 25);
   --on-hue-4: #ffffff;
   /* L≈0.78 versions for numerals on the dark soft chips, where the deep fill disappears.
      In light mode --hue-N-legible just is --hue-N. */
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
-  --hue-4-legible: oklch(0.78 0.15 55);
+  --hue-4-legible: oklch(0.78 0.19 25);
 
   color-scheme: dark;
 }
@@ -320,10 +321,9 @@
   --hue-3: oklch(0.50 0.24 300);
   --hue-3-soft: oklch(0.950 0.045 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.78 0.16 78);
-  --hue-4-soft: oklch(0.955 0.055 78);
-  --on-hue-4: oklch(0.20 0 0);
-  /* Bright fills need near-black (amber); every other hue takes white. */
+  --hue-4: oklch(0.52 0.19 25);
+  --hue-4-soft: oklch(0.950 0.045 25);
+  --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
@@ -379,9 +379,9 @@
   --hue-3: oklch(0.50 0.24 300);
   --hue-3-soft: oklch(0.950 0.045 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.78 0.16 78);
-  --hue-4-soft: oklch(0.955 0.055 78);
-  --on-hue-4: oklch(0.20 0 0);
+  --hue-4: oklch(0.52 0.19 25);
+  --hue-4-soft: oklch(0.950 0.045 25);
+  --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
@@ -436,13 +436,13 @@
   --hue-3: oklch(0.48 0.23 300);
   --hue-3-soft: oklch(0.30 0.060 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.53 0.16 55);
-  --hue-4-soft: oklch(0.31 0.055 55);
+  --hue-4: oklch(0.50 0.19 25);
+  --hue-4-soft: oklch(0.30 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
-  --hue-4-legible: oklch(0.78 0.15 55);
+  --hue-4-legible: oklch(0.78 0.19 25);
 
   color-scheme: dark;
 }
@@ -496,9 +496,9 @@
   --hue-3: oklch(0.50 0.24 300);
   --hue-3-soft: oklch(0.950 0.045 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.78 0.16 78);
-  --hue-4-soft: oklch(0.955 0.055 78);
-  --on-hue-4: oklch(0.20 0 0);
+  --hue-4: oklch(0.52 0.19 25);
+  --hue-4-soft: oklch(0.950 0.045 25);
+  --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
@@ -554,13 +554,13 @@
   --hue-3: oklch(0.48 0.23 300);
   --hue-3-soft: oklch(0.30 0.060 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.53 0.16 55);
-  --hue-4-soft: oklch(0.31 0.055 55);
+  --hue-4: oklch(0.50 0.19 25);
+  --hue-4-soft: oklch(0.30 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
-  --hue-4-legible: oklch(0.78 0.15 55);
+  --hue-4-legible: oklch(0.78 0.19 25);
 
   color-scheme: dark;
 }
@@ -612,9 +612,9 @@
   --hue-3: oklch(0.50 0.24 300);
   --hue-3-soft: oklch(0.950 0.045 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.78 0.16 78);
-  --hue-4-soft: oklch(0.955 0.055 78);
-  --on-hue-4: oklch(0.20 0 0);
+  --hue-4: oklch(0.52 0.19 25);
+  --hue-4-soft: oklch(0.950 0.045 25);
+  --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
@@ -669,13 +669,13 @@
   --hue-3: oklch(0.48 0.23 300);
   --hue-3-soft: oklch(0.30 0.060 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.53 0.16 55);
-  --hue-4-soft: oklch(0.31 0.055 55);
+  --hue-4: oklch(0.50 0.19 25);
+  --hue-4-soft: oklch(0.30 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
-  --hue-4-legible: oklch(0.78 0.15 55);
+  --hue-4-legible: oklch(0.78 0.19 25);
 
   color-scheme: dark;
 }

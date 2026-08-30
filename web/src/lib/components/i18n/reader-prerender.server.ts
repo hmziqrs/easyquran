@@ -36,7 +36,7 @@ export type ReaderHrefFor<Locale extends string> = (
 
 export type ReaderEntryHrefFor<Locale extends string> = (
   locale: Locale,
-  page: "home" | "juz-index",
+  page: "home" | "juz-index" | "surah-index" | "pages-index",
 ) => PublicHref;
 
 /** Existing Arabic-source entries(), represented once for sitemap and SSG discovery. */
@@ -94,6 +94,8 @@ export function readerPrerenderHrefs<Locale extends string>(
     ...entries.map((entry) => readerHrefFor(locale, quranHrefForPrerenderEntry(entry, ARABIC))),
     readerEntryHrefFor(locale, "home"),
     readerEntryHrefFor(locale, "juz-index"),
+    readerEntryHrefFor(locale, "surah-index"),
+    readerEntryHrefFor(locale, "pages-index"),
   ]);
 
   if (new Set(hrefs).size !== hrefs.length) {
