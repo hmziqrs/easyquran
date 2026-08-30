@@ -1,5 +1,5 @@
 /**
- * Shared Puppeteer plumbing for the visual harness (docs/plan/07-visual-verification.md).
+ * Shared Puppeteer plumbing for the visual harness (docs/plan/README.md (phase specs in git history)).
  *
  * Every launch uses a throwaway profile under the OS temp dir — never the developer's own
  * Chrome, never a shared session — so captures cannot inherit extensions, logged-in state,

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
- * Machine guard for the plan 03 geometry contract (docs/plan/03-geometry-and-primitives.md):
+ * Machine guard for the plan 03 geometry contract (docs/plan/README.md (phase specs in git history)):
  * the radius scale, controls-are-pills, icon-holders-are-8px-squares, and no radius literal
  * escaping the scale anywhere under lib/components/ui/.
  */

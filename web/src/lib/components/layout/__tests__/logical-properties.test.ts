@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
- * Machine guard for the plan 04 RTL contract (docs/plan/04-layout-full-bleed.md):
+ * Machine guard for the plan 04 RTL contract (docs/plan/README.md (phase specs in git history)):
  * ported styles use logical properties — ms-/me-/ps-/pe-/start-/end-/text-start —
  * never the physical ml-/mr-/pl-/pr-/left-N/right-N/text-left/border-l/border-r.
  *

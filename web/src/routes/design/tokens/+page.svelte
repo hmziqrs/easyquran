@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * V1 — token sweep host (docs/plan/07-visual-verification.md). Renders every semantic
+   * V1 — token sweep host (docs/plan/README.md (phase specs in git history)). Renders every semantic
    * contract token plus the plan 01 hue set as a labelled swatch with its computed value,
    * so a token missing from one of the eight `[data-palette][data-mode]` blocks shows up
    * as a wrong-coloured / "not defined" square the moment the harness captures it.

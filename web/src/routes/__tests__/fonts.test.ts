@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
- * The fonts gate (docs/plan/02-typography-and-fonts.md). Fonts are self-hosted only —
+ * The fonts gate (docs/plan/README.md (phase specs in git history)). Fonts are self-hosted only —
  * a CDN reference would break offline reading, which is a functional bug, not a style
  * one. This guard converts that risk into a build failure, and pins the Nunito ramp
  * (one Latin face, 600 body / 800 headings) so areas 3–6 can consume it as a contract.

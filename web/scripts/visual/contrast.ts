@@ -1,5 +1,5 @@
 /**
- * Contrast gate core (docs/plan/07-visual-verification.md — "the single highest-value
+ * Contrast gate core (docs/plan/README.md (phase specs in git history) — "the single highest-value
  * artefact in the plan"). Pure: takes layout.css as a string, returns one row per
  * (palette block × token pair). Consumed by `token-contrast.test.ts` (part of `pnpm test`)
  * and by the CLI below for a human-readable table.

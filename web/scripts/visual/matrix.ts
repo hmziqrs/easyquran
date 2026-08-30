@@ -1,5 +1,5 @@
 /**
- * Shared capture matrix for the visual harness (docs/plan/07-visual-verification.md).
+ * Shared capture matrix for the visual harness (docs/plan/README.md (phase specs in git history)).
  *
  * Every script (capture/reference/states) and the V1 token sweep route draw their axes
  * from here so a palette added in one place is picked up everywhere. Tiers follow plan 07:

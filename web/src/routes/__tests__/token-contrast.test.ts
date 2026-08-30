@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { evaluateContrast } from "../../../scripts/visual/contrast.ts";
 
 /**
- * The contrast gate (docs/plan/07-visual-verification.md). Computes WCAG contrast for
+ * The contrast gate (docs/plan/README.md (phase specs in git history)). Computes WCAG contrast for
  * every token pair in every one of the eight `[data-palette][data-mode]` blocks of
  * layout.css and fails below threshold — a reviewer cannot eyeball 4.5:1, so this gate
  * converts the migration's main risk into a build failure. The pure core lives in
