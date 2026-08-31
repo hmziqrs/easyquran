@@ -22,6 +22,9 @@
   } from "./stacked-translations.svelte";
   import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
+  // Direct import: the brand barrel pulls Brand -> config/site -> $env/dynamic,
+  // which must not enter this module graph.
+  import Bismillah from "$lib/components/brand/Bismillah.svelte";
   import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
   import { bodyText } from "$lib/quran/view/source-view";
   import { groupRangeAyahs } from "$lib/quran/view/presentation";
@@ -214,13 +217,11 @@
         </button>
       </div>
       {#if g.opener}
-        <p
-          dir="rtl"
-          lang="ar"
-          class="surah-opener border-b border-reader-divider px-5 text-center font-arabic text-quran-foreground sm:px-9"
+        <div
+          class="surah-opener-bismillah flex justify-center border-b border-reader-divider px-5 pb-[22px] sm:px-9"
         >
-          {g.opener}
-        </p>
+          <Bismillah class="w-44 text-quran-foreground" title={g.opener} />
+        </div>
       {/if}
       <TooltipProvider delayDuration={300}>
         <ol class="ayah-list flex list-none flex-col p-0">
@@ -291,11 +292,9 @@
 </div>
 
 <style>
-  /* §22 Bismillah/opener: same ceremonial-but-minimal treatment as the Surah reader. */
-  .surah-opener {
-    font-size: max(42px, calc(var(--reader-arabic-size, 33px) * 1.35));
-    line-height: 1.9;
-    margin-block: 40px;
+  /* §22 Bismillah/opener: calligraphy SVG; margins mirror the Surah reader. */
+  .surah-opener-bismillah {
+    margin-block: 44px;
   }
 
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .ayah-list {

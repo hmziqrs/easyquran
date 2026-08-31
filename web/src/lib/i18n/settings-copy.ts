@@ -34,6 +34,9 @@ import {
   settings_privacy_version,
   settings_reading_arabic_font,
   settings_reading_font_amiri,
+  settings_reading_font_hafs,
+  settings_reading_font_taha_v1,
+  settings_reading_font_taha_v1_bold,
   settings_reading_font_noto,
   settings_reading_font_sans,
   settings_reading_font_scheherazade,
@@ -240,6 +243,9 @@ export interface SettingsCopy {
       readonly amiri: string;
       readonly scheherazade: string;
       readonly notoNaskh: string;
+      readonly hafs: string;
+      readonly tahaV1: string;
+      readonly tahaV1Bold: string;
     };
     readonly translationFont: string;
     readonly fontFamilies: {
@@ -440,6 +446,9 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         amiri: noArgs(settings_reading_font_amiri),
         scheherazade: noArgs(settings_reading_font_scheherazade),
         notoNaskh: noArgs(settings_reading_font_noto),
+        hafs: noArgs(settings_reading_font_hafs),
+        tahaV1: noArgs(settings_reading_font_taha_v1),
+        tahaV1Bold: noArgs(settings_reading_font_taha_v1_bold),
       },
       translationFont: noArgs(settings_reading_translation_font),
       fontFamilies: {

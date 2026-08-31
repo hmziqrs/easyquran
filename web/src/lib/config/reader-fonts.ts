@@ -1,4 +1,10 @@
-export type ArabicFontId = "amiri" | "scheherazade-new" | "noto-naskh-arabic";
+export type ArabicFontId =
+  | "amiri"
+  | "scheherazade-new"
+  | "noto-naskh-arabic"
+  | "kfgqpc-hafs"
+  | "kfgqpc-taha-v1"
+  | "kfgqpc-taha-v1-bold";
 export type TranslationFamily = "sans" | "serif";
 
 export interface ArabicFontDef {
@@ -6,6 +12,8 @@ export interface ArabicFontDef {
   readonly family: string;
   readonly stack: string;
   readonly file?: () => Promise<string>;
+  /** Font container hint for the FontFace loader; woff2 for packaged fonts. */
+  readonly format?: "woff2" | "truetype";
 }
 
 export interface TranslationFamilyDef {
@@ -17,6 +25,9 @@ export const ARABIC_FONT_IDS: readonly ArabicFontId[] = [
   "amiri",
   "scheherazade-new",
   "noto-naskh-arabic",
+  "kfgqpc-hafs",
+  "kfgqpc-taha-v1",
+  "kfgqpc-taha-v1-bold",
 ];
 
 export const DEFAULT_ARABIC_FONT: ArabicFontId = "amiri";
@@ -47,6 +58,27 @@ export const ARABIC_FONTS: readonly ArabicFontDef[] = [
       import("@fontsource/noto-naskh-arabic/files/noto-naskh-arabic-arabic-400-normal.woff2?url").then(
         (m) => m.default,
       ),
+  },
+  {
+    // King Fahad Complex digital mushaf fonts (QPC, free to redistribute),
+    // self-hosted in static/fonts and lazy-loaded on selection.
+    id: "kfgqpc-hafs",
+    family: "KFGQPC Uthmanic Hafs",
+    stack: `"KFGQPC Uthmanic Hafs", "Amiri", ${ARABIC_FALLBACKS}`,
+    file: () => Promise.resolve("/fonts/uthmanic-hafs-v22.ttf"),
+    format: "truetype",
+  },
+  {
+    id: "kfgqpc-taha-v1",
+    family: "KFGQPC Uthman Taha Naskh v1",
+    stack: `"KFGQPC Uthman Taha Naskh v1", "Amiri", ${ARABIC_FALLBACKS}`,
+    file: () => Promise.resolve("/fonts/uthman-taha-naskh-v1.woff2"),
+  },
+  {
+    id: "kfgqpc-taha-v1-bold",
+    family: "KFGQPC Uthman Taha Naskh v1 Bold",
+    stack: `"KFGQPC Uthman Taha Naskh v1 Bold", "Amiri", ${ARABIC_FALLBACKS}`,
+    file: () => Promise.resolve("/fonts/uthman-taha-naskh-v1-bold.woff2"),
   },
 ];
 

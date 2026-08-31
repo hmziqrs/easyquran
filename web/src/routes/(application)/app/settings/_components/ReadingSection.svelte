@@ -52,6 +52,9 @@
   function fontLabel(fontId: ArabicFontId): string {
     if (fontId === "amiri") return copy.fontNames.amiri;
     if (fontId === "scheherazade-new") return copy.fontNames.scheherazade;
+    if (fontId === "kfgqpc-hafs") return copy.fontNames.hafs;
+    if (fontId === "kfgqpc-taha-v1") return copy.fontNames.tahaV1;
+    if (fontId === "kfgqpc-taha-v1-bold") return copy.fontNames.tahaV1Bold;
     return copy.fontNames.notoNaskh;
   }
 

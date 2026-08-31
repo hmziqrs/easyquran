@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 118 messages. Import this barrel, never
+// 121 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "$lib/paraglide/messages/settings_account_device_note.js";
@@ -36,10 +36,13 @@ export { settings_privacy_up_to_date } from "$lib/paraglide/messages/settings_pr
 export { settings_privacy_version } from "$lib/paraglide/messages/settings_privacy_version.js";
 export { settings_reading_arabic_font } from "$lib/paraglide/messages/settings_reading_arabic_font.js";
 export { settings_reading_font_amiri } from "$lib/paraglide/messages/settings_reading_font_amiri.js";
+export { settings_reading_font_hafs } from "$lib/paraglide/messages/settings_reading_font_hafs.js";
 export { settings_reading_font_noto } from "$lib/paraglide/messages/settings_reading_font_noto.js";
 export { settings_reading_font_sans } from "$lib/paraglide/messages/settings_reading_font_sans.js";
 export { settings_reading_font_scheherazade } from "$lib/paraglide/messages/settings_reading_font_scheherazade.js";
 export { settings_reading_font_serif } from "$lib/paraglide/messages/settings_reading_font_serif.js";
+export { settings_reading_font_taha_v1 } from "$lib/paraglide/messages/settings_reading_font_taha_v1.js";
+export { settings_reading_font_taha_v1_bold } from "$lib/paraglide/messages/settings_reading_font_taha_v1_bold.js";
 export { settings_reading_intro } from "$lib/paraglide/messages/settings_reading_intro.js";
 export { settings_reading_preview } from "$lib/paraglide/messages/settings_reading_preview.js";
 export { settings_reading_sample } from "$lib/paraglide/messages/settings_reading_sample.js";

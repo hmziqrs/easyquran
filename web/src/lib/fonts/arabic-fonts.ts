@@ -10,7 +10,8 @@ function startLoad(id: ArabicFontId): Promise<void> {
   return def
     .file()
     .then((url) => {
-      const face = new FontFace(def.family, `url(${url}) format("woff2")`, { weight: "400" });
+      const format = def.format ?? "woff2";
+      const face = new FontFace(def.family, `url(${url}) format("${format}")`, { weight: "400" });
       return face.load().then(() => {
         document.fonts.add(face);
       });

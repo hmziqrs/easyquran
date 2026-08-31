@@ -29,6 +29,9 @@
   } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
+  // Direct import: the brand barrel pulls Brand -> config/site -> $env/dynamic,
+  // which must not enter this module graph.
+  import Bismillah from "$lib/components/brand/Bismillah.svelte";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import { withModeParam } from "$lib/reader/mode-param";
@@ -886,9 +889,14 @@
                 {copy.shell.surahPageTitle(initial.surah.name, pageData.page.localPage, initial.pageCount)}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-                <p dir="rtl" lang="ar" class="surah-opener text-center text-quran-foreground">
-                  {headerText(pageData.normalization)}
-                </p>
+                <!-- Calligraphy instead of the text bismillah; Surah 1 never
+                     reaches here (its bismillah is ayah 1, OpenerKind.Verse). -->
+                <div class="surah-opener-bismillah flex justify-center">
+                  <Bismillah
+                    class="w-44 text-quran-foreground"
+                    title={headerText(pageData.normalization) ?? "bismillah"}
+                  />
+                </div>
               {/if}
               <ol class="ayah-list list-none p-0">
                 {#each pageData.ayahs as ayah (ayah.key)}
@@ -968,12 +976,10 @@
     flex-direction: column;
   }
 
-  /* §22 Bismillah/opener: ceremonial but minimal — 42–48px, margin-block 40–52px, no ornament.
-     Size tracks the reader's Arabic setting (default 33px → ~45px) and never drops below 42px. */
-  .surah-opener {
-    font-family: var(--reader-arabic-family, var(--font-arabic));
-    font-size: max(42px, calc(var(--reader-arabic-size, 33px) * 1.35));
-    line-height: 1.9;
+  /* §22 Bismillah/opener: the calligraphy SVG replaces the text opener (Surah 1
+     never renders one — its bismillah is ayah 1). Margins keep the ceremonial
+     40–52px rhythm; size is the fixed 176px lockup width. */
+  .surah-opener-bismillah {
     margin-block: 44px;
   }
 
