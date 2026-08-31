@@ -60,7 +60,10 @@
 		"data-slot": "sidebar-menu-button",
 		"data-sidebar": "menu-button",
 		"data-size": size,
-		"data-active": isActive,
+		// Presence selector: `data-active:` matches any value, so a literal
+		// `false` attr would paint every inactive row with the accent. Emit the
+		// attribute only when actually active.
+		"data-active": isActive ? "true" : undefined,
 		...restProps,
 	});
 </script>
