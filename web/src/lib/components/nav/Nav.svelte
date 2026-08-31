@@ -127,6 +127,9 @@
   );
   let accountLabel = $derived(authState.authenticated ? copy.account : copy.signIn);
   let panelOffset = $derived(direction === "rtl" ? -360 : 360);
+  // The locale switch lives in the site panel on small screens; on desktop the
+  // header shows the other-locale link directly, like the marketing header.
+  let otherLocaleLink = $derived(localeLinks.find((link) => !link.current) ?? null);
 
   const SETTINGS_PATH = "/app/settings";
   const SEARCH_PATH = "/app/search";
@@ -197,6 +200,15 @@
       </nav>
     {/if}
 
+    <!-- Desktop search pill — the marketing header's affordance; collapses to
+         the icon trigger on small screens. -->
+    <SearchTrigger
+      variant="pill"
+      label={copy.searchQuran}
+      inert={open}
+      class="hidden ms-auto lg:flex"
+    />
+
     <div class="ms-auto flex items-center gap-2">
       {#if online.hydrated && !online.online}
         <span
@@ -210,7 +222,20 @@
           <span class="hidden sm:inline">{copy.offlineLabel}</span>
         </span>
       {/if}
-      <SearchTrigger label={copy.searchQuran} inert={open} />
+      <SearchTrigger label={copy.searchQuran} inert={open} class="lg:hidden" />
+      {#if otherLocaleLink}
+        <a
+          href={publicHref(otherLocaleLink.href)}
+          hreflang={otherLocaleLink.locale}
+          lang={otherLocaleLink.locale}
+          dir={otherLocaleLink.direction}
+          aria-label={copy.changeLanguage}
+          data-sveltekit-reload
+          inert={open || undefined}
+          aria-hidden={open || undefined}
+          class="hidden flex-none text-[15px] font-bold text-muted transition-colors hover:text-primary lg:inline-flex"
+        >{otherLocaleLink.label}</a>
+      {/if}
       <button
         type="button"
         onclick={() => prefs.toggleTheme()}

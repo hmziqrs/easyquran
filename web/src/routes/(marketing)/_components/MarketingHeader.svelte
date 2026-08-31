@@ -3,32 +3,26 @@
   import { prefs } from "$lib/stores/prefs.svelte";
   import { authState } from "$lib/auth/auth-state.svelte";
   import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { Button, Icon } from "$lib/components";
-  import { commandPalette } from "$lib/stores/command-palette.svelte";
-  import { loadPalette } from "$lib/components/search/palette-loader";
-  import {
-    marketingHomeHref,
-    marketingReaderHomeHref,
-    type MarketingLocale,
-  } from "$lib/i18n/marketing-copy";
+  import { Icon } from "$lib/components";
+  import { SearchTrigger } from "$lib/components/search";
+  import { marketingHomeHref, type MarketingLocale } from "$lib/i18n/marketing-copy";
   import { marketingHref } from "$lib/i18n/marketing";
   import { publicHref } from "$lib/i18n/public-href";
-  import { bookmarksPageHref, readerHrefFor } from "$lib/i18n/reader";
+  import { readerHrefFor, yoursPageHref } from "$lib/i18n/reader";
   import { SITE } from "$lib/config/site";
   import {
     brand_home_label,
     nav_about,
     nav_account,
-    nav_bookmarks,
     nav_change_language,
     nav_header_search,
     nav_juz,
     nav_pages,
     nav_primary_label,
     nav_sign_in,
-    nav_start_reading,
     nav_surahs,
     nav_toggle_theme,
+    nav_yours,
   } from "$lib/i18n/m/chrome";
   import { UI_LOCALES } from "$lib/i18n/locales";
 
@@ -58,10 +52,9 @@
       surahs: nav_surahs(undefined, options),
       juz: nav_juz(undefined, options),
       pages: nav_pages(undefined, options),
-      bookmarks: nav_bookmarks(undefined, options),
+      yours: nav_yours(undefined, options),
       about: nav_about(undefined, options),
       search: nav_header_search(undefined, options),
-      startReading: nav_start_reading(undefined, options),
       toggleTheme: nav_toggle_theme(undefined, options),
       changeLanguage: nav_change_language(undefined, options),
       account: nav_account(undefined, options),
@@ -75,7 +68,7 @@
     { label: t.surahs, href: publicHref(readerHrefFor(locale, "/app/surah")), muted: false },
     { label: t.juz, href: publicHref(readerHrefFor(locale, "/app/juz")), muted: false },
     { label: t.pages, href: publicHref(readerHrefFor(locale, "/app/pages")), muted: false },
-    { label: t.bookmarks, href: publicHref(bookmarksPageHref()), muted: true },
+    { label: t.yours, href: publicHref(yoursPageHref()), muted: true },
   ]);
 
   function onAccountClick(e: MouseEvent): void {
@@ -86,10 +79,6 @@
     authModal.show("login");
   }
 
-  function openSearch(): void {
-    void loadPalette();
-    commandPalette.show();
-  }
 </script>
 
 <header class="sticky top-0 z-50 border-b border-border bg-surface">
@@ -129,23 +118,7 @@
       {/if}
     </nav>
 
-    <button
-      type="button"
-      onclick={openSearch}
-      onpointerenter={() => void loadPalette()}
-      onfocus={() => void loadPalette()}
-      aria-label={t.search}
-      aria-keyshortcuts="Meta+K Control+K"
-      class="group ms-auto flex h-10 min-w-0 flex-grow items-center gap-3 rounded-pill border border-border px-4 text-start transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      <Icon name="search" size={17} class="flex-none text-muted" />
-      <span class="min-w-0 flex-grow truncate text-body text-muted">{t.search}</span>
-      <span
-        class="hidden flex-none items-center gap-[3px] rounded-pill bg-background-subtle px-[9px] py-[5px] text-[13px] font-bold text-muted sm:flex"
-      >
-        <span aria-hidden="true">⌘</span><span aria-hidden="true">K</span>
-      </span>
-    </button>
+    <SearchTrigger variant="pill" label={t.search} class="ms-auto" />
 
     <a
       class="hidden flex-none text-[16.5px] font-bold text-muted transition-colors hover:text-primary md:block"
@@ -176,11 +149,5 @@
       <Icon name="user" size={18} title={accountLabel} />
     </a>
 
-    <Button
-      variant="primary"
-      size="sm"
-      href={publicHref(marketingReaderHomeHref(locale))}
-      class="hidden flex-none font-extrabold sm:inline-flex"
-    >{t.startReading}</Button>
   </div>
 </header>
