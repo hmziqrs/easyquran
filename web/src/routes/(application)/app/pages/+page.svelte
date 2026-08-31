@@ -73,7 +73,7 @@
           class="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="flex h-9 min-w-9 flex-none items-center justify-center rounded-pill px-2 text-[15px] font-extrabold tabular-nums"
+            class="flex h-9 w-11 flex-none items-center justify-center rounded-pill text-[15px] font-extrabold tabular-nums"
             style:background={HUE_SOFT[hue]}
             style:color={HUE_LEGIBLE[hue]}
           >
