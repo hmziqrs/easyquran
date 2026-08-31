@@ -557,11 +557,11 @@ Reading-column tokens derive from the **neutral ground, not a tint**:
 - Dark reader ground sits just under `--surface` (0.190 < 0.238) so the column
   **recesses**; the Quran text stays the highest-contrast element on the page in
   both modes.
-- **Sepia exception (dialled back)**: `sepia` keeps a *whisper* of warmth in its
-  reader in **both** modes (light `#FAF8F3`, warm browns) under its magenta
-  chrome — the original cream ground (`#FBF3DF`) read as a yellow tint and was
-  near-neutralised (CSS-commented in layout.css). All other palettes are neutral
-  in both modes.
+- **No palette exceptions**: every palette reads on the same neutral reader
+  surfaces in both modes. Sepia's warm grounds (`#FBF3DF`, later `#FAF8F3`)
+  were retired after repeated user feedback that any warm cast in the reading
+  column reads as a yellow tint — sepia's identity lives in its magenta chrome
+  only.
 - Status colours are one set per mode, shared by every palette (the ground is
   shared; per-palette status variants were drift): light `#397A57/#8A681E/#B34A4A`,
   dark `#78BD91/#D9B55E/#DF7777`. Status tokens are not in the contrast gate.

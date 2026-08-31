@@ -478,13 +478,13 @@
 
   --focus-ring: oklch(0.54 0.23 352);
 
-  /* Sepia warmth, dialled back (user feedback: the cream ground read as a yellow
-     tint): the reading surface keeps only a whisper of warmth near the neutral
-     ground — chrome around it stays neutral. */
-  --reader-background: #FAF8F3;
-  --quran-foreground: #2B2419;
-  --translation-foreground: #5E5140;
-  --reader-divider: #E5E1D6;
+  /* Sepia reader is fully neutral (user feedback, twice: any warm cast in the
+     reading column reads as a yellow tint) — identical to the shared reader
+     family; sepia's identity lives in its magenta chrome, not the mushaf. */
+  --reader-background: #ffffff;
+  --quran-foreground: oklch(0.16 0 0);
+  --translation-foreground: oklch(0.4 0 0);
+  --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
@@ -538,11 +538,11 @@
 
   --focus-ring: oklch(0.51 0.22 352);
 
-  /* Warm reader ground, dark mode (see sepia light — warmth dialled back). */
-  --reader-background: #191713;
-  --quran-foreground: #F0E5CF;
-  --translation-foreground: #CBBEA4;
-  --reader-divider: #332E24;
+  /* Reader fully neutral in dark mode too (see sepia light). */
+  --reader-background: oklch(0.19 0 0);
+  --quran-foreground: oklch(0.975 0 0);
+  --translation-foreground: oklch(0.775 0 0);
+  --reader-divider: oklch(0.275 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
