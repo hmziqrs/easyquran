@@ -46,11 +46,17 @@
 
   const DEFAULT_BRAND_COPY: BrandResolvedCopy = { homeLabel: "EasyQuran · home" };
 
+  interface NavIndexLink {
+    readonly label: string;
+    readonly href: string;
+  }
+
   let {
     collapsible = false,
     copy = DEFAULT_COPY,
     brandCopy = DEFAULT_BRAND_COPY,
     brandHomeHref = "/",
+    indexLinks = [],
     localeLinks = [],
     direction = "ltr",
   }: {
@@ -58,6 +64,8 @@
     copy?: NavResolvedCopy;
     brandCopy?: BrandResolvedCopy;
     brandHomeHref?: `/${string}`;
+    /** Inline desktop links (reader indexes) — the same grammar MarketingHeader renders. */
+    indexLinks?: readonly NavIndexLink[];
     localeLinks?: LocaleLink[];
     direction?: MarketingDirection;
   } = $props();
@@ -170,12 +178,26 @@
     collapsible && "transition-[top] duration-200 ease-out",
   )}
 >
-  <div class="flex h-[60px] items-center gap-4 px-5 sm:px-7 lg:px-10">
-    <span class="me-auto" inert={open || undefined} aria-hidden={open || undefined}>
+  <div class="flex h-14 items-center gap-4 px-5 sm:px-7 lg:px-10">
+    <span class="flex-none" inert={open || undefined} aria-hidden={open || undefined}>
       <Brand homeHref={brandHomeHref} homeLabel={brandCopy.homeLabel} />
     </span>
 
-    <div class="flex items-center gap-2">
+    {#if indexLinks.length > 0}
+      <nav class="hidden items-center gap-6 text-[15px] font-bold lg:flex" aria-label={copy.primaryLabel}>
+        {#each indexLinks as link (link.href)}
+          <a
+            href={link.href}
+            data-sveltekit-preload-data="hover"
+            inert={open || undefined}
+            aria-hidden={open || undefined}
+            class="text-muted transition-colors hover:text-primary"
+          >{link.label}</a>
+        {/each}
+      </nav>
+    {/if}
+
+    <div class="ms-auto flex items-center gap-2">
       {#if online.hydrated && !online.online}
         <span
           class="inline-flex items-center gap-1.5 rounded-pill border border-border-strong bg-background-subtle px-2.5 py-1 text-caption text-foreground-secondary"
@@ -189,6 +211,17 @@
         </span>
       {/if}
       <SearchTrigger label={copy.searchQuran} inert={open} />
+      <button
+        type="button"
+        onclick={() => prefs.toggleTheme()}
+        aria-label={copy.toggleTheme}
+        title={copy.toggleTheme}
+        inert={open || undefined}
+        aria-hidden={open || undefined}
+        class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      >
+        <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={18} />
+      </button>
       <a
         href={publicHref(accountHref)}
         aria-label={accountLabel}
@@ -196,7 +229,7 @@
         inert={open || undefined}
         aria-hidden={open || undefined}
         onclick={onAccountClick}
-        class="inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name="user" size={18} title={accountLabel} />
       </a>
@@ -208,7 +241,7 @@
         aria-label={open ? copy.closePanel : copy.openPanel}
         title={open ? copy.closePanel : copy.openPanel}
         bind:this={toggleBtn}
-        class="inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <Icon name={open ? "x" : "menu"} size={20} />
       </button>
@@ -221,7 +254,7 @@
     type="button"
     aria-label={copy.closePanel}
     tabindex="-1"
-    class="fixed inset-0 top-[60px] z-40 cursor-default bg-background/40 backdrop-blur-sm"
+    class="fixed inset-0 top-14 z-40 cursor-default bg-background/40 backdrop-blur-sm"
     transition:fade={{ duration: 150 }}
     onclick={close}
   ></button>
@@ -235,7 +268,7 @@
     bind:this={panelEl}
     onkeydown={onPanelKeydown}
     transition:fly={{ x: panelOffset, duration: 220, easing: cubicOut }}
-    class="fixed end-0 top-[60px] bottom-0 z-50 flex w-[340px] max-w-[88vw] flex-col border-s border-border bg-background/95 backdrop-blur-xl"
+    class="fixed end-0 top-14 bottom-0 z-50 flex w-[340px] max-w-[88vw] flex-col border-s border-border bg-background/95 backdrop-blur-xl"
   >
     <div class="flex flex-col gap-6 p-5 sm:p-6">
       <section class="flex flex-col gap-3">

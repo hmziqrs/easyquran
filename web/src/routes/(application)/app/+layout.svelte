@@ -11,7 +11,7 @@
   import { footerLinksFor } from "$lib/i18n/footer-links";
   import { setAppLocale } from "$lib/i18n/app-locale";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { bookmarksPageHref, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
+  import { bookmarksPageHref, readerHrefFor, yoursPageHref, type QuranReaderHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { marketingHomeHref, type LocaleLink } from "$lib/i18n/marketing-copy";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
@@ -64,6 +64,13 @@
   const footerLinks = $derived(
     footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref, bookmarksPageHref()),
   );
+  // Inline desktop nav links — the same reader indexes the marketing header links.
+  const indexLinks = $derived([
+    { label: copy.index.surahsTitle, href: publicHref(readerHrefFor(copy.locale, "/app/surah")) },
+    { label: copy.index.juzTitle, href: publicHref(readerHrefFor(copy.locale, "/app/juz")) },
+    { label: copy.index.pagesTitle, href: publicHref(readerHrefFor(copy.locale, "/app/pages")) },
+    { label: copy.index.yoursTitle, href: publicHref(yoursPageHref()) },
+  ]);
   const knownMoreIds = (ids: readonly string[]): string[] =>
     ids.filter((id) => TRANSLATION_CATALOGUE_BY_ID.has(id));
 
@@ -195,6 +202,7 @@
     copy={copy.nav}
     brandCopy={{ homeLabel: copy.nav.homeLabel(SITE.name) }}
     brandHomeHref={marketingHomeHref(copy.locale)}
+    {indexLinks}
     {localeLinks}
     direction={copy.direction}
   />

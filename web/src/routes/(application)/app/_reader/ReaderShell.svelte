@@ -26,7 +26,7 @@
   <SidebarInset>
     <header
       style:top={headerTop}
-      class="sticky z-10 min-h-[49px] border-b border-border bg-background/80 py-2.5 backdrop-blur-xl transition-[top] duration-200 ease-out"
+      class="sticky z-10 min-h-11 border-b border-border bg-background/80 py-2 backdrop-blur-xl transition-[top] duration-200 ease-out"
     >
       <div class="flex w-full items-center gap-3 px-5 sm:px-7 lg:px-10">
         {#if mounted}

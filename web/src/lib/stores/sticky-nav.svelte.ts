@@ -1,6 +1,6 @@
 class StickyNav {
   collapsed = $state(false);
-  readonly height = 60;
+  readonly height = 56;
 
   collapse(): void {
     this.collapsed = true;

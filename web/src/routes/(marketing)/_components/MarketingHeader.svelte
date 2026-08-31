@@ -88,27 +88,25 @@
 </script>
 
 <header class="sticky top-0 z-50 border-b border-border bg-surface">
-  <div
-    class="mx-auto flex h-16 w-full items-center gap-4 px-5 md:gap-6 md:px-8 lg:h-[72px] lg:px-12 xl:h-20 xl:gap-[26px] xl:px-18"
-  >
+  <div class="mx-auto flex h-14 w-full items-center gap-4 px-5 md:gap-6 sm:px-7 lg:px-10">
     <a
       class="flex flex-none items-center gap-2.5"
       href={publicHref(marketingHomeHref(locale))}
       aria-label={t.brandHome}
     >
       <span
-        class="flex size-9 items-center justify-center rounded-sm bg-primary font-arabic text-[19px] font-bold leading-none text-primary-foreground"
+        class="flex size-8 items-center justify-center rounded-sm bg-primary font-arabic text-[17px] font-bold leading-none text-primary-foreground"
         lang="ar"
         dir="rtl"
         aria-hidden="true">ق</span
       >
-      <span class="text-[22px] font-extrabold tracking-[-0.035em] text-foreground"
+      <span class="text-[20px] font-extrabold tracking-[-0.035em] text-foreground"
         >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
       >
     </a>
 
     <nav
-      class="hidden items-center gap-6 text-[16.5px] font-bold lg:flex"
+      class="hidden items-center gap-6 text-[15px] font-bold lg:flex"
       aria-label={t.primary}
     >
       <a class="text-foreground transition-colors hover:text-primary"
@@ -137,7 +135,7 @@
       onfocus={() => void loadPalette()}
       aria-label={t.search}
       aria-keyshortcuts="Meta+K Control+K"
-      class="group ms-auto flex h-11 min-w-0 flex-grow items-center gap-3 rounded-pill border border-border px-5 text-start transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="group ms-auto flex h-10 min-w-0 flex-grow items-center gap-3 rounded-pill border border-border px-4 text-start transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
       <Icon name="search" size={17} class="flex-none text-muted" />
       <span class="min-w-0 flex-grow truncate text-body text-muted">{t.search}</span>
@@ -162,9 +160,9 @@
       onclick={() => prefs.toggleTheme()}
       aria-label={t.toggleTheme}
       title={t.toggleTheme}
-      class="flex-none inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="flex-none inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
-      <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={19} />
+      <Icon name={prefs.theme === "dark" ? "moon" : "sun"} size={18} />
     </button>
 
     <a
@@ -172,14 +170,14 @@
       aria-label={accountLabel}
       title={accountLabel}
       onclick={onAccountClick}
-      class="flex-none inline-flex size-11 items-center justify-center rounded-pill border border-border text-foreground transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="flex-none inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
     >
-      <Icon name="user" size={19} title={accountLabel} />
+      <Icon name="user" size={18} title={accountLabel} />
     </a>
 
     <Button
       variant="primary"
-      size="md"
+      size="sm"
       href={publicHref(marketingReaderHomeHref(locale))}
       class="hidden flex-none font-extrabold sm:inline-flex"
     >{t.startReading}</Button>

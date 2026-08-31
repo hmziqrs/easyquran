@@ -31,7 +31,7 @@
 >
   <span
     class={cn(
-      "flex size-9 items-center justify-center rounded-sm font-arabic text-[19px] font-bold leading-none",
+      "flex size-8 items-center justify-center rounded-sm font-arabic text-[17px] font-bold leading-none",
       onAccent ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
     )}
     lang="ar"
@@ -40,7 +40,7 @@
   >
   <span
     class={cn(
-      "text-[22px] font-extrabold tracking-[-0.035em]",
+      "text-[20px] font-extrabold tracking-[-0.035em]",
       onAccent ? "text-primary-foreground" : "text-foreground",
     )}
     >{#if onAccent}{brand}{:else}{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span
