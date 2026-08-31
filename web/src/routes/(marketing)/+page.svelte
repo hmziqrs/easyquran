@@ -6,7 +6,7 @@
   import { marketingHref } from "$lib/i18n/marketing";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
   import { surahPathFor } from "$lib/data/quran";
-  import { readerHrefFor } from "$lib/i18n/reader";
+  import { readerHrefFor, yoursPageHref } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import { authState } from "$lib/auth/auth-state.svelte";
   import type { BookmarksStore } from "$lib/bookmarks/store.svelte";
@@ -27,6 +27,14 @@
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const landing = $derived(resolveLandingCopy(locale));
   const aboutHref = $derived(marketingHref("about", locale));
+  // The metric strip doubles as the index hub: each card opens its dedicated
+  // index page (/app/surah, /app/juz, /app/pages, /app/yours).
+  const indexHrefs = $derived([
+    publicHref(readerHrefFor(locale, "/app/surah")),
+    publicHref(readerHrefFor(locale, "/app/juz")),
+    publicHref(readerHrefFor(locale, "/app/pages")),
+    publicHref(yoursPageHref()),
+  ]);
 
   /* Hue slots resolve through the palette tokens (§61 — no colour literals).
      Boards cycle the four hues by position, never by surah number. */
@@ -229,21 +237,42 @@
   </div>
 </Band>
 
-<!-- ── band 3: metric strip — gapless, edge to edge, four hues ──────────── -->
+<!-- ── band 3: metric strip — gapless, edge to edge, four hues; each card opens
+     its dedicated index page ───────────────────────────────────────────── -->
 <Band pad="none" width="full" contentClass="px-0 md:px-0 lg:px-0 xl:px-0">
   <div class="grid grid-cols-1 gap-0 md:grid-cols-2 lg:grid-cols-4">
-    <MetricCard hue={1} value={String(surahCount)} label={landing.metricSurahs} caption={landing.metricSurahsNote}>
-      <Icon name="book" />
-    </MetricCard>
-    <MetricCard hue={2} value={String(juzCount)} label={landing.metricJuz} caption={landing.metricJuzNote}>
-      <Icon name="continuous" />
-    </MetricCard>
-    <MetricCard hue={3} value={String(quranPageCount)} label={landing.metricPages} caption={landing.metricPagesNote}>
-      <Icon name="note" />
-    </MetricCard>
-    <MetricCard hue={4} value={bookmarksValue} label={landing.metricBookmarks} caption={bookmarksCaption}>
-      <Icon name="bookmark" />
-    </MetricCard>
+    <a
+      href={indexHrefs[0]}
+      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      <MetricCard hue={1} value={String(surahCount)} label={landing.metricSurahs} caption={landing.metricSurahsNote}>
+        <Icon name="book" />
+      </MetricCard>
+    </a>
+    <a
+      href={indexHrefs[1]}
+      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      <MetricCard hue={2} value={String(juzCount)} label={landing.metricJuz} caption={landing.metricJuzNote}>
+        <Icon name="continuous" />
+      </MetricCard>
+    </a>
+    <a
+      href={indexHrefs[2]}
+      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      <MetricCard hue={3} value={String(quranPageCount)} label={landing.metricPages} caption={landing.metricPagesNote}>
+        <Icon name="note" />
+      </MetricCard>
+    </a>
+    <a
+      href={indexHrefs[3]}
+      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      <MetricCard hue={4} value={bookmarksValue} label={landing.metricBookmarks} caption={bookmarksCaption}>
+        <Icon name="bookmark" />
+      </MetricCard>
+    </a>
   </div>
 </Band>
 

@@ -14,7 +14,6 @@
   import { marketingHref } from "$lib/i18n/marketing";
   import { publicHref } from "$lib/i18n/public-href";
   import { bookmarksPageHref, readerHrefFor } from "$lib/i18n/reader";
-  import { globalPagePathFor, juzPathFor } from "$lib/data/quran";
   import { SITE } from "$lib/config/site";
   import {
     brand_home_label,
@@ -47,7 +46,6 @@
     authState.hydrate();
   });
 
-  const arabicCtx = { kind: "arabic" } as const;
   const brand = SITE.name.toLowerCase();
   const otherLocale: MarketingLocale = $derived(locale === "en" ? "ar" : "en");
 
@@ -72,6 +70,13 @@
   });
   let accountLabel = $derived(authState.authenticated ? t.account : t.signIn);
   let accountHref: "/account" | "/login" = $derived(authState.authenticated ? "/account" : "/login");
+  // Reader index links — the dedicated index pages, same grammar as the app Nav.
+  const readerIndexLinks = $derived([
+    { label: t.surahs, href: publicHref(readerHrefFor(locale, "/app/surah")), muted: false },
+    { label: t.juz, href: publicHref(readerHrefFor(locale, "/app/juz")), muted: false },
+    { label: t.pages, href: publicHref(readerHrefFor(locale, "/app/pages")), muted: false },
+    { label: t.bookmarks, href: publicHref(bookmarksPageHref()), muted: true },
+  ]);
 
   function onAccountClick(e: MouseEvent): void {
     if (authState.authenticated) return;
@@ -109,18 +114,14 @@
       class="hidden items-center gap-6 text-[15px] font-bold lg:flex"
       aria-label={t.primary}
     >
-      <a class="text-foreground transition-colors hover:text-primary"
-        href={publicHref(marketingReaderHomeHref(locale))}>{t.surahs}</a
-      >
-      <a class="text-foreground transition-colors hover:text-primary"
-        href={publicHref(readerHrefFor(locale, juzPathFor(arabicCtx, 1)))}>{t.juz}</a
-      >
-      <a class="text-foreground transition-colors hover:text-primary"
-        href={publicHref(readerHrefFor(locale, globalPagePathFor(arabicCtx, 1)))}>{t.pages}</a
-      >
-      <a class="text-muted transition-colors hover:text-primary"
-        href={publicHref(bookmarksPageHref())}>{t.bookmarks}</a
-      >
+      {#each readerIndexLinks as link (link.href)}
+        <a
+          class={link.muted
+            ? "text-muted transition-colors hover:text-primary"
+            : "text-foreground transition-colors hover:text-primary"}
+          href={link.href}>{link.label}</a
+        >
+      {/each}
       {#if aboutHref}
         <a class="text-muted transition-colors hover:text-primary" href={publicHref(aboutHref)}
           >{t.about}</a
