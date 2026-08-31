@@ -60,8 +60,7 @@
   {/snippet}
 
   <!-- Page cards: mushaf page number, the surah(s) it draws from, its verse range,
-       and a chip when it carries a sajda. The small badge on the numeral marks a
-       surah opener (a surah that begins on that page). -->
+       and a chip when it carries a sajda. -->
   <ul class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
     {#each data.rows as page (page.index)}
       {@const hue = hueSlotFor(page.index)}
@@ -74,20 +73,10 @@
           class="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="relative flex h-9 min-w-9 flex-none items-center justify-center rounded-pill px-2 text-[15px] font-extrabold tabular-nums"
+            class="flex h-9 min-w-9 flex-none items-center justify-center rounded-pill px-2 text-[15px] font-extrabold tabular-nums"
             style:background={HUE_SOFT[hue]}
             style:color={HUE_LEGIBLE[hue]}
           >
-            {#if page.surahStarts.length > 0}
-              <span
-                class="absolute -start-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-pill px-1 text-[9px] font-extrabold tabular-nums"
-                style:background={HUE_LEGIBLE[hue]}
-                style:color={HUE_SOFT[hue]}
-                aria-hidden="true"
-              >
-                {page.surahStarts[0]}{#if page.surahStarts.length > 1}+{/if}
-              </span>
-            {/if}
             {page.index}
           </span>
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
