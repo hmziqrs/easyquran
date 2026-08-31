@@ -22,7 +22,7 @@
   import { quranWorker } from "$lib/quran/worker-client";
   import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import type { ReadTierStatus } from "$lib/quran/fetch";
-  import { virtualPageWindow } from "$lib/quran/virtual-pages";
+  import { virtualPageWindow, windowSizeForViewport } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
@@ -97,6 +97,7 @@
   let activeLocalPage = $state<number | null>(null);
   let virtualCenterPage = $state<number | null>(null);
   let readerWidth = $state(0);
+  let viewportHeight = $state(0);
   let lastScrollY = 0;
   let touchY: number | null = null;
   let scrollFrame = 0;
@@ -113,6 +114,12 @@
   const loadAheadPx = 900;
   const visibleLocalPage = $derived(activeLocalPage ?? initial?.page.localPage ?? 1);
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
+  // Rendered-page budget: small Arabic sizes make pages shorter than the viewport,
+  // so scale the window to keep ~1.5 viewports rendered on each side of the focus.
+  const adaptiveWindowSize = $derived.by(() => {
+    const focusHeight = heightCache.get(virtualFocusPage, readerWidth);
+    return windowSizeForViewport(viewportHeight, focusHeight);
+  });
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
   const sourceId = $derived(initial.normalization.sourceId);
@@ -156,6 +163,7 @@
         virtualPageWindow(
           pages.map((pageData) => pageData.page.localPage),
           virtualFocusPage,
+          adaptiveWindowSize,
         ),
       ),
   );
@@ -223,11 +231,23 @@
         await tick();
         if (waitForLayout) await nextFrame();
         if (anchor) restoreAnchor(anchor);
+        // Layout settles a frame late when text metrics change (font resize,
+        // note toggle): a second pass absorbs the residual shift instead of
+        // leaving the reader drifted — the same double-restore pattern the
+        // history-restore path uses.
+        if (waitForLayout && anchor) {
+          await nextFrame();
+          restoreAnchor(anchor);
+        }
         await nextFrame();
         updateVisiblePage();
         stableAnchor = captureAnchor();
       } finally {
         suppressScroll = false;
+        // onScroll early-returns while suppressed, so lastScrollY is stale by
+        // however much the restore moved; resync it or the next real scroll
+        // computes a phantom direction and warms the wrong side.
+        lastScrollY = window.scrollY;
       }
     };
     const result = positionQueue.then(operation, operation);
@@ -328,10 +348,13 @@
   }
 
   function changeTypography(change: () => void): void {
-    void preserveViewport(() => {
-      virtualCenterPage = visibleLocalPage;
-      change();
-    }, true);
+    // Deliberately NO virtualCenterPage recenter here: the rendered window is
+    // already centred on the reader's position, and recomputing it from the
+    // (possibly stale) activeLocalPage can drop the anchor's page from the
+    // rendered set mid-preserve — the document then shifts under the restored
+    // scroll and the reader ends up at the top. A font resize only reflows
+    // text in place; the window does not need to move.
+    void preserveViewport(change, true);
   }
 
   function toggleNote(verseKey: string): void {
@@ -353,6 +376,7 @@
     const pageNumbers = virtualPageWindow(
       pages.map((pageData) => pageData.page.localPage),
       localPage,
+      adaptiveWindowSize,
     );
     const included = new Set(pageNumbers);
     return {
@@ -668,6 +692,7 @@
   }
 
   function onResize(): void {
+    viewportHeight = window.innerHeight;
     scheduleForwardFill();
   }
 
@@ -728,6 +753,7 @@
 
   onMount(() => {
     clientMounted = true;
+    viewportHeight = window.innerHeight;
     lastScrollY = window.scrollY;
     cachePage(initial);
     if (initial.ayahs.length === 0) void retryInitialPage();

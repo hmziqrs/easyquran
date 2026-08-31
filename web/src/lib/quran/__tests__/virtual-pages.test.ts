@@ -1,4 +1,9 @@
-import { SURAH_PAGE_WINDOW_SIZE, virtualPageWindow } from "$lib/quran/virtual-pages";
+import {
+  SURAH_PAGE_WINDOW_MAX,
+  SURAH_PAGE_WINDOW_SIZE,
+  virtualPageWindow,
+  windowSizeForViewport,
+} from "$lib/quran/virtual-pages";
 import { describe, expect, it } from "vite-plus/test";
 
 describe("Surah page virtual window", () => {
@@ -16,5 +21,31 @@ describe("Surah page virtual window", () => {
 
   it("uses the closest loaded page when the focus is outside the cache", () => {
     expect(virtualPageWindow([3, 4, 5, 6, 7, 8], 20)).toEqual([4, 5, 6, 7, 8]);
+  });
+});
+
+describe("viewport-adaptive window size", () => {
+  it("falls back to the fixed minimum without a measurable viewport or page", () => {
+    expect(windowSizeForViewport(0, 900)).toBe(SURAH_PAGE_WINDOW_SIZE);
+    expect(windowSizeForViewport(900, 0)).toBe(SURAH_PAGE_WINDOW_SIZE);
+    expect(windowSizeForViewport(900, Number.NaN)).toBe(SURAH_PAGE_WINDOW_SIZE);
+  });
+
+  it("keeps the minimum when a page is taller than the viewport", () => {
+    // ~2000px page at a large Arabic size: half a viewport per side is one page.
+    expect(windowSizeForViewport(900, 2000)).toBe(SURAH_PAGE_WINDOW_SIZE);
+  });
+
+  it("grows (odd) as pages get shorter than the viewport", () => {
+    // 900px viewport, ~600px pages: 1.5 viewports per side = 3 pages/side -> 7.
+    expect(windowSizeForViewport(900, 600)).toBe(7);
+    // ~300px pages: 5 per side -> 11.
+    expect(windowSizeForViewport(900, 300)).toBe(11);
+  });
+
+  it("clamps to the maximum window", () => {
+    const size = windowSizeForViewport(900, 40);
+    expect(size).toBe(SURAH_PAGE_WINDOW_MAX);
+    expect(size % 2).toBe(1);
   });
 });
