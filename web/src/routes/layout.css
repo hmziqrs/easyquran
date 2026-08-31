@@ -478,13 +478,13 @@
 
   --focus-ring: oklch(0.54 0.23 352);
 
-  /* Sepia warmth decision (plan 06 step 2, option a): the palette's accent moved to
-     magenta but its READING surface keeps the deliberate warm ground — reading comfort
-     is a feature, not decoration, and chrome around it stays neutral. */
-  --reader-background: #FBF3DF;
+  /* Sepia warmth, dialled back (user feedback: the cream ground read as a yellow
+     tint): the reading surface keeps only a whisper of warmth near the neutral
+     ground — chrome around it stays neutral. */
+  --reader-background: #FAF8F3;
   --quran-foreground: #2B2419;
   --translation-foreground: #5E5140;
-  --reader-divider: #DDCFB4;
+  --reader-divider: #E5E1D6;
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
@@ -538,11 +538,11 @@
 
   --focus-ring: oklch(0.51 0.22 352);
 
-  /* Warm reader ground, dark mode (plan 06 step 2, option a — see sepia light). */
-  --reader-background: #1C160F;
+  /* Warm reader ground, dark mode (see sepia light — warmth dialled back). */
+  --reader-background: #191713;
   --quran-foreground: #F0E5CF;
   --translation-foreground: #CBBEA4;
-  --reader-divider: #3B3023;
+  --reader-divider: #332E24;
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
