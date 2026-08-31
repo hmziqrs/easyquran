@@ -977,15 +977,23 @@
   }
 
   /* §22 Bismillah/opener: the calligraphy SVG replaces the text opener (Surah 1
-     never renders one — its bismillah is ayah 1). Margins keep the ceremonial
-     40–52px rhythm; size is the fixed 176px lockup width. */
+     never renders one — its bismillah is ayah 1). Padding, not margin: in verse
+     mode the section carries no padding, so a margin would collapse through the
+     section edge, while reading mode adds 2rem section padding — the two modes
+     landed the calligraphy at different heights. Padding-block pins it to the
+     same 44px from the card top; the reading-mode rule sheds the 2rem the
+     section padding already contributes. */
   .surah-opener-bismillah {
-    margin-block: 44px;
+    padding-block: 44px;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page {
     border-bottom: 1px solid var(--reader-divider);
     padding: 2rem 1.25rem;
+  }
+
+  :global([data-reader-mode="reading"]) .reader-pages .surah-opener-bismillah {
+    padding-block: 12px;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
