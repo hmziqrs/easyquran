@@ -72,21 +72,34 @@ export function captureViewportAnchor(container: HTMLElement | null): ViewportAn
     const text = row?.querySelector<HTMLElement>(".verse-text");
     const verseKey = row?.dataset.verseKey;
     if (text && verseKey) {
+      const textRect = text.getBoundingClientRect();
       return {
         kind: "verse",
         localPage,
         verseKey,
-        viewportPoint: marker,
-        ratio: anchorRatio(marker, text.getBoundingClientRect()),
+        // The anchor must remember where the tracked point actually WAS on
+        // screen — not the search marker. Near the document top the marker
+        // falls outside the content, the nearest verse sits BELOW it, and
+        // storing the marker made every restore scroll that verse up to the
+        // marker — the visible jump at scrollY 0. When the marker falls
+        // inside the text, tracked === marker and nothing changes.
+        viewportPoint: truePoint(textRect, anchorRatio(marker, textRect)),
+        ratio: anchorRatio(marker, textRect),
       };
     }
   }
+  const sectionRect = section.getBoundingClientRect();
   return {
     kind: "page",
     localPage,
-    viewportPoint: marker,
-    ratio: anchorRatio(marker, section.getBoundingClientRect()),
+    viewportPoint: truePoint(sectionRect, anchorRatio(marker, sectionRect)),
+    ratio: anchorRatio(marker, sectionRect),
   };
+}
+
+/** The on-screen position of the point `ratio` through the rect at capture time. */
+function truePoint(rect: DOMRect, ratio: number): number {
+  return rect.top + rect.height * ratio;
 }
 
 export function restoreViewportAnchor(
