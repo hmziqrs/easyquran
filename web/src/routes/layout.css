@@ -909,6 +909,19 @@
   vertical-align: middle;
 }
 
+/* Quran.com-style end-of-ayah medallion for the reader's Arabic column: the
+   U+06DD ARABIC END OF AYAH mark composes with the following Arabic-Indic
+   digits into a single ornament glyph inside the Quran font (Amiri and the
+   bundled Quran fonts carry the ligature), so the number arrives enclosed in
+   its ring instead of a painted pill. */
+@utility ayah-ornament {
+  color: var(--primary);
+  font-size: 0.72em;
+  line-height: 1;
+  vertical-align: middle;
+  margin-inline-start: 0.12em;
+}
+
 @utility reading-text {
   font-family: var(--reader-arabic-family, var(--font-arabic));
   direction: rtl;

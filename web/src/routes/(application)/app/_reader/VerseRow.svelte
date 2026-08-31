@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, type Component } from "svelte";
-  import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
   import { toArabicDigits } from "$lib/data/quran";
@@ -30,17 +29,12 @@
   let Tools = $state<
     Component<{ text: string; vKey: string; onToggleNote?: () => void }> | null
   >(null);
-  let hovered = $state(false);
-  let focused = $state(false);
-  let isDesktop = $state(false);
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
   const isRevealed = $derived(page.url.hash === `#${ayahId}`);
   const translationActive = $derived(
     isTranslation ?? ("lang" in page.params && "translator" in page.params),
   );
-  const noteOpen = $derived(reader.openNote === vKey);
-  const showTools = $derived(!isDesktop || hovered || focused || noteOpen);
 
   type ExtraRow =
     | { kind: "skeleton"; sourceId: string }
@@ -62,34 +56,15 @@
         Tools = module.default;
       })
       .catch(() => {});
-    if (!browser) return;
-    const mq = matchMedia("(min-width: 768px)");
-    isDesktop = mq.matches;
-    const update = () => {
-      isDesktop = mq.matches;
-    };
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
   });
 </script>
 
-<!--
-  Verses are a deliberate tab stop: focusing one reveals its tools (bookmark, note, copy), which is
-  the only keyboard path to them. Reviewed exception, not an oversight — revisit if the tools ever
-  get their own focusable controls.
--->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <li
   id={ayahId}
   data-verse-key={vKey}
-  tabindex={showTools ? -1 : 0}
   class="verse-row group relative scroll-mt-24 border-b border-reader-divider px-5 pb-[22px] pt-[62px] transition-colors sm:px-9 {isRevealed
     ? 'revealed-ayah'
     : ''}"
-  onpointerenter={() => (hovered = true)}
-  onpointerleave={() => (hovered = false)}
-  onfocusin={() => (focused = true)}
-  onfocusout={() => (focused = false)}
 >
   {#if translationActive}
     <span
@@ -107,7 +82,9 @@
       class="verse-text font-arabic leading-[2.15] text-quran-foreground"
       style="font-size:var(--reader-arabic-size, 33px)"
     >
-      {text}<span class="ayah-marker arabic-marker" data-verse-anchor={vKey}>{toArabicDigits(n)}</span>
+      {text}<span class="ayah-ornament arabic-marker" data-verse-anchor={vKey}
+        >&#x06DD;{toArabicDigits(n)}</span
+      >
     </span>
   {/if}
 
@@ -130,7 +107,7 @@
     {/each}
   {/if}
 
-  {#if Tools && showTools}
+  {#if Tools}
     <Tools {text} {vKey} {onToggleNote} />
   {/if}
 </li>
