@@ -134,9 +134,12 @@
   $effect(() => {
     const next = adaptiveWindowSize;
     if (!clientMounted || next === renderedWindowSize) return;
-    void preserveViewport(() => {
-      renderedWindowSize = next;
-    });
+    void preserveViewport(
+      () => {
+        renderedWindowSize = next;
+      },
+      true,
+    );
   });
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
@@ -190,8 +193,12 @@
     return captureViewportAnchor(readerPages);
   }
 
-  function restoreAnchor(anchor: ViewportAnchor): void {
-    if (restoreViewportAnchor(readerPages, anchor)) lastScrollY = window.scrollY;
+  function restoreAnchor(anchor: ViewportAnchor): boolean {
+    if (restoreViewportAnchor(readerPages, anchor)) {
+      lastScrollY = window.scrollY;
+      return true;
+    }
+    return false;
   }
 
   function markAnchorRead(anchor: ViewportAnchor | null | undefined): void {
@@ -242,26 +249,40 @@
     waitForLayout = false,
   ): Promise<void> {
     const operation = async () => {
-      const anchor = anchorSource();
+      const startScrollY = window.scrollY;
+      // Document top is a hard invariant: at scrollY 0 nothing above the
+      // viewport exists that could reflow, so any scroll away from 0 after a
+      // change is pure jump. Skip the anchor entirely (its nearest-node
+      // fallback is what dragged the first ayah up to the marker) and pin the
+      // offset back to 0 in the finally block, after the browser has clamped.
+      const atTop = startScrollY <= 0;
+      const anchor = atTop ? null : anchorSource();
       suppressScroll = true;
       try {
         change();
         await tick();
         if (waitForLayout) await nextFrame();
-        if (anchor) restoreAnchor(anchor);
-        // Layout settles a frame late when text metrics change (font resize,
-        // note toggle): a second pass absorbs the residual shift instead of
-        // leaving the reader drifted — the same double-restore pattern the
-        // history-restore path uses.
-        if (waitForLayout && anchor) {
-          await nextFrame();
+        if (anchor) {
           restoreAnchor(anchor);
+          // Layout settles a frame late when text metrics change (font
+          // resize, note toggle, page swaps). One restore is a guess; keep
+          // re-applying until the tracked point is stable across a frame —
+          // the restore itself converges because it is relative.
+          if (waitForLayout) {
+            for (let settle = 0; settle < 3; settle += 1) {
+              const before = window.scrollY;
+              await nextFrame();
+              if (!restoreAnchor(anchor)) break;
+              if (Math.abs(window.scrollY - before) <= 0.5) break;
+            }
+          }
         }
         await nextFrame();
         updateVisiblePage();
         stableAnchor = captureAnchor();
       } finally {
         suppressScroll = false;
+        if (atTop) window.scrollTo(0, 0);
         // onScroll early-returns while suppressed, so lastScrollY is stale by
         // however much the restore moved; resync it or the next real scroll
         // computes a phantom direction and warms the wrong side.
