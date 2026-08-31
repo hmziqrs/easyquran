@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
   import { beforeNavigate, invalidateAll, replaceState } from "$app/navigation";
@@ -22,7 +22,11 @@
   import { quranWorker } from "$lib/quran/worker-client";
   import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
   import type { ReadTierStatus } from "$lib/quran/fetch";
-  import { virtualPageWindow, windowSizeForViewport } from "$lib/quran/virtual-pages";
+  import {
+    SURAH_PAGE_WINDOW_SIZE,
+    virtualPageWindow,
+    windowSizeForViewport,
+  } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
   import { quran } from "$lib/stores/quran.svelte";
@@ -116,9 +120,23 @@
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   // Rendered-page budget: small Arabic sizes make pages shorter than the viewport,
   // so scale the window to keep ~1.5 viewports rendered on each side of the focus.
+  // The size must NOT feed the rendered set directly: it tracks the height cache,
+  // which is written by ResizeObserver AFTER a resize — a reactive window change
+  // would mount/unmount pages around the reader with no anchor restore, and the
+  // document visibly jumps. The effect below applies it through the same
+  // anchor-preserving queue as every other layout change.
   const adaptiveWindowSize = $derived.by(() => {
     const focusHeight = heightCache.get(virtualFocusPage, readerWidth);
     return windowSizeForViewport(viewportHeight, focusHeight);
+  });
+  let renderedWindowSize = $state(SURAH_PAGE_WINDOW_SIZE);
+
+  $effect(() => {
+    const next = adaptiveWindowSize;
+    if (!clientMounted || next === renderedWindowSize) return;
+    void preserveViewport(() => {
+      renderedWindowSize = next;
+    });
   });
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
@@ -163,7 +181,7 @@
         virtualPageWindow(
           pages.map((pageData) => pageData.page.localPage),
           virtualFocusPage,
-          adaptiveWindowSize,
+          renderedWindowSize,
         ),
       ),
   );
@@ -376,7 +394,7 @@
     const pageNumbers = virtualPageWindow(
       pages.map((pageData) => pageData.page.localPage),
       localPage,
-      adaptiveWindowSize,
+      renderedWindowSize,
     );
     const included = new Set(pageNumbers);
     return {
@@ -867,12 +885,17 @@
               </ol>
             </section>
           {:else}
+            <!-- Untracked on purpose: a reactive spacer re-reads the height cache
+                 while the ResizeObserver writes post-resize measurements, and each
+                 silent correction shifts the space above the reader — the jump.
+                 Spacers snapshot at render time; every swap to a real page runs
+                 through the anchor-preserving queue. -->
             <div
               class="page-spacer"
               data-local-page={pageData.page.localPage}
               data-page-spacer
               aria-hidden="true"
-              style:height={`${heightCache.get(pageData.page.localPage, readerWidth)}px`}
+              style:height={`${untrack(() => heightCache.get(pageData.page.localPage, readerWidth))}px`}
             ></div>
           {/if}
         {/each}
