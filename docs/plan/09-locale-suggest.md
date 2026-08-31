@@ -74,8 +74,8 @@ order; for each entry try the full tag (`ar-SA` → `ar`) then the primary subta
 `["en-PK","en","ur"]` → `en` (Urdu never surfaces — correct), `["ar","en"]` → `ar`,
 `["ur-PK","en"]` → `en` (Urdu unsupported as UI locale, falls through to `en`),
 `["fr"]` → `undefined` → no popup. Works unchanged after Chrome's reduction to a
-single entry. Brave's farbled `en-US` just yields `en` — worst case a pointless-but-
-dismissible English suggestion on `/ar`, which the current-locale check (§2.2) already
+single entry. Brave's farbled `en-US` just yields `en` — worst case a needless
+English suggestion on `/ar`, which the current-locale check (§2.2) already
 suppresses.
 
 ### 2.2 Current-locale resolution
@@ -109,24 +109,38 @@ the root-layout shell doesn't own, and `localizeHref(deLocalizeHref(...))` round
 any localized app path — including translated-reader routes, so
 `/en/app/al-fatihah/t/en/sahih` → `/ar/app/al-fatihah/t/en/sahih` keeps the
 translation context intact (the nav-guard's spirit; no hand-built `/app/` strings).
+Note: this is the codebase's first direct `localizeHref` call site — existing
+switchers use the purpose-built `readerHrefFor`/`marketingHomeHref`, which need
+context the root-layout shell doesn't own. The round-trip behavior was live-verified
+against the real runtime: query and hash survive (unspecified URLPattern components
+copy through `fillMissingUrlParts`), and a pattern-less path such as `/about` comes
+back unchanged — which is exactly why trigger condition 5 exists.
+
+One trap the audit caught: `URLPattern("/ar/")` does **not** match `/ar`, so
+`deLocalizeHref("/ar")` returns it unchanged and the accept link would reload the
+same page. Normalize first — treat `/ar` as `/ar/`, mirroring §2.2 — and assert the
+built `targetHref` is not the current path (a same-path accept link must never ship;
+it's a test case in §8).
 
 ## 3. Trigger rules and the edge-case matrix
 
-Evaluate once, client-side, from the root layout after paint (§5.3). Show the popup
-only when **every** row below passes:
+Evaluate from the root layout after first paint, **and again on every client-side
+navigation** (§5.3 — SPA navigation never re-runs onMount, so a `/about` → `/en/app`
+in-session hop must still get its chance). Show the popup only when **every** row
+below passes:
 
 | # | Condition | Rationale / edge case covered |
 | --- | --- | --- |
 | 1 | `navigator.languages` is a non-empty array | Empty/undefined (some embeds, privacy hardening) → silently no popup. |
 | 2 | First-match locale (§2.1) exists | Unsupported primary (`ur`, `fr`, …) → nothing to suggest. The Pakistan guarantee. |
-| 3 | First-match ≠ current URL locale (§2.2) | Already-visited-in-right-locale users are never nagged. |
-| 4 | Target locale not in the resolved map (§4) | "Don't ask again" — the user's explicit requirement. Permanent per locale. |
-| 5 | Current surface has a localized variant: pathname is `/`, `/ar/`, or starts with `/{en,ar}/app/` | Marketing subpages (`/about`, `/faq`, …) have **no** `ar` variant (`urlPatterns` covers only `/` and `/app/**`). On those pages: don't show *and don't record anything* — first landing on `/about` must not burn the one chance; the popup still fires on a later `/` or `/app/**` visit. |
-| 6 | No other modal open at fire time (`authModal.open`, `commandPalette.open`) | Cross-guard precedent: `AuthModalShell.svelte` closes the palette when auth opens. If busy, retry once after the modal closes; never stack. |
-| 7 | Storage write works | If `localStorage` throws (private mode edge), still show — worst case it re-asks next session. Never crash. |
+| 3 | First-match ≠ current URL locale (§2.2) | Already-visited-in-right-locale users are never nagged. Deliberate cross-locale readers (English-locale browser reading `/ar/app` — a core demographic here) pay exactly one dismissal, then silence forever. |
+| 4 | Target locale not in the resolved map (§4) | "Don't ask again" — the user's explicit requirement. The dismissal contract below is the single normative statement of permanence. |
+| 5 | Current surface has a localized variant: `pathname === "/" \|\| pathname === "/ar" \|\| pathname === "/ar/" \|\| /^\/(en\|ar)\/app(\/\|$)/.test(pathname)` | Marketing subpages (`/about`, `/faq`, …) have **no** `ar` variant (`urlPatterns` covers only `/` and `/app/**`), and prefix-less app chrome pages (`/app/settings`, `/app/bookmarks`, `/app/search` — locale-ambiguous per `app-locale.ts`) fail the regex too. On those pages: don't show *and don't record anything* — first landing there must not burn the one chance; the popup still fires on a later eligible surface. The regex must include the exact forms `/en/app` and `/ar/app` (`startsWith("/en/app/")` alone misses the canonical reader home — audit catch) and the slash-less `/ar` (reachable; `isLocalizedMarketingPath` accepts it). |
+| 6 | No other modal open **at fire time and while shown** | Two directions: (a) busy at fire → retry once when the modal closes, re-checking the whole matrix (the modal may have been replaced by another); retry fails → done for this page load. (b) `authModal.open` or `commandPalette.open` becoming true *while the suggest dialog is open* → close suggest immediately, record **nothing** (the user never answered), latch no-re-show for this page load. Cross-guard precedent: `AuthModalShell.svelte` closes the palette when auth opens; without this guard two bits-ui focus traps fight and the suggest dialog floats above the auth dialog. |
 
-Surfaces where condition 5 fails also include auth/account/design routes — same rule:
-skip silently, record nothing.
+Storage health is deliberately *not* a matrix condition: `writeJSON` swallows
+failures (void return), so it can't be probed at fire time. Blocked-storage behavior
+is handled by the in-memory map in §4/§5.4.
 
 ### The dismissal contract (user's headline edge case)
 
@@ -139,8 +153,18 @@ skip silently, record nothing.
   back).
 - Showing the popup records **nothing**. Only interaction persists. A crash between
   show and click leaves the state clean for next visit.
+- A *forced* close (modal collision, condition 6b; cross-tab resolution below) also
+  records nothing — only the user's own answer counts.
 - Re-check the resolved map at fire time (after the §5.3 delay), not just at mount —
   covers the two-tab race where the other tab already dismissed.
+- Cross-tab: subscribe `onStorageKey(KEY)`; if the dialog is open and the storage
+  event says the target got resolved in another tab, close *without writing* (the
+  other tab's answer stands). Residual race — both tabs firing in the same
+  millisecond before either write lands — is accepted as harmless: both dialogs show,
+  the second interaction wins, keys are per-locale so no corruption.
+
+Surfaces where condition 5 fails (marketing subpages, prefix-less app chrome,
+auth/account/design routes): skip silently, record nothing.
 
 ## 4. Storage schema
 
@@ -154,13 +178,18 @@ easyquran.localeSuggest = { "v": 1, "resolved": { "ar": "accepted" | "dismissed"
 
 - Only locales the user actually interacted with appear as keys. Empty map = never
   asked anything.
-- Unknown locales / malformed values decode to absence (decoder tolerance pattern
-  from `safe-storage.ts` + `decoders.ts`); a future `v: 2` written by a newer build
-  is ignored via `isFutureSchema(raw, 1)` — the popup then behaves as first-visit,
-  which is safe.
+- Values decode as a **literal union** (`asLiteral("accepted", "dismissed")`), not
+  `asStringRecord` — `{"ar": "bogus"}` must drop the key, not persist a junk value
+  (audit catch). Unknown locales in the map are ignored (only `en`/`ar` are
+  meaningful); a future `v: 2` written by a newer build is ignored via
+  `isFutureSchema(raw, 1)` — the popup then behaves as first-visit, which is safe.
+- **In-memory write-through:** the state module keeps its own `resolved` map as the
+  primary read source, updated on every accept/dismiss, with `writeJSON` as
+  best-effort persistence. Site-data-blocked / private-mode browsers then nag at
+  most once per page load instead of once per navigation, and nothing ever throws.
 - Name follows the `easyquran.<area>[.<sub>]` convention (`easyquran.prefs`,
-  `easyquran.reader.source`, …). Window-event style (`easyquran:localeSuggest`) if
-  cross-tab reactivity is wanted; `onStorageKey` gives it for free.
+  `easyquran.reader.source`, …). Cross-tab reactivity via `onStorageKey` is part of
+  the v1 spec (see the dismissal contract), not an optional extra.
 - Not part of `SettingsDoc` in v1 (`settings-document.ts` is a local aggregate, not
   synced); cross-device sync is open question 4.
 
@@ -181,13 +210,31 @@ Follow the two established patterns exactly:
   `Content`/`Title`/`Description`/`Close`. There is no shadcn `dialog` wrapper in
   `ui/`; do not add one for this. Sizing: `w-[calc(100vw-2rem)] max-w-[400px]`,
   centered, `z-[92]` (above AuthModal's `z-[90]/[91]`, below the toasts'
-  `z-[1002]`).
-- **Direction/lang:** `Content` gets the *current* locale + its `uiDirection()` —
-  the pitch is written in the language the user is currently reading. The target
-  locale appears as its **endonym** (`UI_LOCALES[target].endonym` → "العربية" /
-  "English"), matching every existing switcher (`MarketingHeader`, `Nav` locale
-  grid). All layout utilities logical (`ms-`/`me-`/`start-`/`end-`) so the ar→en
-  direction is free.
+  `z-[1001]/[1002]` — toasts floating above the dialog is deliberate: they are
+  transient, non-blocking, auto-dismissing; the floating Tweaks panel (`z-[1000]`)
+  likewise sits above, same reasoning; the same ordering already governs
+  AuthModal. The `DownloadBar` (`z-[80]`, top strip) sits under the overlay — the
+  download itself is store-driven and continues; this stacking is accepted, not
+  suppressed, so the matrix stays lean).
+- **SSR/prerender safety is a hard requirement, not a hope:** `open` starts
+  `$state(false)` and the dialog renders inside `{#if open}` — prerendered marketing
+  HTML ships zero popup bytes and hydration has nothing to mismatch. All
+  browser-API work (`navigator`, `onStorageKey`, timers) lives in client-only
+  lifecycle (`onMount`/`$effect`), never module scope.
+- **Direction/lang:** `Content` gets the *current* locale and its `uiDirection()` —
+  both attributes, explicitly (`lang={current} dir={direction}`) — the pitch is
+  written in the language the user is currently reading. The target locale appears
+  as its **endonym** (`UI_LOCALES[target].endonym` → "العربية" / "English"),
+  matching every existing switcher (`MarketingHeader`, `Nav` locale grid). All
+  layout utilities logical (`ms-`/`me-`/`start-`/`end-`) so the ar→en direction is
+  free.
+- **Focus contract:** bits-ui traps focus and restores it on close by default
+  (`trapFocus`, focus-scope auto-focus handlers; Escape + outside-click close by
+  default — `escapeKeydownBehavior`/`interactOutsideBehavior` are `'close'`).
+  Initial focus is the first tabbable in DOM order: render the ✕ `Close` first, as
+  AuthModal does, so focus lands on the *safe reversible* action, not the CTA. No
+  `aria-live` needed — `role="dialog"` + `Title`/`Description` carry the
+  announcement.
 
 ### 5.2 Copy
 
@@ -203,31 +250,71 @@ via `pre*`):
 | `locale_suggest_dismiss` | Not now | ليس الآن |
 | `locale_suggest_close` | Dismiss | تجاهل |
 
-Final ar wording to be reviewed in the L01 fluent-Arabic pass; placeholders ship with
-the endonym. Rendered through the generated `$lib/i18n/m/*` barrel, per-locale via
-the `m.locale_suggest_title(undefined, { locale: current })` options pattern.
+The table shows bare placeholders for readability; the shipped message strings wrap
+them as specified below. Final ar wording to be reviewed in the L01 fluent-Arabic
+pass; placeholders ship with the endonym, wrapped in Unicode isolation characters in
+the message strings (`\u2066{locale}\u2069`) so "العربية" inside an LTR sentence (and
+"English" inside an RTL one) can't drag adjacent neutrals — messages can't carry
+`<bdi>`, and this costs nothing. Message functions take `(inputs, options)` — the placeholder is the
+first argument, the rendering locale the second (same shape as
+`tweaks_accent_option({ name }, { locale })` in `appearance-copy.ts`). Watch the
+name collision: the message *param* `locale` is the target endonym, the *option*
+`locale` is the UI locale rendering the copy:
+
+```ts
+locale_suggest_title({ locale: UI_LOCALES[target].endonym }, { locale: currentUiLocale });
+```
 
 ### 5.3 Timing
 
-Root layout already computes `firstPaintComplete` (double rAF). The popup arms then
-waits **1500 ms** — past LCP, past the offline-engine kick — re-checks conditions 4
-and 6 at fire, then opens. One retry if a modal was open (condition 6); never queues
-behind more than one retry.
+The root layout's `firstPaintComplete` is a closure variable — a sibling component
+can't read it. `LocaleSuggest` arms its **own** double-rAF (copy the layout's
+pattern), then waits **1500 ms** — past LCP, past the offline-engine kick —
+re-checks conditions 4 and 6 at fire, then opens. The delay applies **only to this
+initial evaluation**; every later trigger is immediate:
+
+- **`afterNavigate` re-evaluation (mandatory):** onMount never re-fires
+  for SPA navigation, so a first landing on `/about` (suppressed, nothing recorded)
+  followed by a client-side hop to `/en/app` would otherwise never see the popup —
+  nor would a PWA-standalone session that outlives many navigations. Re-run
+  `evaluate(location.pathname)` on every `afterNavigate`, no delay.
+- **Shown-latch:** one show per page load. If the popup was shown (or forced-closed
+  by condition 6b) this load, later navigations don't re-arm it — the dismissal
+  contract already handles cross-visit permanence.
+- **Retry semantics:** if condition 6a (modal busy) blocks the initial fire, retry
+  once when that modal closes, re-running the *whole* matrix (another modal may
+  have opened in between). Retry blocked again → done for this page load. Never
+  queue more than one retry.
 
 ### 5.4 State module
 
 `web/src/lib/i18n/locale-suggest.svelte.ts` — class store in the `auth-modal.svelte.ts`
 mold: `open = $state(false)`, `target: UiLocale | null`, `evaluate(pathname)` running
 the §3 matrix, `accept()` → persist + let the link navigate, `dismiss()` → persist +
-close. No `$effect` writing state; all mutations are event-handler-driven per the
-Svelte 5 rules (effects are an escape hatch).
+close. Storage reads go through an in-memory `resolved` map (§4 write-through), so
+blocked `localStorage` degrades to per-page-load memory instead of a nag loop.
+Subscriptions, all client-only:
+
+- `onStorageKey(KEY)` — cross-tab resolution closes an open dialog without writing
+  (dismissal contract).
+- a `$effect` watching `authModal.open`/`commandPalette.open` — condition 6b forced
+  close, records nothing, sets the shown-latch.
+
+No `$effect` writes state except that guard; user-driven mutations stay in event
+handlers per the Svelte 5 rules. One double-write trap to guard in tests: closing
+via Escape/overlay fires the same `onOpenChange` path as the buttons — route every
+close through a single `resolve(answer)` entry point so a dismissal is written
+exactly once.
 
 ### 5.5 Analytics
 
 Consent-gated `track()` from `web/src/lib/firebase/analytics.ts`, snake_case names
 matching `notification_*` style: `locale_suggest_shown`, `locale_suggest_accepted`,
-`locale_suggest_dismissed`, each with `suggested_locale` param. No new PII (the
-browser language list itself is never sent).
+`locale_suggest_dismissed`, each with `suggested_locale` param; `…_dismissed`
+additionally carries `dismiss_reason: escape | overlay | button | close_icon`
+(via the `onEscapeKeyDown`/`onInteractOutside` callbacks on `Content`, which
+`onOpenChange` alone cannot distinguish). No new PII (the browser language list
+itself is never sent).
 
 ## 6. Phase 2 (separate build, optional) — translation suggest
 
@@ -243,8 +330,10 @@ Rules: scan the *full* `navigator.languages` list (not just first-match) for a
 `languageCode` hit whose language ≠ current translation and ≠ `ar` (Arabic readers
 use the Arabic text, not `ar.*` tafsir entries); surface once per browser per language
 under a sibling key `easyquran.translationSuggest` with the same dismissal contract;
-**never** change the UI locale in the same breath (non-negotiable 6). Open question 2
-(curated pick) blocks this phase — there is no "recommended" field today.
+**never** change the UI locale in the same breath (non-negotiable 6). When both
+phases exist, they must be mutually exclusive — one suggestion surface per session
+at a time; phase 2 checks and yields to any open/armed phase-1 dialog. Open
+question 2 (curated pick) blocks this phase — there is no "recommended" field today.
 
 ## 7. Docs to amend when this lands
 
@@ -266,19 +355,39 @@ under a sibling key `easyquran.translationSuggest` with the same dismissal contr
    `["en-PK","en","ur"]` on `/` → null (the guarantee, asserted by name);
    `["ar","en"]` on `/` → `ar`; `["ur-PK","en"]` → null; `["fr"]` → null; empty
    array → null; target == current → null; `/about` surface → null **and** nothing
-   persisted; dismissed `ar` in storage → null; accepted `ar` → null;
+   persisted; `/app/settings` (prefix-less chrome) → null, nothing persisted;
+   dismissed `ar` in storage → null; accepted `ar` → null;
    `["ar"]` (Chrome-reduction shape) on `/en/app/al-fatihah/t/en/sahih` → `ar` with
-   target href `/ar/app/al-fatihah/t/en/sahih` (translation context preserved).
+   target href `/ar/app/al-fatihah/t/en/sahih` (translation context preserved);
+   **surface regex**: `/en/app` exact and `/ar/app` exact pass condition 5,
+   `/ar` (no slash) passes; **href builders**: `/ar` + target `en` → `/` (the
+   normalization from §2.3 — without it this case returns `/ar` and the test fails),
+   and a builder assertion that `targetHref` never equals the current path.
    Happy-dom's real `localStorage` — `localStorage.clear()` in `beforeEach`.
 2. **Storage codec** — decode tolerance: malformed JSON, wrong shape, future version
-   (`isFutureSchema`), unknown locale keys survive/ignore.
+   (`isFutureSchema`), `{"ar":"bogus"}` literal-union rejection (key dropped),
+   unknown locale keys ignored.
 3. **Component** — mount style from
    `app/search/__tests__/translation-picker.test.ts` (`mount`/`unmount` from
    `"svelte"`, raw `querySelector`, `MouseEvent` clicks, hand-rolled `settle()`):
-   dialog renders endonym + both actions; ✕ and "Not now" write `dismissed` and
-   close; accept link carries `data-sveltekit-reload`, correct `href`, query+hash;
-   Escape closes; re-`evaluate()` after dismissal is a no-op.
-4. **Guard sweep** — extend the source-scan idea of `nav-guard.test.ts` only if a
+   prerender-safety (`open` false → zero dialog DOM); dialog renders endonym + both
+   actions; ✕ and "Not now" write `dismissed` exactly **once** (the §5.4
+   double-write guard — Escape and `onOpenChange` ride the same path) and close;
+   **Escape writes `dismissed`** (explicit assertion, not implied); accept link
+   carries `data-sveltekit-reload`, correct `href`, query+hash; `evaluate()` after
+   dismissal is a no-op; forced-close paths (auth/palette opens while open;
+   cross-tab storage event) close **without writing**; blocked storage
+   (`setItem` spy that throws) → dismissal lands in memory, dialog never re-opens
+   that load, nothing throws; analytics spy asserts `locale_suggest_shown` on open
+   and `locale_suggest_dismissed` with the right `dismiss_reason` per close path —
+   and that no event payload ever carries the navigator language list.
+4. **Lifecycle** — afterNavigate re-evaluation and the shown-latch are exercised
+   through the store (fire `evaluate` for `/about` → nothing, then `/en/app` →
+   shows; after a show/forced-close, later `evaluate` calls are no-ops; modal open
+   at fire → retry-once re-runs the whole matrix, second block → no show this
+   load). A full SvelteKit-navigation harness is overkill — the contract lives in
+   the store.
+5. **Guard sweep** — extend the source-scan idea of `nav-guard.test.ts` only if a
    hand-built `/app/` string sneaks in; otherwise nothing (the popup builds hrefs
    exclusively via `localizeHref`).
 
@@ -286,6 +395,21 @@ Gate checklist before commit: `pnpm check` (`--fail-on-warnings`), `pnpm lint`
 (`--deny-warnings`, no nested ternaries — use early-return helpers), `pnpm test`.
 All three pre-run `pnpm i18n:check`, so the new message ids must compile in both
 locales first.
+
+### Manual verification matrix (run once, fresh profile each row)
+
+| Scenario | Expect |
+| --- | --- |
+| `en` browser on `/` | No popup, ever. |
+| `ar`-primary browser on `/` | Popup after ~1.5 s; accept → `/ar/`; never asked again. |
+| Same, dismiss instead | Never asked again, incl. after reload + `/app` visit. |
+| `ar`-primary browser, deep link `/en/app/al-fatihah/t/en/sahih` | Accept → `/ar/app/al-fatihah/t/en/sahih` (translation kept). |
+| Land `/about`, client-side nav to `/en/app` | Popup still eligible (afterNavigate path). |
+| Popup open, press ⌘K / open auth | Popup closes silently, nothing recorded, no re-show this load. |
+| Two tabs, dismiss in one | Other tab's open dialog closes without writing. |
+| `/ar` entered without slash, `en` browser | Popup offers English; accept lands on `/`, not `/ar`. |
+| Private window, dismiss | No error; re-asks next window at most, not per navigation. |
+| `["en-PK","en","ur"]` | The guarantee: silence. |
 
 ## 9. Open questions for the owner
 
@@ -297,7 +421,14 @@ locales first.
    `web/src/lib/data/translations.json` (never the immutable DBs), or a heuristic
    (none exists today).
 3. **Reset path** — is "clear site data" acceptable as the only un-dismiss, or should
-   a future Settings → Language section expose a reset? Default: acceptable for v1.
+   a future Settings → Language section expose a reset? Concrete stake: an
+   en-primary user dismisses `ar`; years later the same browser profile is an
+   ar-primary user (or a family member's) landing on `/` — they get zero hint,
+   forever, because entry URLs default `en`. A re-ask-on-browser-language-change
+   heuristic was considered and rejected: it's scope creep against the owner's
+   "don't ask them again", and storing the dismissed-at browser language list is
+fingerprinting-adjacent (§5.5 refuses to even transmit that list). Default:
+permanence + a future explicit Settings reset, per the dismissal contract.
 4. **Cross-device sync** — authed users could carry `resolved` in `SettingsDoc`
    (which already reserves unknown keys). Deferred; v1 is per-browser.
 5. **Delay** — 1500 ms after first paint is a guess; confirm it doesn't fight the
