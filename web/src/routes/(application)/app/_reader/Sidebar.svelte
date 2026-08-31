@@ -124,7 +124,11 @@
   body: Snippet,
 )}
   <SidebarMenuItem>
-    <SidebarMenuButton isActive={isActive} aria-current={ariaCurrent} class={cls}>
+    <!-- bg-transparent: rows must rest on the sidebar ground. The button's hover/
+         active affordance is --sidebar-accent (= surface-hover); with no explicit
+         resting background the row already wore that exact value, so hover and
+         focus were invisible — the feedback area looked smaller than the row. -->
+    <SidebarMenuButton isActive={isActive} aria-current={ariaCurrent} class={cn(cls, "bg-transparent")}>
       {#snippet child({ props })}
         <a {...props} {href} data-sveltekit-preload-data="hover" onclick={onItemClick}>
           {@render body()}
