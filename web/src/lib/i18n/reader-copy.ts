@@ -77,6 +77,9 @@ import {
   reader_navigation_description,
   reader_navigation_error,
   reader_navigation_loading,
+  reader_nav_manual_pages,
+  reader_next_surah,
+  reader_prev_surah,
   reader_network_unavailable,
   reader_new_version_ready,
   reader_no_translations,
@@ -172,6 +175,7 @@ import {
   reader_stacked_title,
   reader_staging_offline_pack,
   reader_storage,
+  reader_surah_nav_label,
   reader_surah_page,
   reader_surah_page_title,
   reader_surah_pages,
@@ -199,6 +203,10 @@ export interface ReaderUiCopy {
     readonly surahPageTitle: (name: string, page: number, count: number) => string;
     readonly pageOf: (page: number, count: number) => string;
     readonly surahPagesLabel: string;
+    readonly surahNavLabel: string;
+    readonly prevSurahLabel: string;
+    readonly nextSurahLabel: string;
+    readonly manualPagesLabel: string;
     readonly arabicTextSizeLabel: string;
     readonly smallerArabicTextLabel: string;
     readonly largerArabicTextLabel: string;
@@ -407,6 +415,10 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
         reader_surah_page_title({ name, page, count }, options),
       pageOf: (page, count) => reader_page_of({ page, count }, options),
       surahPagesLabel: noArgs(reader_surah_pages),
+      surahNavLabel: noArgs(reader_surah_nav_label),
+      prevSurahLabel: noArgs(reader_prev_surah),
+      nextSurahLabel: noArgs(reader_next_surah),
+      manualPagesLabel: noArgs(reader_nav_manual_pages),
       arabicTextSizeLabel: noArgs(reader_arabic_text_size),
       smallerArabicTextLabel: noArgs(reader_smaller_arabic_text),
       largerArabicTextLabel: noArgs(reader_larger_arabic_text),

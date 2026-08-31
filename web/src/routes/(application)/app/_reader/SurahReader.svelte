@@ -940,12 +940,13 @@
     {/if}
 
     <ReaderPageNav
-      {initial}
-      lastLoadedLocalPage={lastLoaded.page.localPage}
-      {previousPage}
-      {nextPage}
+      currentSurah={initial.surah}
+      ctx={routeContext}
       {previousSurah}
       {nextSurah}
+      degraded={degradation.loadFailed}
+      {previousPage}
+      {nextPage}
     />
   </div>
 </div>
