@@ -3,10 +3,11 @@
 #
 # Same contract as deploy/fetch-quran-db.sh (CI / dev machines), minus the repo
 # checkout: the deploy host has no node/python3 and no web/src tree, so the
-# translation file list comes from the manifest COPYed into the api image at
-# build time and is read with jq. Downloads are idempotent per file — present
-# and non-empty is never refetched — so every redeploy re-runs this in seconds
-# and picks up newly published translations only. No hashing anywhere; a
+# translation file list and runtime catalogue come from the manifest COPYed
+# into the api image at build time and are produced with jq. Downloads are
+# idempotent per file — present and non-empty is never refetched — so every
+# redeploy re-runs this in seconds and picks up newly published translations.
+# No hashing anywhere; a
 # truncated or wrong-object download dies on the SQLite magic-header + expected
 # byte-size asserts (size comes from the baked catalogue, keyed by id).
 #
@@ -52,17 +53,37 @@ assert_size() {
   fi
 }
 
+write_catalogue() {
+  local out="$DEST/translations/index.min.json"
+  mkdir -p "$(dirname "$out")"
+  jq '[.[] | {
+    id: .[0],
+    language: .[1],
+    languageCode: .[2],
+    direction: .[3],
+    name: .[4],
+    translator: .[5],
+    file: {path: .[6], sizeBytes: .[7]}
+  }]' "$MANIFEST" > "$out.part"
+  mv "$out.part" "$out"
+}
+
 echo "$BASE → $DEST"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
+get "tanzil/arabic/quran-indopak.sqlite" "$DEST/arabic/quran-indopak.sqlite"
+get "tanzil/arabic/quran-tajweed.sqlite" "$DEST/arabic/quran-tajweed.sqlite"
 get "tanzil/quran-data.xml" "$DEST/quran-data.xml"
 assert_sqlite "$DEST/arabic/quran-uthmani.sqlite"
 assert_size "$DEST/arabic/quran-uthmani.sqlite" 1593344
 assert_sqlite "$DEST/arabic/quran-simple-clean.sqlite"
 assert_size "$DEST/arabic/quran-simple-clean.sqlite" 929792
+assert_sqlite "$DEST/arabic/quran-indopak.sqlite"
+assert_size "$DEST/arabic/quran-indopak.sqlite" 1634304
+assert_sqlite "$DEST/arabic/quran-tajweed.sqlite"
+assert_size "$DEST/arabic/quran-tajweed.sqlite" 2015232
 assert_size "$DEST/quran-data.xml" 77234
 
-get "tanzil/translations/index.min.json" "$DEST/translations/index.min.json"
 # Translation file names + expected byte sizes out of the baked catalogue COPYed
 # into the image (fields 6/7: filePath, sizeBytes) — never from a remote listing
 # (the tracked map is the authority).
@@ -72,5 +93,6 @@ while read -r file want; do
   assert_sqlite "$DEST/translations/$file"
   assert_size "$DEST/translations/$file" "$want"
 done < <(jq -r '.[] | "\(.[6]) \(.[7])"' "$MANIFEST")
+write_catalogue
 
 echo "done"

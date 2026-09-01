@@ -26,11 +26,18 @@ rust/target/
 rust/**/target/
 *.profraw
 
-*.db-wal
-*.db-shm
+*.db
+*.db-*
+*.db3
+*.db3-*
+*.sql
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # Quran databases live in R2, never in git. Provisioned into db/ out of band.
-db/
+/db/
 
 DEPLOYMENT.md
 

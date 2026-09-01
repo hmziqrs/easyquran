@@ -1224,7 +1224,7 @@ async fn scripts_happy_path_advertises_all_four_artifacts() {
         assert_eq!(
             s["downloadUrl"].as_str().unwrap(),
             format!("{}/tanzil/arabic/{filename}", server.uri()),
-            "downloadUrl must match publisher R2 key tanzil/arabic/<file>.sqlite (upload-sqlite.ts PREFIX)"
+            "downloadUrl must match publisher R2 key tanzil/arabic/<file>.sqlite (scripts/quran/upload.ts)"
         );
     }
     assert_eq!(

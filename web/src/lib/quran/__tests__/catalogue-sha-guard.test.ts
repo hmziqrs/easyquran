@@ -38,6 +38,9 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
     "src/lib/quran/catalogue.ts",
     "src/lib/offline/pack.ts",
     "scripts/gen-offline-pack.ts",
+    "../scripts/quran/upload.ts",
+    "../deploy/fetch-quran-db.sh",
+    "../deploy/provision-quran.sh",
   ];
   it("automated Quran path source is sha-free (boot loaders, cache, wire, DTOs)", () => {
     for (const rel of SHA_FREE) {

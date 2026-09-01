@@ -95,6 +95,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Check Quran publisher
+        run: pnpm quran:check
+
       # adapter-node output is pure JS (arch-independent); the sqlite prerender runs on Node
       # here because bun does not implement node:sqlite.
       - run: pnpm --filter web build

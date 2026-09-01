@@ -82,22 +82,17 @@ api-lint:
 api-fmt:
     cd rust && cargo fmt --all
 
-# Provision the immutable Quran DBs into db/ (gitignored). `mode=all` also pulls every
-# translation sqlite — needed by the api's bind mount, not by the web build. Read-only
-# public GETs, no credentials; publishing is still `just upload-sqlite`.
+# Provision immutable Quran DBs into db/ (gitignored). `mode=all` also pulls every
+# translation sqlite — needed by api's bind mount, not by web build. Read-only
+# public GETs, no credentials; publishing is `just upload-sqlite`.
 quran-fetch mode="arabic":
     deploy/fetch-quran-db.sh {{mode}}
 
+# Single publisher for Arabic, Tanzil translations, QuranEnc translations, metadata,
+# and merged catalogue. `--dry-run` needs no R2 credentials.
 upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
-    cd db/quran/translations && npm run upload:sqlite -- {{args}}
-
-# Publish the quranenc translation artifacts (tanzil/translations/quranenc/sqlite/<id>.sqlite).
-# The merged catalogue object is re-published by `just upload-sqlite` — run both when the
-# quranenc set changes.
-upload-quranenc *args='':
-    @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
-    cd db/quran/quranenc && npm run upload:sqlite -- {{args}}
+    pnpm quran:upload -- {{args}}
 
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the

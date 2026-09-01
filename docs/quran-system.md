@@ -75,7 +75,15 @@ Provisioning has two paths:
   into an absolute host bind mount.
 
 Both provisioners are idempotent per file and validate expected size/SQLite shape without
-hashing corpus bytes.
+hashing corpus bytes. They generate the runtime translation catalogue deterministically from
+the tracked compact map, so a stale or partial remote catalogue never controls production
+paths, sizes, or availability. Server provisioning includes all four required Arabic sources.
+
+Publishing has one tracked entry point: `scripts/quran/upload.ts`, exposed as
+`just upload-sqlite`. One validated plan uploads all Arabic, Tanzil translation, QuranEnc,
+metadata, and merged-catalogue objects. Artifact paths and byte sizes come from baked web
+maps; publication never hashes or modifies Quran data. Immutable PUTs are create-only, and
+the mutable catalogue publishes last only after the full immutable set succeeds.
 
 ## Rust API
 

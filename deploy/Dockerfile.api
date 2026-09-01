@@ -40,6 +40,8 @@ COPY web/src/lib/data/translations.json /app/manifest/translations.json
 
 ENV QURAN_UTHMANI_PATH=/app/quran/arabic/quran-uthmani.sqlite \
     QURAN_SIMPLE_CLEAN_PATH=/app/quran/arabic/quran-simple-clean.sqlite \
+    QURAN_INDO_PAK_PATH=/app/quran/arabic/quran-indopak.sqlite \
+    QURAN_TAJWEED_PATH=/app/quran/arabic/quran-tajweed.sqlite \
     QURAN_METADATA_XML_PATH=/app/quran/quran-data.xml \
     QURAN_TRANSLATIONS_DIR=/app/quran/translations
 

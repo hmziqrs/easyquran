@@ -83,11 +83,14 @@ fails on pull.
 - `fetch-quran-db.sh` (`just quran-fetch [arabic|all]`) — the dev/CI provisioner: fills
   gitignored `db/` from the public R2 base with read-only HTTPS GETs, no credentials, keys
   taken from the baked maps. `arabic` is what the web build's prerender needs; `all` adds
-  every translation sqlite. Publishing remains `just upload-sqlite`.
+  every translation sqlite. Publishing uses the single tracked root publisher,
+  `scripts/quran/upload.ts`, through `just upload-sqlite`. In `all` mode the local runtime
+  catalogue is generated from the tracked map, never downloaded as mutable authority.
 - `provision-quran.sh` — the server-side counterpart, baked into the api image and run by
   the compose `quran-init` one-shot service: fills the `quran_data` volume from the public
   R2 base. File list comes from the baked `web/src/lib/data/translations.json` manifest
-  (read with jq — the deploy host has no node/python3/checkout). Idempotent per file
+  (read with jq — the deploy host has no node/python3/checkout); the same manifest generates
+  the runtime catalogue. All four Arabic source databases are provisioned. Idempotent per file
   (present + non-empty is skipped), so every redeploy re-runs it in seconds and picks up
   newly published translations only.
 - `dokploy-auto-update.sh` — legacy server-local fallback. Do not schedule it

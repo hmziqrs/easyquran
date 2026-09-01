@@ -14,7 +14,8 @@
 #   tanzil/quran-data.xml
 #   tanzil/translations/sqlite/<id>.sqlite   web/src/lib/data/translations.json (field 6)
 #   tanzil/translations/quranenc/sqlite/<id>.sqlite   (same catalogue, quranenc file namespace)
-#   tanzil/translations/index.min.json
+# The runtime translation catalogue is generated from the same tracked map; it
+# is never selected from mutable remote metadata.
 #
 # The DBs are immutable and unversioned, so a file already on disk is never refetched
 # unless FORCE=1. No hashing anywhere — content asserts happen downstream (the prerender
@@ -81,6 +82,37 @@ for row in json.load(open('$json')): print(row[6], row[7])
   exit 127
 }
 
+write_catalogue() {
+  local json="$REPO_ROOT/web/src/lib/data/translations.json"
+  local out="$DEST/translations/index.min.json"
+  mkdir -p "$(dirname "$out")"
+  if command -v node >/dev/null; then
+    node --input-type=module -e "
+      import { readFileSync } from 'node:fs';
+      const rows = JSON.parse(readFileSync('$json', 'utf8'));
+      const catalogue = rows.map((row) => ({
+        id: row[0], language: row[1], languageCode: row[2], direction: row[3],
+        name: row[4], translator: row[5], file: { path: row[6], sizeBytes: row[7] },
+      }));
+      process.stdout.write(JSON.stringify(catalogue, null, 2) + '\\n');
+    " > "$out.part"
+    mv "$out.part" "$out"
+    return
+  fi
+  if command -v python3 >/dev/null; then
+    python3 -c "
+import json
+rows = json.load(open('$json'))
+catalogue = [dict(id=r[0], language=r[1], languageCode=r[2], direction=r[3], name=r[4], translator=r[5], file=dict(path=r[6], sizeBytes=r[7])) for r in rows]
+print(json.dumps(catalogue, indent=2, ensure_ascii=False))
+" > "$out.part"
+    mv "$out.part" "$out"
+    return
+  fi
+  echo "need node or python3 to write the translation catalogue" >&2
+  exit 127
+}
+
 # A truncated or error-page download must not survive as a "database".
 assert_sqlite() {
   local file="$1"
@@ -103,7 +135,7 @@ assert_size() {
   fi
 }
 
-echo "$BASE → db/quran (mode: $MODE)"
+echo "$BASE → $DEST (mode: $MODE)"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
 get "tanzil/arabic/quran-indopak.sqlite" "$DEST/arabic/quran-indopak.sqlite"
@@ -120,7 +152,6 @@ assert_size "$DEST/arabic/quran-tajweed.sqlite" 2015232
 assert_size "$DEST/quran-data.xml" 77234
 
 if [ "$MODE" = "all" ]; then
-  get "tanzil/translations/index.min.json" "$DEST/translations/index.min.json"
   # File + expected size come from the tracked baked catalogue (fields 6/7:
   # filePath, sizeBytes), never from a remote listing.
   while read -r file want; do
@@ -129,6 +160,7 @@ if [ "$MODE" = "all" ]; then
     assert_sqlite "$DEST/translations/$file"
     assert_size "$DEST/translations/$file" "$want"
   done < <(translation_files)
+  write_catalogue
 fi
 
 echo "done"

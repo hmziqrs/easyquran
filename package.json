@@ -1,5 +1,20 @@
 {
+  "private": true,
   "type": "module",
+  "scripts": {
+    "quran:check": "pnpm quran:typecheck && pnpm quran:test",
+    "quran:test": "tsx --test scripts/quran/upload.test.ts",
+    "quran:upload": "tsx scripts/quran/upload.ts",
+    "quran:typecheck": "tsc --noEmit -p scripts/quran/tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.709.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -9,9 +24,7 @@
   },
   "workspaces": {
     "packages": [
-      "web",
-      "db/quran/translations",
-      "db/quran/quranenc"
+      "web"
     ],
     "catalog": {
       "vite": "npm:@voidzero-dev/vite-plus-core@0.2.5",
