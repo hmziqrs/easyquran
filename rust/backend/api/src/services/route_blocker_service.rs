@@ -228,8 +228,13 @@ impl RouteBlockerService {
 mod tests {
     use super::*;
 
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        crate::config::settings::TEST_ENV_MUTEX.lock().unwrap()
+    // These tests mutate the SNAPSHOT static and must serialize; the guard is held
+    // across `.await`s, so it is an async mutex (a std MutexGuard across an await is
+    // both a clippy error and a deadlock hazard on a multi-thread runtime).
+    static SNAPSHOT_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    async fn env_lock() -> tokio::sync::MutexGuard<'static, ()> {
+        SNAPSHOT_TEST_MUTEX.lock().await
     }
 
     // sqlite::memory: with no route_status table → every DB read fails, so any
@@ -242,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_snapshot_and_broken_db_fails_closed() {
-        let _g = env_lock();
+        let _g = env_lock().await;
         reset_snapshot_for_tests();
         let db = broken_db().await;
         let result = RouteBlockerService::is_route_blocked(&db, "/admin/route/v1/x").await;
@@ -255,7 +260,7 @@ mod tests {
 
     #[tokio::test]
     async fn fresh_snapshot_answers_without_touching_the_db() {
-        let _g = env_lock();
+        let _g = env_lock().await;
         reset_snapshot_for_tests();
         let mut blocked = HashMap::new();
         blocked.insert("/admin/route/v1/x".to_string(), true);
@@ -278,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn stale_snapshot_serves_last_known_state_on_db_error() {
-        let _g = env_lock();
+        let _g = env_lock().await;
         reset_snapshot_for_tests();
         let mut blocked = HashMap::new();
         blocked.insert("/admin/route/v1/x".to_string(), true);
@@ -297,7 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn record_skips_db_once_the_pattern_is_known() {
-        let _g = env_lock();
+        let _g = env_lock().await;
         reset_snapshot_for_tests();
         let mut blocked = HashMap::new();
         blocked.insert("/known/route".to_string(), false);
