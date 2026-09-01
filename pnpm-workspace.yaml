@@ -1,6 +1,7 @@
 packages:
   - web
   - db/quran/translations
+  - db/quran/quranenc
 
 allowBuilds:
   '@firebase/util': false

@@ -92,6 +92,13 @@ upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
     cd db/quran/translations && npm run upload:sqlite -- {{args}}
 
+# Publish the quranenc translation artifacts (tanzil/translations/quranenc/sqlite/<id>.sqlite).
+# The merged catalogue object is re-published by `just upload-sqlite` — run both when the
+# quranenc set changes.
+upload-quranenc *args='':
+    @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
+    cd db/quran/quranenc && npm run upload:sqlite -- {{args}}
+
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network

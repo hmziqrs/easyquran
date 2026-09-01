@@ -13,6 +13,7 @@
 #   tanzil/arabic/<file>.sqlite          web/src/lib/quran/view/source-profiles.ts
 #   tanzil/quran-data.xml
 #   tanzil/translations/sqlite/<id>.sqlite   web/src/lib/data/translations.json (field 6)
+#   tanzil/translations/quranenc/sqlite/<id>.sqlite   (same catalogue, quranenc file namespace)
 #   tanzil/translations/index.min.json
 #
 # The DBs are immutable and unversioned, so a file already on disk is never refetched
