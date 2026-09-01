@@ -54,13 +54,19 @@ fn invariant(cond: bool, msg: impl FnOnce() -> String) -> Result<(), QuranLoadEr
 pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, QuranLoadError> {
     let uthmani_bytes = read_file(&settings.uthmani_path, "uthmani")?;
     let simple_clean_bytes = read_file(&settings.simple_clean_path, "simple-clean")?;
+    let indopak_bytes = read_file(&settings.indopak_path, "indopak")?;
+    let tajweed_bytes = read_file(&settings.tajweed_path, "tajweed")?;
     let xml_bytes = read_file(&settings.metadata_xml_path, "metadata-xml")?;
 
     let uthmani_rows = read_corpus(&settings.uthmani_path, "uthmani").await?;
     let simple_clean_rows = read_corpus(&settings.simple_clean_path, "simple-clean").await?;
+    let indopak_rows = read_corpus(&settings.indopak_path, "indopak").await?;
+    let tajweed_rows = read_corpus(&settings.tajweed_path, "tajweed").await?;
 
     validate_rows("uthmani", &uthmani_rows)?;
     validate_rows("simple-clean", &simple_clean_rows)?;
+    validate_rows("indopak", &indopak_rows)?;
+    validate_rows("tajweed", &tajweed_rows)?;
     let uthmani = Corpus::from_texts(
         &uthmani_rows
             .iter()
@@ -73,11 +79,28 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
             .map(|r| r.text.as_str())
             .collect::<Vec<_>>(),
     );
+    let indopak = Corpus::from_texts(
+        &indopak_rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>(),
+    );
+    let tajweed = Corpus::from_texts(
+        &tajweed_rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>(),
+    );
 
     let xml_str = std::str::from_utf8(&xml_bytes)
         .map_err(|e| inv(format!("metadata xml is not valid utf-8: {e}")))?;
     let doc = roxmltree::Document::parse(xml_str)?;
     let meta = build_meta(&doc, &uthmani_rows, &uthmani)?;
+
+    // The variant corpora share the canonical tiling: every row's (sura, aya) must
+    // agree with the metadata-derived location of its global index.
+    validate_alignment(&meta, "indopak", &indopak_rows)?;
+    validate_alignment(&meta, "tajweed", &tajweed_rows)?;
 
     let artifacts = Artifacts {
         uthmani: ArtifactFile {
@@ -88,6 +111,14 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
             id: Script::SimpleClean,
             size_bytes: simple_clean_bytes.len() as u64,
         },
+        indopak: ArtifactFile {
+            id: Script::IndoPak,
+            size_bytes: indopak_bytes.len() as u64,
+        },
+        tajweed: ArtifactFile {
+            id: Script::Tajweed,
+            size_bytes: tajweed_bytes.len() as u64,
+        },
     };
 
     let search = super::search::SearchIndex::build(&uthmani);
@@ -95,6 +126,8 @@ pub async fn load_quran_store(settings: &QuranSettings) -> Result<QuranStore, Qu
     Ok(QuranStore {
         uthmani,
         simple_clean,
+        indopak,
+        tajweed,
         meta,
         artifacts,
         search,
@@ -222,6 +255,27 @@ fn validate_rows(what: &'static str, rows: &[CorpusRow]) -> Result<(), QuranLoad
             format!(
                 "{what}: row {i} has index {}, expected contiguous {expected}",
                 r.index
+            )
+        })?;
+    }
+    Ok(())
+}
+
+/// Every variant row's (sura, aya) must match the metadata-derived location of its
+/// global index — the same §3.1 invariant `build_meta` enforces on the uthmani rows.
+fn validate_alignment(
+    meta: &QuranMeta,
+    what: &'static str,
+    rows: &[CorpusRow],
+) -> Result<(), QuranLoadError> {
+    for r in rows {
+        let (s, a) = meta
+            .locate(r.index)
+            .ok_or_else(|| inv(format!("{what}: global {} not locatable", r.index)))?;
+        invariant(r.sura == s && r.aya == a, || {
+            format!(
+                "{what}: global {} is ({}:{}) but metadata says ({s}:{a})",
+                r.index, r.sura, r.aya
             )
         })?;
     }
@@ -563,6 +617,8 @@ mod tests {
         QuranSettings {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
+            indopak_path: format!("{base}/arabic/quran-indopak.sqlite"),
+            tajweed_path: format!("{base}/arabic/quran-tajweed.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
             translations_dir: format!("{base}/translations"),
             max_resident_translations: 8,
@@ -656,6 +712,19 @@ mod tests {
         assert!(u.contains('ٱ') || u.contains('ا'));
         assert!(!sc.is_empty());
 
+        // Variant corpora: resident, verbatim, every verse present.
+        for script in [Script::IndoPak, Script::Tajweed] {
+            assert!(!store.verse(script, 1).unwrap().is_empty());
+            for g in 1..=VERSE_COUNT {
+                assert!(store.verse(script, g).is_some(), "{script:?} g={g}");
+            }
+        }
+        // Tajweed text carries its inline markup segments ([x[...] / [x:id[...]) verbatim.
+        assert!(
+            store.verse(Script::Tajweed, 1).unwrap().contains("[h:"),
+            "tajweed 1:1 must carry tajweed markup"
+        );
+
         for g in 1..=VERSE_COUNT {
             assert!(
                 store.ayah_view(Script::Uthmani, g).is_some(),
@@ -709,6 +778,8 @@ mod tests {
         for (src, name) in [
             ("arabic/quran-uthmani.sqlite", "u.sqlite"),
             ("arabic/quran-simple-clean.sqlite", "s.sqlite"),
+            ("arabic/quran-indopak.sqlite", "i.sqlite"),
+            ("arabic/quran-tajweed.sqlite", "t.sqlite"),
             ("quran-data.xml", "m.xml"),
         ] {
             std::fs::copy(format!("{base}/{src}"), tmp.join(name)).unwrap();
@@ -716,6 +787,8 @@ mod tests {
         let temp_settings = QuranSettings {
             uthmani_path: tmp.join("u.sqlite").to_string_lossy().into_owned(),
             simple_clean_path: tmp.join("s.sqlite").to_string_lossy().into_owned(),
+            indopak_path: tmp.join("i.sqlite").to_string_lossy().into_owned(),
+            tajweed_path: tmp.join("t.sqlite").to_string_lossy().into_owned(),
             metadata_xml_path: tmp.join("m.xml").to_string_lossy().into_owned(),
             translations_dir: tmp.to_string_lossy().into_owned(),
             max_resident_translations: 8,
@@ -729,7 +802,7 @@ mod tests {
         let u_before = store.verse(Script::Uthmani, 1).unwrap().to_string();
         let sc_before = store.verse(Script::SimpleClean, 1160).unwrap().to_string();
 
-        for name in ["u.sqlite", "s.sqlite", "m.xml"] {
+        for name in ["u.sqlite", "s.sqlite", "i.sqlite", "t.sqlite", "m.xml"] {
             std::fs::set_permissions(tmp.join(name), std::fs::Permissions::from_mode(0o000))
                 .unwrap();
         }
@@ -737,7 +810,7 @@ mod tests {
         assert_eq!(store.verse(Script::Uthmani, 1).unwrap(), u_before);
         assert_eq!(store.verse(Script::SimpleClean, 1160).unwrap(), sc_before);
 
-        for name in ["u.sqlite", "s.sqlite", "m.xml"] {
+        for name in ["u.sqlite", "s.sqlite", "i.sqlite", "t.sqlite", "m.xml"] {
             let _ =
                 std::fs::set_permissions(tmp.join(name), std::fs::Permissions::from_mode(0o644));
         }

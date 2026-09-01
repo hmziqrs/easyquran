@@ -34,6 +34,8 @@ fn quran_settings() -> QuranSettings {
     QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
+        indopak_path: format!("{base}/arabic/quran-indopak.sqlite"),
+        tajweed_path: format!("{base}/arabic/quran-tajweed.sqlite"),
         metadata_xml_path: format!("{base}/quran-data.xml"),
         translations_dir: format!("{base}/translations"),
         max_resident_translations: 8,
@@ -154,7 +156,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         quran_runtime_metrics: QuranRuntimeMetrics {
             arabic_load_duration_ms: 7,
             translation_catalogue_load_duration_ms: 3,
-            translation_catalogue_entries: 115,
+            translation_catalogue_entries: translation_pool.catalogue().len() as u64,
         },
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
@@ -392,6 +394,57 @@ async fn script_param_default_and_validation() {
     assert_eq!(
         get("/quran/ayahs/1/1?script=bogus").await.0,
         StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn script_param_accepts_variant_scripts_with_distinct_etags() {
+    use ruxlog::quran::Script;
+    for script in [Script::IndoPak, Script::Tajweed] {
+        let uri = format!("/quran/ayahs/1/1?script={}", script.as_str());
+        let (st, body, headers) = get(&uri).await;
+        assert_eq!(st, StatusCode::OK, "{uri}");
+        let text = data(&body)["text"].as_str().unwrap();
+        assert!(!text.is_empty(), "{uri}");
+        // Verbatim: the served text equals the store's resident corpus bytes.
+        assert_eq!(
+            text.as_bytes(),
+            state().await.quran.verse(script, 1).unwrap().as_bytes(),
+            "{uri} text must be verbatim"
+        );
+        assert!(headers.contains_key(header::ETAG), "{uri}");
+    }
+    // Every script ETag is distinct (cache keys carry the script).
+    let mut etags = Vec::new();
+    for s in ["uthmani", "simple-clean", "indopak", "tajweed"] {
+        let (_, _, h) = get(&format!("/quran/ayahs/1/1?script={s}")).await;
+        etags.push(h.get(header::ETAG).unwrap().to_str().unwrap().to_string());
+    }
+    let uniq: std::collections::HashSet<&str> = etags.iter().map(String::as_str).collect();
+    assert_eq!(uniq.len(), 4, "4 distinct script ETags, got {etags:?}");
+
+    // Garbage still rejected on every script-taking route.
+    for uri in [
+        "/quran/ayahs/1/1?script=indopakk",
+        "/quran/surahs/1/ayahs?script=indo-pak",
+        "/quran/random?script=Tajweed",
+        "/quran/juzs/1/ayahs?script=%20",
+        "/quran/search?q=%D8%A7%D9%84%D8%AD%D9%85%D8%AF&script=tajweede",
+    ] {
+        assert_eq!(
+            get(uri).await.0,
+            StatusCode::BAD_REQUEST,
+            "garbage script must 400: {uri}"
+        );
+    }
+    // Exact ids accepted on the multi-ayah path too.
+    assert_eq!(
+        get("/quran/surahs/1/ayahs?script=tajweed").await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        get("/quran/surahs/1/ayahs?script=indopak").await.0,
+        StatusCode::OK
     );
 }
 
@@ -1120,24 +1173,22 @@ async fn scripts_omits_failed_head_artifacts() {
 }
 
 #[tokio::test]
-async fn scripts_happy_path_advertises_both_artifacts() {
+async fn scripts_happy_path_advertises_all_four_artifacts() {
+    use ruxlog::quran::{QuranStore, Script};
     use wiremock::matchers::{method, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     let server = MockServer::start().await;
     let state = state_with_public_url(&server.uri()).await;
-    let cl_u = state.quran.artifacts.uthmani.size_bytes.to_string();
-    let cl_sc = state.quran.artifacts.simple_clean.size_bytes.to_string();
-    Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
-        .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_u.as_str()))
-        .mount(&server)
-        .await;
-    Mock::given(method("HEAD"))
-        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
-        .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl_sc.as_str()))
-        .mount(&server)
-        .await;
+    for script in Script::ALL {
+        let filename = QuranStore::artifact_filename(script);
+        let cl = state.quran.artifact(script).size_bytes.to_string();
+        Mock::given(method("HEAD"))
+            .and(path_regex(format!(r".*/tanzil/arabic/{filename}")))
+            .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
+            .mount(&server)
+            .await;
+    }
 
     let app = app_over(state);
     let resp = app
@@ -1159,19 +1210,17 @@ async fn scripts_happy_path_advertises_both_artifacts() {
     let scripts = body["data"]["scripts"].as_array().unwrap();
     assert_eq!(
         scripts.len(),
-        2,
-        "happy path advertises exactly both artifacts"
+        Script::ALL.len(),
+        "happy path advertises every artifact"
     );
     let ids: Vec<&str> = scripts.iter().map(|s| s["id"].as_str().unwrap()).collect();
-    assert!(ids.contains(&"uthmani"), "uthmani advertised");
-    assert!(ids.contains(&"simple-clean"), "simple-clean advertised");
+    for expected in ["uthmani", "simple-clean", "indopak", "tajweed"] {
+        assert!(ids.contains(&expected), "{expected} advertised");
+    }
     for s in scripts {
         let id = s["id"].as_str().unwrap();
-        let filename = match id {
-            "uthmani" => "quran-uthmani.sqlite",
-            "simple-clean" => "quran-simple-clean.sqlite",
-            other => panic!("unexpected script id: {other}"),
-        };
+        let script = Script::parse(id).unwrap_or_else(|| panic!("unexpected script id: {id}"));
+        let filename = QuranStore::artifact_filename(script);
         assert_eq!(
             s["downloadUrl"].as_str().unwrap(),
             format!("{}/tanzil/arabic/{filename}", server.uri()),
@@ -1375,6 +1424,81 @@ async fn web_compatible_read_endpoints() {
 }
 
 #[tokio::test]
+async fn variant_sources_surah_separate_row_normalization() {
+    // indopak/tajweed: packaging SeparateRow for every surah except 1 (numbered) and
+    // 9 (absent); the trusted opener text is the corpus's OWN 1:1, and verse 1 of
+    // e.g. surah 2 is pure body (no embedded basmala prefix).
+    for (id, profile) in [
+        ("indopak", "indopak-naveed-7d3c21e0"),
+        ("tajweed", "tajweed-daralislam-5b9f48d2"),
+    ] {
+        let (st, body, _) = get(&format!("/quran/sources/{id}/surah/2")).await;
+        assert_eq!(st, StatusCode::OK);
+        let d = data(&body);
+        assert_eq!(d["sourceId"], id);
+        assert_eq!(d["script"], id);
+        let verses = d["verses"].as_array().unwrap();
+        assert_eq!(verses.len(), 286);
+        let n = &d["normalization"];
+        assert_eq!(n["packaging"], "separate-row");
+        assert_eq!(n["openerKind"], "header");
+        assert_eq!(n["sourceProfile"], profile);
+        assert_eq!(n["openerEndScalar"], 0);
+        assert_eq!(n["bodyStartScalar"], 0);
+        // The opener is the corpus's own 1:1 (bismillah), verbatim.
+        let opener = n["openerText"].as_str().unwrap();
+        let (_, b1, _) = get(&format!("/quran/sources/{id}/surah/1")).await;
+        assert_eq!(
+            opener.as_bytes(),
+            data(&b1)["verses"][0].as_str().unwrap().as_bytes(),
+            "separate-row opener must equal the corpus 1:1"
+        );
+        // Surah 1 is a numbered ayah (its 1:1 IS the content).
+        let (_, bs1, _) = get(&format!("/quran/sources/{id}/surah/1")).await;
+        let n1 = &data(&bs1)["normalization"];
+        assert_eq!(n1["packaging"], "numbered-ayah");
+        assert_eq!(n1["openerKind"], "verse");
+        // Surah 9 has no opener at all.
+        let (_, bs9, _) = get(&format!("/quran/sources/{id}/surah/9")).await;
+        let n9 = &data(&bs9)["normalization"];
+        assert_eq!(n9["packaging"], "absent");
+        assert!(n9["openerText"].is_null());
+    }
+}
+
+#[tokio::test]
+async fn tajweed_serves_markup_verbatim_and_quranenc_translation_loads() {
+    // Tajweed text carries inline markup segments — served verbatim, never stripped.
+    let (st, body, _) = get("/quran/ayahs/1/1?script=tajweed").await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(
+        data(&body)["text"].as_str().unwrap().contains("[h:"),
+        "tajweed markup must survive to the wire"
+    );
+
+    // QuranEnc catalogue rows flow through the pool: id whitelisted, DB loads on
+    // demand from <translations_dir>/quranenc/sqlite/<id>.sqlite, serves body-only
+    // translation shape, and is a distinct source from the tanzil namespace.
+    let (st, body, _) = get("/quran/sources/quranenc.en.saheeh/surah/1").await;
+    assert_eq!(st, StatusCode::OK);
+    let d = data(&body);
+    assert_eq!(d["sourceId"], "quranenc.en.saheeh");
+    assert_eq!(d["script"], "translation");
+    assert_eq!(d["normalization"]["packaging"], "absent");
+    assert_eq!(d["verses"].as_array().unwrap().len(), 7);
+    assert!(
+        !d["verses"][0].as_str().unwrap().is_empty(),
+        "quranenc verse 1 non-empty"
+    );
+
+    // Unknown-namespace garbage still rejected.
+    assert_eq!(
+        get("/quran/sources/quranenc.no.pe/surah/1").await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
 async fn translation_surah_serves_text_with_absent_packaging() {
     let (st, body, _) = get("/quran/sources/en.sahih/surah/2").await;
     assert_eq!(st, StatusCode::OK);
@@ -1443,16 +1567,13 @@ async fn arabic_and_translation_sources_carry_distinct_etags() {
 }
 
 async fn mount_green_sources_heads(state: &AppState, server: &wiremock::MockServer) -> usize {
+    use ruxlog::quran::Script;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, ResponseTemplate};
     let mut n = 0usize;
-    for (file, filename) in [
-        (&state.quran.artifacts.uthmani, "quran-uthmani.sqlite"),
-        (
-            &state.quran.artifacts.simple_clean,
-            "quran-simple-clean.sqlite",
-        ),
-    ] {
+    for script in Script::ALL {
+        let file = state.quran.artifact(script);
+        let filename = ruxlog::quran::QuranStore::artifact_filename(script);
         let cl = file.size_bytes.to_string();
         Mock::given(method("HEAD"))
             .and(path(format!("/tanzil/arabic/{filename}")))
@@ -1523,6 +1644,17 @@ async fn sources_lists_all_sources_with_verified_download_urls() {
         .as_str()
         .unwrap()
         .ends_with("/tanzil/translations/sqlite/en.sahih.sqlite"));
+    // QuranEnc namespace: merged-catalogue rows serve under their own file namespace
+    // behind the same publisher prefix.
+    let q = by_id
+        .get("quranenc.en.saheeh")
+        .expect("quranenc row advertised");
+    assert_eq!(q["kind"], "translation");
+    assert_eq!(q["languageCode"], "en");
+    assert!(q["downloadUrl"]
+        .as_str()
+        .unwrap()
+        .ends_with("/tanzil/translations/quranenc/sqlite/quranenc.en.saheeh.sqlite"));
     assert_eq!(
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::ARABIC_CACHE)
@@ -1565,15 +1697,10 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
     use wiremock::{Mock, MockServer, ResponseTemplate};
     let server = MockServer::start().await;
     let state = state_with_public_url(&server.uri()).await;
-    // Green for Arabic + all translations EXCEPT one (wrong content-length).
-    for (file, filename) in [
-        (&state.quran.artifacts.uthmani, "quran-uthmani.sqlite"),
-        (
-            &state.quran.artifacts.simple_clean,
-            "quran-simple-clean.sqlite",
-        ),
-    ] {
-        let cl = file.size_bytes.to_string();
+    // Green for every Arabic script + all translations EXCEPT one (wrong content-length).
+    for script in ruxlog::quran::Script::ALL {
+        let filename = ruxlog::quran::QuranStore::artifact_filename(script);
+        let cl = state.quran.artifact(script).size_bytes.to_string();
         Mock::given(method("HEAD"))
             .and(path(format!("/tanzil/arabic/{filename}")))
             .respond_with(ResponseTemplate::new(200).insert_header("content-length", cl.as_str()))
@@ -1595,6 +1722,9 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
             .mount(&server)
             .await;
     }
+    // Every arabic script green + every translation green except one (wrong size).
+    let expected_sources =
+        ruxlog::quran::Script::ALL.len() + state.translation_pool.catalogue().len() - 1;
 
     let app = app_over(state);
     let resp = app
@@ -1614,7 +1744,11 @@ async fn sources_partial_upstream_is_no_store_not_cached_truncation() {
     let bytes = to_bytes(resp.into_body(), 4 * 1024 * 1024).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let sources = body["data"]["sources"].as_array().unwrap();
-    assert_eq!(sources.len(), 116, "exactly one translation omitted");
+    assert_eq!(
+        sources.len(),
+        expected_sources,
+        "exactly one source omitted"
+    );
     assert_eq!(
         cc.as_deref(),
         Some(ruxlog::modules::quran_v1::cache::NO_STORE),

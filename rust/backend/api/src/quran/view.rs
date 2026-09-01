@@ -132,11 +132,22 @@ fn canonical_opener_kind(surah: u16) -> OpenerKindDto {
     }
 }
 
-fn packaging(surah: u16) -> OpenerPackagingDto {
-    match surah {
-        1 => OpenerPackagingDto::NumberedAyah,
-        9 => OpenerPackagingDto::Absent,
-        _ => OpenerPackagingDto::EmbeddedPrefix,
+fn packaging(script: Script, surah: u16) -> OpenerPackagingDto {
+    // The Tanzil corpora embed the basmala as a prefix of every surah except 1 and 9.
+    // The variant corpora (indopak, tajweed) store the basmala of surah 1 only: every
+    // other surah's verse 1 is body text and the opener is served as a separate row
+    // (measured packaging 1/0/0/112/1 — see db/quran/arabic/tools).
+    match script {
+        Script::Uthmani | Script::SimpleClean => match surah {
+            1 => OpenerPackagingDto::NumberedAyah,
+            9 => OpenerPackagingDto::Absent,
+            _ => OpenerPackagingDto::EmbeddedPrefix,
+        },
+        Script::IndoPak | Script::Tajweed => match surah {
+            1 => OpenerPackagingDto::NumberedAyah,
+            9 => OpenerPackagingDto::Absent,
+            _ => OpenerPackagingDto::SeparateRow,
+        },
     }
 }
 
@@ -144,6 +155,8 @@ fn source_profile(script: Script) -> String {
     match script {
         Script::Uthmani => "tanzil-uthmani-581cc540".to_string(),
         Script::SimpleClean => "tanzil-simple-clean-a0c52760".to_string(),
+        Script::IndoPak => "indopak-naveed-7d3c21e0".to_string(),
+        Script::Tajweed => "tajweed-daralislam-5b9f48d2".to_string(),
     }
 }
 
@@ -164,7 +177,7 @@ pub fn normalization(
         .ok_or(ViewError::VerseMissing(start_global))?;
     let reference = store.verse(script, 1).ok_or(ViewError::VerseMissing(1))?;
 
-    let pk = packaging(surah);
+    let pk = packaging(script, surah);
     let opener_kind = canonical_opener_kind(surah);
     let (cut, opener_text) = match pk {
         OpenerPackagingDto::EmbeddedPrefix => {
@@ -174,7 +187,10 @@ pub fn normalization(
         }
         OpenerPackagingDto::NumberedAyah => (ZERO_CUT, Some(raw.to_string())),
         OpenerPackagingDto::Absent => (ZERO_CUT, None),
-        _ => return Err(ViewError::UnsupportedPackaging(surah)),
+        // SeparateRow: the DB's own 1:1 IS the trusted bismillah text (the corpus
+        // stores no other copy); verse 1 of this surah is pure body, so no cut.
+        OpenerPackagingDto::SeparateRow => (ZERO_CUT, Some(reference.to_string())),
+        OpenerPackagingDto::ChapterFlag => return Err(ViewError::UnsupportedPackaging(surah)),
     };
 
     Ok(SurahNormalizationDto {
@@ -285,6 +301,8 @@ mod tests {
         QuranSettings {
             uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
             simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
+            indopak_path: format!("{base}/arabic/quran-indopak.sqlite"),
+            tajweed_path: format!("{base}/arabic/quran-tajweed.sqlite"),
             metadata_xml_path: format!("{base}/quran-data.xml"),
             translations_dir: format!("{base}/translations"),
             max_resident_translations: 8,
@@ -297,6 +315,9 @@ mod tests {
         let raw = match script {
             Script::Uthmani => include_str!("testdata/view-uthmani.json"),
             Script::SimpleClean => include_str!("testdata/view-simple-clean.json"),
+            // Variant corpora have no frozen parity fixtures (no historic payload to
+            // pin); their packaging contract is asserted structurally below.
+            Script::IndoPak | Script::Tajweed => unreachable!("no fixture for variant scripts"),
         };
         serde_json::from_str::<Vec<serde_json::Value>>(raw).expect("fixture parses")
     }
@@ -352,6 +373,44 @@ mod tests {
     #[tokio::test]
     async fn parity_simple_clean() {
         parity(Script::SimpleClean).await;
+    }
+
+    #[tokio::test]
+    async fn variant_packaging_is_separate_row_with_own_bismillah() {
+        let store = load_quran_store(&settings()).await.expect("store loads");
+        for script in [Script::IndoPak, Script::Tajweed] {
+            let (mut n_numbered, mut n_separate, mut n_absent) = (0u32, 0u32, 0u32);
+            let bismillah = store.verse(script, 1).unwrap();
+            for surah in 1..=114u16 {
+                let got = normalization(&store, script, surah).expect("normalization");
+                match got.packaging {
+                    OpenerPackagingDto::NumberedAyah => n_numbered += 1,
+                    OpenerPackagingDto::SeparateRow => n_separate += 1,
+                    OpenerPackagingDto::Absent => n_absent += 1,
+                    other => panic!("{script:?} surah {surah}: unexpected {other:?}"),
+                }
+                if surah == 1 {
+                    assert_eq!(got.opener_text.as_deref(), Some(bismillah));
+                } else if surah == 9 {
+                    assert!(got.opener_text.is_none(), "9 has no opener");
+                } else {
+                    // The trusted separate-row opener IS the corpus's own 1:1.
+                    assert_eq!(got.opener_text.as_deref(), Some(bismillah));
+                    assert_eq!(
+                        (got.opener_end_scalar, got.body_start_scalar),
+                        (0, 0),
+                        "separate row needs no cut"
+                    );
+                    // And verse 1 of a separate-row surah is pure body: no bismillah
+                    // prefix embedded in it.
+                    let first = store
+                        .verse(script, store.meta().global_of(surah, 1).unwrap())
+                        .unwrap();
+                    assert_ne!(first, bismillah);
+                }
+            }
+            assert_eq!((n_numbered, n_separate, n_absent), (1, 112, 1));
+        }
     }
 
     #[tokio::test]

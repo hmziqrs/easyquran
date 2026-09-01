@@ -91,6 +91,10 @@ fn quran_settings() -> QuranSettings {
     QuranSettings {
         uthmani_path: format!("{base}/arabic/quran-uthmani.sqlite"),
         simple_clean_path: format!("{base}/arabic/quran-simple-clean.sqlite"),
+
+        indopak_path: format!("{base}/arabic/quran-indopak.sqlite"),
+
+        tajweed_path: format!("{base}/arabic/quran-tajweed.sqlite"),
         metadata_xml_path: format!("{base}/quran-data.xml"),
         translations_dir: format!("{base}/translations"),
         max_resident_translations: 8,

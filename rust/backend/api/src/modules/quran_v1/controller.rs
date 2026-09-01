@@ -30,7 +30,7 @@ fn parse_script(opt: &Option<String>) -> Result<Script, QuranApiError> {
         None => Ok(Script::Uthmani),
         Some(s) => Script::parse(s).ok_or_else(|| {
             invalid(format!(
-                "unknown script '{s}'; expected one of: uthmani, simple-clean"
+                "unknown script '{s}'; expected one of: uthmani, simple-clean, indopak, tajweed"
             ))
         }),
     }
@@ -47,7 +47,7 @@ fn parse_source(
         return Ok(crate::quran::SourceId::Translation(id));
     }
     Err(invalid(format!(
-        "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean) or a catalogue translation id"
+        "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean, indopak, tajweed) or a catalogue translation id"
     ))
     .classified(QuranErrorClass::UnknownSource))
 }
@@ -773,7 +773,7 @@ pub async fn scripts(
                     .to_string();
                 let resolved = resolve_scripts(&state, &public_url).await;
                 // Only cache once fully verified: a transient HEAD failure must self-heal, not be pinned incomplete for life.
-                if resolved.len() == 2 {
+                if resolved.len() == Script::ALL.len() {
                     *guard = Some(resolved.clone());
                 }
                 resolved
@@ -783,7 +783,7 @@ pub async fn scripts(
     // Partial responses use no-store and a distinct ETag, or a CDN pins the empty body as complete.
     let verified = scripts.len();
     let canonical = format!("scripts?verified={verified}");
-    let cache_control = if verified == 2 {
+    let cache_control = if verified == Script::ALL.len() {
         cache::ARABIC_CACHE
     } else {
         cache::NO_STORE
@@ -800,15 +800,10 @@ pub async fn scripts(
 
 async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
     let store = &state.quran;
-    let entries = [
-        (store.artifacts.uthmani.clone(), "quran-uthmani.sqlite"),
-        (
-            store.artifacts.simple_clean.clone(),
-            "quran-simple-clean.sqlite",
-        ),
-    ];
-    let mut out = Vec::with_capacity(2);
-    for (file, filename) in entries {
+    let mut out = Vec::with_capacity(Script::ALL.len());
+    for script in Script::ALL {
+        let file = store.artifact(script);
+        let filename = QuranStore::artifact_filename(script);
         let id = file.id.as_str().to_string();
         let url = format!("{public_url}/tanzil/arabic/{filename}");
         match verify_head(&state.http_client, &url, file.size_bytes).await {
@@ -851,7 +846,7 @@ pub async fn sources(
     headers: HeaderMap,
 ) -> Result<Response<Body>, QuranApiError> {
     let store = &state.quran;
-    let total = 2 + state.translation_pool.catalogue().len();
+    let total = Script::ALL.len() + state.translation_pool.catalogue().len();
     let sources = {
         let mut guard = state.quran_sources.lock().await;
         match guard.as_ref() {
@@ -891,23 +886,19 @@ pub async fn sources(
     ))
 }
 
-/// Every readable source — 2 Arabic scripts + every catalogue translation — each HEAD-verified.
-/// A `JoinSet` fans the cold HEADs out concurrently so 117 checks do not serialize past the
+/// Every readable source — 4 Arabic scripts + every catalogue translation — each HEAD-verified.
+/// A `JoinSet` fans the cold HEADs out concurrently so the checks do not serialize past the
 /// request budget. An unverified entry is omitted; the handler then stamps `no-store` so a CDN
 /// cannot pin a truncated half-list (same discipline as `/scripts`).
 async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
     let store = &state.quran;
     let mut candidates: Vec<(SourceDto, u64)> =
-        Vec::with_capacity(2 + state.translation_pool.catalogue().len());
+        Vec::with_capacity(Script::ALL.len() + state.translation_pool.catalogue().len());
 
-    for (file, filename, display) in [
-        (&store.artifacts.uthmani, "quran-uthmani.sqlite", "Uthmani"),
-        (
-            &store.artifacts.simple_clean,
-            "quran-simple-clean.sqlite",
-            "Simple Clean",
-        ),
-    ] {
+    for script in Script::ALL {
+        let file = store.artifact(script);
+        let filename = QuranStore::artifact_filename(script);
+        let display = QuranStore::script_display_name(script);
         let url = format!("{public_url}/tanzil/arabic/{filename}");
         candidates.push((
             SourceDto {

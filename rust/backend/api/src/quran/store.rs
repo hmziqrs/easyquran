@@ -8,6 +8,12 @@ pub const RESPONSE_CAP: u32 = 300;
 pub enum Script {
     Uthmani,
     SimpleClean,
+    // kebab-case would render "indo-pak"; the wire id is the flat "indopak"
+    // (matches QuranScript.IndoPak on the web side).
+    #[serde(rename = "indopak")]
+    IndoPak,
+    #[serde(rename = "tajweed")]
+    Tajweed,
 }
 
 impl Script {
@@ -15,6 +21,8 @@ impl Script {
         match self {
             Self::Uthmani => "uthmani",
             Self::SimpleClean => "simple-clean",
+            Self::IndoPak => "indopak",
+            Self::Tajweed => "tajweed",
         }
     }
 
@@ -22,9 +30,19 @@ impl Script {
         match s {
             "uthmani" => Some(Self::Uthmani),
             "simple-clean" => Some(Self::SimpleClean),
+            "indopak" => Some(Self::IndoPak),
+            "tajweed" => Some(Self::Tajweed),
             _ => None,
         }
     }
+
+    /// Every resident Arabic script, in the order `/quran/scripts` advertises them.
+    pub const ALL: [Script; 4] = [
+        Script::Uthmani,
+        Script::SimpleClean,
+        Script::IndoPak,
+        Script::Tajweed,
+    ];
 }
 
 /// A translation source id (e.g. "en.sahih"). Constructed ONLY via [`TranslationId::parse`],
@@ -233,6 +251,8 @@ pub struct ArtifactFile {
 pub struct Artifacts {
     pub uthmani: ArtifactFile,
     pub simple_clean: ArtifactFile,
+    pub indopak: ArtifactFile,
+    pub tajweed: ArtifactFile,
 }
 
 #[derive(Clone, Debug)]
@@ -303,6 +323,8 @@ pub fn range_containing<K>(ranges: &[Range<K>], g: u32) -> Option<&Range<K>> {
 pub struct QuranStore {
     pub uthmani: Corpus,
     pub simple_clean: Corpus,
+    pub indopak: Corpus,
+    pub tajweed: Corpus,
     pub meta: QuranMeta,
     pub artifacts: Artifacts,
     pub search: super::search::SearchIndex,
@@ -314,6 +336,48 @@ impl QuranStore {
         match script {
             Script::Uthmani => self.uthmani.verse(g),
             Script::SimpleClean => self.simple_clean.verse(g),
+            Script::IndoPak => self.indopak.verse(g),
+            Script::Tajweed => self.tajweed.verse(g),
+        }
+    }
+
+    #[inline]
+    pub fn corpus(&self, script: Script) -> &Corpus {
+        match script {
+            Script::Uthmani => &self.uthmani,
+            Script::SimpleClean => &self.simple_clean,
+            Script::IndoPak => &self.indopak,
+            Script::Tajweed => &self.tajweed,
+        }
+    }
+
+    /// The published R2 filename for a script's artifact
+    /// (`tanzil/arabic/<filename>` — same keys `deploy/fetch-quran-db.sh` provisions).
+    pub fn artifact_filename(script: Script) -> &'static str {
+        match script {
+            Script::Uthmani => "quran-uthmani.sqlite",
+            Script::SimpleClean => "quran-simple-clean.sqlite",
+            Script::IndoPak => "quran-indopak.sqlite",
+            Script::Tajweed => "quran-tajweed.sqlite",
+        }
+    }
+
+    /// Human display name for `/quran/sources` Arabic entries.
+    pub fn script_display_name(script: Script) -> &'static str {
+        match script {
+            Script::Uthmani => "Uthmani",
+            Script::SimpleClean => "Simple Clean",
+            Script::IndoPak => "IndoPak",
+            Script::Tajweed => "Tajweed",
+        }
+    }
+
+    pub fn artifact(&self, script: Script) -> ArtifactFile {
+        match script {
+            Script::Uthmani => self.artifacts.uthmani.clone(),
+            Script::SimpleClean => self.artifacts.simple_clean.clone(),
+            Script::IndoPak => self.artifacts.indopak.clone(),
+            Script::Tajweed => self.artifacts.tajweed.clone(),
         }
     }
 

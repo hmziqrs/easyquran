@@ -227,6 +227,8 @@ impl SiteSettings {
 pub struct QuranSettings {
     pub uthmani_path: String,
     pub simple_clean_path: String,
+    pub indopak_path: String,
+    pub tajweed_path: String,
     pub metadata_xml_path: String,
     pub translations_dir: String,
     pub max_resident_translations: u64,
@@ -243,6 +245,10 @@ impl QuranSettings {
                 .unwrap_or_else(|_| format!("{QURAN_DB_BASE}/arabic/quran-uthmani.sqlite")),
             simple_clean_path: std::env::var("QURAN_SIMPLE_CLEAN_PATH")
                 .unwrap_or_else(|_| format!("{QURAN_DB_BASE}/arabic/quran-simple-clean.sqlite")),
+            indopak_path: std::env::var("QURAN_INDO_PAK_PATH")
+                .unwrap_or_else(|_| format!("{QURAN_DB_BASE}/arabic/quran-indopak.sqlite")),
+            tajweed_path: std::env::var("QURAN_TAJWEED_PATH")
+                .unwrap_or_else(|_| format!("{QURAN_DB_BASE}/arabic/quran-tajweed.sqlite")),
             metadata_xml_path: std::env::var("QURAN_METADATA_XML_PATH")
                 .unwrap_or_else(|_| format!("{QURAN_DB_BASE}/quran-data.xml")),
             translations_dir: std::env::var("QURAN_TRANSLATIONS_DIR")
