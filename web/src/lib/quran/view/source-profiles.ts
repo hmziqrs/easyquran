@@ -7,7 +7,15 @@ import {
   type QuranSourceId as QuranSourceIdValue,
   type OpenerPackaging as OpenerPackagingValue,
 } from "../../data/quran-types.ts";
-import { TANZIL_QURAN_DATABASE, type QuranDatabaseAdapter } from "../sql.ts";
+import {
+  TANZIL_QURAN_DATABASE,
+  decodeIntegerField,
+  decodeTextField,
+  defineQuranDatabaseAdapter,
+  defineQuranQuery,
+  type FirstAyahRow,
+  type QuranDatabaseAdapter,
+} from "../sql.ts";
 
 export interface QuranSourceArtifact {
   readonly repositoryPath: string;
@@ -69,6 +77,39 @@ const TANZIL_COUNTS: Readonly<Record<OpenerPackagingValue, number>> = Object.fre
   [OpenerPackaging.Absent]: 1,
 });
 
+// The IndoPak and Tajweed variants do NOT embed the bismillah prefix inside each
+// surah's first ayah (measured on the built DBs — only surah 1 carries it, as
+// verse 1). Openers therefore ride as a separate row: the trusted opener text is
+// each DB's own 1:1 (the canonical bismillah, markup included for tajweed).
+const VARIANT_PACKAGING = Object.freeze(
+  Array.from({ length: 115 }, (_, surah): OpenerPackagingValue => {
+    if (surah === 1) return OpenerPackaging.NumberedAyah;
+    if (surah === 9 || surah === 0) return OpenerPackaging.Absent;
+    return OpenerPackaging.SeparateRow;
+  }),
+);
+
+const VARIANT_COUNTS: Readonly<Record<OpenerPackagingValue, number>> = Object.freeze({
+  [OpenerPackaging.NumberedAyah]: 1,
+  [OpenerPackaging.EmbeddedPrefix]: 0,
+  [OpenerPackaging.ChapterFlag]: 0,
+  [OpenerPackaging.SeparateRow]: 112,
+  [OpenerPackaging.Absent]: 1,
+});
+
+/** Same quran_text schema, plus the trusted-opener query the variants need. */
+const VARIANT_QURAN_DATABASE: QuranDatabaseAdapter = defineQuranDatabaseAdapter({
+  id: "variant-quran-text-v1",
+  queries: Object.freeze({
+    ...TANZIL_QURAN_DATABASE.queries,
+    openers: defineQuranQuery(
+      `SELECT sura AS surah, (SELECT text FROM quran_text WHERE sura = 1 AND aya = 1) AS text
+       FROM quran_text WHERE aya = 1 AND sura > 1 AND sura <> 9 ORDER BY sura`,
+      (row) => ({ surah: decodeIntegerField(row, "surah"), text: decodeTextField(row) }) satisfies FirstAyahRow,
+    ),
+  }),
+});
+
 const PROFILES = Object.freeze([
   defineSourceProfile({
     id: "tanzil-uthmani-581cc540",
@@ -98,6 +139,42 @@ const PROFILES = Object.freeze([
     canonicalRowCount: 6236,
     packagingBySurah: TANZIL_PACKAGING,
     expectedPackagingCounts: TANZIL_COUNTS,
+    referenceOpenerSurah: 1,
+  }),
+  // IndoPak mushaf text (Naveed Ahmad / Quran.com-lineage Naskh script). Bismillah
+  // is NOT embedded in first ayahs (measured) — SeparateRow openers come from the
+  // DB's own 1:1 via VARIANT_QURAN_DATABASE.queries.openers.
+  defineSourceProfile({
+    id: "indopak-naveed-7d3c21e0",
+    sourceId: QuranSourceId.Indopak,
+    script: QuranScript.IndoPak,
+    artifact: Object.freeze({
+      repositoryPath: "db/quran/arabic/quran-indopak.sqlite",
+      r2Path: "tanzil/arabic/quran-indopak.sqlite",
+      sizeBytes: 1_634_304,
+    }),
+    database: VARIANT_QURAN_DATABASE,
+    canonicalRowCount: 6236,
+    packagingBySurah: VARIANT_PACKAGING,
+    expectedPackagingCounts: VARIANT_COUNTS,
+    referenceOpenerSurah: 1,
+  }),
+  // Tajweed mushaf text (Dar Al-Islam colored tajweed, via alquran.cloud). Text
+  // column carries inline tajweed markup (`[h:1468[ٱ]`-style segments) verbatim —
+  // A4 renders/parses it; stripping happens in views, never in the DB.
+  defineSourceProfile({
+    id: "tajweed-daralislam-5b9f48d2",
+    sourceId: QuranSourceId.Tajweed,
+    script: QuranScript.Tajweed,
+    artifact: Object.freeze({
+      repositoryPath: "db/quran/arabic/quran-tajweed.sqlite",
+      r2Path: "tanzil/arabic/quran-tajweed.sqlite",
+      sizeBytes: 2_015_232,
+    }),
+    database: VARIANT_QURAN_DATABASE,
+    canonicalRowCount: 6236,
+    packagingBySurah: VARIANT_PACKAGING,
+    expectedPackagingCounts: VARIANT_COUNTS,
     referenceOpenerSurah: 1,
   }),
 ] satisfies readonly QuranSourceProfile[]);
