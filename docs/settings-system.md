@@ -135,21 +135,31 @@ Reader presentation uses HTML-level variables for Arabic family, translation siz
 translation family. Font-family changes route through virtualized-reader typography remeasure
 and viewport preservation. Arabic Quran fonts remain gated to Arabic source content.
 
-Persisted reader schema v3 includes:
+Persisted reader schema v4 includes:
 
 - `arabicFont`, allowlisted by registry; default `amiri`.
+- `arabicScript`, the mushaf script variant (`uthmani`, `simple-clean`, `indopak`, `tajweed`),
+  allowlisted against the Arabic source registry; default `uthmani`. Selected in the Reading
+  section above the font pills. It changes which Arabic corpus post-paint reads serve (see
+  `quran-system.md`); first paint of an Arabic route remains the prerendered Uthmani page.
 - `translationSize`, integer 13–28 px; default 17 px.
+
+Schema v4 migration is decode-side only: v3 blobs hydrate with the `uthmani` default, and
+future schemas are tolerated by reading supported fields only. The Tajweed variant renders
+markup as colored runs in `web/src/lib/quran/view/tajweed.ts`; plain-text surfaces (copy,
+share, sidebar previews, bismillah title attributes) strip the markup in views. IndoPak text
+renders in the user-chosen Arabic font; a dedicated Nastaleeq face is a known gap (§10).
 
 Decode accepts known fields, bounds values, and tolerates future schemas by reading supported
 fields only. Whole-blob writes include both fields; presentation applies after hydration.
 
 `app.html` mirrors translation/font-size bounds for pre-paint stability. It deliberately does
-not mirror `arabicFont`: alternate font bytes load after hydration, `applyReaderPresentation`
-owns font dataset/CSS-variable writes, and first paint remains Amiri. Tests pin this absence and
-the mirrored numeric bounds.
+not mirror `arabicFont` or `arabicScript`: alternate font bytes and variant corpora load after
+hydration, `applyReaderPresentation` owns font dataset/CSS-variable writes, and first paint
+remains Amiri Uthmani. Tests pin this absence and the mirrored numeric bounds.
 
 `translationFamily` is session-only. It survives navigation but resets to sans on reload;
-persisting it requires schema v4.
+persisting it requires a future schema bump (v4 is taken by `arabicScript`).
 
 Reader blob remains whole-record, debounced, last-write-wins across tabs. Storage events reduce
 the collision window but do not eliminate interleaved field loss.
@@ -206,7 +216,7 @@ before UI.
 
 - `SETTINGS_DOC_VERSION = 1`.
 - Appearance derives from `prefs.current`.
-- Reading includes font size, mode, Arabic font, and translation size.
+- Reading includes font size, mode, Arabic font, mushaf script, and translation size.
 - Privacy derives from consent state.
 - Unknown fields survive; missing known fields default safely.
 
@@ -255,6 +265,9 @@ Settings changes preserve:
 - Service-worker metadata may temporarily include orphaned data records until maintenance.
 - Reader persisted blob still has a multi-writer last-write-wins window.
 - Alternate Arabic font first paint uses Amiri until lazy font finishes loading.
+- IndoPak mushaf text has no dedicated Nastaleeq font yet; it renders in the chosen Arabic
+  font (KFGQPC Hafs recommended), and some verses carry KFGQPC PUA waqf codepoints that
+  non-KFGQPC faces may not cover.
 - Translation family is not persisted.
 - Real application build-version display needs new build-time plumbing.
 - Server preference sync has no storage, endpoint, or conflict policy yet.

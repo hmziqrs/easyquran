@@ -44,18 +44,28 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 
 - `quran-uthmani.sqlite` is display and Arabic-search corpus.
 - `quran-simple-clean.sqlite` is the readable API/canonical-view script.
-- Both expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are read
-  directly and read-only; no consolidated canonical DB is built.
+- `quran-indopak.sqlite` (Naveed Ahmad IndoPak text) and `quran-tajweed.sqlite` (Dar Al-Islam
+  colored tajweed, via alquran.cloud) are mushaf-script variants added 2026-09.
+- All four expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are
+  read directly and read-only; no consolidated canonical DB is built. The variants do not
+  embed the bismillah in first ayahs (separate-row openers, measured 1/0/0/112/1); the trusted
+  opener text is each variant's own 1:1.
+- Tajweed `text` carries inline rule markup verbatim (`[h:1468[ٱ]` segments). Rendering parses
+  it in `web/src/lib/quran/view/tajweed.ts` (colored runs); plain-text views (copy, share,
+  sidebar preview, title attributes) strip it there. Stored, wire, and non-tajweed text are
+  never touched.
 - `quran-data.xml` supplies metadata only: 114 surahs, 6,236 ayahs, 604 pages, 30 juz, 556
   ruku, 240 hizb quarters, 7 manzil, and 15 sajda. Web consumes the compact generated JSON;
   Rust parses XML at boot.
 - `quran_text."index"` is canonical global ayah order: `1..6236`, unique, ordered by surah
   then ayah, and equal to XML's zero-based surah start plus one-based ayah number.
 - Page, juz, ruku, hizb-quarter, and manzil ranges tile the corpus without gaps or overlap.
-- Translation catalogue contains 115 immutable SQLite dumps across 44 languages. Web decodes
-  baked `[id, language, languageCode, direction, name, translator, filePath, sizeBytes]`
-  records. Production artifact selection uses baked id maps only.
-- Translation redistribution is non-commercial; revisit licensing before monetization.
+- Translation catalogue contains 134 immutable SQLite dumps across 44 languages: 115 Tanzil
+  dumps plus 19 QuranEnc translations (`quranenc.<iso>.<slug>` ids, one per language).
+  Web decodes baked `[id, language, languageCode, direction, name, translator, filePath,
+  sizeBytes]` records. Production artifact selection uses baked id maps only.
+- Translation redistribution is non-commercial (Tanzil); QuranEnc terms require attribution,
+  no alteration, and update-to-latest. Revisit licensing before monetization.
 
 Provisioning has two paths:
 
@@ -130,7 +140,12 @@ unchanged.
 - API outage memory is passive: transport failures/timeouts and repeated 5xx responses open a
   circuit; no health probe is generated.
 
-Arabic primary plus up to five client-only stacked translations are supported. Extras never
+Arabic primary plus up to five client-only stacked translations are supported. The reader's
+mushaf-script preference (Uthmani/Simple-clean/IndoPak/Tajweed, reader schema v4) selects the
+Arabic corpus for post-paint reads: Arabic routes stay prerendered on Uthmani, hydration
+re-reads visible pages through the worker/API ladder, and the worker stages variant artifacts
+into OPFS on demand (same download/staging path as translations; runners stay resident once
+opened). Extras never
 alter route identity, canonical URL, server HTML cache key, or primary delivery. `?more=` is
 client-mirrored state; cache keys strip it. Selected extras and current primary are pinned
 against OPFS eviction.
@@ -257,6 +272,10 @@ changes Arabic scripture or translation-content semantics.
 6. Authentication remains client-hydrated and absent from every shared output/cache.
 7. Production artifact specs come from baked id maps. Staged validation and atomic pointer
    switching prevent incomplete downloads from becoming active.
+8. Mushaf-script selection is a device-side reader preference, not a route dimension. Arabic
+   SSG stays Uthmani-only (2 prerendered sources); Indopak/Tajweed/simple-clean never
+   prerender — they render through the post-paint worker/API upgrade. Translated routes stay
+   SSR + seven-day disk cache, unchanged.
 
 ---
 
