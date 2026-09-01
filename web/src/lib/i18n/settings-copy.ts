@@ -33,6 +33,11 @@ import {
   settings_privacy_up_to_date,
   settings_privacy_version,
   settings_reading_arabic_font,
+  settings_reading_script,
+  settings_reading_script_uthmani,
+  settings_reading_script_simple_clean,
+  settings_reading_script_indopak,
+  settings_reading_script_tajweed,
   settings_reading_font_amiri,
   settings_reading_font_hafs,
   settings_reading_font_taha_v1,
@@ -238,6 +243,13 @@ export interface SettingsCopy {
   };
   readonly reading: {
     readonly intro: string;
+    readonly arabicScript: string;
+    readonly scriptNames: {
+      readonly uthmani: string;
+      readonly simpleClean: string;
+      readonly indopak: string;
+      readonly tajweed: string;
+    };
     readonly arabicFont: string;
     readonly fontNames: {
       readonly amiri: string;
@@ -441,6 +453,13 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
     },
     reading: {
       intro: noArgs(settings_reading_intro),
+      arabicScript: noArgs(settings_reading_script),
+      scriptNames: {
+        uthmani: noArgs(settings_reading_script_uthmani),
+        simpleClean: noArgs(settings_reading_script_simple_clean),
+        indopak: noArgs(settings_reading_script_indopak),
+        tajweed: noArgs(settings_reading_script_tajweed),
+      },
       arabicFont: noArgs(settings_reading_arabic_font),
       fontNames: {
         amiri: noArgs(settings_reading_font_amiri),

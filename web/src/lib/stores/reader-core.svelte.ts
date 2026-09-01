@@ -1,5 +1,6 @@
 import type { VerseKey } from "$lib/data/quran";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import { QURAN_SOURCE_IDS, QuranSourceId } from "$lib/data/quran-types";
 import { SvelteMap } from "svelte/reactivity";
 
 export const BrowseMode = {
@@ -32,6 +33,8 @@ export interface Persisted {
   current: number;
   fontSize: number;
   arabicFont: ArabicFontId;
+  /** Mushaf script variant for Arabic reading (source id of the Arabic corpus). */
+  arabicScript: QuranSourceId;
   translationSize: number;
   mode: ReaderMode;
   bookmarks: Record<VerseKey, boolean>;
@@ -50,7 +53,11 @@ export interface ReaderState extends Persisted {
   pendingAnchor: LastReadAnchor | null;
 }
 
-export const READER_SCHEMA_VERSION = 3;
+// v4 adds `arabicScript` (Uthmani/Simple-clean/IndoPak/Tajweed mushaf variant).
+// Decode reads supported fields only, so v3 blobs hydrate with the default script.
+export const READER_SCHEMA_VERSION = 4;
+
+export const ARABIC_SCRIPT_VALUES: readonly QuranSourceId[] = QURAN_SOURCE_IDS;
 
 export const ARABIC_FONT_MIN = 22;
 export const ARABIC_FONT_MAX = 56;
@@ -69,6 +76,7 @@ export const READER_DEFAULTS: ReaderState = {
   current: 1,
   fontSize: 33,
   arabicFont: "amiri",
+  arabicScript: QuranSourceId.TanzilUthmani,
   translationSize: 17,
   translationFamily: "sans",
   mode: "verse",

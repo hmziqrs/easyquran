@@ -27,6 +27,7 @@ describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => 
     "src/lib/server/quran-sqlite.ts",
     "src/lib/server/quran-surah-page.ts",
     "src/lib/quran/view/source-profiles.ts",
+    "src/lib/quran/view/tajweed.ts",
     "src/lib/workers/download.ts",
     "src/lib/workers/opfs-cache.ts",
     "src/lib/workers/quran.worker.ts",

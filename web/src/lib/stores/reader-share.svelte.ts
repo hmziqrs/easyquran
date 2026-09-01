@@ -1,6 +1,7 @@
 import { browser } from "$app/environment";
 import { parseKey, type VerseKey } from "$lib/data/quran";
 import { peekQuranData } from "$lib/data/quran-data-client";
+import { stripTajweedMarkup } from "$lib/quran/view/tajweed";
 
 function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);
@@ -9,7 +10,9 @@ function verseRef(key: VerseKey): string {
 }
 
 function verseShareText(key: VerseKey, text: string): string {
-  return `${text}\n${verseRef(key)}`;
+  // Clipboard/share are plain-text views: tajweed markup renders as colors in
+  // the reader, but must not leak `[h:1[ٱ]` tokens into copied text.
+  return `${stripTajweedMarkup(text)}\n${verseRef(key)}`;
 }
 
 export function createReaderShare() {

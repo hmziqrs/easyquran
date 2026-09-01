@@ -6,6 +6,7 @@ import {
 } from "$lib/config/reader-fonts";
 import { ACCENTS, DEFAULTS, SURFACES, type ThemeMode } from "$lib/config/site";
 import { asLiteral, asNumber, asObject, asString } from "$lib/storage";
+import { QURAN_SOURCE_IDS, type QuranSourceId } from "$lib/data/quran-types";
 import type { CustomSeeds } from "$lib/theme/derive";
 import { consent, decodeConsent, type ConsentFlags } from "$lib/stores/consent.svelte";
 import { prefs, type Prefs } from "$lib/stores/prefs.svelte";
@@ -27,6 +28,7 @@ export interface SettingsReadingDoc {
   fontSize: number;
   mode: ReaderMode;
   arabicFont: ArabicFontId;
+  arabicScript: QuranSourceId;
   translationSize: number;
 }
 
@@ -53,11 +55,13 @@ export interface SettingsConsentPort {
 export interface SettingsReaderPort {
   readonly mode: ReaderMode;
   readonly arabicFont: ArabicFontId;
+  readonly arabicScript: QuranSourceId;
   readonly translationFamily: TranslationFamily;
   readonly arabicSizePx: string;
   readonly translationSizePx: string;
   setMode(mode: ReaderMode): void;
   setArabicFont(id: ArabicFontId): void;
+  setArabicScript(id: QuranSourceId): void;
   bigger(): void;
   smaller(): void;
   growTranslation(): void;
@@ -111,6 +115,7 @@ function decodeReading(raw: unknown): SettingsReadingDoc {
     fontSize: READER_DEFAULTS.fontSize,
     mode: READER_DEFAULTS.mode,
     arabicFont: DEFAULT_ARABIC_FONT,
+    arabicScript: READER_DEFAULTS.arabicScript,
     translationSize: READER_DEFAULTS.translationSize,
   };
   const stored = asObject(raw);
@@ -119,6 +124,7 @@ function decodeReading(raw: unknown): SettingsReadingDoc {
     fontSize: asNumber(stored.fontSize, ARABIC_FONT_MIN, ARABIC_FONT_MAX) ?? fallback.fontSize,
     mode: asLiteral<ReaderMode>(stored.mode, READER_MODE_VALUES) ?? fallback.mode,
     arabicFont: asLiteral<ArabicFontId>(stored.arabicFont, ARABIC_FONT_IDS) ?? fallback.arabicFont,
+    arabicScript: asLiteral<QuranSourceId>(stored.arabicScript, QURAN_SOURCE_IDS) ?? fallback.arabicScript,
     translationSize:
       asNumber(stored.translationSize, TRANSLATION_FONT_MIN, TRANSLATION_FONT_MAX) ??
       fallback.translationSize,
@@ -153,6 +159,7 @@ export function toSettingsDoc(stores: SettingsDocStores = { prefs, consent, read
       fontSize: Number.parseFloat(stores.reader.arabicSizePx),
       mode: stores.reader.mode,
       arabicFont: stores.reader.arabicFont,
+      arabicScript: stores.reader.arabicScript,
       translationSize: Number.parseFloat(stores.reader.translationSizePx),
     },
     privacy: { ...stores.consent.current },
@@ -211,6 +218,7 @@ export function applySettingsDoc(
   stores.consent.set({ ...doc.privacy });
   stores.reader.setMode(doc.reading.mode);
   stores.reader.setArabicFont(doc.reading.arabicFont);
+  stores.reader.setArabicScript(doc.reading.arabicScript);
   applyFontSize(stores.reader, doc.reading.fontSize);
   applyTranslationSize(stores.reader, doc.reading.translationSize);
   stores.prefs.apply();

@@ -13,6 +13,7 @@ vi.mock("$lib/stores/reader-presentation", () => ({
 
 import { DEFAULTS } from "$lib/config/site";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import type { QuranSourceId } from "$lib/data/quran-types";
 import { createConsent } from "$lib/stores/consent.svelte";
 import type { Prefs } from "$lib/stores/prefs.svelte";
 import {
@@ -59,6 +60,7 @@ function fakeReader(): FakeReader {
   const calls: string[] = [];
   let mode: ReaderMode = "verse";
   let arabicFont: ArabicFontId = "amiri";
+  let arabicScript: QuranSourceId = "uthmani";
   let family: TranslationFamily = "sans";
   let fontSize = 33;
   let translationSize = 17;
@@ -69,6 +71,9 @@ function fakeReader(): FakeReader {
     },
     get arabicFont() {
       return arabicFont;
+    },
+    get arabicScript() {
+      return arabicScript;
     },
     get translationFamily() {
       return family;
@@ -84,6 +89,9 @@ function fakeReader(): FakeReader {
     },
     setArabicFont(next) {
       arabicFont = next;
+    },
+    setArabicScript(next) {
+      arabicScript = next;
     },
     bigger() {
       calls.push("bigger");
@@ -125,7 +133,7 @@ describe("decodeSettingsDoc", () => {
       reading: {
         fontSize: 36,
         mode: "reading",
-        arabicFont: "scheherazade-new",
+        arabicFont: "scheherazade-new", arabicScript: "indopak",
         translationSize: 15,
       },
       privacy: { analytics: false, performance: true, advertising: true },
@@ -137,7 +145,7 @@ describe("decodeSettingsDoc", () => {
     expect(decodeSettingsDoc({})).toEqual({
       v: SETTINGS_DOC_VERSION,
       appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-      reading: { fontSize: 33, mode: "verse", arabicFont: "amiri", translationSize: 17 },
+      reading: { fontSize: 33, mode: "verse", arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 },
       privacy: { analytics: true, performance: true, advertising: false },
     });
     const out = decodeSettingsDoc({
@@ -151,6 +159,7 @@ describe("decodeSettingsDoc", () => {
       fontSize: 33,
       mode: "verse",
       arabicFont: "amiri",
+      arabicScript: "uthmani",
       translationSize: 17,
     });
     expect(out?.privacy).toEqual({ analytics: true, performance: true, advertising: false });
@@ -203,7 +212,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         custom: { accent: "#112233" },
         instantResume: true,
       },
-      reading: { fontSize: 36, mode: "reading", arabicFont: "scheherazade-new", translationSize: 15 },
+      reading: { fontSize: 36, mode: "reading", arabicFont: "scheherazade-new", arabicScript: "uthmani", translationSize: 15 },
       privacy: { analytics: false, performance: true, advertising: true },
     });
 
@@ -227,7 +236,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", translationSize: 19 },
+        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", arabicScript: "uthmani", translationSize: 19 },
         privacy: { analytics: true, performance: true, advertising: false },
       },
       { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
@@ -246,7 +255,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", translationSize: 19 },
+        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", arabicScript: "uthmani", translationSize: 19 },
         privacy: { analytics: true, performance: true, advertising: false },
       },
       { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
@@ -261,7 +270,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 23, mode: "verse", arabicFont: "amiri", translationSize: 17 },
+        reading: { fontSize: 23, mode: "verse", arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 },
         privacy: { analytics: true, performance: true, advertising: false },
       },
       { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
@@ -285,7 +294,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 25, mode: "verse", arabicFont: "amiri", translationSize: 22 },
+        reading: { fontSize: 25, mode: "verse", arabicFont: "amiri", arabicScript: "tajweed", translationSize: 22 },
         privacy: { analytics: true, performance: true, advertising: false },
       },
       { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },

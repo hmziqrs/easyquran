@@ -30,6 +30,8 @@ const {
   gotoSpy: vi.fn().mockResolvedValue(undefined),
   readerStub: {
     hasLastRead: false,
+    // Mirrors the real store contract's default mushaf script (schema v4 field).
+    arabicScript: "uthmani",
     // SAFETY: tests below reassign lastRead to { num, n, sourceId } objects or null; null is a member of that union.
     lastRead: null as { num: number; n: number; sourceId?: string } | null,
     lastReadRef: "",

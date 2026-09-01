@@ -134,6 +134,14 @@ describe("decodeReader", () => {
     expect(decodeReader({ v: 3, arabicFont: 7 }).arabicFont).toBeUndefined();
   });
 
+  it("decodes the v4 arabicScript field with allowlist + v3 default", () => {
+    expect(decodeReader({ arabicScript: "tajweed" }).arabicScript).toBe("tajweed");
+    expect(decodeReader({ arabicScript: "indopak" }).arabicScript).toBe("indopak");
+    // v3 blobs predate the field: decode stays silent, defaults apply downstream.
+    expect(decodeReader({ v: 3 }).arabicScript).toBeUndefined();
+    expect(decodeReader({ arabicScript: "coptic" }).arabicScript).toBeUndefined();
+  });
+
   it("decodes v3 translationSize only inside the 13-28 bounds", () => {
     expect(decodeReader({ v: 3, translationSize: 13 }).translationSize).toBe(13);
     expect(decodeReader({ v: 3, translationSize: 28 }).translationSize).toBe(28);
@@ -256,7 +264,7 @@ describe("createReaderPersistence scheduling", () => {
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
     persistence.writeNow();
-    expect(read()).toMatchObject({ v: 3, arabicFont: "amiri", translationSize: 17 });
+    expect(read()).toMatchObject({ v: 4, arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 });
     persistence.dispose();
   });
 

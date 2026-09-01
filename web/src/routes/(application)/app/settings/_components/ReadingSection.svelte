@@ -13,6 +13,7 @@
     TRANSLATION_FONT_MAX,
     TRANSLATION_FONT_MIN,
   } from "$lib/stores/reader-core.svelte";
+  import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "$lib/data/quran-types";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import { cn } from "$lib/utils";
   import type { SettingsCopy } from "$lib/i18n/settings-copy";
@@ -47,6 +48,20 @@
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
+  }
+
+  const SCRIPTS: readonly QuranSourceIdValue[] = [
+    QuranSourceId.TanzilUthmani,
+    QuranSourceId.TanzilSimpleClean,
+    QuranSourceId.Indopak,
+    QuranSourceId.Tajweed,
+  ];
+
+  function scriptLabel(script: QuranSourceIdValue): string {
+    if (script === QuranSourceId.TanzilSimpleClean) return copy.scriptNames.simpleClean;
+    if (script === QuranSourceId.Indopak) return copy.scriptNames.indopak;
+    if (script === QuranSourceId.Tajweed) return copy.scriptNames.tajweed;
+    return copy.scriptNames.uthmani;
   }
 
   function fontLabel(fontId: ArabicFontId): string {
@@ -120,6 +135,20 @@
               class={pillClass(reader.mode === mode)}
               aria-pressed={reader.mode === mode}
               onclick={() => reader.setMode(mode)}>{modeLabel(mode)}</button
+            >
+          {/each}
+        </div>
+      </div>
+
+      <div class="px-4 py-3.5 sm:px-5">
+        <span class="text-[14.5px] font-medium text-foreground">{copy.arabicScript}</span>
+        <div class="mt-2.5 grid max-w-md gap-1.5">
+          {#each SCRIPTS as script (script)}
+            <button
+              type="button"
+              class={pillClass(reader.arabicScript === script)}
+              aria-pressed={reader.arabicScript === script}
+              onclick={() => reader.setArabicScript(script)}>{scriptLabel(script)}</button
             >
           {/each}
         </div>

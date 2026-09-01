@@ -15,7 +15,7 @@ export class PageHeightCache {
   #heights = new SvelteMap<string, SvelteMap<number, number>>();
 
   #key(width: number): string {
-    return `${reader.mode}:${reader.arabicSizePx}:${reader.arabicFont}:${reader.translationSizePx}:${reader.translationFamily}:${widthBucket(width)}`;
+    return `${reader.mode}:${reader.arabicSizePx}:${reader.arabicFont}:${reader.arabicScript}:${reader.translationSizePx}:${reader.translationFamily}:${widthBucket(width)}`;
   }
 
   #defaultHeight(width: number): number {

@@ -9,6 +9,7 @@ import {
 } from "$lib/storage";
 
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import type { QuranSourceId } from "$lib/data/quran-types";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -54,6 +55,15 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
       if (core.s.arabicFont === id) return;
       core.s.arabicFont = id;
       present();
+      persistence.writeNow();
+    },
+
+    get arabicScript(): QuranSourceId {
+      return core.s.arabicScript;
+    },
+    setArabicScript(id: QuranSourceId): void {
+      if (core.s.arabicScript === id) return;
+      core.s.arabicScript = id;
       persistence.writeNow();
     },
     get translationSizePx(): string {

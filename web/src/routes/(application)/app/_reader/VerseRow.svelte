@@ -3,6 +3,8 @@
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
   import { toArabicDigits } from "$lib/data/quran";
+  import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
+  import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
   import type { StackedTranslation } from "$lib/data/quran-types";
 
   let {
@@ -10,6 +12,7 @@
     n,
     vKey,
     isTranslation,
+    script = QuranScript.Uthmani,
     onToggleNote,
     stacked = [],
     stackedPending = [],
@@ -20,6 +23,7 @@
     n: number;
     vKey: string;
     isTranslation?: boolean;
+    script?: QuranScriptValue;
     onToggleNote?: () => void;
     stacked?: readonly StackedTranslation[];
     stackedPending?: readonly string[];
@@ -31,6 +35,14 @@
   >(null);
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
+  // Tajweed markup renders as colored runs (view-only; the stored/wire text is
+  // verbatim — see lib/quran/view/tajweed.ts). Every other script renders raw.
+  const tajweedSegments = $derived.by(() =>
+    script === QuranScript.Tajweed ? parseTajweedSegments(text) : null,
+  );
+  function segmentKey(segment: { text: string; rule: string | null }, index: number): string {
+    return `${index}:${segment.rule ?? "p"}`;
+  }
   const isRevealed = $derived(page.url.hash === `#${ayahId}`);
   const translationActive = $derived(
     isTranslation ?? ("lang" in page.params && "translator" in page.params),
@@ -82,7 +94,18 @@
       class="verse-text font-arabic leading-[2.15] text-quran-foreground"
       style="font-size:var(--reader-arabic-size, 33px)"
     >
-      {text}<span class="ayah-ornament arabic-marker" data-verse-anchor={vKey}
+      {#if tajweedSegments}
+        {#each tajweedSegments as segment, index (segmentKey(segment, index))}
+          {#if segment.rule}
+            <span class="tajweed-run" style:color={tajweedRuleColor(segment.rule)}>{segment.text}</span
+            >
+          {:else}
+            {segment.text}
+          {/if}
+        {/each}
+      {:else}
+        {text}
+      {/if}<span class="ayah-ornament arabic-marker" data-verse-anchor={vKey}
         >&#x06DD;{toArabicDigits(n)}</span
       >
     </span>
@@ -116,6 +139,11 @@
   .verse-text {
     display: block;
     text-align: start;
+  }
+
+  .tajweed-run {
+    /* Color comes from the inline style (rule palette in lib/quran/view/tajweed.ts). */
+    text-decoration: none;
   }
 
   /* §21 ayah hover: quiet surface tint (transparent at rest); suppressed in continuous reading mode. */

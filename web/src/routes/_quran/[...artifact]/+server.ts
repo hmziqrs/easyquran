@@ -1,13 +1,15 @@
 import { TRANSLATION_BY_ARTIFACT_PATH } from "$lib/data/translations";
 import { QURAN_R2_UPSTREAM_BASE } from "$lib/quran/environment";
+import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
 import { error } from "@sveltejs/kit";
 
 import type { RequestHandler } from "./$types";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
+// Arabic artifact keys follow the baked source profiles (uthmani, simple-clean,
+// indopak, tajweed); translation keys follow the baked catalogue.
 const ALLOWED_ARTIFACTS = new Set<string>([
-  "tanzil/arabic/quran-uthmani.sqlite",
-  "tanzil/arabic/quran-simple-clean.sqlite",
+  ...registeredSourceProfiles().map((profile) => profile.artifact.r2Path),
   ...TRANSLATION_BY_ARTIFACT_PATH.keys(),
 ]);
 

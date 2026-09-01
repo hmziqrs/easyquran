@@ -131,6 +131,13 @@
     }
   });
 
+  // Reader script preference → worker default for Arabic reads without a pinned
+  // source. Arabic routes stay canonical/SSG (uthmani first paint); the variant
+  // corpus is served by the worker/API upgrade after hydration.
+  $effect(() => {
+    quranWorker.setPreferredArabicSource(reader.arabicScript);
+  });
+
   $effect(() => {
     const ids = stackedTranslations.ids;
     const lang = page.params.lang;

@@ -6,6 +6,7 @@ import type {
   DownloadProgress,
   QuranRangeText,
   QuranReaderSource,
+  QuranSourceId,
   QuranSurahText,
   ArtifactSpec,
   TranslationCatalogueEntry,
@@ -466,6 +467,15 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
   return failChain(args, state);
 }
 
+// Preferred mushaf script for Arabic reads where the caller does not pin a
+// source (reader routes, verse cache refresh). Set from the persisted reader
+// preference; the boot default stays the pinned uthmani plan source.
+let preferredArabicSource: QuranSourceId = DEFAULT_QURAN_SOURCE_PLAN.reader;
+
+function defaultArabicSource(): QuranSourceId {
+  return preferredArabicSource;
+}
+
 export const quranWorker = {
   get ready(): boolean {
     return isReady;
@@ -477,6 +487,11 @@ export const quranWorker = {
   onProgress(cb: (p: DownloadProgress) => void): () => void {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
+  },
+
+  /** Reader preference: which Arabic mushaf variant reads serve when no source is pinned. */
+  setPreferredArabicSource(sourceId: QuranSourceId): void {
+    if (isArabicSourceId(sourceId)) preferredArabicSource = sourceId;
   },
 
   hasTranslation(source: QuranReaderSource): Promise<boolean> {
@@ -581,7 +596,7 @@ export const quranWorker = {
     onStatus?: (status: ReadTierStatus) => void,
     options?: ReadOptions,
   ): Promise<QuranSurahText> {
-    const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
+    const reader = source ?? defaultArabicSource();
     if (isArabicSourceId(reader)) {
       return withSourceFallback({
         hasLocal: () => quranWorker.ready,
@@ -618,7 +633,7 @@ export const quranWorker = {
     onStatus?: (status: ReadTierStatus) => void,
     options?: ReadOptions,
   ): Promise<QuranRangeText> {
-    const reader = source ?? DEFAULT_QURAN_SOURCE_PLAN.reader;
+    const reader = source ?? defaultArabicSource();
     if (isArabicSourceId(reader)) {
       return withSourceFallback({
         hasLocal: () => quranWorker.ready,

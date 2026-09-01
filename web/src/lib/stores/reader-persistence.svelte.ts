@@ -14,10 +14,12 @@ import {
 } from "$lib/storage";
 
 import { ARABIC_FONT_IDS, type ArabicFontId } from "$lib/config/reader-fonts";
+import type { QuranSourceId } from "$lib/data/quran-types";
 
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
+  ARABIC_SCRIPT_VALUES,
   NOTE_PERSIST_DEBOUNCE_MS,
   SURAH_COUNT,
   READER_MODE_VALUES,
@@ -51,6 +53,10 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
 
   const arabicFont = asLiteral<ArabicFontId>(stored.arabicFont, ARABIC_FONT_IDS);
   if (arabicFont) out.arabicFont = arabicFont;
+
+  // v4 field: absent in v3 blobs → default (uthmani) from READER_DEFAULTS.
+  const arabicScript = asLiteral<QuranSourceId>(stored.arabicScript, ARABIC_SCRIPT_VALUES);
+  if (arabicScript) out.arabicScript = arabicScript;
 
   const translationSize = asNumber(
     stored.translationSize,
@@ -139,6 +145,7 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
   if (p.current !== undefined) s.current = p.current;
   if (p.fontSize !== undefined) s.fontSize = p.fontSize;
   if (p.arabicFont !== undefined) s.arabicFont = p.arabicFont;
+  if (p.arabicScript !== undefined) s.arabicScript = p.arabicScript;
   if (p.translationSize !== undefined) s.translationSize = p.translationSize;
   if (p.mode !== undefined) s.mode = p.mode;
   if (p.bookmarks !== undefined) s.bookmarks = p.bookmarks;
@@ -177,6 +184,7 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       current,
       fontSize,
       arabicFont,
+      arabicScript,
       translationSize,
       mode,
       bookmarks,
@@ -191,6 +199,7 @@ export function createReaderPersistence(core: ReaderCore): ReaderPersistence {
       current,
       fontSize,
       arabicFont,
+      arabicScript,
       translationSize,
       mode,
       bookmarks,

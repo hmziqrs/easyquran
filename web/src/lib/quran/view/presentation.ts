@@ -6,9 +6,14 @@ import {
 } from "$lib/data/quran-types";
 
 import { bodyText } from "./source-view.ts";
+import { stripTajweedMarkup } from "./tajweed.ts";
 
 export function headerText(normalization: SurahNormalization): string | null {
-  return normalization.openerKind === OpenerKind.Header ? normalization.openerText : null;
+  if (normalization.openerKind !== OpenerKind.Header) return null;
+  if (normalization.openerText === null) return null;
+  // The opener text feeds the bismillah SVG title attribute (plain-text view);
+  // tajweed markup is view-only and stripped here — a no-op for other sources.
+  return stripTajweedMarkup(normalization.openerText);
 }
 
 export function displayVerses(surah: QuranSurahText): string[] {

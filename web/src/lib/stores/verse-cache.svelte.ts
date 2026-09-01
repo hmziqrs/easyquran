@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import { parseKey, type VerseKey } from "$lib/data/quran";
+import { stripTajweedMarkup } from "$lib/quran/view/tajweed";
 
 import type { ReaderCore } from "./reader-core.svelte";
 
@@ -10,7 +11,9 @@ export function createVerseCache(core: ReaderCore) {
       const sub = core.verseTextBySurah.get(num);
       if (!sub) return [];
       const verses: string[] = [];
-      for (const [n, text] of sub) verses[n - 1] = text;
+      // Sidebar previews are a plain-text view: tajweed markup is stripped,
+      // never rendered or copied through.
+      for (const [n, text] of sub) verses[n - 1] = stripTajweedMarkup(text);
       return verses;
     },
     seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void {

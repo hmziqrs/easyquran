@@ -89,6 +89,12 @@ let corpus: CanonicalSearchUnit[] | null = null;
 let ready = false;
 let storedCatalogue: readonly TranslationCatalogueEntry[] = [];
 let storedCatalogueById: ReadonlyMap<string, TranslationCatalogueEntry> = new Map();
+// On-demand Arabic sources (indopak/tajweed): boot pins only the plan sources;
+// a reader script switch stages the variant artifact through the same OPFS
+// download path as translations. Specs + coordinates come from the init message.
+let storedArtifacts: readonly ArtifactSpec[] = [];
+let storedCoordinates: CanonicalQuranCoordinates | null = null;
+const pendingArabicSources = new Map<QuranSourceId, Promise<void>>();
 let bootPromise: Promise<readonly CachedArtifactInfo[]> | null = null;
 let bootInventory: readonly CachedArtifactInfo[] = Object.freeze([]);
 const TRANSLATION_DB_CAP = STACKED_MAX_EXTRAS + 2;
@@ -259,6 +265,8 @@ async function initialize(
     storedCatalogue = catalogue;
     storedCatalogueById = new Map(catalogue.map((entry) => [entry.id, entry]));
   }
+  storedArtifacts = artifacts;
+  storedCoordinates = coordinates;
   if (ready) return bootInventory;
   if (bootPromise !== null) {
     return await bootPromise;
@@ -269,6 +277,41 @@ async function initialize(
     return bootInventory;
   } finally {
     bootPromise = null;
+  }
+}
+
+async function ensureArabicSource(sourceId: QuranSourceId): Promise<void> {
+  if (sources.has(sourceId)) return;
+  const pending = pendingArabicSources.get(sourceId);
+  if (pending) return pending;
+  const run = (async () => {
+    const spec = storedArtifacts.find((artifact) => artifact.id === sourceId);
+    if (!spec) throw new Error(`artifact list missing Quran source ${sourceId}`);
+    const coordinates = storedCoordinates;
+    if (!coordinates) throw new Error("coordinates unavailable for on-demand Quran source");
+    status("downloading", sourceId);
+    try {
+      const artifact = await ensureArtifact(spec, progressEmitter(spec), {
+        validate: stagedQuranValidator(),
+      });
+      const database = openReadOnly(artifact.bytes);
+      const runner = createWasmQueryRunner(database);
+      const source = loadQuranSource(runner, resolveSourceProfile(sourceId), coordinates);
+      sources.set(sourceId, {
+        bytes: artifact.bytes,
+        source,
+        store: artifact.store,
+        runner,
+      });
+    } finally {
+      status("ready");
+    }
+  })();
+  pendingArabicSources.set(sourceId, run);
+  try {
+    await run;
+  } finally {
+    pendingArabicSources.delete(sourceId);
   }
 }
 
@@ -626,7 +669,7 @@ function search(query: string, opts: SearchOpts = {}): SearchResponse {
 
 function runReaderOp<T>(
   source: QuranReaderSource | undefined,
-  arabic: () => T,
+  arabic: () => T | Promise<T>,
   translation: (src: QuranReaderSource) => Promise<T> | T,
 ): Promise<T> | T {
   return source !== undefined && !isArabicSourceId(source) ? translation(source) : arabic();
@@ -668,13 +711,19 @@ const handlers = {
   readSurah: (m) =>
     runReaderOp(
       m.source,
-      () => readSurah(m.num, arabicSourceId(m.source)),
+      async () => {
+        await ensureArabicSource(arabicSourceId(m.source) ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
+        return readSurah(m.num, arabicSourceId(m.source));
+      },
       (src) => readTranslationSurah(src, m.num),
     ),
   readRange: (m) =>
     runReaderOp(
       m.source,
-      () => readRange(m.from, m.to, arabicSourceId(m.source)),
+      async () => {
+        await ensureArabicSource(arabicSourceId(m.source) ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
+        return readRange(m.from, m.to, arabicSourceId(m.source));
+      },
       (src) => readTranslationRange(src, m.from, m.to),
     ),
   search: (m) => search(m.query, m.opts),

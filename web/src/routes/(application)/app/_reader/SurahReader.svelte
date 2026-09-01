@@ -149,7 +149,11 @@
   const sourceId = $derived(initial.normalization.sourceId);
   const routeContext = $derived(surahRouteContext(sourceId));
   const isTranslationSource = $derived(routeContext.kind !== "arabic");
-  const routeKey = $derived(`${sourceId}:${initial.surah.num}:${initial.page.localPage}`);
+  // Arabic reads serve the persisted script preference (docs/quran-system.md):
+  // the SSG first paint is uthmani; hydration upgrades pages through the
+  // worker/API ladder with the preferred variant corpus.
+  const readSourceId = $derived(isTranslationSource ? sourceId : reader.arabicScript);
+  const routeKey = $derived(`${readSourceId}:${initial.surah.num}:${initial.page.localPage}`);
   let lastRouteKey: string | null = null;
   let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
   const stackedController = createStackedTranslations({
@@ -545,7 +549,12 @@
     if (
       localPage < 1 ||
       localPage > initial.pageCount ||
-      pages.some((item) => item.page.localPage === localPage && item.ayahs.length > 0) ||
+      pages.some(
+        (item) =>
+          item.page.localPage === localPage &&
+          item.ayahs.length > 0 &&
+          item.normalization.sourceId === readSourceId,
+      ) ||
       loadingPages.has(localPage)
     ) {
       return;
@@ -565,7 +574,7 @@
         pageDataRange.startGlobal,
         pageDataRange.endGlobal,
         ayahIndexValidator(quranData),
-        isTranslationSource ? sourceId : undefined,
+        readSourceId,
         (status: ReadTierStatus) => {
           if (readRouteKey !== routeKey) return;
           degradation.applyTierStatus(status);
@@ -781,6 +790,27 @@
     lastRouteKey = key;
   });
 
+  // Script switch: drop pages served from the old corpus and re-request the
+  // visible window from the preferred variant (worker stages the artifact on
+  // demand; the API ladder covers the first cold read).
+  let appliedScript: string | null = null;
+  $effect(() => {
+    const script = reader.arabicScript;
+    const previous = appliedScript;
+    appliedScript = script;
+    if (!clientMounted || isTranslationSource || previous === null || previous === script) return;
+    const wanted = untrack(() => pages.map((pageData) => pageData.page.localPage));
+    void preserveViewport(
+      () => {
+        loadedPages = loadedPages.filter(
+          (pageData) => pageData.normalization.sourceId === script,
+        );
+      },
+      true,
+    );
+    for (const localPage of wanted) void loadPage(localPage);
+  });
+
   let lastTypography: string | null = null;
   $effect(() => {
     const typography = `${reader.arabicFont}:${reader.arabicSizePx}:${reader.translationSizePx}:${reader.translationFamily}`;
@@ -799,6 +829,8 @@
     lastScrollY = window.scrollY;
     cachePage(initial);
     if (initial.ayahs.length === 0) void retryInitialPage();
+    else if (!isTranslationSource && reader.arabicScript !== initial.normalization.sourceId)
+      void loadPage(initial.page.localPage);
     void restoreHistory().then(() => {
       stableAnchor = captureAnchor();
       scheduleForwardFill();
@@ -904,6 +936,7 @@
                     text={bodyText(ayah.text, ayah.ayah, pageData.normalization)}
                     n={ayah.ayah}
                     vKey={ayah.key}
+                    script={pageData.normalization.script}
                     onToggleNote={() => toggleNote(ayah.key)}
                     stacked={stackedFor(stackedController.state, ayah.key)}
                     stackedPending={loadingFor(stackedController.state, ayah.key)}

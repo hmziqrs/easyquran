@@ -30,6 +30,7 @@
   import { groupRangeAyahs } from "$lib/quran/view/presentation";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
+  import { reader } from "$lib/stores/reader.svelte";
   import { publicHref } from "$lib/i18n/public-href";
   import {
     createRangeReaderCoordinator,
@@ -109,7 +110,10 @@
     ctx.kind === SourceKind.Arabic ? null : translationIdFromSegments(ctx.lang, ctx.translator),
   );
   const isArabic = $derived(rangeSourceId === null);
-  const viewKey = $derived(`${rangeSourceId}:${data.kind}:${data.index}`);
+  // Arabic range reads serve the persisted script preference (variant corpus via
+  // the worker/API ladder); the key includes it so a script switch re-reads.
+  const readSourceId = $derived(rangeSourceId ?? reader.arabicScript);
+  const viewKey = $derived(`${readSourceId}:${data.kind}:${data.index}`);
   trackReaderView({ key: () => viewKey, sourceId: () => rangeSourceId });
 
   function openSurah(surah: SurahLink): void {
@@ -171,7 +175,7 @@
 
   $effect.pre(() => {
     const serverData = data;
-    const sourceId = rangeSourceId;
+    const sourceId = readSourceId;
     const key = rangeRouteKey(sourceId, serverData.kind, serverData.index);
     const serverSnapshot: RangeDisplaySnapshot = {
       ayahs: serverData.ayahs,
@@ -230,6 +234,7 @@
               text={bodyText(a.text, a.ayah, g.normalization)}
               n={a.ayah}
               vKey={a.key}
+              script={g.normalization.script}
               stacked={stackedFor(stackedController.state, a.key)}
               stackedPending={loadingFor(stackedController.state, a.key)}
               stackedErrored={erroredFor(stackedController.state, a.key)}
