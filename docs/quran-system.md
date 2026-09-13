@@ -60,8 +60,9 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - `quran_text."index"` is canonical global ayah order: `1..6236`, unique, ordered by surah
   then ayah, and equal to XML's zero-based surah start plus one-based ayah number.
 - Page, juz, ruku, hizb-quarter, and manzil ranges tile the corpus without gaps or overlap.
-- Translation catalogue contains 134 immutable SQLite dumps across 44 languages: 115 Tanzil
-  dumps plus 19 QuranEnc translations (`quranenc.<iso>.<slug>` ids, one per language).
+- Translation catalogue contains 190 immutable SQLite dumps across 56+ languages: 115 Tanzil
+  dumps plus all 75 QuranEnc translations (`quranenc.<iso>.<slug>` ids, every upstream
+  language; Russian and Bengali are absent upstream and come from Tanzil only).
   Web decodes baked `[id, language, languageCode, direction, name, translator, filePath,
   sizeBytes]` records. Production artifact selection uses baked id maps only.
 - Translation redistribution is non-commercial (Tanzil); QuranEnc terms require attribution,
