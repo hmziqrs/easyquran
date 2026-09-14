@@ -48,3 +48,4 @@ DEPLOYMENT.md
 rust/data/
 
 .z-workflow/
+.z-flashflow/
