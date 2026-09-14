@@ -34,6 +34,7 @@
   import Bismillah from "$lib/components/brand/Bismillah.svelte";
   import { quran } from "$lib/stores/quran.svelte";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import { withModeParam } from "$lib/reader/mode-param";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
@@ -265,6 +266,10 @@
       const atTop = startScrollY <= 0;
       const anchor = atTop ? null : anchorSource();
       suppressScroll = true;
+      // The shared collapsible nav keys off raw scroll deltas; the restore below
+      // moves scrollY programmatically, so keep its collapse/expand logic blind
+      // for the whole window (plus a short tail) or the header oscillates.
+      const releaseNavSuppression = stickyNav.suppressProgrammaticScroll();
       try {
         change();
         await tick();
@@ -289,6 +294,7 @@
         stableAnchor = captureAnchor();
       } finally {
         suppressScroll = false;
+        releaseNavSuppression();
         if (atTop) window.scrollTo(0, 0);
         // onScroll early-returns while suppressed, so lastScrollY is stale by
         // however much the restore moved; resync it or the next real scroll
@@ -483,11 +489,13 @@
       reloadPositionState(initial);
     if (saved) {
       suppressScroll = true;
+      const releaseNavSuppression = stickyNav.suppressProgrammaticScroll();
       try {
         await restoreHistoryFrom(saved);
         await nextFrame();
       } finally {
         suppressScroll = false;
+        releaseNavSuppression();
       }
       return;
     }
@@ -500,18 +508,20 @@
       viewportPoint: viewportMarker(),
       ratio: pending.ratio,
     };
-    suppressScroll = true;
-    try {
-      await nextFrame();
-      await nextFrame();
-      restoreAnchor(anchor);
-      await document.fonts.ready;
-      await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
-      restoreAnchor(anchor);
-      stableAnchor = captureAnchor();
-    } finally {
-      suppressScroll = false;
-    }
+      suppressScroll = true;
+      const releaseNavSuppression = stickyNav.suppressProgrammaticScroll();
+      try {
+        await nextFrame();
+        await nextFrame();
+        restoreAnchor(anchor);
+        await document.fonts.ready;
+        await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
+        restoreAnchor(anchor);
+        stableAnchor = captureAnchor();
+      } finally {
+        suppressScroll = false;
+        releaseNavSuppression();
+      }
   }
 
   async function restoreHistoryFrom(saved: SurahReaderHistoryState): Promise<void> {

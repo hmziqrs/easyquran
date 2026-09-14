@@ -1,6 +1,9 @@
 import { clamp } from "es-toolkit";
 
-export const SURAH_PAGE_WINDOW_SIZE = 5;
+// Minimum rendered window: focus page ±3 "hot pages" on each side, available
+// immediately (SSR + first client render) with no height measurement. Larger
+// sizes come from windowSizeForViewport once the focus page height is known.
+export const SURAH_PAGE_WINDOW_SIZE = 7;
 export const SURAH_PAGE_WINDOW_MAX = 15;
 
 export function virtualPageWindow(

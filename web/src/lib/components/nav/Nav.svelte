@@ -86,7 +86,11 @@
     ticking = true;
     requestAnimationFrame(() => {
       const y = window.scrollY;
-      if (y <= 8) {
+      if (stickyNav.scrollSuppressed) {
+        // Programmatic scroll (reader anchor restore): resync the baseline so
+        // the next real scroll computes a clean direction, but never toggle —
+        // toggling on restore-induced jumps is the header flash on fast scroll.
+      } else if (y <= 8) {
         stickyNav.expand();
       } else if (open) {
         // keep visible while the side panel is open
