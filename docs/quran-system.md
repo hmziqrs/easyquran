@@ -60,13 +60,16 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - `quran_text."index"` is canonical global ayah order: `1..6236`, unique, ordered by surah
   then ayah, and equal to XML's zero-based surah start plus one-based ayah number.
 - Page, juz, ruku, hizb-quarter, and manzil ranges tile the corpus without gaps or overlap.
-- Translation catalogue contains 190 immutable SQLite dumps across 56+ languages: 115 Tanzil
-  dumps plus all 75 QuranEnc translations (`quranenc.<iso>.<slug>` ids, every upstream
-  language; Russian and Bengali are absent upstream and come from Tanzil only).
+- Translation catalogue contains 378 immutable SQLite dumps across 105 languages: 115 Tanzil
+  dumps, all 75 QuranEnc translations (`quranenc.<iso>.<slug>` ids; Russian and Bengali are
+  absent upstream and come from Tanzil only), and all 188 QUL translations
+  (`qul.r<N>.<slug>` ids; 91 languages, 16 RTL).
   Web decodes baked `[id, language, languageCode, direction, name, translator, filePath,
   sizeBytes]` records. Production artifact selection uses baked id maps only.
 - Translation redistribution is non-commercial (Tanzil); QuranEnc terms require attribution,
-  no alteration, and update-to-latest. Revisit licensing before monetization.
+  no alteration, and update-to-latest. QUL publishes no per-resource license: 0 of 195
+  mirrored resources state terms, all marked unverified in the package index — resolve
+  redistribution rights before monetization.
 
 Provisioning has two paths:
 
@@ -82,7 +85,7 @@ paths, sizes, or availability. Server provisioning includes all four required Ar
 
 Publishing has one tracked entry point: `scripts/quran/upload.ts`, exposed as
 `just upload-sqlite`. One validated plan uploads all Arabic, Tanzil translation, QuranEnc,
-metadata, and merged-catalogue objects. Artifact paths and byte sizes come from baked web
+QUL, metadata, and merged-catalogue objects. Artifact paths and byte sizes come from baked web
 maps; publication never hashes or modifies Quran data. Immutable PUTs are create-only, and
 the mutable catalogue publishes last only after the full immutable set succeeds.
 

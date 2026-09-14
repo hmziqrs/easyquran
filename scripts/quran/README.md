@@ -5,6 +5,7 @@
 - Arabic SQLite databases from `db/quran/arabic/`
 - Tanzil translation SQLite databases from `db/quran/translations/sqlite/`
 - QuranEnc translation SQLite databases from `db/quran/translations/quranenc/sqlite/`
+- QUL translation SQLite databases from `db/quran/translations/qul/sqlite/`
 - `db/quran/quran-data.xml`
 - merged catalogue generated deterministically from tracked translation map
 
@@ -26,7 +27,7 @@ races. Remote size mismatch fails before any write. Catalogue is mutable and upl
 only after every immutable artifact succeeds.
 
 `just quran-fetch all` creates the canonical local layout under ignored
-`db/quran/translations/`, including QuranEnc. The publisher generates the full runtime
+`db/quran/translations/`, including QuranEnc and QUL. The publisher generates the full runtime
 catalogue from `web/src/lib/data/translations.json`; a downloaded catalogue is never its input.
 
 Required environment variables: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, plus
