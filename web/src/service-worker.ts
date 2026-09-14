@@ -11,6 +11,8 @@ import {
   PURGE_ACK,
   STORAGE_STATS,
   STORAGE_STATS_ACK,
+  VERSION_QUERY,
+  VERSION_RESULT,
   SW_BROADCAST_CHANNEL,
   type ClientToSwMessage,
   type StorageLayerStats,
@@ -32,6 +34,15 @@ export const DATA_CACHE = "eq-data-v1";
 
 const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";
+
+// I7 grace prune: pruning old eq-app-* caches is deferred behind a persisted
+// deadline instead of firing the moment the last client acks, so a routine
+// SKIP_WAITING can never yank precached chunks out from under tabs still
+// running the previous version's lazy-loaded assets. The deadline lives in
+// the IDB meta store (not a timer — the SW is idle-killed and loses timers),
+// and is re-checked on every wake event.
+export const PRUNE_GRACE_MS = 10 * 60 * 1000;
+export const PRUNE_DEADLINE_KEY = "pruneDeadline";
 
 const SHELL_ROUTE = `${base}/404.html`;
 const NAV_TIMEOUT_MS = 3500;
@@ -380,6 +391,9 @@ async function activate(): Promise<void> {
   await metaSet("installedVersion", version);
   await purgeLegacyReaderPaths();
   void enforceDataBounds();
+  // Wake event: a deadline left over by a previous worker (or an earlier
+  // all-ack of this version) may already have expired by activation time.
+  await maybePruneAfterGrace();
   if (priorExisted) announceTakeover();
 }
 
@@ -446,21 +460,39 @@ function isClient(source: Client | ServiceWorker | MessagePort | null): source i
   return !!source && "id" in source;
 }
 
+// VERSION_QUERY RPC: reply with this worker's own build version on the
+// MessageChannel port the caller transferred (same transport as
+// PURGE_USER_CACHES / STORAGE_STATS). Valid for any worker state — active or
+// waiting — because the answer is the version of the script actually running.
+export function versionQueryHandler(port?: MessagePort): void {
+  if (!port) return;
+  try {
+    port.postMessage({ type: VERSION_RESULT, version } satisfies SwToClientMessage);
+  } catch {}
+}
+
 sw.addEventListener("message", (event) => {
   if (!isClientToSw(event.data)) return;
   const data = event.data;
   switch (data.type) {
     case SKIP_WAITING:
       void sw.skipWaiting();
+      void maybePruneAfterGrace();
       return;
     case APP_READY:
       void onAppReady(isClient(event.source) ? event.source : null);
       return;
+    case VERSION_QUERY:
+      versionQueryHandler(event.ports[0]);
+      void maybePruneAfterGrace();
+      return;
     case PURGE_USER_CACHES:
       void purgeUserCachesHandler(event.ports[0]);
+      void maybePruneAfterGrace();
       return;
     case STORAGE_STATS:
       void storageStatsHandler(event.ports[0]);
+      void maybePruneAfterGrace();
       return;
   }
 });
@@ -470,10 +502,17 @@ async function onAppReady(source: Client | null): Promise<void> {
     await metaSet(`ack:${source.id}`, version);
   }
   await maybeFinalizeHandoff();
+  // Wake event: on this same APP_READY the all-ack path may have just reset
+  // the deadline (then this no-ops), or an inherited deadline may have
+  // expired while the ack set is already complete for this version.
+  await maybePruneAfterGrace();
   void runMaintenance();
 }
 
-async function maybeFinalizeHandoff(): Promise<void> {
+// All live clients have acked the CURRENT version: (re)arm the grace deadline
+// instead of pruning immediately (I7). Every new all-ack overwrites the
+// deadline, which is what makes a late-arriving straggler reset the window.
+export async function maybeFinalizeHandoff(): Promise<void> {
   const live = await sw.clients.matchAll({ includeUncontrolled: false });
   const liveIds = new Set(live.map((c) => c.id));
   const acks = await metaScan<string>("ack:");
@@ -485,7 +524,27 @@ async function maybeFinalizeHandoff(): Promise<void> {
   if (live.length === 0) return;
   const allAcked = live.every((c) => acks[c.id] === version);
   if (!allAcked) return;
+  await metaSet(PRUNE_DEADLINE_KEY, Date.now() + PRUNE_GRACE_MS);
+}
+
+// Event-driven grace-prune check (I7): runs on every SW wake (activate, any
+// handled message). Prunes only when the persisted deadline has passed AND
+// every live client STILL acks the CURRENT SW's own version — the exact
+// maybeFinalizeHandoff predicate, version-bound so an inherited stale
+// deadline from a superseded worker can never prune while this version's
+// acks are incomplete. Zero clients = vacuously safe (nobody can be holding
+// old-chunk references), so the predicate is allowed to hold on an empty
+// live set.
+export async function maybePruneAfterGrace(): Promise<void> {
+  const deadline = await metaGet<number>(PRUNE_DEADLINE_KEY);
+  if (deadline === undefined) return;
+  if (Date.now() < deadline) return;
+  const live = await sw.clients.matchAll({ includeUncontrolled: false });
+  const acks = await metaScan<string>("ack:");
+  const allAcked = live.every((c) => acks[c.id] === version);
+  if (!allAcked) return;
   await pruneOldAppCaches();
+  await metaDel(PRUNE_DEADLINE_KEY);
 }
 
 async function pruneOldAppCaches(): Promise<void> {

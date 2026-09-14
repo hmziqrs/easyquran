@@ -6,6 +6,8 @@ export const PURGE_USER_CACHES = "PURGE_USER_CACHES" as const;
 export const PURGE_ACK = "PURGE_ACK" as const;
 export const STORAGE_STATS = "STORAGE_STATS" as const;
 export const STORAGE_STATS_ACK = "STORAGE_STATS_ACK" as const;
+export const VERSION_QUERY = "VERSION_QUERY" as const;
+export const VERSION_RESULT = "VERSION_RESULT" as const;
 
 export const SW_BROADCAST_CHANNEL = "easyquran-sw";
 export const UPDATE_BROADCAST_CHANNEL = "easyquran-update";
@@ -19,11 +21,13 @@ export interface StorageLayerStats {
 export type ClientToSwMessage =
   | { type: typeof SKIP_WAITING }
   | { type: typeof APP_READY }
+  | { type: typeof VERSION_QUERY }
   | { type: typeof PURGE_USER_CACHES }
   | { type: typeof STORAGE_STATS };
 
 export type SwToClientMessage =
   | { type: typeof UPDATE_TAKEOVER; version: string }
+  | { type: typeof VERSION_RESULT; version: string }
   | { type: typeof PURGE_ACK }
   | { type: typeof STORAGE_STATS_ACK; pages: StorageLayerStats; data: StorageLayerStats };
 
@@ -123,4 +127,50 @@ function decodeLayerStats(raw: unknown): StorageLayerStats | null {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- SW postMessage boundary field check: bytes must be a number
   if (typeof obj.bytes !== "number" || !Number.isFinite(obj.bytes)) return null;
   return { entries: obj.entries, bytes: obj.bytes };
+}
+
+// Pinned by the design spec: a page-side version query times out at 2000 ms
+// and falls back to the waiting-exists heuristic (timeout -> null ->
+// indeterminate -> banner eligibility decided by the caller).
+const DEFAULT_VERSION_TIMEOUT_MS = 2000;
+
+export function requestWorkerVersion(
+  target: ServiceWorker | null | undefined,
+  timeoutMs: number = DEFAULT_VERSION_TIMEOUT_MS,
+): Promise<string | null> {
+  if (!target) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const channel = new MessageChannel();
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        channel.port1.close();
+      } catch {}
+      try {
+        channel.port2.close();
+      } catch {}
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    channel.port1.onmessage = (event: MessageEvent<unknown>): void => {
+      const msg = event.data;
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- SW postMessage boundary; the runtime object check is the only discriminator before the type/field reads below
+      if (!msg || typeof msg !== "object") return;
+      // SAFETY: msg is narrowed to a non-null object; the cast only exposes the VERSION_RESULT fields for validation.
+      // eslint-disable-next-line anti-slop/no-unsafe-dictionary-type -- SW reply bag; each field is checked before use
+      const m = msg as Record<string, unknown>;
+      if (m.type !== VERSION_RESULT) return;
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- SW postMessage boundary field check: version must be a non-empty string
+      if (typeof m.version !== "string" || m.version.length === 0) return;
+      finish(m.version);
+    };
+    try {
+      target.postMessage({ type: VERSION_QUERY }, [channel.port2]);
+    } catch {
+      finish(null);
+    }
+  });
 }
