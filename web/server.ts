@@ -19,6 +19,17 @@ type RequestHandler = (request: IncomingMessage, response: ServerResponse) => vo
 
 type HandlerModule = { handler: RequestHandler };
 
+// A missing build/handler.js is the expected fresh-clone / unit-test condition.
+// MODULE_NOT_FOUND is the CommonJS twin (defensive: the bundle never requires,
+// but a corrupted one might). Any other failure — corrupt output, a broken
+// dependency of the bundle — must crash startup loudly like the old static
+// import did: a bound server whose handler is a no-op stalls every request
+// with zero log, which is strictly worse than a crash.
+export function isMissingModule(error: Error): boolean {
+  if (!("code" in error)) return false;
+  return error.code === "ERR_MODULE_NOT_FOUND" || error.code === "MODULE_NOT_FOUND";
+}
+
 // adapter-node emits handler.js at build time, so it does not exist on a fresh
 // clone — and the header logic below is unit-tested by importing this module
 // without a build. Resolve the handler lazily; a missing build only leaves the
@@ -29,7 +40,8 @@ try {
   const built: unknown = await import(modulePath);
   // SAFETY: the module is emitted untyped by adapter-node; HandlerModule spells its real shape.
   ({ handler } = built as HandlerModule);
-} catch {
+} catch (cause: unknown) {
+  if (!(cause instanceof Error) || !isMissingModule(cause)) throw cause;
   // No build output on disk (fresh clone / unit-test import): the no-op handler
   // above stands in; requests would stall, but only `pnpm start` serves traffic.
 }

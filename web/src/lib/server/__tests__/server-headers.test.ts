@@ -3,7 +3,7 @@ import type { ServerResponse } from "node:http";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyHeaders } from "../../../../server";
+import { applyHeaders, isMissingModule } from "../../../../server";
 
 const THEME_SCRIPT = `const theme = localStorage.getItem("theme");document.dir = "ltr";`;
 
@@ -101,5 +101,26 @@ describe("applyHeaders CSP stamping", () => {
     ]);
     applyHeaders(response, "/", 200, undefined, PAGE_HASHES);
     expect(headers.get("content-security-policy")).toBe(inner);
+  });
+});
+
+describe("isMissingModule import guard", () => {
+  it("treats Node missing-module rejections as the expected no-build condition", () => {
+    const esm: NodeJS.ErrnoException = new Error(
+      "Cannot find module './build/handler.js'",
+    );
+    esm.code = "ERR_MODULE_NOT_FOUND";
+    const cjs: NodeJS.ErrnoException = new Error("Cannot find module 'handler'");
+    cjs.code = "MODULE_NOT_FOUND";
+    expect(isMissingModule(esm)).toBe(true);
+    expect(isMissingModule(cjs)).toBe(true);
+  });
+
+  it("rethrows any other failure so a corrupt bundle crashes startup loudly", () => {
+    // Truncated / corrupted build output surfaces as a parse error with no
+    // `code` — swallowing it would bind a server that stalls every request
+    // with zero log.
+    expect(isMissingModule(new SyntaxError("Unexpected end of input"))).toBe(false);
+    expect(isMissingModule(new Error("boom"))).toBe(false);
   });
 });
