@@ -15,10 +15,24 @@ import {
   varyWithAccept,
 } from "./src/lib/accept-parse";
 
-// Emitted by adapter-node at build time, so it carries no types of its own.
-import { handler } from "./build/handler.js";
-
 type RequestHandler = (request: IncomingMessage, response: ServerResponse) => void | Promise<void>;
+
+type HandlerModule = { handler: RequestHandler };
+
+// adapter-node emits handler.js at build time, so it does not exist on a fresh
+// clone — and the header logic below is unit-tested by importing this module
+// without a build. Resolve the handler lazily; a missing build only leaves the
+// module with a no-op handler, which nothing dispatches to outside production.
+let handler: RequestHandler = (): void => {};
+try {
+  const modulePath = "./build/handler.js";
+  const built: unknown = await import(modulePath);
+  // SAFETY: the module is emitted untyped by adapter-node; HandlerModule spells its real shape.
+  ({ handler } = built as HandlerModule);
+} catch {
+  // No build output on disk (fresh clone / unit-test import): the no-op handler
+  // above stands in; requests would stall, but only `pnpm start` serves traffic.
+}
 
 /** The two `writeHead` shapes this server's call graph produces, as one tuple. */
 type WriteHeadArgs = [statusCode: number, headers?: OutgoingHttpHeaders];
@@ -166,11 +180,26 @@ function mergeHeaderInPlace(
   }
 }
 
-function applyHeaders(
+// 1xx, 204, and 304 never carry a body — and the browser MERGES their headers
+// into the cached entry they revalidate (prerendered HTML is `cache-control:
+// no-cache`, so every navigation revalidates). Those responses carry no
+// content-type, so the script hashes for the page cannot be resolved; a CSP
+// stamped there would be the hashless fallback, REPLACING the cached 200's
+// hash-bearing policy and CSP-blocking the page's theme + hydration inline
+// scripts after a service-worker revalidation (JS-dead tab). Omit the CSP
+// entirely instead: a 304 without a CSP leaves the cached 200's policy in force.
+function hasBody(statusCode: number): boolean {
+  if (statusCode < 200) return false;
+  if (statusCode === 204 || statusCode === 304) return false;
+  return true;
+}
+
+export function applyHeaders(
   response: ServerResponse,
   pathname: string,
   statusCode: number,
   argsHeaders?: OutgoingHttpHeaders,
+  pageHashes: ReadonlyMap<string, readonly string[]> = pageScriptHashes,
 ): void {
   const setIfAbsent = (name: string, value: string): void => {
     if (getHeaderString(response, name.toLowerCase()) === undefined)
@@ -184,10 +213,12 @@ function applyHeaders(
     headerArg(argsHeaders, "content-type") ?? getHeaderString(response, "content-type");
   const isHtml = contentType !== undefined && contentType.includes("text/html");
   if (
+    hasBody(statusCode) &&
+    contentType !== undefined &&
     getHeaderString(response, "content-security-policy") === undefined &&
     headerArg(argsHeaders, "content-security-policy") === undefined
   ) {
-    const hashes = isHtml ? pageScriptHashes.get(pathname) : undefined;
+    const hashes = isHtml ? pageHashes.get(pathname) : undefined;
     response.setHeader("Content-Security-Policy", buildCsp(hashes ?? []));
   }
   const mdPath = mdSiblingPathFor(pathname);
@@ -321,8 +352,7 @@ async function routeNegotiated(
     }
   }
   try {
-    // SAFETY: adapter-node emits handler.js without types; RequestHandler spells its real signature.
-    await (handler as RequestHandler)(request, response);
+    await handler(request, response);
   } catch (cause: unknown) {
     console.error("[server] unhandled request error", cause);
     if (response.headersSent) {
@@ -330,11 +360,18 @@ async function routeNegotiated(
       return;
     }
     response.statusCode = 500;
+    // Declared as text/plain so applyHeaders still stamps the security set on
+    // this body-bearing error page (CSP stamping is content-type-gated below).
+    response.setHeader("Content-Type", "text/plain; charset=utf-8");
     applyHeaders(response, decodedPath, 500);
     response.end("Internal Server Error");
   }
 }
 
-server.listen(port, host, () => {
-  console.log(`[server] listening on http://${host}:${port}`);
-});
+// Unit tests import this module for its header logic; binding the port inside
+// the test runner would hold it open for the whole suite.
+if (!process.env.VITEST) {
+  server.listen(port, host, () => {
+    console.log(`[server] listening on http://${host}:${port}`);
+  });
+}
