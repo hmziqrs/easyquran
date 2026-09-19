@@ -56,6 +56,11 @@ class UpdateStore {
   #lastUpdateCheckAt: number | null = null;
   #updateCheckInFlight: Promise<void> | null = null;
   #versionFallbackWired = false;
+  // True once the no-SW fallback owns availability (SvelteKit `updated`).
+  // Reactive because the `dismissed` getter reads it alongside the fallback
+  // dismissal key — the banner's derived visibility must invalidate when the
+  // fallback wires up (I8: the fallback path keeps full dismissal UX).
+  #fallbackMode = $state(false);
 
   get waiting(): boolean {
     return this.#waiting;
@@ -67,12 +72,29 @@ class UpdateStore {
 
   // True when the CURRENT waiting worker's dismissal record matches: either
   // `v:<version>` for a known waiting version or the `*` sentinel when the
-  // version is unknown (I3).
+  // version is unknown (I3). In no-SW fallback mode the dismissal is keyed to
+  // the SvelteKit build version (`updated.version`) — a different version
+  // after the next deploy re-prompts (I3 reset-on-new-deploy).
   get dismissed(): boolean {
+    if (this.#fallbackMode) return this.#dismissalRecord === this.#fallbackDismissalKey();
     if (!this.#waiting) return false;
     const version = this.#waitingVersion;
     if (version !== null) return this.#dismissalRecord === `v:${version}`;
     return this.#dismissalRecord === DISMISS_UNKNOWN;
+  }
+
+  // I3 key for the no-SW fallback: the current SvelteKit build id when
+  // accessible, else the unknown-version sentinel. Newer SvelteKit exposes
+  // `updated.version` at runtime; the pinned type does not declare it, so
+  // widen structurally and treat any absent/empty value as unknown.
+  #fallbackDismissalKey(): string {
+    // SAFETY: optional-property widening only — every field read afterwards
+    // re-checks for absent/empty, so a missing or non-string runtime value
+    // degrades to the `*` sentinel instead of trusting the assertion.
+    const withVersion = updated as { readonly version?: string };
+    const version = withVersion.version;
+    if (version !== undefined && version.length > 0) return `v:${version}`;
+    return DISMISS_UNKNOWN;
   }
 
   // Availability is live-derived only (I1): persisted flags can never set it.
@@ -194,6 +216,7 @@ class UpdateStore {
   #wireVersionFallback(): void {
     if (this.#versionFallbackWired) return;
     this.#versionFallbackWired = true;
+    this.#fallbackMode = true;
     const check = (): void => {
       void updated.check().catch(() => {});
     };
@@ -379,6 +402,16 @@ class UpdateStore {
   }
 
   dismiss(): void {
+    // No-SW fallback (I8): the banner must be dismissable there too. Record
+    // per I3 under the SvelteKit build version (or the `*` sentinel when it
+    // is not accessible) so a new deploy re-prompts while the same build
+    // stays dismissed for this tab session.
+    if (this.#fallbackMode) {
+      const fallbackRecord = this.#fallbackDismissalKey();
+      this.#dismissalRecord = fallbackRecord;
+      writeRaw("session", DISMISS_KEY, fallbackRecord);
+      return;
+    }
     if (!this.#waiting) return;
     const version = this.#waitingVersion;
     const record = version !== null ? `v:${version}` : DISMISS_UNKNOWN;
@@ -419,6 +452,7 @@ class UpdateStore {
     this.#lastUpdateCheckAt = null;
     this.#updateCheckInFlight = null;
     this.#versionFallbackWired = false;
+    this.#fallbackMode = false;
     this.#waitingWorker = null;
     this.#waitingVersion = null;
     this.#controllerVersion = null;

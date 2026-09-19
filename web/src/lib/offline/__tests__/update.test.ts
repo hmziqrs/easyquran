@@ -27,7 +27,13 @@ const PAINT_KEY = "easyquran.update.waiting";
 const DISMISS_KEY = "easyquran.update.dismissed";
 
 const { updatedMock, registerSwMock } = vi.hoisted(() => ({
-  updatedMock: { current: false, check: vi.fn<() => Promise<void>>() },
+  updatedMock: {
+    current: false,
+    // Mirrors $app/state's `updated.version` (current SvelteKit build id),
+    // the no-SW dismissal key per I3/I8.
+    version: "build-1",
+    check: vi.fn<() => Promise<void>>(),
+  },
   registerSwMock: vi.fn<() => Promise<ServiceWorkerRegistration | null>>(),
 }));
 
@@ -231,6 +237,7 @@ beforeEach(() => {
   sessionStorage.clear();
   MockBC.byName.clear();
   updatedMock.current = false;
+  updatedMock.version = "build-1";
   updatedMock.check.mockReset();
   updatedMock.check.mockResolvedValue(undefined);
   registerSwMock.mockReset();
@@ -677,6 +684,70 @@ describe("UpdateStore fresh-tab silent adoption", () => {
     await flush();
     expectReload(1);
     second.dispose();
+  });
+});
+
+describe("UpdateStore no-SW dismissal (I8 fallback keeps full UX)", () => {
+  it("dismisses the fallback banner per SvelteKit build version", async () => {
+    setServiceWorker(null);
+    updatedMock.version = "build-1";
+    updatedMock.current = true;
+    const store = createUpdate();
+    // Interacted tab: keep the fresh-tab silent reload (F6) out of the way.
+    interact();
+    store.hydrate();
+    await flush();
+
+    expect(store.available).toBe(true);
+    expect(store.dismissed).toBe(false);
+    store.dismiss();
+    expect(store.dismissed).toBe(true);
+    expect(sessionStorage.getItem(DISMISS_KEY)).toBe("v:build-1");
+    // Toast visibility = available && !dismissed must actually flip false.
+    expect(store.available && !store.dismissed).toBe(false);
+    store.dispose();
+  });
+
+  it("re-prompts when a new deploy changes updated.version", async () => {
+    setServiceWorker(null);
+    updatedMock.version = "build-1";
+    updatedMock.current = true;
+    const first = createUpdate();
+    interact();
+    first.hydrate();
+    await flush();
+    first.dismiss();
+    expect(first.dismissed).toBe(true);
+    first.dispose();
+
+    // Next load lands on the new build: updated.version differs, so the old
+    // dismissal record must not suppress the new deploy's prompt.
+    updatedMock.version = "build-2";
+    updatedMock.current = true;
+    const second = createUpdate();
+    interact();
+    second.hydrate();
+    await flush();
+    expect(second.available).toBe(true);
+    expect(second.dismissed).toBe(false);
+    second.dispose();
+  });
+
+  it("stays dismissed across a fresh store for the same build version", async () => {
+    setServiceWorker(null);
+    updatedMock.version = "build-1";
+    updatedMock.current = true;
+    // Seeded session key (prior tab dismissed this exact build).
+    sessionStorage.setItem(DISMISS_KEY, "v:build-1");
+    const store = createUpdate();
+    interact();
+    store.hydrate();
+    await flush();
+
+    expect(store.available).toBe(true);
+    expect(store.dismissed).toBe(true);
+    expect(store.available && !store.dismissed).toBe(false);
+    store.dispose();
   });
 });
 
