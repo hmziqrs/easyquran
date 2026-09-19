@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 193 messages. Import this barrel, never
+// 211 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -56,7 +56,10 @@ export { reader_copy_ayah } from "$lib/paraglide/messages/reader_copy_ayah.js";
 export { reader_customize_appearance } from "$lib/paraglide/messages/reader_customize_appearance.js";
 export { reader_dark } from "$lib/paraglide/messages/reader_dark.js";
 export { reader_default } from "$lib/paraglide/messages/reader_default.js";
+export { reader_dir_ltr } from "$lib/paraglide/messages/reader_dir_ltr.js";
+export { reader_dir_rtl } from "$lib/paraglide/messages/reader_dir_rtl.js";
 export { reader_disable } from "$lib/paraglide/messages/reader_disable.js";
+export { reader_dismiss_banner } from "$lib/paraglide/messages/reader_dismiss_banner.js";
 export { reader_dismiss_notification } from "$lib/paraglide/messages/reader_dismiss_notification.js";
 export { reader_dismiss_update } from "$lib/paraglide/messages/reader_dismiss_update.js";
 export { reader_downloading_offline_pack } from "$lib/paraglide/messages/reader_downloading_offline_pack.js";
@@ -123,7 +126,9 @@ export { reader_primary_nav } from "$lib/paraglide/messages/reader_primary_nav.j
 export { reader_quran_book } from "$lib/paraglide/messages/reader_quran_book.js";
 export { reader_range_translation_unavailable } from "$lib/paraglide/messages/reader_range_translation_unavailable.js";
 export { reader_reading } from "$lib/paraglide/messages/reader_reading.js";
+export { reader_reading_banner } from "$lib/paraglide/messages/reader_reading_banner.js";
 export { reader_reading_mode } from "$lib/paraglide/messages/reader_reading_mode.js";
+export { reader_reading_notice } from "$lib/paraglide/messages/reader_reading_notice.js";
 export { reader_reload_open_tabs } from "$lib/paraglide/messages/reader_reload_open_tabs.js";
 export { reader_reload_update } from "$lib/paraglide/messages/reader_reload_update.js";
 export { reader_remove_bookmark } from "$lib/paraglide/messages/reader_remove_bookmark.js";
@@ -171,6 +176,9 @@ export { reader_sign_in } from "$lib/paraglide/messages/reader_sign_in.js";
 export { reader_site_panel } from "$lib/paraglide/messages/reader_site_panel.js";
 export { reader_smaller_arabic_text } from "$lib/paraglide/messages/reader_smaller_arabic_text.js";
 export { reader_source } from "$lib/paraglide/messages/reader_source.js";
+export { reader_source_qul } from "$lib/paraglide/messages/reader_source_qul.js";
+export { reader_source_quranenc } from "$lib/paraglide/messages/reader_source_quranenc.js";
+export { reader_source_tanzil } from "$lib/paraglide/messages/reader_source_tanzil.js";
 export { reader_stacked_clear } from "$lib/paraglide/messages/reader_stacked_clear.js";
 export { reader_stacked_count } from "$lib/paraglide/messages/reader_stacked_count.js";
 export { reader_stacked_error } from "$lib/paraglide/messages/reader_stacked_error.js";
@@ -195,6 +203,16 @@ export { reader_tafsir } from "$lib/paraglide/messages/reader_tafsir.js";
 export { reader_theme } from "$lib/paraglide/messages/reader_theme.js";
 export { reader_toggle_sidebar } from "$lib/paraglide/messages/reader_toggle_sidebar.js";
 export { reader_toggle_theme } from "$lib/paraglide/messages/reader_toggle_theme.js";
+export { reader_tooltip_direction } from "$lib/paraglide/messages/reader_tooltip_direction.js";
+export { reader_tooltip_language } from "$lib/paraglide/messages/reader_tooltip_language.js";
+export { reader_tooltip_size } from "$lib/paraglide/messages/reader_tooltip_size.js";
+export { reader_tooltip_source } from "$lib/paraglide/messages/reader_tooltip_source.js";
 export { reader_translation_unavailable } from "$lib/paraglide/messages/reader_translation_unavailable.js";
+export { reader_translations_close } from "$lib/paraglide/messages/reader_translations_close.js";
+export { reader_translations_description } from "$lib/paraglide/messages/reader_translations_description.js";
+export { reader_translations_hidden_tip } from "$lib/paraglide/messages/reader_translations_hidden_tip.js";
+export { reader_translations_no_matches } from "$lib/paraglide/messages/reader_translations_no_matches.js";
+export { reader_translations_open } from "$lib/paraglide/messages/reader_translations_open.js";
+export { reader_translations_switch } from "$lib/paraglide/messages/reader_translations_switch.js";
 export { reader_unsupported } from "$lib/paraglide/messages/reader_unsupported.js";
 export { reader_your_note } from "$lib/paraglide/messages/reader_your_note.js";

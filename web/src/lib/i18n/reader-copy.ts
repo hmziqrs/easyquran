@@ -1,5 +1,6 @@
 import type { FooterLinkLabels } from "$lib/i18n/footer-links";
 import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
+import type { TranslationProvenance } from "$lib/quran/catalogue";
 import {
   footer_about,
   footer_blurb,
@@ -50,6 +51,9 @@ import {
   reader_customize_appearance,
   reader_dark,
   reader_default,
+  reader_dir_ltr,
+  reader_dir_rtl,
+  reader_dismiss_banner,
   reader_dismiss_update,
   reader_downloading_offline_pack,
   reader_downloading_quran,
@@ -112,7 +116,9 @@ import {
   reader_quran_book,
   reader_range_translation_unavailable,
   reader_reading,
+  reader_reading_banner,
   reader_reading_mode,
+  reader_reading_notice,
   reader_reload_open_tabs,
   reader_reload_update,
   reader_remove_bookmark,
@@ -158,6 +164,9 @@ import {
   reader_sign_in,
   reader_site_panel,
   reader_smaller_arabic_text,
+  reader_source_qul,
+  reader_source_quranenc,
+  reader_source_tanzil,
   reader_source,
   reader_stacked_clear,
   reader_stacked_count,
@@ -182,7 +191,17 @@ import {
   reader_tafsir,
   reader_theme,
   reader_toggle_theme,
+  reader_tooltip_direction,
+  reader_tooltip_language,
+  reader_tooltip_size,
+  reader_tooltip_source,
   reader_translation_unavailable,
+  reader_translations_close,
+  reader_translations_description,
+  reader_translations_hidden_tip,
+  reader_translations_no_matches,
+  reader_translations_open,
+  reader_translations_switch,
   reader_your_note,
 } from "$lib/i18n/m/reader";
 import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
@@ -378,6 +397,23 @@ export interface ReaderUiCopy {
     readonly loading: string;
     readonly error: string;
     readonly noneSelected: string;
+  };
+  readonly translations: {
+    readonly open: string;
+    readonly close: string;
+    readonly description: string;
+    readonly switchTo: string;
+    readonly noMatches: string;
+    readonly hiddenTip: string;
+    readonly readingBanner: string;
+    readonly dismissBanner: string;
+    readonly readingNotice: string;
+    readonly tooltipSource: string;
+    readonly tooltipLanguage: string;
+    readonly tooltipSize: string;
+    readonly tooltipDirection: string;
+    readonly sourceLabel: (provenance: TranslationProvenance) => string;
+    readonly dirLabel: (direction: "ltr" | "rtl") => string;
   };
 }
 
@@ -627,6 +663,32 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       loading: noArgs(reader_stacked_loading),
       error: noArgs(reader_stacked_error),
       noneSelected: noArgs(reader_stacked_none_selected),
+    },
+    translations: {
+      open: noArgs(reader_translations_open),
+      close: noArgs(reader_translations_close),
+      description: noArgs(reader_translations_description),
+      switchTo: noArgs(reader_translations_switch),
+      noMatches: noArgs(reader_translations_no_matches),
+      hiddenTip: noArgs(reader_translations_hidden_tip),
+      readingBanner: noArgs(reader_reading_banner),
+      dismissBanner: noArgs(reader_dismiss_banner),
+      readingNotice: noArgs(reader_reading_notice),
+      tooltipSource: noArgs(reader_tooltip_source),
+      tooltipLanguage: noArgs(reader_tooltip_language),
+      tooltipSize: noArgs(reader_tooltip_size),
+      tooltipDirection: noArgs(reader_tooltip_direction),
+      sourceLabel: (provenance) => {
+        switch (provenance) {
+          case "qul":
+            return noArgs(reader_source_qul);
+          case "quranenc":
+            return noArgs(reader_source_quranenc);
+          case "tanzil":
+            return noArgs(reader_source_tanzil);
+        }
+      },
+      dirLabel: (direction) => (direction === "ltr" ? noArgs(reader_dir_ltr) : noArgs(reader_dir_rtl)),
     },
   };
 }

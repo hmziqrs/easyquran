@@ -21,6 +21,15 @@ export const TRANSLATION_CATALOGUE_BY_ID: ReadonlyMap<string, TranslationCatalog
   TRANSLATION_CATALOGUE.map((entry) => [entry.id, entry]),
 );
 
+/** Provenance of a translation artifact, derivable from its catalogue id prefix. */
+export type TranslationProvenance = "qul" | "quranenc" | "tanzil";
+
+export function translationSourceOf(id: string): TranslationProvenance {
+  if (id.startsWith("qul.")) return "qul";
+  if (id.startsWith("quranenc.")) return "quranenc";
+  return "tanzil";
+}
+
 export function peekTranslationName(sourceId: string | undefined): string | null {
   if (!sourceId) return null;
   return TRANSLATION_CATALOGUE_BY_ID.get(sourceId)?.name ?? null;

@@ -25,7 +25,6 @@
     Sidebar,
     SidebarHeader,
     SidebarContent,
-    SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
     SidebarMenuItem,
@@ -33,8 +32,6 @@
     useSidebar,
   } from "$lib/components/ui/sidebar";
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
-  import TranslationPicker from "./TranslationPicker.svelte";
-  import StackedTranslationsPicker from "./StackedTranslationsPicker.svelte";
 
   const BROWSE = [BrowseMode.Surah, BrowseMode.Ayah, BrowseMode.Juz, BrowseMode.Page] as const;
   const copy = getReaderUiCopy();
@@ -314,14 +311,4 @@
       {/await}
     {/if}
   </SidebarContent>
-
-  <SidebarFooter>
-    <div class="flex items-stretch gap-1">
-      <div class="min-w-0 flex-1">
-        <TranslationPicker />
-      </div>
-      <StackedTranslationsPicker />
-    </div>
-    <span class="px-1 text-[11px] text-muted-foreground">{copy.sidebar.tip}</span>
-  </SidebarFooter>
 </Sidebar>
