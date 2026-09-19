@@ -177,6 +177,7 @@
   "reader_dismiss_banner": "إغلاق التنبيه",
   "reader_reading_notice": "يُعرض في وضع القراءة ترجمة واحدة فقط. بدّل إلى وضع الآية بالآية لمقارنة الترجمات.",
   "reader_tooltip_source": "المصدر",
+  "reader_tooltip_translator": "المترجم",
   "reader_tooltip_language": "اللغة",
   "reader_tooltip_size": "الحجم",
   "reader_tooltip_direction": "الاتجاه",

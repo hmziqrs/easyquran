@@ -24,11 +24,14 @@ const h = vi.hoisted(() => {
       entry("en.sahih", "English", "en", "ltr", "Saheeh International", "Saheeh International"),
       entry("en.pickthall", "English", "en", "ltr", "Pickthall", "Marmaduke Pickthall"),
       entry("qul.en.ahmed", "English", "en", "ltr", "Ahmed Ali", "Ahmed Ali"),
+      entry("en.wahiduddin", "English", "en", "ltr", "Wahiduddin Khan", "Wahiduddin Khan"),
       entry("ur.jalandhry", "Urdu", "ur", "rtl", "Jalandhry", "Maulana Jalal ad-Din"),
+      entry("qul.ur.bayan", "Urdu", "ur", "rtl", "Bayan-ul-Quran", "Dr. Israr Ahmad"),
       entry("ms.basmeih", "Malay", "ms", "ltr", "Basmeih", "Abdullah Muhammad Basmeih"),
       entry("quranenc.fr.hamidullah", "French", "fr", "ltr", "Hamidullah", "Muhammad Hamidullah"),
       entry("tr.diyanet", "Turkish", "tr", "ltr", "Diyanet", "Diyanet Isleri"),
       entry("id.indonesian", "Indonesian", "id", "ltr", "Kemenag", "Kemenag"),
+      entry("es.cortes", "Spanish", "es", "ltr", "Cortés", "Hernán Cortés"),
     ],
     nav: {
       url: new URL("https://example.test/app/al-fatihah"),
@@ -69,10 +72,23 @@ vi.mock("$lib/quran/catalogue", () => {
     if (id.startsWith("quranenc.")) return "quranenc";
     return "tanzil";
   };
+  // Mirrors the real flagFor contract; the real map's catalogue coverage is
+  // pinned separately in language-flags.test.ts (unmocked).
+  const flags = new Map([
+    ["en", { flag: "\u{1F1EC}\u{1F1E7}", country: "United Kingdom" }],
+    ["ur", { flag: "\u{1F1F5}\u{1F1F0}", country: "Pakistan" }],
+    ["ms", { flag: "\u{1F1F2}\u{1F1FE}", country: "Malaysia" }],
+    ["fr", { flag: "\u{1F1EB}\u{1F1F7}", country: "France" }],
+    ["tr", { flag: "\u{1F1F9}\u{1F1F7}", country: "Turkey" }],
+    ["id", { flag: "\u{1F1EE}\u{1F1E9}", country: "Indonesia" }],
+    ["es", { flag: "\u{1F1EA}\u{1F1F8}", country: "Spain" }],
+  ]);
   return {
     TRANSLATION_CATALOGUE: h.catalogue,
     TRANSLATION_CATALOGUE_BY_ID: byId,
     translationSourceOf,
+    flagFor: (code: string) =>
+      flags.get(code) ?? { flag: "\u{1F310}", country: "" },
   };
 });
 
@@ -114,7 +130,7 @@ afterEach(() => {
   }
 });
 
-const groups = (): Element[] => [...document.querySelectorAll("details")];
+const groups = (): Element[] => [...document.querySelectorAll("section[data-language]")];
 const checkboxes = (): HTMLInputElement[] => {
   // SAFETY: selector matches only checkbox inputs, so every element is HTMLInputElement
   return [...document.querySelectorAll('input[type="checkbox"]')] as HTMLInputElement[];
@@ -142,25 +158,62 @@ async function setSearch(query: string): Promise<void> {
 }
 
 describe("TranslationModal", () => {
-  it("groups rows by language in collapsible details", async () => {
+  it("renders static groups sorted alphabetically by language, no collapsibles", async () => {
     instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
     await settle();
-    const langs = groups().map((g) => g.querySelector("summary")?.textContent ?? "");
-    expect(langs).toHaveLength(6);
-    expect(langs.join(" ")).toContain("English");
-    expect(langs.join(" ")).toContain("Urdu");
-    expect(langs.join(" ")).toContain("French");
+    expect(document.querySelectorAll("details")).toHaveLength(0);
+    expect(document.querySelectorAll("summary")).toHaveLength(0);
+    const langs = groups().map((g) => g.getAttribute("data-language") ?? "");
+    expect(langs).toEqual(["English", "French", "Indonesian", "Malay", "Spanish", "Turkish", "Urdu"]);
+    // every row of every group is present without interacting with headers
+    expect(document.querySelectorAll("section[data-language] li")).toHaveLength(11);
   });
 
-  it("filters rows by search and auto-expands matching groups", async () => {
+  it("shows a flag emoji next to each language group header", async () => {
     instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
     await settle();
-    await setSearch("urdu");
-    const visible = groups();
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.getAttribute("open")).not.toBeUndefined();
-    expect(visible[0]?.querySelectorAll("li")).toHaveLength(1);
+    const english = groups().find((g) => g.getAttribute("data-language") === "English");
+    expect(english?.querySelector("div")?.textContent).toContain("\u{1F1EC}\u{1F1E7}");
+  });
 
+  it("sorts rows within a group by translation name", async () => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
+    await settle();
+    const english = groups().find((g) => g.getAttribute("data-language") === "English");
+    const names = [...(english?.querySelectorAll("input[type='checkbox']") ?? [])].map((c) =>
+      c.getAttribute("aria-label"),
+    );
+    expect(names).toEqual(["Ahmed Ali", "Marmaduke Pickthall", "Saheeh International", "Wahiduddin Khan"]);
+  });
+
+  it("focus ring sits on the search wrapper, not the inner input", async () => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
+    await settle();
+    const input = searchInput();
+    const wrapper = input.closest("div");
+    expect(wrapper?.className).toContain("focus-within:border-border-strong");
+    expect(input.className).not.toContain("focus-visible:outline-2");
+  });
+
+  it.each([
+    ["urdu", "Urdu", 2],
+    ["englsh", "English", 4],
+    ["israr", "Urdu", 1],
+    ["khan", "English", 1],
+    ["turkey", "Turkish", 1],
+    ["cortes", "Spanish", 1],
+  ])("fuzzy search %s finds the %s group (%i rows)", async (query, language, rowCount) => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
+    await settle();
+    await setSearch(query);
+    const matching = groups().filter((g) => g.getAttribute("data-language") === language);
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.querySelectorAll("li")).toHaveLength(rowCount);
+  });
+
+  it("reports no matches for an unmatched query", async () => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
+    await settle();
     await setSearch("zzz-no-match");
     expect(groups()).toHaveLength(0);
     expect(document.querySelector('[role="status"]')?.textContent).toContain("No translations");

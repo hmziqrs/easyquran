@@ -177,6 +177,7 @@
   "reader_dismiss_banner": "Dismiss",
   "reader_reading_notice": "Only one translation is shown in reading mode. Switch to verse-by-verse to compare translations.",
   "reader_tooltip_source": "Source",
+  "reader_tooltip_translator": "Translator",
   "reader_tooltip_language": "Language",
   "reader_tooltip_size": "Size",
   "reader_tooltip_direction": "Direction",

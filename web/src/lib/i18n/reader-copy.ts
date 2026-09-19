@@ -195,6 +195,7 @@ import {
   reader_tooltip_language,
   reader_tooltip_size,
   reader_tooltip_source,
+  reader_tooltip_translator,
   reader_translation_unavailable,
   reader_translations_close,
   reader_translations_description,
@@ -409,6 +410,7 @@ export interface ReaderUiCopy {
     readonly dismissBanner: string;
     readonly readingNotice: string;
     readonly tooltipSource: string;
+    readonly tooltipTranslator: string;
     readonly tooltipLanguage: string;
     readonly tooltipSize: string;
     readonly tooltipDirection: string;
@@ -675,6 +677,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       dismissBanner: noArgs(reader_dismiss_banner),
       readingNotice: noArgs(reader_reading_notice),
       tooltipSource: noArgs(reader_tooltip_source),
+      tooltipTranslator: noArgs(reader_tooltip_translator),
       tooltipLanguage: noArgs(reader_tooltip_language),
       tooltipSize: noArgs(reader_tooltip_size),
       tooltipDirection: noArgs(reader_tooltip_direction),

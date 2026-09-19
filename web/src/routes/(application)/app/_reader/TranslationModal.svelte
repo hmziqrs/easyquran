@@ -12,8 +12,10 @@
   import {
     TRANSLATION_CATALOGUE,
     TRANSLATION_CATALOGUE_BY_ID,
+    flagFor,
     translationSourceOf,
   } from "$lib/quran/catalogue";
+  import type { TranslationProvenance } from "$lib/quran/catalogue";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { reader } from "$lib/stores/reader.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
@@ -29,8 +31,21 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
   import { hrefFor, positionOf } from "./translation-nav";
+  import { translationMatchesQuery } from "./translation-search";
 
-  type GroupedLang = { language: string; entries: TranslationCatalogueEntry[] };
+  type GroupedLang = {
+    language: string;
+    flag: string;
+    entries: TranslationCatalogueEntry[];
+  };
+
+  // Distinct color identity per provenance chip; fixed palette dots read on the
+  // inverted (bg-foreground) tooltip surface in both light and dark themes.
+  const PROVENANCE_DOT = {
+    qul: "bg-violet-500",
+    quranenc: "bg-sky-500",
+    tanzil: "bg-emerald-500",
+  } satisfies Record<TranslationProvenance, string>;
 
   let { open = $bindable(false), primaryId = null }: { open?: boolean; primaryId?: string | null } =
     $props();
@@ -45,19 +60,25 @@
   const position = $derived(positionOf(deLocalizeUrl(page.url).pathname));
   const selectedIds = $derived(stackedTranslations.ids);
   const isFull = $derived(selectedIds.length >= STACKED_MAX_EXTRAS);
-  const searching = $derived(searchQuery.trim().length > 0);
 
   const filtered = $derived.by(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
     const list = TRANSLATION_CATALOGUE;
     if (!q) return list;
-    return list.filter(
-      (t) =>
-        t.language.toLowerCase().includes(q) ||
-        (t.translator !== null && t.translator.toLowerCase().includes(q)) ||
-        t.id.toLowerCase().includes(q),
+    return list.filter((t) =>
+      translationMatchesQuery(q, {
+        name: t.name,
+        translator: t.translator,
+        language: t.language,
+        languageCode: t.languageCode,
+        country: flagFor(t.languageCode).country,
+      }),
     );
   });
+
+  // Base-sensitivity collation keeps diacritic-laden language names (e.g.
+  // future "Fātiḥah"-style labels) sorted next to their plain spellings.
+  const languageCollator = new Intl.Collator("en", { sensitivity: "base" });
 
   const grouped = $derived.by<GroupedLang[]>(() => {
     const map = new Map<string, TranslationCatalogueEntry[]>();
@@ -66,7 +87,13 @@
       if (arr) arr.push(t);
       else map.set(t.language, [t]);
     }
-    return [...map.entries()].map(([language, entries]) => ({ language, entries }));
+    return [...map.entries()]
+      .map(([language, entries]) => ({
+        language,
+        flag: flagFor(entries[0]?.languageCode ?? "").flag,
+        entries: [...entries].sort((a, b) => languageCollator.compare(a.name, b.name)),
+      }))
+      .sort((a, b) => languageCollator.compare(a.language, b.language));
   });
 
   const selectedEntries = $derived.by(() => {
@@ -170,8 +197,8 @@
           {/if}
         </div>
 
-        <label
-          class="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 transition-colors"
+        <div
+          class="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 transition-colors focus-within:border-border-strong"
         >
           <span class="sr-only">{copy.stacked.searchPlaceholder}</span>
           <Icon name="search" size={13} class="flex-none text-muted-foreground" />
@@ -181,9 +208,9 @@
             oninput={(e) => (searchQuery = e.currentTarget.value)}
             placeholder={copy.stacked.searchPlaceholder}
             aria-label={copy.stacked.searchPlaceholder}
-            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-none"
           />
-        </label>
+        </div>
 
         {#if reader.isVerseMode && isFull}
           <p class="text-[11.5px] text-muted-foreground">{copy.stacked.full(STACKED_MAX_EXTRAS)}</p>
@@ -248,19 +275,15 @@
           {/if}
 
           {#each grouped as g (g.language)}
-            <!-- Collapsible language groups; a live search forces every matching group open. -->
-            <details class="group" open={searching || undefined}>
-              <summary
-                class="flex cursor-pointer list-none items-center gap-1.5 rounded-sm px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+            <!-- All groups always rendered (no collapsing); the modal body scrolls. -->
+            <section data-language={g.language} class="flex flex-col gap-0.5">
+              <div
+                class="sticky top-0 z-10 flex items-center gap-1.5 rounded-sm bg-popover px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground"
               >
-                <Icon
-                  name="arrow-right"
-                  size={11}
-                  class="flex-none transition-transform group-open:rotate-90"
-                />
+                <span class="text-[12px] leading-none normal-case" aria-hidden="true">{g.flag}</span>
                 {g.language}
                 <span class="lowercase tracking-normal">({g.entries.length})</span>
-              </summary>
+              </div>
               <ul class="flex flex-col gap-0.5">
                 {#each g.entries as t (t.id)}
                   {@const checked = selectedIds.includes(t.id)}
@@ -290,12 +313,52 @@
                           </span>
                         {/snippet}
                       </TooltipTrigger>
-                      <TooltipContent class="flex max-w-[240px] flex-col items-start gap-1 whitespace-normal rounded-md px-3 py-2 text-start leading-snug">
-                        <span class="font-medium">{t.name}</span>
-                        <span>{copy.translations.tooltipSource}: {copy.translations.sourceLabel(translationSourceOf(t.id))}</span>
-                        <span>{copy.translations.tooltipLanguage}: {t.language}</span>
-                        <span>{copy.translations.tooltipSize}: {formatSize(t.sizeBytes)}</span>
-                        <span>{copy.translations.tooltipDirection}: {copy.translations.dirLabel(t.direction)}</span>
+                      <TooltipContent
+                        class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
+                      >
+                        <span class="text-[12px] font-semibold">{t.name}</span>
+                        <span
+                          class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+                        >
+                          <span
+                            class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
+                            aria-hidden="true"
+                          ></span>
+                          {copy.translations.sourceLabel(translationSourceOf(t.id))}
+                        </span>
+                        <dl class="flex w-full flex-col gap-0.5 text-[11px]">
+                          {#if t.translator !== null}
+                            <div class="flex w-full gap-2">
+                              <dt class="w-[4.5rem] flex-none text-background/60">
+                                {copy.translations.tooltipTranslator}
+                              </dt>
+                              <dd class="min-w-0 flex-1">{t.translator}</dd>
+                            </div>
+                          {/if}
+                          <div class="flex w-full gap-2">
+                            <dt class="w-[4.5rem] flex-none text-background/60">
+                              {copy.translations.tooltipLanguage}
+                            </dt>
+                            <dd class="min-w-0 flex-1">
+                              <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                              {t.language}
+                            </dd>
+                          </div>
+                          <div class="flex w-full gap-2">
+                            <dt class="w-[4.5rem] flex-none text-background/60">
+                              {copy.translations.tooltipSize}
+                            </dt>
+                            <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                          </div>
+                          <div class="flex w-full gap-2">
+                            <dt class="w-[4.5rem] flex-none text-background/60">
+                              {copy.translations.tooltipDirection}
+                            </dt>
+                            <dd class="min-w-0 flex-1">
+                              {copy.translations.dirLabel(t.direction)}
+                            </dd>
+                          </div>
+                        </dl>
                       </TooltipContent>
                     </Tooltip>
                     {#if t.id === primaryId}
@@ -320,16 +383,10 @@
                   </li>
                 {/each}
               </ul>
-            </details>
+            </section>
           {/each}
         </div>
       </TooltipProvider>
     </Dialog.Content>
   </Dialog.Portal>
 </Dialog.Root>
-
-<style>
-  summary::-webkit-details-marker {
-    display: none;
-  }
-</style>

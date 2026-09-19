@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 211 messages. Import this barrel, never
+// 212 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -207,6 +207,7 @@ export { reader_tooltip_direction } from "$lib/paraglide/messages/reader_tooltip
 export { reader_tooltip_language } from "$lib/paraglide/messages/reader_tooltip_language.js";
 export { reader_tooltip_size } from "$lib/paraglide/messages/reader_tooltip_size.js";
 export { reader_tooltip_source } from "$lib/paraglide/messages/reader_tooltip_source.js";
+export { reader_tooltip_translator } from "$lib/paraglide/messages/reader_tooltip_translator.js";
 export { reader_translation_unavailable } from "$lib/paraglide/messages/reader_translation_unavailable.js";
 export { reader_translations_close } from "$lib/paraglide/messages/reader_translations_close.js";
 export { reader_translations_description } from "$lib/paraglide/messages/reader_translations_description.js";
