@@ -23,6 +23,18 @@ vi.mock("$lib/data/translations.json", async (importOriginal) => {
         "sqlite/en.sahih.int.sqlite",
         1,
       ],
+      [
+        // Unique fixture id (the real catalogue already has quranenc.en.hilali_khan,
+        // which would trip the duplicate-id guard in translations.ts).
+        "quranenc.en.underscore_fixture",
+        "English",
+        "en",
+        "ltr",
+        "Underscore translator fixture",
+        "Hilali & Khan",
+        "sqlite/quranenc.en.underscore_fixture.sqlite",
+        1,
+      ],
     ],
   };
 });
@@ -72,6 +84,28 @@ describe("dotted translator route segments", () => {
   it("reroutes the public URL without splitting the translator segment", async () => {
     const url = new URL("https://easyquran.fyi/ar/app/al-fatihah/t/en/sahih.int");
     expect(await reroute({ url, fetch })).toBe("/app/al-fatihah/t/en/sahih.int");
+  });
+
+  it("reroutes underscore translator segments (quranenc ids) as reader routes", async () => {
+    const url = new URL("https://easyquran.fyi/en/app/al-fatihah/t/quranenc/en.underscore_fixture");
+    expect(await reroute({ url, fetch })).toBe("/app/al-fatihah/t/quranenc/en.underscore_fixture");
+  });
+
+  it("parses underscore translator segments from path and resolved route params", () => {
+    expect(parseReaderPath("/app/al-fatihah/t/quranenc/en.underscore_fixture")).toMatchObject({
+      type: "translation",
+      sourceId: "quranenc.en.underscore_fixture",
+      cacheKind: "surah",
+      index: 1,
+    });
+    // Real baked id (no fixture needed — it exists in the catalogue).
+    expect(
+      parseReaderRoute(ROUTE_ID, {
+        surah: "al-fatihah",
+        lang: "quranenc",
+        translator: "en.hilali_khan",
+      }),
+    ).toMatchObject({ type: "translation", sourceId: "quranenc.en.hilali_khan" });
   });
 
   it("parses a baked dotted source from path and resolved route params", () => {

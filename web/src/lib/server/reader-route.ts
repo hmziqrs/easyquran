@@ -30,7 +30,10 @@ export type ParsedReaderRoute = ReaderIndexRoute | ArabicReaderRoute | Translati
 
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
-const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
+// Keep in lockstep with the TRANSLATOR_SEGMENT copies in src/lib/i18n/reader.ts, src/hooks.ts,
+// and src/lib/accept-parse.ts (baked ids include underscore translator segments,
+// e.g. quranenc.en.hilali_khan).
+const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
 
 export function localizedReaderLocale(pathname: string): UiLocale | null {

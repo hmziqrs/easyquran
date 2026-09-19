@@ -6,7 +6,10 @@ export type LocalizedReaderHref<Locale extends UiLocale = UiLocale> = `/${Locale
 
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+// Keep in lockstep with the TRANSLATOR_SEGMENT copies in src/hooks.ts, src/lib/accept-parse.ts,
+// and src/lib/server/reader-route.ts (driven by the baked ids in src/lib/data/translations.json,
+// which include underscore translator segments like quranenc.en.hilali_khan and qul r158.*).
+const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const POSITIVE_INTEGER_SEGMENT = /^[1-9]\d*$/;
 const CANONICAL_LOCAL_PAGE_SEGMENT = /^(?:[2-9]|[1-9]\d+)$/;
 const RESERVED_SURAH_SEGMENTS = new Set(["juz", "page", "t", "surah", "pages", "yours"]);

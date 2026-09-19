@@ -21,7 +21,10 @@ const MD_SIBLING_PATHS: ReadonlyMap<string, string> = new Map(
 
 const SURAH_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
-const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[.-][a-z0-9]+)*";
+// Keep in lockstep with the TRANSLATOR_SEGMENT copies in src/lib/i18n/reader.ts, src/hooks.ts,
+// and src/lib/server/reader-route.ts (baked ids include underscore translator segments,
+// e.g. quranenc.en.hilali_khan).
+const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
 const PAGE_BEYOND_FIRST = "(?:[2-9]|[1-9][0-9]+)";
 const READER_MD_SIBLING_PATTERNS: readonly RegExp[] = [
