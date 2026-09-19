@@ -42,8 +42,11 @@ class UpdateStore {
   #waitingWorker: ServiceWorker | null = null;
   // Suppression scoped to a pending fresh-tab silent adoption for THIS exact
   // worker identity; released on abort and on any reconcile where the
-  // registration's waiting worker no longer matches (I4/R6).
-  #silentTarget: ServiceWorker | null = null;
+  // registration's waiting worker no longer matches (I4/R6). Reactive (.raw:
+  // reassigned by identity, never mutated) because `available` reads it — a
+  // plain field would be invisible to Svelte's dependency tracking and the
+  // banner would stay hidden after an abort nulls it.
+  #silentTarget = $state.raw<ServiceWorker | null>(null);
   #silentToken = 0;
   #interacted = false;
   #registration: ServiceWorkerRegistration | null = null;

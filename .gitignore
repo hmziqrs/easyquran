@@ -49,3 +49,5 @@ rust/data/
 
 .z-workflow/
 .z-flashflow/
+
+.z-proflow/

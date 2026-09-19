@@ -1,3 +1,13 @@
+// SAFETY: Svelte 5 does not export `effect` from the public 'svelte' entry;
+// the internal client effect_root + effect pair is the reactive observer
+// available to vitest (no component harness in this repo) — root scope is
+// required or a detached effect never flushes. flushSync forces synchronous
+// flushes so assertions see deterministic effect reruns.
+// SAFETY: svelte/internal/client ships without type declarations; the import
+// is test-only and typed structurally by usage below.
+// @ts-expect-error no declaration file for svelte/internal/client
+import { effect, effect_root } from "svelte/internal/client";
+import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -565,6 +575,40 @@ describe("UpdateStore fresh-tab silent adoption", () => {
     expectNoReload();
     expect(sessionStorage.getItem(RELOAD_GUARD)).toBeNull();
     expect(store.available).toBe(true);
+    store.dispose();
+  });
+
+  // Regression (R6 suppression-leak): the banner must come back for a
+  // REACTIVE consumer ($derived/effect), not just an imperative getter call.
+  // `#silentTarget` used to be a plain field read inside `available`, so
+  // nulling it on the ghost-click abort path never invalidated the derived —
+  // imperative `store.available` reads passed while real UI stayed hidden.
+  it("reactively un-hides the banner when a ghost click aborts the silent attempt", async () => {
+    vi.useFakeTimers();
+    installHarness(new FakeWorker("app-1"), new FakeWorker("app-2"));
+    const store = createUpdate();
+    const seen: boolean[] = [];
+    const stop = effect_root(() => {
+      effect(() => {
+        seen.push(store.available);
+      });
+    });
+    flushSync();
+    // Fresh-tab suppressed state settled (timers frozen): banner hidden for
+    // the reactive consumer while the silent attempt is pending.
+    store.hydrate();
+    await flush();
+    flushSync();
+    expect(seen.at(-1)).toBe(false);
+
+    interact();
+    await flush();
+    await vi.runAllTimersAsync();
+    flushSync();
+    expectNoReload();
+    // The reactive consumer itself must now see the banner.
+    expect(seen.at(-1)).toBe(true);
+    stop();
     store.dispose();
   });
 
