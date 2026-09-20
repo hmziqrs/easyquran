@@ -76,6 +76,8 @@
   data-verse-key={vKey}
   class="verse-row group relative scroll-mt-24 border-b border-reader-divider px-5 pb-[22px] pt-[62px] transition-colors sm:px-9 {isRevealed
     ? 'revealed-ayah'
+    : ''} {reader.isReadingMode && translationActive
+    ? 'verse-row--translation-flow'
     : ''}"
 >
   {#if translationActive}
@@ -181,6 +183,29 @@
 
   :global([data-reader-mode="reading"] [data-source-kind="arabic"]) .verse-text {
     display: inline;
+  }
+
+  /* U10 continuous reading flow for translations: verses join one flowing,
+     justified column; the existing pill ayah-marker stays inline as the
+     subtle ayah boundary (echoes the Arabic ornament flow). Verse mode and
+     the Arabic reading flow above are untouched. */
+  :global([data-reader-mode="reading"] [data-source-kind="translation"]) .verse-row {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  :global([data-reader-mode="reading"] [data-source-kind="translation"]) .verse-row:hover {
+    background: transparent;
+  }
+
+  :global([data-reader-mode="reading"] [data-source-kind="translation"]) .verse-text {
+    display: inline;
+  }
+
+  :global([data-reader-mode="reading"] [data-source-kind="translation"]) .translation-marker {
+    margin-inline-end: 0.55em;
   }
 
   .verse-extra {

@@ -58,30 +58,30 @@
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
     <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-md border border-border bg-popover bg-clip-padding p-4 text-sm text-popover-foreground shadow-lg"
+      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(92vw,460px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-lg border border-border bg-popover bg-clip-padding p-5 text-popover-foreground shadow-lg"
     >
-      <Dialog.Title class="text-base font-semibold">
+      <Dialog.Title class="text-lg font-semibold">
         {copy.translations.readingConfirmTitle}
       </Dialog.Title>
 
       {#if candidates.length <= 1}
-        <Dialog.Description class="text-[13px] leading-relaxed text-foreground-secondary">
+        <Dialog.Description class="text-sm leading-relaxed text-foreground-secondary">
           {copy.translations.readingConfirmSingle(labelFor(candidates[0] ?? { id: null, entry: null }))}
         </Dialog.Description>
       {:else}
-        <Dialog.Description class="text-[13px] leading-relaxed text-foreground-secondary">
+        <Dialog.Description class="text-sm leading-relaxed text-foreground-secondary">
           {copy.translations.readingConfirmBody}
         </Dialog.Description>
-        <fieldset class="flex min-h-0 flex-col gap-1.5 overflow-y-auto">
-          <legend class="mb-1 text-[11.5px] text-muted-foreground">
+        <fieldset class="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-background-subtle p-2">
+          <legend class="mb-1 px-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {copy.translations.readingConfirmChoose}
           </legend>
-          <div class="flex flex-col gap-0.5" role="radiogroup" aria-label={copy.translations.readingConfirmChoose}>
+          <div class="flex flex-col gap-1" role="radiogroup" aria-label={copy.translations.readingConfirmChoose}>
             {#each candidates as c (c.id ?? "arabic")}
               {@const value = c.id ?? "arabic"}
               <label
                 data-candidate={value}
-                class="flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-2 text-[12.5px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+                class="flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2.5 text-sm text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
               >
                 <input
                   type="radio"
@@ -89,18 +89,18 @@
                   {value}
                   checked={selected === value}
                   onchange={() => (selected = value)}
-                  class="h-4 w-4 flex-none accent-primary"
+                  class="h-4 w-4 flex-none cursor-pointer accent-primary"
                 />
                 <span class="min-w-0 flex-1">
-                  <span class="block truncate">{labelFor(c)}</span>
-                  <span class="block truncate text-[11px] text-muted-foreground">
+                  <span class="block truncate font-medium text-foreground">{labelFor(c)}</span>
+                  <span class="block truncate text-xs text-muted-foreground">
                     <span aria-hidden="true">{flagForCandidate(c)}</span>
                     {languageFor(c)}
                   </span>
                 </span>
                 {#if c.entry}
                   <span
-                    class="inline-flex flex-none items-center gap-1.5 rounded-pill bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    class="inline-flex flex-none items-center gap-1.5 rounded-pill bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
                   >
                     <span
                       class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(c.entry.id)]}"
@@ -121,7 +121,7 @@
             <button
               {...props}
               type="button"
-              class="flex h-8 items-center rounded-md px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              class="flex h-9 cursor-pointer items-center rounded-md px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             >
               {copy.translations.readingConfirmCancel}
             </button>
@@ -131,7 +131,7 @@
           type="button"
           onclick={confirm}
           data-reading-confirm
-          class="flex h-8 items-center rounded-md bg-foreground px-3.5 text-[13px] font-medium text-background transition-[filter] hover:brightness-[0.94]"
+          class="flex h-9 cursor-pointer items-center rounded-md bg-foreground px-4.5 text-sm font-medium text-background transition-[filter] hover:brightness-[0.94]"
         >
           {copy.translations.readingConfirmApply}
         </button>

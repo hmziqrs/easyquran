@@ -6,6 +6,7 @@ const { nav, readerStub, mountStub } = vi.hoisted(() => ({
   nav: { url: { hash: "" }, params: {} as Record<string, string> },
   readerStub: {
     isVerseMode: true,
+    isReadingMode: false,
     // SAFETY: null seeds the nullable openNote union; no test assigns before the row reads it
     openNote: null as string | null,
   },
@@ -37,6 +38,7 @@ let target: HTMLElement;
 
 beforeEach(() => {
   readerStub.isVerseMode = true;
+  readerStub.isReadingMode = false;
   readerStub.openNote = null;
   nav.params = {};
   target = document.createElement("div");
@@ -118,5 +120,40 @@ describe("VerseRow stacked extras", () => {
       },
     });
     expect(extras()).toHaveLength(0);
+  });
+});
+
+describe("VerseRow translation reading flow (U10)", () => {
+  it("joins the continuous flow in translation reading mode and keeps the anchor id", () => {
+    readerStub.isVerseMode = false;
+    readerStub.isReadingMode = true;
+    mount(VerseRow, {
+      target,
+      props: { text: "In the name of God", n: 2, vKey: "1:2", isTranslation: true },
+    });
+    // SAFETY: the row list always renders exactly one li, the verse row under test
+    const row = target.querySelector("li") as HTMLElement;
+    expect(row.className).toContain("verse-row--translation-flow");
+    // #ayah deep-link anchors survive the inline flow
+    expect(row.id).toBe("ayah-1-2");
+  });
+
+  it("keeps verse-mode translation rows as block rows (no flow class)", () => {
+    mount(VerseRow, {
+      target,
+      props: { text: "In the name of God", n: 2, vKey: "1:2", isTranslation: true },
+    });
+    // SAFETY: the row list always renders exactly one li, the verse row under test
+    const row = target.querySelector("li") as HTMLElement;
+    expect(row.className).not.toContain("verse-row--translation-flow");
+  });
+
+  it("leaves the Arabic reading flow untouched (no translation flow class)", () => {
+    readerStub.isVerseMode = false;
+    readerStub.isReadingMode = true;
+    mount(VerseRow, { target, props: { text: "بسم الله", n: 1, vKey: "1:1" } });
+    // SAFETY: the row list always renders exactly one li, the verse row under test
+    const row = target.querySelector("li") as HTMLElement;
+    expect(row.className).not.toContain("verse-row--translation-flow");
   });
 });

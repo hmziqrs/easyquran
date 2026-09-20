@@ -237,7 +237,7 @@ describe("TranslationModal", () => {
     await settle();
     const primary = checkboxes().find((c) => c.getAttribute("aria-label") === "Saheeh International");
     expect(primary?.disabled).toBe(true);
-    expect(document.body.textContent).toContain("Primary translation");
+    expect(document.body.textContent).toContain("Primary");
   });
 
   it("caps stacked extras at five — unselected rows are disabled when full", async () => {
@@ -273,6 +273,51 @@ describe("TranslationModal", () => {
     await settle();
     // modal closed after the primary switch
     expect(document.querySelector("input[type='search']")).toBeNull();
+  });
+
+  it("pins the Selected section above the groups: primary first (badge), extras in order", async () => {
+    stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: "en.sahih" } });
+    await settle();
+    const selected = document.querySelector("[data-selected-section]");
+    expect(selected).toBeTruthy();
+    const firstGroup = groups()[0];
+    // SAFETY: selected is asserted truthy above; this cast is a non-null DOM node
+    const selectedEl = selected as Element;
+    // SAFETY: firstGroup is the first [data-language] section, always present when groups render
+    const groupEl = firstGroup as Element;
+    expect(
+      selectedEl.compareDocumentPosition(groupEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const names = [...(selected?.querySelectorAll("li .truncate.font-medium") ?? [])].map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(names).toEqual(["Saheeh International", "Jalandhry", "Basmeih"]);
+    // primary is visually distinct via the Primary badge
+    expect(selected?.textContent).toContain("Primary");
+  });
+
+  it("updates the Selected section live when toggling from the grouped list", async () => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: null } });
+    await settle();
+    expect(document.querySelector("[data-selected-section]")).toBeNull();
+    const box = checkboxes().find((c) => c.getAttribute("aria-label") === "Maulana Jalal ad-Din");
+    // clickable row label carries the pointer cursor
+    expect(box?.closest("li")?.querySelector("label")?.className).toContain("cursor-pointer");
+    box?.click();
+    await settle();
+    const selected = document.querySelector("[data-selected-section]");
+    expect(selected?.textContent).toContain("Jalandhry");
+    box?.click();
+    await settle();
+    expect(document.querySelector("[data-selected-section]")).toBeNull();
+  });
+
+  it("omits the Selected section entirely when nothing is selected", async () => {
+    instance = mount(TranslationModal, { target, props: { open: true, primaryId: null } });
+    await settle();
+    expect(document.querySelector("[data-selected-section]")).toBeNull();
+    expect(document.body.textContent).not.toContain("No translations selected");
   });
 });
 

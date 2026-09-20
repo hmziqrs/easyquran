@@ -308,4 +308,11 @@
     text-align: justify;
     text-align-last: center;
   }
+
+  /* U10: continuous justified flow for translations in reading mode (mirrors
+     SurahReader; verse mode keeps per-ayah rows). */
+  :global([data-reader-mode="reading"] [data-source-kind="translation"]) .ayah-list {
+    display: block;
+    text-align: justify;
+  }
 </style>

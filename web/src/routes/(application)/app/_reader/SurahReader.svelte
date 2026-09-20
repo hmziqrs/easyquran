@@ -1119,6 +1119,16 @@
     word-spacing: 0.14em;
   }
 
+  /* U10: translations flow as one continuous justified column in reading
+     mode (per-ayah rows remain in verse mode). Direction stays per-verse via
+     dir="auto" on the verse text. */
+  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="translation"] .ayah-list {
+    display: block;
+    text-align: justify;
+    font-family: var(--reader-translation-family, var(--font-sans));
+    line-height: 1.9;
+  }
+
   :global(html[data-reader-last-read="true"]:not([data-reader-hydrated="true"]))
     .reader-stack::before {
     content: "";

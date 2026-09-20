@@ -96,13 +96,19 @@
       .sort((a, b) => languageCollator.compare(a.language, b.language));
   });
 
-  const selectedEntries = $derived.by(() => {
-    const out: TranslationCatalogueEntry[] = [];
+  // U12 Selected section: route primary first (badge), then stacked extras in
+  // render order. Updates live from store/prop changes; absent when empty.
+  const selectedRows = $derived.by(() => {
+    const rows: TranslationCatalogueEntry[] = [];
+    const primaryEntry =
+      primaryId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(primaryId) : undefined;
+    if (primaryEntry) rows.push(primaryEntry);
     for (const id of selectedIds) {
+      if (id === primaryId) continue;
       const found = TRANSLATION_CATALOGUE_BY_ID.get(id);
-      if (found) out.push(found);
+      if (found) rows.push(found);
     }
-    return out;
+    return rows;
   });
 
   // Selection changes only touch the stacked store + the ?more= URL param; the
@@ -130,8 +136,9 @@
   function rowLabel(t: TranslationCatalogueEntry): string {
     return t.translator ?? t.name;
   }
-  function selectedLabel(t: TranslationCatalogueEntry): string {
-    return t.translator ? `${t.language} · ${t.translator}` : t.language;
+  function secondaryLabel(t: TranslationCatalogueEntry): string {
+    if (t.translator !== null) return `${t.translator} · ${t.language}`;
+    return t.language;
   }
   function rowHref(t: TranslationCatalogueEntry): `/app/${string}` | null {
     const seg = translationSegmentsFromId(t.id);
@@ -152,11 +159,11 @@
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
     <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-md border border-border bg-popover bg-clip-padding p-4 text-sm text-popover-foreground shadow-lg"
+      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(94vw,660px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-popover bg-clip-padding text-popover-foreground shadow-lg"
     >
-      <div class="flex items-start justify-between gap-2">
+      <div class="flex items-start justify-between gap-3 px-5 pt-5">
         <div class="flex flex-col gap-0.5">
-          <Dialog.Title class="text-base font-semibold">{copy.stacked.title}</Dialog.Title>
+          <Dialog.Title class="text-lg font-semibold">{copy.stacked.title}</Dialog.Title>
           <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
         </div>
         <Dialog.Close>
@@ -165,103 +172,116 @@
               {...props}
               type="button"
               aria-label={copy.translations.close}
-              class="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              class="flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             >
-              <Icon name="x" size={14} />
+              <Icon name="x" size={15} />
             </button>
           {/snippet}
         </Dialog.Close>
       </div>
 
       {#if reader.isReadingMode}
-        <p class="rounded-md border border-border bg-background-subtle px-3 py-2 text-[12.5px] text-foreground-secondary">
+        <p
+          class="mx-5 mt-3 rounded-md border border-border bg-background-subtle px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground-secondary"
+        >
           {copy.translations.readingNotice}
         </p>
       {/if}
 
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <span class="text-[11.5px] text-muted-foreground">
-            {copy.stacked.count(selectedIds.length, STACKED_MAX_EXTRAS)}
-          </span>
-          {#if reader.isVerseMode && selectedIds.length > 0}
-            <button
-              type="button"
-              onclick={clear}
-              aria-label={copy.stacked.clear}
-              class="flex items-center gap-1 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Icon name="x" size={12} />
-              {copy.stacked.clear}
-            </button>
-          {/if}
-        </div>
-
+      <div class="flex flex-col gap-2 px-5 pt-4">
         <div
-          class="flex items-center gap-2 rounded-md border border-border bg-background-subtle px-3 py-2 transition-colors focus-within:border-border-strong"
+          class="flex h-10 items-center gap-2.5 rounded-md border border-border bg-background-subtle px-3.5 transition-colors focus-within:border-border-strong"
         >
           <span class="sr-only">{copy.stacked.searchPlaceholder}</span>
-          <Icon name="search" size={13} class="flex-none text-muted-foreground" />
+          <Icon name="search" size={15} class="flex-none text-muted-foreground" />
           <input
             type="search"
             value={searchQuery}
             oninput={(e) => (searchQuery = e.currentTarget.value)}
             placeholder={copy.stacked.searchPlaceholder}
             aria-label={copy.stacked.searchPlaceholder}
-            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-none"
+            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-none"
           />
         </div>
 
         {#if reader.isVerseMode && isFull}
-          <p class="text-[11.5px] text-muted-foreground">{copy.stacked.full(STACKED_MAX_EXTRAS)}</p>
+          <p class="text-xs text-muted-foreground">{copy.stacked.full(STACKED_MAX_EXTRAS)}</p>
         {/if}
       </div>
 
       <TooltipProvider delayDuration={300}>
-        <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pe-1">
-          {#if reader.isVerseMode && selectedIds.length > 0}
-            <section>
-              <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground">
-                {copy.stacked.selected}
+        <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5 pt-4">
+          {#if reader.isVerseMode && selectedRows.length > 0}
+            <section
+              data-selected-section
+              class="mb-5 flex flex-col gap-2 rounded-lg border border-primary/35 bg-primary/5 p-3"
+            >
+              <div class="flex items-center justify-between gap-2 px-1">
+                <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {copy.stacked.selected}
+                  <span class="ms-1.5 lowercase tracking-normal">
+                    {copy.stacked.count(selectedIds.length, STACKED_MAX_EXTRAS)}
+                  </span>
+                </span>
+                {#if selectedIds.length > 0}
+                  <button
+                    type="button"
+                    onclick={clear}
+                    aria-label={copy.stacked.clear}
+                    class="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Icon name="x" size={12} />
+                    {copy.stacked.clear}
+                  </button>
+                {/if}
               </div>
-              <ol class="flex flex-col gap-0.5">
-                {#each selectedEntries as t, i (t.id)}
-                  <li class="flex items-center gap-1 rounded-sm px-2 py-1.5 text-[12.5px] text-foreground-secondary">
-                    <span class="w-4 flex-none text-[10.5px] text-muted-foreground">{i + 1}</span>
-                    <span class="min-w-0 flex-1 truncate">{selectedLabel(t)}</span>
-                    {#if t.id === primaryId}
+              <ol class="flex flex-col gap-1">
+                {#each selectedRows as t (t.id)}
+                  {@const isPrimary = t.id === primaryId}
+                  {@const extraIndex = selectedIds.indexOf(t.id)}
+                  <li
+                    class="flex items-center gap-2 rounded-md bg-popover/60 px-2.5 py-2 text-sm text-foreground"
+                  >
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate font-medium">{t.name}</span>
+                      <span class="block truncate text-xs text-muted-foreground">
+                        {secondaryLabel(t)}
+                      </span>
+                    </span>
+                    {#if isPrimary}
                       <span
-                        class="flex-none rounded-pill bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                        class="flex-none rounded-pill bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground"
                       >
                         {copy.stacked.primaryBadge}
                       </span>
+                    {:else}
+                      <button
+                        type="button"
+                        onclick={() => reorder(t.id, -1)}
+                        disabled={extraIndex <= 0}
+                        aria-label={copy.stacked.moveUp}
+                        class="flex-none cursor-pointer p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Icon name="arrow-right" size={13} class="-rotate-90" />
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => reorder(t.id, 1)}
+                        disabled={extraIndex === -1 || extraIndex >= selectedIds.length - 1}
+                        aria-label={copy.stacked.moveDown}
+                        class="flex-none cursor-pointer p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Icon name="arrow-right" size={13} class="rotate-90" />
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => remove(t.id)}
+                        aria-label={copy.stacked.remove}
+                        class="flex-none cursor-pointer p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Icon name="x" size={13} />
+                      </button>
                     {/if}
-                    <button
-                      type="button"
-                      onclick={() => reorder(t.id, -1)}
-                      disabled={i === 0}
-                      aria-label={copy.stacked.moveUp}
-                      class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                    >
-                      <Icon name="arrow-right" size={12} class="-rotate-90" />
-                    </button>
-                    <button
-                      type="button"
-                      onclick={() => reorder(t.id, 1)}
-                      disabled={i === selectedEntries.length - 1}
-                      aria-label={copy.stacked.moveDown}
-                      class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                    >
-                      <Icon name="arrow-right" size={12} class="rotate-90" />
-                    </button>
-                    <button
-                      type="button"
-                      onclick={() => remove(t.id)}
-                      aria-label={copy.stacked.remove}
-                      class="flex-none p-1 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Icon name="x" size={12} />
-                    </button>
                   </li>
                 {/each}
               </ol>
@@ -269,28 +289,34 @@
           {/if}
 
           {#if grouped.length === 0}
-            <p class="px-2 py-2 text-[12px] text-muted-foreground" role="status">
+            <p class="px-2 py-3 text-sm text-muted-foreground" role="status">
               {copy.translations.noMatches}
             </p>
           {/if}
 
           {#each grouped as g (g.language)}
             <!-- All groups always rendered (no collapsing); the modal body scrolls. -->
-            <section data-language={g.language} class="flex flex-col gap-0.5">
+            <section data-language={g.language} class="flex flex-col">
               <div
-                class="sticky top-0 z-10 flex items-center gap-1.5 rounded-sm bg-popover px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted-foreground"
+                class="sticky top-0 z-10 flex items-baseline gap-2 rounded-sm bg-popover px-1 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground"
               >
-                <span class="text-[12px] leading-none normal-case" aria-hidden="true">{g.flag}</span>
+                <span class="text-sm leading-none normal-case" aria-hidden="true">{g.flag}</span>
                 {g.language}
-                <span class="lowercase tracking-normal">({g.entries.length})</span>
+                <span class="text-[11px] font-normal lowercase tracking-normal">
+                  ({g.entries.length})
+                </span>
               </div>
-              <ul class="flex flex-col gap-0.5">
+              <ul class="flex flex-col">
                 {#each g.entries as t (t.id)}
                   {@const checked = selectedIds.includes(t.id)}
                   {@const disabled =
                     !reader.isVerseMode || t.id === primaryId || (isFull && !checked)}
                   {@const href = rowHref(t)}
-                  <li class="flex items-center gap-2 rounded-sm px-2 py-2 text-[12.5px] transition-colors text-foreground-secondary hover:bg-surface-hover hover:text-foreground">
+                  <li
+                    class="flex items-center gap-3 rounded-md px-2.5 py-2 transition-colors {checked
+                      ? 'bg-primary/10'
+                      : 'hover:bg-surface-hover'}"
+                  >
                     {#if reader.isVerseMode}
                       <input
                         id={`tmodal-${t.id}`}
@@ -299,71 +325,88 @@
                         disabled={disabled}
                         onchange={() => toggle(t.id)}
                         aria-label={rowLabel(t)}
-                        class="h-4 w-4 flex-none accent-primary disabled:cursor-not-allowed"
+                        class="h-[18px] w-[18px] flex-none cursor-pointer accent-primary disabled:cursor-not-allowed"
                       />
-                    {/if}
-                    <Tooltip>
-                      <TooltipTrigger>
-                        {#snippet child({ props })}
-                          <span
-                            {...props}
-                            class="min-w-0 flex-1 truncate underline decoration-dotted decoration-muted-foreground underline-offset-2"
-                          >
-                            {rowLabel(t)}
-                          </span>
-                        {/snippet}
-                      </TooltipTrigger>
-                      <TooltipContent
-                        class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
-                      >
-                        <span class="text-[12px] font-semibold">{t.name}</span>
-                        <span
-                          class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+                      <Tooltip>
+                        <TooltipTrigger>
+                          {#snippet child({ props })}
+                            <label
+                              {...props}
+                              for={`tmodal-${t.id}`}
+                              class="min-w-0 flex-1 py-0.5 {disabled
+                                ? 'cursor-not-allowed'
+                                : 'cursor-pointer'}"
+                            >
+                              <span class="block truncate text-sm font-medium text-foreground">
+                                {t.name}
+                              </span>
+                              <span class="block truncate text-xs text-muted-foreground">
+                                {secondaryLabel(t)}
+                              </span>
+                            </label>
+                          {/snippet}
+                        </TooltipTrigger>
+                        <TooltipContent
+                          class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
                         >
+                          <span class="text-[12px] font-semibold">{t.name}</span>
                           <span
-                            class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
-                            aria-hidden="true"
-                          ></span>
-                          {copy.translations.sourceLabel(translationSourceOf(t.id))}
-                        </span>
-                        <dl class="flex w-full flex-col gap-0.5 text-[11px]">
-                          {#if t.translator !== null}
+                            class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+                          >
+                            <span
+                              class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
+                              aria-hidden="true"
+                            ></span>
+                            {copy.translations.sourceLabel(translationSourceOf(t.id))}
+                          </span>
+                          <dl class="flex w-full flex-col gap-0.5 text-[11px]">
+                            {#if t.translator !== null}
+                              <div class="flex w-full gap-2">
+                                <dt class="w-[4.5rem] flex-none text-background/60">
+                                  {copy.translations.tooltipTranslator}
+                                </dt>
+                                <dd class="min-w-0 flex-1">{t.translator}</dd>
+                              </div>
+                            {/if}
                             <div class="flex w-full gap-2">
                               <dt class="w-[4.5rem] flex-none text-background/60">
-                                {copy.translations.tooltipTranslator}
+                                {copy.translations.tooltipLanguage}
                               </dt>
-                              <dd class="min-w-0 flex-1">{t.translator}</dd>
+                              <dd class="min-w-0 flex-1">
+                                <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                                {t.language}
+                              </dd>
                             </div>
-                          {/if}
-                          <div class="flex w-full gap-2">
-                            <dt class="w-[4.5rem] flex-none text-background/60">
-                              {copy.translations.tooltipLanguage}
-                            </dt>
-                            <dd class="min-w-0 flex-1">
-                              <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
-                              {t.language}
-                            </dd>
-                          </div>
-                          <div class="flex w-full gap-2">
-                            <dt class="w-[4.5rem] flex-none text-background/60">
-                              {copy.translations.tooltipSize}
-                            </dt>
-                            <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
-                          </div>
-                          <div class="flex w-full gap-2">
-                            <dt class="w-[4.5rem] flex-none text-background/60">
-                              {copy.translations.tooltipDirection}
-                            </dt>
-                            <dd class="min-w-0 flex-1">
-                              {copy.translations.dirLabel(t.direction)}
-                            </dd>
-                          </div>
-                        </dl>
-                      </TooltipContent>
-                    </Tooltip>
+                            <div class="flex w-full gap-2">
+                              <dt class="w-[4.5rem] flex-none text-background/60">
+                                {copy.translations.tooltipSize}
+                              </dt>
+                              <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                            </div>
+                            <div class="flex w-full gap-2">
+                              <dt class="w-[4.5rem] flex-none text-background/60">
+                                {copy.translations.tooltipDirection}
+                              </dt>
+                              <dd class="min-w-0 flex-1">
+                                {copy.translations.dirLabel(t.direction)}
+                              </dd>
+                            </div>
+                          </dl>
+                        </TooltipContent>
+                      </Tooltip>
+                    {:else}
+                      <div class="min-w-0 flex-1 py-0.5">
+                        <span class="block truncate text-sm font-medium text-foreground">
+                          {t.name}
+                        </span>
+                        <span class="block truncate text-xs text-muted-foreground">
+                          {secondaryLabel(t)}
+                        </span>
+                      </div>
+                    {/if}
                     {#if t.id === primaryId}
                       <span
-                        class="flex-none rounded-pill bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                        class="flex-none rounded-pill bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
                       >
                         {copy.stacked.primaryBadge}
                       </span>
@@ -375,9 +418,9 @@
                         onclick={() => onPrimary(t)}
                         aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
                         title={copy.translations.switchTo}
-                        class="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                        class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
                       >
-                        <Icon name="arrow-right" size={12} />
+                        <Icon name="arrow-right" size={13} />
                       </a>
                     {/if}
                   </li>
