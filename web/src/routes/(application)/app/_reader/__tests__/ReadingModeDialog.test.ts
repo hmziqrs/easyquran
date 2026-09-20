@@ -107,7 +107,8 @@ describe("ReadingModeDialog", () => {
     expect(inputs.map((r) => r.value)).toEqual(["en.sahih", "en.arberry", "ur.jalandhry"]);
     expect(inputs[0]?.checked).toBe(true);
     expect(inputs[1]?.checked).toBe(false);
-    // translator-first labels + language sublabels
+    // modal row anatomy: name first, author line only when it differs, language + flag prefix
+    expect(document.body.textContent).toContain("Name en.sahih");
     expect(document.body.textContent).toContain("Saheeh International");
     expect(document.body.textContent).toContain("Maulana Jalal ad-Din");
     expect(document.body.textContent).toContain("Urdu");
@@ -134,18 +135,18 @@ describe("ReadingModeDialog", () => {
   it("renders the simplified single-candidate confirm without a radio list", async () => {
     await openDialog([candidate("en.sahih")]);
     expect(radios()).toHaveLength(0);
-    expect(document.body.textContent).toContain("Saheeh International");
+    expect(document.body.textContent).toContain("Name en.sahih");
     confirmButton().click();
     expect(confirmed.map((c) => c.id)).toEqual(["en.sahih"]);
   });
 
-  it("labels the Arabic current source with the Arabic copy and no provenance chip", async () => {
+  it("labels the Arabic current source with the Arabic copy and no provenance dot", async () => {
     await openDialog([candidate(null), candidate("en.arberry")]);
     const first = radios()[0];
     expect(first?.value).toBe("arabic");
     expect(first?.checked).toBe(true);
     expect(document.body.textContent).toContain("Arabic");
-    // only the translation candidate carries a provenance chip
-    expect(document.querySelectorAll("span.bg-emerald-500, span.size-1\\.5")).toHaveLength(1);
+    // only the translation candidate carries a semantic source dot
+    expect(document.querySelectorAll("span.size-2")).toHaveLength(1);
   });
 });

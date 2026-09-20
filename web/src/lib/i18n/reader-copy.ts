@@ -200,14 +200,19 @@ import {
   reader_tooltip_direction,
   reader_tooltip_language,
   reader_tooltip_size,
-  reader_tooltip_source,
   reader_tooltip_translator,
   reader_translation_unavailable,
+  reader_translations_back,
+  reader_translations_cap_note,
   reader_translations_close,
   reader_translations_description,
+  reader_translations_done,
   reader_translations_hidden_tip,
+  reader_translations_languages_label,
   reader_translations_no_matches,
   reader_translations_open,
+  reader_translations_primary_tip,
+  reader_translations_results,
   reader_translations_switch,
   reader_your_note,
 } from "$lib/i18n/m/reader";
@@ -409,8 +414,14 @@ export interface ReaderUiCopy {
     readonly open: string;
     readonly close: string;
     readonly description: string;
+    readonly done: string;
+    readonly back: string;
+    readonly languagesLabel: string;
     readonly switchTo: string;
     readonly noMatches: string;
+    readonly results: (count: number) => string;
+    readonly primaryTip: string;
+    readonly capNote: (max: number) => string;
     readonly hiddenTip: string;
     readonly readingBanner: string;
     readonly dismissBanner: string;
@@ -421,7 +432,6 @@ export interface ReaderUiCopy {
     readonly readingConfirmChoose: string;
     readonly readingConfirmApply: string;
     readonly readingConfirmCancel: string;
-    readonly tooltipSource: string;
     readonly tooltipTranslator: string;
     readonly tooltipLanguage: string;
     readonly tooltipSize: string;
@@ -680,10 +690,16 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
     },
     translations: {
       open: noArgs(reader_translations_open),
+      back: noArgs(reader_translations_back),
       close: noArgs(reader_translations_close),
       description: noArgs(reader_translations_description),
+      done: noArgs(reader_translations_done),
+      languagesLabel: noArgs(reader_translations_languages_label),
       switchTo: noArgs(reader_translations_switch),
       noMatches: noArgs(reader_translations_no_matches),
+      results: (count) => reader_translations_results({ count }, options),
+      primaryTip: noArgs(reader_translations_primary_tip),
+      capNote: (max) => reader_translations_cap_note({ max }, options),
       hiddenTip: noArgs(reader_translations_hidden_tip),
       readingBanner: noArgs(reader_reading_banner),
       dismissBanner: noArgs(reader_dismiss_banner),
@@ -694,7 +710,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       readingConfirmChoose: noArgs(reader_reading_confirm_choose),
       readingConfirmApply: noArgs(reader_reading_confirm_apply),
       readingConfirmCancel: noArgs(reader_reading_confirm_cancel),
-      tooltipSource: noArgs(reader_tooltip_source),
       tooltipTranslator: noArgs(reader_tooltip_translator),
       tooltipLanguage: noArgs(reader_tooltip_language),
       tooltipSize: noArgs(reader_tooltip_size),
