@@ -31,6 +31,7 @@ import {
   readingCandidates,
   readingModeHrefFor,
   readingModeUi,
+  resetUnlessReading,
 } from "../reading-mode-guard.svelte";
 
 function fixtureEntry(i: number): TranslationCatalogueEntry {
@@ -110,5 +111,25 @@ describe("readingBannerVisible (URL-initiated fallback only)", () => {
     expect(readingBannerVisible({ reading: true, hiddenCount: 2, dismissed: true })).toBe(false);
     expect(readingBannerVisible({ reading: true, hiddenCount: 0, dismissed: false })).toBe(false);
     expect(readingBannerVisible({ reading: false, hiddenCount: 2, dismissed: false })).toBe(false);
+  });
+});
+
+describe("resetUnlessReading (fresh-reader-mount reset)", () => {
+  beforeEach(() => {
+    readingModeUi.reset();
+  });
+
+  it("clears a stale mark when a reader mounts outside reading mode", () => {
+    readingModeUi.mark();
+    resetUnlessReading(false);
+    expect(readingModeUi.appliedByUi).toBe(false);
+    // so a later URL-initiated transition keeps its fallback banner
+    expect(readingBannerVisible({ reading: true, hiddenCount: 1, dismissed: false })).toBe(true);
+  });
+
+  it("keeps the mark when a reader mounts into reading mode (UI-confirmed goto path)", () => {
+    readingModeUi.mark();
+    resetUnlessReading(true);
+    expect(readingModeUi.appliedByUi).toBe(true);
   });
 });

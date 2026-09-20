@@ -11,7 +11,7 @@
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import AppSidebar from "./Sidebar.svelte";
   import TranslationButton from "./TranslationButton.svelte";
-  import { readingBannerVisible, readingModeUi } from "./reading-mode-guard.svelte";
+  import { readingBannerVisible, readingModeUi, resetUnlessReading } from "./reading-mode-guard.svelte";
 
   let { header, children }: { header: Snippet; children: Snippet } = $props();
   let mounted = $state(false);
@@ -63,6 +63,10 @@
 
   onMount(() => {
     mounted = true;
+    // Fresh-reader-mount reset — semantics documented on resetUnlessReading
+    // (mount outside reading clears a stale UI mark; mount into reading keeps
+    // it for the UI-confirmed cross-translation goto path).
+    resetUnlessReading(reader.isReadingMode);
   });
 </script>
 

@@ -99,3 +99,16 @@ export function readingBannerVisible(opts: {
 }): boolean {
   return opts.reading && opts.hiddenCount > 0 && !opts.dismissed && !readingModeUi.appliedByUi;
 }
+
+/**
+ * Fresh-reader-mount reset for the UI-gesture flag: a reader mounting OUTSIDE
+ * reading mode clears any stale mark left by a reader that unmounted in
+ * reading mode (settings route, direct navigation) so a later URL-initiated
+ * ?mode=reading keeps its fallback banner. Mounting INTO reading mode keeps
+ * the flag: that is the UI-confirmed cross-translation goto path, where the
+ * old reader unmounts only AFTER the new shell mounts (an unmount-time reset
+ * would re-arm the banner against the transition the user just confirmed).
+ */
+export function resetUnlessReading(isReadingMode: boolean): void {
+  if (!isReadingMode) readingModeUi.reset();
+}

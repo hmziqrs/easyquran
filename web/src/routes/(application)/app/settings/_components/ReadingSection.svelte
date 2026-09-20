@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import {
     ARABIC_FONTS,
     TRANSLATION_FAMILIES,
@@ -14,9 +15,24 @@
     TRANSLATION_FONT_MIN,
   } from "$lib/stores/reader-core.svelte";
   import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "$lib/data/quran-types";
+  import { surahRouteContext } from "$lib/data/quran";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import { readerSource } from "$lib/stores/reader-settings.svelte";
+  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+  import { noteTranslationChosen } from "$lib/quran/engagement";
+  import { resumeToLastRead } from "$lib/reader/resume";
+  import { readerHomeHrefFor } from "$lib/i18n/reader";
+  import { publicHref } from "$lib/i18n/public-href";
+  import type { UiLocale } from "$lib/i18n/locales";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { cn } from "$lib/utils";
   import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  import ReadingModeDialog from "../../_reader/ReadingModeDialog.svelte";
+  import {
+    readingCandidates,
+    readingModeUi,
+    type ReadingCandidate,
+  } from "../../_reader/reading-mode-guard.svelte";
 
   let {
     id,
@@ -79,6 +95,51 @@
     return mode === "verse" ? copy.modeNames.verse : copy.modeNames.reading;
   }
 
+  // Reading-mode confirmation (U7/U8): the settings pill routes through the
+  // same reading-mode-guard interception as the reader header — UI-initiated
+  // switches to reading confirm first whenever a translation is in play. The
+  // settings route has no reader position, so "current source" is the
+  // persisted readerSource preference and a confirmed different translation
+  // resumes at the last-read anchor.
+  let confirmOpen = $state(false);
+  let confirmCandidates = $state.raw<ReadingCandidate[]>([]);
+
+  function selectMode(mode: ReaderMode): void {
+    if (mode === "reading" && !reader.isReadingMode) {
+      const candidates = readingCandidates(readerSource.sourceId, stackedTranslations.ids);
+      if (candidates.length > 0) {
+        confirmCandidates = candidates;
+        confirmOpen = true;
+        return;
+      }
+    }
+    applyMode(mode);
+  }
+
+  function applyMode(mode: ReaderMode): void {
+    if (mode === "reading") readingModeUi.mark();
+    else readingModeUi.reset();
+    reader.setMode(mode);
+  }
+
+  async function onConfirm(candidate: ReadingCandidate): Promise<void> {
+    const currentPrimary = readerSource.sourceId;
+    confirmOpen = false;
+    readingModeUi.mark();
+    reader.setMode("reading");
+    if (candidate.id === null || candidate.entry === null || candidate.id === currentPrimary) {
+      return;
+    }
+    readerSource.setSourceId(candidate.id);
+    void noteTranslationChosen(candidate.id);
+    if (reader.hasLastRead) {
+      const resumed = await resumeToLastRead(surahRouteContext(candidate.id));
+      if (resumed) return;
+    }
+    // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHomeHrefFor re-validates via assertUiLocale.
+    void goto(publicHref(readerHomeHrefFor(getLocale() as UiLocale)));
+  }
+
   function chooseArabicFont(fontId: ArabicFontId): void {
     reader.setArabicFont(fontId);
     void loadArabicFont(fontId);
@@ -134,7 +195,7 @@
               type="button"
               class={pillClass(reader.mode === mode)}
               aria-pressed={reader.mode === mode}
-              onclick={() => reader.setMode(mode)}>{modeLabel(mode)}</button
+              onclick={() => selectMode(mode)}>{modeLabel(mode)}</button
             >
           {/each}
         </div>
@@ -236,6 +297,8 @@
       </div>
     </div>
   </div>
+
+  <ReadingModeDialog bind:open={confirmOpen} candidates={confirmCandidates} onConfirm={onConfirm} />
 </div>
 
 <style>
