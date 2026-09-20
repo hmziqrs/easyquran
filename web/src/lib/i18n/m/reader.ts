@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 212 messages. Import this barrel, never
+// 218 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -127,6 +127,12 @@ export { reader_quran_book } from "$lib/paraglide/messages/reader_quran_book.js"
 export { reader_range_translation_unavailable } from "$lib/paraglide/messages/reader_range_translation_unavailable.js";
 export { reader_reading } from "$lib/paraglide/messages/reader_reading.js";
 export { reader_reading_banner } from "$lib/paraglide/messages/reader_reading_banner.js";
+export { reader_reading_confirm_apply } from "$lib/paraglide/messages/reader_reading_confirm_apply.js";
+export { reader_reading_confirm_body } from "$lib/paraglide/messages/reader_reading_confirm_body.js";
+export { reader_reading_confirm_cancel } from "$lib/paraglide/messages/reader_reading_confirm_cancel.js";
+export { reader_reading_confirm_choose } from "$lib/paraglide/messages/reader_reading_confirm_choose.js";
+export { reader_reading_confirm_single } from "$lib/paraglide/messages/reader_reading_confirm_single.js";
+export { reader_reading_confirm_title } from "$lib/paraglide/messages/reader_reading_confirm_title.js";
 export { reader_reading_mode } from "$lib/paraglide/messages/reader_reading_mode.js";
 export { reader_reading_notice } from "$lib/paraglide/messages/reader_reading_notice.js";
 export { reader_reload_open_tabs } from "$lib/paraglide/messages/reader_reload_open_tabs.js";

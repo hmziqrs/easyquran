@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
-  import { beforeNavigate, invalidateAll, replaceState } from "$app/navigation";
+  import { beforeNavigate, goto, invalidateAll, replaceState } from "$app/navigation";
   import { page as appPage } from "$app/state";
   import {
     parseKey,
@@ -16,6 +16,7 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
+  import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { resumeToLastRead } from "$lib/reader/resume";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
@@ -36,6 +37,9 @@
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import { withModeParam } from "$lib/reader/mode-param";
+  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+  import { readerSource } from "$lib/stores/reader-settings.svelte";
+  import { noteTranslationChosen } from "$lib/quran/engagement";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import { ayahIndexValidator } from "./range-validate";
@@ -56,6 +60,13 @@
   import ReaderHeader from "./ReaderHeader.svelte";
   import ReaderPageNav from "./ReaderPageNav.svelte";
   import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
+  import ReadingModeDialog from "./ReadingModeDialog.svelte";
+  import {
+    readingCandidates,
+    readingModeHrefFor,
+    readingModeUi,
+    type ReadingCandidate,
+  } from "./reading-mode-guard.svelte";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
   import {
@@ -390,13 +401,62 @@
     if (Number.isSafeInteger(localPage)) shiftVirtualWindow(localPage);
   }
 
+  // Reading-mode confirmation (U7/U8): UI-initiated switches to reading are
+  // intercepted whenever a translation is in play (route translation primary,
+  // or stacked extras beyond the primary). Arabic primary with no extras
+  // switches directly. This is the single interception point — every reader
+  // mode control routes through onChangeMode → changeMode.
+  const primaryTranslationId = $derived(isTranslationSource ? sourceId : null);
+  let readingConfirmOpen = $state(false);
+  let readingConfirmCandidates = $state.raw<ReadingCandidate[]>([]);
+
   function changeMode(mode: ReaderMode): void {
+    if (mode === "reading" && !reader.isReadingMode) {
+      const candidates = readingCandidates(primaryTranslationId, stackedTranslations.ids);
+      if (candidates.length > 0) {
+        readingConfirmCandidates = candidates;
+        readingConfirmOpen = true;
+        return;
+      }
+    }
+    applyMode(mode);
+  }
+
+  function applyMode(mode: ReaderMode): void {
+    if (mode === "reading") readingModeUi.mark();
+    else readingModeUi.reset();
     if (reader.mode === mode) return;
     void preserveViewport(() => {
       virtualCenterPage = visibleLocalPage;
       reader.setMode(mode);
       replaceState(withModeParam(appPage.url, mode), appPage.state);
     }, true);
+  }
+
+  function onReadingConfirm(candidate: ReadingCandidate): void {
+    readingConfirmOpen = false;
+    readingModeUi.mark();
+    const href = readingModeHrefFor(
+      candidate,
+      primaryTranslationId,
+      deLocalizeUrl(appPage.url).pathname,
+    );
+    if (href === null) {
+      // Arabic choice, or the chosen candidate already is the route primary:
+      // no navigation, just enter reading mode in place.
+      applyMode("reading");
+      return;
+    }
+    if (candidate.entry) {
+      readerSource.setSourceId(candidate.entry.id);
+      void noteTranslationChosen(candidate.entry.id);
+    }
+    // Mode first, THEN navigate: the reader store applies reading mode
+    // immediately and the goto target already carries ?mode=reading, so the
+    // layout's mode-param sync never fights the transition and the param
+    // lands on the final URL.
+    reader.setMode("reading");
+    void goto(publicHref(readerHrefFor(copy.locale, href)), { noScroll: true });
   }
 
   function changeTypography(change: () => void): void {
@@ -1000,6 +1060,12 @@
       {nextPage}
     />
   </div>
+
+  <ReadingModeDialog
+    bind:open={readingConfirmOpen}
+    candidates={readingConfirmCandidates}
+    onConfirm={onReadingConfirm}
+  />
 </div>
 
 <style>

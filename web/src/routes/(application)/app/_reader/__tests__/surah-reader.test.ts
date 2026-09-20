@@ -6,6 +6,11 @@ import { mount, unmount } from "svelte";
 import type { ComponentProps } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+// Minimal surface of the ReaderHeader props the tests drive.
+interface HeaderStubProps {
+  onChangeMode: (mode: "verse" | "reading") => void;
+}
+
 // ---- hoisted doubles -------------------------------------------------------
 const {
   nav,
@@ -16,8 +21,10 @@ const {
   gotoSpy,
   readerStub,
   mountStub,
+  headerProps,
+  setSourceIdSpy,
 } = vi.hoisted(() => ({
-  nav: { state: {} },
+  nav: { state: {}, url: new URL("https://example.test/app/al-fatihah") },
   workerStub: {
     ready: true,
     readRange: vi.fn(),
@@ -41,8 +48,17 @@ const {
     setLastReadAnchor: vi.fn(),
     consumePendingAnchor: vi.fn(() => null),
     seedAyahs: vi.fn(),
+    mode: "verse",
+    isReadingMode: false,
+    isVerseMode: true,
+    setMode: vi.fn(),
   },
   mountStub: () => {},
+  // Real ReaderHeader props captured on mount so tests can drive onChangeMode
+  // exactly like the header's mode pills do.
+  // SAFETY: null is the not-yet-mounted member of the nullable holder; tests assign the captured HeaderStubProps on mount.
+  headerProps: { current: null as HeaderStubProps | null },
+  setSourceIdSpy: vi.fn(),
 }));
 
 vi.mock("$app/environment", () => ({ browser: true }));
@@ -52,12 +68,36 @@ vi.mock("$app/navigation", () => ({
   invalidateAll: invalidateAllSpy,
   replaceState: () => {},
 }));
-vi.mock("$app/paths", () => ({ resolve: (p: string) => p }));
+vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
 
 vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
 vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
-vi.mock("$lib/quran/catalogue", () => ({ TRANSLATION_CATALOGUE: [] }));
+vi.mock("$lib/quran/catalogue", () => {
+  const entry = (id: string) => ({
+    id,
+    language: id.startsWith("ur.") ? "Urdu" : "English",
+    languageCode: id.startsWith("ur.") ? "ur" : "en",
+    direction: "ltr" as const,
+    name: `Name ${id}`,
+    translator: `Translator ${id}`,
+    sizeBytes: 2048,
+    downloadUrl: "",
+  });
+  const list = ["en.sahih", "en.arberry", "ur.jalandhry"].map((id) => entry(id));
+  return {
+    TRANSLATION_CATALOGUE: list,
+    TRANSLATION_CATALOGUE_BY_ID: new Map(list.map((t) => [t.id, t])),
+    flagFor: () => ({ flag: "", country: "" }),
+    translationSourceOf: () => "tanzil",
+  };
+});
+vi.mock("$lib/stores/reader-settings.svelte", () => ({
+  readerSource: { sourceId: null, setSourceId: setSourceIdSpy },
+}));
+vi.mock("$lib/quran/engagement", () => ({
+  noteTranslationChosen: vi.fn(() => Promise.resolve()),
+}));
 vi.mock("$lib/stores/quran.svelte", () => ({ quran: quranStore }));
 vi.mock("$lib/stores/reader.svelte", () => ({
   reader: readerStub,
@@ -65,7 +105,12 @@ vi.mock("$lib/stores/reader.svelte", () => ({
 }));
 
 // child components as trivial stubs so mount never depends on their internals.
-vi.mock("../ReaderHeader.svelte", () => ({ default: mountStub }));
+vi.mock("../ReaderHeader.svelte", () => ({
+  default: (...args: unknown[]) => {
+    // SAFETY: Svelte 5 invokes child components as (anchor, props); the props object is always the last argument, so the assertion only widens unknown[] back to the stub contract.
+    headerProps.current = args[args.length - 1] as HeaderStubProps;
+  },
+}));
 vi.mock("../ReaderPageNav.svelte", () => ({ default: mountStub }));
 vi.mock("../VerseRow.svelte", () => ({ default: mountStub }));
 
@@ -171,6 +216,18 @@ beforeEach(() => {
   readerStub.markRead.mockReset();
   readerStub.hasLastRead = false;
   readerStub.lastRead = null;
+  readerStub.mode = "verse";
+  readerStub.isReadingMode = false;
+  readerStub.isVerseMode = true;
+  readerStub.setMode = vi.fn().mockImplementation((m: "verse" | "reading") => {
+    readerStub.mode = m;
+    readerStub.isReadingMode = m === "reading";
+    readerStub.isVerseMode = m === "verse";
+  });
+  headerProps.current = null;
+  setSourceIdSpy.mockReset();
+  nav.url = new URL("https://example.test/app/al-fatihah");
+  localStorage.clear();
 
   // happy-dom lacks ResizeObserver; the reader attaches one in two places.
   vi.stubGlobal(
@@ -602,5 +659,138 @@ describe("SurahReader W7-R2-1 retry-button gate", () => {
     const region = target.querySelector('[role="status"]');
     expect(region?.textContent ?? "").toMatch(/couldn't be loaded/i);
     expect(region?.querySelector('button[type="button"]')).not.toBeNull();
+  });
+});
+
+// ---- reading-mode confirmation (U7/U8) --------------------------------------
+import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import { readingModeUi } from "../reading-mode-guard.svelte";
+
+describe("SurahReader reading-mode confirmation", () => {
+  function translationPageData(): ReturnType<typeof pageData> {
+    const base = pageData({ ayahs: 7, pageCount: 3 });
+    // Route translation primary instead of the default uthmani source id.
+    return { ...base, normalization: { ...base.normalization, sourceId: "en.sahih" } };
+  }
+  function settle(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  function radios(): HTMLInputElement[] {
+    // SAFETY: selector matches only radio inputs, so every element is HTMLInputElement
+    return [...document.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
+  }
+  function confirmButton(): HTMLButtonElement {
+    // SAFETY: selector matches only the dialog's confirm button
+    return document.querySelector("button[data-reading-confirm]") as HTMLButtonElement;
+  }
+  function driveModeSwitch(mode: "verse" | "reading"): void {
+    headerProps.current?.onChangeMode(mode);
+  }
+
+  beforeEach(() => {
+    readingModeUi.reset();
+    stackedTranslations.clear();
+    // Stacked extras fetch through the worker; give the stub a resolving range
+    // so the controller's sync effect never awaits undefined.
+    workerStub.readRange.mockResolvedValue({ ayahs: [], normalizations: [] });
+  });
+
+  afterEach(() => {
+    for (const el of document.querySelectorAll("[data-dialog-content], [data-dialog-overlay]")) {
+      el.remove();
+    }
+  });
+
+  it("opens the confirmation dialog on a UI switch with a translation primary + extras, mode unchanged", async () => {
+    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    expect(readerStub.mode).toBe("verse");
+    expect(radios().map((r) => r.value)).toEqual(["en.sahih", "en.arberry"]);
+  });
+
+  it("confirming another translation navigates position-preserved with ?mode=reading applied", async () => {
+    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
+    nav.url = new URL("https://example.test/app/t/en/sahih/juz/30");
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    radios()[1]?.click();
+    confirmButton().click();
+    expect(setSourceIdSpy).toHaveBeenCalledWith("en.arberry");
+    expect(readerStub.mode).toBe("reading");
+    expect(gotoSpy).toHaveBeenCalledTimes(1);
+    const href = String(gotoSpy.mock.calls[0]?.[0]);
+    expect(href).toContain("/app/t/en/arberry/juz/30");
+    expect(href).toContain("mode=reading");
+  });
+
+  it("confirming the current primary applies reading mode in place without navigation", async () => {
+    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    confirmButton().click();
+    // applyMode runs through the anchor-preserving queue; let a tick land.
+    await settle();
+    expect(readerStub.mode).toBe("reading");
+    expect(gotoSpy).not.toHaveBeenCalled();
+    expect(readingModeUi.appliedByUi).toBe(true);
+  });
+
+  it("cancel leaves the mode untouched", async () => {
+    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    const cancel = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Cancel"),
+    );
+    cancel?.click();
+    await settle();
+    expect(readerStub.mode).toBe("verse");
+    expect(gotoSpy).not.toHaveBeenCalled();
+  });
+
+  it("Arabic primary with zero extras switches directly — no dialog", async () => {
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    expect(readerStub.mode).toBe("reading");
+    expect(radios()).toHaveLength(0);
+    expect(gotoSpy).not.toHaveBeenCalled();
+  });
+
+  it("Arabic primary with extras confirms with Arabic preselected; Arabic choice never navigates", async () => {
+    stackedTranslations.setIds(["en.arberry"]);
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    const inputs = radios();
+    expect(inputs.map((r) => r.value)).toEqual(["arabic", "en.arberry"]);
+    expect(inputs[0]?.checked).toBe(true);
+    confirmButton().click();
+    await settle();
+    expect(readerStub.mode).toBe("reading");
+    expect(gotoSpy).not.toHaveBeenCalled();
+  });
+
+  it("a lone translation primary still asks (single-candidate confirm, no radios)", async () => {
+    stackedTranslations.setIds([]);
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    driveModeSwitch("reading");
+    await settle();
+    expect(radios()).toHaveLength(0);
+    confirmButton().click();
+    await settle();
+    expect(readerStub.mode).toBe("reading");
   });
 });

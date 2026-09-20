@@ -11,6 +11,7 @@
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import AppSidebar from "./Sidebar.svelte";
   import TranslationButton from "./TranslationButton.svelte";
+  import { readingBannerVisible, readingModeUi } from "./reading-mode-guard.svelte";
 
   let { header, children }: { header: Snippet; children: Snippet } = $props();
   let mounted = $state(false);
@@ -26,15 +27,23 @@
       : null,
   );
 
-  // Mode-switch banner: entering reading mode with stacked extras beyond the
-  // primary hides them (VerseRow renders extras in verse mode only). One-shot
-  // per transition — dismissing sticks until the reader leaves reading mode or
-  // the selection changes. The store itself is never touched by mode switches.
+  // Mode-switch banner: URL-initiated fallback ONLY (?mode=reading loads with
+  // no gesture to confirm against). UI-initiated switches get the upfront
+  // ReadingModeDialog confirmation instead (reading-mode-guard), so both must
+  // never show together. One-shot per transition — dismissing sticks until the
+  // reader leaves reading mode or the selection changes. The store itself is
+  // never touched by mode switches.
   let bannerDismissed = $state(false);
   const hiddenCount = $derived(
     stackedTranslations.ids.filter((id) => id !== primaryId).length,
   );
-  const bannerVisible = $derived(reader.isReadingMode && hiddenCount > 0 && !bannerDismissed);
+  const bannerVisible = $derived(
+    readingBannerVisible({
+      reading: reader.isReadingMode,
+      hiddenCount,
+      dismissed: bannerDismissed,
+    }),
+  );
   let prevReading = false;
   let prevHidden = -1;
   $effect(() => {
@@ -42,6 +51,7 @@
     const hidden = hiddenCount;
     const leftReading = prevReading && !reading;
     const selectionsChanged = prevHidden >= 0 && hidden !== prevHidden;
+    if (leftReading) readingModeUi.reset();
     if ((leftReading || selectionsChanged) && bannerDismissed) bannerDismissed = false;
     prevReading = reading;
     prevHidden = hidden;

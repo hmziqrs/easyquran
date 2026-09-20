@@ -117,6 +117,12 @@ import {
   reader_range_translation_unavailable,
   reader_reading,
   reader_reading_banner,
+  reader_reading_confirm_apply,
+  reader_reading_confirm_body,
+  reader_reading_confirm_cancel,
+  reader_reading_confirm_choose,
+  reader_reading_confirm_single,
+  reader_reading_confirm_title,
   reader_reading_mode,
   reader_reading_notice,
   reader_reload_open_tabs,
@@ -409,6 +415,12 @@ export interface ReaderUiCopy {
     readonly readingBanner: string;
     readonly dismissBanner: string;
     readonly readingNotice: string;
+    readonly readingConfirmTitle: string;
+    readonly readingConfirmBody: string;
+    readonly readingConfirmSingle: (name: string) => string;
+    readonly readingConfirmChoose: string;
+    readonly readingConfirmApply: string;
+    readonly readingConfirmCancel: string;
     readonly tooltipSource: string;
     readonly tooltipTranslator: string;
     readonly tooltipLanguage: string;
@@ -676,6 +688,12 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       readingBanner: noArgs(reader_reading_banner),
       dismissBanner: noArgs(reader_dismiss_banner),
       readingNotice: noArgs(reader_reading_notice),
+      readingConfirmTitle: noArgs(reader_reading_confirm_title),
+      readingConfirmBody: noArgs(reader_reading_confirm_body),
+      readingConfirmSingle: (name) => reader_reading_confirm_single({ name }, options),
+      readingConfirmChoose: noArgs(reader_reading_confirm_choose),
+      readingConfirmApply: noArgs(reader_reading_confirm_apply),
+      readingConfirmCancel: noArgs(reader_reading_confirm_cancel),
       tooltipSource: noArgs(reader_tooltip_source),
       tooltipTranslator: noArgs(reader_tooltip_translator),
       tooltipLanguage: noArgs(reader_tooltip_language),
