@@ -123,6 +123,20 @@
     return languages[0]?.language ?? null;
   });
 
+  // Keep the selected rail row in view: on open the auto-selected primary
+  // language can sit far below the fold, and search filtering can shrink the
+  // rail around it. "nearest" never scrolls when the row is already visible.
+  $effect(() => {
+    if (!open || activeLanguage === null) return;
+    const row = document.querySelector<HTMLElement>(
+      `[data-language-option="${CSS.escape(activeLanguage)}"]`,
+    );
+    // jsdom defines no scrollIntoView; presence-check so tests never call it.
+    if (row !== null && "scrollIntoView" in row) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  });
+
   // Flat cross-language rows while searching, ordered by language then name.
   const searchRows = $derived.by(() => {
     if (!searchActive) return [];
@@ -597,7 +611,7 @@
                   {copy.translations.back}
                 </button>
                 <h3 class="text-[15px] font-semibold text-foreground">{activeLanguage}</h3>
-                <span class="text-[13px] text-muted-foreground">
+                <span data-results-count class="text-[13px] text-muted-foreground">
                   {copy.translations.results(activeEntries.length)}
                 </span>
               </div>

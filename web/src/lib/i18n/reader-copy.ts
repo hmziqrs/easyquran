@@ -213,6 +213,7 @@ import {
   reader_translations_open,
   reader_translations_primary_tip,
   reader_translations_results,
+  reader_translations_results_one,
   reader_translations_switch,
   reader_your_note,
 } from "$lib/i18n/m/reader";
@@ -697,7 +698,10 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       languagesLabel: noArgs(reader_translations_languages_label),
       switchTo: noArgs(reader_translations_switch),
       noMatches: noArgs(reader_translations_no_matches),
-      results: (count) => reader_translations_results({ count }, options),
+      results: (count) =>
+        count === 1
+          ? reader_translations_results_one(options)
+          : reader_translations_results({ count }, options),
       primaryTip: noArgs(reader_translations_primary_tip),
       capNote: (max) => reader_translations_cap_note({ max }, options),
       hiddenTip: noArgs(reader_translations_hidden_tip),

@@ -107,6 +107,12 @@ const FILLER_IDS = [
 let target: HTMLElement;
 let instance: ReturnType<typeof mount> | null = null;
 
+// jsdom ships no scrollIntoView; patch it on the prototype so the rail's
+// keep-selected-visible effect can be observed in tests.
+const originalScrollIntoView: ((arg?: boolean | ScrollIntoViewOptions) => void) | undefined =
+  Element.prototype.scrollIntoView?.bind(Element.prototype);
+let scrolledIntoView: Element[] = [];
+
 beforeEach(() => {
   h.readerStub.isVerseMode = true;
   h.readerStub.isReadingMode = false;
@@ -115,6 +121,10 @@ beforeEach(() => {
   h.setSourceId.mockClear();
   localStorage.clear();
   stackedTranslations.clear();
+  scrolledIntoView = [];
+  Element.prototype.scrollIntoView = function scrollSpy(this: Element): void {
+    scrolledIntoView.push(this);
+  };
   target = document.createElement("div");
   document.body.appendChild(target);
 });
@@ -123,6 +133,8 @@ afterEach(() => {
   if (instance) void unmount(instance);
   instance = null;
   target.remove();
+  // SAFETY: jsdom omits scrollIntoView entirely, so the saved original can be undefined at runtime while the DOM types require it.
+  Element.prototype.scrollIntoView = originalScrollIntoView as typeof Element.prototype.scrollIntoView;
   // bits-ui portals can leave dialog shells behind across mounts; clear them so
   // document-level queries only ever see the current modal under test.
   for (const el of document.querySelectorAll("[data-dialog-content], [data-dialog-overlay]")) {
@@ -206,6 +218,35 @@ describe("TranslationModal — master-detail layout", () => {
     // the pane header names the language with a quiet count
     expect(pane().querySelector("h3")?.textContent).toContain("Urdu");
     expect(paneRowIds()).toEqual(["qul.ur.bayan", "ur.jalandhry"]);
+  });
+
+  it("scrolls the selected rail row into view (open auto-select and keyboard moves)", async () => {
+    await open({ primaryId: "qul.ur.bayan" });
+    // Urdu sits last in the fixture rail: the auto-selection must be revealed
+    // instead of resting below the fold.
+    const scrolledOnOpen = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
+    expect(scrolledOnOpen).toContain("Urdu");
+
+    const english = railOptions()[0];
+    english?.focus();
+    english?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+    await settle();
+    const scrolledOnKey = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
+    expect(scrolledOnKey).toContain("French");
+  });
+
+  it("pluralizes the count line: 4 translations vs 1 translation", async () => {
+    await open();
+    expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
+      "4 translations",
+    );
+    railOptions().find((b) => b.getAttribute("data-language-option") === "Turkish")?.click();
+    await settle();
+    expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
+      "1 translation",
+    );
   });
 
   it("selecting a rail language swaps the pane rows", async () => {

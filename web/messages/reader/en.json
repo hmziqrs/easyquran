@@ -176,6 +176,7 @@
   "reader_translations_primary_tip": "The translation used when reading mode shows one.",
   "reader_translations_cap_note": "Up to {max} translations alongside the primary.",
   "reader_translations_results": "{count} translations",
+  "reader_translations_results_one": "1 translation",
   "reader_translations_switch": "Switch to this translation",
   "reader_translations_no_matches": "No translations match your search.",
   "reader_translations_hidden_tip": "Reading mode shows only your first translation.",
