@@ -16,7 +16,8 @@ const h = vi.hoisted(() => {
   return {
     catalogue: [entry("en.sahih", "English", "en"), entry("en.arberry", "English", "en")],
     gotoSpy: vi.fn().mockResolvedValue(undefined),
-    resumeSpy: vi.fn().mockResolvedValue(true),
+    resumeVerseSpy: vi.fn().mockResolvedValue(true),
+    resumeLastReadSpy: vi.fn(),
     setModeSpy,
     setSourceIdSpy: vi.fn(),
     // SAFETY: null is the not-yet-seeded member; tests reassign concrete catalogue ids.
@@ -26,7 +27,10 @@ const h = vi.hoisted(() => {
       isReadingMode: false,
       isVerseMode: true,
       hasLastRead: true,
-      lastRead: { num: 1, n: 1 },
+      // SAFETY: null is a member of the anchor union; no test in this file sets a concrete anchor.
+      lastReadAnchor: null,
+      // last read on a DIFFERENT source than the confirmed candidate, to pin that the candidate wins.
+      lastRead: { num: 2, n: 5, sourceId: "en.sahih" },
       arabicScript: "uthmani",
       arabicFont: "amiri",
       arabicSizePx: "33px",
@@ -67,7 +71,10 @@ vi.mock("$lib/stores/reader-settings.svelte", () => ({
 vi.mock("$lib/quran/engagement", () => ({
   noteTranslationChosen: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("$lib/reader/resume", () => ({ resumeToLastRead: h.resumeSpy }));
+vi.mock("$lib/reader/resume", () => ({
+  resumeToVerse: h.resumeVerseSpy,
+  resumeToLastRead: h.resumeLastReadSpy,
+}));
 vi.mock("$lib/fonts/arabic-fonts", () => ({ loadArabicFont: vi.fn() }));
 vi.mock("$lib/quran/catalogue", () => ({
   TRANSLATION_CATALOGUE_BY_ID: new Map(h.catalogue.map((t) => [t.id, t])),
@@ -98,7 +105,8 @@ beforeEach(() => {
   h.setSourceIdSpy.mockClear();
   h.sourceState.sourceId = null;
   h.gotoSpy.mockClear();
-  h.resumeSpy.mockClear();
+  h.resumeVerseSpy.mockClear();
+  h.resumeVerseSpy.mockResolvedValue(true);
   readingModeUi.reset();
   stackedTranslations.clear();
   target = document.createElement("div");
@@ -181,7 +189,16 @@ describe("ReadingSection mode pill reading-mode-guard interception", () => {
     expect(h.readerStub.mode).toBe("reading");
     expect(readingModeUi.appliedByUi).toBe(true);
     expect(h.setSourceIdSpy).toHaveBeenCalledWith("en.arberry");
-    expect(h.resumeSpy).toHaveBeenCalledTimes(1);
+    // The CHOSEN candidate pins the resume context, not lastRead.sourceId ("en.sahih").
+    expect(h.resumeVerseSpy).toHaveBeenCalledWith(
+      2,
+      5,
+      "en.arberry",
+      { kind: "translation", lang: "en", translator: "arberry" },
+      { anchor: null },
+    );
+    // the lastRead-preferring helper must NOT be used for candidate confirms
+    expect(h.resumeLastReadSpy).not.toHaveBeenCalled();
     expect(h.gotoSpy).not.toHaveBeenCalled();
   });
 
@@ -195,7 +212,7 @@ describe("ReadingSection mode pill reading-mode-guard interception", () => {
     confirmButton().click();
     expect(h.readerStub.mode).toBe("reading");
     expect(h.setSourceIdSpy).not.toHaveBeenCalled();
-    expect(h.resumeSpy).not.toHaveBeenCalled();
+    expect(h.resumeVerseSpy).not.toHaveBeenCalled();
   });
 
   it("switches directly (no dialog) for an Arabic source with zero extras", async () => {

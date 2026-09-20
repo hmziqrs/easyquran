@@ -20,7 +20,7 @@
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { noteTranslationChosen } from "$lib/quran/engagement";
-  import { resumeToLastRead } from "$lib/reader/resume";
+  import { resumeToVerse } from "$lib/reader/resume";
   import { readerHomeHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import type { UiLocale } from "$lib/i18n/locales";
@@ -132,8 +132,16 @@
     }
     readerSource.setSourceId(candidate.id);
     void noteTranslationChosen(candidate.id);
-    if (reader.hasLastRead) {
-      const resumed = await resumeToLastRead(surahRouteContext(candidate.id));
+    if (reader.hasLastRead && reader.lastRead) {
+      // Resume at the last-read POSITION, but pinned to the CHOSEN candidate:
+      // resumeToVerse prefers its sourceId argument (resumeCtxFor), so passing
+      // candidate.id — not lastRead.sourceId — makes the confirmed candidate
+      // win over whatever source the last read happened on. Plain
+      // "continue reading" flows keep the lastRead preference.
+      const lastRead = reader.lastRead;
+      const resumed = await resumeToVerse(lastRead.num, lastRead.n, candidate.id, surahRouteContext(candidate.id), {
+        anchor: reader.lastReadAnchor,
+      });
       if (resumed) return;
     }
     // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHomeHrefFor re-validates via assertUiLocale.
