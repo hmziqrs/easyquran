@@ -610,7 +610,7 @@
                 aria-current={active ? "true" : undefined}
                 onclick={() => selectLanguage(l.language)}
                 onkeydown={(e) => onRailKeydown(e, i)}
-                class="flex h-[52px] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
+                class="flex h-[52px] flex-none cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
                   ? 'bg-primary/10 text-foreground'
                   : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'}"
               >

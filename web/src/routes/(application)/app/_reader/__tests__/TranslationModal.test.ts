@@ -228,6 +228,10 @@ describe("TranslationModal — master-detail layout", () => {
     const english = railOption("English");
     expect(english?.textContent).toContain("\u{1F1EC}\u{1F1E7}");
     expect(english?.textContent).toContain("4");
+    // U17 height must survive the rail's flex column: flex-none keeps the
+    // rows from shrinking below h-[52px] to min-content (vision r7 item 36).
+    expect(english?.className).toContain("h-[52px]");
+    expect(english?.className).toContain("flex-none");
   });
 
   it("boosts the user's browser languages after Arabic and English", async () => {
