@@ -55,8 +55,11 @@
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
     <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(92vw,460px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-xl border border-border bg-popover bg-clip-padding p-5 text-popover-foreground shadow-lg"
+      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(92vw,460px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-xl border border-border bg-popover bg-clip-padding pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.25rem+env(safe-area-inset-bottom))] ps-[calc(1.25rem+env(safe-area-inset-left))] pe-[calc(1.25rem+env(safe-area-inset-right))] text-popover-foreground shadow-lg"
     >
+      <!-- S11 (stress A3): base padding + env(safe-area-inset-*) keeps content
+           clear of notches/home indicators where insets are reported, and
+           collapses to the plain 1.25rem everywhere else. -->
       <Dialog.Title class="text-[17px] font-semibold leading-tight">
         {copy.translations.readingConfirmTitle}
       </Dialog.Title>
@@ -69,16 +72,19 @@
         <Dialog.Description class="text-sm leading-relaxed text-foreground-secondary">
           {copy.translations.readingConfirmBody}
         </Dialog.Description>
-        <fieldset class="flex min-h-0 flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-background-subtle p-2">
+        <fieldset class="flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-lg border border-border bg-background-subtle p-2">
           <legend class="mb-1 px-1.5 text-xs font-medium text-muted-foreground">
             {copy.translations.readingConfirmChoose}
           </legend>
           <div class="flex flex-col gap-0.5" role="radiogroup" aria-label={copy.translations.readingConfirmChoose}>
             {#each candidates as c (c.id ?? "arabic")}
               {@const value = c.id ?? "arabic"}
+              <!-- S9/S13 (stress A1/A4): the label already makes the whole row
+                   the radio's target; min-h-11 lifts it to a >=44px target and
+                   touch-manipulation kills the double-tap-zoom window. -->
               <label
                 data-candidate={value}
-                class="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+                class="flex min-h-11 cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
               >
                 <input
                   type="radio"
@@ -112,7 +118,7 @@
             <button
               {...props}
               type="button"
-              class="flex h-9 cursor-pointer items-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              class="flex h-11 cursor-pointer touch-manipulation items-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             >
               {copy.translations.readingConfirmCancel}
             </button>
@@ -122,7 +128,7 @@
           type="button"
           onclick={confirm}
           data-reading-confirm
-          class="flex h-9 cursor-pointer items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+          class="flex h-11 cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
         >
           {copy.translations.readingConfirmApply}
         </button>

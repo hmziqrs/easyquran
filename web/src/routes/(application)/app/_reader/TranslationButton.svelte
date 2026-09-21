@@ -47,7 +47,7 @@
     aria-expanded={open}
     aria-label={copy.translations.open}
     title={copy.translations.open}
-    class="relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background-subtle text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
+    class="relative flex h-11 w-11 touch-manipulation items-center justify-center rounded-md border border-border bg-background-subtle text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
   >
     <!-- U9: Google-Translate-style mark (rounded square, 文 + A with swap
          arrows). Static brand blue on purpose — the user asked for that logo

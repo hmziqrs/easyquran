@@ -150,4 +150,23 @@ describe("ReadingModeDialog", () => {
     // translations modal now) — none in this dialog either.
     expect(document.querySelectorAll("span.size-2")).toHaveLength(0);
   });
+
+  it("gives choice rows and buttons ≥44px targets with contained overscroll (stress S9/S12/S13)", async () => {
+    await openDialog([candidate("en.sahih"), candidate("en.arberry")]);
+    const row = document.querySelector("label[data-candidate]");
+    // the label already makes the full row the radio's target; min-h-11 lifts it
+    expect(row?.className).toContain("min-h-11");
+    expect(row?.className).toContain("touch-manipulation");
+    expect(confirmButton().className).toContain("h-11");
+    const cancel = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Cancel"),
+    );
+    expect(cancel?.className).toContain("h-11");
+    // SAFETY: the candidate list is the dialog's only scroll container
+    const list = document.querySelector("fieldset") as HTMLElement | null;
+    expect(list?.className).toContain("overscroll-contain");
+    // SAFETY: bits-ui marks the portaled dialog content element
+    const content = document.querySelector("[data-dialog-content]");
+    expect(content?.className).toContain("env(safe-area-inset-left)");
+  });
 });

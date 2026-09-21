@@ -540,6 +540,131 @@ describe("TranslationModal — selected chips", () => {
   });
 });
 
+describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
+  it("makes the whole row the toggle target via a label cover over checkbox+name+author", async () => {
+    await open({ primaryId: "en.sahih" });
+    const row = pane().querySelector('li[data-translation-row="en.pickthall"]');
+    // SAFETY: selector matches only the row's label cover element
+    const label = row?.querySelector("label[data-row-target]") as HTMLLabelElement | null;
+    const box = row?.querySelector('input[type="checkbox"]');
+    expect(label).toBeTruthy();
+    // the label is associated with the row checkbox, so its whole surface toggles
+    expect(label?.getAttribute("for")).toBe(box?.id);
+    expect(box?.id).toBe("tmodal-en.pickthall");
+    // >=44px cover + no double-tap-zoom window on it
+    expect(label?.className).toContain("min-h-11");
+    expect(label?.className).toContain("touch-manipulation");
+    // the name link stretches to the full row height (>=44px target) and keeps
+    // the primary-switch role
+    const link = row?.querySelector("a[data-switch]");
+    expect(link?.className).toContain("self-stretch");
+    // clicking the row cover (not the checkbox) toggles the selection
+    label?.click();
+    await settle();
+    expect([...stackedTranslations.ids]).toEqual(["en.pickthall"]);
+    // primary rows keep a plain cover: no checkbox to associate, no dead label
+    const primaryRow = pane().querySelector('li[data-translation-row="en.sahih"]');
+    expect(primaryRow?.querySelector("label[data-row-target]")).toBeNull();
+    expect(primaryRow?.querySelector("div[data-row-cover]")).toBeTruthy();
+  });
+
+  it("keeps chip reorder arrows focusable and revealed without hover", async () => {
+    stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
+    await open({ primaryId: "en.sahih" });
+    // SAFETY: selector matches only the named chip control button
+    const up = document.querySelector(
+      '[data-chip="ms.basmeih"] button[aria-label="Move up"]',
+    ) as HTMLButtonElement | null;
+    // SAFETY: selector matches only the named chip control button
+    const down = document.querySelector(
+      '[data-chip="ur.jalandhry"] button[aria-label="Move down"]',
+    ) as HTMLButtonElement | null;
+    // real focusable buttons with labels: keyboard users can reach them
+    expect(up?.tagName).toBe("BUTTON");
+    expect(up?.tabIndex).toBe(0);
+    expect(down?.tabIndex).toBe(0);
+    // class-level visibility contract (jsdom cannot match media queries): the
+    // hover-reveal variant compiles only under @media(hover:hover), so coarse
+    // pointers need the hover:none reveal and keyboard needs focus-within.
+    expect(up?.className).toContain("[@media(hover:none)]:enabled:opacity-100");
+    expect(up?.className).toContain("group-focus-within/chip:opacity-100");
+    expect(down?.className).toContain("[@media(hover:none)]:enabled:opacity-100");
+    expect(down?.className).toContain("group-focus-within/chip:opacity-100");
+    // disabled end arrows stay dimmed and unfocusable, not silent dead zones
+    // SAFETY: selector matches only the named chip control button
+    const disabledUp = document.querySelector(
+      '[data-chip="ur.jalandhry"] button[aria-label="Move up"]',
+    ) as HTMLButtonElement | null;
+    expect(disabledUp?.disabled).toBe(true);
+    expect(disabledUp?.className).toContain("disabled:opacity-30");
+  });
+
+  it("lays the chips out as a single horizontal scroll row, never a wall", async () => {
+    stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
+    await open({ primaryId: "en.sahih" });
+    // SAFETY: the chips strip is the first div child of the chips row
+    const strip = document.querySelector("[data-selected-chips] > div") as HTMLElement | null;
+    expect(strip?.className).toContain("overflow-x-auto");
+    expect(strip?.className).not.toContain("flex-wrap");
+    expect(strip?.className).toContain("overscroll-contain");
+    const chips = [...document.querySelectorAll("[data-selected-chips] [data-chip]")];
+    expect(chips).toHaveLength(3);
+    for (const chip of chips) {
+      expect(chip.className).toContain("flex-none");
+      expect(chip.className).toContain("h-11");
+    }
+    // chip controls are 44px tall with a pseudo-widened hit area
+    const remove = document.querySelector('[data-chip="ms.basmeih"] button[aria-label="Remove"]');
+    expect(remove?.className).toContain("h-11");
+    expect(remove?.className).toContain("before:-inset-x-2");
+  });
+
+  it("shows the provenance label as an inline muted line on coarse pointers only", async () => {
+    await open({ primaryId: "en.sahih" });
+    const source = pane().querySelector(
+      'li[data-translation-row="en.pickthall"] [data-row-source]',
+    );
+    expect(source?.textContent).toContain("Tanzil");
+    // hover-capable devices keep the clean row (tooltip carries provenance)
+    expect(source?.className).toContain("[@media(hover:hover)]:hidden");
+  });
+
+  it("contains overscroll in the scroll containers and pads the dialog for safe areas", async () => {
+    await open();
+    expect(rail().className).toContain("overscroll-contain");
+    expect(pane().className).toContain("overscroll-contain");
+    // SAFETY: bits-ui marks the portaled dialog content element
+    const content = document.querySelector("[data-dialog-content]");
+    expect(content?.className).toContain("env(safe-area-inset-left)");
+    expect(content?.className).toContain("env(safe-area-inset-right)");
+  });
+
+  it("gives Clear all, Done, Close, and the search clear ≥44px effective targets", async () => {
+    stackedTranslations.setIds(["ur.jalandhry"]);
+    await open({ primaryId: "en.sahih" });
+    const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find((b) =>
+      b.textContent?.trim() === "Clear all",
+    );
+    // transparent button: real vertical padding + before-pseudo extension
+    expect(clearAll?.className).toContain("py-2.5");
+    expect(clearAll?.className).toContain("before:-inset-2");
+    const done = document.querySelector("button[data-done]");
+    expect(done?.className).toContain("h-11");
+    // SAFETY: selector matches only the header Close button element
+    const close = document.querySelector('button[aria-label="Close"]') as HTMLElement | null;
+    expect(close?.className).toContain("h-11");
+    expect(close?.className).toContain("w-11");
+    await setSearch("urdu");
+    // SAFETY: selector matches only the search field's clear button element
+    const searchClear = document.querySelector(
+      'button[aria-label="Clear search"]',
+    ) as HTMLElement | null;
+    expect(searchClear?.className).toContain("before:-inset-2");
+    const back = pane().querySelector('button[aria-label="Back"]');
+    expect(back?.className).toContain("h-11");
+  });
+});
+
 describe("TranslationModal — reading mode constraint", () => {
   it("disables every checkbox and shows the notice, keeping primary navigation", async () => {
     h.readerStub.isVerseMode = false;

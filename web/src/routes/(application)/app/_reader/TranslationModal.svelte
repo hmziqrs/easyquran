@@ -256,6 +256,20 @@
     if (t.translator === null) return false;
     return t.translator.trim().toLowerCase() !== t.name.trim().toLowerCase();
   }
+
+  // Row cover classes (stress S9): one >=44px (min-h-11) cover per row, so the
+  // checkbox zone and the switch link both sit on full-row targets. "toggle"
+  // rows are labels whose whole surface toggles the checkbox; "locked" mirrors
+  // a disabled checkbox (reading mode / cap); "static" covers primary rows,
+  // which have no checkbox to associate (switching stays on the name link).
+  // touch-manipulation kills the double-tap-zoom window without breaking the
+  // pane's scroll (stress S13).
+  function rowCoverClass(kind: "toggle" | "locked" | "static"): string {
+    const base = "flex min-h-11 flex-1 touch-manipulation items-center gap-1.5 px-3";
+    if (kind === "toggle") return `${base} cursor-pointer`;
+    if (kind === "locked") return `${base} cursor-not-allowed`;
+    return base;
+  }
   function rowHref(t: TranslationCatalogueEntry): `/app/${string}` | null {
     const seg = translationSegmentsFromId(t.id);
     return hrefFor(position, { id: t.id, lang: seg.lang, translator: seg.translator });
@@ -303,8 +317,10 @@
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
     <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(94vw,780px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover bg-clip-padding text-popover-foreground shadow-lg"
+      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(94vw,780px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover bg-clip-padding pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] text-popover-foreground shadow-lg"
     >
+      <!-- S11 (stress A3): env(safe-area-inset-*) padding keeps modal content
+           clear of notches/home indicators on devices that report insets. -->
       <div class="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
         <Dialog.Title class="text-[17px] font-semibold leading-tight">
           {copy.stacked.title}
@@ -316,7 +332,7 @@
               {...props}
               type="button"
               aria-label={copy.translations.close}
-              class="flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              class="flex h-11 w-11 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             >
               <Icon name="x" size={15} />
             </button>
@@ -338,11 +354,13 @@
             class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
           {#if searchQuery !== ""}
+            <!-- S9 (stress A1): the clear affordance stays visually small, but
+                 its before-pseudo grows the hit target to 44px square. -->
             <button
               type="button"
               onclick={() => (searchQuery = "")}
               aria-label={copy.sidebar.clearSearch}
-              class="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              class="relative flex h-7 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-2 before:content-[''] hover:bg-surface-hover hover:text-foreground"
             >
               <Icon name="x" size={13} />
             </button>
@@ -353,13 +371,19 @@
       <TooltipProvider delayDuration={300}>
         {#if reader.isVerseMode && selectedRows.length > 0}
           <div data-selected-chips class="flex items-start justify-between gap-3 px-5 pt-3">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <!-- S14 (stress B1): a single horizontal scroll row, never a wrapped
+                 chip wall — the strip costs one row max and keeps touch
+                 momentum; overscroll-contain stops end-of-strip flicks from
+                 chaining to the page behind the modal (S12). -->
+            <div
+              class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain"
+            >
               {#each selectedRows as t (t.id)}
                 {@const isPrimary = t.id === primaryId}
                 {@const extraIndex = selectedIds.indexOf(t.id)}
                 <div
                   data-chip={t.id}
-                  class="group/chip inline-flex h-8 max-w-full items-center gap-1 rounded-pill border border-border bg-background-subtle pe-0.5 ps-2.5 transition-colors hover:border-border-strong"
+                  class="group/chip inline-flex h-11 max-w-full flex-none touch-manipulation items-center gap-1 rounded-pill border border-border bg-background-subtle pe-0.5 ps-2.5 transition-colors hover:border-border-strong"
                 >
                   <span class="flex-none text-xs leading-none" aria-hidden="true">
                     {flagFor(t.languageCode).flag}
@@ -372,7 +396,7 @@
                             {...props}
                             type="button"
                             aria-label={copy.translations.primaryTip}
-                            class="flex h-8 cursor-help items-center rounded-pill"
+                            class="flex h-11 cursor-help touch-manipulation items-center rounded-pill"
                           >
                             <span
                               class="rounded-pill bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground"
@@ -393,12 +417,18 @@
                     {t.name}
                   </span>
                   {#if !isPrimary}
+                    <!-- S8/S9 (stress A2/A1): the hover-reveal compiles only
+                         under @media(hover:hover), so coarse pointers get the
+                         arrows always (via the hover:none variant), keyboard
+                         focus-within on the chip reveals them too, and the
+                         before-pseudo widens each 44px-tall control to a 44px
+                         hit area without growing the chip. -->
                     <button
                       type="button"
                       onclick={() => reorder(t.id, -1)}
                       disabled={extraIndex <= 0}
                       aria-label={copy.stacked.moveUp}
-                      class="flex h-8 w-7 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Icon name="arrow-right" size={12} class="-rotate-90" />
                     </button>
@@ -407,7 +437,7 @@
                       onclick={() => reorder(t.id, 1)}
                       disabled={extraIndex === -1 || extraIndex >= selectedIds.length - 1}
                       aria-label={copy.stacked.moveDown}
-                      class="flex h-8 w-7 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Icon name="arrow-right" size={12} class="rotate-90" />
                     </button>
@@ -416,14 +446,16 @@
                     type="button"
                     onclick={() => remove(t.id)}
                     aria-label={copy.stacked.remove}
-                    class="flex h-8 w-7 flex-none cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground"
                   >
                     <Icon name="x" size={13} />
                   </button>
                 </div>
               {/each}
             </div>
-            <div class="flex flex-none items-center gap-2.5 pt-2 text-xs text-muted-foreground">
+            <div
+              class="flex flex-none self-stretch touch-manipulation items-center gap-2.5 text-xs text-muted-foreground"
+            >
               <span
                 class="tabular-nums"
                 title={copy.translations.capNote(STACKED_MAX_EXTRAS)}
@@ -431,10 +463,14 @@
                 {copy.stacked.count(selectedIds.length, STACKED_MAX_EXTRAS)}
               </span>
               {#if selectedIds.length > 0}
+                <!-- S9 (stress A1): Clear all is ~46x16 visually; real vertical
+                     padding plus a before-pseudo give a >=44px effective
+                     target with zero visible change (the button has no
+                     background of its own). -->
                 <button
                   type="button"
                   onclick={clear}
-                  class="cursor-pointer transition-colors hover:text-foreground"
+                  class="relative cursor-pointer touch-manipulation py-2.5 transition-colors before:absolute before:-inset-2 before:content-[''] hover:text-foreground"
                 >
                   {copy.stacked.clear}
                 </button>
@@ -459,6 +495,12 @@
                checkbox/link opens the tooltip too. SAFETY: the child-snippet
                props bag is untyped, so the forwarded trigger handlers carry a
                FocusEvent-cast — they are bits-ui's own onfocus/onblur. -->
+          <!-- S9/S10 (stress A1/A2): the row body is a <label> tied to the row
+               checkbox, so checkbox + name + author + the touch-only source
+               line form one >=44px toggle target; the name link stays a link
+               (primary switch) but self-stretches to the full row height, so
+               it also lands on a >=44px target. Primary rows keep a plain
+               cover — no checkbox to associate. -->
 
           <Tooltip>
             <TooltipTrigger tabindex={-1}>
@@ -472,10 +514,11 @@
                   onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
                   onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
                   data-translation-row={t.id}
-                  class="flex items-center gap-1.5 rounded-lg px-3 py-2 transition-colors {checked
+                  class="flex rounded-lg transition-colors {checked
                     ? 'bg-primary/10'
                     : 'hover:bg-surface-hover'}"
                 >
+                  {#snippet coverBody()}
                   {#if withLanguage}
                     <span
                       data-row-language
@@ -496,7 +539,7 @@
                       disabled={disabled}
                       onchange={() => toggle(t.id)}
                       aria-label={rowLabel(t)}
-                      class="size-[18px] flex-none cursor-pointer accent-primary disabled:cursor-not-allowed"
+                      class="size-[18px] flex-none cursor-pointer touch-manipulation accent-primary disabled:cursor-not-allowed"
                     />
                   {/if}
                   {#if href}
@@ -506,7 +549,7 @@
                       data-sveltekit-preload-data="hover"
                       onclick={() => onPrimary(t)}
                       aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
-                      class="min-w-0 flex-1 cursor-pointer py-0.5"
+                      class="flex min-w-0 flex-1 cursor-pointer touch-manipulation flex-col justify-center self-stretch"
                     >
                       <span class="block truncate text-sm font-medium text-foreground">
                         {t.name}
@@ -519,9 +562,21 @@
                           {t.translator}
                         </span>
                       {/if}
+                      <!-- S10 (stress A2): provenance is hover-tooltip-only, so
+                           coarse pointers get it as a muted text line instead
+                           ([@media(hover:hover)]:hidden keeps hover devices on
+                           the clean one/two-line row). -->
+                      <span
+                        data-row-source
+                        class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
+                      >
+                        {copy.translations.sourceLabel(translationSourceOf(t.id))}
+                      </span>
                     </a>
                   {:else}
-                    <span class="min-w-0 flex-1 cursor-default py-0.5">
+                    <span
+                      class="flex min-w-0 flex-1 flex-col justify-center self-stretch"
+                    >
                       <span class="block truncate text-sm font-medium text-foreground">
                         {t.name}
                       </span>
@@ -533,6 +588,12 @@
                           {t.translator}
                         </span>
                       {/if}
+                      <span
+                        data-row-source
+                        class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
+                      >
+                        {copy.translations.sourceLabel(translationSourceOf(t.id))}
+                      </span>
                     </span>
                   {/if}
                   {#if isPrimary}
@@ -541,6 +602,20 @@
                     >
                       {copy.stacked.primaryBadge}
                     </span>
+                  {/if}
+                  {/snippet}
+                  {#if isPrimary}
+                    <div data-row-cover class={rowCoverClass("static")}>
+                      {@render coverBody()}
+                    </div>
+                  {:else}
+                    <label
+                      data-row-target
+                      for={`tmodal-${t.id}`}
+                      class={rowCoverClass(disabled ? "locked" : "toggle")}
+                    >
+                      {@render coverBody()}
+                    </label>
                   {/if}
                 </li>
               {/snippet}
@@ -599,7 +674,7 @@
           <nav
             data-language-rail
             aria-label={copy.translations.languagesLabel}
-            class="{paneVisible ? 'hidden' : 'flex'} md:flex min-h-0 flex-col gap-0.5 overflow-y-auto border-border p-2 md:border-e"
+            class="{paneVisible ? 'hidden' : 'flex'} md:flex min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:border-e"
           >
             {#each languages as l, i (l.language)}
               {@const active = l.language === activeLanguage}
@@ -610,7 +685,7 @@
                 aria-current={active ? "true" : undefined}
                 onclick={() => selectLanguage(l.language)}
                 onkeydown={(e) => onRailKeydown(e, i)}
-                class="flex h-[52px] flex-none cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
+                class="flex h-[52px] flex-none cursor-pointer touch-manipulation items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
                   ? 'bg-primary/10 text-foreground'
                   : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'}"
               >
@@ -642,7 +717,7 @@
 
           <section
             data-language-pane
-            class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 flex-col overflow-y-auto"
+            class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 touch-manipulation flex-col overflow-y-auto overscroll-contain"
           >
             {#if reader.isReadingMode}
               <p
@@ -658,7 +733,7 @@
                   type="button"
                   onclick={backToRail}
                   aria-label={copy.translations.back}
-                  class="flex h-8 -ms-2 flex-none cursor-pointer items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
+                  class="flex h-11 -ms-2 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
                 >
                   <Icon name="arrow-right" size={14} class="rotate-180" />
                   {copy.translations.back}
@@ -684,7 +759,7 @@
                   type="button"
                   onclick={backToRail}
                   aria-label={copy.translations.back}
-                  class="flex h-8 -ms-2 flex-none cursor-pointer items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
+                  class="flex h-11 -ms-2 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
                 >
                   <Icon name="arrow-right" size={14} class="rotate-180" />
                   {copy.translations.back}
@@ -714,7 +789,7 @@
           type="button"
           data-done
           onclick={() => (open = false)}
-          class="flex h-9 flex-none cursor-pointer items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
         >
           {copy.translations.done}
         </button>
