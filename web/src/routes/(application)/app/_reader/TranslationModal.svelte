@@ -3,7 +3,6 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { replaceState } from "$app/navigation";
-  import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { translationSegmentsFromId } from "$lib/data/quran";
   import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
   import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
@@ -30,7 +29,7 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
-  import { hrefFor, positionOf } from "./translation-nav";
+  import { hrefFor, liveReaderPosition } from "./translation-nav";
   import { translationMatchesQuery } from "./translation-search";
 
   type LanguageGroup = {
@@ -85,7 +84,19 @@
     railLanguage = primaryEntry?.language ?? languages[0]?.language ?? null;
   });
 
-  const position = $derived(positionOf(deLocalizeUrl(page.url).pathname));
+  // Live-url first (stress S1): on a scrolled surah route page.url still
+  // holds the bare surah slug while window.location carries the reader's
+  // /page/N rewrite (SvelteKit 2.70.2 replaceState never updates the page
+  // store url). `open` re-keys the derivation on every open — window.location
+  // is not reactive, and the reader can scroll (rewriting the live url) while
+  // the modal is closed; a dedicated openedTick counter would read+write the
+  // same state inside one effect and loop (effect_update_depth_exceeded).
+  // While open, scroll lock keeps the live url frozen. null while closed is
+  // inert: the dialog content is unmounted then.
+  const position = $derived.by(() => {
+    if (!open) return null;
+    return liveReaderPosition(page.url);
+  });
   const selectedIds = $derived(stackedTranslations.ids);
   const isFull = $derived(selectedIds.length >= STACKED_MAX_EXTRAS);
   const searchActive = $derived(searchQuery.trim().length > 0);
@@ -100,6 +111,9 @@
         language: t.language,
         languageCode: t.languageCode,
         country: flagFor(t.languageCode).country,
+        // Stress S2: the native-script autonym is a search haystack, not just
+        // a rail display line — "اردو" must find the Urdu rows.
+        autonym: nativeNameFor(t.languageCode),
       }),
     );
   });

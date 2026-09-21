@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { hrefFor, positionOf } from "../translation-nav";
+import { hrefFor, liveReaderPosition, positionOf } from "../translation-nav";
 
 describe("reader position parsing", () => {
   it("parses an arabic surah page", () => {
@@ -65,5 +65,48 @@ describe("hrefFor position-preserving translation switch", () => {
 
   it("returns null when there is no reader position", () => {
     expect(hrefFor(null, { id: "en.sahih", lang: "en", translator: "sahih" })).toBeNull();
+  });
+});
+
+describe("liveReaderPosition (stress S1: live url first, page store fallback)", () => {
+  afterEach(() => {
+    // Tests within a file share the happy-dom window; restore the default
+    // non-reader location so later tests stay on the fallback path.
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("reads the live window.location when it names a reader position", () => {
+    // Scrolled surah route: the reader's scroll handler rewrote the live url
+    // to /page/N while the page store (fallbackUrl here) still holds the bare
+    // surah slug — SvelteKit 2.70.2 replaceState never updates page.url.
+    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+    expect(liveReaderPosition(new URL("https://example.test/app/al-baqarah"))).toEqual({
+      kind: "surah",
+      slug: "al-baqarah",
+      localPage: 2,
+    });
+  });
+
+  it("de-localizes the live url before parsing it", () => {
+    window.history.replaceState({}, "", "/en/app/al-baqarah/page/3");
+    expect(liveReaderPosition(new URL("https://example.test/app/al-baqarah"))).toEqual({
+      kind: "surah",
+      slug: "al-baqarah",
+      localPage: 3,
+    });
+  });
+
+  it("falls back to the passed page-store url when the live url is not a reader route", () => {
+    // happy-dom's default location "/" parses to no reader position.
+    expect(liveReaderPosition(new URL("https://example.test/app/juz/30"))).toEqual({
+      kind: "juz",
+      n: 30,
+    });
+    expect(liveReaderPosition(new URL("https://example.test/app/t/ms/basmeih/juz/30"))).toEqual({
+      kind: "juz",
+      n: 30,
+      lang: "ms",
+      translator: "basmeih",
+    });
   });
 });

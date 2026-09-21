@@ -16,7 +16,6 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
-  import { deLocalizeUrl } from "$lib/paraglide/runtime";
   import { resumeToLastRead } from "$lib/reader/resume";
   import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
@@ -436,11 +435,10 @@
   function onReadingConfirm(candidate: ReadingCandidate): void {
     readingConfirmOpen = false;
     readingModeUi.mark();
-    const href = readingModeHrefFor(
-      candidate,
-      primaryTranslationId,
-      deLocalizeUrl(appPage.url).pathname,
-    );
+    // The page-store url is only the fallback: on a scrolled surah route
+    // window.location carries the reader's /page/N rewrite that page.url never
+    // sees (stress S1) — readingModeHrefFor reads the live url first.
+    const href = readingModeHrefFor(candidate, primaryTranslationId, appPage.url);
     if (href === null) {
       // Arabic choice, or the chosen candidate already is the route primary:
       // no navigation, just enter reading mode in place.

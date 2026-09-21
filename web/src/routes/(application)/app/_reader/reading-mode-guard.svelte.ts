@@ -1,7 +1,7 @@
 import { translationSegmentsFromId } from "$lib/data/quran";
 import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
 import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-import { hrefFor, positionOf } from "./translation-nav";
+import { hrefFor, liveReaderPosition } from "./translation-nav";
 
 /**
  * Reading-mode switch guard (user findings U7/U8): switching to reading mode
@@ -48,19 +48,22 @@ export function readingCandidates(
 /**
  * Canonical href (with ?mode=reading) for confirming a candidate that differs
  * from the current route source, preserving the reading position via the
- * translation-nav helpers. null when no navigation is needed (Arabic choice
- * or the candidate already is the route primary).
+ * translation-nav helpers. Takes the page-store URL; the live window.location
+ * wins when it names a reader position (scrolled surah routes — the same
+ * stress-S1 class as the modal's primary switch; see liveReaderPosition).
+ * null when no navigation is needed (Arabic choice or the candidate already
+ * is the route primary).
  */
 export function readingModeHrefFor(
   candidate: ReadingCandidate,
   primaryId: string | null,
-  pathname: string,
+  fallbackUrl: URL,
 ): `/app/${string}` | null {
   if (candidate.id === null || candidate.id === primaryId || !candidate.entry) {
     return null;
   }
   const seg = translationSegmentsFromId(candidate.entry.id);
-  const href = hrefFor(positionOf(pathname), {
+  const href = hrefFor(liveReaderPosition(fallbackUrl), {
     id: candidate.entry.id,
     lang: seg.lang,
     translator: seg.translator,

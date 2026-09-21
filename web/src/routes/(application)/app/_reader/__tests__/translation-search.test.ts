@@ -10,6 +10,7 @@ const fields = {
   language: "Urdu",
   languageCode: "ur",
   country: "Pakistan",
+  autonym: "اردو",
 };
 
 describe("translationTokenMatches", () => {
@@ -46,12 +47,40 @@ describe("translationTokenMatches", () => {
   it("skips empty country fields instead of matching them", () => {
     expect(translationTokenMatches("kurdish", { ...fields, country: "" })).toBe(false);
   });
+
+  it("matches the native-script autonym (stress S2: اردو finds Urdu)", () => {
+    expect(translationTokenMatches("اردو", fields)).toBe(true);
+    expect(translationMatchesQuery("اردو", fields)).toBe(true);
+  });
+
+  it("skips null autonyms instead of matching them", () => {
+    expect(translationTokenMatches("اردو", { ...fields, autonym: null })).toBe(false);
+  });
+
+  it("matches the Chinese autonym without whitespace splitting", () => {
+    const zh = { ...fields, language: "Chinese", languageCode: "zh", autonym: "中文" };
+    expect(translationMatchesQuery("中文", zh)).toBe(true);
+  });
+
+  it("strips Arabic harakat from autonym tokens before comparing", () => {
+    // normalize() is NFD + combining-mark strip: harakat are Mn, so a
+    // vocalized query matches the bare autonym.
+    const ar = { ...fields, language: "Arabic", languageCode: "ar", autonym: "العربية" };
+    expect(translationTokenMatches("العَرَبِيَّة", ar)).toBe(true);
+  });
 });
 
 describe("translationMatchesQuery", () => {
   it("requires every token to hit some field", () => {
     expect(translationMatchesQuery("israr urdu", fields)).toBe(true);
     expect(translationMatchesQuery("israr french", fields)).toBe(false);
+  });
+
+  it("keeps every-token AND semantics working across scripts (stress S2)", () => {
+    // With the autonym in the haystack both tokens hit the SAME Urdu rows,
+    // so the mixed-script query narrows correctly instead of returning zero.
+    expect(translationMatchesQuery("urdu اردو", fields)).toBe(true);
+    expect(translationMatchesQuery("اردو french", fields)).toBe(false);
   });
 
   it("matches everything on an empty query", () => {

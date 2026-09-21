@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const h = vi.hoisted(() => {
   const entry = (id: string, language: string, languageCode: string) => ({
@@ -68,9 +68,15 @@ describe("readingCandidates", () => {
 
 describe("readingModeHrefFor", () => {
   it("returns null for the Arabic candidate and the current route primary (no navigation)", () => {
-    expect(readingModeHrefFor({ id: null, entry: null }, "en.sahih", "/app/al-fatihah")).toBeNull();
     expect(
-      readingModeHrefFor({ id: "en.sahih", entry: fixtureEntry(0) }, "en.sahih", "/app/al-fatihah"),
+      readingModeHrefFor({ id: null, entry: null }, "en.sahih", new URL("https://x.test/app/al-fatihah")),
+    ).toBeNull();
+    expect(
+      readingModeHrefFor(
+        { id: "en.sahih", entry: fixtureEntry(0) },
+        "en.sahih",
+        new URL("https://x.test/app/al-fatihah"),
+      ),
     ).toBeNull();
   });
 
@@ -78,7 +84,7 @@ describe("readingModeHrefFor", () => {
     const out = readingModeHrefFor(
       { id: "en.arberry", entry: fixtureEntry(1) },
       "ms.basmeih",
-      "/app/t/ms/basmeih/juz/30",
+      new URL("https://x.test/app/t/ms/basmeih/juz/30"),
     );
     expect(out).toBe("/app/t/en/arberry/juz/30?mode=reading");
   });
@@ -87,9 +93,39 @@ describe("readingModeHrefFor", () => {
     const out = readingModeHrefFor(
       { id: "ur.jalandhry", entry: fixtureEntry(2) },
       null,
-      "/app/al-baqarah/page/3",
+      new URL("https://x.test/app/al-baqarah/page/3"),
     );
     expect(out).toBe("/app/al-baqarah/t/ur/jalandhry/page/3?mode=reading");
+  });
+
+  it("prefers the live url over the page store on a scrolled surah route (stress S1)", () => {
+    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+    const out = readingModeHrefFor(
+      { id: "en.arberry", entry: fixtureEntry(1) },
+      null,
+      // The page store lags at the bare surah slug: SvelteKit 2.70.2
+      // replaceState (the reader's scroll rewrite to /page/N) never updates
+      // page.url, so the confirm must read the live url first.
+      new URL("https://x.test/app/al-baqarah"),
+    );
+    expect(out).toBe("/app/al-baqarah/t/en/arberry/page/2?mode=reading");
+  });
+
+  it("falls back to the page-store url when the live url carries no reader position", () => {
+    // happy-dom's default location "/" is not a reader route: the passed
+    // page-store url decides (juz/global-page kinds never rewrite the url).
+    const out = readingModeHrefFor(
+      { id: "en.arberry", entry: fixtureEntry(1) },
+      "ms.basmeih",
+      new URL("https://x.test/app/t/ms/basmeih/juz/30"),
+    );
+    expect(out).toBe("/app/t/en/arberry/juz/30?mode=reading");
+  });
+
+  afterEach(() => {
+    // Tests within a file share the happy-dom window; restore the default
+    // non-reader location so the fallback-path tests above stay deterministic.
+    window.history.replaceState({}, "", "/");
   });
 });
 

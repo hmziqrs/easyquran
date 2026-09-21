@@ -1,3 +1,5 @@
+import { browser } from "$app/environment";
+import { deLocalizeUrl } from "$lib/paraglide/runtime";
 import {
   globalPagePathFor,
   juzPathFor,
@@ -52,6 +54,32 @@ export function positionOf(pathname: string): ReaderPosition {
     return { kind: "globalPage", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "juz" && rest[1]) return { kind: "juz", n: toNum(rest[1]), lang, translator };
   return null;
+}
+
+/**
+ * Where the reader ACTUALLY is, for position-preserving primary switches
+ * (stress round 8, finding S1).
+ *
+ * SvelteKit 2.70.2 shallow routing does NOT update the page store url on
+ * replaceState: SurahReader's scroll handler rewrites window.location to
+ * /page/N while page.url still holds the bare surah slug, so a switch href
+ * derived from the page store alone lands the reader back at local page 1
+ * after a scrolled reading session. The live url cannot move while the
+ * translations modal / reading-mode confirm dialog is open (scroll lock;
+ * navigation closes the dialog), so reading it at open/confirm time is exact.
+ *
+ * Browser-only: reads positionOf(deLocalizeUrl(window.location.href)) FIRST
+ * and returns it whenever it names a reader position. Everything else — SSR,
+ * test environments whose window.location is not a reader route, non-reader
+ * live urls — falls back to the passed page-store url (the juz/global-page
+ * kinds never rewrite the url, so the fallback carries them).
+ */
+export function liveReaderPosition(fallbackUrl: URL): ReaderPosition {
+  if (browser) {
+    const live = positionOf(deLocalizeUrl(window.location.href).pathname);
+    if (live !== null) return live;
+  }
+  return positionOf(deLocalizeUrl(fallbackUrl).pathname);
 }
 
 function ctxFor(target: TranslationTarget): SurahRouteContext {

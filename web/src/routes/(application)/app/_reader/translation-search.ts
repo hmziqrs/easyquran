@@ -2,11 +2,12 @@
  * Token-based fuzzy search over translation catalogue rows.
  *
  * A row matches when EVERY whitespace-separated query token hits at least one
- * field (translation name, translator, language, language code, country). A
- * token hits a field when any word of the field contains the token, or sits
- * within edit distance 1 of it (typo tolerance, only for tokens of 4+ chars).
- * Comparison is diacritic-insensitive (NFD, combining marks stripped) and
- * case-insensitive, so "Garcia" matches "García" and "englsh" matches "English".
+ * field (translation name, translator, language, language code, country,
+ * native-script autonym). A token hits a field when any word of the field
+ * contains the token, or sits within edit distance 1 of it (typo tolerance,
+ * only for tokens of 4+ chars). Comparison is diacritic-insensitive (NFD,
+ * combining marks stripped) and case-insensitive, so "Garcia" matches
+ * "García" and "englsh" matches "English".
  */
 
 /** Fields of a catalogue row the search matches against. */
@@ -16,6 +17,8 @@ export interface TranslationSearchFields {
   readonly language: string;
   readonly languageCode: string;
   readonly country: string;
+  /** Native-script autonym ("اردو" for Urdu); null when the catalogue has none. */
+  readonly autonym: string | null;
 }
 
 /** lowercase + strip combining marks (NFD), so "García" → "garcia". */
@@ -68,6 +71,7 @@ export function translationTokenMatches(
     words(fields.language),
     words(fields.languageCode),
     fields.country === "" ? [] : words(fields.country),
+    fields.autonym === null ? [] : words(fields.autonym),
   ];
   return fieldWords.some((fw) => tokenHitsField(t, fw));
 }

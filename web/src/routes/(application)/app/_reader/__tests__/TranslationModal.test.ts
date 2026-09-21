@@ -61,7 +61,9 @@ vi.mock("$lib/quran/engagement", () => ({
 }));
 vi.mock("$lib/paraglide/runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("$lib/paraglide/runtime")>();
-  return { ...actual, deLocalizeUrl: (url: URL) => url };
+  // Mirrors the real deLocalizeUrl contract (string | URL in, URL out) — the
+  // live-position helper passes window.location.href as a string.
+  return { ...actual, deLocalizeUrl: (url: URL | string) => new URL(url) };
 });
 vi.mock("$lib/hotkeys.svelte", () => ({
   registerHotkey: () => ({ unregister: () => {} }),
@@ -108,6 +110,7 @@ vi.mock("$lib/quran/catalogue", () => {
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
 import TranslationButton from "../TranslationButton.svelte";
 import TranslationModal from "../TranslationModal.svelte";
+import TranslationModalHost from "./TranslationModalHost.svelte";
 
 const FILLER_IDS = [
   "en.pickthall",
@@ -421,6 +424,19 @@ describe("TranslationModal — master-detail layout", () => {
     expect(paneRowIds().length).toBeGreaterThan(0);
   });
 
+  it("searches by native-script autonym (stress S2: اردو and mixed-script urdu اردو)", async () => {
+    await open();
+    await setSearch("\u0627\u0631\u062F\u0648");
+    // both Urdu rows via the autonym haystack, ordered name-first within the
+    // language (flat cross-language sort: language, then name)
+    expect(paneRowIds()).toEqual(["qul.ur.bayan", "ur.jalandhry"]);
+    expect(railOptions()).toHaveLength(1);
+    // mixed script narrows to the same rows: with the autonym in the haystack
+    // both tokens hit the SAME rows, so every-token AND yields them
+    await setSearch("urdu \u0627\u0631\u062F\u0648");
+    expect(paneRowIds()).toEqual(["qul.ur.bayan", "ur.jalandhry"]);
+  });
+
   it("toggles a stacked extra and syncs the ?more= url param", async () => {
     await open();
     railOptions().find((b) => b.getAttribute("data-language-option") === "Urdu")?.click();
@@ -473,6 +489,66 @@ describe("TranslationModal — master-detail layout", () => {
     done?.click();
     await settle();
     expect(document.querySelector("input[type='search']")).toBeNull();
+  });
+});
+
+describe("TranslationModal — live reader position (stress S1)", () => {
+  afterEach(() => {
+    // Tests within a file share the happy-dom window; restore the default
+    // non-reader location so the other describes stay on the fallback path.
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("derives the switch href from the live url on a scrolled surah route", async () => {
+    // page.url still holds the bare surah slug (SvelteKit 2.70.2 replaceState
+    // never updates the page store), while the reader's scroll handler has
+    // rewritten window.location to /page/2 — the switch must carry the page.
+    h.nav.url = new URL("https://example.test/app/al-baqarah");
+    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+    await open({ primaryId: "en.sahih" });
+    const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
+    expect(link?.getAttribute("href")).toContain("/app/al-baqarah/t/en/pickthall/page/2");
+  });
+
+  it("keeps deriving from the page-store url when the live url is not a reader route", async () => {
+    // window.location stays at the default "/": the page-store url carries
+    // the position (the juz kind never gets scroll-rewritten).
+    h.nav.url = new URL("https://example.test/app/juz/2");
+    await open({ primaryId: "en.sahih" });
+    const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
+    expect(link?.getAttribute("href")).toContain("/app/t/en/pickthall/juz/2");
+  });
+
+  it("re-derives the live position on every reopen, not just the first", async () => {
+    h.nav.url = new URL("https://example.test/app/al-baqarah");
+    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+    // Default no-op: TS cannot see the expose callback has run, so a null
+    // initializer would narrow the later calls to `never`.
+    let setOpen: (open: boolean) => void = () => {};
+    instance = mount(TranslationModalHost, {
+      target,
+      props: {
+        primaryId: "en.sahih",
+        expose: (setter: (open: boolean) => void) => {
+          setOpen = setter;
+        },
+      },
+    });
+    await settle();
+    const pickthallHref = (): string | null | undefined =>
+      switchLinks()
+        .find((a) => a.getAttribute("aria-label")?.includes("Pickthall"))
+        ?.getAttribute("href");
+    expect(pickthallHref()).toContain("/app/al-baqarah/t/en/pickthall/page/2");
+    // Close the SAME mounted instance (as the header button binding does),
+    // let the reader "scroll" (rewrite the live url), then reopen: the cached
+    // position from the previous open must not survive.
+    setOpen(false);
+    await settle();
+    window.history.replaceState({}, "", "/app/al-baqarah/page/4");
+    setOpen(true);
+    await settle();
+    expect(pickthallHref()).toContain("/app/al-baqarah/t/en/pickthall/page/4");
   });
 });
 
