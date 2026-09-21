@@ -384,7 +384,7 @@
 
       <TooltipProvider delayDuration={300}>
         {#if reader.isVerseMode && selectedRows.length > 0}
-          <div data-selected-chips class="flex items-start justify-between gap-3 px-5 pt-3">
+          <div data-selected-chips class="flex items-start justify-between gap-3 px-5 py-3">
             <!-- S14 (stress B1): a single horizontal scroll row, never a wrapped
                  chip wall — the strip costs one row max and keeps touch
                  momentum; overscroll-contain stops end-of-strip flicks from
@@ -434,15 +434,20 @@
                     <!-- S8/S9 (stress A2/A1): the hover-reveal compiles only
                          under @media(hover:hover), so coarse pointers get the
                          arrows always (via the hover:none variant), keyboard
-                         focus-within on the chip reveals them too, and the
+                         focus on the chip reveals them too, and the
                          before-pseudo widens each 44px-tall control to a 44px
-                         hit area without growing the chip. -->
+                         hit area without growing the chip. Hidden arrows also
+                         collapse to w-0 on hover devices — opacity alone
+                         still reserved 28px per button, leaving ragged holes
+                         inside the pill (idle chips read name…✕ tight);
+                         overflow-hidden there is safe because the before-pseudo
+                         hit extension only matters on touch, where w-7 stays. -->
                     <button
                       type="button"
                       onclick={() => reorder(t.id, -1)}
                       disabled={extraIndex <= 0}
                       aria-label={copy.stacked.moveUp}
-                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Icon name="arrow-right" size={12} class="-rotate-90" />
                     </button>
@@ -451,7 +456,7 @@
                       onclick={() => reorder(t.id, 1)}
                       disabled={extraIndex === -1 || extraIndex >= selectedIds.length - 1}
                       aria-label={copy.stacked.moveDown}
-                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Icon name="arrow-right" size={12} class="rotate-90" />
                     </button>
