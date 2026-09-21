@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
   });
   return {
     catalogue: [
+      entry("ar.muyassar", "Arabic", "ar", "rtl", "Al-Muyassar", "Al-Muyassar"),
       entry("en.sahih", "English", "en", "ltr", "Saheeh International", "Saheeh International"),
       entry("en.pickthall", "English", "en", "ltr", "Pickthall", "Marmaduke Pickthall"),
       entry("qul.en.ahmed", "English", "en", "ltr", "Ahmed Ali", "Ahmed Ali"),
@@ -75,6 +76,7 @@ vi.mock("$lib/quran/catalogue", () => {
   // Mirrors the real flagFor contract; the real map's catalogue coverage is
   // pinned separately in language-flags.test.ts (unmocked).
   const flags = new Map([
+    ["ar", { flag: "\u{1F1F8}\u{1F1E6}", country: "Saudi Arabia" }],
     ["en", { flag: "\u{1F1EC}\u{1F1E7}", country: "United Kingdom" }],
     ["ur", { flag: "\u{1F1F5}\u{1F1F0}", country: "Pakistan" }],
     ["ms", { flag: "\u{1F1F2}\u{1F1FE}", country: "Malaysia" }],
@@ -83,12 +85,23 @@ vi.mock("$lib/quran/catalogue", () => {
     ["id", { flag: "\u{1F1EE}\u{1F1E9}", country: "Indonesia" }],
     ["es", { flag: "\u{1F1EA}\u{1F1F8}", country: "Spain" }],
   ]);
+  // Mirrors the real nativeNameFor contract; the real map's catalogue coverage
+  // is pinned separately in language-autonyms.test.ts (unmocked).
+  const autonyms = new Map([
+    ["ar", "العربية"],
+    ["ur", "اردو"],
+    ["fr", "Français"],
+    ["tr", "Türkçe"],
+    ["id", "Bahasa Indonesia"],
+    ["es", "Español"],
+  ]);
   return {
     TRANSLATION_CATALOGUE: h.catalogue,
     TRANSLATION_CATALOGUE_BY_ID: byId,
     translationSourceOf,
     flagFor: (code: string) =>
       flags.get(code) ?? { flag: "\u{1F310}", country: "" },
+    nativeNameFor: (code: string) => autonyms.get(code) ?? null,
   };
 });
 
@@ -146,6 +159,10 @@ const railOptions = (): HTMLButtonElement[] => {
   // SAFETY: selector matches only the rail option buttons
   return [...document.querySelectorAll("[data-language-option]")] as HTMLButtonElement[];
 };
+const railOption = (language: string): HTMLButtonElement | undefined =>
+  railOptions().find((b) => b.getAttribute("data-language-option") === language);
+const railNames = (): string[] =>
+  railOptions().map((b) => b.querySelector("[data-language-name]")?.textContent ?? "");
 const rail = (): HTMLElement => {
   // SAFETY: the rail nav is present whenever the modal is open
   return document.querySelector("[data-language-rail]") as HTMLElement;
@@ -193,11 +210,13 @@ async function open(props: { primaryId?: string | null } = {}): Promise<void> {
 }
 
 describe("TranslationModal — master-detail layout", () => {
-  it("renders the language rail alphabetically with flag and count per language", async () => {
+  it("renders the language rail with Arabic pinned, English second, then the alphabetical tail", async () => {
     await open();
-    // each rail row is three spans: flag, language name, count
-    const names = railOptions().map((b) => b.querySelectorAll("span")[1]?.textContent ?? "");
-    expect(names).toEqual([
+    // jsdom's default navigator.languages is ["en-US"], so the only boost
+    // (en) is already pinned — the visible order is Arabic, English, then
+    // alphabetical (U21 priority sort).
+    expect(railNames()).toEqual([
+      "Arabic",
       "English",
       "French",
       "Indonesian",
@@ -206,9 +225,52 @@ describe("TranslationModal — master-detail layout", () => {
       "Turkish",
       "Urdu",
     ]);
-    const english = railOptions()[0];
+    const english = railOption("English");
     expect(english?.textContent).toContain("\u{1F1EC}\u{1F1E7}");
     expect(english?.textContent).toContain("4");
+  });
+
+  it("boosts the user's browser languages after Arabic and English", async () => {
+    // SAFETY: configurable in jsdom so the stub restores cleanly; the modal
+    // only reads navigator.languages inside onMount (client-only, SSR-safe).
+    const originalLanguages = navigator.languages;
+    Object.defineProperty(navigator, "languages", {
+      value: ["tr", "ur-PK", "zz-XX"],
+      configurable: true,
+    });
+    try {
+      await open();
+      expect(railNames()).toEqual([
+        "Arabic",
+        "English",
+        "Turkish",
+        "Urdu",
+        "French",
+        "Indonesian",
+        "Malay",
+        "Spanish",
+      ]);
+    } finally {
+      Object.defineProperty(navigator, "languages", {
+        value: originalLanguages,
+        configurable: true,
+      });
+    }
+  });
+
+  it("shows the native autonym as a muted secondary under rail language names", async () => {
+    await open();
+    const urdu = railOption("Urdu");
+    const autonym = urdu?.querySelector("[data-language-autonym]");
+    expect(autonym?.textContent).toBe("\u0627\u0631\u062F\u0648");
+    expect(autonym?.getAttribute("dir")).toBe("auto");
+    // English has no distinct autonym: the documented fallback renders no
+    // secondary line instead of duplicating the English name.
+    expect(railOption("English")?.querySelector("[data-language-autonym]")).toBeNull();
+    // RTL autonym still renders inside the rail row
+    expect(railOption("Arabic")?.querySelector("[data-language-autonym]")?.textContent).toBe(
+      "\u0627\u0644\u0639\u0631\u0628\u064A\u0629",
+    );
   });
 
   it("auto-selects the primary translation's language on open", async () => {
@@ -227,7 +289,7 @@ describe("TranslationModal — master-detail layout", () => {
     const scrolledOnOpen = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
     expect(scrolledOnOpen).toContain("Urdu");
 
-    const english = railOptions()[0];
+    const english = railOption("English");
     english?.focus();
     english?.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
@@ -238,11 +300,11 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("pluralizes the count line: 4 translations vs 1 translation", async () => {
-    await open();
+    await open({ primaryId: "en.sahih" });
     expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
       "4 translations",
     );
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Turkish")?.click();
+    railOption("Turkish")?.click();
     await settle();
     expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
       "1 translation",
@@ -251,7 +313,7 @@ describe("TranslationModal — master-detail layout", () => {
 
   it("selecting a rail language swaps the pane rows", async () => {
     await open();
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Turkish")?.click();
+    railOption("Turkish")?.click();
     await settle();
     expect(paneRowIds()).toEqual(["tr.diyanet"]);
     expect(pane().querySelector("h3")?.textContent).toContain("Turkish");
@@ -259,14 +321,14 @@ describe("TranslationModal — master-detail layout", () => {
 
   it("moves keyboard focus through the rail with arrow keys", async () => {
     await open({ primaryId: "en.sahih" });
-    const english = railOptions()[0];
+    const english = railOption("English");
     english?.focus();
     expect(document.activeElement).toBe(english);
     english?.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
     );
     await settle();
-    const french = railOptions()[1];
+    const french = railOption("French");
     expect(document.activeElement).toBe(french);
     expect(french?.getAttribute("aria-current")).toBe("true");
     french?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
@@ -276,7 +338,7 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("uses one row anatomy: name first, author line only when it differs", async () => {
-    await open({ primaryId: null });
+    await open({ primaryId: "en.sahih" });
     const pickthall = pane().querySelector('li[data-translation-row="en.pickthall"]');
     expect(pickthall?.textContent).toContain("Pickthall");
     expect(pickthall?.querySelector("[data-author-line]")?.textContent).toContain(
@@ -285,11 +347,13 @@ describe("TranslationModal — master-detail layout", () => {
     // translator mirrors the name: no duplicated second line
     const sahih = pane().querySelector('li[data-translation-row="en.sahih"]');
     expect(sahih?.querySelector("[data-author-line]")).toBeNull();
-    // every row carries an 18px checkbox and a semantic source dot
+    // every row carries an 18px checkbox and is itself the rich-tooltip
+    // trigger (U16: hover anywhere / keyboard focus on the row opens it)
     expect(pickthall?.querySelector('input[type="checkbox"]')?.className).toContain("size-[18px]");
-    expect(pickthall?.querySelector("button span.size-2")?.className).toContain(
-      "bg-emerald-500",
-    );
+    expect(pickthall?.hasAttribute("data-tooltip-trigger")).toBe(true);
+    // U19: no colored source dot anywhere in the rows — provenance is
+    // tooltip-only now
+    expect(document.querySelectorAll("li[data-translation-row] span.size-2")).toHaveLength(0);
   });
 
   it("shows the Primary badge instead of a checkbox on the primary row", async () => {
@@ -317,7 +381,7 @@ describe("TranslationModal — master-detail layout", () => {
     clear?.click();
     await settle();
     expect(searchInput().value).toBe("");
-    expect(railOptions()).toHaveLength(7);
+    expect(railOptions()).toHaveLength(8);
   });
 
   it.each([
@@ -349,7 +413,7 @@ describe("TranslationModal — master-detail layout", () => {
     expect(railOptions()).toHaveLength(0);
     expect(document.querySelector('[role="status"]')?.textContent).toContain("No translations");
     await setSearch("");
-    expect(railOptions()).toHaveLength(7);
+    expect(railOptions()).toHaveLength(8);
     expect(paneRowIds().length).toBeGreaterThan(0);
   });
 
@@ -369,7 +433,7 @@ describe("TranslationModal — master-detail layout", () => {
 
   it("navigates to another translation preserving position and records the source", async () => {
     h.nav.url = new URL("https://example.test/app/t/ms/basmeih/juz/30");
-    await open();
+    await open({ primaryId: "en.sahih" });
     const link = switchLinks().find((a) =>
       a.getAttribute("aria-label")?.includes("Saheeh International"),
     );

@@ -146,6 +146,123 @@ export function flagFor(languageCode: string): LanguageFlag {
   return LANGUAGE_FLAGS[languageCode] ?? FLAG_FALLBACK;
 }
 
+// Native autonym (العربية, اردو, فارسی, हिन्दी, 中文…) per languageCode present
+// in web/src/lib/data/translations.json (all 96 codes, like LANGUAGE_FLAGS).
+// This is language DATA, not i18n copy: an autonym is correct in every UI
+// language, so it lives here instead of messages/. null = documented fallback:
+// the language's native name IS its English name (English, Hausa, Tagalog…) or
+// no distinct autonym is sensible (creoles like Bislama, exonym-only rows like
+// Yau) — callers render the English name alone. Rendering note: RTL/script
+// autonyms must be emitted with dir="auto" on their span.
+export const LANGUAGE_AUTONYMS: Readonly<Record<string, string | null>> = Object.freeze({
+  aa: "Qafar af",
+  ak: null,
+  am: "አማርኛ",
+  ar: "العربية",
+  as: "অসমীয়া",
+  az: "Azərbaycanca",
+  be: "Беларуская",
+  ber: "ⵜⴰⵎⴰⵣⵉⵖⵜ",
+  bg: "Български",
+  bi: null,
+  bm: "Bamanankan",
+  bn: "বাংলা",
+  bs: "Bosanski",
+  ceb: "Sinugbuanon",
+  cs: "Čeština",
+  dag: "Dagbanli",
+  de: "Deutsch",
+  dv: "ދިވެހި",
+  el: "Ελληνικά",
+  en: null,
+  es: "Español",
+  fa: "فارسی",
+  ff: null,
+  fi: "Suomi",
+  fil: null,
+  fr: "Français",
+  gu: "ગુજરાતી",
+  ha: null,
+  he: "עברית",
+  hi: "हिन्दी",
+  hr: "Hrvatski",
+  id: "Bahasa Indonesia",
+  it: "Italiano",
+  ja: "日本語",
+  kk: "Қазақ тілі",
+  km: "ខ្មែរ",
+  kn: "ಕನ್ನಡ",
+  ko: "한국어",
+  ks: "کٲشُر",
+  ku: "Kurdî",
+  ky: "Кыргызча",
+  lg: "Luganda",
+  ln: "Lingála",
+  lt: "Lietuvių",
+  luy: "Oluluhya",
+  mdh: "Magindanawn",
+  mg: null,
+  mk: "Македонски",
+  ml: "മലയാളം",
+  mos: null,
+  mr: "मराठी",
+  mrw: "Mëranaw",
+  ms: "Bahasa Melayu",
+  mt: "Malti",
+  ne: "नेपाली",
+  nl: "Nederlands",
+  no: "Norsk",
+  nqo: "ߒߞߏ",
+  ny: null,
+  om: "Afaan Oromoo",
+  pa: "ਪੰਜਾਬੀ",
+  pl: "Polski",
+  prs: "دری",
+  ps: "پښتو",
+  pt: "Português",
+  rn: "Ikirundi",
+  ro: "Română",
+  ru: "Русский",
+  rw: "Ikinyarwanda",
+  sd: "سنڌي",
+  si: "සිංහල",
+  sn: "ChiShona",
+  so: "Soomaali",
+  sq: "Shqip",
+  sr: "Српски",
+  sv: "Svenska",
+  sw: "Kiswahili",
+  ta: "தமிழ்",
+  te: "తెలుగు",
+  tg: "Тоҷикӣ",
+  th: "ไทย",
+  tk: "Türkmen",
+  tl: null,
+  tr: "Türkçe",
+  tt: "Татарча",
+  tw: "Asante Twi",
+  ug: "ئۇيغۇرچە",
+  uk: "Українська",
+  ur: "اردو",
+  uz: "Oʻzbekcha",
+  vi: "Tiếng Việt",
+  yao: null,
+  yo: "Yorùbá",
+  zgh: "ⵜⴰⵎⴰⵣⵉⵖⵜ",
+  zh: "中文",
+  zu: "isiZulu",
+});
+
+/**
+ * Native autonym for a catalogue languageCode, or null when the documented
+ * fallback applies (native name equals the English name / no sensible
+ * autonym) — callers then render the English name alone. Unknown codes also
+ * fall back to null rather than guessing.
+ */
+export function nativeNameFor(languageCode: string): string | null {
+  return LANGUAGE_AUTONYMS[languageCode] ?? null;
+}
+
 export function peekTranslationName(sourceId: string | undefined): string | null {
   if (!sourceId) return null;
   return TRANSLATION_CATALOGUE_BY_ID.get(sourceId)?.name ?? null;

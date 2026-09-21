@@ -140,13 +140,14 @@ describe("ReadingModeDialog", () => {
     expect(confirmed.map((c) => c.id)).toEqual(["en.sahih"]);
   });
 
-  it("labels the Arabic current source with the Arabic copy and no provenance dot", async () => {
+  it("labels the Arabic current source with the Arabic copy; rows carry no provenance dot", async () => {
     await openDialog([candidate(null), candidate("en.arberry")]);
     const first = radios()[0];
     expect(first?.value).toBe("arabic");
     expect(first?.checked).toBe(true);
     expect(document.body.textContent).toContain("Arabic");
-    // only the translation candidate carries a semantic source dot
-    expect(document.querySelectorAll("span.size-2")).toHaveLength(1);
+    // U19: provenance dots are gone from rows entirely (tooltip-only in the
+    // translations modal now) — none in this dialog either.
+    expect(document.querySelectorAll("span.size-2")).toHaveLength(0);
   });
 });

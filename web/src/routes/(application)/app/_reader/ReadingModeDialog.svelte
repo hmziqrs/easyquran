@@ -1,17 +1,8 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
-  import type { TranslationProvenance } from "$lib/quran/catalogue";
-  import { flagFor, translationSourceOf } from "$lib/quran/catalogue";
+  import { flagFor } from "$lib/quran/catalogue";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import type { ReadingCandidate } from "./reading-mode-guard.svelte";
-
-  // Same provenance palette as the TranslationModal rows (round-2 visual
-  // language); the Arabic candidate carries no dot (provenance: null).
-  const PROVENANCE_DOT = {
-    qul: "bg-violet-500",
-    quranenc: "bg-sky-500",
-    tanzil: "bg-emerald-500",
-  } satisfies Record<TranslationProvenance, string>;
 
   let {
     open = $bindable(false),
@@ -109,12 +100,6 @@
                     </span>
                   {/if}
                 </span>
-                {#if c.entry}
-                  <span
-                    class="size-2 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(c.entry.id)]}"
-                    aria-hidden="true"
-                  ></span>
-                {/if}
               </label>
             {/each}
           </div>

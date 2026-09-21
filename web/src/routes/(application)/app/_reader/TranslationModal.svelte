@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { replaceState } from "$app/navigation";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
@@ -11,6 +12,7 @@
     TRANSLATION_CATALOGUE,
     TRANSLATION_CATALOGUE_BY_ID,
     flagFor,
+    nativeNameFor,
     translationSourceOf,
   } from "$lib/quran/catalogue";
   import type { TranslationProvenance } from "$lib/quran/catalogue";
@@ -33,12 +35,15 @@
 
   type LanguageGroup = {
     language: string;
+    code: string;
     flag: string;
+    autonym: string | null;
     entries: TranslationCatalogueEntry[];
   };
 
-  // Distinct color identity per provenance dot; fixed palette reads on the
-  // inverted (bg-foreground) tooltip surface in both light and dark themes.
+  // Provenance color identity lives ONLY inside the rich row tooltip (U19):
+  // the source chip's dot reads on the inverted (bg-foreground) surface in
+  // both light and dark themes. Rows themselves carry no dot.
   const PROVENANCE_DOT = {
     qul: "bg-violet-500",
     quranenc: "bg-sky-500",
@@ -62,6 +67,13 @@
       railLanguage = null;
       mobilePane = false;
     }
+  });
+
+  // Client-only browser languages for the rail's priority sort (see
+  // browserBoostCodes above). onMount never runs on the server, so the SSR
+  // render stays alphabetical and hydration cannot mismatch.
+  onMount(() => {
+    browserBoostCodes = browserLanguageCodes(navigator.languages);
   });
 
   // Auto-select the primary translation's language on open: the reader's own
@@ -104,17 +116,59 @@
       else map.set(t.language, [t]);
     }
     return [...map.entries()]
-      .map(([language, entries]) => ({
-        language,
-        flag: flagFor(entries[0]?.languageCode ?? "").flag,
-        entries: [...entries].sort((a, b) => languageCollator.compare(a.name, b.name)),
-      }))
+      .map(([language, entries]) => {
+        const code = entries[0]?.languageCode ?? "";
+        return {
+          language,
+          code,
+          flag: flagFor(code).flag,
+          autonym: nativeNameFor(code),
+          entries: [...entries].sort((a, b) => languageCollator.compare(a.name, b.name)),
+        };
+      })
       .sort((a, b) => languageCollator.compare(a.language, b.language));
+  }
+
+  // Browser-language boost for the rail's priority order (U21). Read in
+  // onMount only: navigator does not exist during SSR, and assigning it there
+  // keeps the server render alphabetical — the derived below re-sorts after
+  // hydration with zero mismatch risk (same mounted-gate approach as
+  // ReaderShell's client-only state).
+  let browserBoostCodes = $state.raw<string[]>([]);
+
+  // navigator.languages → deduped base language codes ("ur-PK" → "ur").
+  // Unknown codes simply never match a group, so no catalogue filtering here.
+  function browserLanguageCodes(languages: readonly string[]): string[] {
+    const codes: string[] = [];
+    for (const tag of languages) {
+      const base = (tag.split("-")[0] ?? "").toLowerCase();
+      if (base !== "" && !codes.includes(base)) codes.push(base);
+    }
+    return codes;
+  }
+
+  // Rail priority (U21): Arabic always first, English second, then the user's
+  // browser languages in their stated preference order, then alphabetical.
+  function railRank(group: LanguageGroup): number {
+    if (group.code === "ar") return 0;
+    if (group.code === "en") return 1;
+    const boostIndex = browserBoostCodes.indexOf(group.code);
+    if (boostIndex !== -1) return 2 + boostIndex;
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  function compareRailGroups(a: LanguageGroup, b: LanguageGroup): number {
+    const rankA = railRank(a);
+    const rankB = railRank(b);
+    if (rankA !== rankB) return rankA - rankB;
+    return languageCollator.compare(a.language, b.language);
   }
 
   // The rail shows matching languages only while searching, so language hits
   // (e.g. "urdu") narrow the rail as well as the flat result list.
-  const languages = $derived(buildGroups(searchActive ? matches : TRANSLATION_CATALOGUE));
+  const languages = $derived(
+    buildGroups(searchActive ? matches : TRANSLATION_CATALOGUE).sort(compareRailGroups),
+  );
 
   const activeLanguage = $derived.by(() => {
     if (railLanguage !== null && languages.some((l) => l.language === railLanguage)) {
@@ -397,142 +451,150 @@
           {@const isPrimary = t.id === primaryId}
           {@const disabled = !reader.isVerseMode || isPrimary || (isFull && !checked)}
           {@const href = rowHref(t)}
-          <li
-            data-translation-row={t.id}
-            class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors {checked
-              ? 'bg-primary/10'
-              : 'hover:bg-surface-hover'}"
-          >
-            {#if withLanguage}
-              <span
-                data-row-language
-                class="w-[88px] flex-none truncate text-xs text-muted-foreground"
-              >
-                <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
-                {t.language}
-              </span>
-            {/if}
-            {#if isPrimary}
-              <span class="flex w-14 flex-none items-center">
-                <span
-                  class="rounded-pill bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+          {@const native = nativeNameFor(t.languageCode)}
+          <!-- U16: the rich tooltip triggers from the whole row. The trigger
+               props land on the li via the child snippet; tabindex stays -1
+               (the row itself is not a tab stop) and focus is forwarded with
+               the bubbling focusin/focusout so keyboard focus on the row's
+               checkbox/link opens the tooltip too. SAFETY: the child-snippet
+               props bag is untyped, so the forwarded trigger handlers carry a
+               FocusEvent-cast — they are bits-ui's own onfocus/onblur. -->
+
+          <Tooltip>
+            <TooltipTrigger tabindex={-1}>
+              {#snippet child({ props })}
+                <!-- omit-pattern destructure: bits-ui merges a button-only
+                     `type` into the trigger props; it is meaningless on an li
+                     and must not reach the DOM. -->
+                {@const { type: _triggerType, ...rowProps } = props}
+                <li
+                  {...rowProps}
+                  onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
+                  onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
+                  data-translation-row={t.id}
+                  class="flex items-center gap-1.5 rounded-lg px-3 py-2 transition-colors {checked
+                    ? 'bg-primary/10'
+                    : 'hover:bg-surface-hover'}"
                 >
-                  {copy.stacked.primaryBadge}
-                </span>
-              </span>
-            {:else}
-              <span class="flex w-14 flex-none items-center">
-                <input
-                  id={`tmodal-${t.id}`}
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onchange={() => toggle(t.id)}
-                  aria-label={rowLabel(t)}
-                  class="size-[18px] flex-none cursor-pointer accent-primary disabled:cursor-not-allowed"
-                />
-              </span>
-            {/if}
-            {#if href}
-              <a
-                href={publicHref(readerHrefFor(copy.locale, href))}
-                data-switch
-                data-sveltekit-preload-data="hover"
-                onclick={() => onPrimary(t)}
-                aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
-                title={copy.translations.switchTo}
-                class="min-w-0 flex-1 cursor-pointer py-0.5"
-              >
-                <span class="block truncate text-sm font-medium text-foreground">
-                  {t.name}
-                </span>
-                {#if hasAuthorLine(t)}
-                  <span
-                    data-author-line
-                    class="block truncate text-[12.5px] leading-snug text-muted-foreground"
-                  >
-                    {t.translator}
-                  </span>
-                {/if}
-              </a>
-            {:else}
-              <span class="min-w-0 flex-1 cursor-default py-0.5">
-                <span class="block truncate text-sm font-medium text-foreground">
-                  {t.name}
-                </span>
-                {#if hasAuthorLine(t)}
-                  <span
-                    data-author-line
-                    class="block truncate text-[12.5px] leading-snug text-muted-foreground"
-                  >
-                    {t.translator}
-                  </span>
-                {/if}
-              </span>
-            {/if}
-            <Tooltip>
-              <TooltipTrigger>
-                {#snippet child({ props })}
-                  <button
-                    {...props}
-                    type="button"
-                    aria-label={copy.translations.sourceLabel(translationSourceOf(t.id))}
-                    class="flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100"
-                  >
+                  {#if withLanguage}
                     <span
-                      class="size-2 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
-                      aria-hidden="true"
-                    ></span>
-                  </button>
-                {/snippet}
-              </TooltipTrigger>
-              <TooltipContent
-                class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
-              >
-                <span class="text-[12px] font-semibold">{t.name}</span>
-                <span
-                  class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
-                >
-                  <span
-                    class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
-                    aria-hidden="true"
-                  ></span>
-                  {copy.translations.sourceLabel(translationSourceOf(t.id))}
-                </span>
-                <dl class="flex w-full flex-col gap-0.5 text-[11px]">
-                  {#if t.translator !== null}
-                    <div class="flex w-full gap-2">
-                      <dt class="w-[4.5rem] flex-none text-background/60">
-                        {copy.translations.tooltipTranslator}
-                      </dt>
-                      <dd class="min-w-0 flex-1">{t.translator}</dd>
-                    </div>
-                  {/if}
-                  <div class="flex w-full gap-2">
-                    <dt class="w-[4.5rem] flex-none text-background/60">
-                      {copy.translations.tooltipLanguage}
-                    </dt>
-                    <dd class="min-w-0 flex-1">
+                      data-row-language
+                      class="w-[88px] flex-none truncate text-xs text-muted-foreground"
+                    >
                       <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
                       {t.language}
-                    </dd>
-                  </div>
+                    </span>
+                  {/if}
+                  {#if isPrimary}
+                    <!-- spacer keeps the name column aligned with checkbox rows -->
+                    <span class="w-[18px] flex-none" aria-hidden="true"></span>
+                  {:else}
+                    <input
+                      id={`tmodal-${t.id}`}
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled}
+                      onchange={() => toggle(t.id)}
+                      aria-label={rowLabel(t)}
+                      class="size-[18px] flex-none cursor-pointer accent-primary disabled:cursor-not-allowed"
+                    />
+                  {/if}
+                  {#if href}
+                    <a
+                      href={publicHref(readerHrefFor(copy.locale, href))}
+                      data-switch
+                      data-sveltekit-preload-data="hover"
+                      onclick={() => onPrimary(t)}
+                      aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
+                      class="min-w-0 flex-1 cursor-pointer py-0.5"
+                    >
+                      <span class="block truncate text-sm font-medium text-foreground">
+                        {t.name}
+                      </span>
+                      {#if hasAuthorLine(t)}
+                        <span
+                          data-author-line
+                          class="block truncate text-[12.5px] leading-snug text-muted-foreground"
+                        >
+                          {t.translator}
+                        </span>
+                      {/if}
+                    </a>
+                  {:else}
+                    <span class="min-w-0 flex-1 cursor-default py-0.5">
+                      <span class="block truncate text-sm font-medium text-foreground">
+                        {t.name}
+                      </span>
+                      {#if hasAuthorLine(t)}
+                        <span
+                          data-author-line
+                          class="block truncate text-[12.5px] leading-snug text-muted-foreground"
+                        >
+                          {t.translator}
+                        </span>
+                      {/if}
+                    </span>
+                  {/if}
+                  {#if isPrimary}
+                    <span
+                      class="flex-none rounded-pill bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                    >
+                      {copy.stacked.primaryBadge}
+                    </span>
+                  {/if}
+                </li>
+              {/snippet}
+            </TooltipTrigger>
+            <TooltipContent
+              class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
+            >
+              <span class="text-[12px] font-semibold">{t.name}</span>
+              <span
+                class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+              >
+                <span
+                  class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
+                  aria-hidden="true"
+                ></span>
+                {copy.translations.sourceLabel(translationSourceOf(t.id))}
+              </span>
+              <dl class="flex w-full flex-col gap-0.5 text-[11px]">
+                {#if t.translator !== null}
                   <div class="flex w-full gap-2">
                     <dt class="w-[4.5rem] flex-none text-background/60">
-                      {copy.translations.tooltipSize}
+                      {copy.translations.tooltipTranslator}
                     </dt>
-                    <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                    <dd class="min-w-0 flex-1">{t.translator}</dd>
                   </div>
-                  <div class="flex w-full gap-2">
-                    <dt class="w-[4.5rem] flex-none text-background/60">
-                      {copy.translations.tooltipDirection}
-                    </dt>
-                    <dd class="min-w-0 flex-1">{copy.translations.dirLabel(t.direction)}</dd>
-                  </div>
-                </dl>
-              </TooltipContent>
-            </Tooltip>
-          </li>
+                {/if}
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipLanguage}
+                  </dt>
+                  <dd class="min-w-0 flex-1">
+                    <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                    {t.language}
+                    {#if native !== null}
+                      <!-- dir=auto: RTL/script autonyms must render in their own direction -->
+                      (<span dir="auto">{native}</span>)
+                    {/if}
+                  </dd>
+                </div>
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipSize}
+                  </dt>
+                  <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                </div>
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipDirection}
+                  </dt>
+                  <dd class="min-w-0 flex-1">{copy.translations.dirLabel(t.direction)}</dd>
+                </div>
+              </dl>
+            </TooltipContent>
+          </Tooltip>
           {/snippet}
           <nav
             data-language-rail
@@ -548,12 +610,29 @@
                 aria-current={active ? "true" : undefined}
                 onclick={() => selectLanguage(l.language)}
                 onkeydown={(e) => onRailKeydown(e, i)}
-                class="flex h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-start text-sm transition-colors {active
-                  ? 'bg-primary/10 font-medium text-foreground'
+                class="flex h-[52px] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
+                  ? 'bg-primary/10 text-foreground'
                   : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'}"
               >
-                <span class="flex-none text-sm leading-none" aria-hidden="true">{l.flag}</span>
-                <span class="min-w-0 flex-1 truncate">{l.language}</span>
+                <span class="flex-none text-lg leading-none" aria-hidden="true">{l.flag}</span>
+                <span class="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                  <span
+                    data-language-name
+                    class="truncate text-[15px] leading-tight {active ? 'font-medium' : ''}"
+                  >
+                    {l.language}
+                  </span>
+                  {#if l.autonym !== null}
+                    <!-- dir=auto: RTL/script autonyms render in their own direction -->
+                    <span
+                      data-language-autonym
+                      dir="auto"
+                      class="truncate text-xs leading-tight text-muted-foreground"
+                    >
+                      {l.autonym}
+                    </span>
+                  {/if}
+                </span>
                 <span class="flex-none text-xs tabular-nums text-muted-foreground">
                   {l.entries.length}
                 </span>
