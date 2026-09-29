@@ -69,7 +69,7 @@ global page, Arabic or translated primary — can stack up to 5 extra translatio
 client-only by
 [`stacked-translations.svelte.ts`](../../web/src/routes/(application)/app/_reader/stacked-translations.svelte.ts)
 with selection via
-[`StackedTranslationsPicker.svelte`](../../web/src/routes/(application)/app/_reader/StackedTranslationsPicker.svelte).
+[`TranslationModal.svelte`](../../web/src/routes/(application)/app/_reader/TranslationModal.svelte).
 The primary SSG/SSR routes and their cache keys are untouched; the `?more=<id>,<id>` client mirror
 is stripped from cache keys by the service worker; selected extras (and the primary) pin against
 OPFS eviction; each extra renders with its own language/direction and translator attribution; and
@@ -133,17 +133,11 @@ translation, and word-by-word sizing.
 
 - [Al-Fatihah reader](https://quran.com/al-fatihah) → settings → **Arabic**
 
-**EasyQuran today:** Uthmani and Simple Clean are registered source profiles, while IndoPak/Tajweed
-appear only in enums/status labels. Reader source picker presents one “Arabic · Original”. Display
-settings offer Arabic size and two reading modes.
+**EasyQuran today:** all four Arabic sources are live (Uthmani, Simple-clean, IndoPak, Tajweed) with
+a script picker in Settings → Reading (reader schema v4); Tajweed markup renders as colored runs.
 
-- [`source-profiles.ts`](../../web/src/lib/quran/view/source-profiles.ts)
-- [`TranslationPicker.svelte`](../../web/src/routes/(application)/app/_reader/TranslationPicker.svelte)
-- [`ReaderHeader.svelte`](../../web/src/routes/(application)/app/_reader/ReaderHeader.svelte)
-
-**Remaining:** only add licensed immutable sources; active script picker; Tajweed color semantics and
-accessible fallback; font/source-specific line breaking; 15/16-line geometry; separate source font
-controls; offline packaging and content invariants.
+**Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
+per-source font controls; dedicated Nastaleeq face for IndoPak.
 
 ### R09 — Pin and compare verses — Missing · P1
 
@@ -220,7 +214,7 @@ triage/export to source maintainer, spam controls, status/acknowledgment, and at
 
 ## Personal Quran, progress, and account data
 
-### P01 — Quran-state account sync — Missing · P0
+### P01 — Quran-state account sync — Partial · P0
 
 **Quran.com:** its own product updates describe centralized accounts syncing progress, notes,
 activity, collections, settings, and connected Quran Foundation products.
@@ -228,31 +222,25 @@ activity, collections, settings, and connected Quran Foundation products.
 - [Centralized accounts](https://quran.com/product-updates/centralized-accounts-across-quran-foundation)
 - [Connected Quran apps](https://quran.com/en/product-updates/connected-quran-apps-expand-your-quran-journey)
 
-**EasyQuran today:** auth/security is shipped, but Quran state is written only to
-`easyquran.reader` localStorage in
-[`reader-persistence.svelte.ts`](../../web/src/lib/stores/reader-persistence.svelte.ts). Account API
-supports profile and session management only in
-[`account-client.ts`](../../web/src/lib/auth/account-client.ts). Backend has no bookmark/note/history/
-goal routes or migrations. Sync wording elsewhere in the developing app is placeholder copy, not
-implementation evidence.
+**EasyQuran today:** bookmark and folder sync is shipped (2026-08-27): client sync engine
+(`web/src/lib/sync`) → `POST /bookmark/v1/sync`, backend `bookmark_v1` + migrations `m000007`/`m000008`.
+Notes, reading position, and progress stay device-local.
 
-**Remaining:** user-owned schema and APIs; anonymous local-first behavior; sign-in merge rules;
-idempotent mutation/conflict resolution; timestamps/tombstones; offline outbox/retry; cross-device
-updates; encryption/privacy/export/delete; quota/abuse rules; auth-cache separation; migration from
-schema-v1 localStorage.
+**Remaining:** sync domains for notes/history/progress; sign-in merge for anonymous local data;
+settings-doc sync.
 
-### P02 — “My Quran” library — Missing · P1
+### P02 — “My Quran” library — Partial · P1
 
 **Quran.com:** guest-visible tabs for Saved, Recent, Notes & Reflections, My Reading Bookmark, and
 Collections.
 
 - [My Quran](https://quran.com/my-quran)
 
-**EasyQuran today:** `/app` redirects to one last-read position. Account page manages profile,
-sessions, and security. There is no saved/recent/notes dashboard.
+**EasyQuran today:** personal surfaces shipped: `/app/yours` (continue reading, recents, bookmark
+preview) and `/app/bookmarks` (saved verses with folders). `/app` still opens the last-read surah;
+no notes tab, no discovery home.
 
-**Remaining:** local-first library route; counts/empty states; tabs or filters; source-aware verse
-previews; open/remove/edit actions; pagination/virtualization; signed-in sync when P01 exists.
+**Remaining:** notes management surface; sync for recents/history (P01).
 
 ### P03 — Explicit reading bookmark — Partial · P1
 
@@ -268,7 +256,7 @@ position; Continue Reading exists. No explicit set/replace/undo or timestamp.
 **Remaining:** distinguish automatic resume from user-set reading bookmark; page/verse target;
 timestamp/source; replace confirmation/undo; library card; sync/export.
 
-### P04 — Dated reading history and sessions — Missing · P1
+### P04 — Dated reading history and sessions — Partial · P1
 
 **Quran.com:** Recently Read lists dated locations. Official API docs distinguish reading sessions
 from daily activity.
@@ -276,12 +264,11 @@ from daily activity.
 - [My Quran](https://quran.com/my-quran)
 - [Reading sessions vs activity days](https://api-docs.quran.com/docs/user-related-apis/1.0.0/reading-sessions-vs-activity-days/)
 
-**EasyQuran today:** one last-read value exists. The file named
-[`reader-history.ts`](../../web/src/routes/(application)/app/_reader/reader-history.ts) is reload-only
-sessionStorage viewport restoration, not durable history.
+**EasyQuran today:** dated, source-aware recents and per-surah progress persist in the reader blob
+and show on `/app/yours`. No history UI, session model, or clear controls; `reader-history.ts` is
+still reload-only viewport restoration.
 
-**Remaining:** bounded source-aware history entries; started/last-seen timestamps; session
-coalescing; resume location; clear/delete controls; privacy/retention; goal-activity separation.
+**Remaining:** dedicated history surface; session coalescing; clear/delete controls.
 
 ### P05 — Saved verse collections — Partial · P1
 
@@ -291,11 +278,11 @@ compare and contrast selected verses.
 - [Save verses to collections](https://quran.com/product-updates/save-verses-to-collections-organize-your-quran-study)
 - [My Quran](https://quran.com/my-quran)
 
-**EasyQuran today:** bookmarks are `Record<VerseKey, boolean>` toggled inline. No list, metadata,
-collection entity, tag, ordering, or comparison workspace.
+**EasyQuran today:** authed users get named bookmark folders with CRUD on `/app/bookmarks`, synced
+via P01; anonymous users keep the legacy local boolean toggle. No tags, manual ordering, or
+comparison workspace.
 
-**Remaining:** saved-item identity/source policy; collection CRUD; many-to-many membership; optional
-title/description/order; recent sort; bulk operations; pin/compare integration; sync/export.
+**Remaining:** manual ordering; bulk operations; pin/compare integration (R09).
 
 ### P06 — Notes/reflections organizer — Partial · P1
 
@@ -328,7 +315,7 @@ already promises export as fallback.
 **Remaining:** documented portable schema; JSON export; validated import/merge/replace preview;
 future-schema rejection; per-item timestamps; account export/delete integration; backup reminder.
 
-### P08 — Goals, activity progress, and streaks — Missing · P1
+### P08 — Goals, activity progress, and streaks — Partial · P1
 
 **Quran.com:** preset 10-min/day, Quran-in-30-days, Quran-in-a-year, and custom goals; daily vs
 duration goals; time/page/range units; timezone resets; daily activity and streak history.
@@ -337,12 +324,11 @@ duration goals; time/page/range units; timezone resets; daily activity and strea
 - [Quran reading streaks](https://quran.com/en/product-updates/quran-reading-streaks)
 - [Reading sessions vs activity days](https://api-docs.quran.com/docs/user-related-apis/1.0.0/reading-sessions-vs-activity-days/)
 
-**EasyQuran today:** no goal, focused-reading duration, daily range, timezone, completion, or streak
-model. Generic reader views/engagement counters are delivery heuristics, not user progress.
+**EasyQuran today:** per-surah progress (furthest ayah) persists in the reader blob with a progress
+bar on `/app/yours`. No goals, reading duration, day boundaries, or streaks.
 
 **Remaining:** goal model/presets/custom range; active-reading measurement; daily activity rules;
-timezone and day boundary; progress UI; completion/pausing; adaptive pace; streak calendar; privacy;
-offline event queue; sync/export; anti-inflation semantics.
+timezone and day boundary; completion/pausing; streak calendar; sync/export.
 
 ### P09 — Goal/calendar reminders — Partial · P2
 

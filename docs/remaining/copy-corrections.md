@@ -16,16 +16,13 @@ Current registration copy says:
 
 Sources:
 
-- [`login/+page.svelte`](../../web/src/routes/(auth)/login/+page.svelte)
-- [`register/+page.svelte`](../../web/src/routes/(auth)/register/+page.svelte)
+- [`web/messages/auth/en.json`](../../web/messages/auth/en.json) (`auth_sign_in_subheading`,
+  `auth_register_subheading`)
 
-Actual behavior: reader persistence writes bookmarks, notes, display settings, and last read only to
-`easyquran.reader` localStorage in
-[`reader-persistence.svelte.ts`](../../web/src/lib/stores/reader-persistence.svelte.ts). Account API
-only manages profile and sessions. Backend has no Quran-personalization schema/routes.
+Actual behavior: bookmark sync is real since 2026-08-27 (`POST /bookmark/v1/sync`), so the bookmarks
+claims are accurate. Notes and reading place/progress remain device-local only.
 
-**Before release:** either ship cross-device reader-state sync, or describe only account capabilities
-available at launch—profile, sessions, and security.
+**Before release:** scope sign-in/registration copy to bookmarks until notes/progress sync ships.
 
 ## C02 — Privacy sync and deletion placeholders
 
@@ -35,12 +32,10 @@ available at launch—profile, sessions, and security.
 - users can delete account and data at any time;
 - local data leaves device if sync is enabled.
 
-Actual behavior: Quran state is local-only; deeds/native apps do not exist; account page has no
-self-service deletion flow.
+Actual behavior: bookmarks sync for signed-in users (2026-08-27); notes, deeds, and native apps do
+not exist; account page has no self-service deletion flow.
 
-**Before release:** align policy with final data flows. If these features remain unshipped, say Quran
-reader data stays in this browser and document exactly which account/session/notification data is
-server-side.
+**Before release:** trim the synced list to bookmarks and document which data is server-side.
 
 ## C03 — Recitation and tafsir placeholders in Terms
 
@@ -89,11 +84,10 @@ Sources:
 - [`about/+page.svelte`](../../web/src/routes/(marketing)/about/+page.svelte)
 - [`content.ts`](../../web/src/lib/data/content.ts)
 
-Actual behavior: all 114 surahs and 115 translations/44 languages are shipped. Real tafsir and
-Hadith remain absent.
+Actual behavior: all 114 surahs and 378 translation sources across 105 languages are shipped. Real
+tafsir and Hadith remain absent.
 
-**Before release:** advertise full Quran and current translation breadth accurately; split
-Hadith/real tafsir into future work if they remain deferred.
+**Before release:** advertise current breadth accurately; keep Hadith/real tafsir as future work.
 
 ## C07 — Bookmark backup placeholder
 
@@ -118,10 +112,10 @@ count as available product features.
 
 Until new work ships, a defensible short description is:
 
-> Read the complete Quran in Uthmani Arabic or choose from 115 translation sources. Search Arabic
-> text, save bookmarks and notes in this browser, resume where you left off, and keep selected
-> reading data available offline. An account currently manages sign-in and security; Quran reading
-> data does not yet sync across devices.
+> Read the complete Quran in Uthmani Arabic or one of three other mushaf scripts, and choose from
+> 378 translation sources in 105 languages. Search Arabic and translated text, save bookmarks
+> (synced with an account) and notes in this browser, resume where you left off, and keep selected
+> reading data available offline. Other reading data does not yet sync across devices.
 
 Recheck counts against the baked catalogue when editing user-facing copy; do not derive or hash
 Quran bytes at runtime.
