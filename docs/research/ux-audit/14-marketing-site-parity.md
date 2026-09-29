@@ -27,11 +27,11 @@
 
 **P1** · first-time visitors deciding whether to use the app · `web/src/routes/(marketing)/about/+page.svelte`, FAQ, palette descriptions
 
-![About: 'Arabic text only, for now' although 115 translations ship](screenshots/marketing/about-outdated.webp)
+![About: 'Arabic text only, for now' although 378 translations ship](screenshots/marketing/about-outdated.webp)
 
 | Where | Says | Reality |
 | --- | --- | --- |
-| About | "a list of surahs, a reader, search and bookmarks — **Arabic text only, for now**. On the way: … translations" | 115 translations ship |
+| About | "a list of surahs, a reader, search and bookmarks — **Arabic text only, for now**. On the way: … translations" | 378 translations in 105 languages ship |
 | FAQ | "Will you add translations and tafsir?" | Translations exist; tafsir is a placeholder ([RDR-03](03-reader.md#rdr-03--the-tafsir-panel-shows-placeholder-text-to-real-readers)) |
 | Settings/Tweaks | Magenta = "accent over a warm reading page" | Warm reader removed (design-system §42) |
 | Landing surah cards | "7 **ayahs**" | App lists say "7 **verses**" |

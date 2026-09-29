@@ -8,7 +8,7 @@ easyquran is built for non-technical people who want to read the Qur'an simply. 
 
 ## The short version
 
-**What's genuinely good.** The Arabic text is set beautifully and is the highest-contrast thing on the page. Offline reading works — with the network cut, you can still open a new surah. Search handles Arabic words, `2:255` and `juz 5`. The token system is contrast-gated, the skip link and ARIA labels are in place, and 115 translations are available.
+**What's genuinely good.** The Arabic text is set beautifully and is the highest-contrast thing on the page. Offline reading works — with the network cut, you can still open a new surah. Search handles Arabic words, `2:255` and `juz 5`. The token system is contrast-gated, the skip link and ARIA labels are in place, and 378 translations in 105 languages are available.
 
 **What holds it back.** Around that strong core, the app speaks developer, repeats itself, and drifts from its own design system:
 

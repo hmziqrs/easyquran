@@ -4,7 +4,7 @@
 
 > **Question this page answers:** *Can a reader who doesn't read Arabic find, choose and trust a translation — without losing the Arabic?*
 
-Summary: the catalogue is impressive (115 translations, native language names, stacking up to 5). But choosing a translation **replaces** the Arabic instead of adding to it, the translator of the main translation is never named, and the picker opens on Arabic *tafsir* rather than translations.
+Summary: the catalogue is impressive (378 translations in 105 languages, native language names, stacking up to 5). But choosing a translation **replaces** the Arabic instead of adding to it, the translator of the main translation is never named, and the picker opens on Arabic *tafsir* rather than translations.
 
 ---
 

@@ -65,7 +65,7 @@ Summary: the first-visit home is bold but lopsided and slightly broken (short Ju
 
 **P1** · non-Arabic readers (the majority of first-time visitors outside the Arab world) · home + reader
 
-**What's wrong.** A new reader taps "Al-Fātiḥah" and gets Arabic-only text. Translations exist (115 of them) but are hidden behind a small icon in the reader sub-bar ([NAV-06](01-navigation-and-wayfinding.md#nav-06--the-reader-sub-bar-hides-two-key-tools-behind-unexplained-icons)). Nothing on the home page mentions them.
+**What's wrong.** A new reader taps "Al-Fātiḥah" and gets Arabic-only text. Translations exist (378 of them, in 105 languages) but are hidden behind a small icon in the reader sub-bar ([NAV-06](01-navigation-and-wayfinding.md#nav-06--the-reader-sub-bar-hides-two-key-tools-behind-unexplained-icons)). Nothing on the home page mentions them.
 
 **Why it matters.** For a reader who cannot read Arabic, the first experience is a page they cannot understand. Many will leave before finding the icon.
 
