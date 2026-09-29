@@ -1,0 +1,21 @@
+{
+  "base": "http://localhost:5391",
+  "out": "docs/research/ux-audit/screenshots/_rerun",
+  "shots": [
+    {
+      "name": "reader/overview-desktop",
+      "url": "/en/app/al-baqarah",
+      "delay": 2000,
+      "annotate": [
+        { "sel": "main .font-arabic.rounded-sm", "label": "1 · surah number ×4" },
+        { "sel": "button[aria-label='Larger Arabic text']", "label": "2 · 28×26 px", "labelSide": "below" }
+      ]
+    },
+    { "name": "reader/floating-button-covers-text-mobile", "url": "/en/app/al-baqarah", "w": 390, "h": 844, "delay": 2000,
+      "annotate": [{ "sel": "button[aria-label='Customize appearance']", "label": "covers Qur'an text" }] },
+    { "name": "axe-reader-dark", "url": "/en/app/al-baqarah", "mode": "dark", "axe": true, "noShot": true },
+    { "name": "compare", "stack": true, "compose": [
+      { "src": "docs/research/ux-audit/screenshots/_rerun/reader/overview-desktop.webp", "caption": "Desktop" }
+    ] }
+  ]
+}
