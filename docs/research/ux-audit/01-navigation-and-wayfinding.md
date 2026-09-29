@@ -55,6 +55,10 @@ The header links also mix the two schemes today: `/en/app/surah`, `/en/app/juz`,
 
 **Done when.** Any `/app` URL can be refreshed in Arabic and stays Arabic; `/en/app/search` and `/ar/app/settings` both load a real page.
 
+**Second pass adds.**
+
+- The manifest `start_url: /app` is a prerendered meta-refresh that always goes to `/en/app`, so the **installed** app is always English ([PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling)). _(from the 24–26 audit)_
+
 ---
 
 ### NAV-03 · Same action, many doors (theme × 4, search × 3, settings × 2)
@@ -107,6 +111,10 @@ Each copy looks different ([11 · Visual consistency](11-visual-consistency.md#v
 **Fix.** Below `sm`, show only logo + search icon + menu; move theme and account into the menu panel. Or let the icon row shrink to 40 px targets with `gap-1`. Test at 320 × 640.
 
 **Done when.** No header control is clipped at 320 px, online or offline.
+
+**Second pass adds.**
+
+- On a 280 px fold the header forces the page to 351 px, so the whole page is zoomed out (`screenshots/display/fold-280.webp`). _(from the 17–18 audit)_
 
 ---
 

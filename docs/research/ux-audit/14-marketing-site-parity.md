@@ -38,6 +38,10 @@
 
 See also `docs/remaining/copy-corrections.md` (C06) — this adds the About/FAQ items.
 
+**Second pass adds.**
+
+- Legal "placeholder text" label and the three contact identities (salam@easyquran.app, easyquran.fyi, hmziqrs@gmail.com) are new ([SCR-01](19-remaining-screens-and-flows.md#scr-01--legal-pages-say-placeholder-text-and-promise-things-the-app-doesnt-do)). Notes saved before sign-in are not moved into the account ([ACCT-09](20-signed-in-experience.md#acct-09--signing-in-merges-local-bookmarks--say-so-and-say-what-doesnt-sync)). _(from the 19–20 audit)_
+
 ---
 
 ### MKT-03 · Landing on phones: headline fills the screen; header search is "S…"
@@ -58,3 +62,8 @@ See also `docs/remaining/copy-corrections.md` (C06) — this adds the About/FAQ 
 
 - Footer credit shows **"@@hmziqrs"** (double @).
 - Brand appears as "easyquran" (wordmark), "EasyQuran" (404 page, home link label), and "easyquran.fyi". Pick one display form.
+
+**Second pass adds.**
+
+- Brand spelled 4 ways in metadata too: manifest "EasyQuran", titles "EasyQuran"/"easyquran", Arabic landing "إيزي قرآن"; manifest/OG say "Quran" ([PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling), [PWA-03](25-pwa-and-page-metadata.md#pwa-03--tab-titles-follow-five-patterns-several-pages-have-no-title), [PWA-09](25-pwa-and-page-metadata.md#pwa-09--link-previews-one-old-image-for-every-page)). _(from the 24–26 audit)_
+

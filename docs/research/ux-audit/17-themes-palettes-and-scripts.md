@@ -257,6 +257,10 @@ Layout shift stays small (CLS 0.05–0.06), so this is a visible text swap rathe
 
 **Fix.** When the saved script isn't Uthmani, keep the verse text hidden (`visibility: hidden`, not removed) until the variant arrives, with a timeout fallback. Preload the saved Arabic font from the inline script in `app.html` (it already reads `easyquran.reader`) by injecting `<link rel="preload" as="font">`.
 
+**Second pass adds.**
+
+- Related: [LOAD-06](24-loading-and-perceived-performance.md#load-06--ayah-markers-change-shape-during-loading) (ayah-marker glyphs re-draw at ~29 s on Slow 3G) and [LOAD-04](24-loading-and-perceived-performance.md#load-04--the-ui-font-arrives-late-and-moves-the-page) (Nunito not preloaded). Fix together as "font loading" work. _(from the 24–26 audit)_
+
 ---
 
 ### SCRIPT-05 · Search results ignore the chosen script and font

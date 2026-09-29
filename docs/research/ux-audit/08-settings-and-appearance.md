@@ -36,6 +36,10 @@ Summary: Settings opens on its most technical tab, exposes designer/developer to
 
 Also: remove the **empty row** between "No translations downloaded" and "Offline pack"; don't letter-space whole sentences.
 
+**Second pass adds.**
+
+- Offline pack status also says "On — 2613 routes stored." and "2613 routes · 14.3 MB· saved 9/29/2026" (count twice, missing space, US date). Download rows show chips "Arabic · On disk · In use". _(from the 19–20 audit)_
+
 ---
 
 ### SET-03 · Designer and developer tools are exposed to readers
@@ -53,6 +57,10 @@ Also: remove the **empty row** between "No translations downloaded" and "Offline
 
 **Fix.** Keep **Light / Dark / Automatic** and the four palettes (with honest descriptions: "Cobalt blue", "Ink (black & white)", "Magenta", "Emerald"). Move custom seeds and Copy CSS behind a "Developer options" toggle, or to `/design/tokens`. Show real current colours in swatches.
 
+**Second pass adds.**
+
+- [THEME-01](17-themes-palettes-and-scripts.md#theme-01--custom-colours-can-make-the-quran-text-invisible)/02 are concrete harms from exposing custom colours; strengthens "hide them". Magenta's "warm reading page" description is shown in all palettes/modes. _(from the 17–18 audit)_
+
 ---
 
 ### SET-04 · Toggles are "on" text pills; analytics is on by default
@@ -68,6 +76,10 @@ Also: remove the **empty row** between "No translations downloaded" and "Offline
 - Analytics is on by default. For a religious reading app, readers may reasonably expect privacy by default.
 
 **Fix.** Use a real switch component (`role="switch"`, `aria-checked`, 44 px, "On/Off" text beside it). Copy: "**Share anonymous usage** — Helps us see which features are used. No personal data." / "**Share speed reports** — Takes effect after the app reloads." Consider default-off with a one-time friendly ask.
+
+**Second pass adds.**
+
+- Evidence for analytics-on-by-default: production build sends Google Analytics `g/collect` (`tid=G-ZYL6HY24W6`) and Firebase Installations requests on `/en/app/al-kahf` — contradicts landing copy ([SCR-05](19-remaining-screens-and-flows.md#scr-05--nothing-tracking-what-you-read-while-analytics-is-on-by-default)). _(from the 19–20 audit)_
 
 ---
 
@@ -101,6 +113,11 @@ Also: remove the **empty row** between "No translations downloaded" and "Offline
 
 **Fix.** Sizes as a slider with "Small · Medium · Large · Extra large" stops and a live sample. Friendly font names with a short description ("Madinah Mushaf style (KFGQPC)", "Amiri — classic book style"). Render the preview with the real `VerseRow`.
 
+**Second pass adds.**
+
+- Font list offers fonts that can't render some scripts ([SCRIPT-03](17-themes-palettes-and-scripts.md#script-03--indopak-text-with-kfgqpc-hafs-shows-a-dotted-circle-in-place-of-a-letter)) or break markers ([SCRIPT-02](17-themes-palettes-and-scripts.md#script-02--the-kfgqpc-fonts-draw-the-verse-end-marker-wrongly)). _(from the 17–18 audit)_
+- The translation-font choice doesn't survive a reload ([TRX-10](22-translations-deep-dive.md#trx-10--the-serif-translation-font-is-forgotten-after-a-reload)); root cause `applyPersisted` in `reader-persistence.svelte.ts`. _(from the 21–23 audit)_
+
 ---
 
 ### SET-08 · A second "Settings" floats over every page
@@ -114,3 +131,8 @@ Also: remove the **empty row** between "No translations downloaded" and "Offline
 **Fix.** Remove it (see [RDR-01](03-reader.md#rdr-01--the-floating-appearance-button-covers-the-quran-text-on-phones)). If a quick panel is kept, make it the reader's "Aa" sheet with Size, Mode, Theme only — same components and wording as Settings.
 
 **Done when.** There is exactly one surface titled "Settings".
+
+**Second pass adds.**
+
+- **Dependency:** `OfflinePackBar` (offline-pack progress) and `Notifications` are mounted *inside* `Tweaks.svelte` (lines 331, 376). Removing the floating panel also removes the offline-pack progress UI — move `OfflinePackBar` to the root layout first. _(from the 24–26 audit)_
+

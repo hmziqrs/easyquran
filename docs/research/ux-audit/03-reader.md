@@ -24,6 +24,12 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 
 **Done when.** At 390 × 844, no fixed element overlaps Qur'an text, list cards or footer links at any scroll position.
 
+**Second pass adds.**
+
+- The floating panel also has a "Data & privacy" section below Copy CSS/Reset (visible when scrolled); clicking any `aria-expanded=false` button on FAQ opens it — the floating trigger is in the tab/expander flow of every page. _(from the 19–20 audit)_
+- The floating button also sits above modal backdrops ([INT-08](23-interaction-details.md#int-08--the-floating-button-stays-on-top-of-open-dialogs)) and its panel lets focus wander behind it ([KEY-07](21-keyboard-focus-and-screen-reader.md#key-07--focus-wanders-behind-the-floating-appearance-panel)). _(from the 21–23 audit)_
+- **Dependency:** `OfflinePackBar` (offline-pack progress) and `Notifications` are mounted *inside* `Tweaks.svelte` (lines 331, 376). Removing the floating panel also removes the offline-pack progress UI — move `OfflinePackBar` to the root layout first. _(from the 24–26 audit)_
+
 ---
 
 ### RDR-02 · Verse actions are tiny, unlabeled and ambiguous
@@ -44,6 +50,10 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 - Replace the share glyph with the platform-familiar "square + arrow" (iOS) / "share-2" shape.
 
 **Done when.** Every verse action has a visible text label somewhere in the flow (sheet or inline), and each target is ≥ 44 × 44 px on phones.
+
+**Second pass adds.**
+
+- Keyboard cost: 4 Tab stops per verse, 1,144 in Al-Baqarah; names lack the verse number ([KEY-03](21-keyboard-focus-and-screen-reader.md#key-03--every-verse-adds-four-tab-stops-with-identical-names)). Reading mode has no verse actions at all ([INT-04](23-interaction-details.md#int-04--reading-mode-removes-every-verse-action)). _(from the 21–23 audit)_
 
 ---
 
@@ -83,6 +93,10 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 
 **Done when.** The surah number appears once per screen and header colour is identical (or meaningfully explained) across surahs.
 
+**Second pass adds.**
+
+- The changing "Page N of 48" is also in `<title>` and is announced assertively on every page boundary ([KEY-01](21-keyboard-focus-and-screen-reader.md#key-01--screen-readers-are-interrupted-with-page-n-of-48-while-you-scroll)). _(from the 21–23 audit)_
+
 ---
 
 ### RDR-05 · Text-size and mode controls are small and unclear
@@ -112,6 +126,11 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 
 **Done when.** No gap between words exceeds roughly one word-width on a 390 px screen.
 
+**Second pass adds.**
+
+- At 56 px on a 360 px phone, continuous mode justifies two words per line into two columns (`screenshots/scripts/phone-56px-continuous.webp`). _(from the 17–18 audit)_
+- Worst on Chromium/Android: Chromium fits fewer words per line than WebKit ([BRW-02](26-cross-browser.md#brw-02--continuous-reading-mode-breaks-arabic-lines-differently-per-engine)). _(from the 24–26 audit)_
+
 ---
 
 ### RDR-07 · Page and Juz readers lack the surah reader's header and controls
@@ -139,6 +158,10 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 **Fix.** Use a **filled** bookmark glyph for the on state (Phosphor `BookmarkSimple` fill), show a 3-second toast with Undo, and add a small bookmark ribbon next to the verse number.
 
 **Done when.** A bookmarked verse is recognisable in greyscale.
+
+**Second pass adds.**
+
+- In forced colours the bookmarked state disappears completely ([DISP-02](18-display-conditions.md#disp-02--windows-high-contrast-nothing-shows-what-is-selected)). _(from the 17–18 audit)_
 
 ---
 
@@ -191,3 +214,8 @@ Summary: the Arabic text itself is beautifully set and the offline behaviour is 
 **What's wrong.** Al-Baqarah loads its 48 local pages as you scroll, and the sticky bar's "Page 1 of 48" silently becomes "Page 2 of 48". There is no page break marker in the text, so the number seems to jump at random.
 
 **Fix.** Either drop the local page count (see RDR-04) or draw a subtle divider with the mushaf page number where pages meet ("— page 3 —").
+
+**Second pass adds.**
+
+- The changing "Page N of 48" is also in `<title>` and is announced assertively on every page boundary ([KEY-01](21-keyboard-focus-and-screen-reader.md#key-01--screen-readers-are-interrupted-with-page-n-of-48-while-you-scroll)). _(from the 21–23 audit)_
+

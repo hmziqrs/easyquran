@@ -26,6 +26,10 @@ Summary: the catalogue is impressive (378 translations in 105 languages, native 
 
 **Done when.** The translated reader shows the same Arabic + Bismillah as the Arabic reader, with the translation added.
 
+**Second pass adds.**
+
+- Worse with tafsir as the main text — [TRX-01](22-translations-deep-dive.md#trx-01--arabic-commentary-chosen-as-the-main-translation-looks-like-quran-text). Copy on translated routes also drops the Arabic ([INT-05](23-interaction-details.md#int-05--what-copy-puts-on-the-clipboard)). _(from the 21–23 audit)_
+
 ---
 
 ### TR-02 · The main translation is never credited
@@ -44,6 +48,11 @@ Summary: the catalogue is impressive (378 translations in 105 languages, native 
 - Remove or explain the numeric badge ("+1 more").
 
 **Done when.** A reader can name the translation on screen without looking at the URL.
+
+**Second pass adds.**
+
+- The reading-mode dialog is the only UI that names the main translation ("Saheeh International"). _(from the 19–20 audit)_
+- The stacked credit is inline Latin inside RTL text and splits lines at large sizes ([TRX-13](22-translations-deep-dive.md#trx-13--stacked-credits-break-right-to-left-lines)). _(from the 21–23 audit)_
 
 ---
 
@@ -69,6 +78,11 @@ Summary: the catalogue is impressive (378 translations in 105 languages, native 
 
 **Done when.** An English-UI user sees English translations first; no flags are shown; no internal words remain.
 
+**Second pass adds.**
+
+- Reading-mode dialog: `rounded-lg` buttons, flags, `shadow-lg` ([SCR-08](19-remaining-screens-and-flows.md#scr-08--the-reading-mode-dialog-uses-its-own-button-and-list-styles)). The search page's picker is a different component ([FLOW-03](19-remaining-screens-and-flows.md#flow-03--search-has-a-second-different-translation-picker--and-it-needs-two-steps)). _(from the 19–20 audit)_
+- Picker also lists duplicates ([TRX-03](22-translations-deep-dive.md#trx-03--the-same-translator-is-listed-twice-and-some-languages-twice)), search misses "sahih" ([TRX-04](22-translations-deep-dive.md#trx-04--picker-search-misses-common-spellings)), chips hide selections ([TRX-05](22-translations-deep-dive.md#trx-05--the-chosen-translation-chips-hide-most-of-your-choices)), × on the main chip is dead ([TRX-06](22-translations-deep-dive.md#trx-06--the--on-the-main-translation-does-nothing-primary-is-a-mystery-button)); flags also in the reading-mode dialog ([TRX-15](22-translations-deep-dive.md#trx-15--reading-mode-choice-dialog-clear-with-small-inconsistencies)). _(from the 21–23 audit)_
+
 ---
 
 ### TR-04 · On phones the picker hides translators one level deep
@@ -91,6 +105,10 @@ Summary: the catalogue is impressive (378 translations in 105 languages, native 
 
 **Fix.** Give stacked translations the same size as the primary translation (or one step smaller, never caption size), and map script-specific fonts (Noto Nastaliq Urdu for `ur`, Noto Naskh for `fa`, Noto Sans Bengali for `bn`…) — self-hosted, per the no-CDN rule.
 
+**Second pass adds.**
+
+- Also applies to RTL translations as the **main** text ([TRX-12](22-translations-deep-dive.md#trx-12--right-to-left-translations-are-set-like-english)). _(from the 21–23 audit)_
+
 ---
 
 ### TR-06 · When the API is unreachable, translated pages fail without falling back to Arabic
@@ -106,3 +124,8 @@ Summary: the catalogue is impressive (378 translations in 105 languages, native 
 **Fix.** On translation failure, render the Arabic rows (already local) with an inline notice per page: "English translation not available offline yet — [Download] [Retry]". Never render a page that skips verses without saying so.
 
 **Done when.** With the API stopped, `/en/app/al-baqarah/t/en/sahih` shows 2:1 onward with Arabic and a clear notice.
+
+**Second pass adds.**
+
+- Positive counter-evidence for the "What's good" section: after one online visit, a never-opened surah, juz, mushaf page, search for a new word, the Arabic-UI reader, and even two never-opened translations (Sahih, Pickthall — apparently prefetched) all opened **offline** on the production build. _(from the 24–26 audit)_
+

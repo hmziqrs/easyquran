@@ -72,6 +72,93 @@ RDR-12, LIST-06, BM-05, RTL-07, VIS-09, VIS-10, AUTH-05, MKT-04.
 | axe run in CI on 10 key routes × 2 themes (fail on serious/critical) | regressions |
 | Route test: every `/en/app/*` and `/ar/app/*` 404 returns HTML with the app header | STATE-01, NAV-02 |
 
+## Second pass additions (docs 17–26)
+
+The second pass added 107 findings. They slot into the same four waves. Two cross-cutting notes first:
+
+- **Before removing the floating button ([RDR-01](03-reader.md#rdr-01--the-floating-appearance-button-covers-the-quran-text-on-phones) / [SET-08](08-settings-and-appearance.md#set-08--a-second-settings-floats-over-every-page)):** `OfflinePackBar` and `Notifications` are mounted inside `web/src/lib/components/tweaks/Tweaks.svelte` (≈ lines 331, 376). Move them to the root layout first, or the offline-pack progress UI disappears with the button.
+- **Hide custom colours ([SET-03](08-settings-and-appearance.md#set-03--designer-and-developer-tools-are-exposed-to-readers)) in Wave 1** — it also closes [THEME-01](17-themes-palettes-and-scripts.md#theme-01--custom-colours-can-make-the-quran-text-invisible) and [THEME-02](17-themes-palettes-and-scripts.md#theme-02--custom-colours-pick-the-wrong-text-colour-for-middle-tones).
+
+### Wave 1 — Trust and blockers (P0) — additions
+
+| IDs | Fix | Effort |
+| --- | --- | --- |
+| [THEME-01](17-themes-palettes-and-scripts.md#theme-01--custom-colours-can-make-the-quran-text-invisible) | Hide custom colours from readers; if kept, derive reader tokens / switch mode | S (hide) · M (derive) |
+| [SCR-01](19-remaining-screens-and-flows.md#scr-01--legal-pages-say-placeholder-text-and-promise-things-the-app-doesnt-do) | legal copy review + single contact | S (copy) + legal review |
+| [TRX-01](22-translations-deep-dive.md#trx-01--arabic-commentary-chosen-as-the-main-translation-looks-like-quran-text) | Tafsir never as the main text; label commentary; redirect `/t/ar/muyassar`, `/t/ar/jalalayn` | S |
+| [PWA-01](25-pwa-and-page-metadata.md#pwa-01--the-home-screen-icon-and-favicons-are-broken-off-brand-artwork) | Re-export all icons/favicons/logo from the current ق mark; separate maskable icons | S |
+
+### Wave 2 — Readability and access (P1) — additions
+
+| IDs | Fix | Effort |
+| --- | --- | --- |
+| [SCRIPT-03](17-themes-palettes-and-scripts.md#script-03--indopak-text-with-kfgqpc-hafs-shows-a-dotted-circle-in-place-of-a-letter) | Restrict fonts per script + build-time glyph-coverage test | M |
+| [SCRIPT-02](17-themes-palettes-and-scripts.md#script-02--the-kfgqpc-fonts-draw-the-verse-end-marker-wrongly) | Render ayah ornament in a fixed font or SVG, independent of the text font | S–M |
+| [SCRIPT-01](17-themes-palettes-and-scripts.md#script-01--tajweed-colours-dont-change-for-dark-mode-several-letters-nearly-vanish) | Per-mode tajweed palette as CSS vars + contrast gate | S |
+| [THEME-03](17-themes-palettes-and-scripts.md#theme-03--the-focus-ring-is-too-faint-on-dark-surfaces-cobalt-magenta-emerald) | Dark `--focus-ring` → `--primary-legible`; gate ring vs surface ≥ 3:1 | S |
+| [THEME-02](17-themes-palettes-and-scripts.md#theme-02--custom-colours-pick-the-wrong-text-colour-for-middle-tones) | Max-contrast on-colour selection; legible accent derivation; picker warning | M |
+| [DISP-01](18-display-conditions.md#disp-01--the-app-ignores-the-browsers-text-size-setting) | Remove `html{font-size:16px}`; rem ramp; relative reader sizes | M–L |
+| [DISP-02](18-display-conditions.md#disp-02--windows-high-contrast-nothing-shows-what-is-selected) | `@media (forced-colors: active)` layer for selected states + swatches | S |
+| [SCR-05](19-remaining-screens-and-flows.md#scr-05--nothing-tracking-what-you-read-while-analytics-is-on-by-default) | analytics copy or opt-in + path scrubbing | S–M |
+| [FLOW-01](19-remaining-screens-and-flows.md#flow-01--clear-cached-pages--data--no-confirmation-no-visible-result) | "Free up space" rename, confirm, refreshed numbers | S |
+| [FLOW-03](19-remaining-screens-and-flows.md#flow-03--search-has-a-second-different-translation-picker--and-it-needs-two-steps) | one translation picker (reuse reader modal), one-step add | M |
+| [ACCT-01](20-signed-in-experience.md#acct-01--signing-out-silently-removes-your-account-bookmarks-from-the-device) | sign-out keep-a-copy / explanation | S–M |
+| [ACCT-02](20-signed-in-experience.md#acct-02--the-account-page-is-a-bare-developer-screen) | account page in app layout, human sessions, change password, delete account | M–L |
+| [ACCT-08](20-signed-in-experience.md#acct-08--server-and-configuration-errors-reach-readers-raw-or-mislabelled) | enabled-providers list, OAuth error redirect, honest error mapping | S–M |
+| [KEY-01](21-keyboard-focus-and-screen-reader.md#key-01--screen-readers-are-interrupted-with-page-n-of-48-while-you-scroll) | Stable `<title>` while scrolling; no assertive announcements on scroll | S |
+| [KEY-03](21-keyboard-focus-and-screen-reader.md#key-03--every-verse-adds-four-tab-stops-with-identical-names) | One Tab stop per verse (roving tabindex) + verse number in action names + skip-to-page-nav | M |
+| [TRX-02](22-translations-deep-dive.md#trx-02--the-transliteration-shows-raw-html-tags) | View-layer parser for transliteration `<u>`/`<b>` markup (data stays immutable) | S |
+| [TRX-03](22-translations-deep-dive.md#trx-03--the-same-translator-is-listed-twice-and-some-languages-twice) | De-duplicate catalogue by (language, translator); merge split languages; keep aliases | M |
+| [INT-01](23-interaction-details.md#int-01--a-shared-link-to-a-long-verse-opens-in-the-wrong-place-on-phones) | Deep-link scroll after layout settles; `scroll-margin-top` from the real bar height | S |
+| [LOAD-01](24-loading-and-perceived-performance.md#load-01--the-reader-shows-text-for-25-s-before-its-controls-exist-then-the-page-jumps) | Render reader controls in SSR (behaviour after hydration); reserve space; CSS-driven theme icon | M |
+| [LOAD-02](24-loading-and-perceived-performance.md#load-02--preparing-offline-quran-sits-on-top-of-the-header-for-the-whole-download) | Move download progress under the header / to a bottom toast; localize; silent background downloads | S |
+| [LOAD-03](24-loading-and-perceived-performance.md#load-03--a-shared-search-link-ignores-its-query-until-the-app-wakes-up) | SSR the `?q=` value; "Searching…" status with progress; results `min-height` | S |
+| [PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling) | Locale-aware `start_url`, resume shortcut, v2 colours, Arabic manifest | S |
+| [PWA-03](25-pwa-and-page-metadata.md#pwa-03--tab-titles-follow-five-patterns-several-pages-have-no-title) | One title pattern for all routes + test | S |
+| [PWA-06](25-pwa-and-page-metadata.md#pwa-06--in-the-installed-app-some-screens-have-no-way-back) | Visible exits on auth/account/404 screens; standalone back affordance | S |
+| [BRW-01](26-cross-browser.md#brw-01--every-text-field-is-under-16-px--iphones-zoom-in-on-tap) | ≥ 16 px inputs on touch devices | S |
+
+### Wave 3 — Consistency (P2) — additions
+
+| IDs | Fix | Effort |
+| --- | --- | --- |
+| [THEME-04](17-themes-palettes-and-scripts.md#theme-04--the-chosen-palette-only-reaches-the-buttons)/05/06/07 | Palette-following decoration; soft fills for large Ink surfaces; no opacity text on fills; gate muted on primary-soft | M |
+| [SCRIPT-04](17-themes-palettes-and-scripts.md#script-04--the-chosen-script-and-font-appear-late-uthmani-and-amiri-flash-first)/05 | Hide text until variant loads + preload font; search uses preferred source + `--font-quran` | M |
+| [DISP-03](18-display-conditions.md#disp-03--translation-lines-are-100-characters-long-on-wide-screens) | `max-width: 68ch` for translation lines (or scale size) | S |
+| [SCR-02](19-remaining-screens-and-flows.md#scr-02--legal-pages-are-hard-to-read), [SCR-03](19-remaining-screens-and-flows.md#scr-03--auth-side-pages-look-like-a-different-product), [SCR-04](19-remaining-screens-and-flows.md#scr-04--landing-lower-sections-wrong-text-colour-a-self-link-a-very-long-list), [SCR-06](19-remaining-screens-and-flows.md#scr-06--every-reader-type-ends-differently--and-the-end-of-the-quran-is-a-small-link), [FLOW-02](19-remaining-screens-and-flows.md#flow-02--offline-pack-no-progress-no-ready-moment-developer-wording), [FLOW-04](19-remaining-screens-and-flows.md#flow-04--storage-download-rows-jargon-chips-and-an-unexplained-disabled-button), [FLOW-05](19-remaining-screens-and-flows.md#flow-05--shared-verses-carry-no-link-back), [FLOW-06](19-remaining-screens-and-flows.md#flow-06--k-go-to-verse-lands-on-the-page-not-the-verse-deep-links-dont-highlight), [FLOW-07](19-remaining-screens-and-flows.md#flow-07--switching-language-throws-away-your-reading-position), [FLOW-08](19-remaining-screens-and-flows.md#flow-08--many-bookmarks-become-an-unsorted-wall), [FLOW-09](19-remaining-screens-and-flows.md#flow-09--update-and-notification-toasts-cover-the-header-and-have-tiny-controls), [ACCT-03](20-signed-in-experience.md#acct-03--nothing-shows-that-youre-signed-in), [ACCT-04](20-signed-in-experience.md#acct-04--bookmark-folders-squashed-add-button-disguised-dropdowns-repeated-labels), [ACCT-06](20-signed-in-experience.md#acct-06--auth-forms-tiny-errors-mixed-icons-hidden-password-rule), [ACCT-07](20-signed-in-experience.md#acct-07--verification-and-reset-codes-dont-match-and-the-copy-talks-to-strangers), [ACCT-09](20-signed-in-experience.md#acct-09--signing-in-merges-local-bookmarks--say-so-and-say-what-doesnt-sync) | See each finding's **Fix** | S–M each |
+| [KEY-02](21-keyboard-focus-and-screen-reader.md#key-02--two-skip-to-content-links--and-in-arabic-the-first-one-is-english), 04, 05, 06, 09, 10, 11, 12 | One localized skip link; card focus ring; palette focus return; `inert` background for all modals; shortcuts help + single-key toggle + Ctrl/⌘ B via `registerHotkey`; names/headings sweep | M |
+| [TRX-04](22-translations-deep-dive.md#trx-04--picker-search-misses-common-spellings), 05, 06, 09, 10, 11, 12, 13 | Picker aliases/fuzzy search; wrapping chip list; remove dead ×; keep verse on switch + readable slugs; persist `translationFamily`; empty-verse notice + fixed `dir`; RTL size/Nastaliq; credit on its own line | M |
+| [INT-02](23-interaction-details.md#int-02--the-highlight-on-a-linked-verse-is-nearly-invisible), 03, 04, 08 | Stronger linked-verse highlight; Back after Next surah restores; verse actions in reading mode; floating button under scrims (or removed) | S–M |
+| [LOAD-04](24-loading-and-perceived-performance.md#load-04--the-ui-font-arrives-late-and-moves-the-page), [LOAD-05](24-loading-and-perceived-performance.md#load-05--67-seconds-of-white-screen-on-a-slow-first-visit) | Preload Nunito + metric-matched fallback; trim eager JS chunks; compress SSR | M |
+| [PWA-04](25-pwa-and-page-metadata.md#pwa-04--browserstatus-bar-colour-never-matches-the-chosen-theme), [PWA-05](25-pwa-and-page-metadata.md#pwa-05--no-help-to-install-the-app), [PWA-08](25-pwa-and-page-metadata.md#pwa-08--the-update-notice-speaks-in-tabs-and-has-a-tiny-button), [PWA-09](25-pwa-and-page-metadata.md#pwa-09--link-previews-one-old-image-for-every-page) | Runtime theme-color; install card; plain update toast; new/per-surah OG images | M |
+| [BRW-02](26-cross-browser.md#brw-02--continuous-reading-mode-breaks-arabic-lines-differently-per-engine), [BRW-04](26-cross-browser.md#brw-04--firefox-is-untested--code-level-risk-list) | No justification on narrow screens; real Firefox pass + Share label | S |
+
+### Wave 4 — Polish (P3) — additions
+
+| IDs | Fix | Effort |
+| --- | --- | --- |
+| [SCRIPT-06](17-themes-palettes-and-scripts.md#script-06--the-bismillah-doesnt-scale-with-the-arabic-text-size), [DISP-04](18-display-conditions.md#disp-04--the-menu-panel-still-slides-when-reduce-motion-is-on), [DISP-05](18-display-conditions.md#disp-05--no-response-to-increase-contrast) | Bismillah in em; `prefersReducedMotion` in Nav; `prefers-contrast: more` layer | S each |
+| [SCR-07](19-remaining-screens-and-flows.md#scr-07--special-quran-moments-arent-explained), [SCR-08](19-remaining-screens-and-flows.md#scr-08--the-reading-mode-dialog-uses-its-own-button-and-list-styles), [ACCT-05](20-signed-in-experience.md#acct-05--sync-status-is-good-but-small) | See each finding's **Fix** | S |
+| [KEY-07](21-keyboard-focus-and-screen-reader.md#key-07--focus-wanders-behind-the-floating-appearance-panel), 08, 13, 14, 15 · [TRX-07](22-translations-deep-dive.md#trx-07--at-the-5-translation-cap-disabled-boxes-look-enabled-and-the-message-is-jargon), 08, 14, 15, 16 · [INT-05](23-interaction-details.md#int-05--what-copy-puts-on-the-clipboard), 06, 07, 09, 10, 11 | Polish sweep: first-focus targets, title pattern, `aria-expanded`, sign-in rule, cap UI, compare mode, copy format, pressable recipe + `cursor:pointer`, one scrim, one spinner/skeleton, end-of-Qur'an block | M |
+| [LOAD-06](24-loading-and-perceived-performance.md#load-06--ayah-markers-change-shape-during-loading), [LOAD-07](24-loading-and-perceived-performance.md#load-07--without-javascript-the-app-is-always-dark), [PWA-07](25-pwa-and-page-metadata.md#pwa-07--safe-area-padding-is-dead-code-no-viewport-fit), [PWA-10](25-pwa-and-page-metadata.md#pwa-10--personal-pages-are-indexable-searchsettings-lack-robots-rules), [BRW-03](26-cross-browser.md#brw-03--viewport-height-and-tap-details-for-ios) | Marker font preload; no-JS OS theme; `viewport-fit=cover` + safe areas; robots; `dvh` + tap highlight | S |
+
+### More guardrails
+
+| Guard | Catches |
+| --- | --- |
+| Contrast pairs: Tajweed colours × mode; focus ring vs every surface; muted text on `--primary-soft`; tokens derived from random custom seeds | [SCRIPT-01](17-themes-palettes-and-scripts.md#script-01--tajweed-colours-dont-change-for-dark-mode-several-letters-nearly-vanish), [THEME-02](17-themes-palettes-and-scripts.md#theme-02--custom-colours-pick-the-wrong-text-colour-for-middle-tones), [THEME-03](17-themes-palettes-and-scripts.md#theme-03--the-focus-ring-is-too-faint-on-dark-surfaces-cobalt-magenta-emerald), [THEME-07](17-themes-palettes-and-scripts.md#theme-07--the-selected-palette-cards-description-is-37391-in-dark-mode) |
+| Font × script glyph-coverage test (no `.notdef` / U+25CC dotted circle) | [SCRIPT-02](17-themes-palettes-and-scripts.md#script-02--the-kfgqpc-fonts-draw-the-verse-end-marker-wrongly), [SCRIPT-03](17-themes-palettes-and-scripts.md#script-03--indopak-text-with-kfgqpc-hafs-shows-a-dotted-circle-in-place-of-a-letter) |
+| Forced-colors visual snapshot of Settings → Appearance and the reader mode toggle | [DISP-02](18-display-conditions.md#disp-02--windows-high-contrast-nothing-shows-what-is-selected) |
+| No `html { font-size: <px> }`; reader sizes in rem/em | [DISP-01](18-display-conditions.md#disp-01--the-app-ignores-the-browsers-text-size-setting) |
+| Announcer-mutation test while scrolling the reader (no assertive announcements) | [KEY-01](21-keyboard-focus-and-screen-reader.md#key-01--screen-readers-are-interrupted-with-page-n-of-48-while-you-scroll) |
+| Accessibility-tree test: no duplicate button names on a reader page | [KEY-03](21-keyboard-focus-and-screen-reader.md#key-03--every-verse-adds-four-tab-stops-with-identical-names), [KEY-10](21-keyboard-focus-and-screen-reader.md#key-10--vague-or-duplicated-control-names) |
+| Catalogue test: no duplicate (language, translator); no `<` in rendered transliteration | [TRX-02](22-translations-deep-dive.md#trx-02--the-transliteration-shows-raw-html-tags), [TRX-03](22-translations-deep-dive.md#trx-03--the-same-translator-is-listed-twice-and-some-languages-twice) |
+| Round-trip persistence test for every reader setting | [TRX-10](22-translations-deep-dive.md#trx-10--the-serif-translation-font-is-forgotten-after-a-reload) |
+| Every browser 404 under `/en|ar/app` (incl. trailing slash, capitals) returns HTML with the app header; OAuth start routes never return JSON to a navigation | [STATE-01](12-states-errors-offline.md#state-01--wrong-reader-urls-return-a-plain-text-not-found), [ACCT-08](20-signed-in-experience.md#acct-08--server-and-configuration-errors-reach-readers-raw-or-mislabelled) |
+| Lighthouse/CDP CI on the production build (Slow 4G phone): CLS ≤ 0.1 on `/`, `/en/app`, `/en/app/al-baqarah`, `/app/search?q=…` | [LOAD-01](24-loading-and-perceived-performance.md#load-01--the-reader-shows-text-for-25-s-before-its-controls-exist-then-the-page-jumps), [LOAD-03](24-loading-and-perceived-performance.md#load-03--a-shared-search-link-ignores-its-query-until-the-app-wakes-up) |
+| Every route has a non-empty `<title>` in one pattern ending in the brand | [PWA-03](25-pwa-and-page-metadata.md#pwa-03--tab-titles-follow-five-patterns-several-pages-have-no-title), [KEY-13](21-keyboard-focus-and-screen-reader.md#key-13--browser-tab-titles-follow-five-different-patterns) |
+| `input`/`textarea` compute ≥ 16 px at 390 px width | [BRW-01](26-cross-browser.md#brw-01--every-text-field-is-under-16-px--iphones-zoom-in-on-tap) |
+
 ## Validate with real people
 
 After Wave 1–2, run 5 short sessions (20 min, remote is fine) with the real audience — ideally two older readers, one Arabic-first reader, one who can't read Arabic, one phone-only user. Tasks:

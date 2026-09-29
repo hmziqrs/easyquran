@@ -26,6 +26,10 @@ Summary: the header, lists chrome, landing page and translation modal title are 
 
 **Fix.** Move all strings to `messages/reader/{en,ar}.json`; in Arabic show surah names in Arabic (الفاتحة، البقرة، يس، الملك) and the subtitle as the Arabic meaning. Render the Button arrow through `Icon name="arrow-right"` so it mirrors.
 
+**Second pass adds.**
+
+- Also true for accessible names, region labels and tab titles ([KEY-11](21-keyboard-focus-and-screen-reader.md#key-11--english-accessible-names-in-the-arabic-ui)); copied text appends an English reference in Arabic UI ([INT-05](23-interaction-details.md#int-05--what-copy-puts-on-the-clipboard)). _(from the 21–23 audit)_
+
 ---
 
 ### RTL-02 · Reader header: English name first, broken number order, English metadata
@@ -42,6 +46,10 @@ Summary: the header, lists chrome, landing page and translation modal title are 
 
 **Fix.** In Arabic UI: H1 = **سورة البقرة**, subtitle = transliteration (optional), meta = **مدنية · ٢٨٦ آية** (localize via messages and `Intl.NumberFormat('ar')` or keep Latin digits consistently — decide once). Wrap any Latin fragment inside Arabic text in `<bdi>` so punctuation stays with it.
 
+**Second pass adds.**
+
+- Also true for accessible names, region labels and tab titles ([KEY-11](21-keyboard-focus-and-screen-reader.md#key-11--english-accessible-names-in-the-arabic-ui)); copied text appends an English reference in Arabic UI ([INT-05](23-interaction-details.md#int-05--what-copy-puts-on-the-clipboard)). _(from the 21–23 audit)_
+
 ---
 
 ### RTL-03 · Surah list metadata is English in Arabic UI
@@ -53,6 +61,10 @@ Summary: the header, lists chrome, landing page and translation modal title are 
 **What's wrong.** Every row's primary text is the English transliteration and meaning ("Al-Fatihah · Al-Faatiha / The Opening · Meccan · 7 verses"); the Arabic name is secondary on the far side.
 
 **Fix.** In Arabic UI, lead with the Arabic name (الفاتحة), then "مكية · ٧ آيات"; show the transliteration small or not at all.
+
+**Second pass adds.**
+
+- Also true for accessible names, region labels and tab titles ([KEY-11](21-keyboard-focus-and-screen-reader.md#key-11--english-accessible-names-in-the-arabic-ui)); copied text appends an English reference in Arabic UI ([INT-05](23-interaction-details.md#int-05--what-copy-puts-on-the-clipboard)). _(from the 21–23 audit)_
 
 ---
 
@@ -67,6 +79,10 @@ Summary: the header, lists chrome, landing page and translation modal title are 
 **What's wrong.** These four pages have no `/ar/` route. Reached by in-app navigation they get Arabic chrome, but Settings' body is **entirely English and left-to-right**. After a refresh (or opening a shared link) all four are fully English. Cause and fix in [NAV-02](01-navigation-and-wayfinding.md#nav-02--two-url-schemes-some-links-lose-the-language-some-return-a-bare-not-found).
 
 **Also:** translate every Settings string (Storage/Appearance/Reading/Privacy/Account copy), and set `dir` on the settings container from the locale.
+
+**Second pass adds.**
+
+- The manifest `start_url: /app` is a prerendered meta-refresh that always goes to `/en/app`, so the **installed** app is always English ([PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling)). _(from the 24–26 audit)_
 
 ---
 

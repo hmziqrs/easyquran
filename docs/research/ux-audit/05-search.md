@@ -63,6 +63,10 @@ Summary: search is powerful for Arabic and references (75 hits for رحمة, `2:
 
 **Fix.** Right-align Arabic to the row edge (`text-end` inside `dir="rtl"`), show the reader's translation under it (matched words highlighted when the query was Latin), make the whole card a link with a visible "Open →" and hover state, and group results by surah with counts.
 
+**Second pass adds.**
+
+- ⌘K palette Arabic results start at the left edge in LTR rows (`screenshots/flows/palette-arabic-alignment.webp`). _(from the 19–20 audit)_
+
 ---
 
 ### SRCH-05 · Seven search boxes, seven looks, seven wordings

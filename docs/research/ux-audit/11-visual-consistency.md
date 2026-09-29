@@ -26,6 +26,11 @@ The design doc (§36) says "One line family: **Lucide**". The code is mostly Pho
 
 **Fix.** Pick one family and weight (Phosphor Regular fits what's there; update §36 accordingly, or migrate to Lucide). Re-export the three Bold icons as Regular; replace the auth solids; replace the brand badge with a normal "languages" icon + label ([TR-02](04-translations.md#tr-02--the-main-translation-is-never-credited)) — the hex colour also violates §61 "semantic tokens only".
 
+**Second pass adds.**
+
+- The hard-coded Google-blue translation badge also ignores the palette ([THEME-04](17-themes-palettes-and-scripts.md#theme-04--the-chosen-palette-only-reaches-the-buttons)). _(from the 17–18 audit)_
+- Register form mixes a line icon (Name) with filled icons (Email/Password) in the same form. _(from the 19–20 audit)_
+
 ---
 
 ### VIS-02 · Icons mean different things in different places
@@ -68,6 +73,11 @@ Three are pills, three are rounded rectangles, one is a box-inside-a-box with th
 
 §38 says: active = primary fill. **Fix:** segmented controls and tabs → solid primary pill; option cards (palette, font) → pale fill + 2 px primary outline + check mark. Nothing black.
 
+**Second pass adds.**
+
+- None of the four "selected" styles survive forced colours ([DISP-02](18-display-conditions.md#disp-02--windows-high-contrast-nothing-shows-what-is-selected)). _(from the 17–18 audit)_
+- Same pattern for backdrops ([INT-07](23-interaction-details.md#int-07--four-different-backdrops-behind-overlays)), pressed states ([INT-06](23-interaction-details.md#int-06--pressed-feedback-exists-on-only-a-few-buttons-buttons-show-an-arrow-cursor)) and loading indicators ([INT-10](23-interaction-details.md#int-10--loading-indicators-come-in-four-styles)). _(from the 21–23 audit)_
+
 ---
 
 ### VIS-05 · Buttons come in seven shapes
@@ -77,6 +87,10 @@ Three are pills, three are rounded rectangles, one is a box-inside-a-box with th
 ![Seven button treatments](screenshots/visual/button-styles.webp)
 
 Pill primary, text-only "pills", rounded-rectangle outline ("Request again"), soft-blue bordered pill ("Download for offline"), rounded-rectangle primary ("Done"), border-less social rows, full-width giant pills ("Copy CSS / Reset"). §35 defines primary / secondary / ghost / quiet / link — all pills. **Fix:** route every button through `ui/button` with those variants; forbid ad-hoc `rounded-md` on buttons via the geometry guard.
+
+**Second pass adds.**
+
+- Reading-mode dialog: `rounded-lg` buttons, flags, `shadow-lg` ([SCR-08](19-remaining-screens-and-flows.md#scr-08--the-reading-mode-dialog-uses-its-own-button-and-list-styles)). The search page's picker is a different component ([FLOW-03](19-remaining-screens-and-flows.md#flow-03--search-has-a-second-different-translation-picker--and-it-needs-two-steps)). _(from the 19–20 audit)_
 
 ---
 
@@ -104,6 +118,10 @@ Pill primary, text-only "pills", rounded-rectangle outline ("Request again"), so
 
 Code font (Geist Mono) or wide letter-spacing is used for: verse refs "2:1", juz/page ranges, "30 ajzā'", "604 pages", "OR CONTINUE WITH", floating panel "SETTINGS" / palette descriptions / "preset", reading settings "PREVIEW", "CONTINUE READING" / "BOOKMARKS" on Yours, "Off — download every route…", the 404 link "← Back to EasyQuran". §10 keeps mono for code. **Fix:** Nunito everywhere readers read; `text-micro` (uppercase, tracked) only for 1–3-word eyebrows, never sentences.
 
+**Second pass adds.**
+
+- Bookmarks group headings ("UNFILED", "DAILY READING") and offline-pack status lines use code font / wide tracking. _(from the 19–20 audit)_
+
 ---
 
 ### VIS-08 · Colour used as decoration, not meaning
@@ -112,6 +130,10 @@ Code font (Geist Mono) or wide letter-spacing is used for: verse refs "2:1", juz
 
 Rotating hue on surah numbers, reader headers ([RDR-04](03-reader.md#rdr-04--the-surah-number-is-shown-four-times-the-header-colour-changes-per-surah)) and home cards contradicts §43: "Colour means something … or it is not there." **Fix:** neutral by default; hue only with a legend.
 
+**Second pass adds.**
+
+- Decorative hue slots contradict the palette choice, esp. Ink "no accent hue" ([THEME-04](17-themes-palettes-and-scripts.md#theme-04--the-chosen-palette-only-reaches-the-buttons)). _(from the 17–18 audit)_
+
 ---
 
 ### VIS-09 · Browser theme colour is from the old design
@@ -119,6 +141,10 @@ Rotating hue on surah numbers, reader headers ([RDR-04](03-reader.md#rdr-04--the
 **P3** · phones (address bar colour) · `web/src/app.html:7-8`
 
 `<meta name="theme-color">` is `#0D1210` (dark forest) and `#F8F7F2` (warm ivory) — v1 "Sacred Editorial" values. The v2 grounds are neutral (`oklch(0.165 0 0)` ≈ `#141414`, `oklch(0.98 0 0)` ≈ `#f8f8f8`). **Fix:** update both, and update at runtime when the user toggles theme.
+
+**Second pass adds.**
+
+- Extended by [PWA-04](25-pwa-and-page-metadata.md#pwa-04--browserstatus-bar-colour-never-matches-the-chosen-theme) (no runtime `theme-color` update) and [PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling) (manifest `theme_color`/`background_color` `#0c0d0c`). _(from the 24–26 audit)_
 
 ---
 

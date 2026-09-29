@@ -20,6 +20,11 @@ Summary: offline reading of Arabic works impressively (navigating to a new surah
 
 **Done when.** Every 404 a browser can hit shows the app header and a way back.
 
+**Second pass adds.**
+
+- More raw `text/plain` "Not found" URLs: a **trailing slash** (`/en/app/al-fatihah/`), **capital letters** (`/en/app/AL-FATIHAH`), `/en/app/juz/0`, `/en/app/page/0`, `/en/app/al-baqarah/page/0`, unknown translators (`/en/app/al-baqarah/t/en/nope`, `…/t/xx/yy`), `/en/app/t/en/sahih/page/605`. The trailing slash is what some chat apps add to shared links; normalise it (and lowercase slugs) with a 308. _(from the 19–20 audit)_
+- Worse in the installed app (no browser toolbar) — [PWA-06](25-pwa-and-page-metadata.md#pwa-06--in-the-installed-app-some-screens-have-no-way-back). _(from the 24–26 audit)_
+
 ---
 
 ### STATE-02 · The error page is a dead end
@@ -32,6 +37,10 @@ Summary: offline reading of Arabic works impressively (navigating to a new surah
 
 **Fix.** Render inside the normal layout (header + footer). Offer: search box, "Go to Surahs", "Continue reading {last surah}" if known. Use ramp roles and a primary pill button.
 
+**Second pass adds.**
+
+- `/ar/nope` renders the **English, left-to-right** error page (`lang="en"`), and "← Back to EasyQuran" goes to the English home. _(from the 19–20 audit)_
+
 ---
 
 ### STATE-03 · Account page spins forever when the API is unreachable
@@ -43,6 +52,10 @@ Summary: offline reading of Arabic works impressively (navigating to a new surah
 **What's wrong.** With the API down, `/account` shows a spinner, "Loading your account… Checking your session." and a plain-text "Retry" — indefinitely, with no header, no back link, no explanation. (With the API up, it correctly redirects to Sign in.)
 
 **Fix.** Time out after ~8 s → "We couldn't reach easyquran's servers. Your bookmarks and reading on this device still work." with **Retry** (pill button) and **Back to reading**. Render inside the app layout.
+
+**Second pass adds.**
+
+- Worse in the installed app (no browser toolbar) — [PWA-06](25-pwa-and-page-metadata.md#pwa-06--in-the-installed-app-some-screens-have-no-way-back). _(from the 24–26 audit)_
 
 ---
 
@@ -77,3 +90,8 @@ Summary: offline reading of Arabic works impressively (navigating to a new surah
 | Yours | "Start reading — your place, bookmarks, and notes will gather here." | Notes never do ([BM-03](07-bookmarks-notes-yours.md#bm-03--notes-are-saved-but-never-shown-anywhere)) |
 
 All use a small green-tinted icon tile. **Fix:** one `EmptyState` component (icon, title, one sentence, one primary action — e.g., "Open Al-Fātiḥah"), with the bookmark icon drawn inline in the bookmarks text.
+
+**Second pass adds.**
+
+- Account / auth-success spinners still use v1 tokens `border-line-2 border-t-accent` ([INT-10](23-interaction-details.md#int-10--loading-indicators-come-in-four-styles)). _(from the 21–23 audit)_
+

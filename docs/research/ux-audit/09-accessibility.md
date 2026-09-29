@@ -47,6 +47,10 @@ Summary: the token system is contrast-gated and the light theme mostly passes. T
 
 **Done when.** axe shows 0 color-contrast issues on the dark reader, landing, and contact pages.
 
+**Second pass adds.**
+
+- Magenta dark primary-as-text 2.5–3.0:1 (same failure as Cobalt); Emerald light eyebrow 4.45:1; **Ink passes in both modes** (0 contrast issues in dark on 9/10 routes). Suggest mentioning Ink as the accessible palette today. _(from the 17–18 audit)_
+
 ---
 
 ### A11Y-02 · Light mode: green-on-green chips and the Juz card caption
@@ -57,6 +61,10 @@ Summary: the token system is contrast-gated and the light theme mostly passes. T
 - Juz metric card caption (`#e0f0ea` on `#00864e`): **3.9:1**.
 
 **Fix.** Use `--hue-2-legible` darkened to ≥4.5:1 on the soft tint in light mode (e.g., `oklch(0.46 0.14 162)`), and full-opacity `--on-hue-2` for captions. Extend the contrast test to "hue-N-legible on hue-N-soft" in light mode too. (Or drop colour chips — [LIST-02](06-browse-lists.md#list-02--rainbow-numbers-carry-no-meaning-and-the-green-fails-contrast).)
+
+**Second pass adds.**
+
+- The 4.17:1 green chip and 3.94:1 Juz caption appear identically in all four palettes (hue slots don't change per palette). _(from the 17–18 audit)_
 
 ---
 
@@ -101,6 +109,10 @@ Summary: the token system is contrast-gated and the light theme mostly passes. T
 
 **Fix.** Floor UI text at **13.5 px (caption)** for secondary and **15 px (body)** for anything people read; use `text-caption`/`text-body` ramp roles rather than `text-[11px]`. For this audience consider a 16 px body default. Ban `text-[1Xpx]` below 13.5 in `/app` via the existing lint/test guards.
 
+**Second pass adds.**
+
+- Tiny px sizes can't be rescued by the browser text-size setting ([DISP-01](18-display-conditions.md#disp-01--the-app-ignores-the-browsers-text-size-setting)). _(from the 17–18 audit)_
+
 ---
 
 ### A11Y-05 · Duplicate and nested landmarks; missing page titles
@@ -112,6 +124,11 @@ Summary: the token system is contrast-gated and the light theme mostly passes. T
 - **Login and Register have no `<title>`** (axe *document-title*). Add `<svelte:head><title>Sign in · easyquran</title>`.
 - **Home has no `<h1>`**; **FAQ skips heading levels**.
 
+**Second pass adds.**
+
+- Add the duplicate skip link ([KEY-02](21-keyboard-focus-and-screen-reader.md#key-02--two-skip-to-content-links--and-in-arabic-the-first-one-is-english)) and inconsistent tab titles ([KEY-13](21-keyboard-focus-and-screen-reader.md#key-13--browser-tab-titles-follow-five-different-patterns)). _(from the 21–23 audit)_
+- Login/Register missing `<title>` also applies to **/forgot-password** and **/verify-email**; the app home's title is just "Home"/"الرئيسية" ([PWA-03](25-pwa-and-page-metadata.md#pwa-03--tab-titles-follow-five-patterns-several-pages-have-no-title)). _(from the 24–26 audit)_
+
 ---
 
 ### A11Y-06 · Links identified by colour only; focus ring style inconsistent
@@ -122,6 +139,10 @@ Summary: the token system is contrast-gated and the light theme mostly passes. T
 
 - Auth links "Reset it", "Create one" differ from surrounding text only by colour (**1.6:1** against the text). Underline them.
 - Header text links show a square outline on focus while pills show a rounded ring; Settings draws a rectangle around the whole panel ([SET-05](08-settings-and-appearance.md#set-05--a-focus-rectangle-is-drawn-around-the-whole-panel-after-clicking-a-tab)). Use one `focus-visible` style: 2 px `--focus-ring`, offset 2, `rounded-pill` on pills and `rounded-sm` on text links.
+
+**Second pass adds.**
+
+- Focus ring invisible on the blue home card ([KEY-04](21-keyboard-focus-and-screen-reader.md#key-04--the-focus-ring-vanishes-on-the-blue-surahs-card)). _(from the 21–23 audit)_
 
 ---
 

@@ -16,6 +16,11 @@
 
 **Fix.** Add a slim header (logo → app home, "✕ Close" / "← Back to reading" on the right) and keep the reader's return URL.
 
+**Second pass adds.**
+
+- Also applies to `/forgot-password`, `/verify-email`, `/auth/[provider]/success|failure`. After sign-in/sign-up the app always goes to `/en/app` (or `/verify-email`) — e.g. signing in from Bookmarks lands on Home. After Sign out it lands on `/login`. _(from the 19–20 audit)_
+- Worse in the installed app (no browser toolbar) — [PWA-06](25-pwa-and-page-metadata.md#pwa-06--in-the-installed-app-some-screens-have-no-way-back). _(from the 24–26 audit)_
+
 ---
 
 ### AUTH-02 · Sign in and Create account don't match
@@ -25,6 +30,10 @@
 ![Sign in has a blue brand block; Create account doesn't](screenshots/auth/login-vs-register.webp)
 
 **Fix.** Use one `AuthShell` for both (either both with the brand block or neither), same spacing, same title size.
+
+**Second pass adds.**
+
+- Forgot password and Verify email also lack the brand block; the forgot-password email field has no icon/placeholder. _(from the 19–20 audit)_
 
 ---
 
@@ -45,6 +54,10 @@
 - "Reset it" and "Create one" are 13 px, colour-only (1.6:1 against body text), 18 px tall. Underline, raise to 15 px, give 44 px hit area.
 - `/login` and `/register` have no `<title>` (axe *document-title*).
 - The password field's eye icon shows "eye-off" while the password is hidden; many users read that as "hidden — tap to show" and others as "tap to hide". Add visible text "Show" / "Hide".
+
+**Second pass adds.**
+
+- Sign-in validates the 12-character *registration* rule and drops focus after a server error ([KEY-15](21-keyboard-focus-and-screen-reader.md#key-15--sign-in-errors-well-built-two-gaps)); otherwise error semantics are good. _(from the 21–23 audit)_
 
 ---
 

@@ -25,6 +25,10 @@ Summary: the first-visit home is bold but lopsided and slightly broken (short Ju
 
 **Done when.** A returning reader sees Continue + all four browse shortcuts on one screen.
 
+**Second pass adds.**
+
+- Manifest shortcut "Continue reading" → `/app` → home; it does not resume ([PWA-02](25-pwa-and-page-metadata.md#pwa-02--manifest-installed-app-always-opens-in-english-old-colours-brand-spelling)). _(from the 24–26 audit)_
+
 ---
 
 ### HOME-02 · Layout is lopsided on desktop and the Juz card is shorter than its neighbours
@@ -46,6 +50,10 @@ Summary: the first-visit home is bold but lopsided and slightly broken (short Ju
 4. Use a page/book-open icon for Pages, a layers or "1/30" icon for Juz (see [VIS-02](11-visual-consistency.md#vis-02--icons-mean-different-things-in-different-places)).
 
 **Done when.** At 1440 px the home content is centred; all four cards are the same height in both themes; no card uses a word where others use a number.
+
+**Second pass adds.**
+
+- At 2560 px the home content is 1024 px in the middle of a mostly empty page. _(from the 17–18 audit)_
 
 ---
 
@@ -90,6 +98,10 @@ See [RTL-01](10-arabic-and-rtl.md#rtl-01--app-home-hero-and-continue-card-are-en
 **P2** · screen-reader users · `+page.svelte:182`
 
 axe: *page-has-heading-one*. "Start reading" is an `<h2>`; the page has no `<h1>`. Make the hero heading an `<h1>` (keep its size), or add a visually hidden "easyquran — home" `<h1>`.
+
+**Second pass adds.**
+
+- Full per-page heading outline in [KEY-12](21-keyboard-focus-and-screen-reader.md#key-12--heading-outline-gaps); range-reader surah groups are not headings. _(from the 21–23 audit)_
 
 ---
 

@@ -40,6 +40,10 @@ Summary: two overlapping pages ("Yours" and "Bookmarks") describe the same saved
 
 **Fix.** Show the first ~80 characters of the verse (Arabic, plus translation if the reader uses one), the saved date ("Saved 3 days ago"), and a note icon when a note exists.
 
+**Second pass adds.**
+
+- Anonymous bookmarks are stored as `{ "2:255": true }` — no timestamp, so "sort by date" needs a schema change ([FLOW-08](19-remaining-screens-and-flows.md#flow-08--many-bookmarks-become-an-unsorted-wall)). _(from the 19–20 audit)_
+
 ---
 
 ### BM-03 · Notes are saved but never shown anywhere
@@ -61,6 +65,10 @@ Summary: two overlapping pages ("Yours" and "Bookmarks") describe the same saved
 **What's wrong.** "Remove" is a small outline button that deletes immediately. Mis-taps on phones are common.
 
 **Fix.** Remove optimistically and show a toast "Bookmark removed · Undo" for 5 seconds; make the button an icon + label ≥ 44 px.
+
+**Second pass adds.**
+
+- Signed-in "Remove" also has no undo; removal while offline disappears instantly (queued). _(from the 19–20 audit)_
 
 ---
 
