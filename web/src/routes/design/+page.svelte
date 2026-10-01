@@ -9,6 +9,12 @@
         "Three takes on the public front door. Same copy and same claims in each — only the form differs, so the comparison is about form.",
     },
     {
+      kind: "system",
+      title: "Reader systems",
+      blurb:
+        "Three complete design systems for the reader: one ground, one accent with one job, one type scale, one radius and one rhythm each, applied to every piece of the page. Pick one whole.",
+    },
+    {
       kind: "reader",
       title: "Reader",
       blurb:
@@ -58,6 +64,32 @@
       </div>
     </section>
   {/each}
+
+  <section class="flex flex-col gap-6 border-b border-line py-11 last:border-b-0">
+    <div class="flex flex-col gap-2">
+      <h2 class="text-[26px] tracking-[-0.02em]">Reader mix</h2>
+      <p class="max-w-[62ch] text-[15px] leading-[1.6] text-fg-3">
+        The live reader's chrome, one axis at a time: surah header, translation button,
+        continue reading, browse lists and stacked translations. Every mix is a URL.
+      </p>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <a
+        href="/design/mix"
+        class="group flex flex-col gap-3 rounded-xl border border-line bg-bg-1 p-5 transition-colors hover:border-accent-line"
+      >
+        <div class="flex items-baseline gap-2">
+          <span class="font-mono text-xs text-accent">M</span>
+          <span class="text-[17px] font-semibold">Reader mix</span>
+        </div>
+        <p class="text-[14px] leading-[1.6] text-fg-2">
+          Al-Mulk with real Uthmani text and real stacked translations (English + Urdu by
+          default), with a switcher for every axis.
+        </p>
+      </a>
+    </div>
+  </section>
 
   <section class="flex flex-col gap-6 border-b border-line py-11 last:border-b-0">
     <div class="flex flex-col gap-2">
