@@ -48,7 +48,7 @@ beforeEach(() => {
 const extras = (): Element[] => [...target.querySelectorAll(".verse-extra")];
 
 describe("VerseRow stacked extras", () => {
-  it("renders ready extras in store order with the BCP-47 lang code and translator label", () => {
+  it("renders ready extras with the BCP-47 lang code and the catalogue name (translator as fallback)", () => {
     mount(VerseRow, {
       target,
       props: {
@@ -83,6 +83,24 @@ describe("VerseRow stacked extras", () => {
     });
     expect(extras()[0]?.textContent).toContain("English");
     expect(extras()[0]?.textContent).toContain("text-en.sahih");
+  });
+
+  it("credits each lane after its text: translator, then the work when named differently", () => {
+    mount(VerseRow, {
+      target,
+      props: {
+        text: "arabic",
+        n: 1,
+        vKey: "1:1",
+        stacked: [
+          stacked("qul.r158.bayan-ul-quran", { name: "Bayan-ul-Quran", translator: "Dr. Israr Ahmad", direction: "rtl" }),
+          stacked("en.sahih", { name: "Saheeh International", translator: "Saheeh International" }),
+        ],
+      },
+    });
+    const credits = [...target.querySelectorAll(".verse-extra-credit")].map((el) => el.textContent?.trim());
+    expect(credits).toEqual(["— Dr. Israr Ahmad (Bayan-ul-Quran)", "— Saheeh International"]);
+    expect(target.querySelector(".verse-extra-credit")?.getAttribute("dir")).toBe("rtl");
   });
 
   it("renders skeletons for pending sources and an error row for errored ones", () => {

@@ -201,11 +201,9 @@
 
 <ReaderShell>
   {#snippet header()}
-    <span class="text-sm font-medium text-foreground-secondary">
-      {surah.num}. {surah.name} · {copy.shell.pageOf(activeLocalPage, data.pageData.pageCount)}
-    </span>
-    <span dir="rtl" lang="ar" class="ms-auto font-arabic text-base text-muted-foreground">
-      {surah.arabic}
+    <span class="hidden min-w-0 truncate text-sm font-medium text-foreground-secondary sm:inline">
+      {surah.num}. {surah.name}
+      <span dir="rtl" lang="ar" class="ms-1 font-arabic text-base">{surah.arabic}</span>
     </span>
   {/snippet}
 

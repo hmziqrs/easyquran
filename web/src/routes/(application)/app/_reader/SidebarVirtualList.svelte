@@ -59,12 +59,14 @@
 </script>
 
 <div class="relative w-full" style="height:{$virtualizer.getTotalSize()}px">
-  <div
-    class="absolute inset-x-0 top-0"
+  <!-- A real list: rows are <li> inside <ul>, so setsize/posinset have a listitem to sit
+       on and no row inherits the browser's default disc marker. -->
+  <ul
+    class="absolute inset-x-0 top-0 list-none"
     style="transform:translateY({$virtualizer.getVirtualItems()[0]?.start ?? 0}px)"
   >
     {#each $virtualizer.getVirtualItems() as row (row.index)}
-      <div
+      <li
         use:measure
         data-index={row.index}
         aria-setsize={count}
@@ -72,7 +74,7 @@
         class="w-full pb-1"
       >
         {@render item(row.index)}
-      </div>
+      </li>
     {/each}
-  </div>
+  </ul>
 </div>

@@ -181,7 +181,7 @@
   --color-border: var(--border);
   --color-card: var(--surface);
   --color-card-foreground: var(--foreground);
-  --color-popover: var(--surface-raised);
+  --color-popover: var(--popover);
   --color-popover-foreground: var(--foreground);
   --color-secondary: var(--surface-hover);
   --color-secondary-foreground: var(--foreground);
@@ -206,19 +206,19 @@
    secondary text — do not raise it. */
 :root,
 [data-palette="sacred"][data-mode="dark"] {
-  --background: oklch(0.165 0 0);
-  --background-subtle: oklch(0.190 0 0);
+  --background: oklch(0 0 0);
+  --background-subtle: oklch(0.145 0 0);
 
-  --surface: oklch(0.238 0 0);
-  --surface-raised: oklch(0.262 0 0);
-  --surface-hover: oklch(0.285 0 0);
+  --surface: oklch(0.17 0 0);
+  --surface-raised: oklch(0.2 0 0);
+  --surface-hover: oklch(0.235 0 0);
 
   --foreground: oklch(0.965 0 0);
   --foreground-secondary: oklch(0.775 0 0);
   --muted: oklch(0.625 0 0);
 
-  --border: oklch(0.305 0 0);
-  --border-strong: oklch(0.375 0 0);
+  --border: oklch(0.255 0 0);
+  --border-strong: oklch(0.33 0 0);
 
   /* Accent family (plan 01 remap: sacred → cobalt). Note the dark accent is DARKER than
      the light one, not lighter — that is the white-on-colour decision (plan 00 D2). */
@@ -241,12 +241,13 @@
   --focus-ring: oklch(0.50 0.20 262);
 
   /* Reader family (plan 06 step 1): derives from the neutral ground, not a tint.
-     Dark reader ground sits just under --surface (0.238) so the column recedes;
-     the Quran text stays the highest-contrast element on the page in both modes. */
-  --reader-background: oklch(0.190 0 0);
+     Dark mode reads on true black (user pick, 2026-10-01: the grey ground read as washed
+     out); the bordered reader card and near-black panels sit one step above it. The Quran
+     text stays the highest-contrast element on the page in both modes. */
+  --reader-background: oklch(0 0 0);
   --quran-foreground: oklch(0.975 0 0);
   --translation-foreground: oklch(0.775 0 0);
-  --reader-divider: oklch(0.275 0 0);
+  --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 4 is rose
      (replaces the retired amber, whose yellow band read poorly in the reader); the
@@ -391,19 +392,19 @@
 }
 
 [data-palette="ink"][data-mode="dark"] {
-  --background: oklch(0.165 0 0);
-  --background-subtle: oklch(0.190 0 0);
+  --background: oklch(0 0 0);
+  --background-subtle: oklch(0.145 0 0);
 
-  --surface: oklch(0.238 0 0);
-  --surface-raised: oklch(0.262 0 0);
-  --surface-hover: oklch(0.285 0 0);
+  --surface: oklch(0.17 0 0);
+  --surface-raised: oklch(0.2 0 0);
+  --surface-hover: oklch(0.235 0 0);
 
   --foreground: oklch(0.965 0 0);
   --foreground-secondary: oklch(0.775 0 0);
   --muted: oklch(0.625 0 0);
 
-  --border: oklch(0.305 0 0);
-  --border-strong: oklch(0.375 0 0);
+  --border: oklch(0.255 0 0);
+  --border-strong: oklch(0.33 0 0);
 
   /* Accent family (plan 01 remap: ink → neutral), dark: ground-inverted. */
   --primary: oklch(0.965 0 0);
@@ -421,10 +422,10 @@
 
   --focus-ring: oklch(0.965 0 0);
 
-  --reader-background: oklch(0.190 0 0);
+  --reader-background: oklch(0 0 0);
   --quran-foreground: oklch(0.975 0 0);
   --translation-foreground: oklch(0.775 0 0);
-  --reader-divider: oklch(0.275 0 0);
+  --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
@@ -508,19 +509,19 @@
 }
 
 [data-palette="sepia"][data-mode="dark"] {
-  --background: oklch(0.165 0 0);
-  --background-subtle: oklch(0.190 0 0);
+  --background: oklch(0 0 0);
+  --background-subtle: oklch(0.145 0 0);
 
-  --surface: oklch(0.238 0 0);
-  --surface-raised: oklch(0.262 0 0);
-  --surface-hover: oklch(0.285 0 0);
+  --surface: oklch(0.17 0 0);
+  --surface-raised: oklch(0.2 0 0);
+  --surface-hover: oklch(0.235 0 0);
 
   --foreground: oklch(0.965 0 0);
   --foreground-secondary: oklch(0.775 0 0);
   --muted: oklch(0.625 0 0);
 
-  --border: oklch(0.305 0 0);
-  --border-strong: oklch(0.375 0 0);
+  --border: oklch(0.255 0 0);
+  --border-strong: oklch(0.33 0 0);
 
   /* Accent family (plan 01 remap: sepia → magenta), dark — darker than light (plan 00 D2). */
   --primary: oklch(0.51 0.22 352);
@@ -539,10 +540,10 @@
   --focus-ring: oklch(0.51 0.22 352);
 
   /* Reader fully neutral in dark mode too (see sepia light). */
-  --reader-background: oklch(0.19 0 0);
+  --reader-background: oklch(0 0 0);
   --quran-foreground: oklch(0.975 0 0);
   --translation-foreground: oklch(0.775 0 0);
-  --reader-divider: oklch(0.275 0 0);
+  --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
@@ -624,19 +625,19 @@
 }
 
 [data-palette="sapphire"][data-mode="dark"] {
-  --background: oklch(0.165 0 0);
-  --background-subtle: oklch(0.190 0 0);
+  --background: oklch(0 0 0);
+  --background-subtle: oklch(0.145 0 0);
 
-  --surface: oklch(0.238 0 0);
-  --surface-raised: oklch(0.262 0 0);
-  --surface-hover: oklch(0.285 0 0);
+  --surface: oklch(0.17 0 0);
+  --surface-raised: oklch(0.2 0 0);
+  --surface-hover: oklch(0.235 0 0);
 
   --foreground: oklch(0.965 0 0);
   --foreground-secondary: oklch(0.775 0 0);
   --muted: oklch(0.625 0 0);
 
-  --border: oklch(0.305 0 0);
-  --border-strong: oklch(0.375 0 0);
+  --border: oklch(0.255 0 0);
+  --border-strong: oklch(0.33 0 0);
 
   /* Accent family (plan 01 remap: sapphire → emerald), dark — darker than light (plan 00 D2). */
   --primary: oklch(0.50 0.14 162);
@@ -654,10 +655,10 @@
 
   --focus-ring: oklch(0.50 0.14 162);
 
-  --reader-background: oklch(0.190 0 0);
+  --reader-background: oklch(0 0 0);
   --quran-foreground: oklch(0.975 0 0);
   --translation-foreground: oklch(0.775 0 0);
-  --reader-divider: oklch(0.275 0 0);
+  --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
   --hue-1: oklch(0.50 0.20 262);
@@ -762,6 +763,13 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--focus-ring);
+}
+
+/* Dark panels (dialogs, sheets) sit on near-black one step above the page instead of the
+   raised grey, which read washed out beside the reading column. Light mode keeps
+   --surface-raised (white) through the shim's --popover alias. */
+:root:not([data-mode="light"]) {
+  --popover: var(--background-subtle);
 }
 
 @layer base {

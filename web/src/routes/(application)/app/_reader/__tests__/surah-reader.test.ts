@@ -9,6 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 // Minimal surface of the ReaderHeader props the tests drive.
 interface HeaderStubProps {
   onChangeMode: (mode: "verse" | "reading") => void;
+  readingText: "arabic" | "translation";
+  readingFlowName: string | null;
+  onReadArabic: () => void;
+  onReadTranslation: () => void;
+  onPickTranslation: () => void;
 }
 
 // ---- hoisted doubles -------------------------------------------------------
@@ -22,6 +27,7 @@ const {
   readerStub,
   mountStub,
   headerProps,
+  rowProps,
   setSourceIdSpy,
 } = vi.hoisted(() => ({
   nav: { state: {}, url: new URL("https://example.test/app/al-fatihah") },
@@ -58,6 +64,9 @@ const {
   // exactly like the header's mode pills do.
   // SAFETY: null is the not-yet-mounted member of the nullable holder; tests assign the captured HeaderStubProps on mount.
   headerProps: { current: null as HeaderStubProps | null },
+  // VerseRow props captured per mount so tests can read what each row was given.
+  // SAFETY: an empty array literal of the captured-props record; tests only push stub props objects.
+  rowProps: [] as { isTranslation?: boolean; arabicPending?: boolean; stacked?: readonly { sourceId: string }[] }[],
   setSourceIdSpy: vi.fn(),
 }));
 
@@ -89,6 +98,7 @@ vi.mock("$lib/quran/catalogue", () => {
     TRANSLATION_CATALOGUE: list,
     TRANSLATION_CATALOGUE_BY_ID: new Map(list.map((t) => [t.id, t])),
     flagFor: () => ({ flag: "", country: "" }),
+    nativeNameFor: () => null,
     translationSourceOf: () => "tanzil",
   };
 });
@@ -112,7 +122,12 @@ vi.mock("../ReaderHeader.svelte", () => ({
   },
 }));
 vi.mock("../ReaderPageNav.svelte", () => ({ default: mountStub }));
-vi.mock("../VerseRow.svelte", () => ({ default: mountStub }));
+vi.mock("../VerseRow.svelte", () => ({
+  default: (...args: unknown[]) => {
+    // SAFETY: Svelte 5 invokes child components as (anchor, props); the props object is the last argument.
+    rowProps.push(args[args.length - 1] as (typeof rowProps)[number]);
+  },
+}));
 
 // ---- helpers ---------------------------------------------------------------
 function flushMicrotasks(n = 12): Promise<void> {
@@ -627,26 +642,6 @@ describe("SurahReader W7 degradation state lifecycle", () => {
 });
 
 describe("SurahReader W7-R2-1 retry-button gate", () => {
-  it("hides Retry when loadFailed has no actionable target (continueReading failure)", async () => {
-    const full = pageData({ ayahs: 7, pageCount: 3 });
-    readerStub.hasLastRead = true;
-    readerStub.lastRead = { num: 1, n: 1, sourceId: "uthmani" };
-    loadQuranDataStub.mockRejectedValue(new Error("boom"));
-
-    mount(SurahReader, { target, props: propsFor(full) });
-    await flushMicrotasks();
-
-    const continueBtn = Array.from(target.querySelectorAll("button")).find((b) =>
-      /continue reading/i.test(b.textContent ?? ""),
-    );
-    continueBtn?.click();
-    await flushMicrotasks(20);
-
-    const region = target.querySelector('[role="status"]');
-    expect(region).not.toBeNull();
-    expect(region?.querySelector('button[type="button"]')).toBeNull();
-  });
-
   it("shows Retry for a real failed adjacent page", async () => {
     const full = pageData({ ayahs: 7, pageCount: 3 });
     workerStub.readRange.mockRejectedValue(new Error("boom"));
@@ -662,135 +657,124 @@ describe("SurahReader W7-R2-1 retry-button gate", () => {
   });
 });
 
-// ---- reading-mode confirmation (U7/U8) --------------------------------------
+// ---- reading mode: Arabic or one translation, never a dialog -----------------
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-import { readingModeUi } from "../reading-mode-guard.svelte";
+import { readingText } from "$lib/stores/reading-text.svelte";
 
-describe("SurahReader reading-mode confirmation", () => {
+describe("SurahReader reading mode", () => {
   function translationPageData(): ReturnType<typeof pageData> {
     const base = pageData({ ayahs: 7, pageCount: 3 });
-    // Route translation primary instead of the default uthmani source id.
+    // Route translation instead of the default uthmani source id.
     return { ...base, normalization: { ...base.normalization, sourceId: "en.sahih" } };
   }
   function settle(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 40));
   }
-  function radios(): HTMLInputElement[] {
-    // SAFETY: selector matches only radio inputs, so every element is HTMLInputElement
-    return [...document.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
-  }
-  function confirmButton(): HTMLButtonElement {
-    // SAFETY: selector matches only the dialog's confirm button
-    return document.querySelector("button[data-reading-confirm]") as HTMLButtonElement;
-  }
-  function driveModeSwitch(mode: "verse" | "reading"): void {
-    headerProps.current?.onChangeMode(mode);
+  function header(): HeaderStubProps {
+    const props = headerProps.current;
+    if (!props) throw new Error("ReaderHeader never mounted");
+    return props;
   }
 
   beforeEach(() => {
-    readingModeUi.reset();
     stackedTranslations.clear();
-    // Stacked extras fetch through the worker; give the stub a resolving range
+    readingText.readArabic();
+    // Stacked translations fetch through the worker; give the stub a resolving range
     // so the controller's sync effect never awaits undefined.
     workerStub.readRange.mockResolvedValue({ ayahs: [], normalizations: [] });
   });
 
-  afterEach(() => {
-    for (const el of document.querySelectorAll("[data-dialog-content], [data-dialog-overlay]")) {
-      el.remove();
-    }
-  });
-
-  it("opens the confirmation dialog on a UI switch with a translation primary + extras, mode unchanged", async () => {
+  it("switches to reading at once with translations stacked — no dialog, no navigation", async () => {
     stackedTranslations.setIds(["en.sahih", "en.arberry"]);
-    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
     await flushMicrotasks();
-    driveModeSwitch("reading");
+    header().onChangeMode("reading");
     await settle();
-    expect(readerStub.mode).toBe("verse");
-    expect(radios().map((r) => r.value)).toEqual(["en.sahih", "en.arberry"]);
-  });
-
-  it("confirming another translation navigates position-preserved with ?mode=reading applied", async () => {
-    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
-    nav.url = new URL("https://example.test/app/t/en/sahih/juz/30");
-    mount(SurahReader, { target, props: propsFor(translationPageData()) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    radios()[1]?.click();
-    confirmButton().click();
-    expect(setSourceIdSpy).toHaveBeenCalledWith("en.arberry");
     expect(readerStub.mode).toBe("reading");
+    expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(gotoSpy).not.toHaveBeenCalled();
+  });
+
+  it("defaults Reading to the Arabic on an Arabic page", async () => {
+    stackedTranslations.setIds(["en.arberry", "ur.jalandhry"]);
+    readerStub.setMode("reading");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    expect(header().readingText).toBe("arabic");
+    expect(header().readingFlowName).toBeNull();
+  });
+
+  it("flows the route's own translation by default on a translation page", async () => {
+    readerStub.setMode("reading");
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    expect(header().readingText).toBe("translation");
+    expect(header().readingFlowName).toBe("Name en.sahih");
+  });
+
+  it("the Translation pill flows the first stacked translation in place when nothing was picked", async () => {
+    stackedTranslations.setIds(["en.arberry", "ur.jalandhry"]);
+    readerStub.setMode("reading");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    header().onReadTranslation();
+    await settle();
+    expect(readingText.text).toBe("translation");
+    expect(header().readingFlowName).toBe("Name en.arberry");
+    expect(gotoSpy).not.toHaveBeenCalled();
+  });
+
+  it("the Translation pill keeps the saved pick, even one that is not stacked", async () => {
+    readingText.readTranslation("ur.jalandhry");
+    readingText.readArabic();
+    stackedTranslations.setIds(["en.arberry"]);
+    readerStub.setMode("reading");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    header().onReadTranslation();
+    await settle();
+    expect(header().readingFlowName).toBe("Name ur.jalandhry");
+  });
+
+  it("opens the full picker, picks a translation, and remembers it as recent", async () => {
+    readerStub.setMode("reading");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks();
+    header().onPickTranslation();
+    await settle();
+    const row = document.querySelector<HTMLButtonElement>('[data-row-pick="en.arberry"]');
+    expect(row).not.toBeNull();
+    row?.click();
+    await settle();
+    expect(readingText.text).toBe("translation");
+    expect(readingText.translationId).toBe("en.arberry");
+    expect(readingText.recent[0]).toBe("en.arberry");
+    expect(header().readingFlowName).toBe("Name en.arberry");
+  });
+
+  it("Ayah-by-Ayah on a translation page leads with the Arabic and puts the page's translation first", async () => {
+    stackedTranslations.setIds(["en.arberry"]);
+    rowProps.length = 0;
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    const row = rowProps[0];
+    expect(row?.isTranslation).toBe(false);
+    expect(row?.arabicPending).toBe(true);
+    expect(row?.stacked?.[0]?.sourceId).toBe("en.sahih");
+  });
+
+  it("Reading → Arabic on a translation page opens the Arabic URL at the same place, in reading mode", async () => {
+    readerStub.setMode("reading");
+    nav.url = new URL("https://example.test/app/al-fatihah/t/en/sahih/page/2");
+    mount(SurahReader, { target, props: propsFor(translationPageData()) });
+    await flushMicrotasks();
+    header().onReadArabic();
+    await settle();
+    expect(readingText.text).toBe("arabic");
     expect(gotoSpy).toHaveBeenCalledTimes(1);
     const href = String(gotoSpy.mock.calls[0]?.[0]);
-    expect(href).toContain("/app/t/en/arberry/juz/30");
+    expect(href).toContain("/app/al-fatihah/page/2");
+    expect(href).not.toContain("/t/");
     expect(href).toContain("mode=reading");
-  });
-
-  it("confirming the current primary applies reading mode in place without navigation", async () => {
-    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
-    mount(SurahReader, { target, props: propsFor(translationPageData()) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    confirmButton().click();
-    // applyMode runs through the anchor-preserving queue; let a tick land.
-    await settle();
-    expect(readerStub.mode).toBe("reading");
-    expect(gotoSpy).not.toHaveBeenCalled();
-    expect(readingModeUi.appliedByUi).toBe(true);
-  });
-
-  it("cancel leaves the mode untouched", async () => {
-    stackedTranslations.setIds(["en.sahih", "en.arberry"]);
-    mount(SurahReader, { target, props: propsFor(translationPageData()) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    const cancel = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("Cancel"),
-    );
-    cancel?.click();
-    await settle();
-    expect(readerStub.mode).toBe("verse");
-    expect(gotoSpy).not.toHaveBeenCalled();
-  });
-
-  it("Arabic primary with zero extras switches directly — no dialog", async () => {
-    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    expect(readerStub.mode).toBe("reading");
-    expect(radios()).toHaveLength(0);
-    expect(gotoSpy).not.toHaveBeenCalled();
-  });
-
-  it("Arabic primary with extras confirms with Arabic preselected; Arabic choice never navigates", async () => {
-    stackedTranslations.setIds(["en.arberry"]);
-    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    const inputs = radios();
-    expect(inputs.map((r) => r.value)).toEqual(["arabic", "en.arberry"]);
-    expect(inputs[0]?.checked).toBe(true);
-    confirmButton().click();
-    await settle();
-    expect(readerStub.mode).toBe("reading");
-    expect(gotoSpy).not.toHaveBeenCalled();
-  });
-
-  it("a lone translation primary still asks (single-candidate confirm, no radios)", async () => {
-    stackedTranslations.setIds([]);
-    mount(SurahReader, { target, props: propsFor(translationPageData()) });
-    await flushMicrotasks();
-    driveModeSwitch("reading");
-    await settle();
-    expect(radios()).toHaveLength(0);
-    confirmButton().click();
-    await settle();
-    expect(readerStub.mode).toBe("reading");
   });
 });

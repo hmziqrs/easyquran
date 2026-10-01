@@ -16,11 +16,9 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
-  import { resumeToLastRead } from "$lib/reader/resume";
-  import { Icon } from "$lib/components/icon";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import { quranWorker } from "$lib/quran/worker-client";
-  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import type { ReadTierStatus } from "$lib/quran/fetch";
   import {
     SURAH_PAGE_WINDOW_SIZE,
@@ -37,8 +35,7 @@
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import { withModeParam } from "$lib/reader/mode-param";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { readerSource } from "$lib/stores/reader-settings.svelte";
-  import { noteTranslationChosen } from "$lib/quran/engagement";
+  import { readingText } from "$lib/stores/reading-text.svelte";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
   import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import { ayahIndexValidator } from "./range-validate";
@@ -59,13 +56,13 @@
   import ReaderHeader from "./ReaderHeader.svelte";
   import ReaderPageNav from "./ReaderPageNav.svelte";
   import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
-  import ReadingModeDialog from "./ReadingModeDialog.svelte";
-  import {
-    readingCandidates,
-    readingModeHrefFor,
-    readingModeUi,
-    type ReadingCandidate,
-  } from "./reading-mode-guard.svelte";
+  import { readingFlowId, readingQuickPicks, type ReadPick } from "./reading-flow";
+  import TranslationModal from "./TranslationModal.svelte";
+  import { registerTypographyWrapper } from "./typography-change";
+  import { createArabicCompanion } from "./arabic-companion.svelte";
+  import type { Ayah, QuranScript, StackedTranslation } from "$lib/data/quran-types";
+  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+  import { arabicHrefFor, liveReaderPosition } from "./translation-nav";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
   import {
@@ -400,30 +397,145 @@
     if (Number.isSafeInteger(localPage)) shiftVirtualWindow(localPage);
   }
 
-  // Reading-mode confirmation (U7/U8): UI-initiated switches to reading are
-  // intercepted whenever a translation is in play (route translation primary,
-  // or stacked extras beyond the primary). Arabic primary with no extras
-  // switches directly. This is the single interception point — every reader
-  // mode control routes through onChangeMode → changeMode.
-  const primaryTranslationId = $derived(isTranslationSource ? sourceId : null);
-  let readingConfirmOpen = $state(false);
-  let readingConfirmCandidates = $state.raw<ReadingCandidate[]>([]);
+  // Reading flows exactly one text — the Arabic or one translation — and switching between
+  // them never asks: Ayah-by-Ayah keeps the Arabic plus every stacked translation, Reading
+  // follows the saved readingText choice (see reading-flow.ts). A translation route always
+  // flows a translation; its Arabic lives at the Arabic URL.
+  const routeTranslationId = $derived(isTranslationSource ? sourceId : null);
+  let pageReadingPick = $state<string | null>(null);
+  let readingPickerOpen = $state(false);
+  const flowId = $derived(
+    reader.isReadingMode
+      ? readingFlowId(
+          readingText.text,
+          readingText.translationId,
+          routeTranslationId,
+          pageReadingPick,
+          stackedTranslations.ids,
+        )
+      : null,
+  );
+  // The route's own translation is the page text itself; any other flows from stacked data.
+  const flowFromStack = $derived(flowId !== null && flowId !== routeTranslationId);
+  const flowLanguage = $derived(
+    flowId === null ? undefined : TRANSLATION_CATALOGUE_BY_ID.get(flowId)?.languageCode,
+  );
+  const showsTranslation = $derived(isTranslationSource || flowId !== null);
+  // A flowing Urdu (or other RTL) translation needs an RTL paragraph, or its ayah markers
+  // land on the wrong side of each run.
+  const flowRtl = $derived(
+    flowId !== null && TRANSLATION_CATALOGUE_BY_ID.get(flowId)?.direction === "rtl",
+  );
+  const flowName = $derived(
+    flowId === null ? null : (TRANSLATION_CATALOGUE_BY_ID.get(flowId)?.name ?? null),
+  );
+  // Reading can flow any catalogue translation. A stacked one is already fetched with the
+  // stack; anything else gets its own one-id fetcher, so it never shows up as a stacked lane.
+  const readingFetchIds = $derived(
+    flowFromStack && flowId !== null && !stackedTranslations.ids.includes(flowId) ? [flowId] : [],
+  );
+  const readingController = createStackedTranslations({
+    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
+    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
+    primarySourceId: () => (isTranslationSource ? sourceId : null),
+    catalogue: () => TRANSLATION_CATALOGUE,
+    routeKey: () => `${sourceId}:${initial.surah.num}`,
+    ids: () => readingFetchIds,
+  });
+  $effect(() => readingController.sync());
+  onDestroy(() => readingController.dispose());
 
-  function changeMode(mode: ReaderMode): void {
-    if (mode === "reading" && !reader.isReadingMode) {
-      const candidates = readingCandidates(primaryTranslationId, stackedTranslations.ids);
-      if (candidates.length > 0) {
-        readingConfirmCandidates = candidates;
-        readingConfirmOpen = true;
-        return;
-      }
-    }
-    applyMode(mode);
+  // Ayah-by-Ayah never drops the Arabic: on a translation route it is fetched alongside, and
+  // the route's own translation becomes the first lane above the stacked ones.
+  const arabicCompanion = createArabicCompanion({
+    enabled: () => isTranslationSource && reader.isVerseMode,
+    source: () => reader.arabicScript,
+    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
+    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
+    routeKey: () => `${sourceId}:${initial.surah.num}`,
+  });
+  $effect(() => arabicCompanion.sync());
+  onDestroy(() => arabicCompanion.dispose());
+  const routeEntry = $derived(
+    routeTranslationId === null ? undefined : TRANSLATION_CATALOGUE_BY_ID.get(routeTranslationId),
+  );
+
+  interface RowView {
+    readonly text: string;
+    readonly isTranslation: boolean | undefined;
+    readonly translationLang: string | undefined;
+    readonly pending: boolean;
+    readonly arabicPending: boolean;
+    readonly script: QuranScript;
+    readonly lead: StackedTranslation | null;
   }
 
-  function applyMode(mode: ReaderMode): void {
-    if (mode === "reading") readingModeUi.mark();
-    else readingModeUi.reset();
+  /** What one ayah row shows: Arabic + lanes, a flowed translation, or the page text. */
+  function rowView(ayah: Ayah, pageData: SurahLocalPageData): RowView {
+    const own = bodyText(ayah.text, ayah.ayah, pageData.normalization);
+    if (isTranslationSource && reader.isVerseMode && routeEntry) {
+      const arabic = arabicCompanion.state.byKey.get(ayah.key);
+      return {
+        text: arabic?.text ?? "",
+        isTranslation: false,
+        translationLang: undefined,
+        pending: false,
+        arabicPending: arabic === undefined,
+        script: arabic?.script ?? pageData.normalization.script,
+        lead: {
+          sourceId: routeEntry.id,
+          name: routeEntry.name,
+          translator: routeEntry.translator,
+          language: routeEntry.language,
+          languageCode: routeEntry.languageCode,
+          direction: routeEntry.direction,
+          text: own,
+        },
+      };
+    }
+    if (flowFromStack) {
+      const flowed = flowText(ayah.key);
+      return {
+        text: flowed ?? "",
+        isTranslation: true,
+        translationLang: flowLanguage,
+        pending: flowed === null,
+        arabicPending: false,
+        script: pageData.normalization.script,
+        lead: null,
+      };
+    }
+    return {
+      text: own,
+      isTranslation: undefined,
+      translationLang: undefined,
+      pending: false,
+      arabicPending: false,
+      script: pageData.normalization.script,
+      lead: null,
+    };
+  }
+
+  function lanesFor(key: string, lead: StackedTranslation | null): readonly StackedTranslation[] {
+    const stacked = stackedFor(stackedController.state, key);
+    return lead ? [lead, ...stacked] : stacked;
+  }
+
+  function flowText(key: string): string | null {
+    const fromStack = stackedFor(stackedController.state, key).find((t) => t.sourceId === flowId);
+    if (fromStack) return fromStack.text;
+    return stackedFor(readingController.state, key).find((t) => t.sourceId === flowId)?.text ?? null;
+  }
+
+  const readPick = $derived<ReadPick>({
+    current: flowId,
+    quick: readingQuickPicks(routeTranslationId, readingText.recent, stackedTranslations.ids),
+    onPick: pickReadingTranslation,
+  });
+
+  function changeMode(mode: ReaderMode): void {
     if (reader.mode === mode) return;
     void preserveViewport(() => {
       virtualCenterPage = visibleLocalPage;
@@ -432,30 +544,50 @@
     }, true);
   }
 
-  function onReadingConfirm(candidate: ReadingCandidate): void {
-    readingConfirmOpen = false;
-    readingModeUi.mark();
-    // The page-store url is only the fallback: on a scrolled surah route
-    // window.location carries the reader's /page/N rewrite that page.url never
-    // sees (stress S1) — readingModeHrefFor reads the live url first.
-    const href = readingModeHrefFor(candidate, primaryTranslationId, appPage.url);
-    if (href === null) {
-      // Arabic choice, or the chosen candidate already is the route primary:
-      // no navigation, just enter reading mode in place.
-      applyMode("reading");
+  function readArabic(): void {
+    if (!isTranslationSource) {
+      void preserveViewport(() => readingText.readArabic(), true);
       return;
     }
-    if (candidate.entry) {
-      readerSource.setSourceId(candidate.entry.id);
-      void noteTranslationChosen(candidate.entry.id);
-    }
-    // Mode first, THEN navigate: the reader store applies reading mode
-    // immediately and the goto target already carries ?mode=reading, so the
-    // layout's mode-param sync never fights the transition and the param
-    // lands on the final URL.
-    reader.setMode("reading");
-    void goto(publicHref(readerHrefFor(copy.locale, href)), { noScroll: true });
+    // A translation route carries no Arabic text: open the Arabic URL at the same place.
+    // liveReaderPosition reads window.location first — a scrolled reader's /page/N rewrite
+    // never reaches page.url (stress S1).
+    readingText.readArabic();
+    const href = arabicHrefFor(liveReaderPosition(appPage.url));
+    if (href === null) return;
+    const target = withModeParam(publicHref(readerHrefFor(copy.locale, href)), "reading", appPage.url);
+    void goto(target, { noScroll: true });
   }
+
+  /** Translation pill: flow the last translation, or open the picker when there is none. */
+  function readTranslation(): void {
+    const next = readingText.translationId ?? stackedTranslations.ids[0] ?? null;
+    if (next === null) {
+      readingPickerOpen = true;
+      return;
+    }
+    void preserveViewport(() => readingText.readTranslation(next), true);
+  }
+
+  function pickReadingTranslation(id: string): void {
+    void preserveViewport(() => {
+      if (isTranslationSource) pageReadingPick = id;
+      readingText.readTranslation(id);
+    }, true);
+  }
+
+  // Urdu and other Arabic-script translations read in Naskh; load it once one is on screen.
+  const needsNaskh = $derived(
+    [...stackedTranslations.ids, flowId, routeTranslationId].some(
+      (id) => id !== null && TRANSLATION_CATALOGUE_BY_ID.get(id)?.direction === "rtl",
+    ),
+  );
+  $effect(() => {
+    if (needsNaskh) void loadArabicFont("noto-naskh-arabic");
+  });
+
+  // The sticky bar's A−/A+ route through this so a resize keeps the reading position.
+  $effect(() => registerTypographyWrapper(changeTypography));
 
   function changeTypography(change: () => void): void {
     // Deliberately NO virtualCenterPage recenter here: the rendered window is
@@ -835,12 +967,6 @@
     }
   }
 
-  async function continueReading(): Promise<void> {
-    if (!reader.hasLastRead) return;
-    const ok = await resumeToLastRead(routeContext);
-    if (!ok && reader.hasLastRead) degradation.loadFailed = true;
-  }
-
   beforeNavigate(() => {
     if (!clientMounted) return;
     if (historyWriteTimer) {
@@ -945,34 +1071,29 @@
     <span class="sr-only" role="status" aria-live="polite">{copy.shell.opening}</span>
   {/if}
 
-  {#if reader.hasLastRead}
-    <button
-      type="button"
-      onclick={continueReading}
-      aria-label={copy.shell.continueReading(reader.lastReadRef)}
-      class="flex items-center gap-3 rounded-md bg-primary-soft px-[18px] py-[13px] text-start transition-[filter] duration-150 hover:brightness-[0.98]"
-    >
-      <Icon name="play" size={15} class="flex-none text-primary" />
-      <span class="text-sm text-primary">{copy.shell.continueReading(reader.lastReadRef)}</span>
-      <span class="ms-auto text-[13px] text-primary">{copy.shell.jump} <span aria-hidden="true">→</span></span>
-    </button>
-  {/if}
 
-  <div class="overflow-hidden rounded-lg border border-border bg-reader-background">
+  <!-- No card (user pick): the reader sits on the page, shares the nav/bar left edge, and only
+       the rule under the surah header and the rules between ayahs divide it. -->
+  <div>
     <ReaderHeader
       {initial}
       {visibleLocalPage}
       {clientMounted}
       onChangeMode={changeMode}
-      onSmaller={() => changeTypography(() => reader.smaller())}
-      onBigger={() => changeTypography(() => reader.bigger())}
+      readingText={flowId === null ? "arabic" : "translation"}
+      readingFlowName={flowName}
+      onReadArabic={readArabic}
+      onReadTranslation={readTranslation}
+      onPickTranslation={() => (readingPickerOpen = true)}
     />
+
+    <TranslationModal bind:open={readingPickerOpen} {readPick} />
 
     <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
     <div
       {@attach captureReaderPages}
       class="reader-pages"
-      data-source-kind={isTranslationSource ? "translation" : "arabic"}
+      data-source-kind={showsTranslation ? "translation" : "arabic"}
       tabindex="-1"
     >
       <TooltipProvider delayDuration={300}>
@@ -998,15 +1119,21 @@
                   />
                 </div>
               {/if}
-              <ol class="ayah-list list-none p-0">
+              <ol class="ayah-list list-none p-0" dir={flowRtl ? "rtl" : undefined}>
                 {#each pageData.ayahs as ayah (ayah.key)}
+                  {@const view = rowView(ayah, pageData)}
                   <VerseRow
-                    text={bodyText(ayah.text, ayah.ayah, pageData.normalization)}
+                    text={view.text}
+                    isTranslation={view.isTranslation}
+                    translationLang={view.translationLang}
+                    pending={view.pending}
+                    arabicPending={view.arabicPending}
+                    leadId={view.lead?.sourceId}
                     n={ayah.ayah}
                     vKey={ayah.key}
-                    script={pageData.normalization.script}
+                    script={view.script}
                     onToggleNote={() => toggleNote(ayah.key)}
-                    stacked={stackedFor(stackedController.state, ayah.key)}
+                    stacked={lanesFor(ayah.key, view.lead)}
                     stackedPending={loadingFor(stackedController.state, ayah.key)}
                     stackedErrored={erroredFor(stackedController.state, ayah.key)}
                     stackedErrorLabel={copy.stacked.error}
@@ -1058,12 +1185,6 @@
       {nextPage}
     />
   </div>
-
-  <ReadingModeDialog
-    bind:open={readingConfirmOpen}
-    candidates={readingConfirmCandidates}
-    onConfirm={onReadingConfirm}
-  />
 </div>
 
 <style>
@@ -1096,7 +1217,7 @@
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-page {
     border-bottom: 1px solid var(--reader-divider);
-    padding: 2rem 1.25rem;
+    padding: 2rem 0;
   }
 
   :global([data-reader-mode="reading"]) .reader-pages .surah-opener-bismillah {
@@ -1127,17 +1248,4 @@
     line-height: 1.9;
   }
 
-  :global(html[data-reader-last-read="true"]:not([data-reader-hydrated="true"]))
-    .reader-stack::before {
-    content: "";
-    display: block;
-    height: 46px;
-    flex: 0 0 46px;
-  }
-
-  @media (min-width: 640px) {
-    :global([data-reader-mode="reading"]) .reader-pages .surah-page {
-      padding-inline: 2.25rem;
-    }
-  }
 </style>

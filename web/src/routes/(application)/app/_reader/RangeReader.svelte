@@ -20,7 +20,9 @@
     loadingFor,
     stackedFor,
   } from "./stacked-translations.svelte";
-  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
+  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   // Direct import: the brand barrel pulls Brand -> config/site -> $env/dynamic,
   // which must not enter this module graph.
@@ -66,6 +68,13 @@
     return "";
   });
   $effect(() => stackedController.sync());
+  // Urdu and other Arabic-script lanes read in Naskh; load it once one is stacked.
+  $effect(() => {
+    const rtl = stackedTranslations.ids.some(
+      (id) => TRANSLATION_CATALOGUE_BY_ID.get(id)?.direction === "rtl",
+    );
+    if (rtl) void loadArabicFont("noto-naskh-arabic");
+  });
   onDestroy(() => stackedController.dispose());
   onMount(() => {
     void loadQuranData()
@@ -206,8 +215,9 @@
 >
   <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
   {#each groups as g (g.surah.num)}
-    <div class="overflow-hidden rounded-lg border border-border bg-reader-background">
-      <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3 sm:px-9">
+    <!-- No card: each surah in the range is a section divided by rules, like the Surah reader. -->
+    <div>
+      <div class="flex items-center justify-between gap-3 border-b border-reader-divider py-3">
         <span class="text-sm font-semibold text-foreground">{g.surah.num}. {g.surah.name}</span>
         <button
           type="button"
@@ -222,7 +232,7 @@
       </div>
       {#if g.opener}
         <div
-          class="surah-opener-bismillah flex justify-center border-b border-reader-divider px-5 pb-[22px] sm:px-9"
+          class="surah-opener-bismillah flex justify-center border-b border-reader-divider pb-[22px]"
         >
           <Bismillah class="w-44 text-quran-foreground" title={g.opener} />
         </div>

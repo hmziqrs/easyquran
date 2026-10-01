@@ -47,7 +47,7 @@
 
 <nav
   aria-label={copy.shell.surahNavLabel}
-  class="flex flex-col gap-3 border-t border-border px-5 py-[22px] sm:px-9"
+  class="flex flex-col gap-3 border-t border-border py-[22px]"
 >
   {#if degraded && (previousPage || nextPage)}
     <div class="flex flex-wrap items-center justify-center gap-2 text-[12.5px] text-muted">

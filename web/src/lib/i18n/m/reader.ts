@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 224 messages. Import this barrel, never
+// 219 messages. Import this barrel, never
 // $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "$lib/paraglide/messages/reader_account.js";
@@ -59,7 +59,6 @@ export { reader_default } from "$lib/paraglide/messages/reader_default.js";
 export { reader_dir_ltr } from "$lib/paraglide/messages/reader_dir_ltr.js";
 export { reader_dir_rtl } from "$lib/paraglide/messages/reader_dir_rtl.js";
 export { reader_disable } from "$lib/paraglide/messages/reader_disable.js";
-export { reader_dismiss_banner } from "$lib/paraglide/messages/reader_dismiss_banner.js";
 export { reader_dismiss_notification } from "$lib/paraglide/messages/reader_dismiss_notification.js";
 export { reader_dismiss_update } from "$lib/paraglide/messages/reader_dismiss_update.js";
 export { reader_downloading_offline_pack } from "$lib/paraglide/messages/reader_downloading_offline_pack.js";
@@ -126,15 +125,12 @@ export { reader_primary_nav } from "$lib/paraglide/messages/reader_primary_nav.j
 export { reader_quran_book } from "$lib/paraglide/messages/reader_quran_book.js";
 export { reader_range_translation_unavailable } from "$lib/paraglide/messages/reader_range_translation_unavailable.js";
 export { reader_reading } from "$lib/paraglide/messages/reader_reading.js";
-export { reader_reading_banner } from "$lib/paraglide/messages/reader_reading_banner.js";
-export { reader_reading_confirm_apply } from "$lib/paraglide/messages/reader_reading_confirm_apply.js";
-export { reader_reading_confirm_body } from "$lib/paraglide/messages/reader_reading_confirm_body.js";
-export { reader_reading_confirm_cancel } from "$lib/paraglide/messages/reader_reading_confirm_cancel.js";
-export { reader_reading_confirm_choose } from "$lib/paraglide/messages/reader_reading_confirm_choose.js";
-export { reader_reading_confirm_single } from "$lib/paraglide/messages/reader_reading_confirm_single.js";
-export { reader_reading_confirm_title } from "$lib/paraglide/messages/reader_reading_confirm_title.js";
+export { reader_reading_arabic } from "$lib/paraglide/messages/reader_reading_arabic.js";
 export { reader_reading_mode } from "$lib/paraglide/messages/reader_reading_mode.js";
-export { reader_reading_notice } from "$lib/paraglide/messages/reader_reading_notice.js";
+export { reader_reading_pick_note } from "$lib/paraglide/messages/reader_reading_pick_note.js";
+export { reader_reading_recent } from "$lib/paraglide/messages/reader_reading_recent.js";
+export { reader_reading_translation } from "$lib/paraglide/messages/reader_reading_translation.js";
+export { reader_reading_translation_pick } from "$lib/paraglide/messages/reader_reading_translation_pick.js";
 export { reader_reload_open_tabs } from "$lib/paraglide/messages/reader_reload_open_tabs.js";
 export { reader_reload_update } from "$lib/paraglide/messages/reader_reload_update.js";
 export { reader_remove_bookmark } from "$lib/paraglide/messages/reader_remove_bookmark.js";
@@ -219,7 +215,6 @@ export { reader_translations_cap_note } from "$lib/paraglide/messages/reader_tra
 export { reader_translations_close } from "$lib/paraglide/messages/reader_translations_close.js";
 export { reader_translations_description } from "$lib/paraglide/messages/reader_translations_description.js";
 export { reader_translations_done } from "$lib/paraglide/messages/reader_translations_done.js";
-export { reader_translations_hidden_tip } from "$lib/paraglide/messages/reader_translations_hidden_tip.js";
 export { reader_translations_languages_label } from "$lib/paraglide/messages/reader_translations_languages_label.js";
 export { reader_translations_no_matches } from "$lib/paraglide/messages/reader_translations_no_matches.js";
 export { reader_translations_open } from "$lib/paraglide/messages/reader_translations_open.js";

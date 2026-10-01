@@ -16,7 +16,6 @@
   } from "$lib/quran/catalogue";
   import type { TranslationProvenance } from "$lib/quran/catalogue";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
   import { readerSource } from "$lib/stores/reader-settings.svelte";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
@@ -30,6 +29,7 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
   import { hrefFor, liveReaderPosition } from "./translation-nav";
+  import type { ReadPick } from "./reading-flow";
   import { translationMatchesQuery } from "./translation-search";
 
   type LanguageGroup = {
@@ -49,8 +49,29 @@
     tanzil: "bg-emerald-500",
   } satisfies Record<TranslationProvenance, string>;
 
-  let { open = $bindable(false), primaryId = null }: { open?: boolean; primaryId?: string | null } =
-    $props();
+  let {
+    open = $bindable(false),
+    primaryId = null,
+    readPick = null,
+  }: {
+    open?: boolean;
+    primaryId?: string | null;
+    /** Reading's picker: one tap picks the text Reading flows instead of toggling the stack. */
+    readPick?: ReadPick | null;
+  } = $props();
+
+  const picking = $derived(readPick !== null);
+  const quickRows = $derived(
+    (readPick?.quick ?? []).flatMap((id) => {
+      const entry = TRANSLATION_CATALOGUE_BY_ID.get(id);
+      return entry ? [entry] : [];
+    }),
+  );
+
+  function pick(id: string): void {
+    readPick?.onPick(id);
+    open = false;
+  }
 
   const copy = getReaderUiCopy();
   let searchQuery = $state("");
@@ -79,9 +100,9 @@
   // language is front and center instead of buried at its alphabetical spot.
   $effect(() => {
     if (!open || railLanguage !== null) return;
-    const primaryEntry =
-      primaryId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(primaryId) : undefined;
-    railLanguage = primaryEntry?.language ?? languages[0]?.language ?? null;
+    const anchorId = readPick?.current ?? primaryId;
+    const anchorEntry = anchorId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(anchorId) : undefined;
+    railLanguage = anchorEntry?.language ?? languages[0]?.language ?? null;
   });
 
   // Live-url first (stress S1): on a scrolled surah route page.url still
@@ -337,7 +358,7 @@
            clear of notches/home indicators on devices that report insets. -->
       <div class="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
         <Dialog.Title class="text-[17px] font-semibold leading-tight">
-          {copy.stacked.title}
+          {picking ? copy.shell.readingTranslationPick : copy.stacked.title}
         </Dialog.Title>
         <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
         <Dialog.Close>
@@ -383,7 +404,30 @@
       </div>
 
       <TooltipProvider delayDuration={300}>
-        {#if reader.isVerseMode && selectedRows.length > 0}
+        {#if picking}
+          {#if quickRows.length > 0}
+            <div data-quick-picks class="flex items-center gap-3 px-5 py-3">
+              <span class="flex-none text-xs text-muted-foreground">{copy.shell.readingRecent}</span>
+              <div class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain">
+                {#each quickRows as t (t.id)}
+                  {@const current = t.id === readPick?.current}
+                  <button
+                    type="button"
+                    data-quick-pick={t.id}
+                    aria-pressed={current}
+                    onclick={() => pick(t.id)}
+                    class="inline-flex h-11 max-w-full flex-none cursor-pointer touch-manipulation items-center gap-1.5 rounded-pill border px-3 text-[13px] font-medium transition-colors {current
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background-subtle text-foreground hover:border-border-strong'}"
+                  >
+                    <span class="flex-none text-xs leading-none" aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                    <span class="min-w-0 truncate" dir="auto">{t.name}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        {:else if selectedRows.length > 0}
           <div data-selected-chips class="flex items-start justify-between gap-3 px-5 py-3">
             <!-- S14 (stress B1): a single horizontal scroll row, never a wrapped
                  chip wall — the strip costs one row max and keeps touch
@@ -502,10 +546,10 @@
           class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[260px_1fr]"
         >
           {#snippet translationRow(t: TranslationCatalogueEntry, withLanguage: boolean)}
-          {@const checked = selectedIds.includes(t.id)}
-          {@const isPrimary = t.id === primaryId}
-          {@const disabled = !reader.isVerseMode || isPrimary || (isFull && !checked)}
-          {@const href = rowHref(t)}
+          {@const checked = picking ? t.id === readPick?.current : selectedIds.includes(t.id)}
+          {@const isPrimary = !picking && t.id === primaryId}
+          {@const disabled = !picking && (isPrimary || (isFull && !checked))}
+          {@const href = picking ? null : rowHref(t)}
           {@const native = nativeNameFor(t.languageCode)}
           <!-- U16: the rich tooltip triggers from the whole row. The trigger
                props land on the li via the child snippet; tabindex stays -1
@@ -547,7 +591,12 @@
                       {t.language}
                     </span>
                   {/if}
-                  {#if isPrimary}
+                  {#if picking}
+                    <!-- Reading's picker: a check marks the text flowing now, no checkbox. -->
+                    <span class="flex w-[18px] flex-none justify-center text-primary" aria-hidden="true">
+                      {#if checked}<Icon name="check" size={15} />{/if}
+                    </span>
+                  {:else if isPrimary}
                     <!-- spacer keeps the name column aligned with checkbox rows -->
                     <span class="w-[18px] flex-none" aria-hidden="true"></span>
                   {:else}
@@ -623,7 +672,17 @@
                     </span>
                   {/if}
                   {/snippet}
-                  {#if isPrimary}
+                  {#if picking}
+                    <button
+                      type="button"
+                      data-row-pick={t.id}
+                      aria-pressed={checked}
+                      onclick={() => pick(t.id)}
+                      class="{rowCoverClass('toggle')} text-start"
+                    >
+                      {@render coverBody()}
+                    </button>
+                  {:else if isPrimary}
                     <div data-row-cover class={rowCoverClass("static")}>
                       {@render coverBody()}
                     </div>
@@ -738,14 +797,6 @@
             data-language-pane
             class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 touch-manipulation flex-col overflow-y-auto overscroll-contain"
           >
-            {#if reader.isReadingMode}
-              <p
-                class="mx-3 mt-3 rounded-lg border border-border bg-background-subtle px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground-secondary"
-              >
-                {copy.translations.readingNotice}
-              </p>
-            {/if}
-
             {#if searchActive}
               <div class="flex items-center gap-2 px-4 pb-1 pt-3">
                 <button
@@ -800,9 +851,13 @@
 
       <div class="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
         <p data-cap-note class="text-xs text-muted-foreground">
-          {reader.isVerseMode && isFull
-            ? copy.stacked.full(STACKED_MAX_EXTRAS)
-            : copy.translations.capNote(STACKED_MAX_EXTRAS)}
+          {#if picking}
+            {copy.shell.readingPickNote}
+          {:else if isFull}
+            {copy.stacked.full(STACKED_MAX_EXTRAS)}
+          {:else}
+            {copy.translations.capNote(STACKED_MAX_EXTRAS)}
+          {/if}
         </p>
         <button
           type="button"

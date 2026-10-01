@@ -82,6 +82,15 @@ export function liveReaderPosition(fallbackUrl: URL): ReaderPosition {
   return positionOf(deLocalizeUrl(fallbackUrl).pathname);
 }
 
+/** The Arabic route at the same reader position (Reading → Arabic from a translation page). */
+export function arabicHrefFor(pos: ReaderPosition): `/app/${string}` | null {
+  if (!pos) return null;
+  const ctx: SurahRouteContext = { kind: "arabic" };
+  if (pos.kind === "surah") return surahLocalPagePathFor(ctx, pos.slug, pos.localPage);
+  if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
+  return juzPathFor(ctx, pos.n);
+}
+
 function ctxFor(target: TranslationTarget): SurahRouteContext {
   return { kind: "translation", lang: target.lang, translator: target.translator };
 }

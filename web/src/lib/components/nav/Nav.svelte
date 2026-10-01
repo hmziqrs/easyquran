@@ -181,11 +181,13 @@
   aria-label={copy.primaryLabel}
   style:top={navTop}
   class={cn(
-    "sticky z-50 border-b border-border bg-surface",
+    "sticky z-50 border-b border-border bg-background",
     collapsible && "transition-[top] duration-200 ease-out",
   )}
 >
-  <div class="flex h-14 items-center gap-4 px-5 sm:px-7 lg:px-10">
+  <!-- Same frame as the reader's sticky bar and page column (Container default: 1200px, 24px
+       gutter), so the logo, the bar's first control and the reader card share one left edge. -->
+  <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-4 px-6">
     <span class="flex-none" inert={open || undefined} aria-hidden={open || undefined}>
       <Brand homeHref={brandHomeHref} homeLabel={brandCopy.homeLabel} />
     </span>

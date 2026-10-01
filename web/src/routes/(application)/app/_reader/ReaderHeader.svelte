@@ -1,136 +1,117 @@
 <script lang="ts">
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import { surahMeta, type SurahLocalPageData } from "$lib/data/quran";
   import { Icon } from "$lib/components/icon";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
+  import type { ReadingText } from "$lib/stores/reading-text.svelte";
 
   let {
     initial,
     visibleLocalPage,
     clientMounted,
     onChangeMode,
-    onSmaller,
-    onBigger,
+    readingText,
+    readingFlowName,
+    onReadArabic,
+    onReadTranslation,
+    onPickTranslation,
   }: {
     initial: SurahLocalPageData;
     visibleLocalPage: number;
     clientMounted: boolean;
     onChangeMode: (mode: ReaderMode) => void;
-    onSmaller: () => void;
-    onBigger: () => void;
+    /** What Reading flows right now. */
+    readingText: ReadingText;
+    /** Name of the translation flowing in Reading, if any. */
+    readingFlowName: string | null;
+    onReadArabic: () => void;
+    /** Flow the last-read translation (or open the picker when there is none yet). */
+    onReadTranslation: () => void;
+    /** Open the full Translations picker to choose the text Reading flows. */
+    onPickTranslation: () => void;
   } = $props();
 
   const copy = getReaderUiCopy();
-  const badge = $derived(String(initial.surah.num).padStart(3, "0"));
 
-  // Reader CHROME only (the reading column stays neutral): the header band takes
-  // the hue-slot soft fill cycling by surah (§6), and the number chip renders the
-  // legible pair on it — the landing tile grammar. Palette × mode resolve the pair.
-  const HUE_SOFT = {
-    1: "var(--hue-1-soft)",
-    2: "var(--hue-2-soft)",
-    3: "var(--hue-3-soft)",
-    4: "var(--hue-4-soft)",
-  } as const;
-  const HUE_LEGIBLE = {
-    1: "var(--hue-1-legible)",
-    2: "var(--hue-2-legible)",
-    3: "var(--hue-3-legible)",
-    4: "var(--hue-4-legible)",
-  } as const;
-  type Hue = keyof typeof HUE_SOFT;
-
-  function hueFor(surahNum: number): Hue {
-    // SAFETY: ((surahNum-1) % 4) is 0–3 for any positive integer, so +1 is exactly 1–4.
-    return (((surahNum - 1) % 4) + 1) as Hue;
-  }
-  const hue = $derived(hueFor(initial.surah.num));
+  // Mode pills sit in an outlined well on the reading ground; the active pill is
+  // ground-inverted (fg on bg), never the palette accent.
+  // On phones the pills share the row evenly; from sm up they size to their labels.
+  const pill =
+    "flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-sm px-3 text-[13px] font-medium transition-colors text-foreground-secondary hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:text-background sm:flex-none";
 </script>
 
-<div
-  class="flex min-h-[229px] flex-wrap items-start justify-between gap-6 border-b border-border px-5 pb-[26px] pt-[30px] sm:min-h-0 sm:px-9"
-  style:background={HUE_SOFT[hue]}
->
-  <div class="flex items-start gap-4">
-    <div
-      aria-hidden="true"
-      class="flex h-16 w-16 flex-none items-center justify-center rounded-sm font-arabic text-lg font-bold"
-      style:color={HUE_LEGIBLE[hue]}
-    >
-      {badge}
-    </div>
-    <div class="flex min-w-0 flex-col gap-1.5">
-      <!-- Judge r1 MAJOR: on the dark --hue-N-soft band, muted-foreground captions
-           measure 3.74–3.90:1 (< §9 4.5 floor); foreground-secondary clears (6.74:1). -->
-      <span
-        class="text-xs font-semibold uppercase tracking-[0.1em] text-foreground-secondary"
-      >
-        {copy.shell.surahPage(initial.surah.num, visibleLocalPage, initial.pageCount)}
-      </span>
-      <div class="flex flex-wrap items-baseline gap-x-3.5 gap-y-1">
-        <h1 class="text-[32px] font-semibold tracking-[-0.025em]">
-          {initial.surah.num}. {initial.surah.name}
-        </h1>
-        <span dir="rtl" lang="ar" class="font-arabic text-[30px] leading-none text-foreground-secondary">
-          {initial.surah.arabic}
-        </span>
-      </div>
-      <span class="text-sm text-foreground-secondary">{surahMeta(initial.surah)}</span>
-    </div>
+<!-- Strip header (user pick, /design/mix head=e): one compact row — number, name, Arabic
+     name, meta — so the text starts sooner. No hue band; A−/A+ live in the sticky bar. -->
+<div class="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-reader-divider py-4">
+  <span
+    aria-hidden="true"
+    class="flex size-9 flex-none items-center justify-center rounded-pill bg-primary text-[13px] font-semibold tabular-nums text-primary-foreground"
+  >
+    {initial.surah.num}
+  </span>
+  <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+    <h1 class="text-[21px] font-semibold tracking-[-0.015em] text-foreground">
+      <span class="sr-only">{initial.surah.num}. </span>{initial.surah.name}
+    </h1>
+    <span dir="rtl" lang="ar" class="font-arabic text-[24px] leading-none text-foreground">
+      {initial.surah.arabic}
+    </span>
+    <span class="text-[13.5px] text-foreground-secondary">
+      {surahMeta(initial.surah)} · {copy.shell.pageOf(visibleLocalPage, initial.pageCount)}
+    </span>
   </div>
 
   {#if clientMounted}
-    <div class="flex flex-wrap items-center justify-end gap-2">
-      <div
-        class="flex items-center gap-0.5 rounded-md bg-background-subtle p-1"
-        role="group"
-        aria-label={copy.shell.arabicTextSizeLabel}
+    <div
+      class="flex w-full items-center gap-0.5 rounded-md border border-border p-0.5 sm:ms-auto sm:w-auto"
+      role="group"
+      aria-label={copy.shell.readingModeLabel}
+    >
+      <button
+        type="button"
+        aria-pressed={reader.isVerseMode}
+        onclick={() => onChangeMode("verse")}
+        class={pill}
       >
+        <Icon name="rows" size={13} />
+        <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
+        <span class="sm:hidden">{copy.shell.ayahs}</span>
+      </button>
+      {#if reader.isReadingMode}
+        <!-- Reading splits into its two texts (quran.com's model): no dialog, one tap. -->
+        <button type="button" aria-pressed={readingText === "arabic"} onclick={onReadArabic} class={pill}>
+          <Icon name="continuous" size={13} />
+          <span>{copy.shell.readingArabic}</span>
+        </button>
+        <!-- Translation: one tap flows the last translation; tapping it again (or ▾) opens the
+             full Translations picker — search, languages, recent picks. -->
         <button
           type="button"
-          onclick={onSmaller}
-          aria-label={copy.shell.smallerArabicTextLabel}
-          class="flex h-[26px] w-7 items-center justify-center rounded-pill text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          aria-pressed={readingText === "translation"}
+          onclick={readingText === "translation" ? onPickTranslation : onReadTranslation}
+          class={pill}
         >
-          A&minus;
+          <span class="max-w-[11rem] truncate" dir="auto">
+            {readingText === "translation" && readingFlowName ? readingFlowName : copy.shell.readingTranslation}
+          </span>
         </button>
         <button
           type="button"
-          onclick={onBigger}
-          aria-label={copy.shell.largerArabicTextLabel}
-          class="flex h-[26px] w-7 items-center justify-center rounded-pill text-[15px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+          aria-haspopup="dialog"
+          aria-label={copy.shell.readingTranslationPick}
+          title={copy.shell.readingTranslationPick}
+          onclick={onPickTranslation}
+          class="flex h-8 w-7 flex-none items-center justify-center rounded-sm text-foreground-secondary transition-colors hover:text-foreground"
         >
-          A+
+          <ChevronDownIcon class="size-3.5" />
         </button>
-      </div>
-
-      <!-- The band above already carries the surah's hue slot, so the active mode pill
-           stays zero-chroma: ground-inverted (fg on bg), never the palette accent. -->
-      <div
-        class="flex items-center gap-0.5 rounded-md bg-background-subtle p-1"
-        role="group"
-        aria-label={copy.shell.readingModeLabel}
-      >
-        <button
-          type="button"
-          aria-pressed={reader.isVerseMode}
-          onclick={() => onChangeMode("verse")}
-          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground aria-pressed:hover:text-background"
-        >
-          <Icon name="rows" size={13} />
-          <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
-          <span class="sm:hidden">{copy.shell.ayahs}</span>
-        </button>
-        <button
-          type="button"
-          aria-pressed={reader.isReadingMode}
-          onclick={() => onChangeMode("reading")}
-          class="flex h-[26px] items-center gap-1.5 rounded-pill px-2.5 text-[13px] font-medium transition-colors text-muted-foreground hover:bg-surface-hover hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground aria-pressed:hover:text-background"
-        >
+      {:else}
+        <button type="button" aria-pressed={false} onclick={() => onChangeMode("reading")} class={pill}>
           <Icon name="continuous" size={13} />
           <span>{copy.shell.reading}</span>
         </button>
-      </div>
+      {/if}
     </div>
   {/if}
 </div>

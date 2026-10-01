@@ -181,6 +181,8 @@ export interface Ayah {
 
 export interface StackedTranslation {
   readonly sourceId: string;
+  /** Catalogue short name (Saheeh International, جالندہری) — the lane label. */
+  readonly name?: string;
   readonly translator: string | null;
   readonly language: string;
   readonly languageCode: string;

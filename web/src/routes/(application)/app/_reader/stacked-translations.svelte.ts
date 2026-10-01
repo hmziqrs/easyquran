@@ -31,6 +31,8 @@ export interface CreateStackedTranslationsOptions {
   readonly primarySourceId: () => string | null;
   readonly catalogue: () => readonly TranslationCatalogueEntry[];
   readonly routeKey: () => string;
+  /** Ids to fetch; defaults to the reader's stacked list. Reading uses its own one-id list. */
+  readonly ids?: () => readonly string[];
 }
 
 export function createStackedTranslations(
@@ -81,6 +83,7 @@ export function createStackedTranslations(
       const filtered = existing.filter((t) => t.sourceId !== id);
       filtered.push({
         sourceId: id,
+        name: meta.name,
         translator: meta.translator,
         language: meta.language,
         languageCode: meta.languageCode,
@@ -211,7 +214,7 @@ export function createStackedTranslations(
     const fromVal = opts.from();
     const toVal = opts.to();
     const primary = opts.primarySourceId();
-    const extras = stackedTranslations.ids.filter((id) => id !== primary);
+    const extras = (opts.ids?.() ?? stackedTranslations.ids).filter((id) => id !== primary);
 
     const prevOrder = untrack(() => order);
     const sameOrder =

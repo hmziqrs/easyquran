@@ -741,21 +741,44 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
   });
 });
 
-describe("TranslationModal — reading mode constraint", () => {
-  it("disables every checkbox and shows the notice, keeping primary navigation", async () => {
+describe("TranslationModal — reading mode", () => {
+  it("leaves the selection free in reading mode: boxes enabled, chips shown, no notice", async () => {
     h.readerStub.isVerseMode = false;
     h.readerStub.isReadingMode = true;
     stackedTranslations.setIds(["ur.jalandhry"]);
     await open({ primaryId: "en.sahih" });
     expect(checkboxes().length).toBeGreaterThan(0);
     for (const box of checkboxes()) {
-      expect(box.disabled).toBe(true);
+      expect(box.disabled).toBe(false);
     }
-    expect(pane().textContent).toContain("Only one translation is shown in reading mode");
-    // no chips row in reading mode (selection is constrained to one)
-    expect(document.querySelector("[data-selected-chips]")).toBeNull();
-    // primary navigation stays available
+    expect(pane().textContent).not.toContain("Only one translation is shown in reading mode");
+    expect(document.querySelector("[data-selected-chips]")).not.toBeNull();
     expect(switchLinks().length).toBeGreaterThan(0);
+  });
+});
+
+describe("TranslationModal — Reading's picker", () => {
+  it("shows recent picks, marks the flowing one, and picks with one tap instead of checkboxes", async () => {
+    stackedTranslations.setIds(["en.sahih"]);
+    const onPick = vi.fn();
+    instance = mount(TranslationModal, {
+      target,
+      props: {
+        open: true,
+        primaryId: null,
+        readPick: { current: "ur.jalandhry", quick: ["ur.jalandhry", "en.sahih"], onPick },
+      },
+    });
+    await settle();
+    const quick = [...document.querySelectorAll<HTMLButtonElement>("[data-quick-pick]")];
+    expect(quick.map((b) => b.dataset.quickPick)).toEqual(["ur.jalandhry", "en.sahih"]);
+    expect(quick[0]?.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("[data-selected-chips]")).toBeNull();
+    expect(checkboxes()).toHaveLength(0);
+    const row = document.querySelector<HTMLButtonElement>("[data-row-pick]");
+    expect(row).not.toBeNull();
+    row?.click();
+    expect(onPick).toHaveBeenCalledWith(row?.dataset.rowPick);
   });
 });
 
@@ -786,19 +809,17 @@ describe("TranslationButton badge", () => {
   it("shows the stacked count excluding the route primary", () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry", "ms.basmeih"]);
     instance = mount(TranslationButton, { target, props: { primaryId: "en.sahih" } });
-    const badge = target.querySelector("button[aria-haspopup='dialog'] span");
+    const badge = target.querySelector("[data-translation-count]");
     expect(badge?.textContent?.trim()).toBe("2");
   });
 
-  it("explains hidden translations on the badge tooltip in reading mode", () => {
+  it("carries no reading-mode warning on the badge (reading picks its text in the header)", () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry"]);
     h.readerStub.isVerseMode = false;
     h.readerStub.isReadingMode = true;
     instance = mount(TranslationButton, { target, props: { primaryId: "en.sahih" } });
-    const badge = target.querySelector("button[aria-haspopup='dialog'] span");
-    expect(badge?.getAttribute("title")).toBe(
-      "Reading mode shows only your first translation.",
-    );
+    const badge = target.querySelector("[data-translation-count]");
+    expect(badge?.getAttribute("title")).toBeNull();
   });
 
   it("opens the modal on click", async () => {

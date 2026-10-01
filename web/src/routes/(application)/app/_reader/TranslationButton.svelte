@@ -1,6 +1,6 @@
 <script lang="ts">
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import TranslationModal from "./TranslationModal.svelte";
 
@@ -47,7 +47,7 @@
     aria-expanded={open}
     aria-label={copy.translations.open}
     title={copy.translations.open}
-    class="relative flex h-11 w-11 touch-manipulation items-center justify-center rounded-md border border-border bg-background-subtle text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
+    class="flex h-10 touch-manipulation items-center gap-2 rounded-md border border-border ps-3 pe-2.5 text-[14px] font-medium text-foreground transition-colors hover:border-primary"
   >
     <!-- U9: Google-Translate-style mark (rounded square, 文 + A with swap
          arrows). Static brand blue on purpose — the user asked for that logo
@@ -75,14 +75,17 @@
         <path d="m16.6 18.4-.9-.4.4-1" stroke-width="1.1" />
       </g>
     </svg>
+    <!-- The word, not just the mark (user pick): "Translations" plus how many are stacked. -->
+    <span>{copy.translations.open}</span>
     {#if hiddenCount > 0}
       <span
-        class="absolute -end-1.5 -top-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-pill bg-foreground px-1 text-[10px] font-medium text-background"
-        title={reader.isReadingMode ? copy.translations.hiddenTip : undefined}
+        data-translation-count
+        class="flex h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-semibold tabular-nums text-primary-foreground"
       >
         {hiddenCount}
       </span>
     {/if}
+    <ChevronDownIcon class="hidden size-4 flex-none text-foreground-secondary sm:block" />
   </button>
 
   <TranslationModal bind:open {primaryId} />

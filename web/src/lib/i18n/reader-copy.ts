@@ -53,7 +53,6 @@ import {
   reader_default,
   reader_dir_ltr,
   reader_dir_rtl,
-  reader_dismiss_banner,
   reader_dismiss_update,
   reader_downloading_offline_pack,
   reader_downloading_quran,
@@ -116,15 +115,12 @@ import {
   reader_quran_book,
   reader_range_translation_unavailable,
   reader_reading,
-  reader_reading_banner,
-  reader_reading_confirm_apply,
-  reader_reading_confirm_body,
-  reader_reading_confirm_cancel,
-  reader_reading_confirm_choose,
-  reader_reading_confirm_single,
-  reader_reading_confirm_title,
+  reader_reading_arabic,
+  reader_reading_translation,
+  reader_reading_translation_pick,
+  reader_reading_recent,
+  reader_reading_pick_note,
   reader_reading_mode,
-  reader_reading_notice,
   reader_reload_open_tabs,
   reader_reload_update,
   reader_remove_bookmark,
@@ -207,7 +203,6 @@ import {
   reader_translations_close,
   reader_translations_description,
   reader_translations_done,
-  reader_translations_hidden_tip,
   reader_translations_languages_label,
   reader_translations_no_matches,
   reader_translations_open,
@@ -246,6 +241,11 @@ export interface ReaderUiCopy {
     readonly ayahByAyah: string;
     readonly ayahs: string;
     readonly reading: string;
+    readonly readingArabic: string;
+    readonly readingTranslation: string;
+    readonly readingTranslationPick: string;
+    readonly readingRecent: string;
+    readonly readingPickNote: string;
     readonly continueReading: (reference: string) => string;
     readonly jump: string;
     readonly retry: string;
@@ -423,16 +423,6 @@ export interface ReaderUiCopy {
     readonly results: (count: number) => string;
     readonly primaryTip: string;
     readonly capNote: (max: number) => string;
-    readonly hiddenTip: string;
-    readonly readingBanner: string;
-    readonly dismissBanner: string;
-    readonly readingNotice: string;
-    readonly readingConfirmTitle: string;
-    readonly readingConfirmBody: string;
-    readonly readingConfirmSingle: (name: string) => string;
-    readonly readingConfirmChoose: string;
-    readonly readingConfirmApply: string;
-    readonly readingConfirmCancel: string;
     readonly tooltipTranslator: string;
     readonly tooltipLanguage: string;
     readonly tooltipSize: string;
@@ -487,6 +477,11 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       ayahByAyah: noArgs(reader_ayah_by_ayah),
       ayahs: noArgs(reader_ayahs),
       reading: noArgs(reader_reading),
+      readingArabic: noArgs(reader_reading_arabic),
+      readingTranslation: noArgs(reader_reading_translation),
+      readingTranslationPick: noArgs(reader_reading_translation_pick),
+      readingRecent: noArgs(reader_reading_recent),
+      readingPickNote: noArgs(reader_reading_pick_note),
       continueReading: (reference) => reader_continue_reading({ reference }, options),
       jump: noArgs(reader_jump),
       retry: noArgs(reader_retry),
@@ -704,16 +699,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
           : reader_translations_results({ count }, options),
       primaryTip: noArgs(reader_translations_primary_tip),
       capNote: (max) => reader_translations_cap_note({ max }, options),
-      hiddenTip: noArgs(reader_translations_hidden_tip),
-      readingBanner: noArgs(reader_reading_banner),
-      dismissBanner: noArgs(reader_dismiss_banner),
-      readingNotice: noArgs(reader_reading_notice),
-      readingConfirmTitle: noArgs(reader_reading_confirm_title),
-      readingConfirmBody: noArgs(reader_reading_confirm_body),
-      readingConfirmSingle: (name) => reader_reading_confirm_single({ name }, options),
-      readingConfirmChoose: noArgs(reader_reading_confirm_choose),
-      readingConfirmApply: noArgs(reader_reading_confirm_apply),
-      readingConfirmCancel: noArgs(reader_reading_confirm_cancel),
       tooltipTranslator: noArgs(reader_tooltip_translator),
       tooltipLanguage: noArgs(reader_tooltip_language),
       tooltipSize: noArgs(reader_tooltip_size),

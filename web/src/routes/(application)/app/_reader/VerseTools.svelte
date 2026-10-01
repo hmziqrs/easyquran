@@ -61,9 +61,9 @@
 <!-- Constantly visible (user ask): the hover-gated toolbar hid the actions on
      desktop and made them feel unreachable. Muted ink keeps them quiet. -->
 <div
-  class="verse-toolbar absolute inset-x-5 top-[22px] flex items-center justify-between gap-2 opacity-100 sm:inset-x-9"
+  class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100"
 >
-  <span class="font-mono text-[11px] tracking-wide text-muted-foreground">{vKey}</span>
+  <span class="font-mono text-[11.5px] tracking-wide text-foreground-secondary">{vKey}</span>
   <div class="flex items-center gap-0.5">
     {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string })}
       <Tooltip>
@@ -76,7 +76,7 @@
               aria-label={ariaLabel}
               class={cn(
                 "flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover",
-                activeClass ?? "text-muted-foreground hover:text-foreground",
+                activeClass ?? "text-foreground-secondary hover:text-foreground",
               )}
             >
               <Icon name={icon} size={15} />
