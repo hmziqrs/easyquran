@@ -51,3 +51,6 @@ rust/data/
 .z-flashflow/
 
 .z-proflow/
+
+# ZCode session state (plans) — never repo material.
+.zcode/
