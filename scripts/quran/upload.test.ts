@@ -11,6 +11,7 @@ import {
   type UploadItem,
   uploadItems,
 } from "./upload.ts";
+import { TRANSLATIONS } from "../../web/src/lib/data/translations.ts";
 
 interface CapturedRequest {
   readonly body?: { destroy?: () => void };
@@ -36,7 +37,7 @@ test("catalogue is generated deterministically from the complete baked map", () 
   const catalogue = JSON.parse(first.toString("utf8")) as unknown[];
 
   assert.deepEqual(first, second);
-  assert.equal(catalogue.length, 134);
+  assert.equal(catalogue.length, TRANSLATIONS.length);
   assert.equal(first.at(-1), 10);
 });
 

@@ -70,7 +70,8 @@ function translationLocalPath(artifactPath: string): string {
   const relativePath = artifactPath.slice(TRANSLATION_PREFIX.length);
   const isTanzil = relativePath.startsWith("sqlite/");
   const isQuranEnc = relativePath.startsWith("quranenc/sqlite/");
-  if (!isTanzil && !isQuranEnc) {
+  const isQul = relativePath.startsWith("qul/sqlite/");
+  if (!isTanzil && !isQuranEnc && !isQul) {
     throw new Error(`unsupported translation artifact path: ${artifactPath}`);
   }
   if (path.posix.normalize(relativePath) !== relativePath) {
