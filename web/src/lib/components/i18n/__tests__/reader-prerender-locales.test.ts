@@ -28,7 +28,8 @@ describe("localized reader prerender discovery", () => {
     const entries = readerPrerenderEntries(QURAN_DATA);
     expect(entries.filter((entry) => entry.kind === "surah")).toHaveLength(114);
     // The surah-local page scheme is gone (its kind no longer exists); hizb/rub joined.
-    expect(entries.some((entry) => entry.kind === ("surah-local-page" as never))).toBe(false);
+    const kinds = new Set<string>(entries.map((entry) => entry.kind));
+    expect(kinds.has("surah-local-page")).toBe(false);
     expect(entries.filter((entry) => entry.kind === "global-page")).toHaveLength(
       RANGE_COUNTS[RangeKind.Page],
     );

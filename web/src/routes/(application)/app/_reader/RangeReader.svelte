@@ -51,12 +51,12 @@
   let { data }: { data: RangePageData } = $props();
   const copy = getReaderUiCopy();
 
-  const RANGE_MAX: Record<RangePageData["kind"], number> = {
+  const RANGE_MAX = {
     page: RANGE_COUNTS[RangeKind.Page],
     juz: RANGE_COUNTS[RangeKind.Juz],
     hizb: HIZB_COUNT,
     rub: RUB_COUNT,
-  };
+  } satisfies Record<RangePageData["kind"], number>;
 
   const coord = createRangeReaderCoordinator();
   let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
