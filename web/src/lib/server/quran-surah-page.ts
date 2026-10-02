@@ -1,4 +1,4 @@
-import { juzOfPage } from "$lib/data/mushaf-divisions";
+import { hizbOfPage, juzOfPage } from "$lib/data/mushaf-divisions";
 import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "$lib/data/quran-types";
 import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { surahRouteNav } from "$lib/server/quran-page-shape";
@@ -38,5 +38,6 @@ export function readSurahRouteData(
     pageData,
     ...surahRouteNav(surah, pageData.page.globalPage),
     juz: juzOfPage(QURAN_DATA, pageData.page.startGlobal),
+    hizb: hizbOfPage(QURAN_DATA, pageData.page.startGlobal),
   };
 }

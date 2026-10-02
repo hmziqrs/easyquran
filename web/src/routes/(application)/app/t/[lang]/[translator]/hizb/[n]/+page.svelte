@@ -43,7 +43,7 @@
   ]}
 />
 
-<ReaderShell>
+<ReaderShell position={{ globalPage: data.globalPage, juz: data.juz, hizb: data.hizb }}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.range.item("hizb", data.index)}</h1>
     <span class="ms-auto font-mono text-[12px] text-muted">{extent}</span>

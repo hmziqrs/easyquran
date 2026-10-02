@@ -241,8 +241,9 @@ export interface SurahRouteData {
   nextPage: MushafPageLink | null;
   previousSurah: SurahLink | null;
   nextSurah: SurahLink | null;
-  /** Juz holding this surah's first page — SSR for the sticky position indicator. */
+  /** Juz and hizb holding this surah's first page — SSR for the sticky position indicator. */
   juz?: number;
+  hizb?: number;
 }
 
 export type SurahRouteContext =
@@ -260,6 +261,10 @@ export interface RangePageData {
   endGlobal: number;
   first: VerseKey;
   last: VerseKey;
+  /** Mushaf divisions of the range's first ayah — SSR for the sticky position indicator. */
+  globalPage: number;
+  juz: number;
+  hizb: number;
   ayahs: Ayah[];
   normalizations: SurahNormalization[];
   surahs: SurahLink[];

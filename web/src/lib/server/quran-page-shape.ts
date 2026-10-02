@@ -1,5 +1,5 @@
 import { RangeKind, SURAH_COUNT } from "$lib/data/quran-data";
-import { hizbRange } from "$lib/data/mushaf-divisions";
+import { hizbRange, positionForGlobal } from "$lib/data/mushaf-divisions";
 import type {
   Ayah,
   CatalogEntry,
@@ -91,6 +91,9 @@ export function toRangePageData(
   normalizations: SurahNormalization[],
 ): RangePageData {
   const surahNums = new Set(ayahs.map((ayah) => ayah.surah));
+  // Division triplet of the range's first ayah, server-known for the sticky
+  // indicator's first paint (plan §3.2 — the index is known at load).
+  const { globalPage, juz, hizb } = positionForGlobal(QURAN_DATA, entry.startGlobal);
   return {
     kind,
     index,
@@ -99,6 +102,9 @@ export function toRangePageData(
     endGlobal: entry.endGlobal,
     first: entry.first,
     last: entry.last,
+    globalPage,
+    juz,
+    hizb,
     ayahs,
     normalizations,
     surahs: [...surahNums].flatMap((num) => surahLinkAt(num) ?? []),

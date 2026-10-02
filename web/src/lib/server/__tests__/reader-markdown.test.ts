@@ -167,6 +167,9 @@ describe("renderRangePageMarkdown", () => {
     endGlobal: 140,
     first: "1:1",
     last: "2:6",
+    globalPage: 1,
+    juz: 1,
+    hizb: 1,
     ayahs: [ayah(1, 1, "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"), ayah(2, 1, "الم ذَٰلِكَ ٱلْكِتَـٰبُ")],
     normalizations: [UTHMANI, SECOND_SURAH_NORMALIZATION],
     surahs: [

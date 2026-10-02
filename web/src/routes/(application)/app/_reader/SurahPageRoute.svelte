@@ -194,7 +194,7 @@
   ]}
 />
 
-<ReaderShell position={{ globalPage: activePage.page.globalPage, juz: data.juz }}>
+<ReaderShell position={{ globalPage: activePage.page.globalPage, juz: data.juz, hizb: data.hizb }}>
   {#snippet header()}
     <span class="hidden min-w-0 truncate text-sm font-medium text-foreground-secondary sm:inline">
       {surah.num}. {surah.name}

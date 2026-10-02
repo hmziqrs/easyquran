@@ -1,7 +1,7 @@
 import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
 import { translationIdFromSegments } from "$lib/data/quran";
-import { juzOfPage } from "$lib/data/mushaf-divisions";
+import { hizbOfPage, juzOfPage } from "$lib/data/mushaf-divisions";
 import type {
   Ayah,
   CatalogEntry,
@@ -179,6 +179,7 @@ export async function loadTranslationSurahRouteData(
     pageData,
     ...surahRouteNav(surah, page.globalPage),
     juz: juzOfPage(QURAN_DATA, page.startGlobal),
+    hizb: hizbOfPage(QURAN_DATA, page.startGlobal),
   };
 }
 

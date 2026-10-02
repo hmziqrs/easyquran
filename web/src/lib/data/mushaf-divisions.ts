@@ -48,8 +48,8 @@ export function hizbOfPage(quranData: QuranData, global: number): number {
 /** Where the reader sits in mushaf divisions, for the sticky position indicator. */
 export interface ReaderPositionState {
   globalPage: number;
-  juz: number | null;
-  hizb: number | null;
+  juz: number;
+  hizb: number;
 }
 
 /** Full division position for one global ayah index. */
