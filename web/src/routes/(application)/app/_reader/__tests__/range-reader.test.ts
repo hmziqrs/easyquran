@@ -89,7 +89,7 @@ function norm(surahNum: number, sourceId: string): SurahNormalization {
 }
 
 function surah(num: number): SurahLink {
-  return { num, slug: `s${num}`, name: `Surah ${num}`, arabic: "ع" };
+  return { num, slug: `s${num}`, name: `Surah ${num}`, arabic: "ع", meaning: `Meaning ${num}` };
 }
 
 function snapshot(

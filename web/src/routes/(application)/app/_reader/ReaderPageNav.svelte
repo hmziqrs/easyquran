@@ -19,8 +19,8 @@
     previousPage = null,
     nextPage = null,
   }: {
-    /** The surah being read — read-again target and degraded-page anchor. */
-    currentSurah: SurahLink;
+    /** The surah being read — read-again target; the reader header already carries the rest. */
+    currentSurah: Pick<SurahLink, "num" | "slug" | "name">;
     /** Active translation context, so every generated link keeps the source. */
     ctx: SurahRouteContext;
     /** Cross-surah navigation — always rendered, infinite scroll never crosses it. */
@@ -38,7 +38,7 @@
   const startArrow = $derived(copy.direction === "rtl" ? "→" : "←");
   const endArrow = $derived(copy.direction === "rtl" ? "←" : "→");
 
-  function surahHref(surah: SurahLink): `/${string}` {
+  function surahHref(surah: Pick<SurahLink, "slug">): `/${string}` {
     return readerHrefFor(copy.locale, surahPathFor(ctx, surah));
   }
 

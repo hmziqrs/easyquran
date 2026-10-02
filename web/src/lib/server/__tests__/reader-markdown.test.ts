@@ -170,8 +170,8 @@ describe("renderRangePageMarkdown", () => {
     ayahs: [ayah(1, 1, "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"), ayah(2, 1, "الم ذَٰلِكَ ٱلْكِتَـٰبُ")],
     normalizations: [UTHMANI, SECOND_SURAH_NORMALIZATION],
     surahs: [
-      { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة" },
-      { num: 2, slug: "al-baqarah", name: "Al-Baqarah", arabic: "البقرة" },
+      { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة", meaning: "The Opener" },
+      { num: 2, slug: "al-baqarah", name: "Al-Baqarah", arabic: "البقرة", meaning: "The Cow" },
     ],
   };
 

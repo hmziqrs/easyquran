@@ -2,7 +2,6 @@
   import { page } from "$app/state";
   import { Seo } from "$lib/components";
   import { hizbPathFor, type SurahRouteContext } from "$lib/data/quran";
-  import { HIZB_COUNT } from "$lib/data/mushaf-divisions";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import ReaderShell from "../../../../../_reader/ReaderShell.svelte";
@@ -28,10 +27,6 @@
   );
   const contentLanguage = $derived(page.params.lang ?? "en");
   const pending = $derived(data.ayahs.length === 0);
-  const prevHref = $derived(data.index > 1 ? hizbPathFor(ctx, data.index - 1) : null);
-  const nextHref = $derived(
-    data.index < HIZB_COUNT ? hizbPathFor(ctx, data.index + 1) : null,
-  );
 </script>
 
 <Seo

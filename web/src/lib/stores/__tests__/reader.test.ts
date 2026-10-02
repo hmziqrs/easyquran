@@ -6,7 +6,6 @@ import { createReader, type ReaderApi } from "../reader.svelte";
 import { observeVersesFor } from "./reader-reactivity.probe.svelte";
 
 type RemovedReaderMembers = {
-  current?: undefined;
   surah?: undefined;
   surahCount?: undefined;
   fontSize?: undefined;
@@ -43,7 +42,6 @@ describe("createReader — preserved public API", () => {
   it("removed the verified-dead public members", () => {
     // SAFETY: createReader() returns the closed ReaderApi contract; the probed members are the verified-removed set, so each lookup is undefined.
     const dead = r as RemovedReaderMembers;
-    expect(dead.current).toBeUndefined();
     expect(dead.surah).toBeUndefined();
     expect(dead.surahCount).toBeUndefined();
     expect(dead.fontSize).toBeUndefined();

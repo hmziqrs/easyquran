@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Seo } from "$lib/components";
   import { hizbPathFor, type SurahRouteContext } from "$lib/data/quran";
-  import { HIZB_COUNT } from "$lib/data/mushaf-divisions";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import ReaderShell from "../../_reader/ReaderShell.svelte";

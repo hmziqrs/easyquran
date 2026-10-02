@@ -26,12 +26,6 @@ function isJsonObject(v: unknown): v is JsonRecord {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- guard for untyped JSON values arriving from history.state / sessionStorage JSON; unknown is the honest input domain.
-function isJsonObject(v: unknown): v is JsonRecord {
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON payloads carry no runtime schema; typeof-object is the only discriminator at this parse boundary.
-  return v !== null && typeof v === "object" && !Array.isArray(v);
-}
-
 export function persistReaderPosition(snapshot: SurahReaderHistoryState): void {
   writeRaw(
     "session",

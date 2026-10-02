@@ -12,6 +12,7 @@ import type {
   TranslationCatalogueEntry,
   SurahLink,
   SurahNormalization,
+  RangeRouteKind,
 } from "$lib/data/quran-types";
 import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
 
@@ -713,7 +714,7 @@ export const quranWorker = {
 
 export interface RangeRouteKey {
   readonly sourceId: string | null;
-  readonly kind: "juz" | "page";
+  readonly kind: RangeRouteKind;
   readonly index: number;
 }
 
@@ -744,7 +745,7 @@ export interface RangeReaderCoordinator {
 
 export function rangeRouteKey(
   sourceId: string | null,
-  kind: "juz" | "page",
+  kind: RangeRouteKind,
   index: number,
 ): RangeRouteKey {
   return { sourceId, kind, index };
