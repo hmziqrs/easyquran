@@ -5,12 +5,12 @@ import { byScore, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteSource } from "../types";
 
 const SOURCE_ID = "search.routes";
-const SEARCH_PATH = "/app/search";
+const SEARCH_PATH = "/search";
 
 function searchHref(): Pathname {
-  // SAFETY: canonical search pathname (localized /{en,ar}/app/search is not
-  // a published route); the palette's resolveHref applies the base, so the raw
-  // path is what the cast brands it as.
+  // SAFETY: canonical search pathname (/ar/search reroutes onto it with
+  // Arabic chrome; the /en and /app shapes are 308s); the palette's
+  // resolveHref applies the base, so the raw path is what the cast brands it as.
   return SEARCH_PATH as Pathname;
 }
 

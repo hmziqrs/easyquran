@@ -8,7 +8,7 @@ export function guestOnlyRedirect(
   pathname: string,
   status: AuthStatus,
   user: UserProfile | null,
-): "/app" | "/verify-email" | null {
+): "/surah" | "/verify-email" | null {
   if (status !== "authenticated") return null;
   if (!GUEST_ONLY_PATHS.has(pathname)) return null;
   return postAuthPath(user);

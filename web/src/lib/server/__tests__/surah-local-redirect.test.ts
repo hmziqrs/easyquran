@@ -13,9 +13,9 @@ describe("surah-local page redirect targets (exhaustive over the baked map)", ()
       for (let localPage = 2; localPage <= pages.length; localPage += 1) {
         const spread = QURAN_DATA.surahLocalPage(surah.num, localPage);
         if (!spread) throw new Error(`missing ${surah.slug} page ${localPage}`);
-        const target = surahLocalRedirectTarget(`/app/${surah.slug}/page/${localPage}`);
+        const target = surahLocalRedirectTarget(`/${surah.slug}/page/${localPage}`);
         expect(target).toEqual({
-          path: `/app/${surah.slug}`,
+          path: `/${surah.slug}`,
           fragment: `#ayah-${surah.num}-${spread.startAyah}`,
         });
       }
@@ -24,8 +24,8 @@ describe("surah-local page redirect targets (exhaustive over the baked map)", ()
 
   it("collapses local page 1 of every surah to the bare root", () => {
     for (const surah of QURAN_DATA.surahs) {
-      expect(surahLocalRedirectTarget(`/app/${surah.slug}/page/1`)).toEqual({
-        path: `/app/${surah.slug}`,
+      expect(surahLocalRedirectTarget(`/${surah.slug}/page/1`)).toEqual({
+        path: `/${surah.slug}`,
         fragment: "",
       });
     }
@@ -34,24 +34,24 @@ describe("surah-local page redirect targets (exhaustive over the baked map)", ()
   it("yields null for count+1 and non-page paths", () => {
     for (const surah of QURAN_DATA.surahs) {
       const count = QURAN_DATA.surahLocalPageCount(surah.num);
-      expect(surahLocalRedirectTarget(`/app/${surah.slug}/page/${count + 1}`)).toBeNull();
+      expect(surahLocalRedirectTarget(`/${surah.slug}/page/${count + 1}`)).toBeNull();
     }
-    expect(surahLocalRedirectTarget("/app/al-baqarah")).toBeNull();
-    expect(surahLocalRedirectTarget("/app/page/2")).toBeNull();
+    expect(surahLocalRedirectTarget("/al-baqarah")).toBeNull();
+    expect(surahLocalRedirectTarget("/page/2")).toBeNull();
   });
 
   it("round-trips the translated shape's lang/translator", () => {
     const spread = QURAN_DATA.surahLocalPage(30, 2);
     if (!spread) throw new Error("missing ar-rum page 2");
-    const target = surahLocalRedirectTarget("/app/ar-rum/t/ms/basmeih/page/2");
+    const target = surahLocalRedirectTarget("/ar-rum/t/ms/basmeih/page/2");
     expect(target).toEqual({
-      path: "/app/ar-rum/t/ms/basmeih",
+      path: "/ar-rum/t/ms/basmeih",
       fragment: `#ayah-30-${spread.startAyah}`,
     });
-    expect(surahLocalRedirectTarget("/app/ar-rum/t/ms/basmeih/page/1")).toEqual({
-      path: "/app/ar-rum/t/ms/basmeih",
+    expect(surahLocalRedirectTarget("/ar-rum/t/ms/basmeih/page/1")).toEqual({
+      path: "/ar-rum/t/ms/basmeih",
       fragment: "",
     });
-    expect(surahLocalRedirectTarget("/app/ar-rum/t/ms/not-a-catalogue-entry/page/2")).toBeNull();
+    expect(surahLocalRedirectTarget("/ar-rum/t/ms/not-a-catalogue-entry/page/2")).toBeNull();
   });
 });

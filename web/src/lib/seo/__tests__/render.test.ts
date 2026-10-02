@@ -21,8 +21,8 @@ describe("renderLlmsIndex", () => {
   });
 
   it("documents juz and mushaf page URL patterns", () => {
-    expect(llms).toContain("/app/juz/");
-    expect(llms).toContain("/app/page/");
+    expect(llms).toContain("/juz/");
+    expect(llms).toContain("/page/");
   });
 
   it("documents markdown negotiation for every route, reader included", () => {

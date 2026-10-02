@@ -157,15 +157,15 @@ describe("mdSiblingRequest", () => {
     { pathname: "/contact", mdPath: "/contact.md" },
     { pathname: "/privacy", mdPath: "/privacy.md" },
     { pathname: "/terms", mdPath: "/terms.md" },
-    { pathname: "/app/al-fatihah", mdPath: "/app/al-fatihah.md" },
-    { pathname: "/en/app/al-fatihah", mdPath: "/en/app/al-fatihah.md" },
-    { pathname: "/app/juz/1", mdPath: "/app/juz/1.md" },
-    { pathname: "/en/app/al-fatihah/t/en/sahih", mdPath: "/en/app/al-fatihah/t/en/sahih.md" },
+    { pathname: "/al-fatihah", mdPath: "/al-fatihah.md" },
+    { pathname: "/ar/al-fatihah", mdPath: "/ar/al-fatihah.md" },
+    { pathname: "/juz/1", mdPath: "/juz/1.md" },
+    { pathname: "/al-fatihah/t/en/sahih", mdPath: "/al-fatihah/t/en/sahih.md" },
   ])("maps $pathname to $mdPath", ({ pathname, mdPath }) => {
     expect(mdSiblingRequest(pathname)).toEqual({ canonicalPath: pathname, mdPath });
   });
 
-  it.each(["/ar", "/ar/about", "/app", "/app/juz", "/about.md", "/llms.txt", "/about/"])(
+  it.each(["/ar", "/ar/about", "/juz", "/ar/juz", "/about.md", "/llms.txt", "/about/"])(
     "returns null for %s",
     (pathname) => {
       expect(mdSiblingRequest(pathname)).toBeNull();
@@ -278,8 +278,8 @@ describe("server markdown negotiation integration", () => {
     expect(body).toContain("https://easyquran.fyi/llms.txt");
     expect(body).toContain("https://easyquran.fyi/llms-full.txt");
     expect(body).toContain("https://easyquran.fyi/sitemap.xml");
-    expect(body).toContain("https://easyquran.fyi/app/al-fatihah");
-    expect(body).toContain("https://easyquran.fyi/app/juz");
+    expect(body).toContain("https://easyquran.fyi/al-fatihah");
+    expect(body).toContain("https://easyquran.fyi/juz");
     expect(body).toContain("https://easyquran.fyi/faq");
     expect(body).toContain("https://easyquran.fyi/contact");
   });

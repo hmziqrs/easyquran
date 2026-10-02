@@ -27,21 +27,41 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
 const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
-const READER_MD_SIBLING_PATTERNS: readonly RegExp[] = [
-  new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
-  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
-  new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
-    "u",
-  ),
-].map((pattern) => new RegExp(`^(?:/(?:en|ar))?${pattern.source.slice(1)}`, pattern.flags));
+// Scheme A: reader content paths are prefix-less; only `ar` requests carry a
+// locale prefix. The same four families serve both the html→md sibling lookup
+// (optionally /ar-prefixed) and the raw .md request gate (isReaderMdPath).
+const READER_MD_PATH_FAMILIES = [
+  `/${SURAH_SEGMENT}`,
+  `/${RANGE_SEGMENT}/${NUMBER}`,
+  `/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}`,
+  `/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}`,
+];
+const READER_MD_SIBLING_PATTERNS: readonly RegExp[] = READER_MD_PATH_FAMILIES.map(
+  (family) => new RegExp(`^(?:/ar)?${family}$`, "u"),
+);
+const READER_MD_REQUEST_PATTERNS: readonly RegExp[] = READER_MD_PATH_FAMILIES.map(
+  (family) => new RegExp(`^(?:/ar)?${family}\\.md$`, "u"),
+);
+
+/** True when the pathname is a prerendered reader .md artifact under scheme A
+ * (`/al-baqarah.md`, `/ar/al-baqarah.md`, `/t/en/sahih/page/7.md`, …). Shared
+ * with web/server.ts so the pattern list has exactly one copy. */
+export function isReaderMdPath(pathname: string): boolean {
+  return READER_MD_REQUEST_PATTERNS.some((pattern) => pattern.test(pathname));
+}
 
 function readerMdSibling(pathname: string): string | null {
-  if (!pathname.startsWith("/app/") && !/^\/(?:en|ar)\/app\//u.test(pathname)) return null;
-  if (pathname === "/app/juz" || pathname === "/en/app/juz" || pathname === "/ar/app/juz") {
+  const hasPrefix = pathname.startsWith("/ar/");
+  const bare = hasPrefix ? pathname.slice(3) : pathname;
+  // The bare locale spellings are the marketing home, not a reader route —
+  // without this guard the broad surah family would claim "/ar" itself.
+  if (bare === "/juz" || bare === "/ar" || bare === "/en" || bare === "" || bare === "/") {
     return null;
   }
+  // Marketing pages own their .md twins (MD_SIBLING_PATHS); the broad
+  // single-segment reader family must never claim them, including the
+  // /ar-prefixed spellings that have no published marketing twin.
+  if (MD_SIBLING_PATHS.has(bare)) return null;
   return READER_MD_SIBLING_PATTERNS.some((pattern) => pattern.test(pathname))
     ? `${pathname}.md`
     : null;

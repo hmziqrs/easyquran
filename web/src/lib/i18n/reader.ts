@@ -1,8 +1,12 @@
 import { assertUiLocale, type UiLocale } from "$lib/i18n/locales";
 import { localizeHref } from "$lib/paraglide/runtime";
 
-export type QuranReaderHref = "/app" | `/app/${string}`;
-export type LocalizedReaderHref<Locale extends UiLocale = UiLocale> = `/${Locale}/app${string}`;
+/** Validated unprefixed reader href (en canonical). `isCanonicalReaderHref`
+ * enforces the path grammar at the public boundary; the type is deliberately
+ * loose (`/${string}`) because the grammar lives in `isReaderPathname`. */
+export type QuranReaderHref = `/${string}`;
+export type LocalizedReaderHref<Locale extends UiLocale = UiLocale> =
+  Locale extends "ar" ? `/ar${string}` : QuranReaderHref;
 
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -12,9 +16,42 @@ const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const POSITIVE_INTEGER_SEGMENT = /^[1-9]\d*$/;
 const RANGE_SEGMENT_KINDS = new Set(["page", "juz", "hizb", "rub"]);
-const RESERVED_SURAH_SEGMENTS = new Set(["juz", "page", "hizb", "rub", "t", "surah", "pages", "yours"]);
-/** Single-segment reader indexes (/app/juz, /app/surah, /app/pages). /app/yours is a
- * personal app route like /app/bookmarks — never localized, never in this set. */
+/** Site-root reserved words (scheme A): these single segments are reader range
+ * kinds, the `t` translation marker, or app index/personal routes — never a
+ * surah slug. This is what keeps /t, /page, /juz, /yours, … from being
+ * swallowed by the dynamic [surah] route at the site root. */
+const RESERVED_SURAH_SEGMENTS = new Set([
+  // reader range kinds, the translation marker, and reader-owned indexes
+  "juz",
+  "page",
+  "hizb",
+  "rub",
+  "t",
+  "surah",
+  "pages",
+  "yours",
+  // bounded product pages
+  "search",
+  "settings",
+  "bookmarks",
+  // static top-level routes (marketing, auth, account, ops) — they outrank the
+  // dynamic [surah] route, and a canonical reader builder must never emit them
+  "about",
+  "faq",
+  "contact",
+  "privacy",
+  "terms",
+  "login",
+  "register",
+  "forgot-password",
+  "verify-email",
+  "account",
+  "auth",
+  "health",
+  "design",
+]);
+/** Single-segment reader indexes (/juz, /surah, /pages). /yours and /bookmarks are
+ * personal app routes — never localized, never in this set. */
 const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages"]);
 
 function hasUnsafeUrlCharacter(value: string): boolean {
@@ -90,10 +127,9 @@ function isRangeSegmentKind(value: string): boolean {
 }
 
 function isReaderPathname(pathname: string): boolean {
-  if (pathname === "/app") return true;
-  if (!pathname.startsWith("/app/")) return false;
+  if (!pathname.startsWith("/") || pathname === "/") return false;
 
-  const segments = pathname.slice(5).split("/");
+  const segments = pathname.slice(1).split("/");
   if (segments.some((segment) => segment === "")) return false;
 
   switch (segments.length) {
@@ -143,6 +179,11 @@ function localizeReaderHref<const Locale extends UiLocale>(
   locale: Locale,
   quranHref: QuranReaderHref,
 ): LocalizedReaderHref<Locale> {
+  if (locale === "en") {
+    // SAFETY: en is the unprefixed base locale — the validated canonical href
+    // IS the localized href, which is exactly the LocalizedReaderHref<"en"> shape.
+    return quranHref as LocalizedReaderHref<Locale>;
+  }
   const localized = localizeHref(quranHref, { locale });
   const sourceParts = splitHref(quranHref);
   const localizedParts = splitHref(localized);
@@ -156,30 +197,23 @@ function localizeReaderHref<const Locale extends UiLocale>(
   return localized as LocalizedReaderHref<Locale>;
 }
 
-export function readerHomeHrefFor<const Locale extends UiLocale>(locale: Locale): `/${Locale}/app` {
-  assertUiLocale(locale);
-  // SAFETY: localizeReaderHref verified its output equals `/${locale}` + "/app" (no query/fragment on the source), so the value is exactly `/${Locale}/app`.
-  return localizeReaderHref(locale, "/app") as `/${Locale}/app`;
+/**
+ * Canonical href of the /bookmarks page for nav/footer links. Deliberately
+ * unprefixed — this is the canonical URL; /ar/bookmarks is a rerouted twin
+ * served with Arabic chrome (hooks.ts reroute), never a separate address.
+ * Matches the /settings and /search precedent (Nav.svelte, palette sources).
+ */
+export function bookmarksPageHref(): "/bookmarks" {
+  return "/bookmarks";
 }
 
 /**
- * Canonical href of the /app/bookmarks page for nav/footer links. Deliberately
- * NOT locale-prefixed: /{en,ar}/app/bookmarks is not a published route (the
- * reroute in hooks.ts only maps localized reader routes), so a prefixed href
- * 404s on hard load. This matches the /app/settings and /app/search precedent
- * (Nav.svelte, the search palette sources).
+ * Canonical href of the /yours hub. Like /bookmarks, it is a personal app
+ * route addressed only by its canonical URL — /ar/yours reroutes onto it
+ * (hooks.ts), and readerHrefFor rejects it so a localized link cannot ship.
  */
-export function bookmarksPageHref(): "/app/bookmarks" {
-  return "/app/bookmarks";
-}
-
-/**
- * Canonical href of the /app/yours hub. Like /app/bookmarks, it is a personal
- * app route with no localized variant — deliberately NOT routed through
- * readerHrefFor, whose validator rejects it so a localized link cannot ship.
- */
-export function yoursPageHref(): "/app/yours" {
-  return "/app/yours";
+export function yoursPageHref(): "/yours" {
+  return "/yours";
 }
 
 export function readerHrefFor<const Locale extends UiLocale>(

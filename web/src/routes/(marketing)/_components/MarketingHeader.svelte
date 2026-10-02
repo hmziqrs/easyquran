@@ -65,9 +65,9 @@
   let accountHref: "/account" | "/login" = $derived(authState.authenticated ? "/account" : "/login");
   // Reader index links — the dedicated index pages, same grammar as the app Nav.
   const readerIndexLinks = $derived([
-    { label: t.surahs, href: publicHref(readerHrefFor(locale, "/app/surah")), muted: false },
-    { label: t.juz, href: publicHref(readerHrefFor(locale, "/app/juz")), muted: false },
-    { label: t.pages, href: publicHref(readerHrefFor(locale, "/app/pages")), muted: false },
+    { label: t.surahs, href: publicHref(readerHrefFor(locale, "/surah")), muted: false },
+    { label: t.juz, href: publicHref(readerHrefFor(locale, "/juz")), muted: false },
+    { label: t.pages, href: publicHref(readerHrefFor(locale, "/pages")), muted: false },
     { label: t.yours, href: publicHref(yoursPageHref()), muted: true },
   ]);
 

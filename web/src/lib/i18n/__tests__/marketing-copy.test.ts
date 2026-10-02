@@ -112,12 +112,12 @@ describe("marketing copy resolvers", () => {
     ]);
   });
 
-  it("footer bookmarks link stays the canonical unlocalized /app/bookmarks in every locale", () => {
-    // /{en,ar}/app/bookmarks is not a published route (404 on hard load); the
+  it("footer bookmarks link stays the canonical unlocalized /bookmarks in every locale", () => {
+    // /ar/bookmarks is not a published route (404 on hard load); the
     // marketing footer must emit the same bare path the app footer does.
     for (const locale of ["en", "ar"] as const) {
       const bookmarks = marketingFooterLinks(locale).product.find((link) => link.id === "bookmarks");
-      expect(bookmarks?.href).toBe("/app/bookmarks");
+      expect(bookmarks?.href).toBe("/bookmarks");
     }
   });
 
@@ -142,8 +142,8 @@ describe("marketing locale links", () => {
   it("uses canonical marketing and reader helpers", () => {
     expect(marketingHomeHref("en")).toBe("/");
     expect(marketingHomeHref("ar")).toBe("/ar/");
-    expect(marketingReaderHomeHref("en")).toBe("/en/app");
-    expect(marketingReaderHomeHref("ar")).toBe("/ar/app");
+    expect(marketingReaderHomeHref("en")).toBe("/surah");
+    expect(marketingReaderHomeHref("ar")).toBe("/ar/surah");
   });
 
   it("does not expose unpublished Arabic marketing links", () => {
@@ -152,9 +152,9 @@ describe("marketing locale links", () => {
     expect(links.company).toEqual([]);
     expect(links.legal).toEqual([]);
     // The bookmarks link is the one app-surface path in the product column:
-    // /app/bookmarks has no localized published route, so it stays bare for
+    // /bookmarks has no localized published route, so it stays bare for
     // every locale (see bookmarksPageHref).
-    expect(links.product.find((link) => link.id === "bookmarks")?.href).toBe("/app/bookmarks");
+    expect(links.product.find((link) => link.id === "bookmarks")?.href).toBe("/bookmarks");
     expect(
       links.product
         .filter((link) => link.id !== "bookmarks")

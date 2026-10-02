@@ -21,7 +21,7 @@ const READER_ENTRY_COUNT =
   RANGE_COUNTS[RangeKind.Juz] +
   HIZB_COUNT +
   RUB_COUNT;
-const INDEX_COUNT = 4; // home + juz/surah/pages indexes, per UI locale
+const INDEX_COUNT = 3; // juz/surah/pages indexes, per UI locale — the /app hub is gone
 
 describe("localized reader prerender discovery", () => {
   it("matches every existing Arabic-source entry exactly once", () => {
@@ -51,29 +51,23 @@ describe("localized reader prerender discovery", () => {
     const total = (READER_ENTRY_COUNT + INDEX_COUNT) * SUPPORTED_UI_LOCALES.length;
     expect(hrefs).toHaveLength(total);
     expect(new Set(hrefs).size).toBe(total);
-    expect(hrefs.filter((href) => href.startsWith("/en/app"))).toHaveLength(
+    // Scheme A: en hrefs are unprefixed, ar hrefs carry /ar.
+    expect(hrefs.filter((href) => href.startsWith("/en/"))).toHaveLength(0);
+    expect(hrefs.filter((href) => !href.startsWith("/ar/"))).toHaveLength(
       READER_ENTRY_COUNT + INDEX_COUNT,
     );
-    expect(hrefs.filter((href) => href.startsWith("/ar/app"))).toHaveLength(
+    expect(hrefs.filter((href) => href.startsWith("/ar/"))).toHaveLength(
       READER_ENTRY_COUNT + INDEX_COUNT,
     );
-    const entryHrefs = new Set([
-      "/en/app",
-      "/en/app/juz",
-      "/en/app/surah",
-      "/en/app/pages",
-      "/ar/app",
-      "/ar/app/juz",
-      "/ar/app/surah",
-      "/ar/app/pages",
-    ]);
-    expect(hrefs.filter((href) => entryHrefs.has(href))).toHaveLength(8);
+    expect(hrefs.every((href) => !href.includes("/app"))).toBe(true);
+    const entryHrefs = new Set(["/juz", "/surah", "/pages", "/ar/juz", "/ar/surah", "/ar/pages"]);
+    expect(hrefs.filter((href) => entryHrefs.has(href))).toHaveLength(6);
     expect(hrefs.every((href) => !href.includes("/t/"))).toBe(true);
-    expect(hrefs.every((href) => !href.includes("/page/") || /\/app\/page\/\d+$/.test(href))).toBe(
+    expect(hrefs.every((href) => !href.includes("/page/") || /\/page\/\d+$/.test(href))).toBe(
       true,
     );
-    expect(hrefs).toContain("/en/app/hizb/1");
-    expect(hrefs).toContain("/ar/app/rub/240");
+    expect(hrefs).toContain("/hizb/1");
+    expect(hrefs).toContain("/ar/rub/240");
     expect(hrefs.every((href) => !href.endsWith(".md") && !href.endsWith(".txt"))).toBe(true);
   });
 
@@ -94,7 +88,7 @@ describe("localized reader prerender discovery", () => {
     const container = target.querySelector<HTMLElement>("[data-reader-prerender-links]");
     expect(container?.hidden).toBe(true);
     expect(container?.querySelectorAll("a")).toHaveLength(hrefs.length);
-    expect(container?.querySelector('a[href="/ar/app/juz"]')).not.toBeNull();
+    expect(container?.querySelector('a[href="/ar/juz"]')).not.toBeNull();
     expect(container?.querySelector('a[href*="/t/"]')).toBeNull();
 
     await unmount(component);
@@ -112,7 +106,7 @@ describe("localized reader prerender discovery", () => {
         lang: "ms",
         translator: "basmeih",
       }),
-    ).toBe("/app/ar-rum/t/ms/basmeih");
+    ).toBe("/ar-rum/t/ms/basmeih");
 
     const rub = readerPrerenderEntries(QURAN_DATA).find((entry) => entry.kind === "rub");
     expect(rub).toBeDefined();
@@ -122,6 +116,6 @@ describe("localized reader prerender discovery", () => {
         lang: "ms",
         translator: "basmeih",
       }),
-    ).toBe("/app/t/ms/basmeih/rub/1");
+    ).toBe("/t/ms/basmeih/rub/1");
   });
 });

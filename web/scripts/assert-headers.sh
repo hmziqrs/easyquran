@@ -45,9 +45,9 @@ code_is() {
 
 printf 'Asserting §6.1 delivery contract against %s\n' "$ORIGIN"
 
-# /app itself is a 92-byte locale-redirect stub (no theme script, no asset refs);
-# /en/app is the real prerendered page both probes below need.
-html=$(curl -sS -H 'Accept: text/html' "$ORIGIN/en/app")
+# Scheme A: /surah is the real prerendered index page the probes below need;
+# the old /en/app + /app spellings are 308s owned by the hooks rule table.
+html=$(curl -sS -H 'Accept: text/html' "$ORIGIN/surah")
 
 immutable=$(grep -oE '/_app/immutable/[^"]+\.js' <<<"$html" | head -n1 || true)
 if [[ -n "$immutable" ]]; then
@@ -56,17 +56,39 @@ if [[ -n "$immutable" ]]; then
 	contains "immutable asset carries nosniff" "$immutable_headers" 'x-content-type-options: nosniff'
 	contains "immutable asset carries HSTS" "$immutable_headers" 'strict-transport-security:'
 else
-	fail_ "no /_app/immutable/* reference on /app — cannot verify immutable"
+	fail_ "no /_app/immutable/* reference on /surah — cannot verify immutable"
 fi
 
-for p in /app /app/al-kahf; do
+for p in /surah /al-kahf /ar/al-kahf; do
 	code=$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN$p" || true)
 	[[ "$code" == "200" ]] || fail_ "$p is HTTP $code, expected 200 (clean-URL HTML not served — try_files?)"
 done
 ok "clean-URL HTML routes resolve (200)"
 
-# Localized canonical reader path — the bare /app/** prefix 307s to /{en,ar}/app/**.
-translation_path=/en/app/al-fatihah/t/en/sahih
+# Scheme A legacy 308 map: single hop, deterministic Location, bounded public TTL.
+assert_redirect() {
+	local from="$1" want="$2"
+	local headers location code
+	headers=$(curl -sS -D - -o /dev/null "$ORIGIN$from")
+	code=$(grep -i '^HTTP/' <<<"$headers" | tail -n1 | awk '{print $2}')
+	location=$(grep -i '^location:' <<<"$headers" | tail -n1 | sed 's/^[Ll]ocation:[[:space:]]*//' | tr -d '\r')
+	[[ "$code" == "308" ]] || fail_ "$from is HTTP $code, expected 308"
+	[[ "$location" == "$want" ]] || fail_ "$from Location is '$location', expected '$want'"
+	contains "$from 308 carries bounded public TTL" "$headers" 'cache-control: public, max-age=86400'
+}
+assert_redirect /app /surah
+assert_redirect /en /
+assert_redirect /en/app /surah
+assert_redirect /en/app/al-fatihah /al-fatihah
+assert_redirect /en/app/2 /al-baqarah
+assert_redirect /ar/app /ar/surah
+assert_redirect /ar/app/al-fatihah /ar/al-fatihah
+assert_redirect /app/2 /al-baqarah
+assert_redirect /ar/2 /ar/al-baqarah
+ok "legacy 308 rule table resolves in one hop"
+
+# Localized translated reader path — SSR + 7-day disk cache, ar UI chrome.
+translation_path=/ar/al-fatihah/t/en/sahih
 translation_html=$(curl -sS "$ORIGIN$translation_path")
 contains "$translation_path renders translated ayahs in SSR HTML" "$translation_html" 'data-verse-key="1:1"'
 translation_headers=$(curl -sS -D - -o /dev/null "$ORIGIN$translation_path")
@@ -91,24 +113,24 @@ contains "same-origin Quran artifact gateway is immutable" "$artifact_headers" '
 artifact_etag=$(printf '%s' "$artifact_headers" | sed -n 's/^[Ee][Tt][Aa][Gg]:[[:space:]]*//p' | tr -d '\r')
 artifact_conditional_status=$(curl -sS -o /dev/null -w '%{http_code}' -H "If-None-Match: $artifact_etag" "$ORIGIN$artifact_path")
 contains "artifact ETag is id-based and conditionally returns 304" "$artifact_etag $artifact_conditional_status" 'W/"quran-artifact:tanzil/arabic/quran-uthmani.sqlite" 304'
-contains "HTML page (/app) is no-cache"      "$(curl -sSI "$ORIGIN/app")" 'no-cache'
-contains "/en/app/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/en/app/al-kahf/__data.json")" 'no-cache'
+contains "HTML page (/surah) is no-cache"    "$(curl -sSI "$ORIGIN/surah")" 'no-cache'
+contains "/ar/al-kahf/__data.json is no-cache" "$(curl -sSI "$ORIGIN/ar/al-kahf/__data.json")" 'no-cache'
 
-app_headers=$(curl -sSI "$ORIGIN/en/app")
-contains "prerendered /en/app carries CSP (server.ts outer pass)" "$app_headers" 'content-security-policy: default-src'
-contains "prerendered /en/app CSP authorizes inline scripts by hash" "$app_headers" 'sha256-'
-contains "prerendered /en/app carries HSTS" "$app_headers" 'strict-transport-security:'
-contains "prerendered /en/app carries nosniff" "$app_headers" 'x-content-type-options: nosniff'
+app_headers=$(curl -sSI "$ORIGIN/surah")
+contains "prerendered /surah carries CSP (server.ts outer pass)" "$app_headers" 'content-security-policy: default-src'
+contains "prerendered /surah CSP authorizes inline scripts by hash" "$app_headers" 'sha256-'
+contains "prerendered /surah carries HSTS" "$app_headers" 'strict-transport-security:'
+contains "prerendered /surah carries nosniff" "$app_headers" 'x-content-type-options: nosniff'
 headers_file=$(curl -sS "$ORIGIN/_headers" || true)
 static_hash=$(grep -oE "sha256-[A-Za-z0-9+/=]+" <<<"$headers_file" | head -n1 || true)
 if [[ -n "$static_hash" ]]; then
-  contains "web/static/_headers theme-script hash matches the served /app CSP" "$app_headers" "$static_hash"
+  contains "web/static/_headers theme-script hash matches the served /surah CSP" "$app_headers" "$static_hash"
 else
   fail_ "live /_headers file has no sha256 script hash — regenerate it (see web/static/_headers comment)"
 fi
 
 robots_ok=0
-for p in /app.txt /app.md /index.txt /index.md; do
+for p in /al-kahf.md /juz/1.md /index.md /index.txt; do
 	code=$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN$p" || true)
 	if [[ "$code" == "200" ]]; then
 		contains "$p carries X-Robots-Tag noindex" "$(curl -sSI "$ORIGIN$p")" 'x-robots-tag: noindex'
@@ -118,12 +140,14 @@ for p in /app.txt /app.md /index.txt /index.md; do
 done
 [[ "$robots_ok" -eq 1 ]] || warn "no .md/.txt text-variant found — skipping robots check"
 
-br=$(curl -sSI -H 'Accept-Encoding: br'   "$ORIGIN/app" | grep -i '^content-encoding:' || true)
-gz=$(curl -sSI -H 'Accept-Encoding: gzip' "$ORIGIN/app" | grep -i '^content-encoding:' || true)
+# GET probe: HEAD responses carry no content-encoding on several servers
+# (vite preview / sirv), which would make this check unpassable everywhere.
+br=$(curl -s -D - -o /dev/null -H 'Accept-Encoding: br'   "$ORIGIN/surah" | grep -i '^content-encoding:' || true)
+gz=$(curl -s -D - -o /dev/null -H 'Accept-Encoding: gzip' "$ORIGIN/surah" | grep -i '^content-encoding:' || true)
 if grep -qi 'br' <<<"$br" || grep -qi 'gzip' <<<"$gz"; then
 	ok "compression offered (br/gzip)"
 else
-	fail_ "no br/gzip content-encoding on /app"
+	fail_ "no br/gzip content-encoding on /surah"
 fi
 
 contains "unknown URL returns branded 404 shell" "$(curl -sS "$ORIGIN/this-route-does-not-exist-easyquran-xyz")" '__sveltekit'

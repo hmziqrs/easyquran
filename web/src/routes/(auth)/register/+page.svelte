@@ -9,7 +9,7 @@
 
   async function onsuccess(): Promise<void> {
     const user = authState.user;
-    await goto(user && !user.is_verified ? "/verify-email" : "/app");
+    await goto(user && !user.is_verified ? "/verify-email" : "/surah");
   }
 </script>
 

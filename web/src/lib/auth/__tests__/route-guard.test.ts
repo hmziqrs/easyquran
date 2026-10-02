@@ -16,12 +16,12 @@ const unverified = { ...verified, is_verified: false };
 
 describe("guestOnlyRedirect", () => {
   it("redirects authenticated users away from sign-in and registration", () => {
-    expect(guestOnlyRedirect("/login", "authenticated", verified)).toBe("/app");
+    expect(guestOnlyRedirect("/login", "authenticated", verified)).toBe("/surah");
     expect(guestOnlyRedirect("/register", "authenticated", unverified)).toBe("/verify-email");
   });
 
   it("redirects authenticated users away from forgot-password (409 guard on the API)", () => {
-    expect(guestOnlyRedirect("/forgot-password", "authenticated", verified)).toBe("/app");
+    expect(guestOnlyRedirect("/forgot-password", "authenticated", verified)).toBe("/surah");
   });
 
   it("leaves guests and non-guest-only auth routes alone", () => {

@@ -59,11 +59,19 @@ pairs.sort((a, b) => {
   return a.key > b.key ? 1 : 0;
 });
 
-const legacyReader = pairs.find(({ key }) => key === "/app/__data.json" || key.startsWith("/app/"));
+// Scheme A: the unprefixed shapes ARE the live shapes now (/page/13/…, /juz/1/…),
+// so the legacy set inverts — the dead spellings are the localized /en|/ar app
+// families plus the deleted /app hub key. Any of those in the build means the
+// old scheme leaked back in.
+const isLegacyReaderKey = (key: string): boolean =>
+  key === "/app/__data.json" ||
+  key === "/en/app/__data.json" ||
+  key.startsWith("/en/app/") ||
+  key === "/ar/app/__data.json" ||
+  key.startsWith("/ar/app/");
+const legacyReader = pairs.find(({ key }) => isLegacyReaderKey(key));
 if (legacyReader) {
-  throw new Error(
-    `[offline] legacy unprefixed reader artifact leaked into build: ${legacyReader.key}`,
-  );
+  throw new Error(`[offline] legacy pre-scheme-A reader artifact leaked into build: ${legacyReader.key}`);
 }
 
 const entries: Record<string, number> = {};

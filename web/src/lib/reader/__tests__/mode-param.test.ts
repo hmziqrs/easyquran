@@ -8,37 +8,37 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("parseModeParam", () => {
   it("returns the mode when the param is a valid reader mode", () => {
-    expect(parseModeParam(new URL("https://h/app/al-fatihah?mode=reading"))).toBe("reading");
-    expect(parseModeParam(new URL("https://h/app/al-fatihah?mode=verse"))).toBe("verse");
+    expect(parseModeParam(new URL("https://h/al-fatihah?mode=reading"))).toBe("reading");
+    expect(parseModeParam(new URL("https://h/al-fatihah?mode=verse"))).toBe("verse");
   });
 
   it("returns null when the param is absent", () => {
-    expect(parseModeParam(new URL("https://h/app/al-fatihah"))).toBeNull();
+    expect(parseModeParam(new URL("https://h/al-fatihah"))).toBeNull();
   });
 
   it("returns null for an unknown or empty value", () => {
-    expect(parseModeParam(new URL("https://h/app/al-fatihah?mode=foo"))).toBeNull();
-    expect(parseModeParam(new URL("https://h/app/al-fatihah?mode="))).toBeNull();
+    expect(parseModeParam(new URL("https://h/al-fatihah?mode=foo"))).toBeNull();
+    expect(parseModeParam(new URL("https://h/al-fatihah?mode="))).toBeNull();
   });
 });
 
 describe("withModeParam", () => {
   it("sets the mode param while preserving path, hash and other params", () => {
-    const out = withModeParam(new URL("https://h/app/al-fatihah?page=2#ayah-1-1"), "reading");
+    const out = withModeParam(new URL("https://h/al-fatihah?page=2#ayah-1-1"), "reading");
     expect(out.searchParams.get(READER_MODE_PARAM)).toBe("reading");
     expect(out.searchParams.get("page")).toBe("2");
-    expect(out.pathname).toBe("/app/al-fatihah");
+    expect(out.pathname).toBe("/al-fatihah");
     expect(out.hash).toBe("#ayah-1-1");
   });
 
   it("overwrites a stale mode param", () => {
-    const out = withModeParam(new URL("https://h/app/al-fatihah?mode=reading"), "verse");
+    const out = withModeParam(new URL("https://h/al-fatihah?mode=reading"), "verse");
     expect(out.searchParams.get(READER_MODE_PARAM)).toBe("verse");
   });
 
   it("resolves a relative path string against the supplied base", () => {
-    const out = withModeParam("/app/al-fatihah", "reading", "https://h");
-    expect(out.href).toBe("https://h/app/al-fatihah?mode=reading");
+    const out = withModeParam("/al-fatihah", "reading", "https://h");
+    expect(out.href).toBe("https://h/al-fatihah?mode=reading");
   });
 });
 

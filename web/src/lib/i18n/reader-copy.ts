@@ -302,7 +302,7 @@ export interface ReaderUiCopy {
     readonly item: (kind: RangeKind, index: number) => string;
     readonly juzCount: (count: number) => string;
   };
-  /** Dedicated index pages (/app/surah, /app/juz, /app/pages, /app/yours). */
+  /** Dedicated index pages (/surah, /juz, /pages) plus the /yours hub. */
   readonly index: {
     readonly juzTitle: string;
     readonly surahsTitle: string;

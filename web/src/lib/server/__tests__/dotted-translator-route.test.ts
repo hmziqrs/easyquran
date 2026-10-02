@@ -49,11 +49,11 @@ import { parseReaderPath, parseReaderRoute } from "$lib/server/reader-route";
 import { reroute } from "../../../hooks";
 import { handle } from "../../../hooks.server";
 
-const ROUTE_ID = "/(application)/app/[surah]/t/[lang]/[translator]";
+const ROUTE_ID = "/(application)/[surah]/t/[lang]/[translator]";
 const PARAMS = { surah: "al-fatihah", lang: "en", translator: "sahih.int" };
 
 function event(): RequestEvent {
-  const url = new URL("https://easyquran.fyi/en/app/al-fatihah/t/en/sahih.int");
+  const url = new URL("https://easyquran.fyi/al-fatihah/t/en/sahih.int");
   // SAFETY: test double providing every RequestEvent member the handle() path reads; cookies and locals are inert placeholders in this test.
   return {
     // SAFETY: handle() reads no cookies in this test; the empty object satisfies the accessor shape RequestEvent declares.
@@ -82,17 +82,17 @@ beforeEach(() => {
 
 describe("dotted translator route segments", () => {
   it("reroutes the public URL without splitting the translator segment", async () => {
-    const url = new URL("https://easyquran.fyi/ar/app/al-fatihah/t/en/sahih.int");
-    expect(await reroute({ url, fetch })).toBe("/app/al-fatihah/t/en/sahih.int");
+    const url = new URL("https://easyquran.fyi/ar/al-fatihah/t/en/sahih.int");
+    expect(await reroute({ url, fetch })).toBe("/al-fatihah/t/en/sahih.int");
   });
 
   it("reroutes underscore translator segments (quranenc ids) as reader routes", async () => {
-    const url = new URL("https://easyquran.fyi/en/app/al-fatihah/t/quranenc/en.underscore_fixture");
-    expect(await reroute({ url, fetch })).toBe("/app/al-fatihah/t/quranenc/en.underscore_fixture");
+    const url = new URL("https://easyquran.fyi/al-fatihah/t/quranenc/en.underscore_fixture");
+    expect(await reroute({ url, fetch })).toBe("/al-fatihah/t/quranenc/en.underscore_fixture");
   });
 
   it("parses underscore translator segments from path and resolved route params", () => {
-    expect(parseReaderPath("/app/al-fatihah/t/quranenc/en.underscore_fixture")).toMatchObject({
+    expect(parseReaderPath("/al-fatihah/t/quranenc/en.underscore_fixture")).toMatchObject({
       type: "translation",
       sourceId: "quranenc.en.underscore_fixture",
       cacheKind: "surah",
@@ -109,7 +109,7 @@ describe("dotted translator route segments", () => {
   });
 
   it("parses a baked dotted source from path and resolved route params", () => {
-    expect(parseReaderPath("/app/al-fatihah/t/en/sahih.int")).toMatchObject({
+    expect(parseReaderPath("/al-fatihah/t/en/sahih.int")).toMatchObject({
       type: "translation",
       sourceId: "en.sahih.int",
       cacheKind: "surah",
@@ -119,7 +119,7 @@ describe("dotted translator route segments", () => {
       type: "translation",
       sourceId: "en.sahih.int",
     });
-    expect(parseReaderPath("/app/al-fatihah/t/en/not.baked")).toBeNull();
+    expect(parseReaderPath("/al-fatihah/t/en/not.baked")).toBeNull();
   });
 
   it("uses full dotted source ID in bounded localized HTML cache key", async () => {

@@ -7,5 +7,5 @@ export function successDestination(
   user: SuccessRouteUser | null,
 ): string {
   const unverified = user ? !user.is_verified : false;
-  return returnTarget ?? (unverified ? "/verify-email" : "/app");
+  return returnTarget ?? (unverified ? "/verify-email" : "/surah");
 }

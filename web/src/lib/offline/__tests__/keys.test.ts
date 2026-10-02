@@ -3,35 +3,35 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("normalizeDataKey", () => {
   it("strips only the x-sveltekit-* reserved params", () => {
-    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?x-sveltekit-invalidated=01")).toBe(
-      "/app/al-kahf/__data.json",
+    expect(normalizeDataKey("https://h/al-kahf/__data.json?x-sveltekit-invalidated=01")).toBe(
+      "/al-kahf/__data.json",
     );
   });
 
   it("preserves application query params (e.g. ?verse= deep links)", () => {
     expect(
-      normalizeDataKey("https://h/app/al-kahf/__data.json?verse=50&x-sveltekit-invalidated=01"),
-    ).toBe("/app/al-kahf/__data.json?verse=50");
+      normalizeDataKey("https://h/al-kahf/__data.json?verse=50&x-sveltekit-invalidated=01"),
+    ).toBe("/al-kahf/__data.json?verse=50");
   });
 
   it("strips the reader-only `mode` presentation param (identical HTML per mode)", () => {
-    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?mode=reading&verse=50")).toBe(
-      "/app/al-kahf/__data.json?verse=50",
+    expect(normalizeDataKey("https://h/al-kahf/__data.json?mode=reading&verse=50")).toBe(
+      "/al-kahf/__data.json?verse=50",
     );
-    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?mode=verse")).toBe(
-      "/app/al-kahf/__data.json",
+    expect(normalizeDataKey("https://h/al-kahf/__data.json?mode=verse")).toBe(
+      "/al-kahf/__data.json",
     );
   });
 
   it("strips the reader-only `more` stacked-translations param (extras are client-only)", () => {
-    expect(normalizeDataKey("https://h/app/al-kahf/__data.json?more=en.sahih,ur.x&verse=50")).toBe(
-      "/app/al-kahf/__data.json?verse=50",
+    expect(normalizeDataKey("https://h/al-kahf/__data.json?more=en.sahih,ur.x&verse=50")).toBe(
+      "/al-kahf/__data.json?verse=50",
     );
-    expect(normalizeDataKey("https://h/app/al-kahf?more=en.sahih")).toBe("/app/al-kahf");
+    expect(normalizeDataKey("https://h/al-kahf?more=en.sahih")).toBe("/al-kahf");
   });
 
   it("preserves the pathname and a trailing slash", () => {
-    expect(normalizeDataKey("https://h/app/juz/?x=1")).toBe("/app/juz/?x=1");
+    expect(normalizeDataKey("https://h/juz/?x=1")).toBe("/juz/?x=1");
   });
 
   it("keeps unrelated params that merely start with x", () => {
@@ -49,6 +49,6 @@ describe("normalizeDataKey", () => {
   });
 
   it("accepts a relative path (the pack's path-only route keys)", () => {
-    expect(normalizeDataKey("/app/al-kahf/__data.json")).toBe("/app/al-kahf/__data.json");
+    expect(normalizeDataKey("/al-kahf/__data.json")).toBe("/al-kahf/__data.json");
   });
 });

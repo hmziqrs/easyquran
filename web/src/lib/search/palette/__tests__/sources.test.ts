@@ -91,7 +91,7 @@ describe("quran.reference source", () => {
   it("resolves a surah:ayah reference to the surah holding that verse", () => {
     const [entry] = run(quranReferenceSource, "2:255");
     expect(entry?.label).toBe("Al-Baqarah 2:255");
-    expect(entry?.href).toBe("/app/al-baqarah#ayah-2-255");
+    expect(entry?.href).toBe("/al-baqarah#ayah-2-255");
     expect(entry?.groupId).toBe(PaletteGroups.JumpTo.id);
   });
 
@@ -166,7 +166,7 @@ describe("quran.surahs source", () => {
     const entries = run(quranSurahsSource, "baqarah 255");
     expect(entries[0]?.groupId).toBe(PaletteGroups.JumpTo.id);
     expect(entries[0]?.label).toBe("Al-Baqarah 2:255");
-    expect(entries[0]?.href).toBe("/app/al-baqarah#ayah-2-255");
+    expect(entries[0]?.href).toBe("/al-baqarah#ayah-2-255");
     // and still offers the surah itself
     expect(labels(entries)).toContain("2. Al-Baqarah");
   });
@@ -188,7 +188,7 @@ describe("quran.surahs source", () => {
   });
 
   it("keeps the active translation in surah hrefs", () => {
-    expect(hrefs(run(quranSurahsSource, "kahf", TRANSLATED))[0]).toBe("/app/al-kahf/t/ms/basmeih");
+    expect(hrefs(run(quranSurahsSource, "kahf", TRANSLATED))[0]).toBe("/al-kahf/t/ms/basmeih");
   });
 });
 
@@ -281,7 +281,7 @@ describe("Arabic-Indic and Persian digits", () => {
   it("reads a verse reference written in Arabic-Indic digits", () => {
     const [entry] = run(quranReferenceSource, "٢:٢٥٥");
     expect(entry?.label).toBe("Al-Baqarah 2:255");
-    expect(entry?.href).toBe("/app/al-baqarah#ayah-2-255");
+    expect(entry?.href).toBe("/al-baqarah#ayah-2-255");
   });
 
   it("reads keyword references in Arabic-Indic and Persian digits", () => {
@@ -388,7 +388,7 @@ describe("translation.text source", () => {
     const [entry] = await runAsync(translationTextSource, "mercy", TRANSLATED);
     expect(entry?.label).toBe("Al-Baqarah 2:255");
     expect(entry?.detail).toBe("Basmeih");
-    expect(entry?.href).toBe("/app/al-baqarah/t/ms/basmeih#ayah-2-255");
+    expect(entry?.href).toBe("/al-baqarah/t/ms/basmeih#ayah-2-255");
     expect(entry?.dedupeKey).toBe("tayah:ms.basmeih:2:255");
     expect(entry?.groupId).toBe(PaletteGroups.TranslationText.id);
     expect(entry?.score).toBe(0.7);
@@ -403,7 +403,7 @@ describe("translation.text source", () => {
     reader.markRead(2, 200, "en.sahih");
     try {
       const [entry] = await runAsync(translationTextSource, "mercy", ARABIC);
-      expect(entry?.href).toBe("/app/al-baqarah/t/en/sahih#ayah-2-255");
+      expect(entry?.href).toBe("/al-baqarah/t/en/sahih#ayah-2-255");
       expect(entry?.dedupeKey).toBe("tayah:en.sahih:2:255");
     } finally {
       reader.clearReadingPosition();
@@ -463,8 +463,8 @@ describe("quran.ranges source", () => {
   });
 
   it("keeps the active translation in range hrefs", () => {
-    expect(hrefs(run(quranRangesSource, "juz", TRANSLATED))[0]).toBe("/app/t/ms/basmeih/juz/1");
-    expect(hrefs(run(quranRangesSource, "page", TRANSLATED))[0]).toBe("/app/t/ms/basmeih/page/1");
+    expect(hrefs(run(quranRangesSource, "juz", TRANSLATED))[0]).toBe("/t/ms/basmeih/juz/1");
+    expect(hrefs(run(quranRangesSource, "page", TRANSLATED))[0]).toBe("/t/ms/basmeih/page/1");
   });
 });
 
@@ -506,7 +506,7 @@ describe("site.routes source", () => {
   it("matches site pages by label, href and keyword", () => {
     expect(hrefs(run(siteRoutesSource, "faq"))).toContain("/faq");
     expect(hrefs(run(siteRoutesSource, "privacy"))).toContain("/privacy");
-    expect(hrefs(run(siteRoutesSource, "reader"))).toContain("/app");
+    expect(hrefs(run(siteRoutesSource, "reader"))).toContain("/surah");
   });
 
   it("lists routes unscored on an empty query", () => {
@@ -519,7 +519,7 @@ describe("site.routes source", () => {
 describe("settings.routes source", () => {
   it("matches the settings entry by keyword and links the canonical route", () => {
     for (const raw of ["settings", "storage", "theme", "privacy"]) {
-      expect(hrefs(run(settingsRoutesSource, raw)), raw).toContain("/app/settings");
+      expect(hrefs(run(settingsRoutesSource, raw)), raw).toContain("/settings");
     }
   });
 
@@ -541,7 +541,7 @@ describe("settings.routes source", () => {
 describe("search.routes source", () => {
   it("matches the search entry by keyword and links the canonical route", () => {
     for (const raw of ["search", "find", "translations"]) {
-      expect(hrefs(run(searchRoutesSource, raw)), raw).toContain("/app/search");
+      expect(hrefs(run(searchRoutesSource, raw)), raw).toContain("/search");
     }
   });
 

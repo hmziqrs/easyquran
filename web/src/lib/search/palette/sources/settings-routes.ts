@@ -5,12 +5,12 @@ import { byScore, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteSource } from "../types";
 
 const SOURCE_ID = "settings.routes";
-const SETTINGS_PATH = "/app/settings";
+const SETTINGS_PATH = "/settings";
 
 function settingsHref(): Pathname {
-  // SAFETY: canonical settings pathname (localized /{en,ar}/app/settings is not
-  // a published route); the palette's resolveHref applies the base, so the raw
-  // path is what the cast brands it as.
+  // SAFETY: canonical settings pathname (/ar/settings reroutes onto it with
+  // Arabic chrome; the /en and /app shapes are 308s); the palette's
+  // resolveHref applies the base, so the raw path is what the cast brands it as.
   return SETTINGS_PATH as Pathname;
 }
 

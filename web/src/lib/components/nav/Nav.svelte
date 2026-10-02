@@ -135,9 +135,9 @@
   // header shows the other-locale link directly, like the marketing header.
   let otherLocaleLink = $derived(localeLinks.find((link) => !link.current) ?? null);
 
-  const SETTINGS_PATH = "/app/settings";
-  const SEARCH_PATH = "/app/search";
-  const BOOKMARKS_PATH = "/app/bookmarks";
+  const SETTINGS_PATH = "/settings";
+  const SEARCH_PATH = "/search";
+  const BOOKMARKS_PATH = "/bookmarks";
   let settingsRowHref = $derived(publicHref(SETTINGS_PATH));
   let searchRowHref = $derived(publicHref(SEARCH_PATH));
   let bookmarksRowHref = $derived(publicHref(BOOKMARKS_PATH));

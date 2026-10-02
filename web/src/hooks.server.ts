@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
+import { MARKETING_PATHS, MARKETING_PUBLICATIONS, type MarketingPageId } from "$lib/i18n/marketing";
 import { SURAH_COUNT } from "$lib/data/quran-data";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { paraglideMiddleware } from "$lib/paraglide/server";
@@ -16,7 +17,6 @@ import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-di
 import { QURAN_DATA } from "$lib/server/quran-data";
 import {
   localizedReaderLocale,
-  parseReaderPath,
   parseReaderRoute,
   surahLocalRedirectTarget,
   type ParsedReaderRoute,
@@ -167,49 +167,97 @@ function tagInlineScripts(html: string, nonce: string): string {
   return html.replaceAll("<script>", `<script nonce="${nonce}">`);
 }
 
-function legacyReaderRedirect(event: RequestEvent): Response | null {
+/**
+ * Scheme A redirect map: every legacy spelling resolves in ONE hop. Ordered
+ * first-match rules; the numeric-alias and surah-local rewrites are composed
+ * into the same 308 — no redirect chains. The table's outputs (unprefixed
+ * paths, /surah, /ar/surah, /ar/<rest>) match no rule input, so no cycle.
+ * 308 + bounded public TTL: targets are deterministic. If a target ever
+ * becomes request-dependent, revert to 307 + no-store.
+ */
+function legacyPrefixRedirect(event: RequestEvent): Response | null {
   const { pathname } = event.url;
-  if (!pathname.startsWith("/app") || !parseReaderPath(pathname)) return null;
-  const tail = building ? "" : `${event.url.search}${event.url.hash}`;
-  // 308 + bounded public TTL: the target is deterministic (/en) today. If the
-  // legacy target ever becomes request-dependent, revert to 307 + no-store.
+  let target: string | null = null;
+  if (pathname === "/en") target = "/";
+  else if (pathname.startsWith("/en/")) target = pathname.slice(3);
+  else if (pathname === "/ar/app") target = "/ar/surah";
+  else if (pathname.startsWith("/ar/app/")) target = `/ar${pathname.slice(7)}`;
+  else if (pathname === "/app") target = "/surah";
+  else if (pathname.startsWith("/app/")) target = pathname.slice(4);
+  if (target === null) return null;
+  // Collapse the legacy /en/app double prefix inside the same hop: an /en
+  // strip can still leave the dead /app marker, and /en/app itself must land
+  // on /surah like every other hub spelling.
+  if (target === "/app") target = "/surah";
+  else if (target.startsWith("/app/")) target = target.slice(4);
+
+  // One-hop composition on the normalized target: numeric alias, then the D1
+  // surah-local collapse. Both are pure path rewrites whose outputs match no
+  // rule input (slugs are letter-initial, indexes are reserved words). The D1
+  // ayah anchor rides along unless the inbound URL carries its own fragment.
+  const search = building ? "" : event.url.search;
+  const inboundHash = building ? "" : event.url.hash;
+  const arPrefixed = target === "/ar" || target.startsWith("/ar/");
+  const prefix = arPrefixed ? "/ar" : "";
+  const rel = arPrefixed ? target.slice(3) : target;
+  const aliased = numericAliasPath(rel);
+  const local = aliased ? null : surahLocalRedirectTarget(rel);
+  let location = prefix + (aliased ?? local?.path ?? rel);
+  if (local && !inboundHash) location += local.fragment;
+  const tail = `${search}${inboundHash}`;
   return new Response(null, {
     status: 308,
     headers: {
-      location: `/en${pathname}${tail}`,
+      location: `${location}${tail}`,
       "cache-control": "public, max-age=86400",
     },
   });
 }
 
 /**
- * Prefix view of a reader request: localized paths keep their locale; bare
- * /app/** requests take the deterministic legacy /en target.
+ * Prefix view of a request: `/ar/**` keeps its locale; everything else is the
+ * unprefixed en canonical. The redirect builders regex-gate themselves on the
+ * returned rel, so a non-null return for every path is safe (cheap rejects).
  */
-function readerRequestBase(pathname: string): { prefix: string; rel: string } | null {
-  const locale = localizedReaderLocale(pathname);
-  if (locale) return { prefix: `/${locale}`, rel: pathname.slice(locale.length + 1) };
-  if (pathname.startsWith("/app")) return { prefix: "/en", rel: pathname };
-  return null;
+/** Prefix view of a request path: locale prefix ("" for the en canonical) + rel. */
+interface ReaderRequestBase {
+  prefix: string;
+  rel: string;
 }
 
-/**
- * Numeric chapter alias (D14): `/en/app/2` → `/en/app/al-baqarah`. Digits never
- * collide with surah slugs (letter-initial) or the reserved range segments.
- * Out-of-range numbers fall through to the parse 404.
- */
-function numericChapterRedirect(event: RequestEvent): Response | null {
-  const base = readerRequestBase(event.url.pathname);
-  if (!base) return null;
-  const match = /^\/app\/([1-9][0-9]*)$/u.exec(base.rel);
+function readerRequestBase(pathname: string): ReaderRequestBase {
+  if (pathname === "/ar" || pathname.startsWith("/ar/")) {
+    return { prefix: "/ar", rel: pathname.slice(3) };
+  }
+  return { prefix: "", rel: pathname };
+}
+
+/** D14 numeric chapter alias on a prefix-less rel: `/2` → `/al-baqarah`. */
+function numericAliasPath(rel: string): string | null {
+  const match = /^\/([1-9][0-9]*)$/u.exec(rel);
   if (!match) return null;
   const num = Number(match[1]);
   const surah = num >= 1 && num <= SURAH_COUNT ? QURAN_DATA.surahByNum(num) : undefined;
-  if (!surah) return null;
+  return surah ? `/${surah.slug}` : null;
+}
+
+/**
+ * Numeric chapter alias (D14): `/2` → `/al-baqarah`, `/ar/2` → `/ar/al-baqarah`.
+ * Digits never collide with surah slugs (letter-initial) or the reserved range
+ * segments. Out-of-range numbers fall through to the parse 404. Same bounded
+ * public TTL as every other 308 row (plan §10: the TTL rides on every row).
+ */
+function numericChapterRedirect(event: RequestEvent): Response | null {
+  const base = readerRequestBase(event.url.pathname);
+  const slug = numericAliasPath(base.rel);
+  if (!slug) return null;
   const tail = building ? "" : `${event.url.search}${event.url.hash}`;
   return new Response(null, {
     status: 308,
-    headers: { location: `${base.prefix}/app/${surah.slug}${tail}` },
+    headers: {
+      location: `${base.prefix}${slug}${tail}`,
+      "cache-control": "public, max-age=86400",
+    },
   });
 }
 
@@ -220,7 +268,6 @@ function numericChapterRedirect(event: RequestEvent): Response | null {
  */
 function surahLocalPageRedirect(event: RequestEvent): Response | null {
   const base = readerRequestBase(event.url.pathname);
-  if (!base) return null;
   const target = surahLocalRedirectTarget(base.rel);
   if (!target) return null;
   const search = building ? "" : event.url.search;
@@ -325,9 +372,32 @@ async function resolveRequest(
   return { response: await resolve(event, resolveOpts), nonce };
 }
 
-function isLocalizedMarketingPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/ar" || pathname === "/ar/";
-}
+/**
+ * The en-only marketing pages have no published /ar variant; a /ar-prefixed
+ * request for them must NOT enter paraglide (it would resolve locale ar and
+ * the page's unpublished-publication guard would 500). They render the en
+ * chrome exactly like they did before the flip.
+ */
+// SAFETY: Object.keys over MARKETING_PUBLICATIONS (a `satisfies
+// Readonly<Record<MarketingPageId, readonly UiLocale[]>>` literal) yields
+// exactly its MarketingPageId keys; the cast restores what the Record key type
+// already guarantees, and the locale membership test needs no cast at all.
+const EN_ONLY_MARKETING_AR_PATHS: ReadonlySet<string> = new Set(
+  (Object.keys(MARKETING_PUBLICATIONS) as MarketingPageId[])
+    .filter((id) => {
+      const locales: readonly string[] = MARKETING_PUBLICATIONS[id];
+      return !locales.includes("ar");
+    })
+    .map((id) => `/ar${MARKETING_PATHS[id]}`),
+);
+
+/** The bounded app pages: live at the site root, with /ar twins via reroute. */
+const PRODUCT_ROUTE_IDS: ReadonlySet<string> = new Set([
+  "/(application)/search",
+  "/(application)/settings",
+  "/(application)/bookmarks",
+  "/(application)/yours",
+]);
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
@@ -349,8 +419,13 @@ export const handle: Handle = async ({ event, resolve }) => {
       response = notAcceptable(accept);
       negotiated = true;
     } else if (chosen === "text/markdown") {
-      const md = await event.fetch(mdSibling.mdPath.replace(/^\/(?:en|ar)(?=\/app\/)/u, ""));
-      if (md.ok) {
+      // A sibling miss must fall through to the 404 path, never surface as a
+      // 500 — the fetch targets our own origin, but treat any transport error
+      // the same as a non-ok response.
+      const md = await event
+        .fetch(mdSibling.mdPath.replace(/^\/ar(?=\/)/u, ""))
+        .catch(() => null);
+      if (md?.ok) {
         response = new Response(await md.text(), {
           headers: {
             "content-type": "text/markdown; charset=utf-8",
@@ -364,19 +439,33 @@ export const handle: Handle = async ({ event, resolve }) => {
   }
 
   if (!response) {
-    response = legacyReaderRedirect(event);
+    response = legacyPrefixRedirect(event);
   }
 
   if (!response) {
     const readerLocale = localizedReaderLocale(pathname);
-    const useI18n = readerLocale !== null || isLocalizedMarketingPath(pathname);
-    // Both redirect builders gate themselves on readerRequestBase (localized
-    // reader paths plus the bare legacy /app/** family), so attempt them for
-    // every request — cheap null returns for everything else.
+    // Scheme A gate: paraglide owns the localized marketing home and every
+    // /ar/** application path. Unprefixed application paths skip it (baseLocale
+    // fallback), exactly as /app/bookmarks did before the flip, and the
+    // en-only marketing pages have no /ar publication to serve.
+    const normalized = pathname.replace(/\/+$/u, "") || "/";
+    const useI18n =
+      (pathname === "/" ||
+        pathname === "/ar" ||
+        (pathname.startsWith("/ar/") && !EN_ONLY_MARKETING_AR_PATHS.has(normalized)));
+    // Both redirect builders gate themselves on their rel regexes (numeric
+    // alias, surah-local shapes), so attempt them for every request — cheap
+    // null returns for everything else.
     const readerRedirect = numericChapterRedirect(event) ?? surahLocalPageRedirect(event);
     if (readerRedirect) {
       response = readerRedirect;
-    } else if (readerLocale && !parseReaderRoute(event.route.id, event.params)) {
+    } else if (
+      readerLocale &&
+      !parseReaderRoute(event.route.id, event.params) &&
+      // Q1 default: /ar/search|settings|bookmarks|yours are live product-page
+      // twins — valid localized routes with no reader-route descriptor.
+      !PRODUCT_ROUTE_IDS.has(event.route.id ?? "")
+    ) {
       response = notFound(event);
     } else if (useI18n) {
       const resolved: NonceHolder = {};
@@ -390,10 +479,13 @@ export const handle: Handle = async ({ event, resolve }) => {
       });
       if (resolved.nonce) nonce = resolved.nonce;
     } else {
+      // Unprefixed application paths (baseLocale en) skip paraglide exactly as
+      // the en canonical should — but they still resolve with the en UI locale
+      // so translated-route HTML keeps its __ui-en disk-cache partition.
       const resolved = await resolveRequest(
         event,
         resolve,
-        null,
+        "en",
         parseReaderRoute(event.route.id, event.params),
         requestHasCookie,
       );

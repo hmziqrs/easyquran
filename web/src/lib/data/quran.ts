@@ -46,16 +46,16 @@ export const parseKey = (key: VerseKey) => {
   return { num: +m[1]!, n: +m[2]! };
 };
 
-export const surahPath = (surah: string | Pick<CatalogEntry, "slug">): `/app/${string}` => {
+export const surahPath = (surah: string | Pick<CatalogEntry, "slug">): `/${string}` => {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
-  return `/app/${slug}`;
+  return `/${slug}`;
 };
 
 export const surahAyahPath = (
   surah: Pick<CatalogEntry, "slug" | "num">,
   ayah: number,
-): `/app/${string}` => `${surahPath(surah)}#ayah-${surah.num}-${ayah}`;
+): `/${string}` => `${surahPath(surah)}#ayah-${surah.num}-${ayah}`;
 
 export const translationIdFromSegments = (lang: string, translator: string): string =>
   translator === "" ? lang : `${lang}.${translator}`;
@@ -70,22 +70,22 @@ export const translationSurahPath = (
   slug: string,
   lang: string,
   translator: string,
-): `/app/${string}` => `/app/${slug}/t/${lang}/${translator}`;
+): `/${string}` => `/${slug}/t/${lang}/${translator}`;
 
 export const translationGlobalPagePath = (
   lang: string,
   translator: string,
   globalPage: number,
-): `/app/${string}` => `/app/t/${lang}/${translator}/page/${globalPage}`;
+): `/${string}` => `/t/${lang}/${translator}/page/${globalPage}`;
 
-export const translationJuzPath = (lang: string, translator: string, n: number): `/app/${string}` =>
-  `/app/t/${lang}/${translator}/juz/${n}`;
+export const translationJuzPath = (lang: string, translator: string, n: number): `/${string}` =>
+  `/t/${lang}/${translator}/juz/${n}`;
 
-export const translationHizbPath = (lang: string, translator: string, n: number): `/app/${string}` =>
-  `/app/t/${lang}/${translator}/hizb/${n}`;
+export const translationHizbPath = (lang: string, translator: string, n: number): `/${string}` =>
+  `/t/${lang}/${translator}/hizb/${n}`;
 
-export const translationRubPath = (lang: string, translator: string, n: number): `/app/${string}` =>
-  `/app/t/${lang}/${translator}/rub/${n}`;
+export const translationRubPath = (lang: string, translator: string, n: number): `/${string}` =>
+  `/t/${lang}/${translator}/rub/${n}`;
 
 export const surahRouteContext = (sourceId: string): SurahRouteContext => {
   if (isArabicSourceId(sourceId)) return { kind: "arabic" };
@@ -109,7 +109,7 @@ export const resumeCtxFor = (
 export const surahPathFor = (
   ctx: SurahRouteContext,
   surah: string | Pick<CatalogEntry, "slug">,
-): `/app/${string}` => {
+): `/${string}` => {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | Pick<CatalogEntry,"slug">); typeof is the correct runtime test for a primitive string, no parse seam
   const slug = typeof surah === "string" ? surah : surah.slug;
   return ctx.kind === "arabic"
@@ -125,21 +125,21 @@ export const surahAyahPathFor = (
   ctx: SurahRouteContext,
   surah: Pick<CatalogEntry, "slug" | "num">,
   ayah: number,
-): `/app/${string}` => `${surahPathFor(ctx, surah)}#ayah-${surah.num}-${ayah}`;
+): `/${string}` => `${surahPathFor(ctx, surah)}#ayah-${surah.num}-${ayah}`;
 
-export const globalPagePathFor = (ctx: SurahRouteContext, globalPage: number): `/app/${string}` =>
+export const globalPagePathFor = (ctx: SurahRouteContext, globalPage: number): `/${string}` =>
   ctx.kind === "arabic"
-    ? `/app/page/${globalPage}`
+    ? `/page/${globalPage}`
     : translationGlobalPagePath(ctx.lang, ctx.translator, globalPage);
 
-export const juzPathFor = (ctx: SurahRouteContext, n: number): `/app/${string}` =>
-  ctx.kind === "arabic" ? `/app/juz/${n}` : translationJuzPath(ctx.lang, ctx.translator, n);
+export const juzPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
+  ctx.kind === "arabic" ? `/juz/${n}` : translationJuzPath(ctx.lang, ctx.translator, n);
 
-export const hizbPathFor = (ctx: SurahRouteContext, n: number): `/app/${string}` =>
-  ctx.kind === "arabic" ? `/app/hizb/${n}` : translationHizbPath(ctx.lang, ctx.translator, n);
+export const hizbPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
+  ctx.kind === "arabic" ? `/hizb/${n}` : translationHizbPath(ctx.lang, ctx.translator, n);
 
-export const rubPathFor = (ctx: SurahRouteContext, n: number): `/app/${string}` =>
-  ctx.kind === "arabic" ? `/app/rub/${n}` : translationRubPath(ctx.lang, ctx.translator, n);
+export const rubPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
+  ctx.kind === "arabic" ? `/rub/${n}` : translationRubPath(ctx.lang, ctx.translator, n);
 
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 

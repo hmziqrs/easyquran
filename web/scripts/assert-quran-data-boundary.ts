@@ -95,7 +95,8 @@ if (readFileSync(serviceWorker, "utf8").includes(digest)) {
   fail(`snapshot provenance digest leaked into service-worker.js`);
 }
 
-for (const routeFile of ["app/al-fatihah.html", "app/al-fatihah/__data.json"]) {
+// Scheme A: the representative prerendered reader route is /al-fatihah.
+for (const routeFile of ["al-fatihah.html", "al-fatihah/__data.json"]) {
   const routePath = path.join(BUILD, routeFile);
   if (!existsSync(routePath)) fail(`representative route output is missing: ${routeFile}`);
   if (readFileSync(routePath, "utf8").includes(SNAPSHOT_NAME)) {

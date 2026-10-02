@@ -67,7 +67,7 @@ describe("landing href discipline (nav-guard complement)", () => {
     expect(landing).toContain("publicHref(");
   });
 
-  it("never hand-builds /app/ href strings", () => {
+  it("never hand-builds reader href strings", () => {
     expect(landing).not.toMatch(/href=\{?["']\/(?:en\/)?app\//);
   });
 

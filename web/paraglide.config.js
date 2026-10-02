@@ -5,27 +5,8 @@ export const paraglideOptions = {
   strategy: ["url", "baseLocale"],
   emitTsDeclarations: true,
   outputStructure: "message-modules",
-  urlPatterns: [
-    {
-      pattern: "/",
-      localized: [
-        ["en", "/"],
-        ["ar", "/ar/"],
-      ],
-    },
-    {
-      pattern: "/app",
-      localized: [
-        ["en", "/en/app"],
-        ["ar", "/ar/app"],
-      ],
-    },
-    {
-      pattern: "/app/:path(.*)",
-      localized: [
-        ["en", "/en/app/:path(.*)"],
-        ["ar", "/ar/app/:path(.*)"],
-      ],
-    },
-  ],
+  // URL scheme A: no custom urlPatterns — the generated default `/:locale/...`
+  // pattern yields unprefixed `en` and `/{locale}` for every other locale
+  // (localizeUrlDefaultPattern / deLocalizeUrlDefaultPattern in the generated
+  // runtime). `en` is the base locale and stays prefix-less; `ar` gets `/ar`.
 };

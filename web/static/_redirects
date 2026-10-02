@@ -6,7 +6,7 @@
 /about/            /about            301
 /download/         /download         301
 /privacy/          /privacy          301
-/app/              /app              301
-/app/read/         /app/read         301
-/app/bookmarks/    /app/bookmarks    301
-/app/settings/     /app/settings     301
+# Scheme A: the /app reader tree is gone (hooks 308s /app/** one hop to the
+# new shapes). Host-level /app 301s here would only add a second hop on top of
+# the 308 — they are gone, not redirected. Only no-slash marketing spellings
+# remain below.

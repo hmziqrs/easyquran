@@ -10,7 +10,7 @@ const RTL = "ar.jalalayn";
 
 describe("parseSearchUrl", () => {
   it("returns empty state for a URL without search params", () => {
-    expect(parseSearchUrl(new URL("https://easyquran.app/app/search"))).toEqual({ q: "", t: [] });
+    expect(parseSearchUrl(new URL("https://easyquran.app/search"))).toEqual({ q: "", t: [] });
     expect(parseSearchUrl({ search: "" })).toEqual({ q: "", t: [] });
   });
 
@@ -46,7 +46,7 @@ describe("parseSearchUrl", () => {
 
   it("accepts a URL instance and a {search} object identically", () => {
     const search = `?q=mercy&t=${LTR}`;
-    expect(parseSearchUrl(new URL(`https://easyquran.app/app/search${search}`))).toEqual(
+    expect(parseSearchUrl(new URL(`https://easyquran.app/search${search}`))).toEqual(
       parseSearchUrl({ search }),
     );
   });

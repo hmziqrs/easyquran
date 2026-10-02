@@ -25,11 +25,22 @@ const escape = (value: string) => value.replace(/[&<>"']/g, (c) => XML_ENTITIES[
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 
 function readerUrl(arabicPath: QuranReaderHref): string {
-  // One <loc> per content location: the Arabic canonical. Translations stay
-  // discovery-only (D9/D12) and carry no hreflang alternates (D13) — the loc
-  // already is the Arabic content-language URL.
-  const loc = SITE.url + readerCanonicalPath(arabicPath);
-  return `  <url>\n    <loc>${escape(loc)}</loc>\n  </url>`;
+  // One <loc> per content location: the unprefixed en canonical (scheme A).
+  // Translations stay discovery-only (D9/D12) and never appear. The UI-locale
+  // pair is the en loc + one ar alternate; en owns x-default (same policy as
+  // the marketing pages, minus per-content-language alternates — D13).
+  const canonical = readerCanonicalPath(arabicPath);
+  return readerUrlBlock(SITE.url + canonical, SITE.url + `/ar${canonical}`);
+}
+
+/** Shared <url> block: one canonical loc + the en/ar/x-default UI triple. */
+function readerUrlBlock(loc: string, arHref: string): string {
+  const alternates = [
+    `    <xhtml:link rel="alternate" hreflang="en" href="${escape(loc)}"/>`,
+    `    <xhtml:link rel="alternate" hreflang="ar" href="${escape(arHref)}"/>`,
+    `    <xhtml:link rel="alternate" hreflang="x-default" href="${escape(loc)}"/>`,
+  ].join("\n");
+  return `  <url>\n    <loc>${escape(loc)}</loc>\n${alternates}\n  </url>`;
 }
 
 function localizedMarketingUrl(pageId: MarketingPageId, locale: UiLocale): string {
@@ -44,7 +55,8 @@ function localizedMarketingUrl(pageId: MarketingPageId, locale: UiLocale): strin
 }
 
 function plainReaderEntryUrl(page: "juz-index" | "surah-index" | "pages-index"): string {
-  return `  <url>\n    <loc>${escape(SITE.url + readerCanonicalEntryPath(page))}</loc>\n  </url>`;
+  const path = readerCanonicalEntryPath(page);
+  return readerUrlBlock(SITE.url + path, SITE.url + `/ar${path}`);
 }
 
 function* sitemapLines(): Generator<string> {
@@ -62,7 +74,8 @@ function* sitemapLines(): Generator<string> {
     yield readerUrl(quranHrefForPrerenderEntry(entry, ARABIC));
     yield "\n";
   }
-  // /en/app is noindex (the app home renders no canonical) — never submitted.
+  // The noindex /app hub is gone (scheme A); the three bounded indexes are
+  // indexable and submitted.
   yield plainReaderEntryUrl("juz-index");
   yield "\n";
   yield plainReaderEntryUrl("surah-index");

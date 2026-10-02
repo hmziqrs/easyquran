@@ -9,23 +9,28 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
 const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
+// Scheme A: reader routes live at the site root (no `/app` marker). The
+// bounded app pages join the same mechanism (Q1 default): /ar/search,
+// /ar/settings, /ar/bookmarks and /ar/yours reroute onto their unprefixed
+// twins. Numeric paths are NOT here — digits are owned by the hooks.server
+// numeric-alias 308, never a reroute.
 const READER_ROUTE_PATTERNS = [
-  new RegExp("^/app$", "u"),
-  new RegExp("^/app/(?:juz|surah|pages)$", "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
-  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
+  new RegExp("^/(?:juz|surah|pages)$", "u"),
+  new RegExp(`^/${SURAH_SEGMENT}$`, "u"),
+  new RegExp(`^/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
+  new RegExp(`^/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
   new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
+    `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
     "u",
   ),
-  new RegExp(`^/app/${SURAH_SEGMENT}\\.md$`, "u"),
-  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}\\.md$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}\\.md$`, "u"),
+  new RegExp(`^/${SURAH_SEGMENT}\\.md$`, "u"),
+  new RegExp(`^/${RANGE_SEGMENT}/${NUMBER}\\.md$`, "u"),
+  new RegExp(`^/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}\\.md$`, "u"),
   new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}\\.md$`,
+    `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}\\.md$`,
     "u",
   ),
+  new RegExp("^/(?:search|settings|bookmarks|yours)$", "u"),
 ];
 
 function isReaderRoute(pathname: string): boolean {
@@ -38,8 +43,12 @@ function isReaderRoute(pathname: string): boolean {
 }
 
 function localizedReaderTuple(rawPathname: string, candidatePathname: string): boolean {
-  const match = /^\/(en|ar)(\/app(?:\/.*)?)$/u.exec(rawPathname);
-  return !!match && match[2] === candidatePathname && isReaderRoute(candidatePathname);
+  // Scheme A: only `/ar` prefixes reroute — `/en/**` is owned by the
+  // hooks.server 308 (never rerouted to a 200), and an unprefixed path is its
+  // own candidate (deLocalizeUrl is identity on it).
+  if (!rawPathname.startsWith("/ar/")) return false;
+  const candidate = rawPathname.slice(3);
+  return candidate === candidatePathname && isReaderRoute(candidate);
 }
 
 export const reroute: Reroute = ({ url }) => {

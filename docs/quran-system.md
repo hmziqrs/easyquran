@@ -169,14 +169,18 @@ selection bypasses the gate. Arabic-only reading never counts toward translation
 
 - Arabic-source pages are built from local SQLite without WASM on first paint.
 - Translated-source pages render on Bun; Node remains build-only for Arabic prerender.
-- Public reader paths begin with `/{ui}/app`, where `ui` is `en` or `ar`. Valid legacy
-  `/app/**` requests receive a `308` (permanent) with a bounded public cache TTL to the matching
-  English UI path; they never render reader HTML or enter disk cache. Numeric chapter aliases
-  (`/app/2`) permanently redirect to the surah slug.
+- Public reader paths are prefix-less for the default UI (`/al-baqarah`, `/page/13`,
+  `/juz/1`) and `/ar`-prefixed for Arabic UI (`/ar/al-baqarah`); there is no `/app` marker
+  segment (scheme A, docs/research/url-scheme-a.md). Every legacy spelling — `/en/**`,
+  `/app/**`, `/ar/app/**` — receives a single-hop `308` (permanent) with a bounded public
+  cache TTL to its live canonical (the deleted `/app` hub lands on `/surah`); legacy shapes
+  never render reader HTML or enter disk cache. Numeric chapter aliases live at the root
+  (`/2`, `/ar/2`) and permanently redirect to the surah slug. Top-level segments are never
+  numeric, and `/en/**` plus `/ar/**` stay reserved for the UI-locale grammar.
 - Route families cover surah, global page, juz, hizb, and rub for Arabic and translated
-  sources. The former surah-local page family is removed (one URL per surah); removed
-  `/page/N` shapes permanently redirect (308) to the surah root anchored at the spread's
-  first ayah.
+  sources at the site root under `(application)/`. The former surah-local page family is
+  removed (one URL per surah); removed `/{slug}/page/N` shapes permanently redirect (308) to
+  the surah root anchored at the spread's first ayah.
 - Page geometry is source-independent. Ayah-to-page mapping is computed from metadata.
 - Reader loads one bounded local page and virtualizes continuous adjacent-page loading.
 
@@ -192,12 +196,14 @@ selection bypasses the gate. Arabic-only reading never counts toward translation
   sitemap fan-out, and prerender discovery.
 - Marketing publishes English at `/` and selected Arabic pages under `/ar/`. Publication
   matrix decides which localized pages exist; unsupported locale/path pairs remain 404.
-- Canonical reader paths use `/en/app/**` and `/ar/app/**`. UI locale changes shell copy and
-  direction only; translation source segments remain unchanged.
+- Canonical reader paths are the unprefixed en forms; Arabic UI adds `/ar` (`/ar/<path>`).
+  UI locale changes shell copy and direction only; translation source segments remain
+  unchanged.
 - Arabic-source output is prerendered for both UI locales. Translated-source paths are never
-  prerendered; UI locale creates bounded SSR cache variants.
-- Reader canonicals and sitemap entries use English UI forms. Quran-content hreflang remains
-  about source content, not shell locale.
+  prerendered; UI locale creates bounded SSR cache variants keyed `__ui-{en|ar}`.
+- Reader canonicals and sitemap entries use English UI forms (`<loc>` unprefixed) with an
+  `en`/`ar`/`x-default` UI-locale hreflang triple. Quran-content hreflang remains about
+  source content, not shell locale.
 
 Quran passages always declare their own language and direction. UI shell direction never
 changes Arabic scripture or translation-content semantics.
@@ -296,6 +302,14 @@ changes Arabic scripture or translation-content semantics.
    permanently redirect (308) to the surah root anchored at the spread's first ayah
    (docs/research/navigation-audit.md M5). Scroll position rides in `?v={surah}:{ayah}` and
    `history.state`, never the path.
+10. URL scheme A (docs/research/url-scheme-a.md) drops both navigation prefixes: the default
+   UI locale `en` is unprefixed and `ar` lives under `/ar/`; the `/{ui}/app` double prefix and
+   the noindex `/app` reader hub are gone (the hub 308s to `/surah`; the resume card lives at
+   `/yours`). A first-match 308 rule table maps every legacy spelling — `/en/**`, `/app/**`,
+   `/ar/app/**` — to its live canonical in one hop with `cache-control: public, max-age=86400`.
+   `/en/**` is a permanently reserved word: no real route may ever appear there, or it would
+   collide with the redirect map. The bounded product pages (`/search`, `/settings`,
+   `/bookmarks`, `/yours`) gained `/ar` twins via the reroute table.
 
 ---
 

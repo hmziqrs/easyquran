@@ -24,6 +24,40 @@
   let { children } = $props();
 
   let offlineTeardown: (() => void) | null = null;
+  /**
+   * Scheme A: application surfaces have no `/app` marker anymore, so the
+   * offline engine boots on everything that is NOT one of the known
+   * non-application surfaces (marketing pages, auth flow, account, design,
+   * health, and root utilities). This mirrors the old `startsWith("/app/")`
+   * gate: bookmarks/yours/search/settings still boot the engine (they read
+   * Quran data), marketing/auth still skip it.
+   */
+  const NON_READER_FIRST_SEGMENTS = new Set([
+    "about",
+    "faq",
+    "contact",
+    "privacy",
+    "terms",
+    "login",
+    "register",
+    "forgot-password",
+    "verify-email",
+    "account",
+    "auth",
+    "design",
+    "health",
+    "_quran",
+    "offline",
+    "sitemap.xml",
+    "llms.txt",
+    "llms-full.txt",
+    "firebase-config.js",
+  ]);
+
+  function isReaderSurfacePath(pathname: string): boolean {
+    const first = pathname.split("/")[1] ?? "";
+    return first !== "" && !NON_READER_FIRST_SEGMENTS.has(first);
+  }
   let firstPaintComplete = false;
   let paintFrame = 0;
   let postPaintFrame = 0;
@@ -31,7 +65,7 @@
   let offlineBootPending = false;
   const ensureOfflineEngine = (pathname: string): void => {
     const canonicalPath = deLocalizeUrl(new URL(pathname, location.origin)).pathname;
-    if (canonicalPath !== "/app" && !canonicalPath.startsWith("/app/")) return;
+    if (!isReaderSurfacePath(canonicalPath)) return;
     if (offlineTeardown || offlineBootPending) return;
     const generation = offlineBootGeneration;
     offlineBootPending = true;

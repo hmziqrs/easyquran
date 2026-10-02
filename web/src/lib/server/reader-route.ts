@@ -2,12 +2,12 @@ import { translationIdFromSegments } from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
 import { hizbRange } from "$lib/data/mushaf-divisions";
 import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "$lib/data/translations";
-import { isUiLocale, type UiDirection, type UiLocale } from "$lib/i18n/locales";
+import { type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { QURAN_DATA } from "$lib/server/quran-data";
 
 interface ReaderIndexRoute {
   readonly type: "index";
-  readonly page: "home" | "juz" | "surah" | "pages";
+  readonly page: "juz" | "surah" | "pages";
 }
 
 /** Range route segments; hizb/rub address the baked hizb-quarter series. */
@@ -38,9 +38,11 @@ const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
 
+/** Scheme A: only `ar` is prefix-detectable (`/ar/**` application paths);
+ * `en` is the absence of a prefix. The bare `/ar` marketing home is NOT an
+ * application path and stays null (the marketing gate owns it). */
 export function localizedReaderLocale(pathname: string): UiLocale | null {
-  const match = /^\/(en|ar)\/app(?:\/|$)/u.exec(pathname);
-  return match && isUiLocale(match[1]) ? match[1] : null;
+  return /^\/ar\/.+/u.test(pathname) ? "ar" : null;
 }
 
 function positiveInteger(value: string): number | null {
@@ -128,31 +130,30 @@ function translationRangeRoute(
   };
 }
 
-/** Parse one canonical, de-localized reader pathname. No query or fragment accepted. */
+/** Parse one canonical, prefix-less reader pathname. No query or fragment accepted. */
 export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
   if (pathname.length > 256 || pathname.includes("%") || pathname.includes("//")) return null;
-  if (pathname === "/app") return { type: "index", page: "home" };
-  if (pathname === "/app/juz") return { type: "index", page: "juz" };
-  if (pathname === "/app/surah") return { type: "index", page: "surah" };
-  if (pathname === "/app/pages") return { type: "index", page: "pages" };
+  if (pathname === "/juz") return { type: "index", page: "juz" };
+  if (pathname === "/surah") return { type: "index", page: "surah" };
+  if (pathname === "/pages") return { type: "index", page: "pages" };
 
-  let match = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u.exec(pathname);
+  let match = /^\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u.exec(pathname);
   if (match) return translationSurahRoute(match[1]!, match[2]!, match[3]!);
 
-  match = /^\/app\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
+  match = /^\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
   if (match) {
     const kind = rangeKindFromSegment(match[3]!);
     if (!kind) return null;
     return translationRangeRoute(match[1]!, match[2]!, kind, match[4]!);
   }
 
-  match = /^\/app\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
+  match = /^\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
   if (match) {
     const kind = rangeKindFromSegment(match[1]!);
     return kind ? rangeRoute(kind, match[2]!) : null;
   }
 
-  match = /^\/app\/([^/]+)$/u.exec(pathname);
+  match = /^\/([^/]+)$/u.exec(pathname);
   return match ? surahRoute(match[1]!) : null;
 }
 
@@ -163,8 +164,8 @@ export interface SurahLocalRedirectTarget {
   fragment: string;
 }
 
-const ARABIC_SURAH_LOCAL_PAGE = /^\/app\/([^/]+)\/page\/([1-9][0-9]*)$/u;
-const TRANSLATED_SURAH_LOCAL_PAGE = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)\/page\/([1-9][0-9]*)$/u;
+const ARABIC_SURAH_LOCAL_PAGE = /^\/([^/]+)\/page\/([1-9][0-9]*)$/u;
+const TRANSLATED_SURAH_LOCAL_PAGE = /^\/([^/]+)\/t\/([^/]+)\/([^/]+)\/page\/([1-9][0-9]*)$/u;
 
 /**
  * Permanent redirect target for a removed surah-local page URL (D1). Pure —
@@ -185,10 +186,10 @@ export function surahLocalRedirectTarget(pathname: string): SurahLocalRedirectTa
   let localPageValue: string;
   if (translated) {
     if (!translation(match[2]!, match[3]!)) return null;
-    path = `/app/${surah.slug}/t/${match[2]}/${match[3]}`;
+    path = `/${surah.slug}/t/${match[2]}/${match[3]}`;
     localPageValue = match[4]!;
   } else {
-    path = `/app/${surah.slug}`;
+    path = `/${surah.slug}`;
     localPageValue = match[2]!;
   }
 
@@ -214,53 +215,57 @@ export function parseReaderRoute(
   params: Record<string, string | undefined>,
 ): ParsedReaderRoute | null {
   if (!routeId) return null;
-  const marker = "/app";
-  const markerIndex = routeId.indexOf(marker);
-  if (markerIndex < 0) return null;
-  const routePattern = routeId.slice(markerIndex).replace(/\.md$/u, "");
+  // Scheme A: reader routes live directly in the (application) group — their
+  // route ids are "/(application)/…" with no "/app" marker segment. Strip the
+  // group prefix, drop matcher spellings ("[surah=surahSlug]" → "[surah]") and
+  // the markdown twin suffix, then switch on the canonical id.
+  const group = "/(application)";
+  if (!routeId.startsWith(`${group}/`)) return null;
+  const routePattern = routeId
+    .slice(group.length)
+    .replace(/\[([a-z]+)(?:=[^\]]+)?\]/giu, "[$1]")
+    .replace(/\.md$/u, "");
   const surah = requiredParam(params, "surah", SURAH_SEGMENT);
   const lang = requiredParam(params, "lang", CONTENT_LANGUAGE_SEGMENT);
   const translator = requiredParam(params, "translator", TRANSLATOR_SEGMENT);
   const n = requiredParam(params, "n", POSITIVE_INTEGER);
 
   switch (routePattern) {
-    case "/app":
-      return parseReaderPath("/app");
-    case "/app/juz":
-      return parseReaderPath("/app/juz");
-    case "/app/surah":
-      return parseReaderPath("/app/surah");
-    case "/app/pages":
-      return parseReaderPath("/app/pages");
-    case "/app/[surah]":
-      return surah ? parseReaderPath(`/app/${surah}`) : null;
-    case "/app/page/[n]":
-      return n ? parseReaderPath(`/app/page/${n}`) : null;
-    case "/app/juz/[n]":
-      return n ? parseReaderPath(`/app/juz/${n}`) : null;
-    case "/app/hizb/[n]":
-      return n ? parseReaderPath(`/app/hizb/${n}`) : null;
-    case "/app/rub/[n]":
-      return n ? parseReaderPath(`/app/rub/${n}`) : null;
-    case "/app/[surah]/t/[lang]/[translator]":
+    case "/juz":
+      return parseReaderPath("/juz");
+    case "/surah":
+      return parseReaderPath("/surah");
+    case "/pages":
+      return parseReaderPath("/pages");
+    case "/[surah]":
+      return surah ? parseReaderPath(`/${surah}`) : null;
+    case "/page/[n]":
+      return n ? parseReaderPath(`/page/${n}`) : null;
+    case "/juz/[n]":
+      return n ? parseReaderPath(`/juz/${n}`) : null;
+    case "/hizb/[n]":
+      return n ? parseReaderPath(`/hizb/${n}`) : null;
+    case "/rub/[n]":
+      return n ? parseReaderPath(`/rub/${n}`) : null;
+    case "/[surah]/t/[lang]/[translator]":
       return surah && lang && translator
-        ? parseReaderPath(`/app/${surah}/t/${lang}/${translator}`)
+        ? parseReaderPath(`/${surah}/t/${lang}/${translator}`)
         : null;
-    case "/app/t/[lang]/[translator]/page/[n]":
+    case "/t/[lang]/[translator]/page/[n]":
       return lang && translator && n
-        ? parseReaderPath(`/app/t/${lang}/${translator}/page/${n}`)
+        ? parseReaderPath(`/t/${lang}/${translator}/page/${n}`)
         : null;
-    case "/app/t/[lang]/[translator]/juz/[n]":
+    case "/t/[lang]/[translator]/juz/[n]":
       return lang && translator && n
-        ? parseReaderPath(`/app/t/${lang}/${translator}/juz/${n}`)
+        ? parseReaderPath(`/t/${lang}/${translator}/juz/${n}`)
         : null;
-    case "/app/t/[lang]/[translator]/hizb/[n]":
+    case "/t/[lang]/[translator]/hizb/[n]":
       return lang && translator && n
-        ? parseReaderPath(`/app/t/${lang}/${translator}/hizb/${n}`)
+        ? parseReaderPath(`/t/${lang}/${translator}/hizb/${n}`)
         : null;
-    case "/app/t/[lang]/[translator]/rub/[n]":
+    case "/t/[lang]/[translator]/rub/[n]":
       return lang && translator && n
-        ? parseReaderPath(`/app/t/${lang}/${translator}/rub/${n}`)
+        ? parseReaderPath(`/t/${lang}/${translator}/rub/${n}`)
         : null;
     default:
       return null;

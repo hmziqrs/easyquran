@@ -32,7 +32,7 @@
   async function onAuthSuccess(): Promise<void> {
     authModal.close();
     const user = authState.user;
-    await goto(user && !user.is_verified ? "/verify-email" : "/app");
+    await goto(user && !user.is_verified ? "/verify-email" : "/surah");
   }
 </script>
 

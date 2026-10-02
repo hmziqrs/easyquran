@@ -9,6 +9,7 @@ import {
 import { join, resolve, sep } from "node:path";
 
 import {
+  isReaderMdPath,
   mdSiblingPathFor,
   negotiateMarkdownPath,
   notAcceptableBody,
@@ -323,7 +324,7 @@ async function servePrerenderedMd(
   response: ServerResponse,
   mdPath: string,
 ): Promise<boolean> {
-  const prefix = /^\/(?:en|ar)(?=\/app\/)/u.exec(mdPath)?.[0];
+  const prefix = /^\/ar(?=\/)/u.exec(mdPath)?.[0];
   const candidates = prefix ? [mdPath, mdPath.slice(prefix.length)] : [mdPath];
   for (const candidate of candidates) {
     if (!isSafeMdCandidate(candidate)) continue;
@@ -347,7 +348,7 @@ async function routeNegotiated(
   decodedPath: string,
 ): Promise<void> {
   if (request.method === "GET") {
-    if (/^\/(?:en|ar)\/app\/.*\.md$/u.test(decodedPath)) {
+    if (isReaderMdPath(decodedPath)) {
       if (await servePrerenderedMd(response, decodedPath)) return;
     }
     const negotiation = negotiateMarkdownPath(decodedPath, request.headers.accept ?? null);

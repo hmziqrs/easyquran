@@ -4,7 +4,7 @@ export const HERO = {
   badge: "Free forever · no ads · no account needed",
   title: "The simplest way to read the Qur'an.",
   sub: "Open it, read, close it. Search, bookmarks and recitation are there when you need them — invisible when you don't.",
-  primary: { label: "Start reading", href: "/app" },
+  primary: { label: "Start reading", href: "/surah" },
   secondary: { label: "Why we built it", href: "/about" },
 } as const;
 

@@ -14,21 +14,21 @@ describe("OAuth success route destination decision", () => {
     expect(successDestination(null, UNVERIFIED)).toBe("/verify-email");
   });
 
-  it("ok + verified user + no returnTarget -> goto('/app')", () => {
-    expect(successDestination(null, VERIFIED)).toBe("/app");
+  it("ok + verified user + no returnTarget -> goto('/surah')", () => {
+    expect(successDestination(null, VERIFIED)).toBe("/surah");
   });
 
   it("returnTarget takes precedence over the unverified fallback", () => {
-    expect(successDestination("/app/settings", UNVERIFIED)).toBe("/app/settings");
+    expect(successDestination("/settings", UNVERIFIED)).toBe("/settings");
   });
 
-  it("no user resolved + no returnTarget -> goto('/app') (unverified defaults false)", () => {
-    expect(successDestination(null, null)).toBe("/app");
+  it("no user resolved + no returnTarget -> goto('/surah') (unverified defaults false)", () => {
+    expect(successDestination(null, null)).toBe("/surah");
   });
 
   it("returnTarget used verbatim once; decision is pure (consume lives in return-target)", () => {
-    const dest = successDestination("/app/library/last", VERIFIED);
-    expect(dest).toBe("/app/library/last");
-    expect(successDestination("/app/library/last", VERIFIED)).toBe(dest);
+    const dest = successDestination("/yours", VERIFIED);
+    expect(dest).toBe("/yours");
+    expect(successDestination("/yours", VERIFIED)).toBe(dest);
   });
 });

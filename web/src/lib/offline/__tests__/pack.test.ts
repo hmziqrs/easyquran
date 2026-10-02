@@ -25,17 +25,17 @@ function tamper(
 describe("decodePack", () => {
   it("round-trips a valid pack and recovers entries/bodies", () => {
     const text = buildPack({
-      "/app/al-kahf/__data.json": '{"node":1}',
+      "/al-kahf/__data.json": '{"node":1}',
       "/__data.json": '{"node":0}',
-      "/app/juz/30/__data.json": '{"node":2}',
+      "/juz/30/__data.json": '{"node":2}',
     });
     const pack = decodePack(text);
     expect(Object.keys(pack.entries).sort()).toEqual([
       "/__data.json",
-      "/app/al-kahf/__data.json",
-      "/app/juz/30/__data.json",
+      "/al-kahf/__data.json",
+      "/juz/30/__data.json",
     ]);
-    expect(pack.bodies[pack.entries["/app/al-kahf/__data.json"]!]).toBe('{"node":1}');
+    expect(pack.bodies[pack.entries["/al-kahf/__data.json"]!]).toBe('{"node":1}');
   });
 
   it("rejects an unsupported version", () => {

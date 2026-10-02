@@ -62,7 +62,7 @@ describe("return-target consume-once", () => {
   });
 
   it("a second consume after success returns null", () => {
-    setReturnTarget("/app");
+    setReturnTarget("/surah");
     consumeReturnTarget();
     expect(consumeReturnTarget()).toBeNull();
   });

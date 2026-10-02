@@ -94,8 +94,8 @@ describe("immutable Quran metadata", () => {
 describe("routing and formatting helpers", () => {
   it("builds a Surah path from selected route metadata", () => {
     const fatihah = QURAN_DATA.surahByNum(1)!;
-    expect(surahPath(fatihah)).toBe("/app/al-fatihah");
-    expect(surahAyahPath(fatihah, 5)).toBe("/app/al-fatihah#ayah-1-5");
+    expect(surahPath(fatihah)).toBe("/al-fatihah");
+    expect(surahAyahPath(fatihah, 5)).toBe("/al-fatihah#ayah-1-5");
   });
 
   it("converts western digits to Arabic-Indic", () => {

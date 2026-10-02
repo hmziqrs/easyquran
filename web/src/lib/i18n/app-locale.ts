@@ -3,7 +3,7 @@ import { getContext, setContext } from "svelte";
 import { DEFAULT_UI_LOCALE, type UiLocale } from "$lib/i18n/locales";
 
 /**
- * Locale hand-off for the de-localized app pages (`/app/bookmarks`, and the
+ * Locale hand-off for the prefix-less app pages (`/bookmarks`, and the
  * settings/search precedent routes). Those URLs carry no `/{en,ar}` prefix, so
  * paraglide's url strategy resolves them to the base locale — on the server
  * hooks.server.ts never runs the paraglide middleware for them, and on the

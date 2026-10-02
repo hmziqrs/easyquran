@@ -39,7 +39,7 @@ describe("marketing localization boundaries", () => {
     const marketingTweaks = source(
       "../../../routes/(marketing)/_components/MarketingTweaks.svelte",
     );
-    const readerLayout = source("../../../routes/(application)/app/+layout.svelte");
+    const readerLayout = source("../../../routes/(application)/+layout.svelte");
     const tweaks = source("../../components/tweaks/Tweaks.svelte");
 
     expect(marketingTweaks).toContain('await import("$lib/i18n/appearance-copy")');
@@ -75,7 +75,7 @@ describe("marketing localization boundaries", () => {
   });
 
   it("routes reader logo links to localized marketing home", () => {
-    const readerLayout = source("../../../routes/(application)/app/+layout.svelte");
+    const readerLayout = source("../../../routes/(application)/+layout.svelte");
 
     expect(readerLayout).toContain("brandHomeHref={marketingHomeHref(copy.locale)}");
     expect(readerLayout).not.toContain("brandHomeHref={currentReaderHref}");

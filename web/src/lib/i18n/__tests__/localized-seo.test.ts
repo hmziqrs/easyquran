@@ -33,26 +33,26 @@ describe("localized SEO links", () => {
     expect(() => marketingSeoLinks("about", "ar")).toThrow(/unpublished marketing page/);
   });
 
-  it("canonicalizes every reader UI variant to en without changing translation source", () => {
-    const translated = "/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12";
+  it("canonicalizes every reader UI variant to the unprefixed en form (scheme A)", () => {
+    const translated = "/ar-rum/t/ms/basmeih?view=compact#ayah-30-12";
     expect(readerCanonicalPath(translated)).toBe(
-      "/en/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
+      "/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
     );
     expect(readerCanonicalUrl(translated)).toBe(
-      "https://easyquran.fyi/en/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
+      "https://easyquran.fyi/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
     );
   });
 
   it("never creates reader markdown or text variants", () => {
-    const canonical = readerCanonicalPath("/app/al-fatihah");
-    expect(canonical).toBe("/en/app/al-fatihah");
+    const canonical = readerCanonicalPath("/al-fatihah");
+    expect(canonical).toBe("/al-fatihah");
     expect(canonical).not.toMatch(/\.(?:md|txt)$/);
   });
 
-  it("canonicalizes both bounded reader entry routes without inventing source context", () => {
-    expect(readerEntryPath("ar", "home")).toBe("/ar/app");
-    expect(readerEntryPath("ar", "juz-index")).toBe("/ar/app/juz");
-    expect(readerCanonicalEntryPath("home")).toBe("/en/app");
-    expect(readerCanonicalEntryPath("juz-index")).toBe("/en/app/juz");
+  it("canonicalizes the bounded reader entry routes without inventing source context", () => {
+    expect(readerEntryPath("ar", "juz-index")).toBe("/ar/juz");
+    expect(readerEntryPath("en", "surah-index")).toBe("/surah");
+    expect(readerCanonicalEntryPath("juz-index")).toBe("/juz");
+    expect(readerCanonicalEntryPath("pages-index")).toBe("/pages");
   });
 });

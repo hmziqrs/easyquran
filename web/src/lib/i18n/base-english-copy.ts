@@ -1,6 +1,6 @@
 import { MARKETING_PAGES, type MarketingPageId } from "$lib/config/site-structure";
 
-export type BaseEnglishPageId = MarketingPageId | "app";
+export type BaseEnglishPageId = MarketingPageId;
 
 export interface BaseEnglishPageCopy {
   readonly label: string;
@@ -47,13 +47,11 @@ export function baseEnglishPageCopy(pageId: BaseEnglishPageId): BaseEnglishPageC
         title: "Terms · EasyQuran",
         description: "The terms under which EasyQuran is provided.",
       };
-    case "app":
-      return { label: "Read", title: "EasyQuran", description: "Read the Quran." };
   }
 }
 
 export function baseEnglishPageCopyForPath(path: string): BaseEnglishPageCopy | null {
   const page = MARKETING_PAGES.find((candidate) => candidate.href === path);
   if (page) return baseEnglishPageCopy(page.id);
-  return path === "/app" ? baseEnglishPageCopy("app") : null;
+  return null;
 }

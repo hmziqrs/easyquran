@@ -2,9 +2,7 @@ import { SITE } from "$lib/config/site";
 import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
 import { marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
 import type { PublicHref } from "$lib/i18n/public-href";
-import { readerHomeHrefFor, readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
-
-export const READER_CANONICAL_UI_LOCALE = "en" as const satisfies UiLocale;
+import { readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
 
 export interface SeoAlternate {
   hreflang: string;
@@ -16,7 +14,7 @@ export interface MarketingSeoLinks {
   alternates: readonly SeoAlternate[];
 }
 
-export type ReaderEntryPage = "home" | "juz-index" | "surah-index" | "pages-index";
+export type ReaderEntryPage = "juz-index" | "surah-index" | "pages-index";
 
 function absoluteHref(path: string): string {
   return `${SITE.url}${path}`;
@@ -50,29 +48,29 @@ export function marketingSeoLinks(
 }
 
 /**
- * Reader UI variants share one SEO canonical: English UI. Quran source
- * segments are already present in quranHref and remain untouched.
+ * Reader UI variants share one SEO canonical: the unprefixed en UI (scheme A).
+ * The canonical path is the validated input itself — `en` hrefs are unprefixed,
+ * so readerHrefFor("en", …) is identity and the canonical equals quranHref.
  */
 export function readerCanonicalPath(quranHref: QuranReaderHref): string {
-  return readerHrefFor(READER_CANONICAL_UI_LOCALE, quranHref);
+  return readerHrefFor("en", quranHref);
 }
 
 export function readerCanonicalUrl(quranHref: QuranReaderHref): string {
   return absoluteHref(readerCanonicalPath(quranHref));
 }
 
-const ENTRY_PATHS: Readonly<Record<Exclude<ReaderEntryPage, "home">, QuranReaderHref>> =
-  Object.freeze({
-    "juz-index": "/app/juz",
-    "surah-index": "/app/surah",
-    "pages-index": "/app/pages",
-  });
+const ENTRY_PATHS: Readonly<Record<ReaderEntryPage, QuranReaderHref>> = Object.freeze({
+  "juz-index": "/juz",
+  "surah-index": "/surah",
+  "pages-index": "/pages",
+});
 
 /** Bounded reader indexes sit outside Quran-content route descriptors. */
 export function readerEntryPath(locale: UiLocale, page: ReaderEntryPage): PublicHref {
-  return page === "home" ? readerHomeHrefFor(locale) : readerHrefFor(locale, ENTRY_PATHS[page]);
+  return readerHrefFor(locale, ENTRY_PATHS[page]);
 }
 
 export function readerCanonicalEntryPath(page: ReaderEntryPage): PublicHref {
-  return readerEntryPath(READER_CANONICAL_UI_LOCALE, page);
+  return readerEntryPath("en", page);
 }

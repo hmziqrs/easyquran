@@ -30,9 +30,9 @@
   // The metric strip doubles as the index hub: each card opens its dedicated
   // index page (/app/surah, /app/juz, /app/pages, /app/yours).
   const indexHrefs = $derived([
-    publicHref(readerHrefFor(locale, "/app/surah")),
-    publicHref(readerHrefFor(locale, "/app/juz")),
-    publicHref(readerHrefFor(locale, "/app/pages")),
+    publicHref(readerHrefFor(locale, "/surah")),
+    publicHref(readerHrefFor(locale, "/juz")),
+    publicHref(readerHrefFor(locale, "/pages")),
     publicHref(yoursPageHref()),
   ]);
 
@@ -90,7 +90,7 @@
   let quranPageCount = $derived(data.pageCount ?? FALLBACK_PAGE_COUNT);
 
   /* ── Hero search ─────────────────────────────────────────────────────────── */
-  const SEARCH_ACTION = publicHref("/app/search");
+  const SEARCH_ACTION = publicHref("/search");
   let query = $state("");
   let searchInput = $state<HTMLInputElement | undefined>();
 

@@ -59,7 +59,7 @@ const FATIHAH_PAGE: SurahLocalPageData = {
 
 describe("renderSurahPageMarkdown", () => {
   it("renders the exact heading, meta, and ayah line shape for Al-Fatihah", () => {
-    const md = renderSurahPageMarkdown(FATIHAH_PAGE, "/en/app/al-fatihah");
+    const md = renderSurahPageMarkdown(FATIHAH_PAGE, "/al-fatihah");
     const lines = md.split("\n");
     expect(lines[0]).toBe("# Al-Fatihah (1)");
     expect(lines[1]).toBe("");
@@ -86,7 +86,7 @@ describe("renderSurahPageMarkdown", () => {
       ayahs: [ayah(2, 1, "BISMILLAH Alif Lam Meem")],
       normalization: withOpener,
     };
-    const md = renderSurahPageMarkdown(page, "/en/app/al-baqarah");
+    const md = renderSurahPageMarkdown(page, "/al-baqarah");
     expect(md).toContain("> BISMILLAH");
     expect(md).toContain("1. Alif Lam Meem");
     expect(md).not.toContain("BISMILLAH Alif");
@@ -110,14 +110,14 @@ describe("renderSurahPageMarkdown", () => {
       ayahs: [ayah(2, 6, "sixth ayah text")],
       normalization: withOpener,
     };
-    const md = renderSurahPageMarkdown(page, "/en/app/al-baqarah/page/2");
+    const md = renderSurahPageMarkdown(page, "/al-baqarah/page/2");
     expect(md).not.toContain("> BISMILLAH");
     expect(md).toContain("6. sixth ayah text");
   });
 
   it("carries the canonical HTML URL and Tanzil attribution in the footer", () => {
-    const md = renderSurahPageMarkdown(FATIHAH_PAGE, "/en/app/al-fatihah");
-    expect(md).toContain("HTML: https://easyquran.fyi/en/app/al-fatihah");
+    const md = renderSurahPageMarkdown(FATIHAH_PAGE, "/al-fatihah");
+    expect(md).toContain("HTML: https://easyquran.fyi/al-fatihah");
     expect(md).toContain("Source: Tanzil — https://tanzil.net");
     expect(md).not.toContain("Translation:");
   });
@@ -134,11 +134,11 @@ describe("renderSurahPageMarkdown", () => {
       ayahs: [ayah(1, 1, "In the name of Allah, the Entirely Merciful.")],
       normalization: translation,
     };
-    const md = renderSurahPageMarkdown(page, "/en/app/al-fatihah/t/en/sahih");
+    const md = renderSurahPageMarkdown(page, "/al-fatihah/t/en/sahih");
     expect(md).toContain("source: en.sahih");
     expect(md).toContain("1. In the name of Allah, the Entirely Merciful.");
     expect(md).toContain("Translation: Saheeh International (English) — en.sahih");
-    expect(md).toContain("HTML: https://easyquran.fyi/en/app/al-fatihah/t/en/sahih");
+    expect(md).toContain("HTML: https://easyquran.fyi/al-fatihah/t/en/sahih");
   });
 
   it("marks a degraded translation page honestly", () => {
@@ -150,7 +150,7 @@ describe("renderSurahPageMarkdown", () => {
     };
     const md = renderSurahPageMarkdown(
       { ...FATIHAH_PAGE, ayahs: [], normalization: degraded },
-      "/en/app/al-fatihah/t/en/sahih",
+      "/al-fatihah/t/en/sahih",
     );
     expect(md).toContain("(translation temporarily unavailable)");
   });
@@ -179,19 +179,19 @@ describe("renderRangePageMarkdown", () => {
   };
 
   it("groups a multi-surah juz under surah subheadings", () => {
-    const md = renderRangePageMarkdown(JUZ_RANGE, "/en/app/juz/1");
+    const md = renderRangePageMarkdown(JUZ_RANGE, "/juz/1");
     expect(md.split("\n")[0]).toBe("# Juz 1");
     expect(md).toContain("Juz 1 · verses 1:1 – 2:6 · source: uthmani");
     expect(md.indexOf("## Al-Fatihah (1)")).toBeGreaterThan(-1);
     expect(md.indexOf("## Al-Baqarah (2)")).toBeGreaterThan(md.indexOf("## Al-Fatihah (1)"));
-    expect(md).toContain("HTML: https://easyquran.fyi/en/app/juz/1");
+    expect(md).toContain("HTML: https://easyquran.fyi/juz/1");
     expect(md).toContain("Source: Tanzil — https://tanzil.net");
   });
 
   it("titles a mushaf page by its index", () => {
     const md = renderRangePageMarkdown(
       { ...JUZ_RANGE, kind: "page", index: 42, label: "Page 42" },
-      "/en/app/page/42",
+      "/page/42",
     );
     expect(md.split("\n")[0]).toBe("# Page 42");
     expect(md).toContain("Page 42 · verses 1:1 – 2:6 · source: uthmani");
@@ -199,7 +199,7 @@ describe("renderRangePageMarkdown", () => {
 
   it("attributes a degraded translation range from its route source id, never as uthmani", () => {
     const degraded: RangePageData = { ...JUZ_RANGE, ayahs: [], normalizations: [] };
-    const md = renderRangePageMarkdown(degraded, "/en/app/t/en/sahih/juz/1", "en.sahih");
+    const md = renderRangePageMarkdown(degraded, "/t/en/sahih/juz/1", "en.sahih");
     expect(md).toContain("source: en.sahih");
     expect(md).toContain("(translation temporarily unavailable)");
     expect(md).toContain("Translation: Saheeh International (English) — en.sahih");
@@ -209,7 +209,7 @@ describe("renderRangePageMarkdown", () => {
   it("keeps the uthmani default for Arabic ranges with no explicit fallback", () => {
     const md = renderRangePageMarkdown(
       { ...JUZ_RANGE, ayahs: [], normalizations: [] },
-      "/en/app/juz/1",
+      "/juz/1",
     );
     expect(md).toContain("source: uthmani");
   });

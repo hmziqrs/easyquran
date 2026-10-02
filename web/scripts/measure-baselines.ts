@@ -5,7 +5,9 @@ import { gzipSync, brotliCompressSync } from "node:zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.resolve(__dirname, "..", "build");
-const APP = path.join(BUILD, "app");
+// Scheme A: the prerendered reader tree sits at the build root (no /app segment).
+const APP = BUILD;
+const NON_READER_HTML = new Set(["404", "index", "about", "faq", "contact", "privacy", "terms"]);
 const label = process.argv[2] ?? "phase0";
 
 interface FileMeasures {
@@ -98,7 +100,9 @@ function listReaderHtml(): string[] {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) stack.push(full);
-      else if (entry.name.endsWith(".html")) files.push(path.relative(APP, full));
+      else if (entry.name.endsWith(".html") && !NON_READER_HTML.has(entry.name.replace(/\.html$/, ""))) {
+        files.push(path.relative(APP, full));
+      }
     }
   }
   return files.sort();

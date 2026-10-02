@@ -13,6 +13,22 @@ function locs(xml: string): string[] {
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
 }
 
+// The seven published marketing locs (home en+ar, five en-only pages); everything
+// else in the sitemap is a reader URL.
+const MARKETING_LOCS = new Set([
+  "https://easyquran.fyi/",
+  "https://easyquran.fyi/ar/",
+  "https://easyquran.fyi/about",
+  "https://easyquran.fyi/faq",
+  "https://easyquran.fyi/contact",
+  "https://easyquran.fyi/privacy",
+  "https://easyquran.fyi/terms",
+]);
+
+function readerLocsOf(xml: string): string[] {
+  return locs(xml).filter((href) => !MARKETING_LOCS.has(href));
+}
+
 // The sitemap fans out over every prerendered reader route, so a cold first call is slow under
 // parallel suite load. The default 5s timeout flakes; the work itself is a few hundred ms warm.
 describe("localized sitemap", { timeout: 30_000 }, () => {
@@ -32,9 +48,9 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
     );
   });
 
-  it("submits exactly the indexable reader set and never the noindex app home", async () => {
+  it("submits exactly the indexable reader set and never a dead spelling", async () => {
     const xml = await GET().text();
-    const readerLocs = locs(xml).filter((href) => href.includes("/app"));
+    const readerLocs = readerLocsOf(xml);
 
     const expectedReaderLocs =
       QURAN_DATA_SURAH_COUNT +
@@ -44,39 +60,50 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
       RUB_COUNT +
       3; // juz/surah/pages browse indexes
     expect(readerLocs).toHaveLength(expectedReaderLocs);
-    // /en/app is noindex — the sitemap stops submitting it (D11).
-    expect(readerLocs).not.toContain("https://easyquran.fyi/en/app");
-    expect(readerLocs).toContain("https://easyquran.fyi/en/app/juz");
-    expect(readerLocs).toContain("https://easyquran.fyi/en/app/surah");
-    expect(readerLocs).toContain("https://easyquran.fyi/en/app/pages");
-    expect(readerLocs.every((href) => href.startsWith("https://easyquran.fyi/en/app"))).toBe(true);
-    expect(readerLocs.some((href) => href.includes("/ar/app"))).toBe(false);
-    expect(readerLocs.some((href) => href === "https://easyquran.fyi/app")).toBe(false);
+    // Scheme A: locs are unprefixed en forms; no legacy /app or /en spelling.
+    expect(readerLocs.every((href) => href.startsWith("https://easyquran.fyi/"))).toBe(true);
+    expect(readerLocs.some((href) => href.includes("/app"))).toBe(false);
+    expect(readerLocs.some((href) => href.includes("/en/"))).toBe(false);
+    expect(readerLocs).toContain("https://easyquran.fyi/juz");
+    expect(readerLocs).toContain("https://easyquran.fyi/surah");
+    expect(readerLocs).toContain("https://easyquran.fyi/pages");
   });
 
   it("carries no surah-local page locs and the full hizb/rub families", async () => {
     const xml = await GET().text();
-    const readerLocs = locs(xml).filter((href) => href.includes("/app"));
+    const readerLocs = readerLocsOf(xml);
 
-    // One URL per surah: zero surah-local page URLs remain.
-    expect(readerLocs.some((href) => /\/app\/[^/]+\/page\/\d+$/.test(href))).toBe(false);
+    // One URL per surah: zero surah-local page URLs remain. The segment before
+    // /page/ must not be the host, so the global /page/N family never matches.
+    expect(
+      readerLocs.some((href) => /\/(?!page\/)[^/]+\/page\/\d+$/.test(new URL(href).pathname)),
+    ).toBe(false);
     for (let hizb = 1; hizb <= HIZB_COUNT; hizb += 8) {
-      expect(readerLocs).toContain(`https://easyquran.fyi/en/app/hizb/${hizb}`);
+      expect(readerLocs).toContain(`https://easyquran.fyi/hizb/${hizb}`);
     }
-    expect(readerLocs).toContain(`https://easyquran.fyi/en/app/rub/${RUB_COUNT}`);
-    expect(readerLocs).toContain("https://easyquran.fyi/en/app/juz/30");
+    expect(readerLocs).toContain(`https://easyquran.fyi/rub/${RUB_COUNT}`);
+    expect(readerLocs).toContain("https://easyquran.fyi/juz/30");
   });
 
-  it("keeps reader <url> blocks free of xhtml:link alternates (D13)", async () => {
+  it("carries the en/ar/x-default UI-locale hreflang triple on every reader url", async () => {
     const xml = await GET().text();
-    const readerBlocks = xml.split("<url>").filter((block) => block.includes("/en/app"));
-    expect(readerBlocks.length).toBeGreaterThan(0);
-    for (const block of readerBlocks) {
-      expect(block.includes("xhtml:link")).toBe(false);
+    const readerLocs = readerLocsOf(xml);
+    expect(readerLocs.length).toBeGreaterThan(1000);
+    for (const loc of readerLocs) {
+      const block = xml
+        .split("<url>")
+        .find((candidate) => candidate.includes(`<loc>${loc}</loc>`));
+      expect(block, `missing block for ${loc}`).toBeDefined();
+      expect(block).toContain(`<xhtml:link rel="alternate" hreflang="en" href="${loc}"/>`);
+      expect(block).toContain(
+        `<xhtml:link rel="alternate" hreflang="ar" href="https://easyquran.fyi/ar${new URL(loc).pathname}"/>`,
+      );
+      expect(block).toContain(`<xhtml:link rel="alternate" hreflang="x-default" href="${loc}"/>`);
     }
     // Translated routes stay discovery-only (D12): never a <loc>, never an alternate.
-    expect(xml).not.toMatch(/<loc>https:\/\/easyquran\.fyi\/en\/app\/[^<]*\/t\//);
-    expect(xml).not.toMatch(/href="https:\/\/easyquran\.fyi\/ar\/app\/[^"]*\/t\//);
-    expect(xml).not.toMatch(/https:\/\/easyquran\.fyi\/en\/app[^<"]+\.(?:md|txt)/);
+    expect(xml).not.toMatch(/<loc>https:\/\/easyquran\.fyi\/[^<]*\/t\//);
+    expect(xml).not.toMatch(/hreflang="ar" href="https:\/\/easyquran\.fyi\/ar\/[^"]*\/t\//);
+    expect(xml).not.toMatch(/https:\/\/easyquran\.fyi\/en\/[^<"]+\.(?:md|txt)/);
+    expect(xml).not.toMatch(/https:\/\/easyquran\.fyi\/app[^<"]*/);
   });
 });

@@ -54,14 +54,14 @@ describe("app-locale hand-off", () => {
   });
 
   it("wires the layout publisher and the bookmarks page consumer together", () => {
-    const layout = source("../../../routes/(application)/app/+layout.svelte");
+    const layout = source("../../../routes/(application)/+layout.svelte");
     expect(layout).toContain("setAppLocale(copy.locale)");
 
-    const page = source("../../../routes/(application)/app/bookmarks/+page.svelte");
+    const page = source("../../../routes/(application)/bookmarks/+page.svelte");
     expect(page).toContain("getBookmarksCopy(appLocale())");
 
     // Settings is English-by-design: it must not start consuming the hand-off.
-    const settings = source("../../../routes/(application)/app/settings/+page.svelte");
+    const settings = source("../../../routes/(application)/settings/+page.svelte");
     expect(settings).not.toContain("appLocale");
   });
 });

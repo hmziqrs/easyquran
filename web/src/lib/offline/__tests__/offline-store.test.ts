@@ -270,7 +270,7 @@ describe("OfflineStore.enable", () => {
     vi.stubGlobal("caches", caches);
     const packBody = JSON.stringify({
       version: 1,
-      entries: { "/app/1/__data.json": 0 },
+      entries: { "/page/1/__data.json": 0 },
       bodies: ["payload"],
     });
     const manifestBody = JSON.stringify({

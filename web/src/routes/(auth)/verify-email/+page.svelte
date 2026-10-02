@@ -32,7 +32,7 @@
         serverErrors.adopt(flow.fieldErrors);
         return;
       }
-      await goto("/app");
+      await goto("/surah");
     },
   }));
 
@@ -49,7 +49,7 @@
     subheading="Your email is already verified. There's nothing more to do here."
     submitLabel="Go to the reader"
     onsubmit={async () => {
-      await goto("/app");
+      await goto("/surah");
     }}
   />
 {:else if flow.verified}
@@ -58,7 +58,7 @@
     subheading="Thanks for confirming your email. Your account is ready."
     submitLabel="Continue to the reader"
     onsubmit={async () => {
-      await goto("/app");
+      await goto("/surah");
     }}
   />
 {:else}

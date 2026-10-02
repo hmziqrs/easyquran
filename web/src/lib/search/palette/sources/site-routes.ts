@@ -23,7 +23,7 @@ export interface SiteRoute {
  */
 const STATIC_ROUTES: readonly SiteRoute[] = [
   {
-    href: "/app",
+    href: "/surah",
     label: "Read the Quran",
     detail: "Reader",
     keywords: ["reader", "read", "mushaf", "quran", "open app"],

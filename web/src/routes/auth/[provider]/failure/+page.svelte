@@ -25,6 +25,6 @@
   onsubmit={backToLogin}
 >
   {#snippet footer()}
-    <a href="/app" class="text-accent hover:underline">Continue without an account</a>
+    <a href="/surah" class="text-accent hover:underline">Continue without an account</a>
   {/snippet}
 </AuthForm>

@@ -7,7 +7,7 @@ import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import type { AccentId, SurfaceId, ThemeMode } from "$lib/config/site";
 import { SUPPORTED_UI_LOCALES, UI_LOCALES, uiDirection, type UiLocale } from "$lib/i18n/locales";
 import { marketingHref } from "$lib/i18n/marketing";
-import { readerHomeHrefFor } from "$lib/i18n/reader";
+import { readerHrefFor } from "$lib/i18n/reader";
 
 export const MARKETING_LOCALES = SUPPORTED_UI_LOCALES;
 export type MarketingLocale = UiLocale;
@@ -205,8 +205,10 @@ export function marketingHomeHref(locale: MarketingLocale): "/" | "/ar/" {
   return href as "/" | "/ar/";
 }
 
-export function marketingReaderHomeHref(locale: MarketingLocale): "/en/app" | "/ar/app" {
-  return readerHomeHrefFor(locale);
+export function marketingReaderHomeHref(locale: MarketingLocale): "/surah" | "/ar/surah" {
+  // SAFETY: readerHrefFor validates "/surah" (a bounded reader index) and
+  // returns exactly the unprefixed path for en and "/ar" + path for ar.
+  return readerHrefFor(locale, "/surah") as "/surah" | "/ar/surah";
 }
 
 export function marketingLocaleLinks(current: MarketingLocale): LocaleLink[] {

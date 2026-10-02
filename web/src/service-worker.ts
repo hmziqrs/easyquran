@@ -52,7 +52,7 @@ export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
 
 const PRECACHE = Array.from(
-  new Set([...build, ...files, "/", "/en/app", `${base}/quran-meta/quran-data.json`]),
+  new Set([...build, ...files, "/", "/surah", `${base}/quran-meta/quran-data.json`]),
 );
 
 const IMMUTABLE = new Set([...build, ...files]);
@@ -399,7 +399,17 @@ async function activate(): Promise<void> {
 
 function isLegacyReaderPath(url: string): boolean {
   const pathname = new URL(url, sw.location.origin).pathname;
-  return pathname === "/app" || pathname.startsWith("/app/");
+  // Scheme A: every `/en/**`, `/app/**` and `/ar/app/**` spelling is dead (the
+  // hooks.server 308 map owns them). PAGES/DATA caches and their metadata
+  // self-clean those entries on activate; unprefixed and /ar shapes are live.
+  return (
+    pathname === "/en" ||
+    pathname.startsWith("/en/") ||
+    pathname === "/app" ||
+    pathname.startsWith("/app/") ||
+    pathname === "/ar/app" ||
+    pathname.startsWith("/ar/app/")
+  );
 }
 
 async function purgeLegacyReaderPaths(): Promise<void> {

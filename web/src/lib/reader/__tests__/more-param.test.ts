@@ -13,18 +13,18 @@ const url = (pathAndSearch: string): URL => new URL(`https://easyquran.local${pa
 
 describe("parseMoreParam", () => {
   it("returns [] when the param is absent", () => {
-    expect(parseMoreParam(url("/app/al-baqarah"))).toEqual([]);
+    expect(parseMoreParam(url("/al-baqarah"))).toEqual([]);
   });
 
   it("splits, trims, and drops empty parts", () => {
-    expect(parseMoreParam(url("/app/1?more=en.sahih,, ,ur.jalandhry"))).toEqual([
+    expect(parseMoreParam(url("/1?more=en.sahih,, ,ur.jalandhry"))).toEqual([
       "en.sahih",
       "ur.jalandhry",
     ]);
   });
 
   it("dedupes preserving first occurrence", () => {
-    expect(parseMoreParam(url("/app/1?more=en.sahih,ur.jalandhry,en.sahih"))).toEqual([
+    expect(parseMoreParam(url("/1?more=en.sahih,ur.jalandhry,en.sahih"))).toEqual([
       "en.sahih",
       "ur.jalandhry",
     ]);
@@ -33,38 +33,38 @@ describe("parseMoreParam", () => {
 
 describe("withMoreParam", () => {
   it("sets the csv when ids are non-empty", () => {
-    const out = withMoreParam(url("/app/1"), ["en.sahih", "ur.jalandhry"]);
+    const out = withMoreParam(url("/1"), ["en.sahih", "ur.jalandhry"]);
     expect(out.searchParams.get(READER_MORE_PARAM)).toBe("en.sahih,ur.jalandhry");
   });
 
   it("deletes the param when ids are empty", () => {
-    const out = withMoreParam(url("/app/1?more=en.sahih"), []);
+    const out = withMoreParam(url("/1?more=en.sahih"), []);
     expect(out.searchParams.has(READER_MORE_PARAM)).toBe(false);
   });
 
   it("round-trips through parseMoreParam", () => {
     const ids = ["en.sahih", "ur.jalandhry", "fr.hamid"];
-    expect(parseMoreParam(withMoreParam(url("/app/1?mode=verse"), ids))).toEqual(ids);
+    expect(parseMoreParam(withMoreParam(url("/1?mode=verse"), ids))).toEqual(ids);
     // preserves unrelated params
-    expect(withMoreParam(url("/app/1?mode=verse"), ids).searchParams.get("mode")).toBe("verse");
+    expect(withMoreParam(url("/1?mode=verse"), ids).searchParams.get("mode")).toBe("verse");
   });
 });
 
 describe("moreParamMatches", () => {
   it("is order-insensitive", () => {
-    const u = url("/app/1?more=en.sahih,ur.jalandhry");
+    const u = url("/1?more=en.sahih,ur.jalandhry");
     expect(moreParamMatches(u, ["ur.jalandhry", "en.sahih"])).toBe(true);
     expect(moreParamMatches(u, ["en.sahih", "ur.jalandhry"])).toBe(true);
   });
 
   it("rejects length mismatch and foreign ids", () => {
-    const u = url("/app/1?more=en.sahih,ur.jalandhry");
+    const u = url("/1?more=en.sahih,ur.jalandhry");
     expect(moreParamMatches(u, ["en.sahih"])).toBe(false);
     expect(moreParamMatches(u, ["en.sahih", "fr.hamid"])).toBe(false);
   });
 
   it("matches an empty store against a bare url", () => {
-    expect(moreParamMatches(url("/app/1"), [])).toBe(true);
+    expect(moreParamMatches(url("/1"), [])).toBe(true);
   });
 });
 
@@ -87,7 +87,7 @@ function reconcile(u: URL, ids: string[]) {
 
 describe("cold deep-link convergence (adopts ?more without flicker)", () => {
   it("adopts ?more into an empty store and leaves the bar stable", () => {
-    let u = url("/app/al-baqarah?more=en.sahih");
+    let u = url("/al-baqarah?more=en.sahih");
     let ids: string[] = [];
     for (let i = 0; i < 2; i++) {
       const r = reconcile(u, ids);
@@ -99,7 +99,7 @@ describe("cold deep-link convergence (adopts ?more without flicker)", () => {
   });
 
   it("normalizes an over-cap ?more down to STACKED_MAX_EXTRAS in the bar", () => {
-    let u = url("/app/1?more=a,b,c,d,e,f");
+    let u = url("/1?more=a,b,c,d,e,f");
     let ids: string[] = [];
     for (let i = 0; i < 4; i++) {
       const r = reconcile(u, ids);
@@ -111,7 +111,7 @@ describe("cold deep-link convergence (adopts ?more without flicker)", () => {
   });
 
   it("re-adds ?more after internal nav dropped it (store -> url sync)", () => {
-    let u = url("/app/1");
+    let u = url("/1");
     const ids = ["en.sahih"];
     for (let i = 0; i < 2; i++) {
       const r = reconcile(u, ids);

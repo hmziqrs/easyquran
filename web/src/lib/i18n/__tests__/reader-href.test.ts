@@ -13,7 +13,7 @@ describe("canonical reader hrefs accept every baked translation id", () => {
     for (const translation of TRANSLATIONS) {
       const { lang, translator } = translationSegmentsFromId(translation.id);
       expect(readerHrefFor("en", translationSurahPath("al-fatihah", lang, translator))).toBe(
-        `/en/app/al-fatihah/t/${lang}/${translator}`,
+        `/al-fatihah/t/${lang}/${translator}`,
       );
     }
   });
@@ -21,8 +21,8 @@ describe("canonical reader hrefs accept every baked translation id", () => {
   it("accepts underscore translator segments from every provenance family", () => {
     // quranenc ids carry underscores (en.hilali_khan) — the historical crash
     // was exactly this family failing TRANSLATOR_SEGMENT.
-    expect(readerHrefFor("en", "/app/al-fatihah/t/quranenc/en.hilali_khan")).toBe(
-      "/en/app/al-fatihah/t/quranenc/en.hilali_khan",
+    expect(readerHrefFor("en", "/al-fatihah/t/quranenc/en.hilali_khan")).toBe(
+      "/al-fatihah/t/quranenc/en.hilali_khan",
     );
     // qul ids carry digits in the language segment (r158).
     const qul = TRANSLATIONS.find((translation) => translation.id.startsWith("qul."));
@@ -30,31 +30,31 @@ describe("canonical reader hrefs accept every baked translation id", () => {
     if (qul) {
       const { lang, translator } = translationSegmentsFromId(qul.id);
       expect(readerHrefFor("ar", translationSurahPath("al-fatihah", lang, translator))).toBe(
-        `/ar/app/al-fatihah/t/${lang}/${translator}`,
+        `/ar/al-fatihah/t/${lang}/${translator}`,
       );
     }
     // tanzil dotted translators (en.sahih.int) keep working.
-    expect(readerHrefFor("en", "/app/al-fatihah/t/en/sahih.int")).toBe(
-      "/en/app/al-fatihah/t/en/sahih.int",
+    expect(readerHrefFor("en", "/al-fatihah/t/en/sahih.int")).toBe(
+      "/al-fatihah/t/en/sahih.int",
     );
   });
 
   it("accepts underscore translators on range routes and translated surah roots", () => {
-    expect(readerHrefFor("en", "/app/t/quranenc/en.hilali_khan/juz/30")).toBe(
-      "/en/app/t/quranenc/en.hilali_khan/juz/30",
+    expect(readerHrefFor("en", "/t/quranenc/en.hilali_khan/juz/30")).toBe(
+      "/t/quranenc/en.hilali_khan/juz/30",
     );
-    expect(readerHrefFor("en", "/app/al-baqarah/t/quranenc/en.hilali_khan")).toBe(
-      "/en/app/al-baqarah/t/quranenc/en.hilali_khan",
+    expect(readerHrefFor("en", "/al-baqarah/t/quranenc/en.hilali_khan")).toBe(
+      "/al-baqarah/t/quranenc/en.hilali_khan",
     );
-    expect(readerHrefFor("en", "/app/t/quranenc/en.hilali_khan/rub/240")).toBe(
-      "/en/app/t/quranenc/en.hilali_khan/rub/240",
+    expect(readerHrefFor("en", "/t/quranenc/en.hilali_khan/rub/240")).toBe(
+      "/t/quranenc/en.hilali_khan/rub/240",
     );
   });
 
   it("round-trips translationJuzPath through readerHrefFor for a qul id", () => {
     const { lang, translator } = translationSegmentsFromId("qul.r158.bayan-ul-quran");
     expect(readerHrefFor("ar", translationJuzPath(lang, translator, 1))).toBe(
-      `/ar/app/t/${lang}/${translator}/juz/1`,
+      `/ar/t/${lang}/${translator}/juz/1`,
     );
   });
 });
