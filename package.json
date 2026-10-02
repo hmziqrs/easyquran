@@ -1,11 +1,21 @@
 {
   "private": true,
+  "workspaces": {
+    "packages": [
+      "web"
+    ],
+    "catalog": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
+      "vite-plus": "1.0.0"
+    }
+  },
   "type": "module",
   "scripts": {
     "quran:check": "pnpm quran:typecheck && pnpm quran:test",
     "quran:test": "tsx --test scripts/quran/upload.test.ts",
     "quran:upload": "tsx scripts/quran/upload.ts",
-    "quran:typecheck": "tsc --noEmit -p scripts/quran/tsconfig.json"
+    "quran:typecheck": "tsc --noEmit -p scripts/quran/tsconfig.json",
+    "prepare": "vp config"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.709.0"
@@ -13,7 +23,12 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vite-plus": "catalog:"
+  },
+  "overrides": {
+    "nanoid": "3.3.18",
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -21,19 +36,6 @@
       "version": "11.21.0",
       "onFail": "download"
     }
-  },
-  "workspaces": {
-    "packages": [
-      "web"
-    ],
-    "catalog": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@0.2.5",
-      "vite-plus": "0.2.5"
-    }
-  },
-  "overrides": {
-    "vite": "catalog:",
-    "nanoid": "3.3.18"
   },
   "patchedDependencies": {
     "@tanstack/hotkeys@0.8.0": "patches/@tanstack__hotkeys@0.8.0.patch",

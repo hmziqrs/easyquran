@@ -54,3 +54,4 @@ rust/data/
 
 # ZCode session state (plans) — never repo material.
 .zcode/
+.vitest/
