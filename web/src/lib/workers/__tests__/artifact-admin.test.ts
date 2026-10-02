@@ -380,10 +380,8 @@ describe("worker deleteStorageArtifact refusals", () => {
     const gate = hooks.pendingRunner("en.sahih");
     expect(gate).not.toBeNull();
     const secondDelete = worker.deleteStorageArtifact("en.sahih");
-    const gateRejection = expect(gate).rejects.toThrow(/^busy$/);
-    const secondRejection = expect(secondDelete).rejects.toThrow(/^busy$/);
-    await gateRejection;
-    await secondRejection;
+    await expect(gate).rejects.toThrow(/^busy$/);
+    await expect(secondDelete).rejects.toThrow(/^busy$/);
 
     await deleting;
     expect(hooks.pendingRunner("en.sahih")).toBeNull();

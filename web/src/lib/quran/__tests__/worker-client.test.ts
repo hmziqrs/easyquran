@@ -159,9 +159,8 @@ describe("quranWorker request settlement", () => {
     const fake = await startReady();
     const p = quranWorker.readSurah(1);
     const req = fake.posted.at(-1)!;
-    const assertion = expect(p).rejects.toThrow("no such surah");
     fake.emit("message", { id: req.id, ok: false, error: "no such surah" });
-    await assertion;
+    await expect(p).rejects.toThrow("no such surah");
   });
 
   it("decodes a clipped coordinate-aware range", async () => {
@@ -241,7 +240,6 @@ describe("quranWorker request settlement", () => {
   it("rejects a legacy ayah-only search response", async () => {
     const fake = await startReady();
     const resultPromise = quranWorker.search("الم");
-    const assertion = expect(resultPromise).rejects.toThrow("malformed search response");
     const req = fake.posted.at(-1)!;
     fake.emit("message", {
       id: req.id,
@@ -254,15 +252,18 @@ describe("quranWorker request settlement", () => {
         results: [{ ayah: { key: "2:1" }, highlights: [] }],
       },
     });
-    await assertion;
+    await expect(resultPromise).rejects.toThrow("malformed search response");
   });
 
   it("rejects a request that never gets a response (timeout)", async () => {
     await startReady();
     const p = quranWorker.readSurah(1);
-    const assertion = expect(p).rejects.toThrow("timed out");
+    // Attach a no-op handler up front: the fake-timer advance flushes microtasks, so an
+    // unhandled rejection there would fail the test before the assertion re-observes it.
+    const handled = p.catch(() => {});
     await vi.advanceTimersByTimeAsync(30_000);
-    await assertion;
+    await expect(p).rejects.toThrow("timed out");
+    await handled;
   });
 
   it("a post-init fatal rejects every in-flight request", async () => {
@@ -271,11 +272,9 @@ describe("quranWorker request settlement", () => {
     const detach = quranWorker.onStatus((status, detail) => statuses.push([status, detail]));
     const p1 = quranWorker.readSurah(1);
     const p2 = quranWorker.readSurah(2);
-    const a1 = expect(p1).rejects.toThrow("sqlite-wasm exploded");
-    const a2 = expect(p2).rejects.toThrow("sqlite-wasm exploded");
     fake.emit("message", { type: "fatal", error: "sqlite-wasm exploded" });
-    await a1;
-    await a2;
+    await expect(p1).rejects.toThrow("sqlite-wasm exploded");
+    await expect(p2).rejects.toThrow("sqlite-wasm exploded");
     expect(fake.terminated).toBe(true);
     expect(quranWorker.ready).toBe(false);
     expect(statuses.at(-1)).toEqual(["error", "sqlite-wasm exploded"]);
@@ -295,9 +294,8 @@ describe("quranWorker request settlement", () => {
   it("dispose rejects in-flight requests and terminates the worker", async () => {
     const fake = await startReady();
     const p = quranWorker.readSurah(1);
-    const assertion = expect(p).rejects.toThrow("disposed");
     quranWorker.dispose();
-    await assertion;
+    await expect(p).rejects.toThrow("disposed");
     expect(fake.terminated).toBe(true);
     expect(quranWorker.ready).toBe(false);
   });
@@ -309,36 +307,32 @@ describe("quranWorker storage admin wire contract", () => {
     const p = quranWorker.deleteTranslation("en.sahih");
     const req = fake.posted.at(-1)!;
     expect(req).toMatchObject({ type: "deleteArtifact", sourceId: "en.sahih" });
-    const assertion = expect(p).rejects.toMatchObject({
+    fake.emit("message", { id: req.id, ok: false, error: "busy" });
+    await expect(p).rejects.toMatchObject({
       name: "StorageAdminError",
       failure: "busy",
     });
-    fake.emit("message", { id: req.id, ok: false, error: "busy" });
-    await assertion;
   });
 
   it("maps the arabic wire error to a StorageAdminError", async () => {
     const fake = await startReady();
     const p = quranWorker.deleteTranslation("uthmani");
     const req = fake.posted.at(-1)!;
-    const assertion = expect(p).rejects.toBeInstanceOf(StorageAdminError);
     fake.emit("message", { id: req.id, ok: false, error: "arabic" });
-    await assertion;
+    await expect(p).rejects.toBeInstanceOf(StorageAdminError);
   });
 
   it("passes an unrelated wire error through untouched", async () => {
     const fake = await startReady();
     const messageCase = quranWorker.deleteTranslation("en.sahih");
     const messageReq = fake.posted.at(-1)!;
-    const messageAssertion = expect(messageCase).rejects.toThrow("engine not ready");
     fake.emit("message", { id: messageReq.id, ok: false, error: "engine not ready" });
-    await messageAssertion;
+    await expect(messageCase).rejects.toThrow("engine not ready");
 
     const instanceCase = quranWorker.deleteTranslation("ur.jalandhry");
     const instanceReq = fake.posted.at(-1)!;
-    const instanceAssertion = expect(instanceCase).rejects.not.toBeInstanceOf(StorageAdminError);
     fake.emit("message", { id: instanceReq.id, ok: false, error: "engine not ready" });
-    await instanceAssertion;
+    await expect(instanceCase).rejects.not.toBeInstanceOf(StorageAdminError);
   });
 
   it("decodes a valid artifact list", async () => {
@@ -346,11 +340,6 @@ describe("quranWorker storage admin wire contract", () => {
     const p = quranWorker.listArtifacts();
     const req = fake.posted.at(-1)!;
     expect(req).toMatchObject({ type: "listArtifacts" });
-    const assertion = expect(p).resolves.toEqual([
-      { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: 1234 },
-      { id: "fr.hamid", store: "idb", tag: "fr.hamid", sizeBytes: 4096, lastUsed: null },
-      { id: "ur.jaw", store: "session", tag: "ur.jaw", sizeBytes: 1024, lastUsed: null },
-    ]);
     fake.emit("message", {
       id: req.id,
       ok: true,
@@ -360,14 +349,17 @@ describe("quranWorker storage admin wire contract", () => {
         { id: "ur.jaw", store: "session", tag: "ur.jaw", sizeBytes: 1024, lastUsed: null },
       ],
     });
-    await assertion;
+    await expect(p).resolves.toEqual([
+      { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: 1234 },
+      { id: "fr.hamid", store: "idb", tag: "fr.hamid", sizeBytes: 4096, lastUsed: null },
+      { id: "ur.jaw", store: "session", tag: "ur.jaw", sizeBytes: 1024, lastUsed: null },
+    ]);
   });
 
   it("rejects a malformed artifact list", async () => {
     const fake = await startReady();
     const p = quranWorker.listArtifacts();
     const req = fake.posted.at(-1)!;
-    const assertion = expect(p).rejects.toThrow("malformed artifact list");
     fake.emit("message", {
       id: req.id,
       ok: true,
@@ -375,7 +367,7 @@ describe("quranWorker storage admin wire contract", () => {
         { id: "en.sahih", store: "bogus", tag: "en.sahih", sizeBytes: 2048, lastUsed: null },
       ],
     });
-    await assertion;
+    await expect(p).rejects.toThrow("malformed artifact list");
   });
 
   it("rejects every malformed artifact field at the boundary", async () => {
@@ -400,9 +392,8 @@ describe("quranWorker storage admin wire contract", () => {
     for (const result of cases) {
       const p = quranWorker.listArtifacts();
       const req = fake.posted.at(-1)!;
-      const assertion = expect(p).rejects.toThrow("malformed artifact list");
       fake.emit("message", { id: req.id, ok: true, result });
-      await assertion;
+      await expect(p).rejects.toThrow("malformed artifact list");
     }
   });
 });
