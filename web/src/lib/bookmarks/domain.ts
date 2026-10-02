@@ -1,5 +1,11 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "$lib/auth/auth-client";
-import { SyncPausedError, type SyncDomain, type SyncMutation, type SyncRoundResult } from "$lib/sync";
+import {
+  SyncPausedError,
+  type SyncDomain,
+  type SyncMutation,
+  type SyncRoundResult,
+} from "$lib/sync";
+
 import { decodeBookmarksEnvelope, type BookmarksMutation, type BookmarksSnapshot } from "./schema";
 
 /**

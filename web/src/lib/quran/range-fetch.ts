@@ -1,6 +1,11 @@
 import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
 
-import { type JsonDocument, MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "./fetch";
+import {
+  type JsonDocument,
+  MalformedDataError,
+  RESPONSE_CAP,
+  RANGE_CHUNK_TIMEOUT_MS,
+} from "./fetch";
 import { unwrapEnvelope } from "./wire";
 
 export type RangeJsonFetcher = (

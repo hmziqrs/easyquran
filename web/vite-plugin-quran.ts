@@ -15,12 +15,11 @@ function artifactEntry(artifactPath: string, localPath: string): [string, string
   return [artifactPath, localPath];
 }
 const LOCAL_ARTIFACT_ENTRIES: [string, string][] = [
-  ...registeredSourceProfiles().map(
-    (profile) =>
-      artifactEntry(
-        profile.artifact.r2Path,
-        path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
-      ),
+  ...registeredSourceProfiles().map((profile) =>
+    artifactEntry(
+      profile.artifact.r2Path,
+      path.resolve(WEB_ROOT, "..", profile.artifact.repositoryPath),
+    ),
   ),
   ...TRANSLATIONS.map((translation) => {
     return artifactEntry(

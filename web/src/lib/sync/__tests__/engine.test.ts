@@ -1,6 +1,11 @@
 import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "$lib/sync/engine.svelte";
 import { createOutbox, memoryQueueStorage, type Outbox, type QueueStorage } from "$lib/sync/outbox";
-import { SyncPausedError, type SyncDomain, type SyncMutation, type SyncRoundResult } from "$lib/sync/types";
+import {
+  SyncPausedError,
+  type SyncDomain,
+  type SyncMutation,
+  type SyncRoundResult,
+} from "$lib/sync/types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/environment", () => ({ browser: true }));

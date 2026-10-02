@@ -1,10 +1,10 @@
-import type { CanonicalQuranRow } from "$lib/quran/sql";
 import {
   buildTranslationSearchCorpus,
   searchTranslationCorpus,
   type TranslationSearchOpts,
   type TranslationSearchUnit,
 } from "$lib/quran/search/translation-corpus";
+import type { CanonicalQuranRow } from "$lib/quran/sql";
 import { describe, expect, it } from "vite-plus/test";
 
 function row(globalIndex: number, text: string, surah = 1, ayah = globalIndex): CanonicalQuranRow {
@@ -90,7 +90,11 @@ describe("searchTranslationCorpus", () => {
   });
 
   it("stamps provenance on every hit", () => {
-    const { results } = searchTranslationCorpus(units, "mercy", optsFor(CORPUS_ROWS, "en.pickthall"));
+    const { results } = searchTranslationCorpus(
+      units,
+      "mercy",
+      optsFor(CORPUS_ROWS, "en.pickthall"),
+    );
     for (const hit of results) {
       expect(hit.kind).toBe("ayah");
       expect(hit.sourceId).toBe("en.pickthall");

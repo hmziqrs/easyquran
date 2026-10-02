@@ -1,5 +1,5 @@
-import { LOCAL_HEDGE_BUDGET_MS, ReadChainError } from "$lib/quran/fetch";
 import type { ArtifactSpec } from "$lib/data/quran-types";
+import { LOCAL_HEDGE_BUDGET_MS, ReadChainError } from "$lib/quran/fetch";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -265,10 +265,12 @@ describe("hedged translation reads", () => {
 
   it("skips the API leg when the caller has already aborted", async () => {
     const fake = await startReady();
-    apiReads.readRange.mockImplementation((_id: string, _f: number, _t: number, signal?: AbortSignal) => {
-      if (signal?.aborted) return Promise.reject(new Error("aborted"));
-      return Promise.resolve(API_RANGE);
-    });
+    apiReads.readRange.mockImplementation(
+      (_id: string, _f: number, _t: number, signal?: AbortSignal) => {
+        if (signal?.aborted) return Promise.reject(new Error("aborted"));
+        return Promise.resolve(API_RANGE);
+      },
+    );
     wireMocks.decodeTranslationRange.mockReturnValue(DECODED_RANGE);
     const controller = new AbortController();
     controller.abort();

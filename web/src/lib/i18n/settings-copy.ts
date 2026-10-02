@@ -1,12 +1,27 @@
 import { offlinePackStatus, type OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
+import type { AppearanceMode, PaletteId } from "$lib/config/site";
+import { QuranScript } from "$lib/data/quran-types";
 import type { UiDirection, UiLocale } from "$lib/i18n/locales";
 import { uiDirection } from "$lib/i18n/locales";
-import type { AppearanceMode, PaletteId } from "$lib/config/site";
-import type { SurfaceResolvedCopy } from "$lib/i18n/marketing-copy";
-import { QuranScript } from "$lib/data/quran-types";
 import { reader_new_version_ready, reader_reload_open_tabs } from "$lib/i18n/m/reader";
-import { getLocale } from "$lib/paraglide/runtime.js";
-import { theme_dark, theme_light, theme_system } from "$lib/i18n/m/theme";
+import { reader_arabic_text_size, reader_ayah_by_ayah, reader_reading } from "$lib/i18n/m/reader";
+import {
+  reader_analytics,
+  reader_mode,
+  reader_notifications,
+  reader_notifications_blocked,
+  reader_notifications_browser_unsupported,
+  reader_notifications_checking,
+  reader_notifications_error,
+  reader_notifications_off,
+  reader_notifications_off_updates,
+  reader_notifications_on,
+  reader_notifications_unavailable,
+  reader_off,
+  reader_on,
+  reader_performance,
+  reader_performance_reload,
+} from "$lib/i18n/m/reader-settings";
 import {
   settings_account_device_note,
   settings_account_intro,
@@ -130,29 +145,10 @@ import {
   settings_storage_used_of,
   settings_title,
 } from "$lib/i18n/m/settings";
-import {
-  reader_arabic_text_size,
-  reader_ayah_by_ayah,
-  reader_reading,
-} from "$lib/i18n/m/reader";
-import {
-  reader_analytics,
-  reader_mode,
-  reader_notifications,
-  reader_notifications_blocked,
-  reader_notifications_browser_unsupported,
-  reader_notifications_checking,
-  reader_notifications_error,
-  reader_notifications_off,
-  reader_notifications_off_updates,
-  reader_notifications_on,
-  reader_notifications_unavailable,
-  reader_off,
-  reader_on,
-  reader_performance,
-  reader_performance_reload,
-} from "$lib/i18n/m/reader-settings";
+import { theme_dark, theme_light, theme_system } from "$lib/i18n/m/theme";
+import type { SurfaceResolvedCopy } from "$lib/i18n/marketing-copy";
 import { getReaderSettingsCopy, type ReaderSettingsCopy } from "$lib/i18n/reader-settings-copy";
+import { getLocale } from "$lib/paraglide/runtime.js";
 
 export type { ReaderSettingsCopy };
 

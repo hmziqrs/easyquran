@@ -1,6 +1,4 @@
 import { browser } from "$app/environment";
-
-import { loadArabicFont } from "$lib/fonts/arabic-fonts";
 import {
   DEFAULT_ARABIC_FONT,
   DEFAULT_TRANSLATION_FAMILY,
@@ -9,6 +7,8 @@ import {
   type ArabicFontId,
   type TranslationFamily,
 } from "$lib/config/reader-fonts";
+import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+
 import { READER_DEFAULTS, type ReaderMode } from "./reader-core.svelte";
 
 export function applyReaderPresentation(

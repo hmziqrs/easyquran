@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 const SRC_ROOT = join(process.cwd(), "src");
@@ -77,10 +78,9 @@ describe("search route chunk isolation", () => {
       "NavSuggestions",
       "ResultSection",
     ]) {
-      expect(
-        page![1],
-        `+page.svelte must keep importing ${name} statically`,
-      ).toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}\\.svelte"`, "u"));
+      expect(page![1], `+page.svelte must keep importing ${name} statically`).toMatch(
+        new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}\\.svelte"`, "u"),
+      );
     }
   });
 

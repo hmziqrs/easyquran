@@ -100,7 +100,10 @@ function listReaderHtml(): string[] {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) stack.push(full);
-      else if (entry.name.endsWith(".html") && !NON_READER_HTML.has(entry.name.replace(/\.html$/, ""))) {
+      else if (
+        entry.name.endsWith(".html") &&
+        !NON_READER_HTML.has(entry.name.replace(/\.html$/, ""))
+      ) {
         files.push(path.relative(APP, full));
       }
     }

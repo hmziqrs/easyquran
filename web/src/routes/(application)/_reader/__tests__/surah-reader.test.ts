@@ -69,7 +69,11 @@ const {
   headerProps: { current: null as HeaderStubProps | null },
   // VerseRow props captured per mount so tests can read what each row was given.
   // SAFETY: an empty array literal of the captured-props record; tests only push stub props objects.
-  rowProps: [] as { isTranslation?: boolean; arabicPending?: boolean; stacked?: readonly { sourceId: string }[] }[],
+  rowProps: [] as {
+    isTranslation?: boolean;
+    arabicPending?: boolean;
+    stacked?: readonly { sourceId: string }[];
+  }[],
   setSourceIdSpy: vi.fn(),
 }));
 
@@ -145,9 +149,7 @@ function flushMicrotasks(n = 12): Promise<void> {
 const SURAH = { num: 1, slug: "al-fatihah", name: "Al-Fatihah", arabic: "الفاتحة" };
 
 // SurahLocalPageData with a minimal valid shape.
-function pageData(
-  opts: { localPage?: number; ayahs?: number; pageCount?: number } = {},
-) {
+function pageData(opts: { localPage?: number; ayahs?: number; pageCount?: number } = {}) {
   const localPage = opts.localPage ?? 1;
   const count = opts.ayahs ?? 0;
   return {
@@ -470,7 +472,9 @@ describe("SurahReader W7 degradation state lifecycle", () => {
 
   it("retries explicit ayah jump after cold worker becomes ready", async () => {
     stubDistinctRanges();
-    const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 600, 9000));
+    const geometry = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue(new DOMRect(0, 0, 600, 9000));
     workerStub.ready = false;
     workerStub.whenReady.mockImplementation(() => {
       workerStub.ready = true;
@@ -480,7 +484,10 @@ describe("SurahReader W7 degradation state lifecycle", () => {
       if (!workerStub.ready) return Promise.reject(new Error("worker starting"));
       return Promise.resolve(surahOneRange(from, to));
     });
-    const view = mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    const view = mount(SurahReader, {
+      target,
+      props: propsFor(pageData({ ayahs: 7, pageCount: 3 })),
+    });
     await flushMicrotasks(20);
     const jump = view.ensureAyah(3, "1:15");
     for (let frame = 0; frame < 8; frame += 1) {
@@ -490,7 +497,9 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     await jump;
     expect(workerStub.whenReady).toHaveBeenCalledOnce();
     expect(workerStub.readRange.mock.calls.filter(([from]) => from === 15)).toHaveLength(2);
-    expect(target.querySelector('[role="status"]')?.textContent ?? "").not.toMatch(/couldn't be loaded/i);
+    expect(target.querySelector('[role="status"]')?.textContent ?? "").not.toMatch(
+      /couldn't be loaded/i,
+    );
     window.dispatchEvent(new WheelEvent("wheel", { deltaY: -500 }));
     for (let frame = 0; frame < 8; frame += 1) {
       await flushMicrotasks(20);
@@ -697,9 +706,9 @@ describe("SurahReader W7-R2-1 retry-button gate", () => {
   });
 });
 
+import { readingText } from "$lib/stores/reading-text.svelte";
 // ---- reading mode: Arabic or one translation, never a dialog -----------------
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-import { readingText } from "$lib/stores/reading-text.svelte";
 
 describe("SurahReader reading mode", () => {
   function translationPageData(): ReturnType<typeof pageData> {
@@ -751,7 +760,10 @@ describe("SurahReader reading mode", () => {
     stackedTranslations.setIds(["en.arberry", "ur.jalandhry"]);
     readingText.readTranslation("en.arberry");
     readerStub.setMode("reading");
-    const view = mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 1 })) });
+    const view = mount(SurahReader, {
+      target,
+      props: propsFor(pageData({ ayahs: 7, pageCount: 1 })),
+    });
     await flushMicrotasks(30);
     expect(workerStub.readRange).toHaveBeenCalled();
     expect(workerStub.readRange.mock.calls.every((call) => call[3] === "en.arberry")).toBe(true);

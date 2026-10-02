@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vite-plus/test";
-import { cn, RAMP_TEXT_ROLES } from "$lib/utils";
+
 import { buttonVariants } from "$lib/components/ui/button/button-variants";
+import { cn, RAMP_TEXT_ROLES } from "$lib/utils";
+import { describe, expect, it } from "vite-plus/test";
 
 /**
  * Machine guard for the §35–§38 primitive contracts (docs/design-system.md), restyled onto
@@ -45,7 +46,10 @@ describe("primitives §61 — semantic tokens only", () => {
 
   for (const [name, source] of PRIMITIVE_SOURCES) {
     it(`${name} contains no hard-coded palette color`, () => {
-      expect(source.match(/#[0-9a-fA-F]{3,8}\b/), `${name} must not contain hex literals`).toBeNull();
+      expect(
+        source.match(/#[0-9a-fA-F]{3,8}\b/),
+        `${name} must not contain hex literals`,
+      ).toBeNull();
       expect(source.match(paletteClass), `${name} must not use Tailwind palette colors`).toBeNull();
     });
   }
@@ -63,7 +67,7 @@ describe("button §35 + plan 03 state matrix", () => {
     for (const role of RAMP_TEXT_ROLES) {
       const merged = cn("bg-primary text-primary-foreground", `min-h-11 px-6 text-${role}`);
       expect(merged, `role ${role} must not eat text-primary-foreground`).toContain(
-        "text-primary-foreground"
+        "text-primary-foreground",
       );
       expect(merged, `role ${role} must survive the merge itself`).toContain(`text-${role}`);
     }
@@ -106,7 +110,7 @@ describe("button §35 + plan 03 state matrix", () => {
 
   it("focus uses the --focus-ring outline, not a removed indicator", () => {
     expect(button).toContain(
-      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
     );
   });
 
@@ -118,7 +122,7 @@ describe("button §35 + plan 03 state matrix", () => {
   it("every variant defines a hover state (focus-visible is owned by the base)", () => {
     const matches = [
       ...button.matchAll(
-        /(?:^|\s)"?(?:primary|secondary|ghost|accent|quiet|ink|outline-ink)"?:\s*"([^"]+)"/g
+        /(?:^|\s)"?(?:primary|secondary|ghost|accent|quiet|ink|outline-ink)"?:\s*"([^"]+)"/g,
       ),
     ];
     expect(matches.length).toBe(7);
@@ -166,7 +170,7 @@ describe("inputs §37 + plan 03 geometry", () => {
     expect(input).toContain("border-border bg-surface");
     expect(input).toContain("rounded-pill");
     expect(input).toContain(
-      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
     );
     expect(input).not.toContain("ring-3");
   });

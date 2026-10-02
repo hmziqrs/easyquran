@@ -14,7 +14,9 @@ import {
 /** JSON scalar a wire fixture may carry; decoders must reject every non-string/number shape. */
 type Wire = string | number | boolean | null;
 
-function folderWire(overrides: Partial<Record<"id" | "name" | "createdAt" | "updatedAt", Wire>> = {}) {
+function folderWire(
+  overrides: Partial<Record<"id" | "name" | "createdAt" | "updatedAt", Wire>> = {},
+) {
   return {
     id: "f1",
     name: "Ramadan",
@@ -25,7 +27,9 @@ function folderWire(overrides: Partial<Record<"id" | "name" | "createdAt" | "upd
 }
 
 function bookmarkWire(
-  overrides: Partial<Record<"id" | "folderId" | "surah" | "ayah" | "createdAt" | "updatedAt", Wire>> = {},
+  overrides: Partial<
+    Record<"id" | "folderId" | "surah" | "ayah" | "createdAt" | "updatedAt", Wire>
+  > = {},
 ) {
   return {
     id: "b1",
@@ -113,15 +117,12 @@ describe("newBookmarkEntityId fallback (insecure origins, no randomUUID)", () =>
   });
 
   it("emits UUID-v4-shaped ids from getRandomValues when randomUUID is missing", () => {
-    vi.stubGlobal(
-      "crypto",
-      {
-        getRandomValues(arr: Uint8Array): Uint8Array {
-          for (let i = 0; i < arr.length; i += 1) arr[i] = Math.floor(Math.random() * 256);
-          return arr;
-        },
+    vi.stubGlobal("crypto", {
+      getRandomValues(arr: Uint8Array): Uint8Array {
+        for (let i = 0; i < arr.length; i += 1) arr[i] = Math.floor(Math.random() * 256);
+        return arr;
       },
-    );
+    });
     const first = newBookmarkEntityId();
     const second = newBookmarkEntityId();
     expect(first).toMatch(UUID_V4);
@@ -167,7 +168,8 @@ describe("decodeBookmarksEnvelope", () => {
     expect(decodeBookmarksEnvelope("nope")).toBeNull();
     expect(decodeBookmarksEnvelope({ folders: [] })).toBeNull();
     expect(decodeBookmarksEnvelope({ bookmarks: [] })).toBeNull();
-    expect(decodeBookmarksEnvelope({ applied: "3", skipped: 0, folders: [], bookmarks: [] })?.applied)
-      .toBe(0);
+    expect(
+      decodeBookmarksEnvelope({ applied: "3", skipped: 0, folders: [], bookmarks: [] })?.applied,
+    ).toBe(0);
   });
 });

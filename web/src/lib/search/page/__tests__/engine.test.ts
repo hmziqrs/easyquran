@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { CatalogEntry } from "$lib/data/quran-types";
 import type { SearchResponse, TranslationSearchResponse } from "$lib/quran/search/types";
 import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 interface EngineSeedState {
   artifacts: { id: string }[];
@@ -103,7 +103,12 @@ function fakeQuranData() {
   };
 }
 
-function arabicResponse(query: string, total: number, offset: number, limit: number): SearchResponse {
+function arabicResponse(
+  query: string,
+  total: number,
+  offset: number,
+  limit: number,
+): SearchResponse {
   const results: SearchResponse["results"] = [];
   const end = Math.min(offset + limit, total);
   for (let i = offset; i < end; i++) {

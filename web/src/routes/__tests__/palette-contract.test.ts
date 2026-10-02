@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 import { parseOklch } from "../../lib/theme/derive.ts";
@@ -126,9 +127,10 @@ describe("layout.css palette contract", () => {
         expect(expected, `sacred ${mode} ${token} has no value`).not.toBeNull();
         for (const palette of PALETTES) {
           if (palette === "sacred") continue;
-          expect(tokenValue(paletteBlock(palette, mode), token), `${palette} ${mode} ${token}`).toBe(
-            expected,
-          );
+          expect(
+            tokenValue(paletteBlock(palette, mode), token),
+            `${palette} ${mode} ${token}`,
+          ).toBe(expected);
         }
       }
     }
@@ -142,9 +144,10 @@ describe("layout.css palette contract", () => {
         expect(expected, `sacred ${mode} ${token} has no value`).not.toBeNull();
         for (const palette of PALETTES) {
           if (palette === "sacred") continue;
-          expect(tokenValue(paletteBlock(palette, mode), token), `${palette} ${mode} ${token}`).toBe(
-            expected,
-          );
+          expect(
+            tokenValue(paletteBlock(palette, mode), token),
+            `${palette} ${mode} ${token}`,
+          ).toBe(expected);
         }
       }
     }

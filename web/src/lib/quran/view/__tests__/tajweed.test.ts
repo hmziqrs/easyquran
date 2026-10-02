@@ -1,12 +1,11 @@
-import { describe, expect, it } from "vite-plus/test";
-
+import { QuranScript } from "$lib/data/quran-types";
 import {
   isTajweedScript,
   parseTajweedSegments,
   stripTajweedMarkup,
   tajweedRuleColor,
 } from "$lib/quran/view/tajweed";
-import { QuranScript } from "$lib/data/quran-types";
+import { describe, expect, it } from "vite-plus/test";
 
 // Real bytes from db/quran/arabic/quran-tajweed.sqlite (1:1, 2:255 excerpt).
 const FATIHAH_1 = "بِسْمِ [h:1[ٱ]للَّهِ [h:2[ٱ][l[ل]رَّحْمَ[n[ـٰ]نِ [h:3[ٱ][l[ل]رَّح[p[ِي]مِ";
@@ -62,15 +61,30 @@ describe("stripTajweedMarkup", () => {
   });
 
   it("round-trips real ayat al-kursi bytes", () => {
-    expect(stripTajweedMarkup(AYAT_AL_KURSI_EXCERPT)).toBe(
-      "ٱللَّهُ لَآ إِلَـٰهَ إِلَّا هُوَ ٱلْحَىُّ",
-    );
+    expect(stripTajweedMarkup(AYAT_AL_KURSI_EXCERPT)).toBe("ٱللَّهُ لَآ إِلَـٰهَ إِلَّا هُوَ ٱلْحَىُّ");
   });
 });
 
 describe("tajweedRuleColor + isTajweedScript", () => {
   it("maps every known rule letter to a color", () => {
-    const letters = ["h", "s", "l", "n", "p", "m", "q", "o", "c", "f", "w", "i", "a", "u", "d", "g"] as const;
+    const letters = [
+      "h",
+      "s",
+      "l",
+      "n",
+      "p",
+      "m",
+      "q",
+      "o",
+      "c",
+      "f",
+      "w",
+      "i",
+      "a",
+      "u",
+      "d",
+      "g",
+    ] as const;
     for (const letter of letters) expect(tajweedRuleColor(letter)).toMatch(/^#[0-9a-f]{6}$/u);
   });
 

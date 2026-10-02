@@ -46,7 +46,12 @@ function okBody() {
     applied: 2,
     skipped: 1,
     folders: [
-      { id: "f1", name: "Tafsir", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z" },
+      {
+        id: "f1",
+        name: "Tafsir",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z",
+      },
     ],
     bookmarks: [
       {
@@ -70,7 +75,9 @@ describe("createBookmarksDomain.sync", () => {
     const fake = fakeAuth();
     const domain = createBookmarksDomain(fake.auth, { authenticated: false });
 
-    const batch = [mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1)];
+    const batch = [
+      mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1),
+    ];
     await expect(domain.sync(batch)).rejects.toBeInstanceOf(SyncPausedError);
     await expect(domain.sync(batch)).rejects.toThrow("bookmarks sync paused");
     expect(fake.calls).toHaveLength(0);
@@ -82,7 +89,17 @@ describe("createBookmarksDomain.sync", () => {
     const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     const batch = [
-      mutation({ kind: "bookmark.upsert", id: "b1", folderId: null, surah: 1, ayah: 1, updatedAt: "2026-01-01T00:00:00Z" }, 1),
+      mutation(
+        {
+          kind: "bookmark.upsert",
+          id: "b1",
+          folderId: null,
+          surah: 1,
+          ayah: 1,
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
+        1,
+      ),
       mutation({ kind: "folder.delete", id: "f9", updatedAt: "2026-01-01T00:00:01Z" }, 2),
     ];
     const result = await domain.sync(batch);
@@ -93,17 +110,36 @@ describe("createBookmarksDomain.sync", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toEqual({
       mutations: [
-        { kind: "bookmark.upsert", id: "b1", folderId: null, surah: 1, ayah: 1, updatedAt: "2026-01-01T00:00:00Z" },
+        {
+          kind: "bookmark.upsert",
+          id: "b1",
+          folderId: null,
+          surah: 1,
+          ayah: 1,
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
         { kind: "folder.delete", id: "f9", updatedAt: "2026-01-01T00:00:01Z" },
       ],
     });
     expect(result.applied).toBe(2);
     expect(result.skipped).toBe(1);
     expect(result.state.folders).toEqual([
-      { id: "f1", name: "Tafsir", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z" },
+      {
+        id: "f1",
+        name: "Tafsir",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z",
+      },
     ]);
     expect(result.state.bookmarks).toEqual([
-      { id: "b1", folderId: null, surah: 1, ayah: 1, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z" },
+      {
+        id: "b1",
+        folderId: null,
+        surah: 1,
+        ayah: 1,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z",
+      },
     ]);
   });
 
@@ -121,10 +157,18 @@ describe("createBookmarksDomain.sync", () => {
     const domain = createBookmarksDomain(fake.auth, { authenticated: true });
 
     for (const status of [400, 401, 409, 500, 503]) {
-      fake.respondWith({ ok: false, status, data: null, error: { type: "AUTH_ERROR" }, rotated: false });
-      await expect(domain.sync([mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1)])).rejects.toThrow(
-        `bookmark sync failed (${status})`,
-      );
+      fake.respondWith({
+        ok: false,
+        status,
+        data: null,
+        error: { type: "AUTH_ERROR" },
+        rotated: false,
+      });
+      await expect(
+        domain.sync([
+          mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1),
+        ]),
+      ).rejects.toThrow(`bookmark sync failed (${status})`);
     }
   });
 

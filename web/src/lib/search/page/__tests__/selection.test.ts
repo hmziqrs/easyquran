@@ -4,7 +4,12 @@ vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
 import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
 
-import { batchPlan, partitionSearchable, resolveDefaultSelection, SEARCH_BATCH_SIZE } from "../selection";
+import {
+  batchPlan,
+  partitionSearchable,
+  resolveDefaultSelection,
+  SEARCH_BATCH_SIZE,
+} from "../selection";
 
 const LTR = "en.sahih";
 const LTR_2 = "fr.hamidullah";
@@ -37,9 +42,7 @@ describe("resolveDefaultSelection", () => {
   });
 
   it("falls back to the persisted selection, re-validated against the catalogue", () => {
-    expect(
-      resolveDefaultSelection(input({ persisted: [RTL, LTR_2, UNKNOWN] })),
-    ).toEqual([LTR_2]);
+    expect(resolveDefaultSelection(input({ persisted: [RTL, LTR_2, UNKNOWN] }))).toEqual([LTR_2]);
   });
 
   it("skips an all-RTL persisted selection instead of returning it", () => {

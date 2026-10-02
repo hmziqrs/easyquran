@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$app/environment", () => ({ dev: false }));
 vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
-import { GET as translationSurahMd } from "../[surah]/t/[lang]/[translator].md/+server";
 import { GET as surahMd, entries as surahEntries } from "../[surah=surahSlug].md/+server";
+import { GET as translationSurahMd } from "../[surah]/t/[lang]/[translator].md/+server";
 import { GET as juzMd } from "../juz/[n].md/+server";
 import { GET as pageMd } from "../page/[n].md/+server";
 
@@ -137,8 +137,8 @@ describe("SSR translation md route", () => {
 
   it("404s an unknown surah slug without loading a translation", async () => {
     loadTranslationSurahRoute.mockClear();
-    await expect(
-      async () => translationSurahMd(mdEvent({ surah: "not-a-surah", lang: "en", translator: "sahih" })),
+    await expect(async () =>
+      translationSurahMd(mdEvent({ surah: "not-a-surah", lang: "en", translator: "sahih" })),
     ).rejects.toMatchObject({ status: 404 });
     expect(loadTranslationSurahRoute).not.toHaveBeenCalled();
   });

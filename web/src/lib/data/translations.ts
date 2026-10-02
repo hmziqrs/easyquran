@@ -67,11 +67,7 @@ function decodeTranslation(raw: unknown, index: number): BakedTranslationMetadat
   return Object.freeze({
     id: nonEmptyString(raw[TranslationField.Id], "id", rowNumber),
     language: nonEmptyString(raw[TranslationField.Language], "language", rowNumber),
-    languageCode: nonEmptyString(
-      raw[TranslationField.LanguageCode],
-      "languageCode",
-      rowNumber,
-    ),
+    languageCode: nonEmptyString(raw[TranslationField.LanguageCode], "languageCode", rowNumber),
     direction: direction(raw[TranslationField.Direction], rowNumber),
     name: nonEmptyString(raw[TranslationField.Name], "name", rowNumber),
     translator: translatorValue,
@@ -106,8 +102,4 @@ export const TRANSLATION_BY_ID: ReadonlyMap<string, BakedTranslationMetadata> = 
 );
 
 export const TRANSLATION_BY_ARTIFACT_PATH: ReadonlyMap<string, BakedTranslationMetadata> =
-  uniqueIndex(
-    TRANSLATIONS,
-    (entry) => entry.artifactPath,
-    "artifact path",
-  );
+  uniqueIndex(TRANSLATIONS, (entry) => entry.artifactPath, "artifact path");

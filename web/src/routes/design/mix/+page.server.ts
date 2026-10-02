@@ -16,6 +16,11 @@ export const load: PageServerLoad = ({ url }) => {
   const ids =
     raw === null
       ? DEFAULT_TRANSLATIONS
-      : uniq(raw.split(",").map((id) => id.trim()).filter(Boolean)).slice(0, MAX_TRANSLATIONS);
+      : uniq(
+          raw
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean),
+        ).slice(0, MAX_TRANSLATIONS);
   return { ...loadMixData(ids), maxTranslations: MAX_TRANSLATIONS };
 };

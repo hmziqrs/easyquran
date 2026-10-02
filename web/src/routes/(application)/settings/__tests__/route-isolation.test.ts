@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 const SRC_ROOT = join(process.cwd(), "src");
@@ -54,10 +55,9 @@ describe("settings route chunk isolation", () => {
     const page = [...sources].find(([path]) => path.endsWith(`${SETTINGS_DIR}+page.svelte`));
     expect(page, "settings +page.svelte should exist").toBeDefined();
     for (const name of SECTION_COMPONENTS) {
-      expect(
-        page![1],
-        `+page.svelte must keep importing ${name} statically`,
-      ).toMatch(new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}"`, "u"));
+      expect(page![1], `+page.svelte must keep importing ${name} statically`).toMatch(
+        new RegExp(`import\\s+\\w+\\s+from\\s+"\\./_components/${name}"`, "u"),
+      );
     }
   });
 
@@ -178,9 +178,7 @@ describe("settings storage delete-flow guards", () => {
 
 describe("settings URL param suppression", () => {
   it("the app layout keeps reader ?mode/?more replaceState off /settings and /search", () => {
-    const layout = [...sources].find(([path]) =>
-      path.endsWith("(application)/+layout.svelte"),
-    );
+    const layout = [...sources].find(([path]) => path.endsWith("(application)/+layout.svelte"));
     expect(layout, "(application)/+layout.svelte should exist").toBeDefined();
     const src = layout![1];
     expect(src).toContain('endsWith("/settings")');

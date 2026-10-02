@@ -2,11 +2,7 @@ import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
 
 import { idbDelete, idbPut, openIdb } from "./idb";
 import { idbError } from "./idb-error";
-import {
-  deleteCachedArtifact,
-  listCachedArtifacts,
-  type CachedArtifactInfo,
-} from "./opfs-cache";
+import { deleteCachedArtifact, listCachedArtifacts, type CachedArtifactInfo } from "./opfs-cache";
 
 const META_DB = "easyquran-meta";
 const META_STORE = "lastUsed";

@@ -702,9 +702,7 @@ export class TwoFactorFlow {
     this.genericError = null;
     this.fieldErrors = {};
     const code = currentCode?.trim();
-    const init: UnsafeRequestInit = code
-      ? { method: "POST", body: { code } }
-      : { method: "POST" };
+    const init: UnsafeRequestInit = code ? { method: "POST", body: { code } } : { method: "POST" };
     try {
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/2fa/setup", init);
       if (!res.ok) {

@@ -13,7 +13,11 @@ export const HEAD_OPTIONS = [
   { id: "a", name: "Current", note: "Hue band behind the title, number tile on the left." },
   { id: "b", name: "Plain", note: "No band. Title and controls sit on the reading ground." },
   { id: "c", name: "Centered", note: "Arabic name leads, centred like a book's opening page." },
-  { id: "d", name: "Edge", note: "No band; the surah's hue survives as a thin top edge and the number." },
+  {
+    id: "d",
+    name: "Edge",
+    note: "No band; the surah's hue survives as a thin top edge and the number.",
+  },
   { id: "e", name: "Strip", note: "One compact row. The text starts sooner." },
 ] as const satisfies readonly MixOption[];
 
@@ -42,7 +46,11 @@ export const LISTS_OPTIONS = [
 export const STACK_OPTIONS = [
   { id: "a", name: "Current", note: "Rules between translations, inline translator label." },
   { id: "b", name: "Quiet", note: "No rules; label above each text; Urdu set in Naskh." },
-  { id: "c", name: "Lanes", note: "Each translation owns a hue edge; its name runs inline in that hue (Tweak → Lanes to move it)." },
+  {
+    id: "c",
+    name: "Lanes",
+    note: "Each translation owns a hue edge; its name runs inline in that hue (Tweak → Lanes to move it).",
+  },
   { id: "d", name: "Columns", note: "Side by side on wide screens, names in a sticky header." },
   { id: "e", name: "Lead", note: "First translation leads; the rest fold behind “Compare”." },
 ] as const satisfies readonly MixOption[];
@@ -50,7 +58,11 @@ export const STACK_OPTIONS = [
 export const FRAME_OPTIONS = [
   { id: "a", name: "Card", note: "Today's frame: a bordered card a shade lighter than the page." },
   { id: "b", name: "Borderless", note: "A card told apart by its ground alone, no outline." },
-  { id: "c", name: "Flat", note: "No card. The reading column sits on the page; only ayah rules remain." },
+  {
+    id: "c",
+    name: "Flat",
+    note: "No card. The reading column sits on the page; only ayah rules remain.",
+  },
 ] as const satisfies readonly MixOption[];
 
 export const BG_OPTIONS = [
@@ -98,8 +110,16 @@ export const BG_COLORS = {
   e: { page: "oklch(0 0 0)", reader: "oklch(0.14 0 0)", line: "oklch(0.24 0 0)" },
   f: { page: "oklch(0.15 0 0)", reader: "oklch(0.06 0 0)", line: "oklch(0.22 0 0)" },
   g: { page: "oklch(0.15 0.008 70)", reader: "oklch(0.15 0.008 70)", line: "oklch(0.26 0.012 70)" },
-  h: { page: "oklch(0.15 0.014 262)", reader: "oklch(0.15 0.014 262)", line: "oklch(0.27 0.022 262)" },
-  i: { page: "oklch(0.15 0.01 162)", reader: "oklch(0.15 0.01 162)", line: "oklch(0.26 0.016 162)" },
+  h: {
+    page: "oklch(0.15 0.014 262)",
+    reader: "oklch(0.15 0.014 262)",
+    line: "oklch(0.27 0.022 262)",
+  },
+  i: {
+    page: "oklch(0.15 0.01 162)",
+    reader: "oklch(0.15 0.01 162)",
+    line: "oklch(0.26 0.016 162)",
+  },
 } as const satisfies { readonly [K in BgId]: BgColors };
 
 export type MixAxisKey = keyof MixState;

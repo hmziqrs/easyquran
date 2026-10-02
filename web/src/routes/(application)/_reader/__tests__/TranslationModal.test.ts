@@ -101,13 +101,13 @@ vi.mock("$lib/quran/catalogue", () => {
     TRANSLATION_CATALOGUE: h.catalogue,
     TRANSLATION_CATALOGUE_BY_ID: byId,
     translationSourceOf,
-    flagFor: (code: string) =>
-      flags.get(code) ?? { flag: "\u{1F310}", country: "" },
+    flagFor: (code: string) => flags.get(code) ?? { flag: "\u{1F310}", country: "" },
     nativeNameFor: (code: string) => autonyms.get(code) ?? null,
   };
 });
 
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+
 import TranslationButton from "../TranslationButton.svelte";
 import TranslationModal from "../TranslationModal.svelte";
 import TranslationModalHost from "./TranslationModalHost.svelte";
@@ -150,7 +150,8 @@ afterEach(() => {
   instance = null;
   target.remove();
   // SAFETY: jsdom omits scrollIntoView entirely, so the saved original can be undefined at runtime while the DOM types require it.
-  Element.prototype.scrollIntoView = originalScrollIntoView as typeof Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView =
+    originalScrollIntoView as typeof Element.prototype.scrollIntoView;
   // bits-ui portals can leave dialog shells behind across mounts; clear them so
   // document-level queries only ever see the current modal under test.
   for (const el of document.querySelectorAll("[data-dialog-content], [data-dialog-overlay]")) {
@@ -187,8 +188,8 @@ const searchInput = (): HTMLInputElement => {
   return document.querySelector('input[type="search"]') as HTMLInputElement;
 };
 const paneRowIds = (): string[] =>
-  [...pane().querySelectorAll("li[data-translation-row]")].map((li) =>
-    li.getAttribute("data-translation-row") ?? "",
+  [...pane().querySelectorAll("li[data-translation-row]")].map(
+    (li) => li.getAttribute("data-translation-row") ?? "",
   );
 
 // bits-ui portals dialog content in after mount (presence transition) — let a
@@ -298,9 +299,7 @@ describe("TranslationModal — master-detail layout", () => {
 
     const english = railOption("English");
     english?.focus();
-    english?.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-    );
+    english?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     await settle();
     const scrolledOnKey = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
     expect(scrolledOnKey).toContain("French");
@@ -331,9 +330,7 @@ describe("TranslationModal — master-detail layout", () => {
     const english = railOption("English");
     english?.focus();
     expect(document.activeElement).toBe(english);
-    english?.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-    );
+    english?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     await settle();
     const french = railOption("French");
     expect(document.activeElement).toBe(french);
@@ -439,7 +436,9 @@ describe("TranslationModal — master-detail layout", () => {
 
   it("toggles a stacked extra and syncs the ?more= url param", async () => {
     await open();
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Urdu")?.click();
+    railOptions()
+      .find((b) => b.getAttribute("data-language-option") === "Urdu")
+      ?.click();
     await settle();
     const box = checkboxes().find((c) => c.getAttribute("aria-label") === "Maulana Jalal ad-Din");
     expect(box).toBeTruthy();
@@ -468,7 +467,9 @@ describe("TranslationModal — master-detail layout", () => {
   it("disables unselected rows when the cap of five extras is reached", async () => {
     stackedTranslations.setIds(FILLER_IDS);
     await open({ primaryId: "en.sahih" });
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Indonesian")?.click();
+    railOptions()
+      .find((b) => b.getAttribute("data-language-option") === "Indonesian")
+      ?.click();
     await settle();
     const extra = checkboxes().find((c) => c.getAttribute("aria-label") === "Kemenag");
     expect(extra?.disabled).toBe(true);
@@ -565,7 +566,7 @@ describe("TranslationModal — selected chips", () => {
     const primaryChip = chips[0];
     expect(primaryChip?.textContent).toContain("Primary");
     // the badge is a tooltip trigger explaining the primary's role
-    expect(primaryChip?.querySelector('button[aria-label]')?.getAttribute("aria-label")).toContain(
+    expect(primaryChip?.querySelector("button[aria-label]")?.getAttribute("aria-label")).toContain(
       "reading mode",
     );
     // extras carry hover-revealed reorder arrows + remove
@@ -583,16 +584,16 @@ describe("TranslationModal — selected chips", () => {
     stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
     await open({ primaryId: "en.sahih" });
     const chip = document.querySelector('[data-chip="ms.basmeih"]');
-    chip?.querySelector('button[aria-label="Move up"]')?.dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
+    chip
+      ?.querySelector('button[aria-label="Move up"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect([...stackedTranslations.ids]).toEqual(["ms.basmeih", "ur.jalandhry"]);
     document
       .querySelector('[data-chip="ur.jalandhry"] button[aria-label="Remove"]')
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect([...stackedTranslations.ids]).toEqual(["ms.basmeih"]);
-    const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find((b) =>
-      b.textContent?.trim() === "Clear all",
+    const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find(
+      (b) => b.textContent?.trim() === "Clear all",
     );
     clearAll?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect([...stackedTranslations.ids]).toEqual([]);
@@ -604,7 +605,9 @@ describe("TranslationModal — selected chips", () => {
   it("updates the chips row live when toggling a pane row", async () => {
     await open();
     expect(document.querySelector("[data-selected-chips]")).toBeNull();
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Urdu")?.click();
+    railOptions()
+      .find((b) => b.getAttribute("data-language-option") === "Urdu")
+      ?.click();
     await settle();
     const box = checkboxes().find((c) => c.getAttribute("aria-label") === "Maulana Jalal ad-Din");
     box?.click();
@@ -718,8 +721,8 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
   it("gives Clear all, Done, Close, and the search clear ≥44px effective targets", async () => {
     stackedTranslations.setIds(["ur.jalandhry"]);
     await open({ primaryId: "en.sahih" });
-    const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find((b) =>
-      b.textContent?.trim() === "Clear all",
+    const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find(
+      (b) => b.textContent?.trim() === "Clear all",
     );
     // transparent button: real vertical padding + before-pseudo extension
     expect(clearAll?.className).toContain("py-2.5");
@@ -786,7 +789,9 @@ describe("TranslationModal — mobile collapse", () => {
   it("hides the rail once a language is tapped and returns via Back", async () => {
     await open();
     expect(rail().className).not.toContain("hidden");
-    railOptions().find((b) => b.getAttribute("data-language-option") === "Urdu")?.click();
+    railOptions()
+      .find((b) => b.getAttribute("data-language-option") === "Urdu")
+      ?.click();
     await settle();
     expect(rail().className).toContain("hidden");
     expect(pane().className).toContain("flex");

@@ -65,19 +65,22 @@ export const SYSTEM_VARIANTS: VariantDef[] = [
   {
     id: "a",
     name: "Mushaf",
-    pitch: "Warm black, one gold accent, translations in a book serif, one centred column with no boxes.",
+    pitch:
+      "Warm black, one gold accent, translations in a book serif, one centred column with no boxes.",
     tradeoff: "The narrowest column; wide screens keep a lot of empty margin.",
   },
   {
     id: "b",
     name: "Ledger",
-    pitch: "Today's reader made strict: cobalt for what you press, one 10px radius, translations in soft panels.",
+    pitch:
+      "Today's reader made strict: cobalt for what you press, one 10px radius, translations in soft panels.",
     tradeoff: "The most boxes of the three; it reads as an app more than a book.",
   },
   {
     id: "c",
     name: "Garden",
-    pitch: "Airy: one soft green, big type, ayahs separated by space, numbers hanging in the margin.",
+    pitch:
+      "Airy: one soft green, big type, ayahs separated by space, numbers hanging in the margin.",
     tradeoff: "The most scrolling; fewer ayahs fit on a screen.",
   },
 ];

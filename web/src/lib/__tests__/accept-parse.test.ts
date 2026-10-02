@@ -106,9 +106,7 @@ describe("accept-parse mdSiblingPathFor", () => {
     expect(mdSiblingPathFor(`${prefix}/al-fatihah/t/en/sahih`)).toBe(
       `${prefix}/al-fatihah/t/en/sahih.md`,
     );
-    expect(mdSiblingPathFor(`${prefix}/t/en/sahih/juz/1`)).toBe(
-      `${prefix}/t/en/sahih/juz/1.md`,
-    );
+    expect(mdSiblingPathFor(`${prefix}/t/en/sahih/juz/1`)).toBe(`${prefix}/t/en/sahih/juz/1.md`);
   });
 
   it.each([

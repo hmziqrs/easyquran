@@ -105,7 +105,11 @@ const VARIANT_QURAN_DATABASE: QuranDatabaseAdapter = defineQuranDatabaseAdapter(
     openers: defineQuranQuery(
       `SELECT sura AS surah, (SELECT text FROM quran_text WHERE sura = 1 AND aya = 1) AS text
        FROM quran_text WHERE aya = 1 AND sura > 1 AND sura <> 9 ORDER BY sura`,
-      (row) => ({ surah: decodeIntegerField(row, "surah"), text: decodeTextField(row) }) satisfies FirstAyahRow,
+      (row) =>
+        ({
+          surah: decodeIntegerField(row, "surah"),
+          text: decodeTextField(row),
+        }) satisfies FirstAyahRow,
     ),
   }),
 });

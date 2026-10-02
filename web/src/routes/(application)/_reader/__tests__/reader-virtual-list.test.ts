@@ -26,11 +26,11 @@ beforeEach(() => {
   vi.stubGlobal("innerHeight", 800);
   vi.stubGlobal("innerWidth", 1200);
   vi.stubGlobal("scrollY", 0);
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
-    function (this: HTMLElement) {
-      return Number.parseFloat(this.style.height) || 0;
-    },
-  );
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return Number.parseFloat(this.style.height) || 0;
+  });
 });
 
 afterEach(async () => {

@@ -470,9 +470,7 @@ describe("quran.ranges source", () => {
 
 describe("surah and juz nicknames", () => {
   it("maps tabarak to both Al-Mulk and the Juz 29 ranges entry", () => {
-    const surah = run(quranSurahsSource, "tabarak").find(
-      (entry) => entry.label === "67. Al-Mulk",
-    );
+    const surah = run(quranSurahsSource, "tabarak").find((entry) => entry.label === "67. Al-Mulk");
     expect(surah?.score).toBe(0.75);
     const [juz] = run(quranRangesSource, "tabarak");
     expect(juz?.label).toBe("Juz 29 (Tabarak)");

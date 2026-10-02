@@ -56,7 +56,10 @@ export const SYSTEMS: readonly ReaderSystem[] = [
       ["lane-gap", "16px"],
     ]),
     rules: [
-      { label: "Accent", value: "Gold, only for marks: ayah ornaments, translator names, the active control" },
+      {
+        label: "Accent",
+        value: "Gold, only for marks: ayah ornaments, translator names, the active control",
+      },
       { label: "Type", value: "UI Nunito 500 · translations Amiri serif 19/1.7 · Urdu Naskh" },
       { label: "Scale", value: "12.5 · 14 · 19 · 24 · 44" },
       { label: "Shape", value: "6px radius, no cards, hairline rules" },

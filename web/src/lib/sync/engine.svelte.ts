@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import { trailingDebounce, type Debounced } from "$lib/storage";
+
 import { createOutbox, type Outbox } from "./outbox";
 import {
   SyncPausedError,
@@ -305,7 +306,10 @@ export class SyncEngine {
       }
       try {
         if (!pullOnly) {
-          await this.#outbox.remove(domain.name, batch.map((m) => m.id));
+          await this.#outbox.remove(
+            domain.name,
+            batch.map((m) => m.id),
+          );
           this.#pending = Math.max(0, this.#pending - batch.length);
         }
         this.#lastSyncAt = Date.now();

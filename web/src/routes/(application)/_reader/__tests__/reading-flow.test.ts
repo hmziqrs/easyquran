@@ -4,11 +4,9 @@ import { READING_QUICK_MAX, readingFlowId, readingQuickPicks } from "../reading-
 
 describe("readingQuickPicks", () => {
   it("offers recent picks, then stacked translations, deduped", () => {
-    expect(readingQuickPicks(null, ["ur.jalandhry", "en.pickthall"], ["en.sahih", "ur.jalandhry"])).toEqual([
-      "ur.jalandhry",
-      "en.pickthall",
-      "en.sahih",
-    ]);
+    expect(
+      readingQuickPicks(null, ["ur.jalandhry", "en.pickthall"], ["en.sahih", "ur.jalandhry"]),
+    ).toEqual(["ur.jalandhry", "en.pickthall", "en.sahih"]);
   });
 
   it("puts a translation page's own translation first", () => {
@@ -33,7 +31,9 @@ describe("readingFlowId", () => {
 
   it("flows the saved translation — stacked or not", () => {
     expect(readingFlowId("translation", "ur.jalandhry", null, null, stacked)).toBe("ur.jalandhry");
-    expect(readingFlowId("translation", "fr.hamidullah", null, null, stacked)).toBe("fr.hamidullah");
+    expect(readingFlowId("translation", "fr.hamidullah", null, null, stacked)).toBe(
+      "fr.hamidullah",
+    );
   });
 
   it("falls back to the first stacked translation when nothing was picked yet", () => {

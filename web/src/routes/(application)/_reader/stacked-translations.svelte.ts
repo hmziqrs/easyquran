@@ -1,4 +1,3 @@
-import { untrack } from "svelte";
 import type {
   StackedSourceState,
   StackedTranslation,
@@ -8,9 +7,10 @@ import type {
 } from "$lib/data/quran-types";
 import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
 import type { WorkerStatus } from "$lib/quran/protocol";
-import { quranWorker } from "$lib/quran/worker-client";
 import type { AyahCoordinateValidator } from "$lib/quran/wire";
+import { quranWorker } from "$lib/quran/worker-client";
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import { untrack } from "svelte";
 
 export interface StackedControllerState {
   readonly byVerse: StackedTranslationsByVerse;

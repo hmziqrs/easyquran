@@ -1,5 +1,5 @@
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
 import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
+import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -90,9 +90,7 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
     const readerLocs = readerLocsOf(xml);
     expect(readerLocs.length).toBeGreaterThan(1000);
     for (const loc of readerLocs) {
-      const block = xml
-        .split("<url>")
-        .find((candidate) => candidate.includes(`<loc>${loc}</loc>`));
+      const block = xml.split("<url>").find((candidate) => candidate.includes(`<loc>${loc}</loc>`));
       expect(block, `missing block for ${loc}`).toBeDefined();
       expect(block).toContain(`<xhtml:link rel="alternate" hreflang="en" href="${loc}"/>`);
       expect(block).toContain(

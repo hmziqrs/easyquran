@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 const USAGE_BAR_PATH = join(
@@ -28,10 +29,9 @@ describe("UsageBar stays accessible and token-themed", () => {
     const fills = layerFillEntries();
     expect(fills.length, "LAYER_FILL must cover every layer").toBeGreaterThanOrEqual(6);
     for (const [layer, fill] of fills) {
-      expect(
-        fill,
-        `LAYER_FILL.${layer} must be a var(--…) token`,
-      ).toMatch(/^var\(--[a-z0-9-]+\)$/u);
+      expect(fill, `LAYER_FILL.${layer} must be a var(--…) token`).toMatch(
+        /^var\(--[a-z0-9-]+\)$/u,
+      );
     }
     expect(source).toMatch(/url\(#usage-other-stripes\)/u);
     expect(source).not.toMatch(/fill="#/u);

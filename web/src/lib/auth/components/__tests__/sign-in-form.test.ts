@@ -5,6 +5,7 @@ vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.
 import type { AuthClient } from "$lib/auth/auth-client";
 import { createLoginFlow } from "$lib/auth/flows.svelte";
 import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
+
 import SignInForm from "../SignInForm.svelte";
 
 const copy = getAuthValidationCopy("en");

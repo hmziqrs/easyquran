@@ -1,5 +1,5 @@
-import { uniq } from "es-toolkit";
 import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
+import { uniq } from "es-toolkit";
 
 export interface SearchUrlState {
   q: string;

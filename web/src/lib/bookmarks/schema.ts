@@ -39,7 +39,12 @@ export type BookmarksMutation =
       readonly updatedAt: string;
     }
   | { readonly kind: "bookmark.delete"; readonly id: string; readonly updatedAt: string }
-  | { readonly kind: "folder.upsert"; readonly id: string; readonly name: string; readonly updatedAt: string }
+  | {
+      readonly kind: "folder.upsert";
+      readonly id: string;
+      readonly name: string;
+      readonly updatedAt: string;
+    }
   | { readonly kind: "folder.delete"; readonly id: string; readonly updatedAt: string };
 
 /** Full server state, as returned by POST /bookmark/v1/sync. */
@@ -122,7 +127,12 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
   if (id === undefined || id.length === 0) return null;
   const surah = asNumber(obj.surah, SURAH_MIN, SURAH_MAX);
   const ayah = asNumber(obj.ayah, 1, AYAH_MAX);
-  if (surah === undefined || ayah === undefined || !Number.isSafeInteger(surah) || !Number.isSafeInteger(ayah)) {
+  if (
+    surah === undefined ||
+    ayah === undefined ||
+    !Number.isSafeInteger(surah) ||
+    !Number.isSafeInteger(ayah)
+  ) {
     return null;
   }
   const createdAt = decodeTimestamp(obj.createdAt);

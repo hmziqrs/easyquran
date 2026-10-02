@@ -1,6 +1,5 @@
 import type { FooterLinkLabels } from "$lib/i18n/footer-links";
 import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
-import type { TranslationProvenance } from "$lib/quran/catalogue";
 import {
   footer_about,
   footer_blurb,
@@ -224,6 +223,7 @@ import {
 } from "$lib/i18n/m/reader";
 import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
 import { getLocale } from "$lib/paraglide/runtime.js";
+import type { TranslationProvenance } from "$lib/quran/catalogue";
 
 type BrowseMode = "surah" | "ayah" | "juz" | "page";
 type RangeKind = "juz" | "page" | "hizb" | "rub";
@@ -734,7 +734,8 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
             return noArgs(reader_source_tanzil);
         }
       },
-      dirLabel: (direction) => (direction === "ltr" ? noArgs(reader_dir_ltr) : noArgs(reader_dir_rtl)),
+      dirLabel: (direction) =>
+        direction === "ltr" ? noArgs(reader_dir_ltr) : noArgs(reader_dir_rtl),
     },
   };
 }

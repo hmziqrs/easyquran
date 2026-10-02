@@ -59,18 +59,13 @@ function collapseVowels(joined: string): string {
 }
 
 export function translitKey(raw: string): string {
-  const lowered = raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .normalize("NFC");
+  const lowered = raw.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC");
   const tokens = lowered
     .replace(SEPARATOR_RUN, " ")
     .trim()
     .split(" ")
     .filter((token) => token.length > 0);
-  const kept =
-    tokens.length > 1 && ARTICLE_TOKEN_SET.has(tokens[0]!) ? tokens.slice(1) : tokens;
+  const kept = tokens.length > 1 && ARTICLE_TOKEN_SET.has(tokens[0]!) ? tokens.slice(1) : tokens;
   let key = kept.join("");
   key = stripBareArticle(key);
   key = collapseVowels(key);

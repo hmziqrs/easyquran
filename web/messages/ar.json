@@ -316,14 +316,8 @@
   "settings_storage_pack_heading": "الحزمة دون اتصال",
   "settings_storage_pack_routes": [
     {
-      "declarations": [
-        "input entries",
-        "input size",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "input size", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "لا توجد مسارات · {size}",
         "entriesPlural=one": "مسار واحد · {size}",
@@ -342,13 +336,8 @@
   "settings_storage_pack_retry": "إعادة المحاولة",
   "settings_storage_pack_status_active": [
     {
-      "declarations": [
-        "input entries",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "مفعّلة — لا توجد مسارات مخزّنة.",
         "entriesPlural=one": "مفعّلة — مسار واحد مخزّن.",

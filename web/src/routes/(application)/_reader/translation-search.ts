@@ -30,7 +30,9 @@ function normalize(value: string): string {
 }
 
 function words(value: string): string[] {
-  return normalize(value).split(/[\s'’-]+/).filter(Boolean);
+  return normalize(value)
+    .split(/[\s'’-]+/)
+    .filter(Boolean);
 }
 
 /** Classic two-row Levenshtein distance; inputs here are short single words. */
@@ -59,10 +61,7 @@ function tokenHitsField(token: string, fieldWords: string[]): boolean {
 }
 
 /** Does a single normalized query token hit any of the row's fields? */
-export function translationTokenMatches(
-  token: string,
-  fields: TranslationSearchFields,
-): boolean {
+export function translationTokenMatches(token: string, fields: TranslationSearchFields): boolean {
   const t = normalize(token);
   if (!t) return true;
   const fieldWords = [
@@ -77,10 +76,7 @@ export function translationTokenMatches(
 }
 
 /** True when every query token hits some field of the row (empty query: true). */
-export function translationMatchesQuery(
-  query: string,
-  fields: TranslationSearchFields,
-): boolean {
+export function translationMatchesQuery(query: string, fields: TranslationSearchFields): boolean {
   const tokens = normalize(query).split(/\s+/).filter(Boolean);
   return tokens.every((token) => translationTokenMatches(token, fields));
 }

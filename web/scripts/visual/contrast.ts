@@ -207,7 +207,8 @@ function cli(): void {
   }
   if (report.failures.length > 0 || report.blockCount !== 8) {
     for (const f of report.failures) console.error(f.message);
-    if (report.blockCount !== 8) console.error(`expected 8 palette blocks, found ${report.blockCount}`);
+    if (report.blockCount !== 8)
+      console.error(`expected 8 palette blocks, found ${report.blockCount}`);
     process.exitCode = 1;
   }
 }

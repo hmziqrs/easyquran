@@ -37,10 +37,7 @@ interface ErrorContextNode {
   readonly message?: unknown;
   readonly errors?: unknown;
 }
-type FieldErrorContextValue =
-  | string
-  | (string | ErrorContextNode)[]
-  | ErrorContextNode;
+type FieldErrorContextValue = string | (string | ErrorContextNode)[] | ErrorContextNode;
 type FieldErrorContext = Readonly<Record<string, FieldErrorContextValue>>;
 type FieldErrors = Record<string, string>;
 
@@ -63,20 +60,16 @@ function pickFieldMessage(value: FieldErrorContextValue | undefined): string | n
 }
 /* eslint-enable anti-slop/no-runtime-typeof */
 
-export function extractFieldErrors(
-  error: AuthErrorEnvelope | null,
-  fields: ReadonlyArray<string>,
-) {
+export function extractFieldErrors(error: AuthErrorEnvelope | null, fields: ReadonlyArray<string>) {
   // SAFETY: an empty object literal satisfies Record<string, string> (zero key/value pairs), so this cast only names the accumulator's concrete type
   const out = {} as FieldErrors;
   if (!error?.context) return out;
   // SAFETY: error.context is the parsed JSON body of an auth-error response (truthy after the guard); treated as an opaque field map whose values are narrowed by pickFieldMessage before any string is read
   const root = error.context as FieldErrorContext;
   // SAFETY: the typeof guard proved the chosen branch is a non-null object; the auth API contract defines it as a field-keyed error map, and each value is re-validated by pickFieldMessage
-  const bucket = (
+  const bucket =
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON boundary: typeof proves root.errors is an object map before we treat it as the field bucket
-    root.errors && typeof root.errors === "object" ? root.errors : root
-  ) as FieldErrorContext;
+    (root.errors && typeof root.errors === "object" ? root.errors : root) as FieldErrorContext;
   for (const field of fields) {
     const msg = pickFieldMessage(bucket[field]);
     if (msg) out[field] = msg;
@@ -108,8 +101,7 @@ export function isTransportFailure(status: number): boolean {
 export function isRateLimited(error: AuthErrorEnvelope | null, status: number): boolean {
   if (status === 429) return true;
   return (
-    (error?.type != null && RATE_LIMIT_TYPES.has(error.type)) ||
-    error?.retry_after !== undefined
+    (error?.type != null && RATE_LIMIT_TYPES.has(error.type)) || error?.retry_after !== undefined
   );
 }
 

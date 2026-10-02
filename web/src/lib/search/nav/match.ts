@@ -86,7 +86,10 @@ export interface SplitPlace {
 }
 
 export function splitPlaceToken(raw: string): SplitPlace {
-  const words = raw.trim().split(/\s+/).filter((word) => word.length > 0);
+  const words = raw
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
   let place: "meccan" | "medinan" | null = null;
   const kept: string[] = [];
   for (const word of words) {

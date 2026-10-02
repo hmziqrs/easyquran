@@ -166,9 +166,7 @@ afterEach(() => {
 
 describe("W5 same-origin /api/ requests never enter Cache Storage", () => {
   it("does not call respondWith for a same-origin /api/ GET (bypass)", async () => {
-    const ev = dispatchFetch(
-      makeRequest("/api/quran/sources/en.sahih/range?from=1&to=7"),
-    );
+    const ev = dispatchFetch(makeRequest("/api/quran/sources/en.sahih/range?from=1&to=7"));
     expect(ev.respondWithCalled).toBe(false);
   });
 

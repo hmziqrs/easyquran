@@ -23,6 +23,7 @@ import {
   parseAccept,
   preferredType,
 } from "$lib/server/markdown-negotiation";
+
 import { handle } from "../../../hooks.server";
 
 const ORIGIN = "https://easyquran.fyi";
@@ -37,7 +38,11 @@ const MD_BODY = "# EasyQuran\n\nmock markdown sibling\n";
 function requestEvent(
   pathname: string,
   routeId: string | null,
-  opts: { headers?: HeadersInit; fetch?: RequestEvent["fetch"]; params?: Record<string, string> } = {},
+  opts: {
+    headers?: HeadersInit;
+    fetch?: RequestEvent["fetch"];
+    params?: Record<string, string>;
+  } = {},
 ): RequestEvent {
   const url = new URL(pathname, ORIGIN);
   const request = new Request(url);
@@ -201,9 +206,7 @@ describe("server markdown negotiation integration", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect((response.headers.get("vary") ?? "").toLowerCase()).toContain("accept");
-    expect(response.headers.get("link")).toBe(
-      '</index.md>; rel="alternate"; type="text/markdown"',
-    );
+    expect(response.headers.get("link")).toBe('</index.md>; rel="alternate"; type="text/markdown"');
     expect(calls).toEqual([]);
   });
 

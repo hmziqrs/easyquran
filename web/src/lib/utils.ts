@@ -51,10 +51,7 @@ export function formatBytes(n: number | null): string {
 
 export type ExternalLinkAttrs = { target?: "_blank"; rel?: string };
 
-export function externalLinkAttrs(
-  href?: string,
-  opts: { me?: boolean } = {},
-): ExternalLinkAttrs {
+export function externalLinkAttrs(href?: string, opts: { me?: boolean } = {}): ExternalLinkAttrs {
   if (href !== undefined && /^https?:\/\//i.test(href)) {
     return {
       target: "_blank",

@@ -1,7 +1,7 @@
 import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
-import { translationIdFromSegments } from "$lib/data/quran";
 import { hizbOfPage, juzOfPage } from "$lib/data/mushaf-divisions";
+import { translationIdFromSegments } from "$lib/data/quran";
 import type {
   Ayah,
   CatalogEntry,

@@ -100,7 +100,10 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     offline: noArgs(reader_bookmarks_offline),
     // Singular/plural: en has no dual; ar folds 0/2+ into the plural form
     // ("{count} من التغييرات…") and uses the explicit singular for exactly 1.
-    pending: (count) => (count === 1 ? noArgs(reader_bookmarks_pending_one) : reader_bookmarks_pending({ count }, options)),
+    pending: (count) =>
+      count === 1
+        ? noArgs(reader_bookmarks_pending_one)
+        : reader_bookmarks_pending({ count }, options),
     synced: noArgs(reader_bookmarks_synced),
     syncError: noArgs(reader_bookmarks_sync_error),
     localOnly: noArgs(reader_bookmarks_local_only),

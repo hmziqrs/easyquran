@@ -13,11 +13,7 @@ export function parseMoreParam(url: URL): string[] {
   );
 }
 
-export function withMoreParam(
-  url: URL | string,
-  ids: readonly string[],
-  base?: URL | string,
-): URL {
+export function withMoreParam(url: URL | string, ids: readonly string[], base?: URL | string): URL {
   const next = url instanceof URL ? url : new URL(url, base);
   if (ids.length > 0) {
     next.searchParams.set(READER_MORE_PARAM, uniq(ids).join(","));

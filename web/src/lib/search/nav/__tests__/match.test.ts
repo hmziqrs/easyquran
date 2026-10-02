@@ -105,7 +105,9 @@ describe("matchNav — sajdas", () => {
     expect(matches.every((match) => match.score === 0.5)).toBe(true);
     const indexes = matches
       .map((match) => match.target)
-      .filter((target): target is Extract<typeof target, { kind: "sajda" }> => target.kind === "sajda")
+      .filter(
+        (target): target is Extract<typeof target, { kind: "sajda" }> => target.kind === "sajda",
+      )
       .map((target) => target.index);
     expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
   });
@@ -114,7 +116,9 @@ describe("matchNav — sajdas", () => {
     const kinds = new Set(
       matchNav(QURAN, "sajda", 20)
         .map((match) => match.target)
-        .filter((target): target is Extract<typeof target, { kind: "sajda" }> => target.kind === "sajda")
+        .filter(
+          (target): target is Extract<typeof target, { kind: "sajda" }> => target.kind === "sajda",
+        )
         .map((target) => target.sajdaKind),
     );
     expect(kinds.has("recommended")).toBe(true);

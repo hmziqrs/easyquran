@@ -14,7 +14,13 @@
           var r = JSON.parse(localStorage.getItem("easyquran.reader") || "{}");
           var d = document.documentElement;
           // §4 palette + §25 appearance: legacy surface/theme prefs migrate once, pre-paint.
-          var S2P = { ink: "ink", paper: "sepia", slate: "sapphire", mocha: "sacred", contrast: "ink" };
+          var S2P = {
+            ink: "ink",
+            paper: "sepia",
+            slate: "sapphire",
+            mocha: "sacred",
+            contrast: "ink",
+          };
           var palette = p.palette || S2P[p.surface] || "sacred";
           var mode = p.mode || p.theme;
           if (mode !== "light" && mode !== "dark") {

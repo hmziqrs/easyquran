@@ -115,9 +115,11 @@ describe("prefix-less reader semantic route parser", () => {
         translator: "sahih",
       }),
     ).toBeNull();
-    expect(
-      parseReaderRoute("/(application)/hizb/[n]", { n: "60" }),
-    ).toMatchObject({ type: "arabic", cacheKind: "hizb", index: 60 });
+    expect(parseReaderRoute("/(application)/hizb/[n]", { n: "60" })).toMatchObject({
+      type: "arabic",
+      cacheKind: "hizb",
+      index: 60,
+    });
     expect(
       parseReaderRoute("/(application)/t/[lang]/[translator]/rub/[n]", {
         lang: "en",

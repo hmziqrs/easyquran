@@ -1,5 +1,5 @@
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { textVariantEntries } from "$lib/seo/render";
+import { QURAN_DATA } from "$lib/server/quran-data";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$env/dynamic/public", () => ({ env: {} }));

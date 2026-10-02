@@ -135,7 +135,7 @@ export async function main(argv: string[]): Promise<number> {
             for (const state of wanted) {
               pressed = await clearState(page, pressed);
               await target.handle.scrollIntoView();
-              pressed = await applyState(page, target, state) || pressed;
+              pressed = (await applyState(page, target, state)) || pressed;
               // Clip to the element plus breathing room; the box is re-read after
               // scrollIntoView, which can move it since the last measurement.
               const box = await target.handle.boundingBox();

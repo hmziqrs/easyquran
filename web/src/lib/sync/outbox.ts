@@ -1,7 +1,8 @@
 import { browser } from "$app/environment";
 import { asNumber, asObject, asString } from "$lib/storage";
-import { idbError } from "$lib/workers/idb-error";
 import { runTxVoid } from "$lib/workers/idb";
+import { idbError } from "$lib/workers/idb-error";
+
 import type { SyncMutation } from "./types";
 
 const SYNC_DB = "easyquran-sync";

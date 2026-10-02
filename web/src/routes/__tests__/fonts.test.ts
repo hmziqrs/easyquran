@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 /**
@@ -82,7 +83,7 @@ describe("fonts gate (plan 02)", () => {
   it("Inter and Newsreader are gone from layout.css and package.json", () => {
     for (const hay of [css, pkg]) {
       expect(hay).not.toMatch(/fontsource-variable\/inter/u);
-      expect(hay).not.toMatch(/newsreader/ui);
+      expect(hay).not.toMatch(/newsreader/iu);
       expect(hay).not.toMatch(/Inter Variable/u);
     }
     expect(pkg).toMatch(/@fontsource-variable\/nunito/u);

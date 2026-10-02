@@ -79,9 +79,7 @@ export function requestStorageStats(
   return new Promise((resolve) => {
     let settled = false;
     const channel = new MessageChannel();
-    const finish = (
-      value: { pages: StorageLayerStats; data: StorageLayerStats } | null,
-    ): void => {
+    const finish = (value: { pages: StorageLayerStats; data: StorageLayerStats } | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);

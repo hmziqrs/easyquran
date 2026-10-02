@@ -1,5 +1,11 @@
 import { createSyncEngine, type RegisteredSyncDomain } from "$lib/sync/engine.svelte";
-import { createOutbox, idbQueueStorage, memoryQueueStorage, type Outbox, type SyncMutationDraft } from "$lib/sync/outbox";
+import {
+  createOutbox,
+  idbQueueStorage,
+  memoryQueueStorage,
+  type Outbox,
+  type SyncMutationDraft,
+} from "$lib/sync/outbox";
 import type { SyncMutation } from "$lib/sync/types";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -18,10 +24,16 @@ describe("Outbox (memory backend)", () => {
     // take is a peek: without removal the same head comes back (failed rounds re-take it).
     expect((await outbox.take("bookmarks", 2)).map((m) => m.payload)).toEqual(["p0", "p1"]);
 
-    await outbox.remove("bookmarks", queued.slice(0, 2).map((m) => m.id));
+    await outbox.remove(
+      "bookmarks",
+      queued.slice(0, 2).map((m) => m.id),
+    );
     expect((await outbox.take("bookmarks", 2)).map((m) => m.payload)).toEqual(["p2", "p3"]);
 
-    await outbox.remove("bookmarks", queued.slice(2, 4).map((m) => m.id));
+    await outbox.remove(
+      "bookmarks",
+      queued.slice(2, 4).map((m) => m.id),
+    );
     expect((await outbox.take("bookmarks", 2)).map((m) => m.payload)).toEqual(["p4"]);
 
     await outbox.remove("bookmarks", [queued[4]!.id]);
@@ -148,7 +160,10 @@ interface FakeCursor {
 }
 
 interface FakeIndex {
-  openCursor(range?: { readonly lower: string; readonly upper: string }): FakeReq<FakeCursor | null>;
+  openCursor(range?: {
+    readonly lower: string;
+    readonly upper: string;
+  }): FakeReq<FakeCursor | null>;
 }
 
 interface FakeStore {

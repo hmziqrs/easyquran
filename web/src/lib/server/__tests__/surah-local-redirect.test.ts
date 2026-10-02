@@ -1,5 +1,5 @@
-import { surahLocalRedirectTarget } from "$lib/server/reader-route";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { surahLocalRedirectTarget } from "$lib/server/reader-route";
 import { describe, expect, it } from "vite-plus/test";
 
 /**

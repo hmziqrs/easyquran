@@ -1,10 +1,6 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-import {
-  LANGUAGE_FLAGS,
-  TRANSLATION_CATALOGUE,
-  flagFor,
-} from "$lib/quran/catalogue";
 import { TRANSLATIONS } from "$lib/data/translations";
+import { LANGUAGE_FLAGS, TRANSLATION_CATALOGUE, flagFor } from "$lib/quran/catalogue";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({
   QURAN: {

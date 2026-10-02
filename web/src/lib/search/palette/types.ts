@@ -1,8 +1,8 @@
 import type { Pathname } from "$app/types";
 import type { IconName } from "$lib/components/icon/icons";
 import type { SurahRouteContext } from "$lib/data/quran";
-import type { TranslationDirection } from "$lib/data/quran-types";
 import type { QuranData } from "$lib/data/quran-data";
+import type { TranslationDirection } from "$lib/data/quran-types";
 import type { Highlight } from "$lib/quran/search/types";
 
 /**

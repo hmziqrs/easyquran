@@ -48,9 +48,10 @@ describe("marketing message catalogs", () => {
       const ar = arabic[key]!;
       expect(Array.isArray(ar), key).toBe(Array.isArray(en));
       if (Array.isArray(en) && Array.isArray(ar)) {
-        expect(ar.map((variant) => variant.declarations), key).toEqual(
-          en.map((variant) => variant.declarations),
-        );
+        expect(
+          ar.map((variant) => variant.declarations),
+          key,
+        ).toEqual(en.map((variant) => variant.declarations));
         expect(ar.flatMap((variant) => Object.keys(variant.match ?? {})).sort(), key).toEqual(
           en.flatMap((variant) => Object.keys(variant.match ?? {})).sort(),
         );
@@ -116,7 +117,9 @@ describe("marketing copy resolvers", () => {
     // /ar/bookmarks is not a published route (404 on hard load); the
     // marketing footer must emit the same bare path the app footer does.
     for (const locale of ["en", "ar"] as const) {
-      const bookmarks = marketingFooterLinks(locale).product.find((link) => link.id === "bookmarks");
+      const bookmarks = marketingFooterLinks(locale).product.find(
+        (link) => link.id === "bookmarks",
+      );
       expect(bookmarks?.href).toBe("/bookmarks");
     }
   });

@@ -110,7 +110,8 @@ export class ReadingTextStore {
         ? this.#recent
         : [nextId, ...this.#recent.filter((x) => x !== nextId)].slice(0, READING_RECENT_MAX);
     const recentSame =
-      nextRecent.length === this.#recent.length && nextRecent.every((x, i) => x === this.#recent[i]);
+      nextRecent.length === this.#recent.length &&
+      nextRecent.every((x, i) => x === this.#recent[i]);
     if (this.#text === "translation" && nextId === this.#translationId && recentSame) return;
     this.#text = "translation";
     this.#translationId = nextId;

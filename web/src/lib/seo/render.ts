@@ -18,8 +18,7 @@ turndown.addRule("stripSvg", {
 turndown.addRule("stripAriaHidden", {
   filter: (node) =>
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- turndown types filter nodes as HTMLElement but walks every DOM node at runtime (text/comment nodes have no getAttribute); this probe is the only boundary check
-    typeof node.getAttribute === "function" &&
-    node.getAttribute("aria-hidden") === "true",
+    typeof node.getAttribute === "function" && node.getAttribute("aria-hidden") === "true",
   replacement: () => "",
 });
 turndown.addRule("cleanHeading", {

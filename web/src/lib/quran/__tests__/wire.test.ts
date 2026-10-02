@@ -347,16 +347,17 @@ describe("translation range Worker wire", () => {
 
 describe("translation search Worker wire", () => {
   it("decodes a well-formed response with ascending coordinates and per-hit source echo", () => {
-    expect(
-      decodeTranslationSearchResponse(TRANSLATION_SEARCH_PAYLOAD, validateCoordinate),
-    ).toEqual(TRANSLATION_SEARCH_PAYLOAD);
+    expect(decodeTranslationSearchResponse(TRANSLATION_SEARCH_PAYLOAD, validateCoordinate)).toEqual(
+      TRANSLATION_SEARCH_PAYLOAD,
+    );
   });
 
   it("rejects a coordinate the validator refuses", () => {
     const rejected = TRANSLATION_HIT_SECOND.ayah.globalIndex;
     expect(
-      decodeTranslationSearchResponse(TRANSLATION_SEARCH_PAYLOAD, (globalIndex) =>
-        globalIndex !== rejected,
+      decodeTranslationSearchResponse(
+        TRANSLATION_SEARCH_PAYLOAD,
+        (globalIndex) => globalIndex !== rejected,
       ),
     ).toBeNull();
   });
@@ -405,7 +406,13 @@ describe("translation search Worker wire", () => {
         {
           ...TRANSLATION_SEARCH_PAYLOAD,
           results: [
-            { ...TRANSLATION_HIT_FIRST, highlights: [{ start: 0, end: 6 }, { start: 3, end: 9 }] },
+            {
+              ...TRANSLATION_HIT_FIRST,
+              highlights: [
+                { start: 0, end: 6 },
+                { start: 3, end: 9 },
+              ],
+            },
             TRANSLATION_HIT_SECOND,
           ],
         },

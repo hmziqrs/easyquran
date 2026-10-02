@@ -1,3 +1,4 @@
+import { getAuthValidationCopy, type AuthValidationCopy } from "$lib/i18n/auth-validation-copy";
 import {
   check,
   forward,
@@ -13,7 +14,6 @@ import {
   trim,
   type InferOutput,
 } from "valibot";
-import { getAuthValidationCopy, type AuthValidationCopy } from "$lib/i18n/auth-validation-copy";
 
 // Mirrors the server regex in rust/backend/api/src/modules/auth_v1/validator.rs::validate_email.
 // Kept identical so the client never accepts an address the API will reject.
@@ -49,12 +49,7 @@ function confirmPasswordSchema(copy: AuthValidationCopy) {
 }
 
 function totpCodeSchema(copy: AuthValidationCopy) {
-  return pipe(
-    string(),
-    trim(),
-    nonEmpty(copy.codeRequired),
-    regex(SIX_DIGITS_RE, copy.codeDigits),
-  );
+  return pipe(string(), trim(), nonEmpty(copy.codeRequired), regex(SIX_DIGITS_RE, copy.codeDigits));
 }
 
 function emailCodeSchema(copy: AuthValidationCopy) {
@@ -69,12 +64,7 @@ function emailCodeSchema(copy: AuthValidationCopy) {
 // Server bound: CODE_LEN in forgot_password_v1 (6 numeric digits — an OTP-style
 // reset code, distinct from the longer email-verification code).
 function resetCodeSchema(copy: AuthValidationCopy) {
-  return pipe(
-    string(),
-    trim(),
-    nonEmpty(copy.codeRequired),
-    regex(SIX_DIGITS_RE, copy.codeDigits),
-  );
+  return pipe(string(), trim(), nonEmpty(copy.codeRequired), regex(SIX_DIGITS_RE, copy.codeDigits));
 }
 
 export function loginSchema(copy: AuthValidationCopy = getAuthValidationCopy()) {

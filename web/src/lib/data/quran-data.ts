@@ -275,9 +275,8 @@ export function createQuranData(raw: QuranDataJson): QuranData {
       const cached = rangeCache.get(kind);
       if (cached) return cached;
       const family = Object.freeze(
-        Array.from(
-          { length: data.rangeCount(kind) },
-          (_, index) => data.rangeByIndex(kind, index + 1)!,
+        Array.from({ length: data.rangeCount(kind) }, (_, index) =>
+          data.rangeByIndex(kind, index + 1)!,
         ),
       );
       rangeCache.set(kind, family);

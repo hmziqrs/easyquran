@@ -4,8 +4,8 @@ vi.mock("$lib/offline/messages", () => ({
   purgeUserCaches: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { installPurgeHook, makePurgeHook } from "$lib/auth/purge-hook";
 import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
+import { installPurgeHook, makePurgeHook } from "$lib/auth/purge-hook";
 import { purgeUserCaches } from "$lib/offline/messages";
 import { reader } from "$lib/stores/reader.svelte";
 

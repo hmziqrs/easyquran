@@ -33,11 +33,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const VISUAL_ROOT = path.resolve(__dirname, "../../.visual");
 
 const slugId = (routePath: string): string =>
-  routePath
-    .replace(/^\//, "")
-    .replaceAll("/", "-")
-    .replaceAll("[", "")
-    .replaceAll("]", "") || "root";
+  routePath.replace(/^\//, "").replaceAll("/", "-").replaceAll("[", "").replaceAll("]", "") ||
+  "root";
 
 function resolveRoutes(args: Args): RouteDef[] {
   const requested = args.list("route");

@@ -50,10 +50,7 @@ const FATIHAH_PAGE: SurahLocalPageData = {
     last: "1:7",
   },
   pageCount: 1,
-  ayahs: [
-    ayah(1, 1, "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"),
-    ayah(1, 2, "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ"),
-  ],
+  ayahs: [ayah(1, 1, "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"), ayah(1, 2, "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ")],
   normalization: UTHMANI,
 };
 
@@ -207,10 +204,7 @@ describe("renderRangePageMarkdown", () => {
   });
 
   it("keeps the uthmani default for Arabic ranges with no explicit fallback", () => {
-    const md = renderRangePageMarkdown(
-      { ...JUZ_RANGE, ayahs: [], normalizations: [] },
-      "/juz/1",
-    );
+    const md = renderRangePageMarkdown({ ...JUZ_RANGE, ayahs: [], normalizations: [] }, "/juz/1");
     expect(md).toContain("source: uthmani");
   });
 });

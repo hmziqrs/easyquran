@@ -1,5 +1,5 @@
-import { loadQuranData } from "$lib/data/quran-data-client";
 import { QURAN } from "$lib/config/site";
+import { loadQuranData } from "$lib/data/quran-data-client";
 import { quran } from "$lib/stores/quran.svelte";
 
 import { TRANSLATION_CATALOGUE } from "./catalogue";

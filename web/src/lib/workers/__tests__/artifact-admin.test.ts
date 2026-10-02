@@ -310,12 +310,10 @@ describe("worker listStorageArtifacts joins cached artifacts with lastUsed", () 
   it("lists OPFS + IDB artifacts with stamped and unstamped lastUsed", async () => {
     await seedOpfsArtifact("en.sahih", 2 * MB);
     await seedOpfsArtifact("ur.jalandhry", 3 * MB);
-    seedIdbRecord(
-      "easyquran-pointers",
-      "opfsPointers",
-      "en.sahih",
-      { sourceId: "en.sahih", activeFile: "en.sahih.sqlite" },
-    );
+    seedIdbRecord("easyquran-pointers", "opfsPointers", "en.sahih", {
+      sourceId: "en.sahih",
+      activeFile: "en.sahih.sqlite",
+    });
     seedIdbRecord("easyquran-pointers", "opfsPointers", "ur.jalandhry", {
       sourceId: "ur.jalandhry",
       activeFile: "ur.jalandhry.sqlite",

@@ -86,7 +86,9 @@ describe("ForgotPasswordFlow request (explicit account-existence contract)", () 
     const res = await flow.request();
     expect(res).toBe(false);
     expect(flow.step).toBe("request");
-    expect(flow.genericError).toBe("You're already signed in. Sign out first to reset your password.");
+    expect(flow.genericError).toBe(
+      "You're already signed in. Sign out first to reset your password.",
+    );
     expect(flow.successMessage).toBeNull();
   });
 

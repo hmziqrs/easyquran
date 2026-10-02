@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { StorageArtifactInfo } from "$lib/quran/protocol";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 interface OfflinePackMirror {
   packId: string;
@@ -24,7 +24,10 @@ const h = vi.hoisted(() => ({
   },
   statsMock: {
     requestStorageStats: vi.fn<
-      () => Promise<{ pages: { entries: number; bytes: number }; data: { entries: number; bytes: number } } | null>
+      () => Promise<{
+        pages: { entries: number; bytes: number };
+        data: { entries: number; bytes: number };
+      } | null>
     >(),
   },
   offlineMock: {
@@ -264,7 +267,10 @@ describe("storage report fan-in", () => {
       .mockRejectedValueOnce(new h.AdminErrorMock("busy"))
       .mockResolvedValue(undefined);
     const report = createStorageReport();
-    report.artifacts = [artifact({ id: "en.sahih", sizeBytes: 2 * MB }), artifact({ id: "fr.hamid" })];
+    report.artifacts = [
+      artifact({ id: "en.sahih", sizeBytes: 2 * MB }),
+      artifact({ id: "fr.hamid" }),
+    ];
     const result = await report.clearAllTranslations([]);
     expect(result).toEqual({ freedBytes: MB, failures: 1 });
   });

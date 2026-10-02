@@ -139,7 +139,10 @@ describe("landing surface (plan 05)", () => {
       expect(copy.closingBismillah.length, locale).toBeGreaterThan(0);
       expect(copy.steps, locale).toHaveLength(3);
       expect(copy.roadmap, locale).toHaveLength(4);
-      expect(strings.every((s) => s.trim().length > 0), locale).toBe(true);
+      expect(
+        strings.every((s) => s.trim().length > 0),
+        locale,
+      ).toBe(true);
     }
   });
 

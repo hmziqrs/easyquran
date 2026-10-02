@@ -35,9 +35,7 @@ describe("baked translation catalogue", () => {
 
   it("provides stable indexed metadata and labels", () => {
     const byId = TRANSLATION_BY_ID.get("sq.nahi");
-    const byPath = TRANSLATION_BY_ARTIFACT_PATH.get(
-      "tanzil/translations/sqlite/sq.nahi.sqlite",
-    );
+    const byPath = TRANSLATION_BY_ARTIFACT_PATH.get("tanzil/translations/sqlite/sq.nahi.sqlite");
 
     expect(byId).toBe(byPath);
     expect(peekTranslationName("sq.nahi")).toBe("Efendi Nahi");

@@ -4,7 +4,6 @@ import {
   surahTranslitKeys,
   type TranslitKey,
 } from "$lib/quran/search/translit";
-
 import { splitPlaceToken } from "$lib/search/nav/match";
 
 import { SURAH_ALIASES } from "../aliases";

@@ -2,12 +2,8 @@ import { browser } from "$app/environment";
 import { isArabicSourceId } from "$lib/data/quran-types";
 import { requestStorageStats, type StorageLayerStats } from "$lib/offline/messages";
 import { offline } from "$lib/offline/offline-store.svelte";
-import {
-  quranWorker,
-  StorageAdminError,
-  type StorageAdminFailure,
-} from "$lib/quran/worker-client";
 import type { StorageArtifactInfo } from "$lib/quran/protocol";
+import { quranWorker, StorageAdminError, type StorageAdminFailure } from "$lib/quran/worker-client";
 import { sumBy } from "es-toolkit";
 
 export const TRANSLATION_CAP_BYTES = 256 * 1024 * 1024;
@@ -32,10 +28,7 @@ export interface StackLayersInput {
 export const TRANSLATION_CAP_WARNING_RATIO = 0.8;
 export const QUOTA_WARNING_RATIO = 0.9;
 
-function sumArtifacts(
-  artifacts: readonly StorageArtifactInfo[],
-  arabic: boolean,
-): number {
+function sumArtifacts(artifacts: readonly StorageArtifactInfo[], arabic: boolean): number {
   return sumBy(artifacts, (a) => (isArabicSourceId(a.id) === arabic ? a.sizeBytes : 0));
 }
 

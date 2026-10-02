@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  translationMatchesQuery,
-  translationTokenMatches,
-} from "../translation-search";
+
+import { translationMatchesQuery, translationTokenMatches } from "../translation-search";
 
 const fields = {
   name: "Bayan-ul-Quran",

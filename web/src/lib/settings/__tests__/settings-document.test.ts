@@ -11,8 +11,8 @@ vi.mock("$lib/stores/reader-presentation", () => ({
   applyReaderPresentation: presentation.apply,
 }));
 
-import { DEFAULTS } from "$lib/config/site";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import { DEFAULTS } from "$lib/config/site";
 import type { QuranSourceId } from "$lib/data/quran-types";
 import { createConsent } from "$lib/stores/consent.svelte";
 import type { Prefs } from "$lib/stores/prefs.svelte";
@@ -26,6 +26,7 @@ import {
   type ReaderMode,
 } from "$lib/stores/reader-core.svelte";
 import { createReader } from "$lib/stores/reader.svelte";
+
 import {
   applySettingsDoc,
   decodeSettingsDoc,
@@ -133,7 +134,8 @@ describe("decodeSettingsDoc", () => {
       reading: {
         fontSize: 36,
         mode: "reading",
-        arabicFont: "scheherazade-new", arabicScript: "indopak",
+        arabicFont: "scheherazade-new",
+        arabicScript: "indopak",
         translationSize: 15,
       },
       privacy: { analytics: false, performance: true, advertising: true },
@@ -145,12 +147,24 @@ describe("decodeSettingsDoc", () => {
     expect(decodeSettingsDoc({})).toEqual({
       v: SETTINGS_DOC_VERSION,
       appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-      reading: { fontSize: 33, mode: "verse", arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 },
+      reading: {
+        fontSize: 33,
+        mode: "verse",
+        arabicFont: "amiri",
+        arabicScript: "uthmani",
+        translationSize: 17,
+      },
       privacy: { analytics: true, performance: true, advertising: false },
     });
     const out = decodeSettingsDoc({
       v: 1,
-      appearance: { theme: "blue", surface: "wood", accent: 4, custom: { bg: "red" }, instantResume: 1 },
+      appearance: {
+        theme: "blue",
+        surface: "wood",
+        accent: 4,
+        custom: { bg: "red" },
+        instantResume: 1,
+      },
       reading: { fontSize: 999, mode: "scrolled", arabicFont: "times", translationSize: 2 },
       privacy: { analytics: "yes", performance: null, advertising: "no" },
     });
@@ -212,7 +226,13 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         custom: { accent: "#112233" },
         instantResume: true,
       },
-      reading: { fontSize: 36, mode: "reading", arabicFont: "scheherazade-new", arabicScript: "uthmani", translationSize: 15 },
+      reading: {
+        fontSize: 36,
+        mode: "reading",
+        arabicFont: "scheherazade-new",
+        arabicScript: "uthmani",
+        translationSize: 15,
+      },
       privacy: { analytics: false, performance: true, advertising: true },
     });
 
@@ -236,10 +256,20 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", arabicScript: "uthmani", translationSize: 19 },
+        reading: {
+          fontSize: 36,
+          mode: "reading",
+          arabicFont: "noto-naskh-arabic",
+          arabicScript: "uthmani",
+          translationSize: 19,
+        },
         privacy: { analytics: true, performance: true, advertising: false },
       },
-      { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
+      {
+        prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
+        consent: createConsent(),
+        reader: store,
+      },
     );
     expect(store.mode).toBe("reading");
     expect(store.arabicFont).toBe("noto-naskh-arabic");
@@ -255,10 +285,20 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 36, mode: "reading", arabicFont: "noto-naskh-arabic", arabicScript: "uthmani", translationSize: 19 },
+        reading: {
+          fontSize: 36,
+          mode: "reading",
+          arabicFont: "noto-naskh-arabic",
+          arabicScript: "uthmani",
+          translationSize: 19,
+        },
         privacy: { analytics: true, performance: true, advertising: false },
       },
-      { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
+      {
+        prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
+        consent: createConsent(),
+        reader: store,
+      },
     );
     expect(presentation.apply).toHaveBeenCalledTimes(1);
     expect(presentation.apply).toHaveBeenCalledWith("reading", 36, "noto-naskh-arabic", 19, "sans");
@@ -270,10 +310,20 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 23, mode: "verse", arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 },
+        reading: {
+          fontSize: 23,
+          mode: "verse",
+          arabicFont: "amiri",
+          arabicScript: "uthmani",
+          translationSize: 17,
+        },
         privacy: { analytics: true, performance: true, advertising: false },
       },
-      { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
+      {
+        prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
+        consent: createConsent(),
+        reader: store,
+      },
     );
     const landed = Number.parseFloat(store.arabicSizePx);
     expect(landed).toBeGreaterThanOrEqual(ARABIC_FONT_MIN);
@@ -294,10 +344,20 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       {
         v: SETTINGS_DOC_VERSION,
         appearance: { ...DEFAULTS, instantResume: false, custom: {} },
-        reading: { fontSize: 25, mode: "verse", arabicFont: "amiri", arabicScript: "tajweed", translationSize: 22 },
+        reading: {
+          fontSize: 25,
+          mode: "verse",
+          arabicFont: "amiri",
+          arabicScript: "tajweed",
+          translationSize: 22,
+        },
         privacy: { analytics: true, performance: true, advertising: false },
       },
-      { prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }), consent: createConsent(), reader: store },
+      {
+        prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
+        consent: createConsent(),
+        reader: store,
+      },
     );
     expect(exact).toEqual(["fontSize:25", "translationSize:22"]);
     expect(store.calls()).toEqual([]);

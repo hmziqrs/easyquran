@@ -419,9 +419,7 @@ describe("handleNavigation keys the PAGES cache by the normalized url (?more/?mo
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const pages = await fakeCaches.open(PAGES_CACHE);
     const matchSpy = vi.spyOn(pages, "match").mockResolvedValue(responseWith(8));
-    const res = await handleNavigation(
-      new Request(`${ORIGIN}/al-baqarah?more=ur.x&mode=reading`),
-    );
+    const res = await handleNavigation(new Request(`${ORIGIN}/al-baqarah?more=ur.x&mode=reading`));
     expect(res.ok).toBe(true);
     expect(matchSpy).toHaveBeenCalledTimes(1);
     const looked = matchSpy.mock.calls[0]?.[0];

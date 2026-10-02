@@ -10,8 +10,22 @@ import { QuranScript, type QuranScript as QuranScriptValue } from "../../data/qu
  */
 
 export type TajweedRuleLetter =
-  | "h" | "s" | "l" | "n" | "p" | "m" | "q" | "o"
-  | "c" | "f" | "w" | "i" | "a" | "u" | "d" | "g";
+  | "h"
+  | "s"
+  | "l"
+  | "n"
+  | "p"
+  | "m"
+  | "q"
+  | "o"
+  | "c"
+  | "f"
+  | "w"
+  | "i"
+  | "a"
+  | "u"
+  | "d"
+  | "g";
 
 /**
  * Rule letter → display color. Letters are the Dar Al-Islam tajweed edition's
@@ -84,7 +98,8 @@ function takeOpener(
   if (text[bodyStart] === ":") {
     const digitStart = bodyStart + 1;
     let digitEnd = digitStart;
-    while (digitEnd < text.length && text[digitEnd]! >= "0" && text[digitEnd]! <= "9") digitEnd += 1;
+    while (digitEnd < text.length && text[digitEnd]! >= "0" && text[digitEnd]! <= "9")
+      digitEnd += 1;
     if (digitEnd === digitStart || text[digitEnd] !== "[") return null;
     bodyStart = digitEnd + 1;
   } else if (text[bodyStart] === "[") {
@@ -100,7 +115,8 @@ function coalescePlain(segments: readonly TajweedSegment[]): readonly TajweedSeg
   const out: TajweedSegment[] = [];
   for (const segment of segments) {
     const last = out[out.length - 1];
-    if (segment.rule === null && last?.rule === null) out[out.length - 1] = { text: last.text + segment.text, rule: null };
+    if (segment.rule === null && last?.rule === null)
+      out[out.length - 1] = { text: last.text + segment.text, rule: null };
     else out.push(segment);
   }
   return out;
@@ -121,7 +137,8 @@ export function parseTajweedSegments(text: string): readonly TajweedSegment[] {
     if (!opener) {
       // Literal bracket, not markup: fold it into the trailing plain run.
       const last = segments[segments.length - 1];
-      if (last && last.rule === null) segments[segments.length - 1] = { text: `${last.text}[`, rule: null };
+      if (last && last.rule === null)
+        segments[segments.length - 1] = { text: `${last.text}[`, rule: null };
       else segments.push({ text: "[", rule: null });
       cursor.index += 1;
       continue;

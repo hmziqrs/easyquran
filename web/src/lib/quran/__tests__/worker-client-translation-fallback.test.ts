@@ -1,9 +1,4 @@
-import {
-  OpenerKind,
-  OpenerPackaging,
-  QuranScript,
-  type ArtifactSpec,
-} from "$lib/data/quran-types";
+import { OpenerKind, OpenerPackaging, QuranScript, type ArtifactSpec } from "$lib/data/quran-types";
 import { ReadChainError } from "$lib/quran/fetch";
 import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
 import { QURAN_DATA } from "$lib/server/quran-data";

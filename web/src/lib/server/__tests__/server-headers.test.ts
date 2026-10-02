@@ -106,9 +106,7 @@ describe("applyHeaders CSP stamping", () => {
 
 describe("isMissingModule import guard", () => {
   it("treats Node missing-module rejections as the expected no-build condition", () => {
-    const esm: NodeJS.ErrnoException = new Error(
-      "Cannot find module './build/handler.js'",
-    );
+    const esm: NodeJS.ErrnoException = new Error("Cannot find module './build/handler.js'");
     esm.code = "ERR_MODULE_NOT_FOUND";
     const cjs: NodeJS.ErrnoException = new Error("Cannot find module 'handler'");
     cjs.code = "MODULE_NOT_FOUND";

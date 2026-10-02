@@ -1,8 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
-
 import { createQuranData, type QuranData } from "$lib/data/quran-data";
 import {
   ARTICLE_TOKENS,
@@ -13,6 +11,7 @@ import {
   translitKey,
   type TranslitKey,
 } from "$lib/quran/search/translit";
+import { describe, expect, it } from "vite-plus/test";
 
 const DATA_PATH = [
   path.resolve(process.cwd(), "static/quran-meta/quran-data.json"),
@@ -277,7 +276,8 @@ describe("catalogue census", () => {
     const offenders: string[] = [];
     for (const surah of QURAN.surahs) {
       const tokens = catalogueTokens(surah.transliteration);
-      if (tokens.length > 1 && !allowed.has(tokens[0]!)) offenders.push(`${surah.num}:${tokens[0]}`);
+      if (tokens.length > 1 && !allowed.has(tokens[0]!))
+        offenders.push(`${surah.num}:${tokens[0]}`);
     }
     expect(offenders).toEqual([]);
   });

@@ -108,8 +108,9 @@ describe("createStackedTranslations", () => {
 
   it("loads an extra and resolves ready text in store order", async () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
     ctrl.sync();
@@ -126,8 +127,9 @@ describe("createStackedTranslations", () => {
 
   it("accumulates byVerse across from/to expansion without clearing (no skeleton re-flash)", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
     const ctrl = makeController(inputs);
@@ -147,8 +149,9 @@ describe("createStackedTranslations", () => {
 
   it("clears byVerse only on route-identity change, never on range expansion", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
     const ctrl = makeController(inputs);
@@ -215,9 +218,10 @@ describe("createStackedTranslations", () => {
     stackedTranslations.setIds(["en.sahih"]);
     let resolveRead!: (value: ReturnType<typeof rangeText>) => void;
     workerStub.readRange.mockImplementation(
-      () => new Promise<ReturnType<typeof rangeText>>((res) => {
-        resolveRead = res;
-      }),
+      () =>
+        new Promise<ReturnType<typeof rangeText>>((res) => {
+          resolveRead = res;
+        }),
     );
     const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
     ctrl.sync();
@@ -247,8 +251,9 @@ describe("createStackedTranslations", () => {
 
   it("re-selecting a deselected errored extra retries instead of staying stuck", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     workerStub.readRange.mockRejectedValueOnce(new Error("cold"));
     const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
@@ -271,8 +276,9 @@ describe("createStackedTranslations", () => {
 
   it("does not refetch a ready extra when only the selection changes elsewhere", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
     ctrl.sync();
@@ -291,8 +297,9 @@ describe("createStackedTranslations", () => {
 
   it("a ready extra that errors on an expansion refetch keeps loaded text without a doubled error row", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
     const ctrl = makeController(inputs);
@@ -312,8 +319,9 @@ describe("createStackedTranslations", () => {
 
   it("an id with no catalogue meta surfaces as an error, never a silent ready", async () => {
     stackedTranslations.setIds(["en.sahih"]);
-    workerStub.readRange.mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
-      Promise.resolve(rangeText(id, f, t)),
+    workerStub.readRange.mockImplementation(
+      (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
+        Promise.resolve(rangeText(id, f, t)),
     );
     const ctrl = createStackedTranslations({
       from: () => 1,

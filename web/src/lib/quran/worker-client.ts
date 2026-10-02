@@ -209,6 +209,13 @@ export class StorageAdminError extends Error {
   }
 }
 
+// Worker-wire boundary: Number.isFinite rejects non-numbers without coercion, so this doubles
+// as the type guard for the stamped numeric artifact fields below.
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary guard: wire fields arrive as unknown; Number.isFinite is the parser that validates them
+function isFiniteNumber(value: unknown): value is number {
+  return Number.isFinite(value);
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- boundary decoder: raw is the untyped worker reply; this function IS the parser that validates each artifact field
 function decodeStorageArtifacts(raw: unknown): StorageArtifactInfo[] | null {
   if (!Array.isArray(raw)) return null;
@@ -224,10 +231,10 @@ function decodeStorageArtifacts(raw: unknown): StorageArtifactInfo[] | null {
     if (obj.store !== "opfs" && obj.store !== "idb" && obj.store !== "session") return null;
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: tag must be a string
     if (typeof obj.tag !== "string") return null;
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: sizeBytes must be a finite number
-    if (typeof obj.sizeBytes !== "number" || !Number.isFinite(obj.sizeBytes)) return null;
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- worker-message boundary field check: lastUsed is a stamped finite number or null
-    if (obj.lastUsed !== null && (typeof obj.lastUsed !== "number" || !Number.isFinite(obj.lastUsed))) return null;
+    // Worker-message boundary field checks: sizeBytes must be a finite number; lastUsed a stamped
+    // finite number or null.
+    if (!isFiniteNumber(obj.sizeBytes)) return null;
+    if (obj.lastUsed !== null && !isFiniteNumber(obj.lastUsed)) return null;
     out.push({
       id: obj.id,
       store: obj.store,
@@ -690,25 +697,29 @@ export const quranWorker = {
     opts?: SearchOpts,
     validateCoordinate?: AyahCoordinateValidator,
   ): Promise<TranslationSearchResponse> {
-    return request<unknown>((id) => ({ id, type: "searchTranslation", sourceId, query, opts })).then(
-      (r) => {
-        const limit = opts?.limit ?? DEFAULT_LIMIT;
-        const offset = opts?.offset ?? DEFAULT_OFFSET;
-        const payload = decodeTranslationSearchResponse(r, validateCoordinate);
-        if (!payload) {
-          throw new Error("quran worker returned a malformed translation search response");
-        }
-        return {
-          query: payload.query ?? query,
-          sourceId: payload.sourceId ?? sourceId,
-          total: payload.total ?? payload.results.length,
-          limit: payload.limit ?? limit,
-          offset: payload.offset ?? offset,
-          results: payload.results,
-          source: SearchProvider.Worker,
-        };
-      },
-    );
+    return request<unknown>((id) => ({
+      id,
+      type: "searchTranslation",
+      sourceId,
+      query,
+      opts,
+    })).then((r) => {
+      const limit = opts?.limit ?? DEFAULT_LIMIT;
+      const offset = opts?.offset ?? DEFAULT_OFFSET;
+      const payload = decodeTranslationSearchResponse(r, validateCoordinate);
+      if (!payload) {
+        throw new Error("quran worker returned a malformed translation search response");
+      }
+      return {
+        query: payload.query ?? query,
+        sourceId: payload.sourceId ?? sourceId,
+        total: payload.total ?? payload.results.length,
+        limit: payload.limit ?? limit,
+        offset: payload.offset ?? offset,
+        results: payload.results,
+        source: SearchProvider.Worker,
+      };
+    });
   },
 };
 

@@ -20,12 +20,17 @@ const ARABIC_UI_LOCALE = Object.freeze({
 export const UI_LOCALES = Object.freeze({
   en: ENGLISH_UI_LOCALE,
   ar: ARABIC_UI_LOCALE,
-} as const satisfies Readonly<Record<UiLocale, {
-  locale: string;
-  endonym: string;
-  direction: string;
-  openGraphLocale: string;
-}>>);
+} as const satisfies Readonly<
+  Record<
+    UiLocale,
+    {
+      locale: string;
+      endonym: string;
+      direction: string;
+      openGraphLocale: string;
+    }
+  >
+>);
 
 export type UiDirection = (typeof UI_LOCALES)[UiLocale]["direction"];
 export type UiLocaleMetadata = (typeof UI_LOCALES)[UiLocale];

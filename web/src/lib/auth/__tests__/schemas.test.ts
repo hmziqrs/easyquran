@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vite-plus/test";
-import { safeParse } from "valibot";
 import { issuesToFieldErrors } from "$lib/auth/form-validation.svelte";
 import {
   forgotVerifySchema,
@@ -11,6 +9,8 @@ import {
   verifyEmailSchema,
 } from "$lib/auth/schemas";
 import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
+import { safeParse } from "valibot";
+import { describe, expect, it } from "vite-plus/test";
 
 const copy = getAuthValidationCopy("en");
 
@@ -47,7 +47,9 @@ describe("loginSchema", () => {
       password: copy.passwordMin,
     });
     expect(errorsFor(loginSchema(copy), { email: "a@b.co", password: "a".repeat(12) })).toEqual({});
-    expect(errorsFor(loginSchema(copy), { email: "a@b.co", password: "a".repeat(256) })).toEqual({});
+    expect(errorsFor(loginSchema(copy), { email: "a@b.co", password: "a".repeat(256) })).toEqual(
+      {},
+    );
     expect(errorsFor(loginSchema(copy), { email: "a@b.co", password: "a".repeat(257) })).toEqual({
       password: copy.passwordMax,
     });
@@ -73,9 +75,9 @@ describe("registerSchema", () => {
   });
 
   it("reports a mismatch on confirm_password, not password", () => {
-    expect(errorsFor(registerSchema(copy), { ...base, confirm_password: "something-else" })).toEqual(
-      { confirm_password: copy.confirmMismatch },
-    );
+    expect(
+      errorsFor(registerSchema(copy), { ...base, confirm_password: "something-else" }),
+    ).toEqual({ confirm_password: copy.confirmMismatch });
   });
 
   it("asks for the confirmation before comparing it", () => {
@@ -86,7 +88,12 @@ describe("registerSchema", () => {
 
   it("reports every bad field at once", () => {
     expect(
-      errorsFor(registerSchema(copy), { name: "", email: "nope", password: "", confirm_password: "" }),
+      errorsFor(registerSchema(copy), {
+        name: "",
+        email: "nope",
+        password: "",
+        confirm_password: "",
+      }),
     ).toEqual({
       name: copy.nameRequired,
       email: copy.emailInvalid,

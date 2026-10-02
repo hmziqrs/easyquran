@@ -216,7 +216,9 @@ describe("AuthState probe result mapping", () => {
 
 describe("AuthState onAuthTransition hook (W8a purgeUserCaches placeholder)", () => {
   it("invokes the registered hook during transition()", async () => {
-    const hook = vi.fn<(ctx: AuthTransitionContext) => Promise<void>>().mockResolvedValue(undefined);
+    const hook = vi
+      .fn<(ctx: AuthTransitionContext) => Promise<void>>()
+      .mockResolvedValue(undefined);
     const state = createAuthState(asClient);
     state.setOnAuthTransition(hook);
     await state.transition({ kind: "login" });

@@ -53,16 +53,16 @@ class FakeWorker {
 }
 
 const ARTIFACTS: readonly ArtifactSpec[] = [
-    {
-      id: QuranSourceId.TanzilUthmani,
-      sizeBytes: 1,
-      downloadUrl: "https://x/uthmani",
-    },
-    {
-      id: QuranSourceId.TanzilSimpleClean,
-      sizeBytes: 1,
-      downloadUrl: "https://x/simple-clean",
-    },
+  {
+    id: QuranSourceId.TanzilUthmani,
+    sizeBytes: 1,
+    downloadUrl: "https://x/uthmani",
+  },
+  {
+    id: QuranSourceId.TanzilSimpleClean,
+    sizeBytes: 1,
+    downloadUrl: "https://x/simple-clean",
+  },
 ];
 
 beforeEach(() => {
@@ -371,14 +371,22 @@ describe("quranWorker storage admin wire contract", () => {
     fake.emit("message", {
       id: req.id,
       ok: true,
-      result: [{ id: "en.sahih", store: "bogus", tag: "en.sahih", sizeBytes: 2048, lastUsed: null }],
+      result: [
+        { id: "en.sahih", store: "bogus", tag: "en.sahih", sizeBytes: 2048, lastUsed: null },
+      ],
     });
     await assertion;
   });
 
   it("rejects every malformed artifact field at the boundary", async () => {
     const fake = await startReady();
-    const wellFormed = { id: "en.sahih", store: "opfs", tag: "en.sahih", sizeBytes: 2048, lastUsed: null };
+    const wellFormed = {
+      id: "en.sahih",
+      store: "opfs",
+      tag: "en.sahih",
+      sizeBytes: 2048,
+      lastUsed: null,
+    };
     const cases: unknown[] = [
       "not-an-array",
       { not: "an array" },

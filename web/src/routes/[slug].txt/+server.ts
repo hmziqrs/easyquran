@@ -20,7 +20,10 @@ export const GET: RequestHandler = async ({ fetch, params }) => {
   // never internally fetch the surah HTML and mint-plain-text it by accident.
   // (Prerender entries already constrain the build; this guards runtime too.)
   if (params.slug === undefined || !matchMarketingText(params.slug)) {
-    return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+    return new Response("Not found", {
+      status: 404,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
   }
   const res = await fetch(pagePath(params.slug));
   const md = htmlToMarkdown(await res.text());

@@ -1,8 +1,8 @@
-import { readerHrefFor } from "$lib/i18n/reader";
 import { translationSurahPath } from "$lib/data/quran";
+import { readerHrefFor } from "$lib/i18n/reader";
 import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
-import { requireSurah } from "$lib/server/reader-route-guards";
 import { renderSurahPageMarkdown } from "$lib/server/reader-markdown";
+import { requireSurah } from "$lib/server/reader-route-guards";
 import { error } from "@sveltejs/kit";
 
 import type { RequestHandler } from "./$types";

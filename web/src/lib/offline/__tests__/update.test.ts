@@ -1,15 +1,3 @@
-// SAFETY: Svelte 5 does not export `effect` from the public 'svelte' entry;
-// the internal client effect_root + effect pair is the reactive observer
-// available to vitest (no component harness in this repo) — root scope is
-// required or a detached effect never flushes. flushSync forces synchronous
-// flushes so assertions see deterministic effect reruns.
-// SAFETY: svelte/internal/client ships without type declarations; the import
-// is test-only and typed structurally by usage below.
-// @ts-expect-error no declaration file for svelte/internal/client
-import { effect, effect_root } from "svelte/internal/client";
-import { flushSync } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-
 import {
   PREPARE_RELOAD,
   PREPARE_RELOAD_EVENT,
@@ -21,6 +9,17 @@ import {
   VERSION_RESULT,
 } from "$lib/offline/messages";
 import { createUpdate } from "$lib/offline/update.svelte";
+import { flushSync } from "svelte";
+// SAFETY: Svelte 5 does not export `effect` from the public 'svelte' entry;
+// the internal client effect_root + effect pair is the reactive observer
+// available to vitest (no component harness in this repo) — root scope is
+// required or a detached effect never flushes. flushSync forces synchronous
+// flushes so assertions see deterministic effect reruns.
+// SAFETY: svelte/internal/client ships without type declarations; the import
+// is test-only and typed structurally by usage below.
+// @ts-expect-error no declaration file for svelte/internal/client
+import { effect, effect_root } from "svelte/internal/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const RELOAD_GUARD = "easyquran.reload-guard";
 const PAINT_KEY = "easyquran.update.waiting";

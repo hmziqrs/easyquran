@@ -1,5 +1,5 @@
-import { tv, type VariantProps } from "tailwind-variants";
 import { rampTwMergeConfig } from "$lib/utils";
+import { tv, type VariantProps } from "tailwind-variants";
 
 /**
  * §35 (docs/design-system.md) + plan 03 geometry/state matrix: primary/secondary/ghost
@@ -16,18 +16,16 @@ export const buttonVariants = tv(
     base: "group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-pill border border-transparent font-sans tracking-tight transition-[background-color,border-color,color,transform,filter] duration-150 ease-out active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50",
     variants: {
       variant: {
-        primary:
-          "bg-primary text-primary-foreground font-[550] hover:bg-primary-hover",
+        primary: "bg-primary text-primary-foreground font-[550] hover:bg-primary-hover",
         secondary:
           "bg-surface text-foreground border-border hover:bg-surface-hover hover:border-border-strong",
         ghost: "bg-transparent text-foreground hover:bg-surface-hover",
         /* Legacy interactive-accent CTA — now the §35 primary role. */
-        accent:
-          "bg-primary text-primary-foreground font-[550] hover:bg-primary-hover",
-        quiet: "bg-transparent text-foreground-secondary px-2 hover:text-foreground hover:bg-surface-hover",
+        accent: "bg-primary text-primary-foreground font-[550] hover:bg-primary-hover",
+        quiet:
+          "bg-transparent text-foreground-secondary px-2 hover:text-foreground hover:bg-surface-hover",
         ink: "bg-primary-foreground text-primary hover:brightness-105",
-        "outline-ink":
-          "bg-transparent text-foreground border-border-strong hover:bg-surface-hover",
+        "outline-ink": "bg-transparent text-foreground border-border-strong hover:bg-surface-hover",
       },
       size: {
         /* sm stays compact for dense table/inline contexts (§51 44px applies to core CTAs).

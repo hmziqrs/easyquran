@@ -19,6 +19,7 @@ vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
 });
 
 import { QURAN_DATA } from "$lib/server/quran-data";
+
 import { handle } from "../../../hooks.server";
 
 const ORIGIN = "https://easyquran.fyi";

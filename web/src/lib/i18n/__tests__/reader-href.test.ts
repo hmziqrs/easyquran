@@ -34,9 +34,7 @@ describe("canonical reader hrefs accept every baked translation id", () => {
       );
     }
     // tanzil dotted translators (en.sahih.int) keep working.
-    expect(readerHrefFor("en", "/al-fatihah/t/en/sahih.int")).toBe(
-      "/al-fatihah/t/en/sahih.int",
-    );
+    expect(readerHrefFor("en", "/al-fatihah/t/en/sahih.int")).toBe("/al-fatihah/t/en/sahih.int");
   });
 
   it("accepts underscore translators on range routes and translated surah roots", () => {

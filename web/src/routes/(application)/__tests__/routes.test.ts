@@ -247,11 +247,7 @@ describe("continueReading resume uses the last-read verse's own source, not the 
   it("resume into a translation source keeps /t/<lang>/<translator> even when the current route is arabic", () => {
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
-    const resume = surahAyahPathFor(
-      resumeCtxFor(lastRead, currentRouteArabic),
-      surah,
-      lastRead.n,
-    );
+    const resume = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, lastRead.n);
     expect(resume).toBe("/luqman/t/ms/basmeih#ayah-31-4");
     expect(resume.includes("/t/ms/basmeih")).toBe(true);
   });
@@ -272,11 +268,7 @@ describe("continueReading resume uses the last-read verse's own source, not the 
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
     const buggy = surahAyahPathFor(currentRouteArabic, surah, lastRead.n);
-    const fixed = surahAyahPathFor(
-      resumeCtxFor(lastRead, currentRouteArabic),
-      surah,
-      lastRead.n,
-    );
+    const fixed = surahAyahPathFor(resumeCtxFor(lastRead, currentRouteArabic), surah, lastRead.n);
     expect(fixed).not.toBe(buggy);
     expect(buggy.includes("/t/")).toBe(false);
     expect(fixed.includes("/t/ms/basmeih")).toBe(true);

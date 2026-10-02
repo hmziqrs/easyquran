@@ -1,6 +1,6 @@
+import { hizbRange } from "$lib/data/mushaf-divisions";
 import { translationIdFromSegments } from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
-import { hizbRange } from "$lib/data/mushaf-divisions";
 import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "$lib/data/translations";
 import { type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { QURAN_DATA } from "$lib/server/quran-data";
@@ -252,21 +252,13 @@ export function parseReaderRoute(
         ? parseReaderPath(`/${surah}/t/${lang}/${translator}`)
         : null;
     case "/t/[lang]/[translator]/page/[n]":
-      return lang && translator && n
-        ? parseReaderPath(`/t/${lang}/${translator}/page/${n}`)
-        : null;
+      return lang && translator && n ? parseReaderPath(`/t/${lang}/${translator}/page/${n}`) : null;
     case "/t/[lang]/[translator]/juz/[n]":
-      return lang && translator && n
-        ? parseReaderPath(`/t/${lang}/${translator}/juz/${n}`)
-        : null;
+      return lang && translator && n ? parseReaderPath(`/t/${lang}/${translator}/juz/${n}`) : null;
     case "/t/[lang]/[translator]/hizb/[n]":
-      return lang && translator && n
-        ? parseReaderPath(`/t/${lang}/${translator}/hizb/${n}`)
-        : null;
+      return lang && translator && n ? parseReaderPath(`/t/${lang}/${translator}/hizb/${n}`) : null;
     case "/t/[lang]/[translator]/rub/[n]":
-      return lang && translator && n
-        ? parseReaderPath(`/t/${lang}/${translator}/rub/${n}`)
-        : null;
+      return lang && translator && n ? parseReaderPath(`/t/${lang}/${translator}/rub/${n}`) : null;
     default:
       return null;
   }

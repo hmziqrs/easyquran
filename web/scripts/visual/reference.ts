@@ -38,7 +38,8 @@ async function unwrapDesignComponent(page: Page): Promise<void> {
       // Array.from: appending each node MOVES it, so the live NodeList must be snapshotted.
       for (const node of Array.from(helmet.childNodes)) document.head.append(node);
     }
-    for (const node of Array.from(wrapper.childNodes)) wrapper.parentNode?.insertBefore(node, wrapper);
+    for (const node of Array.from(wrapper.childNodes))
+      wrapper.parentNode?.insertBefore(node, wrapper);
     wrapper.remove();
   }, dc);
 }
@@ -68,7 +69,10 @@ export async function main(argv: string[]): Promise<number> {
         await prepare(page, pathToFileURL(full).href, { width });
         if (full.endsWith(".dc.html")) await unwrapDesignComponent(page);
         await page.evaluate(() => document.fonts.ready);
-        const stem = path.basename(file).replace(/\.dc?\.html$/, "").replace(/\.html$/, "");
+        const stem = path
+          .basename(file)
+          .replace(/\.dc?\.html$/, "")
+          .replace(/\.html$/, "");
         const out = `${stem}__${width}.png`;
         await page.screenshot({ path: path.join(root, out), fullPage: true });
         written.push(out);

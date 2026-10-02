@@ -2,9 +2,9 @@ import { randomBytes } from "node:crypto";
 
 import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
-import { MARKETING_PATHS, MARKETING_PUBLICATIONS, type MarketingPageId } from "$lib/i18n/marketing";
 import { SURAH_COUNT } from "$lib/data/quran-data";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
+import { MARKETING_PATHS, MARKETING_PUBLICATIONS, type MarketingPageId } from "$lib/i18n/marketing";
 import { paraglideMiddleware } from "$lib/paraglide/server";
 import {
   agentNotFoundMarkdown,
@@ -13,8 +13,8 @@ import {
   notAcceptableBody,
   preferredType,
 } from "$lib/server/markdown-negotiation";
-import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
 import { QURAN_DATA } from "$lib/server/quran-data";
+import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
 import {
   localizedReaderLocale,
   parseReaderRoute,
@@ -422,9 +422,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       // A sibling miss must fall through to the 404 path, never surface as a
       // 500 — the fetch targets our own origin, but treat any transport error
       // the same as a non-ok response.
-      const md = await event
-        .fetch(mdSibling.mdPath.replace(/^\/ar(?=\/)/u, ""))
-        .catch(() => null);
+      const md = await event.fetch(mdSibling.mdPath.replace(/^\/ar(?=\/)/u, "")).catch(() => null);
       if (md?.ok) {
         response = new Response(await md.text(), {
           headers: {
@@ -450,9 +448,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     // en-only marketing pages have no /ar publication to serve.
     const normalized = pathname.replace(/\/+$/u, "") || "/";
     const useI18n =
-      (pathname === "/" ||
-        pathname === "/ar" ||
-        (pathname.startsWith("/ar/") && !EN_ONLY_MARKETING_AR_PATHS.has(normalized)));
+      pathname === "/" ||
+      pathname === "/ar" ||
+      (pathname.startsWith("/ar/") && !EN_ONLY_MARKETING_AR_PATHS.has(normalized));
     // Both redirect builders gate themselves on their rel regexes (numeric
     // alias, surah-local shapes), so attempt them for every request — cheap
     // null returns for everything else.

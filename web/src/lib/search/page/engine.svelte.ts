@@ -1,8 +1,6 @@
-import { loadQuranData } from "$lib/data/quran-data-client";
 import type { QuranData } from "$lib/data/quran-data";
+import { loadQuranData } from "$lib/data/quran-data-client";
 import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-import { isNavCandidate, matchNav, splitPlaceToken } from "$lib/search/nav/match";
-import type { NavMatch } from "$lib/search/nav/types";
 import { quranSearch } from "$lib/quran/search";
 import {
   DEFAULT_LIMIT,
@@ -18,8 +16,10 @@ import {
   type SearchHit,
   type TranslationSearchHit,
 } from "$lib/quran/search/types";
-import { quranWorker } from "$lib/quran/worker-client";
 import type { AyahCoordinateValidator } from "$lib/quran/wire";
+import { quranWorker } from "$lib/quran/worker-client";
+import { isNavCandidate, matchNav, splitPlaceToken } from "$lib/search/nav/match";
+import type { NavMatch } from "$lib/search/nav/types";
 import { searchSelection } from "$lib/stores/search-selection.svelte";
 import { storageReport } from "$lib/stores/storage-report.svelte";
 

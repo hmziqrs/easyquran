@@ -1,8 +1,9 @@
-import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
 import {
   notificationsStatus,
   type NotificationsCopy,
 } from "$lib/components/notifications/notifications-copy";
+import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
+import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
 import type { UiLocale } from "$lib/i18n/locales";
 import {
   tweaks_accent_option,
@@ -12,12 +13,7 @@ import {
   tweaks_reset_to_preset,
   tweaks_toggle_status,
 } from "$lib/i18n/m/controls";
-import {
-  reader_copied,
-  reader_dark,
-  reader_light,
-  reader_theme,
-} from "$lib/i18n/m/reader";
+import { reader_copied, reader_dark, reader_light, reader_theme } from "$lib/i18n/m/reader";
 import {
   reader_accent,
   reader_accent_azure,
@@ -86,7 +82,6 @@ import {
   settings_storage_pack_toggle_on,
   settings_storage_pack_usage,
 } from "$lib/i18n/m/settings";
-import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
 import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
@@ -152,7 +147,8 @@ export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
       }),
       routes: (entries: number, size: string) =>
         settings_storage_pack_routes({ entries, size }, options),
-      saved: (when: Date) => settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, options),
+      saved: (when: Date) =>
+        settings_storage_pack_saved({ when: when.toLocaleDateString(locale) }, options),
       usage: (used: string) => settings_storage_pack_usage({ used }, options),
       toggleOn: noArgs(settings_storage_pack_toggle_on),
       toggleOff: noArgs(settings_storage_pack_toggle_off),

@@ -1,3 +1,4 @@
+import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import {
   auth_create_account,
   auth_confirm_password_placeholder,
@@ -35,7 +36,6 @@ import {
   auth_continue_with_provider,
   auth_close,
 } from "$lib/i18n/m/auth";
-import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { getLocale } from "$lib/paraglide/runtime.js";
 
 export interface AuthCopy {

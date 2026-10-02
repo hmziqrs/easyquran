@@ -264,7 +264,12 @@ describe("createReaderPersistence scheduling", () => {
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
     persistence.writeNow();
-    expect(read()).toMatchObject({ v: 4, arabicFont: "amiri", arabicScript: "uthmani", translationSize: 17 });
+    expect(read()).toMatchObject({
+      v: 4,
+      arabicFont: "amiri",
+      arabicScript: "uthmani",
+      translationSize: 17,
+    });
     persistence.dispose();
   });
 

@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-import { LANGUAGE_AUTONYMS, TRANSLATION_CATALOGUE, nativeNameFor } from "$lib/quran/catalogue";
 import { TRANSLATIONS } from "$lib/data/translations";
+import { LANGUAGE_AUTONYMS, TRANSLATION_CATALOGUE, nativeNameFor } from "$lib/quran/catalogue";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$lib/config/site", () => ({
   QURAN: {
@@ -41,9 +41,10 @@ describe("language autonym map", () => {
       if (autonym === null) continue;
       const english = englishNameByCode.get(code);
       if (english === undefined) continue;
-      expect(autonym.trim().toLowerCase(), `autonym for ${code} duplicates the English name`).not.toBe(
-        english.trim().toLowerCase(),
-      );
+      expect(
+        autonym.trim().toLowerCase(),
+        `autonym for ${code} duplicates the English name`,
+      ).not.toBe(english.trim().toLowerCase());
     }
   });
 

@@ -1,3 +1,4 @@
+import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
 import type { SurahRouteContext } from "$lib/data/quran";
 import {
   globalPagePathFor,
@@ -7,7 +8,6 @@ import {
   surahPathFor,
 } from "$lib/data/quran";
 import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
 import type { PublicHref } from "$lib/i18n/public-href";
 import type { QuranReaderHref } from "$lib/i18n/reader";
 

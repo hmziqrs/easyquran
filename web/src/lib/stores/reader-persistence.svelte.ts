@@ -1,3 +1,5 @@
+import { ARABIC_FONT_IDS, type ArabicFontId } from "$lib/config/reader-fonts";
+import type { QuranSourceId } from "$lib/data/quran-types";
 import {
   asArray,
   asBooleanRecord,
@@ -12,9 +14,6 @@ import {
   trailingDebounce,
   writeJSON,
 } from "$lib/storage";
-
-import { ARABIC_FONT_IDS, type ArabicFontId } from "$lib/config/reader-fonts";
-import type { QuranSourceId } from "$lib/data/quran-types";
 
 import {
   ARABIC_FONT_MAX,
@@ -132,13 +131,7 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
 }
 
 function applyPresentation(s: ReaderCore["s"]): void {
-  applyReaderPresentation(
-    s.mode,
-    s.fontSize,
-    s.arabicFont,
-    s.translationSize,
-    s.translationFamily,
-  );
+  applyReaderPresentation(s.mode, s.fontSize, s.arabicFont, s.translationSize, s.translationFamily);
 }
 
 function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {

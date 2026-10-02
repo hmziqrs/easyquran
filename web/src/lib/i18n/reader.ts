@@ -5,8 +5,9 @@ import { localizeHref } from "$lib/paraglide/runtime";
  * enforces the path grammar at the public boundary; the type is deliberately
  * loose (`/${string}`) because the grammar lives in `isReaderPathname`. */
 export type QuranReaderHref = `/${string}`;
-export type LocalizedReaderHref<Locale extends UiLocale = UiLocale> =
-  Locale extends "ar" ? `/ar${string}` : QuranReaderHref;
+export type LocalizedReaderHref<Locale extends UiLocale = UiLocale> = Locale extends "ar"
+  ? `/ar${string}`
+  : QuranReaderHref;
 
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;

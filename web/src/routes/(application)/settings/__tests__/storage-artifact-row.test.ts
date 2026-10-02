@@ -1,9 +1,9 @@
+import { getSettingsCopy } from "$lib/i18n/settings-copy";
+import type { StorageArtifactInfo } from "$lib/quran/protocol";
+import type { DeleteOutcome } from "$lib/stores/storage-report.svelte";
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { StorageArtifactInfo } from "$lib/quran/protocol";
-import type { DeleteOutcome } from "$lib/stores/storage-report.svelte";
-import { getSettingsCopy } from "$lib/i18n/settings-copy";
 import StorageArtifactRow from "../_components/StorageArtifactRow.svelte";
 
 const storageCopy = getSettingsCopy("en").storage;

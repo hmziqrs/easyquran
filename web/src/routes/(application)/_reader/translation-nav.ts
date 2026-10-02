@@ -1,5 +1,4 @@
 import { browser } from "$app/environment";
-import { deLocalizeUrl } from "$lib/paraglide/runtime";
 import {
   globalPagePathFor,
   hizbPathFor,
@@ -8,6 +7,7 @@ import {
   surahPathFor,
   type SurahRouteContext,
 } from "$lib/data/quran";
+import { deLocalizeUrl } from "$lib/paraglide/runtime";
 
 /**
  * Position-preserving translation navigation, ported from the sidebar
@@ -81,7 +81,8 @@ export function positionOf(pathname: string): ReaderPosition {
     if (!slug) return null;
     return { kind: "surah", slug, lang, translator };
   }
-  if (rest[0] === "page" && rest[1]) return { kind: "globalPage", n: toNum(rest[1]), lang, translator };
+  if (rest[0] === "page" && rest[1])
+    return { kind: "globalPage", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "juz" && rest[1]) return { kind: "juz", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "hizb" && rest[1]) return { kind: "hizb", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "rub" && rest[1]) return { kind: "rub", n: toNum(rest[1]), lang, translator };
@@ -123,10 +124,7 @@ function ctxFor(target: TranslationTarget): SurahRouteContext {
   return { kind: "translation", lang: target.lang, translator: target.translator };
 }
 
-export function hrefFor(
-  pos: ReaderPosition,
-  target: TranslationTarget,
-): `/${string}` | null {
+export function hrefFor(pos: ReaderPosition, target: TranslationTarget): `/${string}` | null {
   if (!pos) return null;
   const ctx = ctxFor(target);
   if (pos.kind === "surah") return surahPathFor(ctx, pos.slug);

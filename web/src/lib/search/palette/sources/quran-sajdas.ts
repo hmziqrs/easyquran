@@ -1,6 +1,7 @@
+import { matchSajdas } from "$lib/search/nav/match";
+
 import { SAJDA_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
-import { matchSajdas } from "$lib/search/nav/match";
 import { hasKeyword } from "../query";
 import { ayahHref, openVerse } from "../quran-nav";
 import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
@@ -33,7 +34,12 @@ export const quranSajdasSource: PaletteSource = {
     for (const match of matches) {
       if (match.target.kind !== "sajda") continue;
       const surah = query.quranData.surahByNum(match.target.surah);
-      const href = ayahHref(query.routeContext, query.quranData, match.target.surah, match.target.ayah);
+      const href = ayahHref(
+        query.routeContext,
+        query.quranData,
+        match.target.surah,
+        match.target.ayah,
+      );
       if (!surah || !href) continue;
       entries.push({
         id: `${SOURCE_ID}:${match.target.surah}:${match.target.ayah}`,

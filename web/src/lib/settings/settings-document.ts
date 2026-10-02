@@ -5,9 +5,8 @@ import {
   type TranslationFamily,
 } from "$lib/config/reader-fonts";
 import { ACCENTS, DEFAULTS, SURFACES, type ThemeMode } from "$lib/config/site";
-import { asLiteral, asNumber, asObject, asString } from "$lib/storage";
 import { QURAN_SOURCE_IDS, type QuranSourceId } from "$lib/data/quran-types";
-import type { CustomSeeds } from "$lib/theme/derive";
+import { asLiteral, asNumber, asObject, asString } from "$lib/storage";
 import { consent, decodeConsent, type ConsentFlags } from "$lib/stores/consent.svelte";
 import { prefs, type Prefs } from "$lib/stores/prefs.svelte";
 import {
@@ -21,6 +20,7 @@ import {
 } from "$lib/stores/reader-core.svelte";
 import { applyReaderPresentation } from "$lib/stores/reader-presentation";
 import { reader } from "$lib/stores/reader.svelte";
+import type { CustomSeeds } from "$lib/theme/derive";
 
 export const SETTINGS_DOC_VERSION = 1;
 
@@ -124,7 +124,8 @@ function decodeReading(raw: unknown): SettingsReadingDoc {
     fontSize: asNumber(stored.fontSize, ARABIC_FONT_MIN, ARABIC_FONT_MAX) ?? fallback.fontSize,
     mode: asLiteral<ReaderMode>(stored.mode, READER_MODE_VALUES) ?? fallback.mode,
     arabicFont: asLiteral<ArabicFontId>(stored.arabicFont, ARABIC_FONT_IDS) ?? fallback.arabicFont,
-    arabicScript: asLiteral<QuranSourceId>(stored.arabicScript, QURAN_SOURCE_IDS) ?? fallback.arabicScript,
+    arabicScript:
+      asLiteral<QuranSourceId>(stored.arabicScript, QURAN_SOURCE_IDS) ?? fallback.arabicScript,
     translationSize:
       asNumber(stored.translationSize, TRANSLATION_FONT_MIN, TRANSLATION_FONT_MAX) ??
       fallback.translationSize,

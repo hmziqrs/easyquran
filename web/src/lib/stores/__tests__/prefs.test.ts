@@ -70,7 +70,13 @@ describe("prefs cross-tab wiring", () => {
   it("drops invalid fields from a foreign tab instead of applying them", () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({ theme: "blue", surface: "nope", accent: 7, mode: "sepia", custom: { bg: "red" } }),
+      JSON.stringify({
+        theme: "blue",
+        surface: "nope",
+        accent: 7,
+        mode: "sepia",
+        custom: { bg: "red" },
+      }),
     );
     window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
     expect(prefs.palette).toBe("sacred");

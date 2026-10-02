@@ -3,7 +3,12 @@ import { clamp } from "es-toolkit";
 import type { CanonicalQuranRow } from "../sql.ts";
 import { isEligibleLatinQuery, normalizeLatin, normalizeLatinWithMap } from "./normalize-latin.ts";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, MAX_LIMIT, MAX_OFFSET } from "./normalize.ts";
-import { SearchHitKind, type Highlight, type SearchOpts, type TranslationSearchHit } from "./types.ts";
+import {
+  SearchHitKind,
+  type Highlight,
+  type SearchOpts,
+  type TranslationSearchHit,
+} from "./types.ts";
 
 export interface TranslationSearchUnit {
   surah: number;

@@ -1,9 +1,9 @@
-import { readerHrefFor } from "$lib/i18n/reader";
 import { surahPathFor, type SurahRouteContext } from "$lib/data/quran";
+import { readerHrefFor } from "$lib/i18n/reader";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
-import { requireSurah } from "$lib/server/reader-route-guards";
 import { renderSurahPageMarkdown } from "$lib/server/reader-markdown";
+import { requireSurah } from "$lib/server/reader-route-guards";
 import { error } from "@sveltejs/kit";
 
 import type { RequestHandler } from "./$types";
@@ -20,9 +20,6 @@ export const GET: RequestHandler = ({ params }) => {
   const surah = requireSurah(params.surah);
   const pageData = readSurahLocalPageData(surah, 1);
   if (!pageData) throw error(404, `Unknown surah: ${params.surah}`);
-  const body = renderSurahPageMarkdown(
-    pageData,
-    readerHrefFor("en", surahPathFor(ARABIC, surah)),
-  );
+  const body = renderSurahPageMarkdown(pageData, readerHrefFor("en", surahPathFor(ARABIC, surah)));
   return new Response(body, { headers: { "content-type": "text/markdown; charset=utf-8" } });
 };

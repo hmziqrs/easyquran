@@ -1,6 +1,6 @@
-import type { VerseKey } from "$lib/data/quran";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
 import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
+import type { VerseKey } from "$lib/data/quran";
 import type { QuranSourceId } from "$lib/data/quran-types";
 
 import { createAnnotations } from "./annotations.svelte";

@@ -27,7 +27,12 @@ import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { uniq } from "es-toolkit";
 
-import type { StorageArtifactInfo, WorkerOutbound, WorkerRequest, WorkerStatus } from "../quran/protocol";
+import type {
+  StorageArtifactInfo,
+  WorkerOutbound,
+  WorkerRequest,
+  WorkerStatus,
+} from "../quran/protocol";
 import {
   buildCanonicalSearchCorpus,
   searchCanonicalCorpus,
@@ -594,10 +599,7 @@ export async function deleteStorageArtifact(sourceId: string): Promise<null> {
 
 export const __artifactAdminTestHooks = {
   injectInFlight(id: string): void {
-    pendingTranslationRunners.set(
-      id,
-      new Promise<QuranQueryRunner>(() => {}),
-    );
+    pendingTranslationRunners.set(id, new Promise<QuranQueryRunner>(() => {}));
   },
   clearInFlight(id: string): void {
     pendingTranslationRunners.delete(id);

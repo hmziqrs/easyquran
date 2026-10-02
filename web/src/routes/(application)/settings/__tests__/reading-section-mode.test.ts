@@ -43,6 +43,7 @@ vi.mock("$lib/fonts/arabic-fonts", () => ({ loadArabicFont: vi.fn() }));
 
 import { getSettingsCopy } from "$lib/i18n/settings-copy";
 import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+
 import ReadingSection from "../_components/ReadingSection.svelte";
 
 const readingCopy = getSettingsCopy("en").reading;
@@ -73,7 +74,10 @@ afterEach(() => {
 });
 
 function mountSection(): void {
-  instance = mount(ReadingSection, { target, props: { id: "reading", heading: "Reading", copy: readingCopy } });
+  instance = mount(ReadingSection, {
+    target,
+    props: { id: "reading", heading: "Reading", copy: readingCopy },
+  });
 }
 
 function settle(): Promise<void> {

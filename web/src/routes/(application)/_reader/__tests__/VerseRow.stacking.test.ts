@@ -19,6 +19,7 @@ vi.mock("$lib/stores/reader.svelte", () => ({ reader: readerStub }));
 vi.mock("../VerseTools.svelte", () => ({ default: mountStub }));
 
 import type { StackedTranslation } from "$lib/data/quran-types";
+
 import VerseRow from "../VerseRow.svelte";
 
 const stacked = (
@@ -93,12 +94,18 @@ describe("VerseRow stacked extras", () => {
         n: 1,
         vKey: "1:1",
         stacked: [
-          stacked("qul.r158.bayan-ul-quran", { name: "Bayan-ul-Quran", translator: "Dr. Israr Ahmad", direction: "rtl" }),
+          stacked("qul.r158.bayan-ul-quran", {
+            name: "Bayan-ul-Quran",
+            translator: "Dr. Israr Ahmad",
+            direction: "rtl",
+          }),
           stacked("en.sahih", { name: "Saheeh International", translator: "Saheeh International" }),
         ],
       },
     });
-    const credits = [...target.querySelectorAll(".verse-extra-credit")].map((el) => el.textContent?.trim());
+    const credits = [...target.querySelectorAll(".verse-extra-credit")].map((el) =>
+      el.textContent?.trim(),
+    );
     expect(credits).toEqual(["— Dr. Israr Ahmad (Bayan-ul-Quran)", "— Saheeh International"]);
     expect(target.querySelector(".verse-extra-credit")?.getAttribute("dir")).toBe("rtl");
   });

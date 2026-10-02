@@ -344,9 +344,7 @@ export async function sweepAbandonedTemps(
   knownTemps?: ReadonlyArray<{ readonly tag: string; readonly name: string }>,
 ): Promise<void> {
   const files = knownTemps ?? (await listOpfsTree()).filter((f) => isTempFileName(f.name));
-  await Promise.all(
-    files.map((f) => removeOpfsFile(f.tag, f.name)),
-  );
+  await Promise.all(files.map((f) => removeOpfsFile(f.tag, f.name)));
 }
 
 export interface EnsureArtifactOptions {

@@ -1,5 +1,4 @@
 import { browser } from "$app/environment";
-
 import { arabicFontDef, type ArabicFontId } from "$lib/config/reader-fonts";
 
 const loads = new Map<ArabicFontId, Promise<void>>();

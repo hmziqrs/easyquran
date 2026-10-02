@@ -264,7 +264,12 @@ export function applyHeaders(
   if (pathname.endsWith(".md") || pathname.endsWith(".txt")) {
     setIfAbsent("X-Robots-Tag", "noindex, follow");
   }
-  if (mdPath !== null || pathname.endsWith(".md") || pathname.endsWith(".txt") || statusCode === 404) {
+  if (
+    mdPath !== null ||
+    pathname.endsWith(".md") ||
+    pathname.endsWith(".txt") ||
+    statusCode === 404
+  ) {
     mergeHeaderInPlace(response, argsHeaders, "Vary", varyWithAccept);
   }
 }
@@ -320,10 +325,7 @@ function isSafeMdCandidate(candidate: string): boolean {
 // Localized reader .md spellings have no prerendered file of their own (/ar is
 // never crawled; the content is locale-independent), and the Arabic family must
 // not SSR on Bun (no node:sqlite), so a de-localized prerendered file is tried first.
-async function servePrerenderedMd(
-  response: ServerResponse,
-  mdPath: string,
-): Promise<boolean> {
+async function servePrerenderedMd(response: ServerResponse, mdPath: string): Promise<boolean> {
   const prefix = /^\/ar(?=\/)/u.exec(mdPath)?.[0];
   const candidates = prefix ? [mdPath, mdPath.slice(prefix.length)] : [mdPath];
   for (const candidate of candidates) {

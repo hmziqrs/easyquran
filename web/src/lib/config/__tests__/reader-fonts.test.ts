@@ -1,19 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
-
-import {
-  ARABIC_FONTS,
-  ARABIC_FONT_IDS,
-  TRANSLATION_FAMILIES,
-} from "$lib/config/reader-fonts";
+import { ARABIC_FONTS, ARABIC_FONT_IDS, TRANSLATION_FAMILIES } from "$lib/config/reader-fonts";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
   TRANSLATION_FONT_MAX,
   TRANSLATION_FONT_MIN,
 } from "$lib/stores/reader-core.svelte";
+import { describe, expect, it } from "vite-plus/test";
 
 function findWebRoot(): string {
   let dir = process.cwd();
@@ -23,7 +18,9 @@ function findWebRoot(): string {
     }
     dir = resolve(dir, "..");
   }
-  throw new Error("reader-fonts literal-sync guard: could not locate web/ root from " + process.cwd());
+  throw new Error(
+    "reader-fonts literal-sync guard: could not locate web/ root from " + process.cwd(),
+  );
 }
 
 const APP_HTML = readFileSync(resolve(findWebRoot(), "src/app.html"), "utf8");

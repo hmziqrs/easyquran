@@ -14,7 +14,8 @@ function attributionLines(sourceId: string): string[] {
   const lines = [`Source: Tanzil — ${SITE.tanzilUrl}`];
   if (sourceId !== "uthmani") {
     const metadata = TRANSLATION_BY_ID.get(sourceId);
-    if (metadata) lines.unshift(`Translation: ${metadata.name} (${metadata.language}) — ${sourceId}`);
+    if (metadata)
+      lines.unshift(`Translation: ${metadata.name} (${metadata.language}) — ${sourceId}`);
   }
   return lines;
 }
@@ -66,9 +67,8 @@ export function renderRangePageMarkdown(
     "",
   ];
   const surahByNum = new Map<number, SurahLink>(range.surahs.map((surah) => [surah.num, surah]));
-  const sourceProfilePending = range.normalizations.length === 0 || pendingTranslation(
-    range.normalizations[0]!,
-  );
+  const sourceProfilePending =
+    range.normalizations.length === 0 || pendingTranslation(range.normalizations[0]!);
   if (range.ayahs.length === 0) {
     lines.push(sourceProfilePending ? "(translation temporarily unavailable)" : "(no verses)", "");
   }

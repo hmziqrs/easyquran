@@ -1,8 +1,8 @@
-import { readerHrefFor } from "$lib/i18n/reader";
 import { rubPathFor, type SurahRouteContext } from "$lib/data/quran";
+import { readerHrefFor } from "$lib/i18n/reader";
 import { loadRangeData } from "$lib/server/quran-range";
-import { rangeEntries, requireRangeIndex } from "$lib/server/reader-route-guards";
 import { renderRangePageMarkdown } from "$lib/server/reader-markdown";
+import { rangeEntries, requireRangeIndex } from "$lib/server/reader-route-guards";
 
 import type { RequestHandler } from "./$types";
 

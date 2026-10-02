@@ -1,8 +1,7 @@
-import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-
 import { getSearchCopy } from "$lib/i18n/search-copy";
 import { searchSelection } from "$lib/stores/search-selection.svelte";
+import { mount, unmount } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 interface ProgressEvent {
   script: string;

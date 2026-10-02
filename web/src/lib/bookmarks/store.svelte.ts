@@ -1,10 +1,17 @@
 import { browser } from "$app/environment";
 import { authClient } from "$lib/auth/auth-client";
 import { authState } from "$lib/auth/auth-state.svelte";
-import { reader } from "$lib/stores/reader.svelte";
 import type { VerseKey } from "$lib/data/quran";
 import { readRaw, writeRaw } from "$lib/storage/safe-storage";
-import { registerDomain, syncEngine, type RegisteredSyncDomain, type SyncDomain, type SyncMutation, type SyncStatus } from "$lib/sync";
+import { reader } from "$lib/stores/reader.svelte";
+import {
+  registerDomain,
+  syncEngine,
+  type RegisteredSyncDomain,
+  type SyncDomain,
+  type SyncMutation,
+  type SyncStatus,
+} from "$lib/sync";
 
 import { createBookmarksDomain, type BookmarkAuthLike } from "./domain";
 import {
@@ -138,7 +145,8 @@ export class BookmarksStore {
     const groups = new Map<string | null, Bookmark[]>();
     for (const bookmark of this.#bookmarks) {
       const folderId =
-        bookmark.folderId !== null && this.#folders.some((folder) => folder.id === bookmark.folderId)
+        bookmark.folderId !== null &&
+        this.#folders.some((folder) => folder.id === bookmark.folderId)
           ? bookmark.folderId
           : null;
       const rows = groups.get(folderId);
@@ -274,10 +282,14 @@ export class BookmarksStore {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    this.#enqueue({ kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt }, () => {
-      if (this.#folders.some((existing) => existing.id === folder.id)) return;
-      this.#folders = [...this.#folders, folder];
-    }, { folder });
+    this.#enqueue(
+      { kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt },
+      () => {
+        if (this.#folders.some((existing) => existing.id === folder.id)) return;
+        this.#folders = [...this.#folders, folder];
+      },
+      { folder },
+    );
     return folder;
   }
 
@@ -286,9 +298,13 @@ export class BookmarksStore {
     const existing = this.#folders.find((folder) => folder.id === id);
     if (!existing) return;
     const renamed: BookmarkFolder = { ...existing, name: name.trim(), updatedAt: nowIso() };
-    this.#enqueue({ kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt }, () => {
-      this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
-    }, { folder: renamed });
+    this.#enqueue(
+      { kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt },
+      () => {
+        this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
+      },
+      { folder: renamed },
+    );
   }
 
   deleteFolder(id: string): void {
@@ -297,7 +313,9 @@ export class BookmarksStore {
     this.#enqueue({ kind: "folder.delete", id, updatedAt: nowIso() }, () => {
       this.#folders = this.#folders.filter((folder) => folder.id !== id);
       // Server detaches children on folder.delete; mirror it.
-      this.#bookmarks = this.#bookmarks.map((b) => (b.folderId === id ? { ...b, folderId: null } : b));
+      this.#bookmarks = this.#bookmarks.map((b) =>
+        b.folderId === id ? { ...b, folderId: null } : b,
+      );
     });
   }
 
@@ -318,7 +336,10 @@ export class BookmarksStore {
    * No-op while signed out: a round that was mid-flight at logout must not
    * repopulate the old account's view after the logout reset.
    */
-  applyServer(snapshot: BookmarksSnapshot, drained?: readonly SyncMutation<BookmarksMutation>[]): void {
+  applyServer(
+    snapshot: BookmarksSnapshot,
+    drained?: readonly SyncMutation<BookmarksMutation>[],
+  ): void {
     if (!this.authed) return;
     if (drained !== undefined) {
       // DEFERRED: a drain in another tab does not retire this tab's overlay
@@ -335,7 +356,8 @@ export class BookmarksStore {
       if (this.#pendingDeletes.has(bookmark.id)) continue;
       const key = verseKeyOf(bookmark.surah, bookmark.ayah);
       const prev = newestPerVerse.get(key);
-      if (prev === undefined || bookmark.updatedAt >= prev.updatedAt) newestPerVerse.set(key, bookmark);
+      if (prev === undefined || bookmark.updatedAt >= prev.updatedAt)
+        newestPerVerse.set(key, bookmark);
     }
     for (const pending of this.#pendingById.values()) {
       newestPerVerse.set(verseKeyOf(pending.surah, pending.ayah), pending);
@@ -344,7 +366,8 @@ export class BookmarksStore {
     // predates a local create/rename/delete must not erase or resurrect it.
     this.#folders = [
       ...snapshot.folders.filter(
-        (folder) => !this.#pendingFolderDeletes.has(folder.id) && !this.#pendingFoldersById.has(folder.id),
+        (folder) =>
+          !this.#pendingFolderDeletes.has(folder.id) && !this.#pendingFoldersById.has(folder.id),
       ),
       ...this.#pendingFoldersById.values(),
     ];

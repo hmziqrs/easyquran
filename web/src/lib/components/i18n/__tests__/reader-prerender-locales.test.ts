@@ -4,8 +4,8 @@ import {
   readerPrerenderHrefs,
 } from "$lib/components/i18n/reader-prerender.server";
 import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
 import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
+import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
 import { SUPPORTED_UI_LOCALES } from "$lib/i18n/locales";
 import { readerHrefFor } from "$lib/i18n/reader";
 import { readerEntryPath } from "$lib/i18n/seo";
@@ -33,7 +33,9 @@ describe("localized reader prerender discovery", () => {
     expect(entries.filter((entry) => entry.kind === "global-page")).toHaveLength(
       RANGE_COUNTS[RangeKind.Page],
     );
-    expect(entries.filter((entry) => entry.kind === "juz")).toHaveLength(RANGE_COUNTS[RangeKind.Juz]);
+    expect(entries.filter((entry) => entry.kind === "juz")).toHaveLength(
+      RANGE_COUNTS[RangeKind.Juz],
+    );
     expect(entries.filter((entry) => entry.kind === "hizb")).toHaveLength(HIZB_COUNT);
     expect(entries.filter((entry) => entry.kind === "rub")).toHaveLength(RUB_COUNT);
     expect(HIZB_COUNT).toBe(60);
@@ -63,9 +65,7 @@ describe("localized reader prerender discovery", () => {
     const entryHrefs = new Set(["/juz", "/surah", "/pages", "/ar/juz", "/ar/surah", "/ar/pages"]);
     expect(hrefs.filter((href) => entryHrefs.has(href))).toHaveLength(6);
     expect(hrefs.every((href) => !href.includes("/t/"))).toBe(true);
-    expect(hrefs.every((href) => !href.includes("/page/") || /\/page\/\d+$/.test(href))).toBe(
-      true,
-    );
+    expect(hrefs.every((href) => !href.includes("/page/") || /\/page\/\d+$/.test(href))).toBe(true);
     expect(hrefs).toContain("/hizb/1");
     expect(hrefs).toContain("/ar/rub/240");
     expect(hrefs.every((href) => !href.endsWith(".md") && !href.endsWith(".txt"))).toBe(true);

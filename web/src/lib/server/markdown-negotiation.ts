@@ -1,5 +1,5 @@
-import { SITE } from "$lib/config/site";
 import { mdSiblingPathFor } from "$lib/accept-parse";
+import { SITE } from "$lib/config/site";
 
 export {
   appendVaryAccept,

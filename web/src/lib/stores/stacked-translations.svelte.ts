@@ -1,5 +1,5 @@
 import { browser } from "$app/environment";
-import { uniq } from "es-toolkit";
+import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
 import {
   asArray,
   asObject,
@@ -9,7 +9,7 @@ import {
   readJSON,
   writeJSON,
 } from "$lib/storage";
-import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
+import { uniq } from "es-toolkit";
 
 export { STACKED_MAX_EXTRAS };
 
@@ -69,9 +69,7 @@ export class StackedTranslationsStore {
   }
 
   toggle(id: string): void {
-    const next = this.#ids.includes(id)
-      ? this.#ids.filter((x) => x !== id)
-      : [...this.#ids, id];
+    const next = this.#ids.includes(id) ? this.#ids.filter((x) => x !== id) : [...this.#ids, id];
     this.setIds(next);
   }
 

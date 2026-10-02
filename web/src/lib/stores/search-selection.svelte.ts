@@ -1,5 +1,4 @@
 import { browser } from "$app/environment";
-import { uniq } from "es-toolkit";
 import {
   asArray,
   asObject,
@@ -9,6 +8,7 @@ import {
   readJSON,
   writeJSON,
 } from "$lib/storage";
+import { uniq } from "es-toolkit";
 
 const SEARCH_SELECTION_STORAGE_KEY = "easyquran.search.selection";
 const SEARCH_SELECTION_SCHEMA_VERSION = 1;
@@ -61,7 +61,8 @@ export class SearchSelectionStore {
 
   #commit(ids: string[]): void {
     this.#ids = ids;
-    if (browser) writeJSON(SEARCH_SELECTION_STORAGE_KEY, { v: SEARCH_SELECTION_SCHEMA_VERSION, ids });
+    if (browser)
+      writeJSON(SEARCH_SELECTION_STORAGE_KEY, { v: SEARCH_SELECTION_SCHEMA_VERSION, ids });
   }
 
   setIds(ids: readonly string[]): void {
@@ -71,9 +72,7 @@ export class SearchSelectionStore {
   }
 
   toggle(id: string): void {
-    const next = this.#ids.includes(id)
-      ? this.#ids.filter((x) => x !== id)
-      : [...this.#ids, id];
+    const next = this.#ids.includes(id) ? this.#ids.filter((x) => x !== id) : [...this.#ids, id];
     this.setIds(next);
   }
 

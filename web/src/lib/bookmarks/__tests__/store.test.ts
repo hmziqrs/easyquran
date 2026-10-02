@@ -1,9 +1,9 @@
-import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "$lib/sync";
 import type { VerseKey } from "$lib/data/quran";
+import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "$lib/sync";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createBookmarksStore, type SyncEngineLike } from "../store.svelte";
 import type { BookmarksMutation, BookmarksSnapshot } from "../schema";
+import { createBookmarksStore, type SyncEngineLike } from "../store.svelte";
 
 vi.mock("$app/environment", () => ({ browser: true }));
 vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
@@ -152,7 +152,12 @@ afterEach(() => {
 
 const SNAP: BookmarksSnapshot = {
   folders: [
-    { id: "f1", name: "Tafsir", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+    {
+      id: "f1",
+      name: "Tafsir",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
   ],
   bookmarks: [
     {
@@ -237,7 +242,11 @@ describe("BookmarksStore — authed toggles", () => {
     expect(rig.store.isBookmarked(2, 255)).toBe(false);
     expect(rig.store.bookmarks).toHaveLength(1);
     expect(rig.engine.enqueued).toHaveLength(1);
-    expect(rig.engine.enqueued[0]!).toEqual({ kind: "bookmark.delete", id: "b1", updatedAt: expect.any(String) });
+    expect(rig.engine.enqueued[0]!).toEqual({
+      kind: "bookmark.delete",
+      id: "b1",
+      updatedAt: expect.any(String),
+    });
   });
 
   it("a rejected enqueue applies no optimistic view and leaves no overlay behind", async () => {
@@ -300,7 +309,14 @@ describe("BookmarksStore — authed toggles", () => {
     rig.store.applyServer({
       folders: [],
       bookmarks: [
-        { id: entityId, folderId: null, surah: 1, ayah: 1, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+        {
+          id: entityId,
+          folderId: null,
+          surah: 1,
+          ayah: 1,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     });
     expect(rig.store.isBookmarked(1, 1)).toBe(false);
@@ -334,7 +350,11 @@ describe("BookmarksStore — folders and moves", () => {
     await flush();
 
     expect(rig.store.folderById(folder.id)?.name).toBe("New");
-    expect(rig.engine.enqueued[1]).toMatchObject({ kind: "folder.upsert", id: folder.id, name: "New" });
+    expect(rig.engine.enqueued[1]).toMatchObject({
+      kind: "folder.upsert",
+      id: folder.id,
+      name: "New",
+    });
   });
 
   it("deleteFolder detaches children and enqueues folder.delete", async () => {
@@ -346,7 +366,9 @@ describe("BookmarksStore — folders and moves", () => {
 
     expect(rig.store.folders).toEqual([]);
     expect(rig.store.bookmarksIn(null)).toHaveLength(2);
-    expect(rig.engine.enqueued).toEqual([{ kind: "folder.delete", id: "f1", updatedAt: expect.any(String) }]);
+    expect(rig.engine.enqueued).toEqual([
+      { kind: "folder.delete", id: "f1", updatedAt: expect.any(String) },
+    ]);
   });
 
   it("moveToFolder enqueues an upsert with the new folderId; unknown folder is a no-op", async () => {
@@ -356,7 +378,13 @@ describe("BookmarksStore — folders and moves", () => {
     rig.store.moveToFolder("b2", "f1");
     await flush();
     expect(rig.store.bookmarksIn("f1")).toHaveLength(2);
-    expect(rig.engine.enqueued[0]).toMatchObject({ kind: "bookmark.upsert", id: "b2", folderId: "f1", surah: 112, ayah: 1 });
+    expect(rig.engine.enqueued[0]).toMatchObject({
+      kind: "bookmark.upsert",
+      id: "b2",
+      folderId: "f1",
+      surah: 112,
+      ayah: 1,
+    });
 
     rig.store.moveToFolder("b2", "missing");
     expect(rig.engine.enqueued).toHaveLength(1);
@@ -547,7 +575,15 @@ describe("BookmarksStore — optimistic overlay", () => {
 
     // An older round acks with a stale snapshot that still contains b1 and
     // knows nothing of the 1:1 add: both edits must survive.
-    rig.store.applyServer(SNAP, drainedOf(rig, { kind: "folder.upsert", id: "unrelated", name: "x", updatedAt: "2026-01-01T00:00:00Z" }));
+    rig.store.applyServer(
+      SNAP,
+      drainedOf(rig, {
+        kind: "folder.upsert",
+        id: "unrelated",
+        name: "x",
+        updatedAt: "2026-01-01T00:00:00Z",
+      }),
+    );
 
     expect(rig.store.isBookmarked(2, 255)).toBe(false);
     expect(rig.store.isBookmarked(1, 1)).toBe(true);
@@ -557,14 +593,25 @@ describe("BookmarksStore — optimistic overlay", () => {
     const fresh: BookmarksSnapshot = {
       folders: SNAP.folders,
       bookmarks: [
-        { id: "b2", folderId: null, surah: 112, ayah: 1, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z" },
-        { id: "b4", folderId: null, surah: 1, ayah: 1, createdAt: "2026-01-05T00:00:00Z", updatedAt: "2026-01-05T00:00:00Z" },
+        {
+          id: "b2",
+          folderId: null,
+          surah: 112,
+          ayah: 1,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-02T00:00:00Z",
+        },
+        {
+          id: "b4",
+          folderId: null,
+          surah: 1,
+          ayah: 1,
+          createdAt: "2026-01-05T00:00:00Z",
+          updatedAt: "2026-01-05T00:00:00Z",
+        },
       ],
     };
-    rig.store.applyServer(fresh, [
-      ...drainedOf(rig, removePayload),
-      ...drainedOf(rig, addPayload),
-    ]);
+    rig.store.applyServer(fresh, [...drainedOf(rig, removePayload), ...drainedOf(rig, addPayload)]);
 
     // Overlay entries for the drained entities are retired; server rows win.
     expect(rig.store.bookmarks.map((b) => b.id)).toEqual(["b2", "b4"]);
@@ -643,7 +690,14 @@ describe("BookmarksStore — view grouping", () => {
       folders: SNAP.folders,
       bookmarks: [
         ...SNAP.bookmarks,
-        { id: "orphan", folderId: "ghost", surah: 3, ayah: 26, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+        {
+          id: "orphan",
+          folderId: "ghost",
+          surah: 3,
+          ayah: 26,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
       ],
     });
 

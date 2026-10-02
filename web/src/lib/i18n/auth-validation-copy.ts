@@ -1,3 +1,4 @@
+import type { UiLocale } from "$lib/i18n/locales";
 import {
   auth_error_backup_code_invalid,
   auth_error_code_digits,
@@ -13,7 +14,6 @@ import {
   auth_error_password_min,
   auth_error_password_required,
 } from "$lib/i18n/m/auth";
-import type { UiLocale } from "$lib/i18n/locales";
 import { getLocale } from "$lib/paraglide/runtime.js";
 
 export interface AuthValidationCopy {
@@ -33,7 +33,9 @@ export interface AuthValidationCopy {
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
-export function getAuthValidationCopy(locale: UiLocale = getLocale() as UiLocale): AuthValidationCopy {
+export function getAuthValidationCopy(
+  locale: UiLocale = getLocale() as UiLocale,
+): AuthValidationCopy {
   return {
     nameRequired: auth_error_name_required(undefined, { locale }),
     nameMax: auth_error_name_max(undefined, { locale }),

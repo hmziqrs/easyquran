@@ -1,10 +1,10 @@
-import { untrack } from "svelte";
 import type { QuranScript, VerseKey } from "$lib/data/quran-types";
 import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
 import type { WorkerStatus } from "$lib/quran/protocol";
 import { bodyText } from "$lib/quran/view/source-view";
-import { quranWorker } from "$lib/quran/worker-client";
 import type { AyahCoordinateValidator } from "$lib/quran/wire";
+import { quranWorker } from "$lib/quran/worker-client";
+import { untrack } from "svelte";
 
 /**
  * The Arabic for a translation route. A /t/ page's own text is its translation (SSR, SEO),
@@ -49,7 +49,12 @@ export function createArabicCompanion(opts: CreateArabicCompanionOptions): Arabi
   let inFlight: AbortController | null = null;
   let stopWorkerStatus: (() => void) | null = null;
 
-  function fetchRange(from: number, to: number, source: string, validator: AyahCoordinateValidator): void {
+  function fetchRange(
+    from: number,
+    to: number,
+    source: string,
+    validator: AyahCoordinateValidator,
+  ): void {
     const startGen = ++gen;
     inFlight?.abort();
     const controller = new AbortController();
@@ -91,7 +96,8 @@ export function createArabicCompanion(opts: CreateArabicCompanionOptions): Arabi
   }
 
   function sync(): void {
-    if (!stopWorkerStatus && !disposed) stopWorkerStatus = quranWorker.onStatus?.(onWorkerStatus) ?? null;
+    if (!stopWorkerStatus && !disposed)
+      stopWorkerStatus = quranWorker.onStatus?.(onWorkerStatus) ?? null;
     const identity = `${opts.routeKey()}|${opts.source()}`;
     if (identity !== lastIdentity) {
       lastIdentity = identity;

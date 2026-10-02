@@ -22,8 +22,8 @@ vi.mock("$lib/firebase", () => firebaseCore);
 vi.mock("$lib/firebase/messaging", () => messaging);
 vi.mock("$lib/firebase/analytics", () => analytics);
 
-import { createNotifications } from "$lib/stores/notifications.svelte";
 import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
+import { createNotifications } from "$lib/stores/notifications.svelte";
 
 const STORAGE_KEY = "easyquran.fcm";
 let foregroundCb: ((p: MessagePayload) => void) | undefined;

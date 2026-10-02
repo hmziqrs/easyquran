@@ -38,7 +38,7 @@ describe("normalizeLatin", () => {
   });
 
   it("folds curly quotes to ASCII", () => {
-    expect(normalizeLatin("don’t “seek” mercy")).toBe("don't \"seek\" mercy");
+    expect(normalizeLatin("don’t “seek” mercy")).toBe('don\'t "seek" mercy');
   });
 
   it("folds typographic dashes to ASCII hyphen", () => {
@@ -74,9 +74,9 @@ describe("normalizeLatinWithMap", () => {
     const original = "Mércy — MERCY";
     const map = normalizeLatinWithMap(original);
     const segments = highlightSegments(original, spansFor(map, "mercy"));
-    expect(segments.filter((segment) => segment.highlighted).map((segment) => segment.text)).toEqual(
-      ["Mércy", "MERCY"],
-    );
+    expect(
+      segments.filter((segment) => segment.highlighted).map((segment) => segment.text),
+    ).toEqual(["Mércy", "MERCY"]);
     expect(segments.map((segment) => segment.text).join("")).toBe(original);
   });
 
@@ -85,10 +85,9 @@ describe("normalizeLatinWithMap", () => {
     const map = normalizeLatinWithMap(original);
     expect(map.normalized).toBe("mercy and mercy");
     const segments = highlightSegments(original, spansFor(map, "mercy"));
-    expect(segments.filter((segment) => segment.highlighted).map((segment) => segment.text)).toEqual([
-      "mércy",
-      "mércy",
-    ]);
+    expect(
+      segments.filter((segment) => segment.highlighted).map((segment) => segment.text),
+    ).toEqual(["mércy", "mércy"]);
   });
 
   it("emits distinct spans per occurrence", () => {

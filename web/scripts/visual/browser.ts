@@ -52,10 +52,13 @@ export async function prepare(page: Page, url: string, opts: PrepareOptions): Pr
   await page.setViewport({ width: opts.width, height: opts.height ?? 900 });
   await page.goto(url, { waitUntil: "networkidle2", timeout: 60_000 });
   if (opts.palette !== undefined && opts.mode !== undefined) {
-    await page.evaluate(([palette, mode]) => {
-      document.documentElement.dataset.palette = palette;
-      document.documentElement.dataset.mode = mode;
-    }, [opts.palette, opts.mode]);
+    await page.evaluate(
+      ([palette, mode]) => {
+        document.documentElement.dataset.palette = palette;
+        document.documentElement.dataset.mode = mode;
+      },
+      [opts.palette, opts.mode],
+    );
   }
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(

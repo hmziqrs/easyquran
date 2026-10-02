@@ -222,10 +222,10 @@
 
   /* Accent family (plan 01 remap: sacred → cobalt). Note the dark accent is DARKER than
      the light one, not lighter — that is the white-on-colour decision (plan 00 D2). */
-  --primary: oklch(0.50 0.20 262);
-  --primary-hover: oklch(0.54 0.20 262);
+  --primary: oklch(0.5 0.2 262);
+  --primary-hover: oklch(0.54 0.2 262);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.30 0.055 262);
+  --primary-soft: oklch(0.3 0.055 262);
 
   /* The editorial-gold role is retired (plan 01): --accent now means "the secondary hue". */
   --accent: var(--hue-2);
@@ -234,11 +234,11 @@
 
   /* Status set (plan 06, area-1 punt): one per mode, shared by every palette —
      the ground is shared, so per-palette status variants no longer mean anything. */
-  --success: #78BD91;
-  --warning: #D9B55E;
-  --danger: #DF7777;
+  --success: #78bd91;
+  --warning: #d9b55e;
+  --danger: #df7777;
 
-  --focus-ring: oklch(0.50 0.20 262);
+  --focus-ring: oklch(0.5 0.2 262);
 
   /* Reader family (plan 06 step 1): derives from the neutral ground, not a tint.
      Dark mode reads on true black (user pick, 2026-10-01: the grey ground read as washed
@@ -252,17 +252,17 @@
   /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 4 is rose
      (replaces the retired amber, whose yellow band read poorly in the reader); the
      dark values are the same L/C step-down the other hues use. */
-  --hue-1: oklch(0.50 0.20 262);
-  --hue-1-soft: oklch(0.30 0.055 262);
+  --hue-1: oklch(0.5 0.2 262);
+  --hue-1-soft: oklch(0.3 0.055 262);
   --on-hue-1: #ffffff;
-  --hue-2: oklch(0.50 0.14 162);
-  --hue-2-soft: oklch(0.30 0.050 162);
+  --hue-2: oklch(0.5 0.14 162);
+  --hue-2-soft: oklch(0.3 0.05 162);
   --on-hue-2: #ffffff;
   --hue-3: oklch(0.48 0.23 300);
-  --hue-3-soft: oklch(0.30 0.060 300);
+  --hue-3-soft: oklch(0.3 0.06 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.50 0.19 25);
-  --hue-4-soft: oklch(0.30 0.055 25);
+  --hue-4: oklch(0.5 0.19 25);
+  --hue-4-soft: oklch(0.3 0.055 25);
   --on-hue-4: #ffffff;
   /* L≈0.78 versions for numerals on the dark soft chips, where the deep fill disappears.
      In light mode --hue-N-legible just is --hue-N. */
@@ -275,15 +275,15 @@
 }
 
 [data-palette="sacred"][data-mode="light"] {
-  --background: oklch(0.980 0 0);
+  --background: oklch(0.98 0 0);
   --background-subtle: oklch(0.968 0 0);
 
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
-  --foreground: oklch(0.20 0 0);
-  --foreground-secondary: oklch(0.40 0 0);
+  --foreground: oklch(0.2 0 0);
+  --foreground-secondary: oklch(0.4 0 0);
   --muted: oklch(0.52 0 0);
 
   --border: oklch(0.885 0 0);
@@ -293,37 +293,37 @@
   --primary: oklch(0.52 0.21 262);
   --primary-hover: oklch(0.48 0.21 262);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.950 0.045 262);
+  --primary-soft: oklch(0.95 0.045 262);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #397A57;
-  --warning: #8A681E;
-  --danger: #B34A4A;
+  --success: #397a57;
+  --warning: #8a681e;
+  --danger: #b34a4a;
 
   --focus-ring: oklch(0.52 0.21 262);
 
   --reader-background: #ffffff;
   --quran-foreground: oklch(0.16 0 0);
-  --translation-foreground: oklch(0.40 0 0);
+  --translation-foreground: oklch(0.4 0 0);
   --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01) — identical in every palette, mode-dependent. Hue 2 is the board's
      oklch(0.54 0.16 162) nudged to L 0.53: white on the board value measures 4.47:1 in the
      contrast gate's Ottosson math and the gate is the binding contract. */
   --hue-1: oklch(0.52 0.21 262);
-  --hue-1-soft: oklch(0.950 0.045 262);
+  --hue-1-soft: oklch(0.95 0.045 262);
   --on-hue-1: #ffffff;
   --hue-2: oklch(0.53 0.16 162);
-  --hue-2-soft: oklch(0.950 0.045 162);
+  --hue-2-soft: oklch(0.95 0.045 162);
   --on-hue-2: #ffffff;
-  --hue-3: oklch(0.50 0.24 300);
-  --hue-3-soft: oklch(0.950 0.045 300);
+  --hue-3: oklch(0.5 0.24 300);
+  --hue-3-soft: oklch(0.95 0.045 300);
   --on-hue-3: #ffffff;
   --hue-4: oklch(0.52 0.19 25);
-  --hue-4-soft: oklch(0.950 0.045 25);
+  --hue-4-soft: oklch(0.95 0.045 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
@@ -334,15 +334,15 @@
 }
 
 [data-palette="ink"][data-mode="light"] {
-  --background: oklch(0.980 0 0);
+  --background: oklch(0.98 0 0);
   --background-subtle: oklch(0.968 0 0);
 
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
-  --foreground: oklch(0.20 0 0);
-  --foreground-secondary: oklch(0.40 0 0);
+  --foreground: oklch(0.2 0 0);
+  --foreground-secondary: oklch(0.4 0 0);
   --muted: oklch(0.52 0 0);
 
   --border: oklch(0.885 0 0);
@@ -350,7 +350,7 @@
 
   /* Accent family (plan 01 remap: ink → neutral). The accent is the ink itself; on-accent
      is ground-inverted (white on near-black in light, near-black on white in dark). */
-  --primary: oklch(0.20 0 0);
+  --primary: oklch(0.2 0 0);
   --primary-hover: oklch(0.28 0 0);
   --primary-foreground: #ffffff;
   --primary-soft: oklch(0.953 0 0);
@@ -359,29 +359,29 @@
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #397A57;
-  --warning: #8A681E;
-  --danger: #B34A4A;
+  --success: #397a57;
+  --warning: #8a681e;
+  --danger: #b34a4a;
 
-  --focus-ring: oklch(0.20 0 0);
+  --focus-ring: oklch(0.2 0 0);
 
   --reader-background: #ffffff;
   --quran-foreground: oklch(0.16 0 0);
-  --translation-foreground: oklch(0.40 0 0);
+  --translation-foreground: oklch(0.4 0 0);
   --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
-  --hue-1-soft: oklch(0.950 0.045 262);
+  --hue-1-soft: oklch(0.95 0.045 262);
   --on-hue-1: #ffffff;
   --hue-2: oklch(0.53 0.16 162);
-  --hue-2-soft: oklch(0.950 0.045 162);
+  --hue-2-soft: oklch(0.95 0.045 162);
   --on-hue-2: #ffffff;
-  --hue-3: oklch(0.50 0.24 300);
-  --hue-3-soft: oklch(0.950 0.045 300);
+  --hue-3: oklch(0.5 0.24 300);
+  --hue-3-soft: oklch(0.95 0.045 300);
   --on-hue-3: #ffffff;
   --hue-4: oklch(0.52 0.19 25);
-  --hue-4-soft: oklch(0.950 0.045 25);
+  --hue-4-soft: oklch(0.95 0.045 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
@@ -409,16 +409,16 @@
   /* Accent family (plan 01 remap: ink → neutral), dark: ground-inverted. */
   --primary: oklch(0.965 0 0);
   --primary-hover: oklch(1 0 0);
-  --primary-foreground: oklch(0.20 0 0);
-  --primary-soft: oklch(0.30 0 0);
+  --primary-foreground: oklch(0.2 0 0);
+  --primary-soft: oklch(0.3 0 0);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #78BD91;
-  --warning: #D9B55E;
-  --danger: #DF7777;
+  --success: #78bd91;
+  --warning: #d9b55e;
+  --danger: #df7777;
 
   --focus-ring: oklch(0.965 0 0);
 
@@ -428,17 +428,17 @@
   --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
-  --hue-1: oklch(0.50 0.20 262);
-  --hue-1-soft: oklch(0.30 0.055 262);
+  --hue-1: oklch(0.5 0.2 262);
+  --hue-1-soft: oklch(0.3 0.055 262);
   --on-hue-1: #ffffff;
-  --hue-2: oklch(0.50 0.14 162);
-  --hue-2-soft: oklch(0.30 0.050 162);
+  --hue-2: oklch(0.5 0.14 162);
+  --hue-2-soft: oklch(0.3 0.05 162);
   --on-hue-2: #ffffff;
   --hue-3: oklch(0.48 0.23 300);
-  --hue-3-soft: oklch(0.30 0.060 300);
+  --hue-3-soft: oklch(0.3 0.06 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.50 0.19 25);
-  --hue-4-soft: oklch(0.30 0.055 25);
+  --hue-4: oklch(0.5 0.19 25);
+  --hue-4-soft: oklch(0.3 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
@@ -449,15 +449,15 @@
 }
 
 [data-palette="sepia"][data-mode="light"] {
-  --background: oklch(0.980 0 0);
+  --background: oklch(0.98 0 0);
   --background-subtle: oklch(0.968 0 0);
 
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
-  --foreground: oklch(0.20 0 0);
-  --foreground-secondary: oklch(0.40 0 0);
+  --foreground: oklch(0.2 0 0);
+  --foreground-secondary: oklch(0.4 0 0);
   --muted: oklch(0.52 0 0);
 
   --border: oklch(0.885 0 0);
@@ -465,17 +465,17 @@
 
   /* Accent family (plan 01 remap: sepia → magenta). */
   --primary: oklch(0.54 0.23 352);
-  --primary-hover: oklch(0.50 0.23 352);
+  --primary-hover: oklch(0.5 0.23 352);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.950 0.045 352);
+  --primary-soft: oklch(0.95 0.045 352);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #397A57;
-  --warning: #8A681E;
-  --danger: #B34A4A;
+  --success: #397a57;
+  --warning: #8a681e;
+  --danger: #b34a4a;
 
   --focus-ring: oklch(0.54 0.23 352);
 
@@ -489,16 +489,16 @@
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
-  --hue-1-soft: oklch(0.950 0.045 262);
+  --hue-1-soft: oklch(0.95 0.045 262);
   --on-hue-1: #ffffff;
   --hue-2: oklch(0.53 0.16 162);
-  --hue-2-soft: oklch(0.950 0.045 162);
+  --hue-2-soft: oklch(0.95 0.045 162);
   --on-hue-2: #ffffff;
-  --hue-3: oklch(0.50 0.24 300);
-  --hue-3-soft: oklch(0.950 0.045 300);
+  --hue-3: oklch(0.5 0.24 300);
+  --hue-3-soft: oklch(0.95 0.045 300);
   --on-hue-3: #ffffff;
   --hue-4: oklch(0.52 0.19 25);
-  --hue-4-soft: oklch(0.950 0.045 25);
+  --hue-4-soft: oklch(0.95 0.045 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
@@ -527,15 +527,15 @@
   --primary: oklch(0.51 0.22 352);
   --primary-hover: oklch(0.55 0.22 352);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.30 0.055 352);
+  --primary-soft: oklch(0.3 0.055 352);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #78BD91;
-  --warning: #D9B55E;
-  --danger: #DF7777;
+  --success: #78bd91;
+  --warning: #d9b55e;
+  --danger: #df7777;
 
   --focus-ring: oklch(0.51 0.22 352);
 
@@ -546,17 +546,17 @@
   --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
-  --hue-1: oklch(0.50 0.20 262);
-  --hue-1-soft: oklch(0.30 0.055 262);
+  --hue-1: oklch(0.5 0.2 262);
+  --hue-1-soft: oklch(0.3 0.055 262);
   --on-hue-1: #ffffff;
-  --hue-2: oklch(0.50 0.14 162);
-  --hue-2-soft: oklch(0.30 0.050 162);
+  --hue-2: oklch(0.5 0.14 162);
+  --hue-2-soft: oklch(0.3 0.05 162);
   --on-hue-2: #ffffff;
   --hue-3: oklch(0.48 0.23 300);
-  --hue-3-soft: oklch(0.30 0.060 300);
+  --hue-3-soft: oklch(0.3 0.06 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.50 0.19 25);
-  --hue-4-soft: oklch(0.30 0.055 25);
+  --hue-4: oklch(0.5 0.19 25);
+  --hue-4-soft: oklch(0.3 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);
@@ -567,15 +567,15 @@
 }
 
 [data-palette="sapphire"][data-mode="light"] {
-  --background: oklch(0.980 0 0);
+  --background: oklch(0.98 0 0);
   --background-subtle: oklch(0.968 0 0);
 
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
-  --foreground: oklch(0.20 0 0);
-  --foreground-secondary: oklch(0.40 0 0);
+  --foreground: oklch(0.2 0 0);
+  --foreground-secondary: oklch(0.4 0 0);
   --muted: oklch(0.52 0 0);
 
   --border: oklch(0.885 0 0);
@@ -586,35 +586,35 @@
   --primary: oklch(0.53 0.16 162);
   --primary-hover: oklch(0.49 0.16 162);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.950 0.045 162);
+  --primary-soft: oklch(0.95 0.045 162);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #397A57;
-  --warning: #8A681E;
-  --danger: #B34A4A;
+  --success: #397a57;
+  --warning: #8a681e;
+  --danger: #b34a4a;
 
   --focus-ring: oklch(0.53 0.16 162);
 
   --reader-background: #ffffff;
   --quran-foreground: oklch(0.16 0 0);
-  --translation-foreground: oklch(0.40 0 0);
+  --translation-foreground: oklch(0.4 0 0);
   --reader-divider: oklch(0.905 0 0);
 
   /* Hue set (plan 01), light values — identical in every palette (see sacred light). */
   --hue-1: oklch(0.52 0.21 262);
-  --hue-1-soft: oklch(0.950 0.045 262);
+  --hue-1-soft: oklch(0.95 0.045 262);
   --on-hue-1: #ffffff;
   --hue-2: oklch(0.53 0.16 162);
-  --hue-2-soft: oklch(0.950 0.045 162);
+  --hue-2-soft: oklch(0.95 0.045 162);
   --on-hue-2: #ffffff;
-  --hue-3: oklch(0.50 0.24 300);
-  --hue-3-soft: oklch(0.950 0.045 300);
+  --hue-3: oklch(0.5 0.24 300);
+  --hue-3-soft: oklch(0.95 0.045 300);
   --on-hue-3: #ffffff;
   --hue-4: oklch(0.52 0.19 25);
-  --hue-4-soft: oklch(0.950 0.045 25);
+  --hue-4-soft: oklch(0.95 0.045 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: var(--hue-1);
   --hue-2-legible: var(--hue-2);
@@ -640,20 +640,20 @@
   --border-strong: oklch(0.33 0 0);
 
   /* Accent family (plan 01 remap: sapphire → emerald), dark — darker than light (plan 00 D2). */
-  --primary: oklch(0.50 0.14 162);
+  --primary: oklch(0.5 0.14 162);
   --primary-hover: oklch(0.53 0.14 162);
   --primary-foreground: #ffffff;
-  --primary-soft: oklch(0.30 0.050 162);
+  --primary-soft: oklch(0.3 0.05 162);
 
   --accent: var(--hue-2);
   --accent-strong: var(--hue-2);
   --accent-soft: var(--hue-2-soft);
 
-  --success: #78BD91;
-  --warning: #D9B55E;
-  --danger: #DF7777;
+  --success: #78bd91;
+  --warning: #d9b55e;
+  --danger: #df7777;
 
-  --focus-ring: oklch(0.50 0.14 162);
+  --focus-ring: oklch(0.5 0.14 162);
 
   --reader-background: oklch(0 0 0);
   --quran-foreground: oklch(0.975 0 0);
@@ -661,17 +661,17 @@
   --reader-divider: oklch(0.22 0 0);
 
   /* Hue set (plan 01), dark values — identical in every palette (see sacred dark). */
-  --hue-1: oklch(0.50 0.20 262);
-  --hue-1-soft: oklch(0.30 0.055 262);
+  --hue-1: oklch(0.5 0.2 262);
+  --hue-1-soft: oklch(0.3 0.055 262);
   --on-hue-1: #ffffff;
-  --hue-2: oklch(0.50 0.14 162);
-  --hue-2-soft: oklch(0.30 0.050 162);
+  --hue-2: oklch(0.5 0.14 162);
+  --hue-2-soft: oklch(0.3 0.05 162);
   --on-hue-2: #ffffff;
   --hue-3: oklch(0.48 0.23 300);
-  --hue-3-soft: oklch(0.30 0.060 300);
+  --hue-3-soft: oklch(0.3 0.06 300);
   --on-hue-3: #ffffff;
-  --hue-4: oklch(0.50 0.19 25);
-  --hue-4-soft: oklch(0.30 0.055 25);
+  --hue-4: oklch(0.5 0.19 25);
+  --hue-4-soft: oklch(0.3 0.055 25);
   --on-hue-4: #ffffff;
   --hue-1-legible: oklch(0.78 0.19 262);
   --hue-2-legible: oklch(0.78 0.14 162);

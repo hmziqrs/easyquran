@@ -71,7 +71,9 @@ const isLegacyReaderKey = (key: string): boolean =>
   key.startsWith("/ar/app/");
 const legacyReader = pairs.find(({ key }) => isLegacyReaderKey(key));
 if (legacyReader) {
-  throw new Error(`[offline] legacy pre-scheme-A reader artifact leaked into build: ${legacyReader.key}`);
+  throw new Error(
+    `[offline] legacy pre-scheme-A reader artifact leaked into build: ${legacyReader.key}`,
+  );
 }
 
 const entries: Record<string, number> = {};

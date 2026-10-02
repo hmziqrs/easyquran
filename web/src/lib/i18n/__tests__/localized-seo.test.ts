@@ -35,9 +35,7 @@ describe("localized SEO links", () => {
 
   it("canonicalizes every reader UI variant to the unprefixed en form (scheme A)", () => {
     const translated = "/ar-rum/t/ms/basmeih?view=compact#ayah-30-12";
-    expect(readerCanonicalPath(translated)).toBe(
-      "/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
-    );
+    expect(readerCanonicalPath(translated)).toBe("/ar-rum/t/ms/basmeih?view=compact#ayah-30-12");
     expect(readerCanonicalUrl(translated)).toBe(
       "https://easyquran.fyi/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
     );

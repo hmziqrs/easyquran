@@ -1,5 +1,5 @@
-import { RangeKind, SURAH_COUNT } from "$lib/data/quran-data";
 import { hizbRange, positionForGlobal } from "$lib/data/mushaf-divisions";
+import { RangeKind, SURAH_COUNT } from "$lib/data/quran-data";
 import type {
   Ayah,
   CatalogEntry,

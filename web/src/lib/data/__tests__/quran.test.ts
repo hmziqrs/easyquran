@@ -1,10 +1,4 @@
-import {
-  parseKey,
-  surahAyahPath,
-  surahPath,
-  toArabicDigits,
-  verseKey,
-} from "$lib/data/quran";
+import { parseKey, surahAyahPath, surahPath, toArabicDigits, verseKey } from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
 import { QURAN_DATA } from "$lib/server/quran-data";
 import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
