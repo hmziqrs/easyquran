@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, type Component } from "svelte";
+  import type { Attachment } from "svelte/attachments";
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
   import { toArabicDigits } from "$lib/data/quran";
@@ -23,6 +24,11 @@
     stackedPending = [],
     stackedErrored = [],
     stackedErrorLabel = "",
+    localPage,
+    virtualIndex,
+    totalAyahs,
+    virtualGap = 0,
+    measure,
   }: {
     text: string;
     n: number;
@@ -42,6 +48,11 @@
     stackedPending?: readonly string[];
     stackedErrored?: readonly string[];
     stackedErrorLabel?: string;
+    localPage?: number;
+    virtualIndex?: number;
+    totalAyahs?: number;
+    virtualGap?: number;
+    measure?: Attachment<HTMLElement>;
   } = $props();
   let Tools = $state<
     Component<{ text: string; vKey: string; onToggleNote?: () => void }> | null
@@ -109,8 +120,14 @@
 </script>
 
 <li
+  {@attach measure}
   id={ayahId}
   data-verse-key={vKey}
+  data-local-page={localPage}
+  data-index={virtualIndex}
+  aria-posinset={totalAyahs === undefined ? undefined : n}
+  aria-setsize={totalAyahs}
+  style:margin-block-start={`${virtualGap}px`}
   class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] {isRevealed
     ? 'revealed-ayah'
     : ''} {reader.isReadingMode && translationActive

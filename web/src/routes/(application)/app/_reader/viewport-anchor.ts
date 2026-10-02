@@ -67,8 +67,8 @@ export function captureViewportAnchor(container: HTMLElement | null): ViewportAn
   if (!section) return null;
   const localPage = Number(section.dataset.localPage);
   if (!Number.isSafeInteger(localPage)) return null;
-  if (section.hasAttribute("data-page-rendered")) {
-    const row = closestVerse(section, marker);
+  if (section.hasAttribute("data-page-rendered") || section.hasAttribute("data-verse-key")) {
+    const row = section.hasAttribute("data-verse-key") ? section : closestVerse(section, marker);
     const text = row?.querySelector<HTMLElement>(".verse-text");
     const verseKey = row?.dataset.verseKey;
     if (text && verseKey) {

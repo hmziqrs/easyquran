@@ -113,7 +113,7 @@
       if (!targetPage) return;
       // The target page streams in place through the reader's anchor-preserving
       // queue — no navigation, the path never moves.
-      await readerView?.ensurePage(targetPage.localPage);
+      await readerView?.ensureAyah(targetPage.localPage, `${surah.num}:${ayah}`);
       const targetHref = publicHref(
         readerHrefFor(copy.locale, surahAyahPathFor(routeContext, surah, ayah)),
       );

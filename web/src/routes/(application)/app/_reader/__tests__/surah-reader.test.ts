@@ -33,6 +33,7 @@ const {
   nav: { state: {}, url: new URL("https://example.test/app/al-fatihah") },
   workerStub: {
     ready: true,
+    whenReady: vi.fn(),
     readRange: vi.fn(),
     onStatus: vi.fn().mockReturnValue(() => {}),
   },
@@ -221,6 +222,7 @@ beforeEach(() => {
   workerStub.readRange = vi.fn();
   workerStub.onStatus = vi.fn().mockReturnValue(() => {});
   workerStub.ready = true;
+  workerStub.whenReady.mockReset().mockResolvedValue(undefined);
   loadQuranDataStub.mockReset();
   loadQuranDataStub.mockResolvedValue({
     surahLocalPage: () => ({ startGlobal: 8, endGlobal: 14 }),
@@ -466,6 +468,39 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     };
   }
 
+  it("retries explicit ayah jump after cold worker becomes ready", async () => {
+    stubDistinctRanges();
+    const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 600, 9000));
+    workerStub.ready = false;
+    workerStub.whenReady.mockImplementation(() => {
+      workerStub.ready = true;
+      return Promise.resolve();
+    });
+    workerStub.readRange.mockImplementation((from: number, to: number) => {
+      if (!workerStub.ready) return Promise.reject(new Error("worker starting"));
+      return Promise.resolve(surahOneRange(from, to));
+    });
+    const view = mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
+    await flushMicrotasks(20);
+    const jump = view.ensureAyah(3, "1:15");
+    for (let frame = 0; frame < 8; frame += 1) {
+      await flushMicrotasks(20);
+      flushRaf();
+    }
+    await jump;
+    expect(workerStub.whenReady).toHaveBeenCalledOnce();
+    expect(workerStub.readRange.mock.calls.filter(([from]) => from === 15)).toHaveLength(2);
+    expect(target.querySelector('[role="status"]')?.textContent ?? "").not.toMatch(/couldn't be loaded/i);
+    window.dispatchEvent(new WheelEvent("wheel", { deltaY: -500 }));
+    for (let frame = 0; frame < 8; frame += 1) {
+      await flushMicrotasks(20);
+      flushRaf();
+    }
+    expect(workerStub.readRange.mock.calls.some(([from]) => from === 8)).toBe(true);
+    await unmount(view);
+    geometry.mockRestore();
+  });
+
   // W7-R2-2: a worker-degraded flag set by one adjacent read clears on a
   // subsequent clean adjacent read (the status callback re-assigns, not merges).
   it("clears workerDegraded when a later adjacent read succeeds cleanly", async () => {
@@ -703,10 +738,24 @@ describe("SurahReader reading mode", () => {
   it("defaults Reading to the Arabic on an Arabic page", async () => {
     stackedTranslations.setIds(["en.arberry", "ur.jalandhry"]);
     readerStub.setMode("reading");
+    rowProps.length = 0;
     mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
     await flushMicrotasks();
     expect(header().readingText).toBe("arabic");
     expect(header().readingFlowName).toBeNull();
+    expect(rowProps).toHaveLength(0);
+    expect(target.querySelector("[data-page-rendered]")).not.toBeNull();
+  });
+
+  it("fetches only selected Reading translation when other translations are stacked", async () => {
+    stackedTranslations.setIds(["en.arberry", "ur.jalandhry"]);
+    readingText.readTranslation("en.arberry");
+    readerStub.setMode("reading");
+    const view = mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 1 })) });
+    await flushMicrotasks(30);
+    expect(workerStub.readRange).toHaveBeenCalled();
+    expect(workerStub.readRange.mock.calls.every((call) => call[3] === "en.arberry")).toBe(true);
+    await unmount(view);
   });
 
   it("flows the route's own translation by default on a translation page", async () => {

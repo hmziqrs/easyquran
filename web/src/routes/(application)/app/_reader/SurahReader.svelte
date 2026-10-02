@@ -21,9 +21,7 @@
   import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import type { ReadTierStatus } from "$lib/quran/fetch";
   import {
-    SURAH_PAGE_WINDOW_SIZE,
     virtualPageWindow,
-    windowSizeForViewport,
   } from "$lib/quran/virtual-pages";
   import { bodyText } from "$lib/quran/view/source-view";
   import { headerText } from "$lib/quran/view/presentation";
@@ -37,7 +35,6 @@
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import { readingText } from "$lib/stores/reading-text.svelte";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
-  import { PageHeightCache, stablePageHeight, widthBucket } from "./page-heights";
   import { ayahIndexValidator } from "./range-validate";
   import {
     parseHistoryState,
@@ -47,7 +44,6 @@
   } from "./reader-history";
   import {
     captureViewportAnchor,
-    closestPage,
     nextFrame,
     restoreViewportAnchor,
     viewportMarker,
@@ -66,6 +62,9 @@
   import { positionLabel } from "./position-label";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
+  import ReadingAyah from "./ReadingAyah.svelte";
+  import ReaderVirtualList from "./ReaderVirtualList.svelte";
+  import { estimateTextHeight, type ReaderRenderItem } from "./virtual-reader";
   import {
     createStackedTranslations,
     erroredFor,
@@ -94,7 +93,8 @@
   const copy = getReaderUiCopy();
 
   let loadedPages = $state.raw<SurahLocalPageData[]>([]);
-  const pages = $derived.by(() => {
+  let pageOrigin = $state<number | null>(null);
+  const allPages = $derived.by(() => {
     // `initial` can be gone for one turn when a keyed swap / hot update tears the
     // route down while a lazy read (history snapshot) still re-evaluates us.
     if (!initial) return [];
@@ -105,57 +105,39 @@
     }
     return [...byPage.values()].sort((a, b) => a.page.localPage - b.page.localPage);
   });
+  const pages = $derived.by(() => {
+    const origin = pageOrigin ?? initial?.page.localPage;
+    const index = allPages.findIndex((entry) => entry.page.localPage === origin);
+    if (index < 0) return initial ? [initial] : [];
+    let start = index;
+    let end = index;
+    while (start > 0 && allPages[start - 1]!.page.localPage === allPages[start]!.page.localPage - 1) start -= 1;
+    while (end + 1 < allPages.length && allPages[end + 1]!.page.localPage === allPages[end]!.page.localPage + 1) end += 1;
+    return allPages.slice(start, end + 1);
+  });
   let readerPages: HTMLElement | null = $state(null);
   const loadingPages = new SvelteSet<number>();
   const degradation = new ReaderDegradationState();
   let initialRetryInFlight = false;
   let clientMounted = $state(false);
   let activeLocalPage = $state<number | null>(null);
-  let virtualCenterPage = $state<number | null>(null);
   let readerWidth = $state(0);
-  let viewportHeight = $state(0);
   let lastScrollY = 0;
   let touchY: number | null = null;
   let scrollFrame = 0;
   let forwardFillFrame = 0;
   let historyWriteTimer: ReturnType<typeof setTimeout> | null = null;
-  let suppressScroll = false;
+  let suppressScroll = $state(false);
   let sawUserInput = false;
   let userScrolled = false;
   let layoutRepairPending = false;
-  let virtualShiftPage: number | null = null;
   let stableAnchor: ViewportAnchor | null = null;
   let positionQueue = Promise.resolve();
-  const heightCache = new PageHeightCache();
   const loadAheadPx = 900;
   const visibleLocalPage = $derived(activeLocalPage ?? initial?.page.localPage ?? 1);
   const visiblePageData = $derived(
     pages.find((item) => item.page.localPage === visibleLocalPage) ?? initial,
   );
-  const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
-  // Rendered-page budget: small Arabic sizes make pages shorter than the viewport,
-  // so scale the window to keep ~1.5 viewports rendered on each side of the focus.
-  // The size must NOT feed the rendered set directly: it tracks the height cache,
-  // which is written by ResizeObserver AFTER a resize — a reactive window change
-  // would mount/unmount pages around the reader with no anchor restore, and the
-  // document visibly jumps. The effect below applies it through the same
-  // anchor-preserving queue as every other layout change.
-  const adaptiveWindowSize = $derived.by(() => {
-    const focusHeight = heightCache.get(virtualFocusPage, readerWidth);
-    return windowSizeForViewport(viewportHeight, focusHeight);
-  });
-  let renderedWindowSize = $state(SURAH_PAGE_WINDOW_SIZE);
-
-  $effect(() => {
-    const next = adaptiveWindowSize;
-    if (!clientMounted || next === renderedWindowSize) return;
-    void preserveViewport(
-      () => {
-        renderedWindowSize = next;
-      },
-      true,
-    );
-  });
   const firstLoaded = $derived(pages[0]!);
   const lastLoaded = $derived(pages.at(-1)!);
   const sourceId = $derived(initial.normalization.sourceId);
@@ -169,12 +151,17 @@
   let lastRouteKey: string | null = null;
   let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
   const stackedController = createStackedTranslations({
-    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
-    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    from: () => readFrom,
+    to: () => readTo,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
     primarySourceId: () => (isTranslationSource ? sourceId : null),
     catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${sourceId}:${initial.surah.num}`,
+    ids: () => {
+      if (reader.isVerseMode) return stackedTranslations.ids;
+      if (flowFromStack && flowId !== null && stackedTranslations.ids.includes(flowId)) return [flowId];
+      return [];
+    },
   });
   const stackedAnnouncement = $derived.by(() => {
     const st = stackedController.state;
@@ -199,16 +186,41 @@
     reader.setPosition(positionForGlobal(quranData, pageData.page.startGlobal));
   }
 
-  const renderedPageNumbers = $derived.by(
-    () =>
-      new Set(
-        virtualPageWindow(
-          pages.map((pageData) => pageData.page.localPage),
-          virtualFocusPage,
-          renderedWindowSize,
-        ),
-      ),
-  );
+  let virtualList: ReaderVirtualList<ReaderRenderItem> | undefined = $state();
+  let renderedItems = $state.raw<readonly ReaderRenderItem[]>([]);
+  const renderedPageNumbers = $derived(new Set(renderedItems.map((entry) => entry.localPage)));
+  const readPages = $derived.by(() => {
+    if (renderedItems.length === 0) return [initial];
+    const mountedPages = pages.filter((entry) => renderedPageNumbers.has(entry.page.localPage));
+    return mountedPages.length > 0 ? mountedPages : [initial];
+  });
+  const readFrom = $derived(Math.min(...readPages.map((entry) => entry.page.startGlobal)));
+  const readTo = $derived(Math.max(...readPages.map((entry) => entry.page.endGlobal)));
+  const renderItems = $derived.by((): ReaderRenderItem[] => {
+    const arabicSize = Number.parseFloat(reader.arabicSizePx ?? "33");
+    const translationSize = Number.parseFloat(reader.translationSizePx ?? "17");
+    if (reader.isReadingMode) {
+      return pages.map((pageData) => {
+        const text = pageData.ayahs.map((ayah) => rowView(ayah, pageData).text).join(" ");
+        const size = showsTranslation ? translationSize : arabicSize;
+        const lineHeight = showsTranslation ? 1.9 : 2.35;
+        const openerHeight = pageData.page.startAyah === 1 && headerText(pageData.normalization) ? 88 : 0;
+        return { kind: "page", key: `page:${pageData.page.localPage}`, localPage: pageData.page.localPage, pageData, estimate: 64 + openerHeight + estimateTextHeight(text, size, readerWidth, lineHeight) };
+      });
+    }
+    return pages.flatMap((pageData) => pageData.ayahs.map((ayah) => {
+      const view = rowView(ayah, pageData);
+      const lanes = lanesFor(ayah.key, view.lead);
+      let estimate = 86 + estimateTextHeight(view.text, arabicSize, readerWidth, 2.15);
+      for (const lane of lanes) estimate += 34 + estimateTextHeight(lane.text, translationSize, Math.min(readerWidth, 720), 1.85);
+      return { kind: "ayah", key: `${pageData.page.localPage}:${ayah.key}`, verseKey: ayah.key, localPage: pageData.page.localPage, ayah, pageData, estimate };
+    }));
+  });
+
+  function syncRendered(rendered: readonly ReaderRenderItem[]): void {
+    if (rendered.length === renderedItems.length && rendered.every((entry, index) => entry.key === renderedItems[index]?.key)) return;
+    renderedItems = rendered;
+  }
 
   function captureAnchor(): ViewportAnchor | null {
     return captureViewportAnchor(readerPages);
@@ -231,37 +243,14 @@
     }
   }
 
-  function measurePage(localPage: number): Attachment<HTMLElement> {
-    return (node) => {
-      let lastTotalHeight = 0;
-      const measure = () => {
-        const rect = node.getBoundingClientRect();
-        const parentWidth = readerPages?.getBoundingClientRect().width ?? rect.width;
-        const totalHeight = rect.height;
-        heightCache.save(localPage, stablePageHeight(node, rect), parentWidth);
-        if (
-          lastTotalHeight > 0 &&
-          Math.abs(totalHeight - lastTotalHeight) > 1 &&
-          clientMounted &&
-          !suppressScroll &&
-          !layoutRepairPending &&
-          stableAnchor &&
-          rect.bottom > 0 &&
-          rect.top < window.innerHeight
-        ) {
-          const anchor = stableAnchor;
-          layoutRepairPending = true;
-          void preserveViewportFrom(() => anchor, () => undefined, true).finally(() => {
-            layoutRepairPending = false;
-          });
-        }
-        lastTotalHeight = totalHeight;
-      };
-      const observer = new ResizeObserver(measure);
-      observer.observe(node);
-      measure();
-      return () => observer.disconnect();
-    };
+  function repairReaderItem(node: HTMLElement): void {
+    const rect = node.getBoundingClientRect();
+    if (!clientMounted || suppressScroll || layoutRepairPending || !stableAnchor || rect.bottom <= 0 || rect.top >= window.innerHeight) return;
+    const anchor = stableAnchor;
+    layoutRepairPending = true;
+    void preserveViewportFrom(() => anchor, () => undefined, true).finally(() => {
+      layoutRepairPending = false;
+    });
   }
 
   function preserveViewportFrom(
@@ -288,6 +277,7 @@
         await tick();
         if (waitForLayout) await nextFrame();
         if (anchor) {
+          await virtualList?.prepareAnchor(anchor);
           restoreAnchor(anchor);
           // Layout settles a frame late when text metrics change (font
           // resize, note toggle, page swaps). One restore is a guess; keep
@@ -328,7 +318,7 @@
     readerPages = node;
     const updateWidth = () => {
       const nextWidth = Math.round(node.getBoundingClientRect().width);
-      if (nextWidth > 0 && widthBucket(nextWidth) !== widthBucket(readerWidth)) {
+      if (nextWidth > 0 && nextWidth !== readerWidth) {
         const anchor = stableAnchor;
         readerWidth = nextWidth;
         if (
@@ -339,9 +329,7 @@
         ) {
           void preserveViewportFrom(
             () => anchor,
-            () => {
-              virtualCenterPage = visibleLocalPage;
-            },
+            () => undefined,
             true,
           );
         }
@@ -358,50 +346,6 @@
       if (readerPages === node) readerPages = null;
     };
   };
-
-  function shiftVirtualWindow(localPage: number): void {
-    if (renderedPageNumbers.has(localPage) || virtualShiftPage === localPage) return;
-    virtualShiftPage = localPage;
-    // SAFETY: document.activeElement is Element | null; only page/render elements can hold focus in
-    // the reader, and closest<HTMLElement> types the match for dataset.localPage access below.
-    const focusedPage = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-page-rendered]",
-    );
-    if (
-      focusedPage &&
-      Math.abs(Number(focusedPage.dataset.localPage) - localPage) > 2 &&
-      readerPages
-    ) {
-      readerPages.focus({ preventScroll: true });
-    }
-    void preserveViewport(() => {
-      virtualCenterPage = localPage;
-    }).finally(() => {
-      virtualShiftPage = null;
-    });
-  }
-
-  function warmVirtualWindow(direction: number): void {
-    if (!readerPages || direction === 0) return;
-    const candidates = [
-      ...readerPages.querySelectorAll<HTMLElement>("[data-page-spacer]"),
-    ].filter((spacer) => {
-      const pageNumber = Number(spacer.dataset.localPage);
-      const rect = spacer.getBoundingClientRect();
-      return (
-        rect.bottom > -loadAheadPx &&
-        rect.top < window.innerHeight + loadAheadPx &&
-        (direction > 0 ? pageNumber > virtualFocusPage : pageNumber < virtualFocusPage)
-      );
-    });
-    candidates.sort((a, b) => {
-      const aPage = Number(a.dataset.localPage);
-      const bPage = Number(b.dataset.localPage);
-      return direction > 0 ? aPage - bPage : bPage - aPage;
-    });
-    const localPage = Number(candidates[0]?.dataset.localPage);
-    if (Number.isSafeInteger(localPage)) shiftVirtualWindow(localPage);
-  }
 
   // Reading flows exactly one text — the Arabic or one translation — and switching between
   // them never asks: Ayah-by-Ayah keeps the Arabic plus every stacked translation, Reading
@@ -421,6 +365,7 @@
         )
       : null,
   );
+  const renderLayoutKey = $derived(`${reader.mode}:${readerWidth}:${reader.arabicFont}:${reader.arabicSizePx}:${reader.arabicScript}:${reader.translationSizePx}:${reader.translationFamily}:${sourceId}:${flowId}:${stackedTranslations.ids.join(",")}`);
   // The route's own translation is the page text itself; any other flows from stacked data.
   const flowFromStack = $derived(flowId !== null && flowId !== routeTranslationId);
   const flowLanguage = $derived(
@@ -441,8 +386,8 @@
     flowFromStack && flowId !== null && !stackedTranslations.ids.includes(flowId) ? [flowId] : [],
   );
   const readingController = createStackedTranslations({
-    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
-    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    from: () => readFrom,
+    to: () => readTo,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
     primarySourceId: () => (isTranslationSource ? sourceId : null),
     catalogue: () => TRANSLATION_CATALOGUE,
@@ -457,8 +402,8 @@
   const arabicCompanion = createArabicCompanion({
     enabled: () => isTranslationSource && reader.isVerseMode,
     source: () => reader.arabicScript,
-    from: () => (pages.length ? Math.min(...pages.map((p) => p.page.startGlobal)) : 0),
-    to: () => (pages.length ? Math.max(...pages.map((p) => p.page.endGlobal)) : 0),
+    from: () => readFrom,
+    to: () => readTo,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
     routeKey: () => `${sourceId}:${initial.surah.num}`,
   });
@@ -544,7 +489,6 @@
   function changeMode(mode: ReaderMode): void {
     if (reader.mode === mode) return;
     void preserveViewport(() => {
-      virtualCenterPage = visibleLocalPage;
       reader.setMode(mode);
       replaceState(withModeParam(appPage.url, mode), appPage.state);
     }, true);
@@ -581,8 +525,9 @@
   }
 
   // Urdu and other Arabic-script translations read in Naskh; load it once one is on screen.
+  const visibleTranslationIds = $derived(reader.isVerseMode ? [...stackedTranslations.ids, routeTranslationId] : [flowId]);
   const needsNaskh = $derived(
-    [...stackedTranslations.ids, flowId, routeTranslationId].some(
+    visibleTranslationIds.some(
       (id) => id !== null && TRANSLATION_CATALOGUE_BY_ID.get(id)?.direction === "rtl",
     ),
   );
@@ -594,12 +539,6 @@
   $effect(() => registerTypographyWrapper(changeTypography));
 
   function changeTypography(change: () => void): void {
-    // Deliberately NO virtualCenterPage recenter here: the rendered window is
-    // already centred on the reader's position, and recomputing it from the
-    // (possibly stale) activeLocalPage can drop the anchor's page from the
-    // rendered set mid-preserve — the document then shifts under the restored
-    // scroll and the reader ends up at the top. A font resize only reflows
-    // text in place; the window does not need to move.
     void preserveViewport(change, true);
   }
 
@@ -622,7 +561,6 @@
     const pageNumbers = virtualPageWindow(
       pages.map((pageData) => pageData.page.localPage),
       localPage,
-      renderedWindowSize,
     );
     const included = new Set(pageNumbers);
     return {
@@ -715,6 +653,7 @@
       try {
         await nextFrame();
         await nextFrame();
+        await virtualList?.prepareAnchor(anchor);
         restoreAnchor(anchor);
         await document.fonts.ready;
         await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
@@ -740,8 +679,8 @@
     }
     byPage.delete(initial.page.localPage);
     loadedPages = [...byPage.values()];
+    pageOrigin = saved.activeLocalPage;
     activeLocalPage = saved.activeLocalPage;
-    virtualCenterPage = saved.activeLocalPage;
     for (const pageData of saved.pages) cachePage(pageData);
     await tick();
     onVisiblePage?.(
@@ -749,10 +688,16 @@
     );
     await nextFrame();
     await nextFrame();
-    if (saved.anchor) restoreAnchor(saved.anchor);
+    if (saved.anchor) {
+      await virtualList?.prepareAnchor(saved.anchor);
+      restoreAnchor(saved.anchor);
+    }
     await document.fonts.ready;
     await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 80));
-    if (saved.anchor) restoreAnchor(saved.anchor);
+    if (saved.anchor) {
+      await virtualList?.prepareAnchor(saved.anchor);
+      restoreAnchor(saved.anchor);
+    }
     stableAnchor = captureAnchor();
     updateVisiblePage();
   }
@@ -761,7 +706,7 @@
     if (
       localPage < 1 ||
       localPage > initial.pageCount ||
-      pages.some(
+      allPages.some(
         (item) =>
           item.page.localPage === localPage &&
           item.ayahs.length > 0 &&
@@ -821,12 +766,24 @@
     }
   }
 
-  /** Route-driven in-place page stream (ayah reveal): loads the page if absent, anchor-preserved. */
+  export async function ensureAyah(localPage: number, verseKey: string | null): Promise<void> {
+    if (!initial || localPage < 1 || localPage > initial.pageCount) return;
+    const expectedRoute = routeKey;
+    const available = () => allPages.some((entry) => entry.page.localPage === localPage && entry.ayahs.length > 0);
+    if (!available()) await loadPage(localPage);
+    if (!available() && !quranWorker.ready) {
+      await quranWorker.whenReady().catch(() => undefined);
+      if (!initial || expectedRoute !== routeKey) return;
+      await loadPage(localPage);
+    }
+    if (!available() || !initial || expectedRoute !== routeKey) return;
+    pageOrigin = localPage;
+    await tick();
+    await virtualList?.reveal(verseKey, localPage);
+  }
+
   export async function ensurePage(localPage: number): Promise<void> {
-    if (!initial) return;
-    if (localPage < 1 || localPage > initial.pageCount) return;
-    if (pages.some((item) => item.page.localPage === localPage && item.ayahs.length > 0)) return;
-    await loadPage(localPage);
+    await ensureAyah(localPage, null);
   }
 
   async function retryInitialPage(): Promise<void> {
@@ -877,7 +834,6 @@
   }
 
   function setVisiblePage(localPage: number, anchor?: ViewportAnchor | null): void {
-    if (!renderedPageNumbers.has(localPage)) shiftVirtualWindow(localPage);
     if (localPage === visibleLocalPage) return;
     activeLocalPage = localPage;
     const pageData = pages.find((item) => item.page.localPage === localPage);
@@ -895,10 +851,8 @@
       setVisiblePage(anchor.localPage, anchor);
       return;
     }
-    if (!readerPages) return;
-    const section = closestPage(readerPages, viewportMarker());
-    const localPage = Number(section?.dataset.localPage);
-    if (Number.isSafeInteger(localPage)) setVisiblePage(localPage);
+    const current = captureAnchor();
+    if (current) setVisiblePage(current.localPage, current);
   }
 
   function processScroll(direction: number): void {
@@ -907,7 +861,6 @@
       stableAnchor = captureAnchor();
     } else {
       if (sawUserInput) userScrolled = true;
-      warmVirtualWindow(direction);
       const anchor = captureAnchor();
       updateVisiblePage(anchor);
       stableAnchor = anchor;
@@ -967,7 +920,6 @@
   }
 
   function onResize(): void {
-    viewportHeight = window.innerHeight;
     scheduleForwardFill();
   }
 
@@ -1036,14 +988,11 @@
     const firstRun = lastTypography === null;
     lastTypography = typography;
     if (firstRun) return;
-    void preserveViewport(() => {
-      virtualCenterPage = visibleLocalPage;
-    }, true);
+    void preserveViewport(() => undefined, true);
   });
 
   onMount(() => {
     clientMounted = true;
-    viewportHeight = window.innerHeight;
     lastScrollY = window.scrollY;
     cachePage(initial);
     if (initial.ayahs.length === 0) void retryInitialPage();
@@ -1090,6 +1039,58 @@
   onresize={onResize}
 />
 
+
+{#snippet renderReaderItem(entry: ReaderRenderItem, index: number, gap: number, measure: Attachment<HTMLElement>)}
+  {#if entry.kind === "ayah"}
+    {@const view = rowView(entry.ayah, entry.pageData)}
+    <VerseRow
+      text={view.text}
+      isTranslation={view.isTranslation}
+      translationLang={view.translationLang}
+      pending={view.pending}
+      arabicPending={view.arabicPending}
+      leadId={view.lead?.sourceId}
+      n={entry.ayah.ayah}
+      vKey={entry.ayah.key}
+      script={view.script}
+      localPage={entry.localPage}
+      virtualIndex={index}
+      totalAyahs={initial.surah.ayahCount}
+      virtualGap={gap}
+      {measure}
+      onToggleNote={() => toggleNote(entry.ayah.key)}
+      stacked={lanesFor(entry.ayah.key, view.lead)}
+      stackedPending={loadingFor(stackedController.state, entry.ayah.key)}
+      stackedErrored={erroredFor(stackedController.state, entry.ayah.key)}
+      stackedErrorLabel={copy.stacked.error}
+    />
+  {:else}
+    <section
+      class="surah-page"
+      data-local-page={entry.localPage}
+      data-page-rendered
+      data-index={index}
+      data-last-page={entry.localPage === initial.pageCount || undefined}
+      aria-labelledby="surah-page-{entry.localPage}-title"
+      style:margin-block-start={`${gap}px`}
+      {@attach measure}
+    >
+      <h2 id="surah-page-{entry.localPage}-title" class="sr-only">{copy.range.item("page", entry.pageData.page.globalPage)}</h2>
+      {#if entry.pageData.page.startAyah === 1 && headerText(entry.pageData.normalization)}
+        <div class="surah-opener-bismillah flex justify-center">
+          <Bismillah class="w-44 text-quran-foreground" title={headerText(entry.pageData.normalization) ?? "bismillah"} />
+        </div>
+      {/if}
+      <div class="reading-flow" dir={flowRtl ? "rtl" : undefined}>
+        {#each entry.pageData.ayahs as ayah (ayah.key)}
+          {@const view = rowView(ayah, entry.pageData)}
+          <ReadingAyah text={view.text} n={ayah.ayah} vKey={ayah.key} isTranslation={view.isTranslation ?? showsTranslation} translationLang={view.translationLang ?? routeEntry?.languageCode} pending={view.pending} script={view.script} />
+        {/each}
+      </div>
+    </section>
+  {/if}
+{/snippet}
+
 <div class="reader-stack flex flex-col gap-4">
   {#if clientMounted && initial.ayahs.length === 0 && !degradation.loadFailed && quran.status !== "error"}
     <span class="sr-only" role="status" aria-live="polite">{copy.shell.opening}</span>
@@ -1120,65 +1121,21 @@
       tabindex="-1"
     >
       <TooltipProvider delayDuration={300}>
-        {#each pages as pageData (pageData.page.localPage)}
-          {#if renderedPageNumbers.has(pageData.page.localPage)}
-            <section
-              class="surah-page"
-              data-local-page={pageData.page.localPage}
-              data-page-rendered
-              aria-labelledby="surah-page-{pageData.page.localPage}-title"
-              {@attach measurePage(pageData.page.localPage)}
-            >
-              <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
-                {copy.range.item("page", pageData.page.globalPage)}
-              </h2>
-              {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
-                <!-- Calligraphy instead of the text bismillah; Surah 1 never
-                     reaches here (its bismillah is ayah 1, OpenerKind.Verse). -->
-                <div class="surah-opener-bismillah flex justify-center">
-                  <Bismillah
-                    class="w-44 text-quran-foreground"
-                    title={headerText(pageData.normalization) ?? "bismillah"}
-                  />
-                </div>
-              {/if}
-              <ol class="ayah-list list-none p-0" dir={flowRtl ? "rtl" : undefined}>
-                {#each pageData.ayahs as ayah (ayah.key)}
-                  {@const view = rowView(ayah, pageData)}
-                  <VerseRow
-                    text={view.text}
-                    isTranslation={view.isTranslation}
-                    translationLang={view.translationLang}
-                    pending={view.pending}
-                    arabicPending={view.arabicPending}
-                    leadId={view.lead?.sourceId}
-                    n={ayah.ayah}
-                    vKey={ayah.key}
-                    script={view.script}
-                    onToggleNote={() => toggleNote(ayah.key)}
-                    stacked={lanesFor(ayah.key, view.lead)}
-                    stackedPending={loadingFor(stackedController.state, ayah.key)}
-                    stackedErrored={erroredFor(stackedController.state, ayah.key)}
-                    stackedErrorLabel={copy.stacked.error}
-                  />
-                {/each}
-              </ol>
-            </section>
-          {:else}
-            <!-- Untracked on purpose: a reactive spacer re-reads the height cache
-                 while the ResizeObserver writes post-resize measurements, and each
-                 silent correction shifts the space above the reader — the jump.
-                 Spacers snapshot at render time; every swap to a real page runs
-                 through the anchor-preserving queue. -->
-            <div
-              class="page-spacer"
-              data-local-page={pageData.page.localPage}
-              data-page-spacer
-              aria-hidden="true"
-              style:height={`${untrack(() => heightCache.get(pageData.page.localPage, readerWidth))}px`}
-            ></div>
-          {/if}
-        {/each}
+        {#if reader.isVerseMode && firstLoaded.page.startAyah === 1 && headerText(firstLoaded.normalization)}
+          <div class="surah-opener-bismillah flex justify-center">
+            <Bismillah class="w-44 text-quran-foreground" title={headerText(firstLoaded.normalization) ?? "bismillah"} />
+          </div>
+        {/if}
+        <ReaderVirtualList
+          bind:this={virtualList}
+          items={renderItems}
+          tag={reader.isVerseMode ? "ol" : "div"}
+          layoutKey={renderLayoutKey}
+          preserving={suppressScroll}
+          onRendered={syncRendered}
+          onResize={repairReaderItem}
+          item={renderReaderItem}
+        />
       </TooltipProvider>
     </div>
 
@@ -1216,17 +1173,6 @@
     outline: none;
   }
 
-  .page-spacer {
-    contain: strict;
-    overflow-anchor: none;
-    pointer-events: none;
-  }
-
-  .ayah-list {
-    display: flex;
-    flex-direction: column;
-  }
-
   /* §22 Bismillah/opener: the calligraphy SVG replaces the text opener (Surah 1
      never renders one — its bismillah is ayah 1). Padding, not margin: in verse
      mode the section carries no padding, so a margin would collapse through the
@@ -1247,11 +1193,11 @@
     padding-block: 12px;
   }
 
-  :global([data-reader-mode="reading"]) .reader-pages .surah-page:last-child {
+  :global([data-reader-mode="reading"]) .reader-pages .surah-page[data-last-page] {
     border-bottom: 0;
   }
 
-  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="arabic"] .ayah-list {
+  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="arabic"] .reading-flow {
     display: block;
     direction: rtl;
     text-align: justify;
@@ -1264,7 +1210,7 @@
   /* U10: translations flow as one continuous justified column in reading
      mode (per-ayah rows remain in verse mode). Direction stays per-verse via
      dir="auto" on the verse text. */
-  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="translation"] .ayah-list {
+  :global([data-reader-mode="reading"]) .reader-pages[data-source-kind="translation"] .reading-flow {
     display: block;
     text-align: justify;
     font-family: var(--reader-translation-family, var(--font-sans));
