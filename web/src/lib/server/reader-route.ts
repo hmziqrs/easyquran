@@ -1,5 +1,6 @@
 import { translationIdFromSegments } from "$lib/data/quran";
 import { RangeKind } from "$lib/data/quran-data";
+import { hizbRange } from "$lib/data/mushaf-divisions";
 import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "$lib/data/translations";
 import { isUiLocale, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { QURAN_DATA } from "$lib/server/quran-data";
@@ -9,11 +10,13 @@ interface ReaderIndexRoute {
   readonly page: "home" | "juz" | "surah" | "pages";
 }
 
+/** Range route segments; hizb/rub address the baked hizb-quarter series. */
+export type ReaderRangeSegment = "page" | "juz" | "hizb" | "rub";
+
 interface ArabicReaderRoute {
   readonly type: "arabic";
-  readonly cacheKind: "surah" | "page" | "juz";
+  readonly cacheKind: "surah" | ReaderRangeSegment;
   readonly index: number;
-  readonly localPage?: number;
 }
 
 interface TranslationReaderRoute {
@@ -21,9 +24,8 @@ interface TranslationReaderRoute {
   readonly sourceId: string;
   readonly contentLanguage: string;
   readonly contentDirection: UiDirection;
-  readonly cacheKind: "surah" | "page" | "juz";
+  readonly cacheKind: "surah" | ReaderRangeSegment;
   readonly index: number;
-  readonly localPage?: number;
 }
 
 export type ParsedReaderRoute = ReaderIndexRoute | ArabicReaderRoute | TranslationReaderRoute;
@@ -57,39 +59,20 @@ function translation(
   return metadata ? { sourceId, metadata } : null;
 }
 
-function surahRoute(slug: string, localPage: number): ArabicReaderRoute | null {
+function surahRoute(slug: string): ArabicReaderRoute | null {
   const surah = QURAN_DATA.surahBySlug(slug);
-  if (!surah || !QURAN_DATA.surahLocalPage(surah.num, localPage)) return null;
-  if (localPage > 1) {
-    return { type: "arabic", cacheKind: "surah", index: surah.num, localPage };
-  }
-  return {
-    type: "arabic",
-    cacheKind: "surah",
-    index: surah.num,
-  };
+  if (!surah) return null;
+  return { type: "arabic", cacheKind: "surah", index: surah.num };
 }
 
 function translationSurahRoute(
   slug: string,
   lang: string,
   translator: string,
-  localPage: number,
 ): TranslationReaderRoute | null {
   const surah = QURAN_DATA.surahBySlug(slug);
   const source = translation(lang, translator);
-  if (!surah || !source || !QURAN_DATA.surahLocalPage(surah.num, localPage)) return null;
-  if (localPage > 1) {
-    return {
-      type: "translation",
-      sourceId: source.sourceId,
-      contentLanguage: source.metadata.languageCode,
-      contentDirection: source.metadata.direction,
-      cacheKind: "surah",
-      index: surah.num,
-      localPage,
-    };
-  }
+  if (!surah || !source) return null;
   return {
     type: "translation",
     sourceId: source.sourceId,
@@ -100,35 +83,47 @@ function translationSurahRoute(
   };
 }
 
-function rangeRoute(kind: "page" | "juz", value: string): ArabicReaderRoute | null {
+function rangeRoute(segment: ReaderRangeSegment, value: string): ArabicReaderRoute | null {
   const index = positiveInteger(value);
-  const rangeKind = kind === "juz" ? RangeKind.Juz : RangeKind.Page;
-  if (index === null || !QURAN_DATA.rangeByIndex(rangeKind, index)) return null;
-  return { type: "arabic", cacheKind: kind, index };
+  if (index === null || !rangeIndexInRange(segment, index)) return null;
+  return { type: "arabic", cacheKind: segment, index };
 }
 
-function rangeKindFromSegment(segment: string): "page" | "juz" | null {
-  if (segment === "page") return "page";
-  if (segment === "juz") return "juz";
+function rangeKindFromSegment(segment: string): ReaderRangeSegment | null {
+  if (segment === "page" || segment === "juz" || segment === "hizb" || segment === "rub") {
+    return segment;
+  }
   return null;
+}
+
+function rangeIndexInRange(segment: ReaderRangeSegment, index: number): boolean {
+  switch (segment) {
+    case "page":
+      return QURAN_DATA.rangeByIndex(RangeKind.Page, index) !== undefined;
+    case "juz":
+      return QURAN_DATA.rangeByIndex(RangeKind.Juz, index) !== undefined;
+    case "rub":
+      return QURAN_DATA.rangeByIndex(RangeKind.HizbQuarter, index) !== undefined;
+    case "hizb":
+      return hizbRange(QURAN_DATA, index) !== undefined;
+  }
 }
 
 function translationRangeRoute(
   lang: string,
   translator: string,
-  kind: "page" | "juz",
+  segment: ReaderRangeSegment,
   value: string,
 ): TranslationReaderRoute | null {
   const source = translation(lang, translator);
   const index = positiveInteger(value);
-  const rangeKind = kind === "juz" ? RangeKind.Juz : RangeKind.Page;
-  if (!source || index === null || !QURAN_DATA.rangeByIndex(rangeKind, index)) return null;
+  if (!source || index === null || !rangeIndexInRange(segment, index)) return null;
   return {
     type: "translation",
     sourceId: source.sourceId,
     contentLanguage: source.metadata.languageCode,
     contentDirection: source.metadata.direction,
-    cacheKind: kind,
+    cacheKind: segment,
     index,
   };
 }
@@ -141,38 +136,67 @@ export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
   if (pathname === "/app/surah") return { type: "index", page: "surah" };
   if (pathname === "/app/pages") return { type: "index", page: "pages" };
 
-  let match = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)\/page\/([^/]+)$/u.exec(pathname);
-  if (match) {
-    const localPage = positiveInteger(match[4]!);
-    return localPage === null || localPage === 1
-      ? null
-      : translationSurahRoute(match[1]!, match[2]!, match[3]!, localPage);
-  }
+  let match = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u.exec(pathname);
+  if (match) return translationSurahRoute(match[1]!, match[2]!, match[3]!);
 
-  match = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u.exec(pathname);
-  if (match) return translationSurahRoute(match[1]!, match[2]!, match[3]!, 1);
-
-  match = /^\/app\/t\/([^/]+)\/([^/]+)\/(page|juz)\/([^/]+)$/u.exec(pathname);
+  match = /^\/app\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
   if (match) {
     const kind = rangeKindFromSegment(match[3]!);
     if (!kind) return null;
     return translationRangeRoute(match[1]!, match[2]!, kind, match[4]!);
   }
 
-  match = /^\/app\/([^/]+)\/page\/([^/]+)$/u.exec(pathname);
-  if (match) {
-    const localPage = positiveInteger(match[2]!);
-    return localPage === null || localPage === 1 ? null : surahRoute(match[1]!, localPage);
-  }
-
-  match = /^\/app\/(page|juz)\/([^/]+)$/u.exec(pathname);
+  match = /^\/app\/(page|juz|hizb|rub)\/([^/]+)$/u.exec(pathname);
   if (match) {
     const kind = rangeKindFromSegment(match[1]!);
     return kind ? rangeRoute(kind, match[2]!) : null;
   }
 
   match = /^\/app\/([^/]+)$/u.exec(pathname);
-  return match ? surahRoute(match[1]!, 1) : null;
+  return match ? surahRoute(match[1]!) : null;
+}
+
+export interface SurahLocalRedirectTarget {
+  /** Bare canonical path of the surah root (Arabic or translated). */
+  path: string;
+  /** `#ayah-{surah}-{startAyah}` preserving the spread's first ayah; empty for local page 1. */
+  fragment: string;
+}
+
+const ARABIC_SURAH_LOCAL_PAGE = /^\/app\/([^/]+)\/page\/([1-9][0-9]*)$/u;
+const TRANSLATED_SURAH_LOCAL_PAGE = /^\/app\/([^/]+)\/t\/([^/]+)\/([^/]+)\/page\/([1-9][0-9]*)$/u;
+
+/**
+ * Permanent redirect target for a removed surah-local page URL (D1). Pure —
+ * no event, no query/fragment handling — so the hooks branch owns localization
+ * and suffix preservation. Unknown slug, unknown translation, or out-of-range
+ * local page yields null (caller falls through to 404).
+ */
+export function surahLocalRedirectTarget(pathname: string): SurahLocalRedirectTarget | null {
+  const translated = TRANSLATED_SURAH_LOCAL_PAGE.exec(pathname);
+  const arabic = translated ? null : ARABIC_SURAH_LOCAL_PAGE.exec(pathname);
+  if (!translated && !arabic) return null;
+  const match = translated ?? arabic!;
+  const slug = match[1]!;
+  const surah = QURAN_DATA.surahBySlug(slug);
+  if (!surah) return null;
+
+  let path: string;
+  let localPageValue: string;
+  if (translated) {
+    if (!translation(match[2]!, match[3]!)) return null;
+    path = `/app/${surah.slug}/t/${match[2]}/${match[3]}`;
+    localPageValue = match[4]!;
+  } else {
+    path = `/app/${surah.slug}`;
+    localPageValue = match[2]!;
+  }
+
+  const localPage = Number(localPageValue);
+  if (localPage === 1) return { path, fragment: "" };
+  const page = QURAN_DATA.surahLocalPage(surah.num, localPage);
+  if (!page) return null;
+  return { path, fragment: `#ayah-${surah.num}-${page.startAyah}` };
 }
 
 function requiredParam(
@@ -197,7 +221,6 @@ export function parseReaderRoute(
   const surah = requiredParam(params, "surah", SURAH_SEGMENT);
   const lang = requiredParam(params, "lang", CONTENT_LANGUAGE_SEGMENT);
   const translator = requiredParam(params, "translator", TRANSLATOR_SEGMENT);
-  const localPage = requiredParam(params, "localPage", POSITIVE_INTEGER);
   const n = requiredParam(params, "n", POSITIVE_INTEGER);
 
   switch (routePattern) {
@@ -211,21 +234,17 @@ export function parseReaderRoute(
       return parseReaderPath("/app/pages");
     case "/app/[surah]":
       return surah ? parseReaderPath(`/app/${surah}`) : null;
-    case "/app/[surah]/page/[localPage]":
-      return surah && localPage && localPage !== "1"
-        ? parseReaderPath(`/app/${surah}/page/${localPage}`)
-        : null;
     case "/app/page/[n]":
       return n ? parseReaderPath(`/app/page/${n}`) : null;
     case "/app/juz/[n]":
       return n ? parseReaderPath(`/app/juz/${n}`) : null;
+    case "/app/hizb/[n]":
+      return n ? parseReaderPath(`/app/hizb/${n}`) : null;
+    case "/app/rub/[n]":
+      return n ? parseReaderPath(`/app/rub/${n}`) : null;
     case "/app/[surah]/t/[lang]/[translator]":
       return surah && lang && translator
         ? parseReaderPath(`/app/${surah}/t/${lang}/${translator}`)
-        : null;
-    case "/app/[surah]/t/[lang]/[translator]/page/[localPage]":
-      return surah && lang && translator && localPage && localPage !== "1"
-        ? parseReaderPath(`/app/${surah}/t/${lang}/${translator}/page/${localPage}`)
         : null;
     case "/app/t/[lang]/[translator]/page/[n]":
       return lang && translator && n
@@ -234,6 +253,14 @@ export function parseReaderRoute(
     case "/app/t/[lang]/[translator]/juz/[n]":
       return lang && translator && n
         ? parseReaderPath(`/app/t/${lang}/${translator}/juz/${n}`)
+        : null;
+    case "/app/t/[lang]/[translator]/hizb/[n]":
+      return lang && translator && n
+        ? parseReaderPath(`/app/t/${lang}/${translator}/hizb/${n}`)
+        : null;
+    case "/app/t/[lang]/[translator]/rub/[n]":
+      return lang && translator && n
+        ? parseReaderPath(`/app/t/${lang}/${translator}/rub/${n}`)
         : null;
     default:
       return null;

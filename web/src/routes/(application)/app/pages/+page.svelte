@@ -1,24 +1,26 @@
 <script lang="ts">
   import { Chip, Icon, Seo } from "$lib/components";
-  import { globalPagePathFor, type SurahRouteContext } from "$lib/data/quran";
+  import { globalPagePathFor, resumeCtxFor } from "$lib/data/quran";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { readerCanonicalEntryPath } from "$lib/i18n/seo";
   import { publicHref } from "$lib/i18n/public-href";
   import type { PageIndexRow } from "./+page";
   import ReaderShell from "../_reader/ReaderShell.svelte";
+  import { reader } from "$lib/stores/reader.svelte";
   import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
 
   let { data } = $props();
 
-  const arabicCtx: SurahRouteContext = { kind: "arabic" };
+  // Rows carry the reader's active source after hydration; prerendered HTML stays Arabic.
+  const ctx = $derived(resumeCtxFor(reader.lastRead, { kind: "arabic" }));
   const copy = getReaderUiCopy();
 
   const seoTitle = $derived(copy.seo.pagesIndexTitle);
   const seoDescription = $derived(copy.seo.pagesIndexDescription);
 
   function pageHref(n: number): `/${string}` {
-    return readerHrefFor(copy.locale, globalPagePathFor(arabicCtx, n));
+    return readerHrefFor(copy.locale, globalPagePathFor(ctx, n));
   }
 
   function surahNames(page: PageIndexRow): string {

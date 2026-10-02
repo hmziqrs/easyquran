@@ -1,4 +1,4 @@
-import { surahAyahPathFor, surahLocalPagePathFor } from "$lib/data/quran";
+import { surahAyahPathFor, surahPathFor } from "$lib/data/quran";
 import { readerHrefFor } from "$lib/i18n/reader";
 import { deLocalizeUrl } from "$lib/paraglide/runtime";
 import { describe, expect, it } from "vite-plus/test";
@@ -15,23 +15,23 @@ function switchUiLocale(href: string, locale: "en" | "ar"): string {
 }
 
 describe("reader UI locale navigation", () => {
-  it("preserves source, dotted translator id, page, query, and ayah hash", () => {
+  it("preserves source, dotted translator id, query, and ayah hash", () => {
     const ayahUrl = new URL(
-      surahAyahPathFor(TRANSLATION, { num: 30, slug: "ar-rum" }, 7, 12),
+      surahAyahPathFor(TRANSLATION, { num: 30, slug: "ar-rum" }, 12),
       "https://easyquran.fyi",
     );
     ayahUrl.searchParams.set("view", "reading");
     const canonical = `${ayahUrl.pathname}${ayahUrl.search}${ayahUrl.hash}`;
     const arabicUi = readerHrefFor("ar", canonical);
 
-    expect(arabicUi).toBe("/ar/app/ar-rum/t/en/dr.mustafa.khattab/page/7?view=reading#ayah-30-12");
+    expect(arabicUi).toBe("/ar/app/ar-rum/t/en/dr.mustafa.khattab?view=reading#ayah-30-12");
     expect(switchUiLocale(arabicUi, "en")).toBe(
-      "/en/app/ar-rum/t/en/dr.mustafa.khattab/page/7?view=reading#ayah-30-12",
+      "/en/app/ar-rum/t/en/dr.mustafa.khattab?view=reading#ayah-30-12",
     );
   });
 
-  it("switches UI locale without dropping a translation on canonical page one", () => {
-    const canonical = surahLocalPagePathFor(TRANSLATION, "ar-rum", 1);
+  it("switches UI locale without dropping a translation on the surah root", () => {
+    const canonical = surahPathFor(TRANSLATION, "ar-rum");
     expect(switchUiLocale(readerHrefFor("en", canonical), "ar")).toBe(
       "/ar/app/ar-rum/t/en/dr.mustafa.khattab",
     );

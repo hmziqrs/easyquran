@@ -5,13 +5,17 @@
   import {
     SourceKind,
     globalPagePathFor,
+    hizbPathFor,
     juzPathFor,
     routeContextFromParams,
+    rubPathFor,
     surahPathFor,
     translationIdFromSegments,
     type SurahLink,
   } from "$lib/data/quran";
-  import { loadQuranData } from "$lib/data/quran-data-client";
+  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
+  import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
+  import { HIZB_COUNT, positionForGlobal, RUB_COUNT } from "$lib/data/mushaf-divisions";
   import { trackReaderView } from "$lib/quran/track-view.svelte";
   import VerseRow from "./VerseRow.svelte";
   import {
@@ -47,6 +51,13 @@
   let { data }: { data: RangePageData } = $props();
   const copy = getReaderUiCopy();
 
+  const RANGE_MAX: Record<RangePageData["kind"], number> = {
+    page: RANGE_COUNTS[RangeKind.Page],
+    juz: RANGE_COUNTS[RangeKind.Juz],
+    hizb: HIZB_COUNT,
+    rub: RUB_COUNT,
+  };
+
   const coord = createRangeReaderCoordinator();
   let stackedQuranData = $state<Awaited<ReturnType<typeof loadQuranData>> | null>(null);
   const stackedController = createStackedTranslations({
@@ -80,8 +91,15 @@
     void loadQuranData()
       .then((qd) => {
         stackedQuranData = qd;
+        reader.setPosition(positionForGlobal(qd, data.startGlobal));
       })
       .catch(() => {});
+  });
+  // Sticky-bar position: republish on route-data change (range nav swaps props, not instances).
+  $effect(() => {
+    const startGlobal = data.startGlobal;
+    const quranData = peekQuranData();
+    if (quranData) reader.setPosition(positionForGlobal(quranData, startGlobal));
   });
   let readStatus = $state<"ready" | "loading" | "offline" | "error">("loading");
   // Intentional SSR snapshot; the route-keyed pre-effect installs later prop updates.
@@ -129,9 +147,23 @@
     void goto(publicHref(readerHrefFor(copy.locale, surahPathFor(ctx, surah))));
   }
 
-  const MAX = $derived(data.kind === "juz" ? 30 : 604);
+  const MAX = $derived(RANGE_MAX[data.kind]);
   function rangeHref(kind: RangePageData["kind"], index: number): `/${string}` {
-    const quranHref = kind === "juz" ? juzPathFor(ctx, index) : globalPagePathFor(ctx, index);
+    let quranHref: `/app/${string}`;
+    switch (kind) {
+      case "page":
+        quranHref = globalPagePathFor(ctx, index);
+        break;
+      case "juz":
+        quranHref = juzPathFor(ctx, index);
+        break;
+      case "hizb":
+        quranHref = hizbPathFor(ctx, index);
+        break;
+      case "rub":
+        quranHref = rubPathFor(ctx, index);
+        break;
+    }
     return readerHrefFor(copy.locale, quranHref);
   }
 
@@ -160,7 +192,15 @@
         if (seen.has(a.surah)) continue;
         seen.add(a.surah);
         const entry = byNum.get(a.surah);
-        if (entry) surahs.push({ num: entry.num, slug: entry.slug, name: entry.name, arabic: entry.arabic });
+        if (entry) {
+        surahs.push({
+          num: entry.num,
+          slug: entry.slug,
+          name: entry.name,
+          arabic: entry.arabic,
+          meaning: entry.meaning,
+        });
+      }
       }
       const snapshot: RangeDisplaySnapshot = {
         ayahs: range.ayahs,

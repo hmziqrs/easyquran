@@ -26,9 +26,10 @@ function isJsonObject(v: unknown): v is JsonRecord {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-export function currentUrlLocalPage(): number {
-  const match = /\/page\/(\d+)\/?$/.exec(window.location.pathname);
-  return match ? Number(match[1]) : 1;
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- guard for untyped JSON values arriving from history.state / sessionStorage JSON; unknown is the honest input domain.
+function isJsonObject(v: unknown): v is JsonRecord {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- JSON payloads carry no runtime schema; typeof-object is the only discriminator at this parse boundary.
+  return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
 export function persistReaderPosition(snapshot: SurahReaderHistoryState): void {
@@ -77,11 +78,14 @@ export function parseHistoryState(
 ): SurahReaderHistoryState | null {
   const state = asObject(value);
   if (!state) return null;
-  const activeLocalPage = currentUrlLocalPage();
+  // One URL per surah: every history entry of this route shares the same path,
+  // so the entry's own activeLocalPage is authoritative (no URL matching).
+  const activeLocalPage = state.activeLocalPage;
   if (
     state.version === 1 &&
     state.surahNum === surahNum &&
-    state.activeLocalPage === activeLocalPage &&
+    isNumber(activeLocalPage) &&
+    activeLocalPage >= 1 &&
     Array.isArray(state.pages)
   ) {
     // SAFETY: Page.state is untyped at runtime (SvelteKit keeps it a plain record); every element

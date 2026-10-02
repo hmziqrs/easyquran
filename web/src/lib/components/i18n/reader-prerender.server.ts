@@ -1,17 +1,22 @@
+import type { SurahRouteContext } from "$lib/data/quran";
 import {
   globalPagePathFor,
+  hizbPathFor,
   juzPathFor,
-  surahLocalPagePathFor,
+  rubPathFor,
   surahPathFor,
-  type SurahRouteContext,
 } from "$lib/data/quran";
+import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
+import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
 import type { PublicHref } from "$lib/i18n/public-href";
 import type { QuranReaderHref } from "$lib/i18n/reader";
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 
-export const READER_GLOBAL_PAGE_COUNT = 604;
-export const READER_JUZ_COUNT = 30;
+export const READER_GLOBAL_PAGE_COUNT = RANGE_COUNTS[RangeKind.Page];
+export const READER_JUZ_COUNT = RANGE_COUNTS[RangeKind.Juz];
+export const READER_HIZB_COUNT = HIZB_COUNT;
+export const READER_RUB_COUNT = RUB_COUNT;
 
 interface ReaderSurah {
   num: number;
@@ -20,14 +25,14 @@ interface ReaderSurah {
 
 export interface ReaderPrerenderSource {
   readonly surahs: readonly ReaderSurah[];
-  surahLocalPageCount(surah: number): number;
 }
 
 export type ReaderPrerenderEntry =
   | { kind: "surah"; surah: ReaderSurah }
-  | { kind: "surah-local-page"; surah: ReaderSurah; localPage: number }
   | { kind: "global-page"; globalPage: number }
-  | { kind: "juz"; juz: number };
+  | { kind: "juz"; juz: number }
+  | { kind: "hizb"; hizb: number }
+  | { kind: "rub"; rub: number };
 
 export type ReaderHrefFor<Locale extends string> = (
   locale: Locale,
@@ -46,17 +51,17 @@ export function readerPrerenderEntries(source: ReaderPrerenderSource): ReaderPre
   for (const surah of source.surahs) {
     entries.push({ kind: "surah", surah });
   }
-  for (const surah of source.surahs) {
-    const pageCount = source.surahLocalPageCount(surah.num);
-    for (let localPage = 2; localPage <= pageCount; localPage += 1) {
-      entries.push({ kind: "surah-local-page", surah, localPage });
-    }
-  }
   for (let globalPage = 1; globalPage <= READER_GLOBAL_PAGE_COUNT; globalPage += 1) {
     entries.push({ kind: "global-page", globalPage });
   }
   for (let juz = 1; juz <= READER_JUZ_COUNT; juz += 1) {
     entries.push({ kind: "juz", juz });
+  }
+  for (let hizb = 1; hizb <= READER_HIZB_COUNT; hizb += 1) {
+    entries.push({ kind: "hizb", hizb });
+  }
+  for (let rub = 1; rub <= READER_RUB_COUNT; rub += 1) {
+    entries.push({ kind: "rub", rub });
   }
 
   return entries;
@@ -70,12 +75,14 @@ export function quranHrefForPrerenderEntry(
   switch (entry.kind) {
     case "surah":
       return surahPathFor(context, entry.surah);
-    case "surah-local-page":
-      return surahLocalPagePathFor(context, entry.surah, entry.localPage);
     case "global-page":
       return globalPagePathFor(context, entry.globalPage);
     case "juz":
       return juzPathFor(context, entry.juz);
+    case "hizb":
+      return hizbPathFor(context, entry.hizb);
+    case "rub":
+      return rubPathFor(context, entry.rub);
   }
 }
 

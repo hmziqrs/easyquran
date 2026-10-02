@@ -8,32 +8,22 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 // underscore translator segments, e.g. quranenc.en.hilali_khan).
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
-const PAGE_BEYOND_FIRST = "(?:[2-9]|[1-9][0-9]+)";
+const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
 const READER_ROUTE_PATTERNS = [
   new RegExp("^/app$", "u"),
   new RegExp("^/app/(?:juz|surah|pages)$", "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/page/${NUMBER}$`, "u"),
-  new RegExp(`^/app/(?:page|juz)/${NUMBER}$`, "u"),
+  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
   new RegExp(
-    `^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/page/${NUMBER}$`,
-    "u",
-  ),
-  new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/(?:page|juz)/${NUMBER}$`,
+    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
     "u",
   ),
   new RegExp(`^/app/${SURAH_SEGMENT}\\.md$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/page/${PAGE_BEYOND_FIRST}\\.md$`, "u"),
-  new RegExp(`^/app/(?:page|juz)/${NUMBER}\\.md$`, "u"),
+  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}\\.md$`, "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}\\.md$`, "u"),
   new RegExp(
-    `^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/page/${PAGE_BEYOND_FIRST}\\.md$`,
-    "u",
-  ),
-  new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/(?:page|juz)/${NUMBER}\\.md$`,
+    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}\\.md$`,
     "u",
   ),
 ];

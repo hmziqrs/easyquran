@@ -40,8 +40,8 @@ export function ayahHref(
 ): Pathname | null {
   const entry = quranData.surahByNum(surah);
   if (!entry) return null;
-  const localPage = quranData.surahLocalPageForAyah(surah, ayah);
-  return localPage ? surahAyahPathFor(ctx, entry, localPage.localPage, ayah) : null;
+  if (!quranData.surahLocalPageForAyah(surah, ayah)) return null;
+  return surahAyahPathFor(ctx, entry, ayah);
 }
 
 /**

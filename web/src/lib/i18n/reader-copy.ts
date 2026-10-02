@@ -56,7 +56,9 @@ import {
   reader_dismiss_update,
   reader_downloading_offline_pack,
   reader_downloading_quran,
+  reader_end_of_surah,
   reader_full_surah,
+  reader_hizb_item,
   reader_home_label,
   reader_index_juz_title,
   reader_index_page_sajda_legend,
@@ -82,7 +84,12 @@ import {
   reader_navigation_loading,
   reader_nav_manual_pages,
   reader_next_surah,
+  reader_position_hizb,
+  reader_position_juz,
+  reader_position_page,
   reader_prev_surah,
+  reader_read_again,
+  reader_rub_item,
   reader_network_unavailable,
   reader_new_version_ready,
   reader_no_translations,
@@ -108,7 +115,6 @@ import {
   reader_page_abbreviation,
   reader_page_count,
   reader_page_item,
-  reader_page_of,
   reader_page_unavailable,
   reader_preparing_offline_pack,
   reader_primary_nav,
@@ -140,6 +146,8 @@ import {
   reader_searching,
   reader_seo_breadcrumb_surah,
   reader_seo_home,
+  reader_seo_hizb_description,
+  reader_seo_hizb_title,
   reader_seo_juz_description,
   reader_seo_juz_index_description,
   reader_seo_juz_index_title,
@@ -149,16 +157,19 @@ import {
   reader_seo_pages_index_description,
   reader_seo_pages_index_title,
   reader_seo_quran,
+  reader_seo_rub_description,
+  reader_seo_rub_title,
   reader_seo_surah_index_description,
   reader_seo_surah_index_title,
   reader_seo_surah_description_translation,
   reader_seo_surah_description_uthmani,
-  reader_seo_surah_page_title,
   reader_seo_surah_title,
+  reader_seo_translation_hizb_description,
   reader_seo_translation_juz_description,
+  reader_seo_translation_page_description,
+  reader_seo_translation_rub_description,
   reader_seo_yours_description,
   reader_seo_yours_title,
-  reader_seo_translation_page_description,
   reader_share,
   reader_share_verse,
   reader_sidebar_title,
@@ -188,7 +199,6 @@ import {
   reader_storage,
   reader_surah_nav_label,
   reader_surah_page,
-  reader_surah_page_title,
   reader_surah_pages,
   reader_tafsir,
   reader_theme,
@@ -216,7 +226,7 @@ import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-co
 import { getLocale } from "$lib/paraglide/runtime.js";
 
 type BrowseMode = "surah" | "ayah" | "juz" | "page";
-type RangeKind = "juz" | "page";
+type RangeKind = "juz" | "page" | "hizb" | "rub";
 
 export interface ReaderUiCopy {
   readonly locale: UiLocale;
@@ -227,13 +237,16 @@ export interface ReaderUiCopy {
   readonly shell: {
     readonly opening: string;
     readonly surahPage: (surah: number, page: number, count: number) => string;
-    readonly surahPageTitle: (name: string, page: number, count: number) => string;
-    readonly pageOf: (page: number, count: number) => string;
     readonly surahPagesLabel: string;
     readonly surahNavLabel: string;
     readonly prevSurahLabel: string;
     readonly nextSurahLabel: string;
     readonly manualPagesLabel: string;
+    readonly endOfSurah: (name: string) => string;
+    readonly readAgain: string;
+    readonly positionPage: (page: number) => string;
+    readonly positionJuz: (juz: number) => string;
+    readonly positionHizb: (hizb: number) => string;
     readonly arabicTextSizeLabel: string;
     readonly smallerArabicTextLabel: string;
     readonly largerArabicTextLabel: string;
@@ -375,23 +388,14 @@ export interface ReaderUiCopy {
     readonly translationJuzDescription: (index: number, first: string, last: string) => string;
     readonly translationPageDescription: (index: number, first: string, last: string) => string;
     readonly surahTitle: (surah: number, name: string) => string;
-    readonly surahPageTitle: (surah: number, name: string, page: number, count: number) => string;
-    readonly surahDescriptionUthmani: (
-      name: string,
-      arabic: string,
-      page: number,
-      count: number,
-      start: number,
-      end: number,
-    ) => string;
-    readonly surahDescriptionTranslation: (
-      name: string,
-      arabic: string,
-      page: number,
-      count: number,
-      start: number,
-      end: number,
-    ) => string;
+    readonly hizbTitle: (index: number, first: string, last: string) => string;
+    readonly hizbDescription: (index: number, first: string, last: string) => string;
+    readonly rubTitle: (index: number, first: string, last: string) => string;
+    readonly rubDescription: (index: number, first: string, last: string) => string;
+    readonly translationHizbDescription: (index: number, first: string, last: string) => string;
+    readonly translationRubDescription: (index: number, first: string, last: string) => string;
+    readonly surahDescriptionUthmani: (name: string, arabic: string) => string;
+    readonly surahDescriptionTranslation: (name: string, arabic: string) => string;
     readonly breadcrumbSurah: (name: string) => string;
     readonly quranBook: string;
   };
@@ -451,8 +455,18 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
     }
   };
 
-  const rangeItem = (kind: RangeKind, index: number): string =>
-    kind === "juz" ? reader_juz_item({ index }, options) : reader_page_item({ index }, options);
+  const rangeItem = (kind: RangeKind, index: number): string => {
+    switch (kind) {
+      case "juz":
+        return reader_juz_item({ index }, options);
+      case "page":
+        return reader_page_item({ index }, options);
+      case "hizb":
+        return reader_hizb_item({ index }, options);
+      case "rub":
+        return reader_rub_item({ index }, options);
+    }
+  };
 
   return {
     locale,
@@ -462,14 +476,16 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
     shell: {
       opening: noArgs(reader_opening),
       surahPage: (surah, page, count) => reader_surah_page({ surah, page, count }, options),
-      surahPageTitle: (name, page, count) =>
-        reader_surah_page_title({ name, page, count }, options),
-      pageOf: (page, count) => reader_page_of({ page, count }, options),
       surahPagesLabel: noArgs(reader_surah_pages),
       surahNavLabel: noArgs(reader_surah_nav_label),
       prevSurahLabel: noArgs(reader_prev_surah),
       nextSurahLabel: noArgs(reader_next_surah),
       manualPagesLabel: noArgs(reader_nav_manual_pages),
+      endOfSurah: (name) => reader_end_of_surah({ name }, options),
+      readAgain: noArgs(reader_read_again),
+      positionPage: (page) => reader_position_page({ page }, options),
+      positionJuz: (juz) => reader_position_juz({ juz }, options),
+      positionHizb: (hizb) => reader_position_hizb({ hizb }, options),
       arabicTextSizeLabel: noArgs(reader_arabic_text_size),
       smallerArabicTextLabel: noArgs(reader_smaller_arabic_text),
       largerArabicTextLabel: noArgs(reader_larger_arabic_text),
@@ -656,15 +672,20 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       translationPageDescription: (index, first, last) =>
         reader_seo_translation_page_description({ index, first, last }, options),
       surahTitle: (surah, name) => reader_seo_surah_title({ surah, name }, options),
-      surahPageTitle: (surah, name, page, count) =>
-        reader_seo_surah_page_title({ surah, name, page, count }, options),
-      surahDescriptionUthmani: (name, arabic, page, count, start, end) =>
-        reader_seo_surah_description_uthmani({ name, arabic, page, count, start, end }, options),
-      surahDescriptionTranslation: (name, arabic, page, count, start, end) =>
-        reader_seo_surah_description_translation(
-          { name, arabic, page, count, start, end },
-          options,
-        ),
+      hizbTitle: (index, first, last) => reader_seo_hizb_title({ index, first, last }, options),
+      hizbDescription: (index, first, last) =>
+        reader_seo_hizb_description({ index, first, last }, options),
+      rubTitle: (index, first, last) => reader_seo_rub_title({ index, first, last }, options),
+      rubDescription: (index, first, last) =>
+        reader_seo_rub_description({ index, first, last }, options),
+      translationHizbDescription: (index, first, last) =>
+        reader_seo_translation_hizb_description({ index, first, last }, options),
+      translationRubDescription: (index, first, last) =>
+        reader_seo_translation_rub_description({ index, first, last }, options),
+      surahDescriptionUthmani: (name, arabic) =>
+        reader_seo_surah_description_uthmani({ name, arabic }, options),
+      surahDescriptionTranslation: (name, arabic) =>
+        reader_seo_surah_description_translation({ name, arabic }, options),
       breadcrumbSurah: (name) => reader_seo_breadcrumb_surah({ name }, options),
       quranBook: noArgs(reader_quran_book),
     },

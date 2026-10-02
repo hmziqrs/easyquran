@@ -26,18 +26,13 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 // e.g. quranenc.en.hilali_khan).
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
-const PAGE_BEYOND_FIRST = "(?:[2-9]|[1-9][0-9]+)";
+const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
 const READER_MD_SIBLING_PATTERNS: readonly RegExp[] = [
   new RegExp(`^/app/${SURAH_SEGMENT}$`, "u"),
-  new RegExp(`^/app/${SURAH_SEGMENT}/page/${PAGE_BEYOND_FIRST}$`, "u"),
-  new RegExp(`^/app/(?:page|juz)/${NUMBER}$`, "u"),
+  new RegExp(`^/app/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
   new RegExp(`^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
   new RegExp(
-    `^/app/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/page/${PAGE_BEYOND_FIRST}$`,
-    "u",
-  ),
-  new RegExp(
-    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/(?:page|juz)/${NUMBER}$`,
+    `^/app/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
     "u",
   ),
 ].map((pattern) => new RegExp(`^(?:/(?:en|ar))?${pattern.source.slice(1)}`, pattern.flags));

@@ -1,8 +1,9 @@
 import {
   globalPagePathFor,
+  hizbPathFor,
   juzPathFor,
+  rubPathFor,
   surahAyahPathFor,
-  surahLocalPagePathFor,
   surahPathFor,
   surahRouteContext,
 } from "$lib/data/quran";
@@ -19,13 +20,14 @@ import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 const VALID_READER_HREFS = [
   "/app",
   "/app/al-fatihah",
-  "/app/al-baqarah/page/2",
   "/app/page/604",
   "/app/juz",
   "/app/juz/30",
+  "/app/hizb/60",
+  "/app/rub/240",
   "/app/al-fatihah/t/en/sahih",
-  "/app/al-baqarah/t/ms/basmeih/page/12",
   "/app/t/en/sahih/page/604",
+  "/app/t/en/sahih/hizb/12",
   "/app/t/ru/kuliev-alsaadi/juz/30",
   "/app/al-fatihah/t/en/sahih.int",
 ] as const satisfies readonly QuranReaderHref[];
@@ -62,9 +64,9 @@ describe("reader localized hrefs", () => {
     expect(
       readerHrefFor(
         "ar",
-        "/app/al-baqarah/t/ms/basmeih/page/8?view=focus&source=en.sahih#ayah-2-255",
+        "/app/al-baqarah/t/ms/basmeih?view=focus&source=en.sahih#ayah-2-255",
       ),
-    ).toBe("/ar/app/al-baqarah/t/ms/basmeih/page/8?view=focus&source=en.sahih#ayah-2-255");
+    ).toBe("/ar/app/al-baqarah/t/ms/basmeih?view=focus&source=en.sahih#ayah-2-255");
     expect(readerHrefFor("en", "/app/al-fatihah?x=%2Fapp%2Ft#ayah-1-7")).toBe(
       "/en/app/al-fatihah?x=%2Fapp%2Ft#ayah-1-7",
     );
@@ -81,10 +83,11 @@ describe("reader localized hrefs", () => {
     const surah = { slug: "ar-rum", num: 30 };
     const quranHrefs = [
       surahPathFor(context, surah),
-      surahLocalPagePathFor(context, surah, 7),
-      surahAyahPathFor(context, surah, 7, 12),
+      surahAyahPathFor(context, surah, 12),
       globalPagePathFor(context, 42),
       juzPathFor(context, 30),
+      hizbPathFor(context, 60),
+      rubPathFor(context, 240),
     ];
 
     for (const quranHref of quranHrefs) {

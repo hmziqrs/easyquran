@@ -4,6 +4,6 @@
   let { data } = $props();
 </script>
 
-{#key `${data.pageData.surah.num}:${data.pageData.page.localPage}:${data.pageData.normalization.sourceId}`}
+{#key `${data.pageData.surah.num}:${data.pageData.normalization.sourceId}`}
   <SurahPageRoute {data} />
 {/key}

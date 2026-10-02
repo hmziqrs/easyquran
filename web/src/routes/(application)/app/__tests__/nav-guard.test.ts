@@ -1,9 +1,10 @@
 import {
   globalPagePathFor,
+  hizbPathFor,
   juzPathFor,
   routeContextFromParams,
+  rubPathFor,
   surahAyahPathFor,
-  surahLocalPagePathFor,
   surahPathFor,
   surahRouteContext,
   translationIdFromSegments,
@@ -59,10 +60,11 @@ function handBuiltAppNavHits(src: string): string[] {
 describe("reader navigation regression guard", () => {
   it("the centralized route-aware helpers are exported from $lib/data/quran", () => {
     expect(surahPathFor).toBeInstanceOf(Function);
-    expect(surahLocalPagePathFor).toBeInstanceOf(Function);
     expect(surahAyahPathFor).toBeInstanceOf(Function);
     expect(globalPagePathFor).toBeInstanceOf(Function);
     expect(juzPathFor).toBeInstanceOf(Function);
+    expect(hizbPathFor).toBeInstanceOf(Function);
+    expect(rubPathFor).toBeInstanceOf(Function);
     expect(surahRouteContext).toBeInstanceOf(Function);
   });
 
@@ -77,8 +79,10 @@ describe("reader navigation regression guard", () => {
 
   it("the guard regex never matches the *For variants (false-positive check)", () => {
     expect(ARABIC_ONLY_HELPERS.test("surahPathFor")).toBe(false);
-    expect(ARABIC_ONLY_HELPERS.test("surahLocalPagePathFor")).toBe(false);
     expect(ARABIC_ONLY_HELPERS.test("surahAyahPathFor")).toBe(false);
+    // The removed surah-local scheme cannot sneak back in under a *For name.
+    expect(ARABIC_ONLY_HELPERS.test("surahLocalPagePathFor")).toBe(false);
+    expect(ARABIC_ONLY_HELPERS.test("const x = surahLocalPagePath")).toBe(true);
   });
 });
 
@@ -150,10 +154,18 @@ describe("translated range-route fixtures preserve active source context across 
 
   it("ayah navigation from a range route keeps /t/<lang>/<translator> via surahAyahPathFor", () => {
     const surah = { slug: "ar-rum", num: 30 };
-    const path = surahAyahPathFor(ctx, surah, 7, 12);
-    expect(path).toBe("/app/ar-rum/t/ms/basmeih/page/7#ayah-30-12");
+    const path = surahAyahPathFor(ctx, surah, 12);
+    expect(path).toBe("/app/ar-rum/t/ms/basmeih#ayah-30-12");
     expect(path.includes("/t/ms/basmeih/")).toBe(true);
-    expect(path).not.toBe(surahAyahPathFor(ARABIC, surah, 7, 12));
+    expect(path).not.toBe(surahAyahPathFor(ARABIC, surah, 12));
+  });
+
+  it("hizb and rub navigation keeps /t/<lang>/<translator> via hizbPathFor/rubPathFor", () => {
+    expect(hizbPathFor(ctx, 60)).toBe("/app/t/ms/basmeih/hizb/60");
+    expect(hizbPathFor(ARABIC, 1)).toBe("/app/hizb/1");
+    expect(rubPathFor(ctx, 240)).toBe("/app/t/ms/basmeih/rub/240");
+    expect(rubPathFor(ARABIC, 1)).toBe("/app/rub/1");
+    expect(rubPathFor(ctx, 4)).not.toBe(rubPathFor(ARABIC, 4));
   });
 
   it("translationIdFromSegments round-trips the active source id used by the reader", () => {

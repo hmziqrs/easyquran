@@ -13,7 +13,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
   const surah = requireSurah(params.surah);
   const data = await loadTranslationSurahRouteData(surah, 1, params.lang, params.translator, fetch);
   if (!data) throw error(404, `Unknown Surah page: 1`);
-  const canonical = translationSurahPath(surah.slug, params.lang, params.translator, 1);
+  const canonical = translationSurahPath(surah.slug, params.lang, params.translator);
   const body = renderSurahPageMarkdown(data.pageData, readerHrefFor("en", canonical));
   return new Response(body, { headers: { "content-type": "text/markdown; charset=utf-8" } });
 };

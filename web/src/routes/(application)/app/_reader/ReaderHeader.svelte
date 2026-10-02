@@ -8,7 +8,6 @@
 
   let {
     initial,
-    visibleLocalPage,
     clientMounted,
     onChangeMode,
     readingText,
@@ -18,7 +17,6 @@
     onPickTranslation,
   }: {
     initial: SurahLocalPageData;
-    visibleLocalPage: number;
     clientMounted: boolean;
     onChangeMode: (mode: ReaderMode) => void;
     /** What Reading flows right now. */
@@ -57,9 +55,7 @@
     <span dir="rtl" lang="ar" class="font-arabic text-[24px] leading-none text-foreground">
       {initial.surah.arabic}
     </span>
-    <span class="text-[13.5px] text-foreground-secondary">
-      {surahMeta(initial.surah)} · {copy.shell.pageOf(visibleLocalPage, initial.pageCount)}
-    </span>
+    <span class="text-[13.5px] text-foreground-secondary">{surahMeta(initial.surah)}</span>
   </div>
 
   {#if clientMounted}

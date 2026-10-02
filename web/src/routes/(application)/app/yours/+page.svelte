@@ -77,14 +77,13 @@
     return sorted.slice(0, 5).flatMap((entry) => {
       const surah = data.surahByNum(entry.surah);
       if (!surah) return [];
-      const localPage = data.surahLocalPageForAyah(entry.surah, entry.ayah)?.localPage ?? 1;
       return [
         {
           key: entry.key,
           surah: entry.surah,
           ayah: entry.ayah,
           name: surah.name,
-          href: surahAyahPathFor(ARABIC_CTX, surah, localPage, entry.ayah),
+          href: surahAyahPathFor(ARABIC_CTX, surah, entry.ayah),
         },
       ];
     });

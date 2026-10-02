@@ -4,6 +4,6 @@
   let { data } = $props();
 </script>
 
-{#key `${data.pageData.surah.num}:${data.pageData.page.localPage}`}
+{#key data.pageData.surah.num}
   <SurahPageRoute {data} />
 {/key}

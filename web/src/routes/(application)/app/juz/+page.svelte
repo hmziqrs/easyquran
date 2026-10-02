@@ -1,26 +1,28 @@
 <script lang="ts">
   import { Seo, Icon } from "$lib/components";
-  import { globalPagePathFor, juzPathFor, type SurahRouteContext } from "$lib/data/quran";
+  import { juzPathFor, resumeCtxFor, rubPathFor } from "$lib/data/quran";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { readerCanonicalEntryPath } from "$lib/i18n/seo";
   import { publicHref } from "$lib/i18n/public-href";
   import ReaderShell from "../_reader/ReaderShell.svelte";
+  import { reader } from "$lib/stores/reader.svelte";
   import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
   let { data } = $props();
 
-  const arabicCtx: SurahRouteContext = { kind: "arabic" };
+  // Rows carry the reader's active source after hydration; prerendered HTML stays Arabic.
+  const ctx = $derived(resumeCtxFor(reader.lastRead, { kind: "arabic" }));
   const copy = getReaderUiCopy();
 
   const seoTitle = $derived(copy.seo.juzIndexTitle);
   const seoDescription = $derived(copy.seo.juzIndexDescription);
 
   function juzHref(n: number): `/${string}` {
-    return readerHrefFor(copy.locale, juzPathFor(arabicCtx, n));
+    return readerHrefFor(copy.locale, juzPathFor(ctx, n));
   }
 
-  function pageHref(n: number): `/${string}` {
-    return readerHrefFor(copy.locale, globalPagePathFor(arabicCtx, n));
+  function rubHref(juzIndex: number, quarterIndex: number): `/${string}` {
+    return readerHrefFor(copy.locale, rubPathFor(ctx, (juzIndex - 1) * 4 + quarterIndex + 1));
   }
 
   function sajdaLabel(count: number): string {
@@ -88,7 +90,7 @@
         <div class="grid grid-cols-2 gap-px border-t border-border bg-border lg:grid-cols-4">
           {#each juz.quarters as quarter, qi (quarter.first)}
             <a
-              href={publicHref(pageHref(quarter.page))}
+              href={publicHref(rubHref(juz.index, qi))}
               data-sveltekit-preload-data="hover"
               class="flex flex-col gap-0.5 bg-surface px-3 py-2 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >

@@ -1,18 +1,19 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { goto, replaceState } from "$app/navigation";
+  import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import { SITE } from "$lib/config/site";
   import { Seo } from "$lib/components";
   import {
     QuranScript,
     surahAyahPathFor,
-    surahLocalPagePathFor,
+    surahPathFor,
     surahRouteContext,
     translationSegmentsFromId,
     type SurahRouteData,
   } from "$lib/data/quran";
-  import { loadQuranData } from "$lib/data/quran-data-client";
+  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
+  import { positionForGlobal } from "$lib/data/mushaf-divisions";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
@@ -28,40 +29,23 @@
   const surah = $derived(data.pageData.surah);
   let scrolledPage = $state<typeof data.pageData | null>(null);
   let anchorScrolling = $state(false);
+  let readerView: SurahReader | null = $state(null);
   const activePage = $derived(scrolledPage ?? data.pageData);
-  const activeLocalPage = $derived(activePage.page.localPage);
   const normalization = $derived(data.pageData.normalization);
   const routeContext = $derived(surahRouteContext(normalization.sourceId));
-  const canonicalPath = $derived(surahLocalPagePathFor(routeContext, surah, activeLocalPage));
+  // One canonical, one title, one description per surah — never scroll-dependent.
+  const canonicalPath = $derived(surahPathFor(routeContext, surah));
   const canonicalPublicPath = $derived(readerHrefFor("en", canonicalPath));
   const currentPublicPath = $derived(readerHrefFor(copy.locale, canonicalPath));
-  const seoTitle = $derived(
-    data.pageData.pageCount > 1
-      ? copy.seo.surahPageTitle(surah.num, surah.name, activeLocalPage, data.pageData.pageCount)
-      : copy.seo.surahTitle(surah.num, surah.name),
-  );
+  const seoTitle = $derived(copy.seo.surahTitle(surah.num, surah.name));
   const isTranslation = $derived(normalization.script === QuranScript.Translation);
   const contentLanguage = $derived(
     isTranslation ? translationSegmentsFromId(normalization.sourceId).lang : "ar",
   );
   const seoDescription = $derived(
     isTranslation
-      ? copy.seo.surahDescriptionTranslation(
-          surah.name,
-          surah.arabic,
-          activeLocalPage,
-          data.pageData.pageCount,
-          activePage.page.startAyah,
-          activePage.page.endAyah,
-        )
-      : copy.seo.surahDescriptionUthmani(
-          surah.name,
-          surah.arabic,
-          activeLocalPage,
-          data.pageData.pageCount,
-          activePage.page.startAyah,
-          activePage.page.endAyah,
-        ),
+      ? copy.seo.surahDescriptionTranslation(surah.name, surah.arabic)
+      : copy.seo.surahDescriptionUthmani(surah.name, surah.arabic),
   );
   const translationPending = $derived(isTranslation && data.pageData.ayahs.length === 0);
   const chapterLd = $derived([
@@ -87,10 +71,22 @@
   ]);
 
   function requestedAyah(): number | null {
-    const legacy = page.url.searchParams.get("verse");
     const hash = new RegExp(`^#ayah-${surah.num}-(\\d+)$`).exec(page.url.hash)?.[1];
-    const value = Number(hash ?? legacy);
-    return Number.isSafeInteger(value) && value >= 1 && value <= surah.ayahCount ? value : null;
+    // ?v={surah}:{ayah} is the write-side of the scroll handler (share/reload parity);
+    // ?verse= is the legacy spelling. A foreign surah number in ?v= is ignored.
+    const shared = /^(\d+):(\d+)$/.exec(page.url.searchParams.get("v") ?? "");
+    const legacy = page.url.searchParams.get("verse");
+    let value: number | undefined;
+    if (hash !== undefined) {
+      value = Number(hash);
+    } else if (shared && Number(shared[1]) === surah.num) {
+      value = Number(shared[2]);
+    } else if (legacy !== null) {
+      value = Number(legacy);
+    }
+    return value !== undefined && Number.isSafeInteger(value) && value >= 1 && value <= surah.ayahCount
+      ? value
+      : null;
   }
 
   function nextFrame(): Promise<void> {
@@ -115,24 +111,17 @@
       const quranData = await loadQuranData();
       const targetPage = quranData.surahLocalPageForAyah(surah.num, ayah);
       if (!targetPage) return;
+      // The target page streams in place through the reader's anchor-preserving
+      // queue — no navigation, the path never moves.
+      await readerView?.ensurePage(targetPage.localPage);
       const targetHref = publicHref(
-        readerHrefFor(
-          copy.locale,
-          surahAyahPathFor(routeContext, surah, targetPage.localPage, ayah),
-        ),
+        readerHrefFor(copy.locale, surahAyahPathFor(routeContext, surah, ayah)),
       );
-      if (targetPage.localPage !== data.pageData.page.localPage) {
-        await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
-        return;
-      }
       if (page.url.href !== new URL(targetHref, page.url).href) {
         replaceState(withModeParam(targetHref, reader.mode, page.url), page.state);
       }
       const row = await ayahRow(ayah);
-      if (!row) {
-        await goto(targetHref, { replaceState: true, keepFocus: true, noScroll: true });
-        return;
-      }
+      if (!row) return;
       const target = row.querySelector<HTMLElement>("[data-verse-anchor]") ?? row;
       const start = performance.now();
       let lastHeight = -1;
@@ -158,6 +147,21 @@
 
   onMount(() => {
     reader.setCurrent(surah.num);
+    void loadQuranData()
+      .then(() => {
+        const quranData = peekQuranData();
+        if (quranData) reader.setPosition(positionForGlobal(quranData, activePage.page.startGlobal));
+      })
+      .catch(() => {});
+  });
+
+  // Sticky-bar position: server payload knows the initial page; the reader
+  // republishes on scroll. Reading peekQuranData here keeps SSR free of the
+  // client-only division fetch.
+  $effect(() => {
+    const startGlobal = activePage.page.startGlobal;
+    const quranData = peekQuranData();
+    if (quranData) reader.setPosition(positionForGlobal(quranData, startGlobal));
   });
 
   const viewKey = $derived(`${normalization.sourceId}:${surah.num}`);
@@ -175,15 +179,6 @@
   });
 </script>
 
-<svelte:head>
-  {#if data.readingPreviousHref}
-    <link rel="prev" href={`${SITE.url}${readerHrefFor(copy.locale, data.readingPreviousHref)}`} />
-  {/if}
-  {#if data.readingNextHref}
-    <link rel="next" href={`${SITE.url}${readerHrefFor(copy.locale, data.readingNextHref)}`} />
-  {/if}
-</svelte:head>
-
 <Seo
   path={canonicalPublicPath}
   title={seoTitle}
@@ -199,7 +194,7 @@
   ]}
 />
 
-<ReaderShell>
+<ReaderShell position={{ globalPage: activePage.page.globalPage, juz: data.juz }}>
   {#snippet header()}
     <span class="hidden min-w-0 truncate text-sm font-medium text-foreground-secondary sm:inline">
       {surah.num}. {surah.name}
@@ -211,6 +206,7 @@
     <Results />
   {:else}
     <SurahReader
+      bind:this={readerView}
       initial={data.pageData}
       previousPage={data.previousPage}
       nextPage={data.nextPage}

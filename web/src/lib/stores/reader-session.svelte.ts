@@ -1,5 +1,6 @@
 import { browser } from "$app/environment";
 import type { VerseKey } from "$lib/data/quran";
+import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
 
 import type { BrowseMode, LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
@@ -54,6 +55,17 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
     },
     setBrowse(browse: BrowseMode): void {
       core.s.browse = browse;
+    },
+
+    get current(): number {
+      return core.s.current;
+    },
+
+    get position(): ReaderPositionState | null {
+      return core.s.position;
+    },
+    setPosition(position: ReaderPositionState | null): void {
+      core.s.position = position;
     },
 
     get openNote(): VerseKey | null {

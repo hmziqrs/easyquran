@@ -6,13 +6,13 @@
   import { page as appPage } from "$app/state";
   import {
     parseKey,
-    surahLocalPagePathFor,
     surahRouteContext,
+    type MushafPageLink,
     type SurahLocalPageData,
-    type SurahLocalPageLink,
     type SurahLink,
   } from "$lib/data/quran";
-  import { loadQuranData } from "$lib/data/quran-data-client";
+  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
+  import { positionForGlobal } from "$lib/data/mushaf-divisions";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
@@ -63,6 +63,7 @@
   import type { Ayah, QuranScript, StackedTranslation } from "$lib/data/quran-types";
   import { loadArabicFont } from "$lib/fonts/arabic-fonts";
   import { arabicHrefFor, liveReaderPosition } from "./translation-nav";
+  import { positionLabel } from "./position-label";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";
   import {
@@ -82,8 +83,8 @@
     onVisiblePage,
   }: {
     initial: SurahLocalPageData;
-    previousPage: SurahLocalPageLink | null;
-    nextPage: SurahLocalPageLink | null;
+    previousPage: MushafPageLink | null;
+    nextPage: MushafPageLink | null;
     previousSurah: SurahLink | null;
     nextSurah: SurahLink | null;
     anchorScrolling?: boolean;
@@ -128,6 +129,9 @@
   const heightCache = new PageHeightCache();
   const loadAheadPx = 900;
   const visibleLocalPage = $derived(activeLocalPage ?? initial?.page.localPage ?? 1);
+  const visiblePageData = $derived(
+    pages.find((item) => item.page.localPage === visibleLocalPage) ?? initial,
+  );
   const virtualFocusPage = $derived(virtualCenterPage ?? visibleLocalPage);
   // Rendered-page budget: small Arabic sizes make pages shorter than the viewport,
   // so scale the window to keep ~1.5 viewports rendered on each side of the focus.
@@ -184,15 +188,17 @@
     void loadQuranData()
       .then((qd) => {
         stackedQuranData = qd;
+        publishPosition(initial);
       })
       .catch(() => {});
   });
-  function pagePathFor(localPage: number): `/${string}` {
-    return readerHrefFor(
-      copy.locale,
-      surahLocalPagePathFor(routeContext, initial.surah, localPage),
-    );
+  /** Live mushaf position for the sticky indicator (best-effort: needs division data). */
+  function publishPosition(pageData: SurahLocalPageData): void {
+    const quranData = peekQuranData();
+    if (!quranData) return;
+    reader.setPosition(positionForGlobal(quranData, pageData.page.startGlobal));
   }
+
   const renderedPageNumbers = $derived.by(
     () =>
       new Set(
@@ -550,8 +556,6 @@
       return;
     }
     // A translation route carries no Arabic text: open the Arabic URL at the same place.
-    // liveReaderPosition reads window.location first — a scrolled reader's /page/N rewrite
-    // never reaches page.url (stress S1).
     readingText.readArabic();
     const href = arabicHrefFor(liveReaderPosition(appPage.url));
     if (href === null) return;
@@ -633,16 +637,24 @@
   let lastWrittenUrl: string | null = null;
   let lastWrittenPage: number | null = null;
 
-  function writeHistoryState(
-    url: string | URL = window.location.href,
-    localPage = visibleLocalPage,
-  ): void {
+  function writeHistoryState(localPage = visibleLocalPage): void {
     // Guard the whole write: after a keyed swap / hot update the prop can already
     // be gone while beforeNavigate or a settled loadPage still calls in. A skipped
     // history write is harmless; a snapshot of a half-torn reader is a crash.
     if (!initial) return;
     const snapshot = historySnapshot(localPage);
-    const next = withModeParam(url, reader.mode, window.location.href);
+    // One URL per surah: the path never moves, so the restore snapshot rides in
+    // history.state on the current path and the settled verse position rides in
+    // the ?v={surah}:{ayah} query (share/reload parity, quran.com's startingVerse).
+    const base = new URL(window.location.href);
+    const params = new URLSearchParams(base.search);
+    params.delete("v");
+    params.delete("verse");
+    const anchor = snapshot.anchor;
+    if (anchor !== null && anchor.kind === "verse") params.set("v", anchor.verseKey);
+    const query = params.toString();
+    const bare = `${base.pathname}${query === "" ? "" : `?${query}`}`;
+    const next = withModeParam(bare, reader.mode, window.location.href);
     const target = next.href;
     if (target !== lastWrittenUrl || localPage !== lastWrittenPage) {
       replaceState(next, {
@@ -809,6 +821,14 @@
     }
   }
 
+  /** Route-driven in-place page stream (ayah reveal): loads the page if absent, anchor-preserved. */
+  export async function ensurePage(localPage: number): Promise<void> {
+    if (!initial) return;
+    if (localPage < 1 || localPage > initial.pageCount) return;
+    if (pages.some((item) => item.page.localPage === localPage && item.ayahs.length > 0)) return;
+    await loadPage(localPage);
+  }
+
   async function retryInitialPage(): Promise<void> {
     if (initialRetryInFlight) return;
     initialRetryInFlight = true;
@@ -861,9 +881,13 @@
     if (localPage === visibleLocalPage) return;
     activeLocalPage = localPage;
     const pageData = pages.find((item) => item.page.localPage === localPage);
-    if (pageData) onVisiblePage?.(pageData);
+    if (pageData) {
+      onVisiblePage?.(pageData);
+      publishPosition(pageData);
+    }
     markAnchorRead(anchor !== undefined ? anchor : captureAnchor());
-    writeHistoryState(publicHref(pagePathFor(localPage)), localPage);
+    // Path never moves — only the history-state snapshot and ?v= query update.
+    writeHistoryState(localPage);
   }
 
   function updateVisiblePage(anchor: ViewportAnchor | null = null): void {
@@ -1077,7 +1101,6 @@
   <div>
     <ReaderHeader
       {initial}
-      {visibleLocalPage}
       {clientMounted}
       onChangeMode={changeMode}
       readingText={flowId === null ? "arabic" : "translation"}
@@ -1107,7 +1130,7 @@
               {@attach measurePage(pageData.page.localPage)}
             >
               <h2 id="surah-page-{pageData.page.localPage}-title" class="sr-only">
-                {copy.shell.surahPageTitle(initial.surah.name, pageData.page.localPage, initial.pageCount)}
+                {copy.range.item("page", pageData.page.globalPage)}
               </h2>
               {#if pageData.page.startAyah === 1 && headerText(pageData.normalization)}
                 <!-- Calligraphy instead of the text bismillah; Surah 1 never
@@ -1160,7 +1183,7 @@
     </div>
 
     <span class="sr-only" aria-live="polite">
-      {copy.shell.pageOf(visibleLocalPage, initial.pageCount)}
+      {positionLabel(copy, reader.position ?? { globalPage: visiblePageData?.page.globalPage ?? 1 })}
     </span>
 
     {#if clientMounted && (degradation.loadFailed || degradation.workerDegraded || degradation.apiDegraded || quran.status === "error")}

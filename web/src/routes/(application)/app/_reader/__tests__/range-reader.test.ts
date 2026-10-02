@@ -56,7 +56,10 @@ vi.mock("$lib/quran/wire", () => ({
 vi.mock("$app/navigation", () => ({ goto: gotoSpy }));
 vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
-vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
+vi.mock("$lib/data/quran-data-client", () => ({
+  loadQuranData: loadQuranDataStub,
+  peekQuranData: () => undefined,
+}));
 vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));
 vi.mock("../VerseRow.svelte", () => ({ default: verseRowStub }));
 vi.mock("$lib/components/ui/tooltip", () => ({ TooltipProvider: tooltipStub }));

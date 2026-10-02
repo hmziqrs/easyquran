@@ -1,9 +1,8 @@
+import { juzOfPage } from "$lib/data/mushaf-divisions";
 import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "$lib/data/quran-types";
 import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
 import { surahRouteNav } from "$lib/server/quran-page-shape";
 import { readRangeText } from "$lib/server/quran-sqlite";
-
-const ARABIC_CTX = { kind: "arabic" } as const;
 
 export function readSurahLocalPageData(
   surah: CatalogEntry,
@@ -35,5 +34,9 @@ export function readSurahRouteData(
 ): SurahRouteData | undefined {
   const pageData = readSurahLocalPageData(surah, localPage);
   if (!pageData) return undefined;
-  return { pageData, ...surahRouteNav(ARABIC_CTX, surah, localPage, pageData.pageCount) };
+  return {
+    pageData,
+    ...surahRouteNav(surah, pageData.page.globalPage),
+    juz: juzOfPage(QURAN_DATA, pageData.page.startGlobal),
+  };
 }

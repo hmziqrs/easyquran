@@ -97,13 +97,12 @@
       if (coords === null) continue;
       const entry = data.surahByNum(coords.surah);
       if (!entry) continue;
-      const localPage = data.surahLocalPageForAyah(coords.surah, coords.ayah)?.localPage ?? 1;
       out.push({
         key,
         surah: coords.surah,
         ayah: coords.ayah,
         name: entry.name,
-        href: surahAyahPathFor(ARABIC_CTX, entry, localPage, coords.ayah),
+        href: surahAyahPathFor(ARABIC_CTX, entry, coords.ayah),
       });
     }
     return out;
@@ -115,10 +114,9 @@
     if (data === null) return null;
     const entry = data.surahByNum(bookmark.surah);
     if (!entry) return null;
-    const localPage = data.surahLocalPageForAyah(bookmark.surah, bookmark.ayah)?.localPage ?? 1;
     return {
       name: entry.name,
-      href: surahAyahPathFor(ARABIC_CTX, entry, localPage, bookmark.ayah),
+      href: surahAyahPathFor(ARABIC_CTX, entry, bookmark.ayah),
     };
   }
 

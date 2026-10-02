@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { building } from "$app/environment";
 import { QURAN } from "$lib/config/site";
+import { SURAH_COUNT } from "$lib/data/quran-data";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
 import { paraglideMiddleware } from "$lib/paraglide/server";
 import {
@@ -12,10 +13,12 @@ import {
   preferredType,
 } from "$lib/server/markdown-negotiation";
 import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
+import { QURAN_DATA } from "$lib/server/quran-data";
 import {
   localizedReaderLocale,
   parseReaderPath,
   parseReaderRoute,
+  surahLocalRedirectTarget,
   type ParsedReaderRoute,
 } from "$lib/server/reader-route";
 import type { Handle, RequestEvent } from "@sveltejs/kit";
@@ -37,13 +40,9 @@ function translationRouteCacheKey(
   uiLocale: UiLocale | null,
 ): string | null {
   if (!uiLocale || route?.type !== "translation") return null;
-  const base = diskCacheKey(
-    route.sourceId,
-    route.cacheKind,
-    route.index,
-    route.cacheKind === "surah" ? (route.localPage ?? 1) : undefined,
-  );
-  return `${base}__ui-${uiLocale}`;
+  // Bounded UI-locale partition on top of the source-kind key: en/ar chrome
+  // renders different shells over the same translation content.
+  return `${diskCacheKey(route.sourceId, route.cacheKind, route.index)}__ui-${uiLocale}`;
 }
 
 function withTrailingSlash(value: string): string {
@@ -118,6 +117,7 @@ export function applyHeaders(
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   const translationPending = response.headers.get("x-eq-translation-pending");
   const privateMode = requestHasCookie || responseSetsCookie(response);
+  const isRedirect = response.status >= 300 && response.status < 400;
   const isImmutableAsset =
     pathname.startsWith("/_app/immutable/") ||
     pathname.startsWith("/_quran/tanzil/") ||
@@ -126,6 +126,9 @@ export function applyHeaders(
     response.headers.set("Cache-Control", "private, no-store");
   } else if (response.status >= 500 || hasNoStore(response) || translationPending) {
     response.headers.set("Cache-Control", "no-store");
+  } else if (isRedirect) {
+    // Redirect handlers own their cache policy (e.g. the bounded public TTL on
+    // the deterministic legacy-locale 308); the default no-cache stays off.
   } else if (isImmutableAsset) {
     response.headers.set("Cache-Control", IMMUTABLE);
   } else {
@@ -168,33 +171,64 @@ function legacyReaderRedirect(event: RequestEvent): Response | null {
   const { pathname } = event.url;
   if (!pathname.startsWith("/app") || !parseReaderPath(pathname)) return null;
   const tail = building ? "" : `${event.url.search}${event.url.hash}`;
+  // 308 + bounded public TTL: the target is deterministic (/en) today. If the
+  // legacy target ever becomes request-dependent, revert to 307 + no-store.
   return new Response(null, {
-    status: 307,
+    status: 308,
     headers: {
       location: `/en${pathname}${tail}`,
-      "cache-control": "no-store",
+      "cache-control": "public, max-age=86400",
     },
   });
 }
 
-function noncanonicalLocalizedReaderRedirect(event: RequestEvent): Response | null {
-  const { pathname } = event.url;
-  if (
-    event.params.localPage !== "1" ||
-    !event.route.id ||
-    (!event.route.id.endsWith("/app/[surah]/page/[localPage]") &&
-      !event.route.id.endsWith("/app/[surah]/t/[lang]/[translator]/page/[localPage]")) ||
-    !pathname.endsWith("/page/1")
-  ) {
-    return null;
-  }
-  const localizedCanonical = pathname.slice(0, -"/page/1".length);
-  const canonical = localizedCanonical.replace(/^\/(?:en|ar)(?=\/app(?:\/|$))/u, "");
-  if (!parseReaderPath(canonical)) return null;
+/**
+ * Prefix view of a reader request: localized paths keep their locale; bare
+ * /app/** requests take the deterministic legacy /en target.
+ */
+function readerRequestBase(pathname: string): { prefix: string; rel: string } | null {
+  const locale = localizedReaderLocale(pathname);
+  if (locale) return { prefix: `/${locale}`, rel: pathname.slice(locale.length + 1) };
+  if (pathname.startsWith("/app")) return { prefix: "/en", rel: pathname };
+  return null;
+}
+
+/**
+ * Numeric chapter alias (D14): `/en/app/2` → `/en/app/al-baqarah`. Digits never
+ * collide with surah slugs (letter-initial) or the reserved range segments.
+ * Out-of-range numbers fall through to the parse 404.
+ */
+function numericChapterRedirect(event: RequestEvent): Response | null {
+  const base = readerRequestBase(event.url.pathname);
+  if (!base) return null;
+  const match = /^\/app\/([1-9][0-9]*)$/u.exec(base.rel);
+  if (!match) return null;
+  const num = Number(match[1]);
+  const surah = num >= 1 && num <= SURAH_COUNT ? QURAN_DATA.surahByNum(num) : undefined;
+  if (!surah) return null;
   const tail = building ? "" : `${event.url.search}${event.url.hash}`;
   return new Response(null, {
     status: 308,
-    headers: { location: `${localizedCanonical}${tail}` },
+    headers: { location: `${base.prefix}/app/${surah.slug}${tail}` },
+  });
+}
+
+/**
+ * Surah-local page URLs are gone (D1); every removed shape 308s to the surah
+ * root, landing on the spread's first ayah when no explicit fragment travels
+ * with the request.
+ */
+function surahLocalPageRedirect(event: RequestEvent): Response | null {
+  const base = readerRequestBase(event.url.pathname);
+  if (!base) return null;
+  const target = surahLocalRedirectTarget(base.rel);
+  if (!target) return null;
+  const search = building ? "" : event.url.search;
+  const inboundHash = building ? "" : event.url.hash;
+  const fragment = inboundHash || target.fragment;
+  return new Response(null, {
+    status: 308,
+    headers: { location: `${base.prefix}${target.path}${search}${fragment}` },
   });
 }
 
@@ -336,9 +370,11 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!response) {
     const readerLocale = localizedReaderLocale(pathname);
     const useI18n = readerLocale !== null || isLocalizedMarketingPath(pathname);
-    const noncanonicalRedirect = readerLocale ? noncanonicalLocalizedReaderRedirect(event) : null;
-    if (noncanonicalRedirect) {
-      response = noncanonicalRedirect;
+    const readerRedirect = readerLocale
+      ? (numericChapterRedirect(event) ?? surahLocalPageRedirect(event))
+      : null;
+    if (readerRedirect) {
+      response = readerRedirect;
     } else if (readerLocale && !parseReaderRoute(event.route.id, event.params)) {
       response = notFound(event);
     } else if (useI18n) {

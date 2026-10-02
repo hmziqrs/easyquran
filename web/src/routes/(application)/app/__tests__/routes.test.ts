@@ -1,11 +1,11 @@
 import {
   globalPagePathFor,
+  hizbPathFor,
   juzPathFor,
   resumeCtxFor,
+  rubPathFor,
   surahAyahPath,
   surahAyahPathFor,
-  surahLocalPagePath,
-  surahLocalPagePathFor,
   surahPath,
   surahPathFor,
   surahRouteContext,
@@ -17,7 +17,7 @@ import {
 } from "$lib/data/quran";
 import { describe, expect, it } from "vite-plus/test";
 
-const ROUTE_LITERALS = ["t", "page", "juz"] as const;
+const ROUTE_LITERALS = ["t", "page", "juz", "hizb", "rub"] as const;
 
 function segmentAfterSlug(path: string, slug: string): string | undefined {
   const prefix = `/app/${slug}/`;
@@ -26,27 +26,23 @@ function segmentAfterSlug(path: string, slug: string): string | undefined {
 }
 
 describe("translation route grammar — non-shadow", () => {
-  it("uses 't' (not 'page') directly after a surah slug, so the two trees cannot collide", () => {
+  it("uses 't' (not a range literal) directly after a surah slug, so the two trees cannot collide", () => {
     const slug = "al-baqarah";
-    const arabicLocal = surahLocalPagePath(slug, 3);
-    const translationLocal = translationSurahPath(slug, "en", "sahih", 1);
+    const arabicRoot = surahPath(slug);
+    const translationRoot = translationSurahPath(slug, "en", "sahih");
 
-    expect(arabicLocal).toBe("/app/al-baqarah/page/3");
-    expect(translationLocal).toBe("/app/al-baqarah/t/en/sahih");
+    expect(arabicRoot).toBe("/app/al-baqarah");
+    expect(translationRoot).toBe("/app/al-baqarah/t/en/sahih");
 
-    const arabicSeg = segmentAfterSlug(arabicLocal, slug);
-    const translationSeg = segmentAfterSlug(translationLocal, slug);
-    expect(arabicSeg).toBe("page");
+    const arabicSeg = segmentAfterSlug(arabicRoot, slug);
+    const translationSeg = segmentAfterSlug(translationRoot, slug);
+    expect(arabicSeg).toBeUndefined();
     expect(translationSeg).toBe("t");
-    expect(arabicSeg).not.toBe(translationSeg);
   });
 
-  it("collapses translation local page 1 to the bare translation route", () => {
-    const one = translationSurahPath("al-baqarah", "en", "sahih", 1);
-    const two = translationSurahPath("al-baqarah", "en", "sahih", 2);
-    expect(one).toBe("/app/al-baqarah/t/en/sahih");
-    expect(two).toBe("/app/al-baqarah/t/en/sahih/page/2");
-    expect(one.endsWith("/page/1")).toBe(false);
+  it("surah URLs never carry a page tail — one URL per surah", () => {
+    expect(surahPath("al-baqarah").includes("/page/")).toBe(false);
+    expect(translationSurahPath("al-baqarah", "en", "sahih").includes("/page/")).toBe(false);
   });
 
   it("places global translation routes under the literal /app/t/ tree", () => {
@@ -58,7 +54,7 @@ describe("translation route grammar — non-shadow", () => {
     expect(juz.startsWith("/app/t/")).toBe(true);
   });
 
-  it("keeps t, page, and juz mutually distinct as route literals", () => {
+  it("keeps t and every range literal mutually distinct", () => {
     expect(new Set(ROUTE_LITERALS).size).toBe(ROUTE_LITERALS.length);
     for (const a of ROUTE_LITERALS) {
       for (const b of ROUTE_LITERALS) {
@@ -119,40 +115,16 @@ describe("route-aware path builders preserve translation across surah boundaries
   const nextSurah = "luqman";
   const prevSurah = "al-ankabut";
 
-  it("cross-surah Next on a translated surah's last local page keeps t/<lang>/<translator> (ar-rum -> luqman)", () => {
-    const next = surahLocalPagePathFor(ctx, nextSurah, 1);
+  it("cross-surah Next from a translated surah keeps t/<lang>/<translator> (ar-rum -> luqman)", () => {
+    const next = surahPathFor(ctx, nextSurah);
     expect(next).toBe(`/app/${nextSurah}/t/ms/basmeih`);
     expect(next.endsWith("/page/1")).toBe(false);
-    expect(surahPathFor(ctx, nextSurah)).toBe(next);
   });
 
-  it("cross-surah Previous on local page 1 of a translated surah keeps t/<lang>/<translator> (ar-rum -> al-ankabut)", () => {
-    const prev = surahLocalPagePathFor(ctx, prevSurah, 1);
+  it("cross-surah Previous from a translated surah keeps t/<lang>/<translator> (ar-rum -> al-ankabut)", () => {
+    const prev = surahPathFor(ctx, prevSurah);
     expect(prev).toBe(`/app/${prevSurah}/t/ms/basmeih`);
     expect(prev.endsWith("/page/1")).toBe(false);
-    expect(surahPathFor(ctx, prevSurah)).toBe(prev);
-  });
-});
-
-describe("route-aware path builders preserve translation within a surah", () => {
-  const ctx = surahRouteContext("ms.basmeih");
-  const surah = "ar-rum";
-
-  it("within-surah Next keeps translation after a forward-load (lastLoadedLocalPage !== initial.page.localPage)", () => {
-    const next = surahLocalPagePathFor(ctx, surah, 8);
-    expect(next).toBe(`/app/${surah}/t/ms/basmeih/page/8`);
-    expect(next).not.toBe(surahLocalPagePath(surah, 8));
-  });
-
-  it("within-surah Previous keeps translation after a forward-load", () => {
-    const prev = surahLocalPagePathFor(ctx, surah, 6);
-    expect(prev).toBe(`/app/${surah}/t/ms/basmeih/page/6`);
-    expect(prev).not.toBe(surahLocalPagePath(surah, 6));
-  });
-
-  it("collapses translation local page 1 to the bare translation route", () => {
-    expect(surahLocalPagePathFor(ctx, surah, 1)).toBe(`/app/${surah}/t/ms/basmeih`);
-    expect(surahLocalPagePathFor(ctx, surah, 1).endsWith("/page/1")).toBe(false);
   });
 });
 
@@ -160,29 +132,26 @@ describe("route-aware ayah path preserves translation (reveal, sidebar, search, 
   const ctx = surahRouteContext("ms.basmeih");
   const surah = { slug: "ar-rum", num: 30 };
 
-  it("surahAyahPathFor keeps the translation segment and matches the translated local page", () => {
-    const same = surahAyahPathFor(ctx, surah, 7, 12);
-    expect(same).toBe("/app/ar-rum/t/ms/basmeih/page/7#ayah-30-12");
-    expect(same.includes("/t/ms/basmeih/")).toBe(true);
-
-    const cross = surahAyahPathFor(ctx, { slug: "luqman", num: 31 }, 1, 4);
-    expect(cross).toBe("/app/luqman/t/ms/basmeih#ayah-31-4");
-    expect(cross.endsWith("/page/1")).toBe(false);
+  it("surahAyahPathFor anchors the bare surah root — no page tail anywhere", () => {
+    const path = surahAyahPathFor(ctx, surah, 12);
+    expect(path).toBe("/app/ar-rum/t/ms/basmeih#ayah-30-12");
+    expect(path.includes("/t/ms/basmeih")).toBe(true);
+    expect(path.includes("/page/")).toBe(false);
   });
 
   it("surahAyahPathFor diverges from the Arabic-only surahAyahPath on a translation route", () => {
-    expect(surahAyahPathFor(ctx, surah, 7, 12)).not.toBe(surahAyahPath(surah, 7, 12));
-    expect(surahAyahPath(surah, 7, 12)).toBe("/app/ar-rum/page/7#ayah-30-12");
+    expect(surahAyahPathFor(ctx, surah, 12)).not.toBe(surahAyahPath(surah, 12));
+    expect(surahAyahPath(surah, 12)).toBe("/app/ar-rum#ayah-30-12");
   });
 });
 
-describe("canonical/surah-page path for a translation source is not the Arabic path", () => {
+describe("canonical surah path for a translation source is not the Arabic path", () => {
   const ctx = surahRouteContext("ms.basmeih");
 
-  it("surahLocalPagePathFor emits the translated canonical, not the Arabic one", () => {
-    const canonical = surahLocalPagePathFor(ctx, "ar-rum", 7);
-    expect(canonical).toBe("/app/ar-rum/t/ms/basmeih/page/7");
-    expect(canonical).not.toBe(surahLocalPagePath("ar-rum", 7));
+  it("surahPathFor emits the translated canonical, not the Arabic one", () => {
+    const canonical = surahPathFor(ctx, "ar-rum");
+    expect(canonical).toBe("/app/ar-rum/t/ms/basmeih");
+    expect(canonical).not.toBe(surahPath("ar-rum"));
     expect(canonical.includes("/t/ms/basmeih/")).toBe(true);
   });
 });
@@ -191,31 +160,21 @@ describe("arabic source context stays parity with legacy helpers", () => {
   const ctx = surahRouteContext("uthmani");
   const surah = { slug: "al-baqarah", num: 2 };
 
-  it("surahPathFor / surahLocalPagePathFor / surahAyahPathFor match the Arabic-only builders", () => {
+  it("surahPathFor / surahAyahPathFor match the Arabic-only builders", () => {
     expect(surahPathFor(ctx, "al-baqarah")).toBe(surahPath("al-baqarah"));
-    expect(surahLocalPagePathFor(ctx, "al-baqarah", 3)).toBe(surahLocalPagePath("al-baqarah", 3));
-    expect(surahLocalPagePathFor(ctx, "al-baqarah", 1)).toBe(surahLocalPagePath("al-baqarah", 1));
-    expect(surahLocalPagePathFor(ctx, "al-baqarah", 1).endsWith("/page/1")).toBe(false);
-    expect(surahAyahPathFor(ctx, surah, 3, 5)).toBe(surahAyahPath(surah, 3, 5));
+    expect(surahAyahPathFor(ctx, surah, 5)).toBe(surahAyahPath(surah, 5));
   });
 
   it("never introduces a /t/ segment for an arabic source", () => {
     expect(surahPathFor(ctx, "al-baqarah").includes("/t/")).toBe(false);
-    expect(surahLocalPagePathFor(ctx, "al-baqarah", 3).includes("/t/")).toBe(false);
-    expect(surahAyahPathFor(ctx, surah, 3, 5).includes("/t/")).toBe(false);
+    expect(surahAyahPathFor(ctx, surah, 5).includes("/t/")).toBe(false);
   });
 });
 
 describe("legacy Arabic-only helpers drop the translation segment (regression guard)", () => {
-  it("surahLocalPagePath never emits a /t/ segment", () => {
-    expect(surahLocalPagePath("luqman", 1)).toBe("/app/luqman");
-    expect(surahLocalPagePath("luqman", 1).includes("/t/")).toBe(false);
-    expect(surahLocalPagePath("ar-rum", 8).includes("/t/")).toBe(false);
-  });
-
   it("surahAyahPath never emits a /t/ segment", () => {
-    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 7, 12)).toBe("/app/ar-rum/page/7#ayah-30-12");
-    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 7, 12).includes("/t/")).toBe(false);
+    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 12)).toBe("/app/ar-rum#ayah-30-12");
+    expect(surahAyahPath({ slug: "ar-rum", num: 30 }, 12).includes("/t/")).toBe(false);
   });
 
   it("surahPath never emits a /t/ segment", () => {
@@ -226,7 +185,6 @@ describe("legacy Arabic-only helpers drop the translation segment (regression gu
 describe("sitemap emits every indexable route class (canonical-seo guard)", () => {
   const ARABIC = surahRouteContext("uthmani");
   const ctx = surahRouteContext("ms.basmeih");
-  const slug = "ar-rum";
 
   it("emits the arabic global page route /app/page/[n] via globalPagePathFor", () => {
     expect(globalPagePathFor(ARABIC, 42)).toBe("/app/page/42");
@@ -238,14 +196,17 @@ describe("sitemap emits every indexable route class (canonical-seo guard)", () =
     expect(globalPagePathFor(ctx, 42).includes("/t/ms/basmeih/")).toBe(true);
   });
 
-  it("emits the translated surah local page route /app/<slug>/t/<lang>/<translator>/page/[localPage]", () => {
-    expect(surahLocalPagePathFor(ctx, slug, 7)).toBe("/app/ar-rum/t/ms/basmeih/page/7");
-    expect(surahLocalPagePathFor(ctx, slug, 7).includes("/t/ms/basmeih/")).toBe(true);
+  it("emits both arabic and translated hizb/rub routes, kept distinct", () => {
+    expect(hizbPathFor(ARABIC, 60)).toBe("/app/hizb/60");
+    expect(hizbPathFor(ctx, 60)).toBe("/app/t/ms/basmeih/hizb/60");
+    expect(rubPathFor(ARABIC, 240)).toBe("/app/rub/240");
+    expect(rubPathFor(ctx, 240)).toBe("/app/t/ms/basmeih/rub/240");
+    expect(rubPathFor(ctx, 4)).not.toBe(rubPathFor(ARABIC, 4));
   });
 
   it("translation route classes are not silently collapsed to their arabic counterparts", () => {
     expect(globalPagePathFor(ctx, 42)).not.toBe(globalPagePathFor(ARABIC, 42));
-    expect(surahLocalPagePathFor(ctx, slug, 7)).not.toBe(surahLocalPagePathFor(ARABIC, slug, 7));
+    expect(juzPathFor(ctx, 30)).not.toBe(juzPathFor(ARABIC, 30));
   });
 
   it("emits both arabic and translation juz routes, kept distinct", () => {
@@ -289,7 +250,6 @@ describe("continueReading resume uses the last-read verse's own source, not the 
     const resume = surahAyahPathFor(
       resumeCtxFor(lastRead, currentRouteArabic),
       surah,
-      1,
       lastRead.n,
     );
     expect(resume).toBe("/app/luqman/t/ms/basmeih#ayah-31-4");
@@ -302,21 +262,19 @@ describe("continueReading resume uses the last-read verse's own source, not the 
     const resume = surahAyahPathFor(
       resumeCtxFor(lastRead, currentRouteTranslation),
       surah,
-      7,
       lastRead.n,
     );
-    expect(resume).toBe("/app/ar-rum/page/7#ayah-30-12");
+    expect(resume).toBe("/app/ar-rum#ayah-30-12");
     expect(resume.includes("/t/")).toBe(false);
   });
 
   it("the resume URL diverges from what the current routeContext alone would have produced", () => {
     const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
     const surah = { slug: "luqman", num: 31 };
-    const buggy = surahAyahPathFor(currentRouteArabic, surah, 1, lastRead.n);
+    const buggy = surahAyahPathFor(currentRouteArabic, surah, lastRead.n);
     const fixed = surahAyahPathFor(
       resumeCtxFor(lastRead, currentRouteArabic),
       surah,
-      1,
       lastRead.n,
     );
     expect(fixed).not.toBe(buggy);
@@ -324,39 +282,13 @@ describe("continueReading resume uses the last-read verse's own source, not the 
     expect(fixed.includes("/t/ms/basmeih")).toBe(true);
   });
 
-  it("cross-surah resume preserves translation across a surah boundary (ar-rum -> luqman, page 1 collapses)", () => {
-    const lastRead: LastRead = { num: 31, n: 4, sourceId: "ms.basmeih" };
-    const surah = { slug: "luqman", num: 31 };
-    const resume = surahAyahPathFor(
-      resumeCtxFor(lastRead, currentRouteArabic),
-      surah,
-      1,
-      lastRead.n,
-    );
-    expect(resume).toBe("/app/luqman/t/ms/basmeih#ayah-31-4");
-    expect(resume.endsWith("/page/1")).toBe(false);
-  });
-
-  it("within-surah resume preserves translation on a deeper local page", () => {
-    const lastRead: LastRead = { num: 30, n: 12, sourceId: "ms.basmeih" };
-    const surah = { slug: "ar-rum", num: 30 };
-    const resume = surahAyahPathFor(
-      resumeCtxFor(lastRead, currentRouteArabic),
-      surah,
-      7,
-      lastRead.n,
-    );
-    expect(resume).toBe("/app/ar-rum/t/ms/basmeih/page/7#ayah-30-12");
-    expect(resume).not.toBe(surahAyahPath(surah, 7, lastRead.n));
-  });
-
   it("falls back to the current routeContext when lastRead carries no sourceId (backwards compat)", () => {
     const lastRead: LastRead = { num: 30, n: 12 };
     const surah = { slug: "ar-rum", num: 30 };
     const ctx = resumeCtxFor(lastRead, currentRouteTranslation);
     expect(ctx).toBe(currentRouteTranslation);
-    const resume = surahAyahPathFor(ctx, surah, 7, lastRead.n);
-    expect(resume).toBe("/app/ar-rum/t/ms/basmeih/page/7#ayah-30-12");
+    const resume = surahAyahPathFor(ctx, surah, lastRead.n);
+    expect(resume).toBe("/app/ar-rum/t/ms/basmeih#ayah-30-12");
   });
 });
 
@@ -387,11 +319,11 @@ describe("translated range-route canonical is helper-built, not page.url.pathnam
   it("helper-built canonicals are deterministic across calls (same n -> same slash-less path)", () => {
     expect(globalPagePathFor(ctx, 7)).toBe(globalPagePathFor(ctx, 7));
     expect(juzPathFor(ctx, 30)).toBe(juzPathFor(ctx, 30));
-    expect(globalPagePathFor(ctx, 7).endsWith("/")).toBe(false);
-    expect(juzPathFor(ctx, 30).endsWith("/")).toBe(false);
+    expect(hizbPathFor(ctx, 7)).toBe(hizbPathFor(ctx, 7));
+    expect(rubPathFor(ctx, 7)).toBe(rubPathFor(ctx, 7));
   });
 
-  it("helper-built canonical matches the sitemap route form for both range classes", () => {
+  it("helper-built canonical matches the sitemap route form for all range classes", () => {
     expect(globalPagePathFor(ctx, 7)).toBe(translationGlobalPagePath("ms", "basmeih", 7));
     expect(juzPathFor(ctx, 30)).toBe(translationJuzPath("ms", "basmeih", 30));
     for (const p of [globalPagePathFor(ctx, 7), juzPathFor(ctx, 30)]) {

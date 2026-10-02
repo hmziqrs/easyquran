@@ -5,17 +5,11 @@ import {
   readerPrerenderEntries,
 } from "$lib/components/i18n/reader-prerender.server";
 import { SITE } from "$lib/config/site";
-import { translationSegmentsFromId, type SurahRouteContext } from "$lib/data/quran";
-import { TRANSLATIONS } from "$lib/data/translations";
+import type { SurahRouteContext } from "$lib/data/quran";
 import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
 import { MARKETING_PUBLICATIONS, marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
 import type { QuranReaderHref } from "$lib/i18n/reader";
-import {
-  marketingSeoLinks,
-  readerCanonicalEntryPath,
-  readerCanonicalPath,
-  type ReaderEntryPage,
-} from "$lib/i18n/seo";
+import { marketingSeoLinks, readerCanonicalEntryPath, readerCanonicalPath } from "$lib/i18n/seo";
 import { QURAN_DATA } from "$lib/server/quran-data";
 
 const XML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
@@ -30,35 +24,12 @@ const escape = (value: string) => value.replace(/[&<>"']/g, (c) => XML_ENTITIES[
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 
-type TranslationEntry = { lang: string; ctx: SurahRouteContext };
-
-const translations: TranslationEntry[] = TRANSLATIONS.map((translation) => {
-    const { lang, translator } = translationSegmentsFromId(translation.id);
-    return { lang, ctx: { kind: "translation", lang, translator } };
-  });
-
-function alternatesBlock(
-  arabicLoc: string,
-  pathForCtx: (ctx: SurahRouteContext) => QuranReaderHref,
-): string {
-  let out = `    <xhtml:link rel="alternate" hreflang="ar" href="${escape(arabicLoc)}"/>`;
-  out += `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${escape(arabicLoc)}"/>`;
-  const seen = new Set(["ar"]);
-  for (const t of translations) {
-    if (seen.has(t.lang)) continue;
-    seen.add(t.lang);
-    const href = SITE.url + readerCanonicalPath(pathForCtx(t.ctx));
-    out += `\n    <xhtml:link rel="alternate" hreflang="${escape(t.lang)}" href="${escape(href)}"/>`;
-  }
-  return out;
-}
-
-function groupedUrl(
-  arabicPath: QuranReaderHref,
-  pathForCtx: (ctx: SurahRouteContext) => QuranReaderHref,
-): string {
+function readerUrl(arabicPath: QuranReaderHref): string {
+  // One <loc> per content location: the Arabic canonical. Translations stay
+  // discovery-only (D9/D12) and carry no hreflang alternates (D13) — the loc
+  // already is the Arabic content-language URL.
   const loc = SITE.url + readerCanonicalPath(arabicPath);
-  return `  <url>\n    <loc>${escape(loc)}</loc>\n${alternatesBlock(loc, pathForCtx)}\n  </url>`;
+  return `  <url>\n    <loc>${escape(loc)}</loc>\n  </url>`;
 }
 
 function localizedMarketingUrl(pageId: MarketingPageId, locale: UiLocale): string {
@@ -72,7 +43,7 @@ function localizedMarketingUrl(pageId: MarketingPageId, locale: UiLocale): strin
   return `  <url>\n    <loc>${escape(links.canonical)}</loc>\n${alternates}\n  </url>`;
 }
 
-function plainReaderEntryUrl(page: ReaderEntryPage): string {
+function plainReaderEntryUrl(page: "juz-index" | "surah-index" | "pages-index"): string {
   return `  <url>\n    <loc>${escape(SITE.url + readerCanonicalEntryPath(page))}</loc>\n  </url>`;
 }
 
@@ -88,13 +59,10 @@ function* sitemapLines(): Generator<string> {
     }
   }
   for (const entry of readerPrerenderEntries(QURAN_DATA)) {
-    yield groupedUrl(quranHrefForPrerenderEntry(entry, ARABIC), (ctx) =>
-      quranHrefForPrerenderEntry(entry, ctx),
-    );
+    yield readerUrl(quranHrefForPrerenderEntry(entry, ARABIC));
     yield "\n";
   }
-  yield plainReaderEntryUrl("home");
-  yield "\n";
+  // /en/app is noindex (the app home renders no canonical) — never submitted.
   yield plainReaderEntryUrl("juz-index");
   yield "\n";
   yield plainReaderEntryUrl("surah-index");

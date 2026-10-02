@@ -1,5 +1,6 @@
 import type { VerseKey } from "$lib/data/quran";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
 import type { QuranSourceId } from "$lib/data/quran-types";
 
 import { createAnnotations } from "./annotations.svelte";
@@ -32,6 +33,7 @@ export interface ReaderApi {
   readonly browseJuz: boolean;
   readonly browsePage: boolean;
   setBrowse(browse: BrowseMode): void;
+  readonly current: number;
   readonly openNote: VerseKey | null;
   toggleNote(key: VerseKey): void;
   setCurrent(num: number): void;
@@ -54,6 +56,9 @@ export interface ReaderApi {
   readonly isVerseMode: boolean;
   readonly isReadingMode: boolean;
   setMode(mode: ReaderMode): void;
+  /** Live mushaf position (sticky indicator). Transient — null until a reader view writes it. */
+  readonly position: ReaderPositionState | null;
+  setPosition(position: ReaderPositionState | null): void;
   isBookmarked(key: VerseKey): boolean;
   readonly bookmarkedKeys: readonly VerseKey[];
   toggleBookmark(key: VerseKey): void;
@@ -115,6 +120,10 @@ export function createReader(): ReaderApi {
     },
     setBrowse: (browse: BrowseMode) => session.setBrowse(browse),
 
+    get current() {
+      return session.current;
+    },
+
     get openNote() {
       return session.openNote;
     },
@@ -157,6 +166,11 @@ export function createReader(): ReaderApi {
       return settings.isReadingMode;
     },
     setMode: (mode: ReaderMode) => settings.setMode(mode),
+
+    get position() {
+      return session.position;
+    },
+    setPosition: (position: ReaderPositionState | null) => session.setPosition(position),
 
     isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
     get bookmarkedKeys(): readonly VerseKey[] {

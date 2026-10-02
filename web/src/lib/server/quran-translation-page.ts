@@ -1,13 +1,14 @@
 import { env } from "$env/dynamic/private";
 import { QURAN } from "$lib/config/site";
 import { translationIdFromSegments } from "$lib/data/quran";
+import { juzOfPage } from "$lib/data/mushaf-divisions";
 import type {
   Ayah,
   CatalogEntry,
   QuranRangeText,
   RangePageData,
+  RangeRouteKind,
   SurahLocalPageData,
-  SurahRouteContext,
   SurahRouteData,
   SurahNormalization,
 } from "$lib/data/quran-types";
@@ -174,12 +175,15 @@ export async function loadTranslationSurahRouteData(
     ayahs,
     normalization,
   };
-  const ctx: SurahRouteContext = { kind: "translation", lang, translator };
-  return { pageData, ...surahRouteNav(ctx, surah, localPage, pageCount) };
+  return {
+    pageData,
+    ...surahRouteNav(surah, page.globalPage),
+    juz: juzOfPage(QURAN_DATA, page.startGlobal),
+  };
 }
 
 export async function loadTranslationRangeData(
-  kind: "page" | "juz",
+  kind: RangeRouteKind,
   index: number,
   lang: string,
   translator: string,

@@ -22,6 +22,6 @@ export function toSurahRenderMetadata(entry: CatalogEntry): SurahRenderMetadata 
 }
 
 export function toSurahLink(entry: CatalogEntry): SurahLink {
-  const { num, slug, name, arabic } = entry;
-  return { num, slug, name, arabic };
+  const { num, slug, name, arabic, meaning } = entry;
+  return { num, slug, name, arabic, meaning };
 }

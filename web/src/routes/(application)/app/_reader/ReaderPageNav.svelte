@@ -3,7 +3,9 @@
   import { readerHrefFor } from "$lib/i18n/reader";
   import { publicHref } from "$lib/i18n/public-href";
   import {
-    surahLocalPagePathFor,
+    globalPagePathFor,
+    surahPathFor,
+    type MushafPageLink,
     type SurahLink,
     type SurahRouteContext,
   } from "$lib/data/quran";
@@ -17,9 +19,9 @@
     previousPage = null,
     nextPage = null,
   }: {
-    /** The surah being read — anchor for the degraded manual page links. */
+    /** The surah being read — read-again target and degraded-page anchor. */
     currentSurah: SurahLink;
-    /** Active translation context, so degraded page jumps keep the source. */
+    /** Active translation context, so every generated link keeps the source. */
     ctx: SurahRouteContext;
     /** Cross-surah navigation — always rendered, infinite scroll never crosses it. */
     previousSurah: SurahLink | null;
@@ -27,8 +29,8 @@
     /** When the source can't stream (API unreachable, degraded read), the
      * adjacent-page links come back: manual page jumps are the only way forward. */
     degraded?: boolean;
-    previousPage?: { localPage: number } | null;
-    nextPage?: { localPage: number } | null;
+    previousPage?: MushafPageLink | null;
+    nextPage?: MushafPageLink | null;
   } = $props();
 
   const copy = getReaderUiCopy();
@@ -37,11 +39,11 @@
   const endArrow = $derived(copy.direction === "rtl" ? "←" : "→");
 
   function surahHref(surah: SurahLink): `/${string}` {
-    return readerHrefFor(copy.locale, surahLocalPagePathFor(ctx, surah, 1));
+    return readerHrefFor(copy.locale, surahPathFor(ctx, surah));
   }
 
-  function pageHref(localPage: number): `/${string}` {
-    return readerHrefFor(copy.locale, surahLocalPagePathFor(ctx, currentSurah, localPage));
+  function pageHref(globalPage: number): `/${string}` {
+    return readerHrefFor(copy.locale, globalPagePathFor(ctx, globalPage));
   }
 </script>
 
@@ -54,51 +56,73 @@
       <span>{copy.shell.manualPagesLabel}</span>
       {#if previousPage}
         <a
-          href={publicHref(pageHref(previousPage.localPage))}
+          href={publicHref(pageHref(previousPage.globalPage))}
           data-sveltekit-preload-data="hover"
           class="rounded-pill border border-border px-2.5 py-1 font-mono transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          {copy.range.item("page", previousPage.localPage)}
+          {copy.range.item("page", previousPage.globalPage)}
         </a>
       {/if}
       {#if nextPage}
         <a
-          href={publicHref(pageHref(nextPage.localPage))}
+          href={publicHref(pageHref(nextPage.globalPage))}
           data-sveltekit-preload-data="hover"
           class="rounded-pill border border-border px-2.5 py-1 font-mono transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          {copy.range.item("page", nextPage.localPage)}
+          {copy.range.item("page", nextPage.globalPage)}
         </a>
       {/if}
     </div>
   {/if}
 
-  <div class="flex items-center justify-between gap-4">
-    {#if previousSurah}
-      <a
-        href={publicHref(surahHref(previousSurah))}
-        data-sveltekit-preload-data="hover"
-        aria-label="{copy.shell.prevSurahLabel}: {previousSurah.name}"
-        title="{copy.shell.prevSurahLabel}: {previousSurah.name}"
-        class="flex h-9 items-center gap-1.5 rounded-pill border border-transparent bg-surface-hover px-4 text-sm font-medium text-foreground transition-colors duration-150 ease-out hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        <span aria-hidden="true">{startArrow}</span>
-        {previousSurah.name}
-      </a>
-    {:else}
-      <span></span>
-    {/if}
-    {#if nextSurah}
-      <a
-        href={publicHref(surahHref(nextSurah))}
-        data-sveltekit-preload-data="hover"
-        aria-label="{copy.shell.nextSurahLabel}: {nextSurah.name}"
-        title="{copy.shell.nextSurahLabel}: {nextSurah.name}"
-        class="flex h-9 items-center gap-1.5 rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        {nextSurah.name}
-        <span aria-hidden="true">{endArrow}</span>
-      </a>
-    {/if}
+  <!-- quran.com end-card grammar: the chapter closes with a heading, a read-again
+       link, and prev/next surah cards — not a bare pill pair. -->
+  <div
+    class="flex flex-col items-center gap-5 rounded-lg border border-border bg-surface px-5 py-9 text-center sm:px-9"
+  >
+    <h2 class="text-[17px] font-semibold text-foreground">
+      {copy.shell.endOfSurah(currentSurah.name)}
+    </h2>
+    <a
+      href={publicHref(surahHref(currentSurah))}
+      data-sveltekit-preload-data="hover"
+      class="rounded-pill border border-border px-4 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      {copy.shell.readAgain}
+    </a>
+    <div class="grid w-full gap-2 sm:grid-cols-2">
+      {#if previousSurah}
+        <a
+          href={publicHref(surahHref(previousSurah))}
+          data-sveltekit-preload-data="hover"
+          aria-label="{copy.shell.prevSurahLabel}: {previousSurah.name}"
+          title="{copy.shell.prevSurahLabel}: {previousSurah.name}"
+          class="flex min-w-0 items-center gap-2 rounded-lg border border-transparent bg-surface-hover px-4 py-3 text-start transition-colors duration-150 ease-out hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <span aria-hidden="true" class="flex-none">{startArrow}</span>
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate text-sm font-medium text-foreground">{previousSurah.name}</span>
+            <span class="truncate text-[11.5px] text-muted">{previousSurah.meaning}</span>
+          </span>
+        </a>
+      {:else}
+        <span></span>
+      {/if}
+      {#if nextSurah}
+        <a
+          href={publicHref(surahHref(nextSurah))}
+          data-sveltekit-preload-data="hover"
+          aria-label="{copy.shell.nextSurahLabel}: {nextSurah.name}"
+          title="{copy.shell.nextSurahLabel}: {nextSurah.name}"
+          class="flex min-w-0 items-center justify-end gap-2 rounded-lg bg-primary px-4 py-3 text-end transition-colors duration-150 ease-out hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate text-sm font-medium text-primary-foreground">{nextSurah.name}</span>
+            <span class="truncate text-[11.5px] text-primary-foreground/75">{nextSurah.meaning}</span>
+          </span>
+          <span aria-hidden="true" class="flex-none">{endArrow}</span>
+        </a>
+      {/if}
+    </div>
   </div>
 </nav>

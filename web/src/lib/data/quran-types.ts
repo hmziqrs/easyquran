@@ -116,7 +116,10 @@ export type SurahRenderMetadata = Pick<
   "num" | "slug" | "name" | "arabic" | "place" | "ayahCount"
 >;
 
-export type SurahLink = Pick<CatalogEntry, "num" | "slug" | "name" | "arabic">;
+export interface SurahLink extends Pick<CatalogEntry, "num" | "slug" | "name" | "arabic"> {
+  /** English meaning of the surah name — end-card subtitle. */
+  meaning: string;
+}
 
 export interface LoadedSurah extends SurahRenderMetadata, QuranSurahText {}
 
@@ -227,27 +230,30 @@ export interface SurahLocalPageData {
   normalization: SurahNormalization;
 }
 
-export interface SurahLocalPageLink {
-  localPage: number;
-  href: `/app/${string}`;
+/** Adjacent global mushaf page (degraded-read manual jump). */
+export interface MushafPageLink {
+  globalPage: number;
 }
 
 export interface SurahRouteData {
   pageData: SurahLocalPageData;
-  previousPage: SurahLocalPageLink | null;
-  nextPage: SurahLocalPageLink | null;
+  previousPage: MushafPageLink | null;
+  nextPage: MushafPageLink | null;
   previousSurah: SurahLink | null;
   nextSurah: SurahLink | null;
-  readingPreviousHref: `/app/${string}` | null;
-  readingNextHref: `/app/${string}` | null;
+  /** Juz holding this surah's first page — SSR for the sticky position indicator. */
+  juz?: number;
 }
 
 export type SurahRouteContext =
   | { readonly kind: "arabic" }
   | { readonly kind: "translation"; readonly lang: string; readonly translator: string };
 
+/** Addressable range families: global pages, juz, and the baked hizb-quarter series. */
+export type RangeRouteKind = "juz" | "page" | "hizb" | "rub";
+
 export interface RangePageData {
-  kind: "juz" | "page";
+  kind: RangeRouteKind;
   index: number;
   label: string;
   startGlobal: number;

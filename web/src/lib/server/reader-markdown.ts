@@ -57,8 +57,10 @@ export function renderRangePageMarkdown(
   fallbackSourceId?: string,
 ): string {
   const sourceId = range.normalizations[0]?.sourceId ?? fallbackSourceId ?? "uthmani";
+  // The markdown H1 drops the index — the label line right below carries it.
+  const family = range.label.slice(0, range.label.lastIndexOf(" "));
   const lines: string[] = [
-    `# ${range.kind === "juz" ? "Juz" : "Page"} ${range.index}`,
+    `# ${family} ${range.index}`,
     "",
     `${range.label} · verses ${range.first} – ${range.last} · source: ${sourceId}`,
     "",

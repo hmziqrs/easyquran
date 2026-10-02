@@ -11,8 +11,8 @@ const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 // which include underscore translator segments like quranenc.en.hilali_khan and qul r158.*).
 const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const POSITIVE_INTEGER_SEGMENT = /^[1-9]\d*$/;
-const CANONICAL_LOCAL_PAGE_SEGMENT = /^(?:[2-9]|[1-9]\d+)$/;
-const RESERVED_SURAH_SEGMENTS = new Set(["juz", "page", "t", "surah", "pages", "yours"]);
+const RANGE_SEGMENT_KINDS = new Set(["page", "juz", "hizb", "rub"]);
+const RESERVED_SURAH_SEGMENTS = new Set(["juz", "page", "hizb", "rub", "t", "surah", "pages", "yours"]);
 /** Single-segment reader indexes (/app/juz, /app/surah, /app/pages). /app/yours is a
  * personal app route like /app/bookmarks — never localized, never in this set. */
 const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages"]);
@@ -85,8 +85,8 @@ function isPositiveIntegerSegment(value: string): boolean {
   return POSITIVE_INTEGER_SEGMENT.test(value);
 }
 
-function isCanonicalLocalPageSegment(value: string): boolean {
-  return CANONICAL_LOCAL_PAGE_SEGMENT.test(value);
+function isRangeSegmentKind(value: string): boolean {
+  return RANGE_SEGMENT_KINDS.has(value);
 }
 
 function isReaderPathname(pathname: string): boolean {
@@ -100,15 +100,7 @@ function isReaderPathname(pathname: string): boolean {
     case 1:
       return READER_INDEX_SEGMENTS.has(segments[0]!) || isSurahSegment(segments[0]!);
     case 2:
-      return (
-        (segments[0] === "page" || segments[0] === "juz") && isPositiveIntegerSegment(segments[1]!)
-      );
-    case 3:
-      return (
-        isSurahSegment(segments[0]!) &&
-        segments[1] === "page" &&
-        isCanonicalLocalPageSegment(segments[2]!)
-      );
+      return isRangeSegmentKind(segments[0]!) && isPositiveIntegerSegment(segments[1]!);
     case 4:
       return (
         isSurahSegment(segments[0]!) &&
@@ -121,17 +113,8 @@ function isReaderPathname(pathname: string): boolean {
         segments[0] === "t" &&
         isContentLanguageSegment(segments[1]!) &&
         isTranslatorSegment(segments[2]!) &&
-        (segments[3] === "page" || segments[3] === "juz") &&
+        isRangeSegmentKind(segments[3]!) &&
         isPositiveIntegerSegment(segments[4]!)
-      );
-    case 6:
-      return (
-        isSurahSegment(segments[0]!) &&
-        segments[1] === "t" &&
-        isContentLanguageSegment(segments[2]!) &&
-        isTranslatorSegment(segments[3]!) &&
-        segments[4] === "page" &&
-        isCanonicalLocalPageSegment(segments[5]!)
       );
     default:
       return false;

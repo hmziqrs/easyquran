@@ -1,5 +1,6 @@
 import type { VerseKey } from "$lib/data/quran";
 import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
 import { QURAN_SOURCE_IDS, QuranSourceId } from "$lib/data/quran-types";
 import { SvelteMap } from "svelte/reactivity";
 
@@ -51,6 +52,8 @@ export interface ReaderState extends Persisted {
   browse: BrowseMode;
   openNote: VerseKey | null;
   pendingAnchor: LastReadAnchor | null;
+  /** Live mushaf position for the sticky indicator. Transient — never persisted. */
+  position: ReaderPositionState | null;
 }
 
 // v4 adds `arabicScript` (Uthmani/Simple-clean/IndoPak/Tajweed mushaf variant).
@@ -90,6 +93,7 @@ export const READER_DEFAULTS: ReaderState = {
   query: "",
   browse: BrowseMode.Surah,
   openNote: null,
+  position: null,
 };
 
 export interface NavToken {

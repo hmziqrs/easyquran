@@ -54,6 +54,8 @@ const {
     setLastReadAnchor: vi.fn(),
     consumePendingAnchor: vi.fn(() => null),
     seedAyahs: vi.fn(),
+    position: null,
+    setPosition: vi.fn(),
     mode: "verse",
     isReadingMode: false,
     isVerseMode: true,
@@ -80,7 +82,10 @@ vi.mock("$app/navigation", () => ({
 vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
 
-vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataStub }));
+vi.mock("$lib/data/quran-data-client", () => ({
+  loadQuranData: loadQuranDataStub,
+  peekQuranData: () => undefined,
+}));
 vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
 vi.mock("$lib/quran/catalogue", () => {
   const entry = (id: string) => ({

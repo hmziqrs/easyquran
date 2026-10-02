@@ -80,14 +80,13 @@
     const ayah = searchHitAnchorAyah(r);
     const entry = quranData.surahByNum(surah);
     if (!entry) return;
-    const localPage = quranData.surahLocalPageForAyah(surah, ayah);
-    if (!localPage) return;
+    if (!quranData.surahLocalPageForAyah(surah, ayah)) return;
     reader.openVerse(surah, ayah);
     void goto(
       publicHref(
         readerHrefFor(
           copy.locale,
-          surahAyahPathFor(routeContext, entry, localPage.localPage, ayah),
+          surahAyahPathFor(routeContext, entry, ayah),
         ),
       ),
     );

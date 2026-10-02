@@ -170,10 +170,13 @@ selection bypasses the gate. Arabic-only reading never counts toward translation
 - Arabic-source pages are built from local SQLite without WASM on first paint.
 - Translated-source pages render on Bun; Node remains build-only for Arabic prerender.
 - Public reader paths begin with `/{ui}/app`, where `ui` is `en` or `ar`. Valid legacy
-  `/app/**` requests receive a `307` plus `Cache-Control: no-store` to the matching English UI
-  path; they never render reader HTML or enter disk cache.
-- Route families cover surah, surah-local page, global page, and juz for Arabic and translated
-  sources.
+  `/app/**` requests receive a `308` (permanent) with a bounded public cache TTL to the matching
+  English UI path; they never render reader HTML or enter disk cache. Numeric chapter aliases
+  (`/app/2`) permanently redirect to the surah slug.
+- Route families cover surah, global page, juz, hizb, and rub for Arabic and translated
+  sources. The former surah-local page family is removed (one URL per surah); removed
+  `/page/N` shapes permanently redirect (308) to the surah root anchored at the spread's
+  first ayah.
 - Page geometry is source-independent. Ayah-to-page mapping is computed from metadata.
 - Reader loads one bounded local page and virtualizes continuous adjacent-page loading.
 
@@ -274,7 +277,7 @@ changes Arabic scripture or translation-content semantics.
 
 1. Translated pages use SSR plus seven-day disk cache and are never SSG. Their surah and
    surah-local shapes alone would create about 76,000 routes before juz/global pages.
-2. Translation context spans surah, surah-local page, global page, and juz routes. Navigation
+2. Translation context spans surah, global page, juz, hizb, and rub routes. Navigation
    may never fall back to Arabic context.
 3. “SSG-last” applies only to Arabic. Translation recovery is local DB → API → matching server
    data.
@@ -288,6 +291,11 @@ changes Arabic scripture or translation-content semantics.
    SSG stays Uthmani-only (2 prerendered sources); Indopak/Tajweed/simple-clean never
    prerender — they render through the post-paint worker/API upgrade. Translated routes stay
    SSR + seven-day disk cache, unchanged.
+9. The surah-local page scheme (`/app/{slug}/page/N` and its translated mirror) is removed:
+   one URL per surah, page addressing is global `/app/page/N` only, and removed shapes
+   permanently redirect (308) to the surah root anchored at the spread's first ayah
+   (docs/research/navigation-audit.md M5). Scroll position rides in `?v={surah}:{ayah}` and
+   `history.state`, never the path.
 
 ---
 

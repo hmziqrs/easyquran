@@ -6,7 +6,6 @@ vi.mock("$env/dynamic/public", () => ({ env: {} }));
 
 import { GET as translationSurahMd } from "../[surah]/t/[lang]/[translator].md/+server";
 import { GET as surahMd, entries as surahEntries } from "../[surah].md/+server";
-import { GET as localPageMd } from "../[surah]/page/[localPage].md/+server";
 import { GET as juzMd } from "../juz/[n].md/+server";
 import { GET as pageMd } from "../page/[n].md/+server";
 
@@ -71,9 +70,13 @@ const TRANSLATION_PAGE: SurahRouteData = {
   previousPage: null,
   nextPage: null,
   previousSurah: null,
-  nextSurah: { num: 2, slug: "al-baqarah", name: "Al-Baqarah", arabic: "البقرة" },
-  readingPreviousHref: null,
-  readingNextHref: "/app/al-baqarah/t/en/sahih",
+  nextSurah: {
+    num: 2,
+    slug: "al-baqarah",
+    name: "Al-Baqarah",
+    arabic: "البقرة",
+    meaning: "The Cow",
+  },
 };
 
 describe("prerendered Arabic reader md routes", () => {
@@ -115,12 +118,6 @@ describe("prerendered Arabic reader md routes", () => {
     const response = await pageMd(mdEvent({ n: "42" }));
     const body = await response.text();
     expect(body.startsWith("# Page 42\n")).toBe(true);
-  });
-
-  it("redirects the noncanonical local page 1 spelling", async () => {
-    await expect(
-      async () => localPageMd(mdEvent({ surah: "al-baqarah", localPage: "1" })),
-    ).rejects.toMatchObject({ status: 308 });
   });
 });
 

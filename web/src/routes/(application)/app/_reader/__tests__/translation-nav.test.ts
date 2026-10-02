@@ -3,17 +3,15 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { hrefFor, liveReaderPosition, positionOf } from "../translation-nav";
 
 describe("reader position parsing", () => {
-  it("parses an arabic surah page", () => {
-    expect(positionOf("/app/al-fatihah/page/3")).toEqual({
-      kind: "surah",
-      slug: "al-fatihah",
-      localPage: 3,
-    });
+  it("parses an arabic surah root — one URL per surah, no page tail", () => {
+    expect(positionOf("/app/al-fatihah")).toEqual({ kind: "surah", slug: "al-fatihah" });
   });
 
-  it("parses an arabic global page and juz", () => {
+  it("parses an arabic global page, juz, hizb, and rub", () => {
     expect(positionOf("/app/page/42")).toEqual({ kind: "globalPage", n: 42 });
     expect(positionOf("/app/juz/30")).toEqual({ kind: "juz", n: 30 });
+    expect(positionOf("/app/hizb/60")).toEqual({ kind: "hizb", n: 60 });
+    expect(positionOf("/app/rub/240")).toEqual({ kind: "rub", n: 240 });
   });
 
   it("parses a translated juz route keeping lang/translator", () => {
@@ -25,11 +23,16 @@ describe("reader position parsing", () => {
     });
   });
 
-  it("parses a surah-local translated route", () => {
-    expect(positionOf("/app/ar-rum/t/en/sahih/page/2")).toEqual({
+  it("parses a translated surah and translated hizb keeping lang/translator", () => {
+    expect(positionOf("/app/ar-rum/t/en/sahih")).toEqual({
       kind: "surah",
       slug: "ar-rum",
-      localPage: 2,
+      lang: "en",
+      translator: "sahih",
+    });
+    expect(positionOf("/app/t/en/sahih/hizb/7")).toEqual({
+      kind: "hizb",
+      n: 7,
       lang: "en",
       translator: "sahih",
     });
@@ -49,10 +52,21 @@ describe("hrefFor position-preserving translation switch", () => {
     );
   });
 
-  it("rebuilds a surah local page for another translation", () => {
-    const pos = positionOf("/app/ar-rum/page/2");
+  it("rebuilds a hizb and rub position for another translation", () => {
+    const hizb = positionOf("/app/t/ms/basmeih/hizb/3");
+    expect(hrefFor(hizb, { id: "ur.jalandhry", lang: "ur", translator: "jalandhry" })).toBe(
+      "/app/t/ur/jalandhry/hizb/3",
+    );
+    const rub = positionOf("/app/rub/9");
+    expect(hrefFor(rub, { id: "en.sahih", lang: "en", translator: "sahih" })).toBe(
+      "/app/t/en/sahih/rub/9",
+    );
+  });
+
+  it("rebuilds a surah root for another translation (never a page tail)", () => {
+    const pos = positionOf("/app/ar-rum");
     expect(hrefFor(pos, { id: "ur.jalandhry", lang: "ur", translator: "jalandhry" })).toBe(
-      "/app/ar-rum/t/ur/jalandhry/page/2",
+      "/app/ar-rum/t/ur/jalandhry",
     );
   });
 
@@ -68,7 +82,7 @@ describe("hrefFor position-preserving translation switch", () => {
   });
 });
 
-describe("liveReaderPosition (stress S1: live url first, page store fallback)", () => {
+describe("liveReaderPosition (live url first, page store fallback)", () => {
   afterEach(() => {
     // Tests within a file share the happy-dom window; restore the default
     // non-reader location so later tests stay on the fallback path.
@@ -76,23 +90,18 @@ describe("liveReaderPosition (stress S1: live url first, page store fallback)", 
   });
 
   it("reads the live window.location when it names a reader position", () => {
-    // Scrolled surah route: the reader's scroll handler rewrote the live url
-    // to /page/N while the page store (fallbackUrl here) still holds the bare
-    // surah slug — SvelteKit 2.70.2 replaceState never updates page.url.
-    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
-    expect(liveReaderPosition(new URL("https://example.test/app/al-baqarah"))).toEqual({
+    window.history.replaceState({}, "", "/app/al-baqarah");
+    expect(liveReaderPosition(new URL("https://example.test/app/al-fatihah"))).toEqual({
       kind: "surah",
       slug: "al-baqarah",
-      localPage: 2,
     });
   });
 
   it("de-localizes the live url before parsing it", () => {
-    window.history.replaceState({}, "", "/en/app/al-baqarah/page/3");
-    expect(liveReaderPosition(new URL("https://example.test/app/al-baqarah"))).toEqual({
+    window.history.replaceState({}, "", "/en/app/al-baqarah");
+    expect(liveReaderPosition(new URL("https://example.test/app/al-fatihah"))).toEqual({
       kind: "surah",
       slug: "al-baqarah",
-      localPage: 3,
     });
   });
 

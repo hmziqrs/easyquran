@@ -20,19 +20,13 @@ export async function resumeToVerse(
   try {
     const quranData = await loadQuranData();
     const surah = quranData.surahByNum(num);
-    const targetPage = quranData.surahLocalPageForAyah(num, n);
-    if (!surah || !targetPage) return false;
+    if (!surah || !quranData.surahLocalPageForAyah(num, n)) return false;
     const resumeCtx = resumeCtxFor(sourceId !== undefined ? { sourceId } : null, currentCtx);
     reader.openVerse(num, n, sourceId);
     if (options.anchor) reader.setPendingAnchor(options.anchor);
     // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
     await goto(
-      publicHref(
-        readerHrefFor(
-          getLocale() as UiLocale,
-          surahAyahPathFor(resumeCtx, surah, targetPage.localPage, n),
-        ),
-      ),
+      publicHref(readerHrefFor(getLocale() as UiLocale, surahAyahPathFor(resumeCtx, surah, n))),
       {
         keepFocus: !options.replaceState,
         replaceState: options.replaceState,

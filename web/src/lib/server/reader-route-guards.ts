@@ -1,9 +1,10 @@
 import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import type { Ayah, CatalogEntry } from "$lib/data/quran-types";
+import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
+import type { Ayah, CatalogEntry, RangeRouteKind } from "$lib/data/quran-types";
 import { QURAN_DATA } from "$lib/server/quran-data";
 // Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
-// `RANGE_COUNTS`, so no route hard-codes 604/30.
-import { error, redirect } from "@sveltejs/kit";
+// `RANGE_COUNTS` (plus the hizb derivation), so no route hard-codes 604/30/60/240.
+import { error } from "@sveltejs/kit";
 
 export function requireSurah(slug: string): CatalogEntry {
   const surah = QURAN_DATA.surahBySlug(slug);
@@ -11,31 +12,24 @@ export function requireSurah(slug: string): CatalogEntry {
   return surah;
 }
 
-export function requireRangeIndex(kind: "juz" | "page", raw: string): number {
+const RANGE_COUNT_BY_KIND: Readonly<Record<RangeRouteKind, number>> = Object.freeze({
+  juz: RANGE_COUNTS[RangeKind.Juz],
+  page: RANGE_COUNTS[RangeKind.Page],
+  hizb: HIZB_COUNT,
+  rub: RUB_COUNT,
+});
+
+export function requireRangeIndex(kind: RangeRouteKind, raw: string): number {
   const index = Number(raw);
-  const max = RANGE_COUNTS[kind === "juz" ? RangeKind.Juz : RangeKind.Page];
+  const max = RANGE_COUNT_BY_KIND[kind];
   if (!Number.isInteger(index) || index < 1 || index > max) {
     throw error(404, `Unknown ${kind}: ${raw}`);
   }
   return index;
 }
 
-export function rangeEntries(kind: "juz" | "page"): { n: string }[] {
-  const count = RANGE_COUNTS[kind === "juz" ? RangeKind.Juz : RangeKind.Page];
-  return Array.from({ length: count }, (_, i) => ({ n: String(i + 1) }));
-}
-
-/**
- * Surah-local page 2..n. Page 1 is not addressable under `/page/1` — it 308s to the canonical
- * Surah root so both spellings never index separately.
- */
-export function requireLocalPageBeyondFirst(raw: string, canonical: `/app/${string}`): number {
-  const localPage = Number(raw);
-  if (!Number.isSafeInteger(localPage) || localPage < 1) {
-    throw error(404, `Unknown Surah page: ${raw}`);
-  }
-  if (localPage === 1) throw redirect(308, canonical);
-  return localPage;
+export function rangeEntries(kind: RangeRouteKind): { n: string }[] {
+  return Array.from({ length: RANGE_COUNT_BY_KIND[kind] }, (_, i) => ({ n: String(i + 1) }));
 }
 
 /**

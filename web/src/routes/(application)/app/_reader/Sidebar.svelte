@@ -13,7 +13,8 @@
   } from "$lib/data/quran";
   import { loadQuranData } from "$lib/data/quran-data-client";
   import { RangeKind, type QuranData } from "$lib/data/quran-data";
-  import type { RangeEntry } from "$lib/data/quran-types";
+  import { hizbRange, juzOfPage } from "$lib/data/mushaf-divisions";
+  import type { CatalogEntry, RangeEntry } from "$lib/data/quran-types";
   import { Icon } from "$lib/components/icon";
   import { Input } from "$lib/components/ui/input";
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
@@ -31,6 +32,7 @@
     useSidebar,
   } from "$lib/components/ui/sidebar";
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
+  import { ayahTabSurah } from "./ayah-tab";
 
   const BROWSE = [BrowseMode.Surah, BrowseMode.Ayah, BrowseMode.Juz, BrowseMode.Page] as const;
   // Active rows take a soft primary fill instead of the grey sidebar accent.
@@ -54,11 +56,9 @@
   function selectBrowse(browse: BrowseMode) {
     reader.setBrowse(browse);
     if (browse !== BrowseMode.Ayah) return;
-    const slug = page.params.surah;
-    if (!slug) return;
     void loadQuranData().then((quranData) => {
-      const current = quranData.surahBySlug(slug);
-      if (current) void reader.refreshFromWorker(current.num);
+      const current = ayahTabSurah(quranData, page.params, reader.current);
+      void reader.refreshFromWorker(current.num);
     });
   }
 
@@ -87,10 +87,37 @@
   }
 
   const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
+  const isHizbRoute = $derived((page.route.id ?? "").includes("/hizb/"));
+  const isRubRoute = $derived((page.route.id ?? "").includes("/rub/"));
 
   function toIndex(v: string | undefined): number | null {
     const n = v ? Number(v) : Number.NaN;
     return Number.isSafeInteger(n) && n > 0 ? n : null;
+  }
+
+  function clampAyah(surah: CatalogEntry, n: number): number {
+    return Number.isSafeInteger(n) && n >= 1 && n <= surah.ayahCount ? n : 1;
+  }
+
+  /**
+   * Ayah of `surah` the current route or reader position points at — hash
+   * anchor, shared ?v= position, or the sticky bar's live mushaf page. Used to
+   * reveal the matching row; deep links always name something now.
+   */
+  function routeAyah(quranData: QuranData, surah: CatalogEntry): number {
+    const hash = new RegExp(`^#ayah-${surah.num}-(\\d+)$`).exec(page.url.hash)?.[1];
+    if (hash !== undefined) return clampAyah(surah, Number(hash));
+    const shared = /^(\d+):(\d+)$/.exec(page.url.searchParams.get("v") ?? "");
+    if (shared && Number(shared[1]) === surah.num) return clampAyah(surah, Number(shared[2]));
+    const position = reader.position;
+    if (position) {
+      const start = quranData.rangeByIndex(RangeKind.Page, position.globalPage)?.startGlobal;
+      const surahEnd = surah.startGlobal + surah.ayahCount - 1;
+      if (start !== undefined && start >= surah.startGlobal && start <= surahEnd) {
+        return start - surah.startGlobal + 1;
+      }
+    }
+    return 1;
   }
 
   /** Global ayah the current route points at, used to reveal the matching row. */
@@ -99,11 +126,12 @@
     if (slug) {
       const s = quranData.surahBySlug(slug);
       if (!s) return null;
-      const localPage = toIndex(page.params.localPage) ?? 1;
-      return quranData.surahLocalPage(s.num, localPage)?.startGlobal ?? s.startGlobal;
+      return quranData.globalIndexOf(s.num, routeAyah(quranData, s)) ?? s.startGlobal;
     }
     const n = toIndex(page.params.n);
     if (n === null) return null;
+    if (isHizbRoute) return hizbRange(quranData, n)?.startGlobal ?? null;
+    if (isRubRoute) return quranData.rangeByIndex(RangeKind.HizbQuarter, n)?.startGlobal ?? null;
     const kind = isJuzRoute ? RangeKind.Juz : RangeKind.Page;
     return quranData.rangeByIndex(kind, n)?.startGlobal ?? null;
   }
@@ -125,10 +153,6 @@
       juzPageCounts.set(quranData, counts);
     }
     return counts.get(juz.index) ?? 0;
-  }
-
-  function juzOf(quranData: QuranData, global: number): number {
-    return quranData.ranges(RangeKind.Juz).find((j) => global >= j.startGlobal && global <= j.endGlobal)?.index ?? 1;
   }
 
   function surahNameOf(quranData: QuranData, num: number): string {
@@ -232,7 +256,7 @@
           {copy.sidebar.loadingNavigation}
         </p>
       {:then quranData}
-        {@const current = page.params.surah ? quranData.surahBySlug(page.params.surah) : undefined}
+        {@const current = ayahTabSurah(quranData, page.params, reader.current)}
         {#if reader.browseSurah}
           <SidebarGroup>
             <SidebarGroupContent>
@@ -276,53 +300,47 @@
             </SidebarGroupContent>
           </SidebarGroup>
         {:else if reader.browseAyah}
-          {#if current}
-            {@const cur = current}
-            {@const verses = reader.versesFor(cur.num)}
-            {#key verses.length}
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarVirtualList
-                  getScrollElement={() => contentEl}
-                  count={verses.length}
-                  estimateSize={44}
-                  activeIndex={(quranData.surahLocalPage(cur.num, toIndex(page.params.localPage) ?? 1)
-                    ?.startAyah ?? 1) - 1}
-                >
-                  {#snippet item(i)}
-                    {@const n = i + 1}
-                    {@const v = verses[i]}
-                    {@const localPage = quranData.surahLocalPageForAyah(cur.num, n)}
-                    {#if v}
-                      {#snippet body()}
-                        <span
-                          class="flex h-6 w-6 flex-none items-center justify-center rounded-pill border border-border text-[11px] text-muted-foreground"
-                        >
-                          {n}
-                        </span>
-                        <span dir="rtl" class="min-w-0 flex-1 truncate font-arabic text-[15px]">
-                          {v}
-                        </span>
-                      {/snippet}
-                      {@render navRow(
-                        publicHref(
-                          readerHrefFor(
-                            copy.locale,
-                            surahAyahPathFor(routeCtx, cur, localPage?.localPage ?? 1, n),
-                          ),
-                        ),
-                        undefined,
-                        undefined,
-                        "h-auto gap-3 px-3.5 py-2.5",
-                        body,
-                      )}
-                    {/if}
-                  {/snippet}
-                </SidebarVirtualList>
-              </SidebarGroupContent>
-            </SidebarGroup>
-            {/key}
-          {/if}
+          {@const cur = current}
+          {@const verses = reader.versesFor(cur.num)}
+          {@const routeVerse = routeAyah(quranData, cur)}
+          {#key verses.length}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarVirtualList
+                getScrollElement={() => contentEl}
+                count={verses.length}
+                estimateSize={44}
+                activeIndex={routeVerse - 1}
+              >
+                {#snippet item(i)}
+                  {@const n = i + 1}
+                  {@const v = verses[i]}
+                  {#if v}
+                    {#snippet body()}
+                      <span
+                        class="flex h-6 w-6 flex-none items-center justify-center rounded-pill border border-border text-[11px] text-muted-foreground"
+                      >
+                        {n}
+                      </span>
+                      <span dir="rtl" class="min-w-0 flex-1 truncate font-arabic text-[15px]">
+                        {v}
+                      </span>
+                    {/snippet}
+                    {@render navRow(
+                      publicHref(
+                        readerHrefFor(copy.locale, surahAyahPathFor(routeCtx, cur, n)),
+                      ),
+                      n === routeVerse ? true : undefined,
+                      n === routeVerse ? "page" : undefined,
+                      "h-auto gap-3 px-3.5 py-2.5",
+                      body,
+                    )}
+                  {/if}
+                {/snippet}
+              </SidebarVirtualList>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          {/key}
         {:else}
           {@const ranges = quranData.ranges(
             reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
@@ -361,7 +379,7 @@
                         {#if reader.browseJuz}
                           {copy.index.pageCount(pagesInJuz(quranData, rg))}
                         {:else}
-                          {copy.sidebar.rangeItem("juz", juzOf(quranData, rg.startGlobal))}
+                          {copy.sidebar.rangeItem("juz", juzOfPage(quranData, rg.startGlobal))}
                         {/if}
                       </span>
                     </span>

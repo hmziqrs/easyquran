@@ -9,9 +9,19 @@
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import AppSidebar from "./Sidebar.svelte";
   import { changeTypography } from "./typography-change";
+  import PositionIndicator from "./PositionIndicator.svelte";
   import TranslationButton from "./TranslationButton.svelte";
 
-  let { header, children }: { header: Snippet; children: Snippet } = $props();
+  let {
+    header,
+    position = null,
+    children,
+  }: {
+    header: Snippet;
+    /** Route-known mushaf position for the sticky bar's live indicator; absent on non-content routes. */
+    position?: { globalPage: number; juz?: number | null; hizb?: number | null } | null;
+    children: Snippet;
+  } = $props();
   let mounted = $state(false);
   const copy = getReaderUiCopy();
 
@@ -49,6 +59,9 @@
           <TranslationButton {primaryId} />
         {/if}
         {@render header()}
+        {#if position}
+          <PositionIndicator initial={position} />
+        {/if}
         {#if mounted}
           <!-- Arabic size lives in the sticky bar so it is always in reach (user pick); the
                reader's typography effect keeps the reading position across the change. -->

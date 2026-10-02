@@ -18,6 +18,7 @@ vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
   };
 });
 
+import { QURAN_DATA } from "$lib/server/quran-data";
 import { handle } from "../../../hooks.server";
 
 const ORIGIN = "https://easyquran.fyi";
@@ -71,7 +72,7 @@ beforeEach(() => {
 });
 
 describe("server localized reader integration", () => {
-  it("redirects a valid legacy route to localized English and preserves query", async () => {
+  it("permanently redirects a valid legacy route to localized English with a bounded public TTL", async () => {
     const event = requestEvent("/app/al-fatihah?view=reading", "/(application)/app/[surah]", {
       surah: "al-fatihah",
     });
@@ -79,14 +80,93 @@ describe("server localized reader integration", () => {
 
     const response = await handle({ event, resolve });
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(308);
     expect(response.headers.get("location")).toBe("/en/app/al-fatihah?view=reading");
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=86400");
     const csp = response.headers.get("content-security-policy") ?? "";
     const scriptSrc = csp.split("; ").find((directive) => directive.startsWith("script-src")) ?? "";
     expect(csp).toContain("default-src 'self'");
     expect(scriptSrc).toContain("'unsafe-eval'");
     expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(resolve).not.toHaveBeenCalled();
+    expect(cache.get).not.toHaveBeenCalled();
+  });
+
+  it("aliases a numeric chapter to its slug across UI locales (D14)", async () => {
+    const resolve = htmlResolve();
+
+    const en = await handle({
+      event: requestEvent("/en/app/2?view=reading", null, {}),
+      resolve,
+    });
+    expect(en.status).toBe(308);
+    expect(en.headers.get("location")).toBe("/en/app/al-baqarah?view=reading");
+
+    const ar = await handle({
+      event: requestEvent("/ar/app/114", null, {}),
+      resolve,
+    });
+    expect(ar.status).toBe(308);
+    expect(ar.headers.get("location")).toBe("/ar/app/an-nas");
+
+    // Bare /app/2 takes the deterministic legacy /en target in the same hop.
+    const bare = await handle({
+      event: requestEvent("/app/2", null, {}),
+      resolve,
+    });
+    expect(bare.status).toBe(308);
+    expect(bare.headers.get("location")).toBe("/en/app/al-baqarah");
+
+    // Out-of-range numbers still 404 through the parse gate.
+    const over = await handle({
+      event: requestEvent("/en/app/115", null, {}),
+      resolve,
+    });
+    expect(over.status).toBe(404);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("308s a removed surah-local page to the anchored surah root (D1)", async () => {
+    const resolve = htmlResolve("must-not-render");
+    const spread = QURAN_DATA.surahLocalPage(2, 2);
+    if (!spread) throw new Error("missing al-baqarah local page 2");
+
+    const response = await handle({
+      event: requestEvent("/en/app/al-baqarah/page/2?view=reading", null, {}),
+      resolve,
+    });
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      `/en/app/al-baqarah?view=reading#ayah-2-${spread.startAyah}`,
+    );
+    // The bare legacy spelling lands on the same /en target.
+    const bare = await handle({
+      event: requestEvent("/app/al-baqarah/page/2", null, {}),
+      resolve,
+    });
+    expect(bare.status).toBe(308);
+    expect(bare.headers.get("location")).toBe(`/en/app/al-baqarah#ayah-2-${spread.startAyah}`);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(cache.get).not.toHaveBeenCalled();
+  });
+
+  it("308s an explicit page one to the bare localized root, preserving query and hash", async () => {
+    const resolve = htmlResolve("must-not-render");
+
+    const arabic = await handle({
+      event: requestEvent("/ar/app/al-fatihah/page/1?view=reading", null, {}),
+      resolve,
+    });
+    expect(arabic.status).toBe(308);
+    expect(arabic.headers.get("location")).toBe("/ar/app/al-fatihah?view=reading");
+
+    const translated = await handle({
+      event: requestEvent("/en/app/al-fatihah/t/en/sahih/page/1?view=reading", null, {}),
+      resolve,
+    });
+    expect(translated.status).toBe(308);
+    expect(translated.headers.get("location")).toBe("/en/app/al-fatihah/t/en/sahih?view=reading");
     expect(resolve).not.toHaveBeenCalled();
     expect(cache.get).not.toHaveBeenCalled();
   });
@@ -105,8 +185,8 @@ describe("server localized reader integration", () => {
 
     const keys = cache.set.mock.calls.map(([key]) => key);
     expect(keys).toHaveLength(2);
-    expect(keys[0]).toContain("__en.sahih__surah__1__1__ui-en");
-    expect(keys[1]).toContain("__en.sahih__surah__1__1__ui-ar");
+    expect(keys[0]).toContain("__en.sahih__surah__1__ui-en");
+    expect(keys[1]).toContain("__en.sahih__surah__1__ui-ar");
     expect(await enResponse.text()).toContain('<html lang="en" dir="ltr">');
     expect(await arResponse.text()).toContain('<html lang="ar" dir="rtl">');
     expect(enResponse.headers.get("content-security-policy")).toContain("nonce-");
@@ -164,43 +244,6 @@ describe("server localized reader integration", () => {
     });
 
     expect(await response.text()).toContain('<html lang="en" dir="ltr">');
-  });
-
-  it("never lets explicit translated page one hit or write the root cache entry", async () => {
-    cache.html.set("warm-root", "<html>warm root</html>");
-    cache.get.mockResolvedValue("<html>warm root</html>");
-    const routeId = "/(application)/app/[surah]/t/[lang]/[translator]/page/[localPage]";
-    const event = requestEvent("/en/app/al-fatihah/t/en/sahih/page/1?view=reading", routeId, {
-      surah: "al-fatihah",
-      lang: "en",
-      translator: "sahih",
-      localPage: "1",
-    });
-    const resolve = htmlResolve("must-not-render");
-
-    const response = await handle({ event, resolve });
-
-    expect(response.status).toBe(308);
-    expect(response.headers.get("location")).toBe("/en/app/al-fatihah/t/en/sahih?view=reading");
-    expect(cache.get).not.toHaveBeenCalled();
-    expect(cache.set).not.toHaveBeenCalled();
-    expect(resolve).not.toHaveBeenCalled();
-  });
-
-  it("canonicalizes explicit Arabic page one before rendering", async () => {
-    const resolve = htmlResolve("must-not-render");
-    const response = await handle({
-      event: requestEvent(
-        "/ar/app/al-fatihah/page/1?view=reading",
-        "/(application)/app/[surah]/page/[localPage]",
-        { surah: "al-fatihah", localPage: "1" },
-      ),
-      resolve,
-    });
-
-    expect(response.status).toBe(308);
-    expect(response.headers.get("location")).toBe("/ar/app/al-fatihah?view=reading");
-    expect(resolve).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid translated source before cache lookup or rendering", async () => {

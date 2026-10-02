@@ -542,7 +542,8 @@ describe("translation route loaders", () => {
       fetcherReturning(translationRangeFor(page.startGlobal, page.endGlobal)),
     );
     expect(data!.previousPage).not.toBeNull();
-    expect(data!.previousPage!.localPage).toBe(1);
+    // Degraded manual jumps now address GLOBAL mushaf pages.
+    expect(data!.previousPage!.globalPage).toBe(QURAN_DATA.surahLocalPage(2, 1)!.globalPage);
   });
 
   it("returns undefined when the surah local page does not exist", async () => {

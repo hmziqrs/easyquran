@@ -26,8 +26,8 @@ export function ayahHrefFor(
 ): string | null {
   const entry = quranData.surahByNum(surah);
   if (!entry) return null;
-  const localPage = quranData.surahLocalPageForAyah(surah, ayah);
-  return localPage ? surahAyahPathFor(contextFor(sectionId), entry, localPage.localPage, ayah) : null;
+  if (!quranData.surahLocalPageForAyah(surah, ayah)) return null;
+  return surahAyahPathFor(contextFor(sectionId), entry, ayah);
 }
 
 /** Surah jump href for the suggestions list; null when the coordinate is unknown. */
