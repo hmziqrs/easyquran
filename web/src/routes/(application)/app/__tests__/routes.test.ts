@@ -152,7 +152,7 @@ describe("canonical surah path for a translation source is not the Arabic path",
     const canonical = surahPathFor(ctx, "ar-rum");
     expect(canonical).toBe("/app/ar-rum/t/ms/basmeih");
     expect(canonical).not.toBe(surahPath("ar-rum"));
-    expect(canonical.includes("/t/ms/basmeih/")).toBe(true);
+    expect(canonical.includes("/t/ms/basmeih")).toBe(true);
   });
 });
 

@@ -89,13 +89,14 @@ describe("accept-parse mdSiblingPathFor", () => {
 
   it.each([
     "/app/al-fatihah",
-    "/app/al-fatihah/page/2",
+    "/app/hizb/2",
     "/app/juz/30",
     "/app/page/604",
+    "/app/rub/240",
     "/app/al-fatihah/t/en/sahih",
-    "/app/al-fatihah/t/en/sahih/page/2",
     "/app/t/en/sahih/juz/1",
     "/app/t/en/sahih/page/42",
+    "/app/t/en/sahih/hizb/3",
   ])("maps reader path %s to its .md sibling", (pathname) => {
     expect(mdSiblingPathFor(pathname)).toBe(`${pathname}.md`);
   });

@@ -499,15 +499,15 @@ describe("TranslationModal — live reader position (stress S1)", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("derives the switch href from the live url on a scrolled surah route", async () => {
-    // page.url still holds the bare surah slug (SvelteKit 2.70.2 replaceState
-    // never updates the page store), while the reader's scroll handler has
-    // rewritten window.location to /page/2 — the switch must carry the page.
-    h.nav.url = new URL("https://example.test/app/al-baqarah");
-    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+  it("derives the switch href from the live url over a stale page-store url", async () => {
+    // The path never moves while scrolling, so the divergence to guard is a
+    // STALE store: the live url names the surah actually being read while
+    // page.url still holds an earlier route (replaceState never updates it).
+    h.nav.url = new URL("https://example.test/app/al-fatihah");
+    window.history.replaceState({}, "", "/app/al-baqarah");
     await open({ primaryId: "en.sahih" });
     const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
-    expect(link?.getAttribute("href")).toContain("/app/al-baqarah/t/en/pickthall/page/2");
+    expect(link?.getAttribute("href")).toContain("/app/al-baqarah/t/en/pickthall");
   });
 
   it("keeps deriving from the page-store url when the live url is not a reader route", async () => {
@@ -520,8 +520,8 @@ describe("TranslationModal — live reader position (stress S1)", () => {
   });
 
   it("re-derives the live position on every reopen, not just the first", async () => {
-    h.nav.url = new URL("https://example.test/app/al-baqarah");
-    window.history.replaceState({}, "", "/app/al-baqarah/page/2");
+    h.nav.url = new URL("https://example.test/app/al-fatihah");
+    window.history.replaceState({}, "", "/app/al-baqarah");
     // Default no-op: TS cannot see the expose callback has run, so a null
     // initializer would narrow the later calls to `never`.
     let setOpen: (open: boolean) => void = () => {};
@@ -539,16 +539,16 @@ describe("TranslationModal — live reader position (stress S1)", () => {
       switchLinks()
         .find((a) => a.getAttribute("aria-label")?.includes("Pickthall"))
         ?.getAttribute("href");
-    expect(pickthallHref()).toContain("/app/al-baqarah/t/en/pickthall/page/2");
+    expect(pickthallHref()).toContain("/app/al-baqarah/t/en/pickthall");
     // Close the SAME mounted instance (as the header button binding does),
-    // let the reader "scroll" (rewrite the live url), then reopen: the cached
+    // move the live url to another reader route, then reopen: the cached
     // position from the previous open must not survive.
     setOpen(false);
     await settle();
-    window.history.replaceState({}, "", "/app/al-baqarah/page/4");
+    window.history.replaceState({}, "", "/app/ar-rum");
     setOpen(true);
     await settle();
-    expect(pickthallHref()).toContain("/app/al-baqarah/t/en/pickthall/page/4");
+    expect(pickthallHref()).toContain("/app/ar-rum/t/en/pickthall");
   });
 });
 

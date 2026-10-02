@@ -156,7 +156,7 @@ describe("translated range-route fixtures preserve active source context across 
     const surah = { slug: "ar-rum", num: 30 };
     const path = surahAyahPathFor(ctx, surah, 12);
     expect(path).toBe("/app/ar-rum/t/ms/basmeih#ayah-30-12");
-    expect(path.includes("/t/ms/basmeih/")).toBe(true);
+    expect(path.includes("/t/ms/basmeih")).toBe(true);
     expect(path).not.toBe(surahAyahPathFor(ARABIC, surah, 12));
   });
 

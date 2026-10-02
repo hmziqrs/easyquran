@@ -136,7 +136,7 @@ describe("dotted translator route segments", () => {
     expect(response.status).toBe(200);
     expect(cache.get).toHaveBeenCalledTimes(1);
     const key = cache.get.mock.calls[0]![0];
-    expect(key).toContain("__en.sahih.int__surah__1__1__ui-en");
+    expect(key).toContain("__en.sahih.int__surah__1__ui-en");
     expect(cache.set).toHaveBeenCalledWith(key, expect.stringContaining("dotted"));
   });
 });

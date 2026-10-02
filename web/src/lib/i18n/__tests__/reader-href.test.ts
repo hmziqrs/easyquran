@@ -39,12 +39,15 @@ describe("canonical reader hrefs accept every baked translation id", () => {
     );
   });
 
-  it("accepts underscore translators on range and paged reader routes", () => {
+  it("accepts underscore translators on range routes and translated surah roots", () => {
     expect(readerHrefFor("en", "/app/t/quranenc/en.hilali_khan/juz/30")).toBe(
       "/en/app/t/quranenc/en.hilali_khan/juz/30",
     );
-    expect(readerHrefFor("en", "/app/al-baqarah/t/quranenc/en.hilali_khan/page/2")).toBe(
-      "/en/app/al-baqarah/t/quranenc/en.hilali_khan/page/2",
+    expect(readerHrefFor("en", "/app/al-baqarah/t/quranenc/en.hilali_khan")).toBe(
+      "/en/app/al-baqarah/t/quranenc/en.hilali_khan",
+    );
+    expect(readerHrefFor("en", "/app/t/quranenc/en.hilali_khan/rub/240")).toBe(
+      "/en/app/t/quranenc/en.hilali_khan/rub/240",
     );
   });
 

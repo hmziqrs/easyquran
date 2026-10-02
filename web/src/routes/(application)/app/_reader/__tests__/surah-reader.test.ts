@@ -768,9 +768,9 @@ describe("SurahReader reading mode", () => {
     expect(row?.stacked?.[0]?.sourceId).toBe("en.sahih");
   });
 
-  it("Reading → Arabic on a translation page opens the Arabic URL at the same place, in reading mode", async () => {
+  it("Reading → Arabic on a translation page opens the Arabic surah root in reading mode", async () => {
     readerStub.setMode("reading");
-    nav.url = new URL("https://example.test/app/al-fatihah/t/en/sahih/page/2");
+    nav.url = new URL("https://example.test/app/al-fatihah/t/en/sahih");
     mount(SurahReader, { target, props: propsFor(translationPageData()) });
     await flushMicrotasks();
     header().onReadArabic();
@@ -778,7 +778,9 @@ describe("SurahReader reading mode", () => {
     expect(readingText.text).toBe("arabic");
     expect(gotoSpy).toHaveBeenCalledTimes(1);
     const href = String(gotoSpy.mock.calls[0]?.[0]);
-    expect(href).toContain("/app/al-fatihah/page/2");
+    // One URL per surah: the Arabic twin is the bare root, mode rides in query.
+    expect(href).toContain("/app/al-fatihah");
+    expect(href).not.toContain("/page/");
     expect(href).not.toContain("/t/");
     expect(href).toContain("mode=reading");
   });

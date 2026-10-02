@@ -370,9 +370,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!response) {
     const readerLocale = localizedReaderLocale(pathname);
     const useI18n = readerLocale !== null || isLocalizedMarketingPath(pathname);
-    const readerRedirect = readerLocale
-      ? (numericChapterRedirect(event) ?? surahLocalPageRedirect(event))
-      : null;
+    // Both redirect builders gate themselves on readerRequestBase (localized
+    // reader paths plus the bare legacy /app/** family), so attempt them for
+    // every request — cheap null returns for everything else.
+    const readerRedirect = numericChapterRedirect(event) ?? surahLocalPageRedirect(event);
     if (readerRedirect) {
       response = readerRedirect;
     } else if (readerLocale && !parseReaderRoute(event.route.id, event.params)) {

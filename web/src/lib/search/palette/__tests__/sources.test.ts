@@ -88,10 +88,10 @@ const hrefs = (entries: readonly PaletteEntry[]): (string | undefined)[] =>
   entries.map((e) => e.href);
 
 describe("quran.reference source", () => {
-  it("resolves a surah:ayah reference to the page holding that verse", () => {
+  it("resolves a surah:ayah reference to the surah holding that verse", () => {
     const [entry] = run(quranReferenceSource, "2:255");
     expect(entry?.label).toBe("Al-Baqarah 2:255");
-    expect(entry?.href).toBe("/app/al-baqarah/page/41#ayah-2-255");
+    expect(entry?.href).toBe("/app/al-baqarah#ayah-2-255");
     expect(entry?.groupId).toBe(PaletteGroups.JumpTo.id);
   });
 
@@ -166,7 +166,7 @@ describe("quran.surahs source", () => {
     const entries = run(quranSurahsSource, "baqarah 255");
     expect(entries[0]?.groupId).toBe(PaletteGroups.JumpTo.id);
     expect(entries[0]?.label).toBe("Al-Baqarah 2:255");
-    expect(entries[0]?.href).toBe("/app/al-baqarah/page/41#ayah-2-255");
+    expect(entries[0]?.href).toBe("/app/al-baqarah#ayah-2-255");
     // and still offers the surah itself
     expect(labels(entries)).toContain("2. Al-Baqarah");
   });
@@ -281,7 +281,7 @@ describe("Arabic-Indic and Persian digits", () => {
   it("reads a verse reference written in Arabic-Indic digits", () => {
     const [entry] = run(quranReferenceSource, "٢:٢٥٥");
     expect(entry?.label).toBe("Al-Baqarah 2:255");
-    expect(entry?.href).toBe("/app/al-baqarah/page/41#ayah-2-255");
+    expect(entry?.href).toBe("/app/al-baqarah#ayah-2-255");
   });
 
   it("reads keyword references in Arabic-Indic and Persian digits", () => {
@@ -388,7 +388,7 @@ describe("translation.text source", () => {
     const [entry] = await runAsync(translationTextSource, "mercy", TRANSLATED);
     expect(entry?.label).toBe("Al-Baqarah 2:255");
     expect(entry?.detail).toBe("Basmeih");
-    expect(entry?.href).toBe("/app/al-baqarah/t/ms/basmeih/page/41#ayah-2-255");
+    expect(entry?.href).toBe("/app/al-baqarah/t/ms/basmeih#ayah-2-255");
     expect(entry?.dedupeKey).toBe("tayah:ms.basmeih:2:255");
     expect(entry?.groupId).toBe(PaletteGroups.TranslationText.id);
     expect(entry?.score).toBe(0.7);
@@ -403,7 +403,7 @@ describe("translation.text source", () => {
     reader.markRead(2, 200, "en.sahih");
     try {
       const [entry] = await runAsync(translationTextSource, "mercy", ARABIC);
-      expect(entry?.href).toBe("/app/al-baqarah/t/en/sahih/page/41#ayah-2-255");
+      expect(entry?.href).toBe("/app/al-baqarah/t/en/sahih#ayah-2-255");
       expect(entry?.dedupeKey).toBe("tayah:en.sahih:2:255");
     } finally {
       reader.clearReadingPosition();
@@ -723,7 +723,7 @@ describe("quran.sajdas source", () => {
 
   it("carries the translation context into its hrefs", () => {
     const [entry] = run(quranSajdasSource, "sajda 7", TRANSLATED);
-    expect(entry?.href).toContain("/t/ms/basmeih/");
+    expect(entry?.href).toContain("/t/ms/basmeih");
   });
 
   it("sits out for non-sajda queries", () => {

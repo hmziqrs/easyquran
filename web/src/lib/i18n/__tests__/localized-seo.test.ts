@@ -34,12 +34,12 @@ describe("localized SEO links", () => {
   });
 
   it("canonicalizes every reader UI variant to en without changing translation source", () => {
-    const translated = "/app/ar-rum/t/ms/basmeih/page/7?view=compact#ayah-30-12";
+    const translated = "/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12";
     expect(readerCanonicalPath(translated)).toBe(
-      "/en/app/ar-rum/t/ms/basmeih/page/7?view=compact#ayah-30-12",
+      "/en/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
     );
     expect(readerCanonicalUrl(translated)).toBe(
-      "https://easyquran.fyi/en/app/ar-rum/t/ms/basmeih/page/7?view=compact#ayah-30-12",
+      "https://easyquran.fyi/en/app/ar-rum/t/ms/basmeih?view=compact#ayah-30-12",
     );
   });
 
