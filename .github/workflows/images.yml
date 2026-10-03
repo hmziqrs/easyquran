@@ -1,11 +1,6 @@
 # Build + push two runtime images. After both master images publish, CI tells
 # Dokploy to redeploy; pull_policy: always fetches new latest tags.
 #
-# Mirrors `just images` / `just push` exactly, with one simplification: the runners are
-# arm64 (`ubuntu-24.04-arm`, the deploy target's arch), so nothing cross-compiles. cargo
-# builds natively into rust/target/aarch64-unknown-linux-gnu/release — the path
-# deploy/Dockerfile.api COPYs from — and no zig, no qemu, no buildx emulation is involved.
-#
 # Both Dockerfiles are packaging-only: the artifacts are produced by these jobs and COPYed
 # in. That is why each build job does its own toolchain work before touching Docker.
 #
@@ -43,7 +38,7 @@ env:
 
 jobs:
   meta:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.version.outputs.version }}
       push: ${{ github.event_name != 'pull_request' }}
@@ -68,7 +63,7 @@ jobs:
     # Same-repo PRs only: a fork PR cannot be trusted with two arm64 build
     # runners (it still executes its own copy of this workflow).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v5
 
@@ -142,7 +137,7 @@ jobs:
     needs: meta
     # Same-repo PRs only — see the web job.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v5
 
@@ -192,6 +187,14 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
+      - name: Check API runtime libraries
+        env:
+          API_IMAGE_TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          docker load -i /tmp/easyquran-api.tar
+          read -r image <<< "$API_IMAGE_TAGS"
+          docker run --rm --entrypoint /lib/ld-linux-aarch64.so.1 "$image" --list /app/ruxlog
+
       - uses: actions/upload-artifact@v7
         if: needs.meta.outputs.push == 'true'
         with:
@@ -206,7 +209,7 @@ jobs:
   publish:
     needs: [meta, web, api]
     if: needs.meta.outputs.push == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -236,7 +239,7 @@ jobs:
   deploy:
     needs: publish
     if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: production
     steps:
       - name: Redeploy Dokploy compose app

@@ -19,7 +19,7 @@ Both Dockerfiles are **packaging-only**: they compile nothing, install no toolch
 no network calls. Everything is built outside the deploy and COPYed in.
 
 **Primary publisher + deploy trigger: CI** (`.github/workflows/images.yml`). On every master push and `v*`
-tag (PRs build without pushing) it builds both images natively on `ubuntu-24.04-arm`
+tag (PRs build without pushing) it builds both images natively on `ubuntu-26.04-arm`
 runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `pnpm --filter web
 build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release --locked
 -p ruxlog --features vendored-openssl --target aarch64-unknown-linux-gnu`. It pushes
@@ -27,6 +27,9 @@ build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release -
 `pr-N` on PRs). After both images from a master push publish, CI calls Dokploy's
 redeploy API; Dokploy pulls `:latest` during that redeploy (see `Deploying with
 Dokploy` → step 3).
+
+All CI runners use Ubuntu 26.04. Before publishing, CI loads the API image and runs
+its runtime linker against `ruxlog` to verify compatibility with Debian trixie.
 
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
@@ -46,10 +49,10 @@ failed repeatedly and opaquely (a bare `Exit status 1` with no error text). It i
 
 What the fallback recipes do — the same steps CI runs on the runner:
 
-| recipe | host step (dev-machine fallback) | image step |
-| --- | --- | --- |
-| `just image-web` | `pnpm --filter web build` (PUBLIC_ENV=prod) | COPY `web/build` + `web/server.ts` (~10s) |
-| `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary |
+| recipe           | host step (dev-machine fallback)                                                     | image step                                |
+| ---------------- | ------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `just image-web` | `pnpm --filter web build` (PUBLIC_ENV=prod)                                          | COPY `web/build` + `web/server.ts` (~10s) |
+| `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary                       |
 
 `vendored-openssl` is required on **both** build paths: the runtime image
 (`debian:trixie-slim`) installs no libssl, so the binary must not link one dynamically. On
@@ -176,15 +179,16 @@ both `:latest` tags, then calls `POST /api/compose.redeploy`. Dokploy's
 3. GitHub → Settings → Environments → create **production** (recommended:
    required reviewers), then add secrets:
 
-   | secret | value |
-   | --- | --- |
-   | `DOKPLOY_API_URL` | reachable Dokploy API base, e.g. `https://dokploy.example.com/api` |
-   | `DOKPLOY_API_KEY` | token from step 1 |
-   | `DOKPLOY_COMPOSE_ID` | Compose ID from step 2 |
+   | secret               | value                                                              |
+   | -------------------- | ------------------------------------------------------------------ |
+   | `DOKPLOY_API_URL`    | reachable Dokploy API base, e.g. `https://dokploy.example.com/api` |
+   | `DOKPLOY_API_KEY`    | token from step 1                                                  |
+   | `DOKPLOY_COMPOSE_ID` | Compose ID from step 2                                             |
 
    GitHub-hosted runner needs network access to this URL. If Dokploy is
    private-only, use a tightly restricted proxy/VPN gateway or self-hosted
    runner with private-network access.
+
 4. Push harmless master commit. **deploy** runs only after **publish** succeeds;
    approve production if environment protection requires it.
 
@@ -254,12 +258,12 @@ All four used to be env vars. With web+api co-located on one Docker network they
 collapse: the internal base is a hardcoded invariant, the public bases derive
 from `DOMAIN`, and the unused `INTERNAL_API_BASE_URL` is deleted.
 
-| Surface | Where set | Value |
-|---|---|---|
-| Browser | `PUBLIC_API_BASE_URL` in compose | `https://${DOMAIN}/api` (runtime `$env/dynamic/public`, derived from `DOMAIN`) |
-| Browser Quran | `PUBLIC_QURAN_API_BASE` in compose | `https://${DOMAIN}/api/quran` (runtime, derived) |
-| Browser FCM | `PUBLIC_FCM_VAPID_KEY` in compose | Firebase console → Cloud Messaging → WebPush certificate key (runtime; empty = notifications show "not configured") |
-| SSR Quran | `INTERNAL_QURAN_API_BASE` in compose | `http://api:8888/quran` (co-located invariant, literal) |
+| Surface       | Where set                            | Value                                                                                                               |
+| ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Browser       | `PUBLIC_API_BASE_URL` in compose     | `https://${DOMAIN}/api` (runtime `$env/dynamic/public`, derived from `DOMAIN`)                                      |
+| Browser Quran | `PUBLIC_QURAN_API_BASE` in compose   | `https://${DOMAIN}/api/quran` (runtime, derived)                                                                    |
+| Browser FCM   | `PUBLIC_FCM_VAPID_KEY` in compose    | Firebase console → Cloud Messaging → WebPush certificate key (runtime; empty = notifications show "not configured") |
+| SSR Quran     | `INTERNAL_QURAN_API_BASE` in compose | `http://api:8888/quran` (co-located invariant, literal)                                                             |
 
 `PUBLIC_*` are read at runtime via `$env/dynamic/public` (not build-baked), so
 they live in the web container's `environment:`, not in build args.
@@ -269,12 +273,12 @@ they live in the web container's `environment:`, not in build args.
 External rate limiting keys on the **verified Cloudflare client identity**, not
 on the proxy's TCP address. Three isolated, non-escalating identities:
 
-| Identity | How resolved | Bucket | Limiter |
-|---|---|---|---|
-| External client | `CF-Connecting-IP` header (parsed `IpAddr`) | `ratelimit:{ip}:…` | content ceiling (600/min) — the only one that can enter W3a escalation |
-| Trusted internal SSR (Bun) | server-only `X-EasyQuran-Internal-Token`, constant-time match | `ratelimit:internal-webssr:…` | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (default 600) |
-| Public readiness | exempt from identity resolution | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120) |
-| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters; **not on the public host router** (Docker-network / in-container only) | — | — |
+| Identity                   | How resolved                                                                                                                  | Bucket                           | Limiter                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| External client            | `CF-Connecting-IP` header (parsed `IpAddr`)                                                                                   | `ratelimit:{ip}:…`               | content ceiling (600/min) — the only one that can enter W3a escalation |
+| Trusted internal SSR (Bun) | server-only `X-EasyQuran-Internal-Token`, constant-time match                                                                 | `ratelimit:internal-webssr:…`    | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (default 600)                     |
+| Public readiness           | exempt from identity resolution                                                                                               | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120)                       |
+| Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters; **not on the public host router** (Docker-network / in-container only) | —                                | —                                                                      |
 
 `.env.example` ships `IP_SOURCE=CfConnectingIp` (exact PascalCase; `connect-info`
 and `cf-connecting-ip` are invalid). The api refuses to boot in production with
@@ -341,7 +345,7 @@ stack of the private router:
 A ban unit is one canonical value: an IPv4 address → `a.b.c.d/32`, an IPv6 address → its `/64` network (host bits truncated). Export emits **only** active `quran-ban:` rows whose suffix parses as a valid `/32` or `/64` unit — email, user-id, totp, and fixed-rate keys are never exported. Export shape:
 
 ```json
-{ "bans": [ { "banUnit": "203.0.113.5/32", "scope": "Long", "expiresAt": 1735689600 } ] }
+{ "bans": [{ "banUnit": "203.0.113.5/32", "scope": "Long", "expiresAt": 1735689600 }] }
 ```
 
 `expiresAt` is a UNIX timestamp (seconds); `scope` is `"Temp"` or `"Long"`.
@@ -360,7 +364,7 @@ CIDR units.
 Production boot fails closed when `WEB_AUTH_ENABLED=true` unless `MAIL_PROVIDER`
 is a real transport with credentials and a non-empty `MAIL_FROM_ADDRESS` /
 `MAIL_FROM_NAME` (see `WebAuthSettings::from_env`). That gate proves credentials
-are *present* — it cannot prove mail is *delivered*. A misconfigured SPF/DKIM
+are _present_ — it cannot prove mail is _delivered_. A misconfigured SPF/DKIM
 record, a relay that silently drops, or a `MAIL_FROM_ADDRESS` the receiving MTA
 rejects all pass boot and then break verification + recovery for real users.
 
@@ -376,7 +380,7 @@ mailbox or a throwaway you can read), never a real user.
 
 2. **Stand up the mail stack on a non-production instance.** Point a staging
    container (or a local `cargo run --bin ruxlog` with `RUST_ENV=development`)
-   at the *same* mail config production will use:
+   at the _same_ mail config production will use:
    - `MAIL_PROVIDER=smtp` (or `cloudflare`) + the real credentials
      (`SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`, or
      `CLOUDFLARE_EMAIL_ACCOUNT_ID`/`CLOUDFLARE_EMAIL_API_TOKEN`).
