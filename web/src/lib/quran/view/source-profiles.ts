@@ -130,6 +130,27 @@ const PROFILES = Object.freeze([
     expectedPackagingCounts: TANZIL_COUNTS,
     referenceOpenerSurah: 1,
   }),
+  // Fully annotated Uthmani mushaf — quran.com word-level text_uthmani lineage
+  // (their reader pages' text). Carries the small-meem pausals (U+06E2/U+06ED),
+  // waqf stop marks and sajdah signs the Tanzil edition omits. Built by
+  // scripts/quran/build-uthmani-annotated.ts from the public quran.com API v4
+  // words endpoint; 2:1 does NOT embed the bismillah (SeparateRow openers from
+  // this DB's own 1:1), same packaging as the IndoPak/Tajweed variants.
+  defineSourceProfile({
+    id: "uthmani-annotated-qcom-words-v1",
+    sourceId: QuranSourceId.AnnotatedUthmani,
+    script: QuranScript.Uthmani,
+    artifact: Object.freeze({
+      repositoryPath: "db/quran/arabic/quran-uthmani-annotated.sqlite",
+      r2Path: "tanzil/arabic/quran-uthmani-annotated.sqlite",
+      sizeBytes: 1_605_632,
+    }),
+    database: VARIANT_QURAN_DATABASE,
+    canonicalRowCount: 6236,
+    packagingBySurah: VARIANT_PACKAGING,
+    expectedPackagingCounts: VARIANT_COUNTS,
+    referenceOpenerSurah: 1,
+  }),
   defineSourceProfile({
     id: "tanzil-simple-clean-a0c52760",
     sourceId: QuranSourceId.TanzilSimpleClean,

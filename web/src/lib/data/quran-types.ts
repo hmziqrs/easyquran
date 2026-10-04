@@ -1,5 +1,6 @@
 export const QuranSourceId = {
   TanzilUthmani: "uthmani",
+  AnnotatedUthmani: "uthmani-annotated",
   TanzilSimpleClean: "simple-clean",
   Indopak: "indopak",
   Tajweed: "tajweed",

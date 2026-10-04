@@ -9,6 +9,17 @@
 - `db/quran/quran-data.xml`
 - merged catalogue generated deterministically from tracked translation map
 
+`build-uthmani-annotated.ts` (same folder) builds the fully annotated Uthmani
+artifact `db/quran/arabic/quran-uthmani-annotated.sqlite` (small-meem pausals,
+waqf stop marks, sajdah signs) from quran.com's public API v4 word-level
+`text_uthmani` — the lineage their reader pages render; the verse-level API
+field is the stripped Tanzil text our default DB already carries. Deterministic
+one-shot build; identity = plain id string + byte size, never a hash. Run:
+
+```bash
+pnpm exec tsx scripts/quran/build-uthmani-annotated.ts
+```
+
 Paths, expected byte sizes, and catalogue come from tracked baked maps/constants. Publisher
 validates each local file and checks SQLite headers before contacting R2. It never hashes or
 modifies Quran data.

@@ -219,7 +219,10 @@ export async function listExisting(
   return existing;
 }
 
-async function runPool<T>(values: readonly T[], worker: (value: T) => Promise<void>): Promise<void> {
+async function runPool<T>(
+  values: readonly T[],
+  worker: (value: T) => Promise<void>,
+): Promise<void> {
   let nextIndex = 0;
   async function runWorker(): Promise<void> {
     while (nextIndex < values.length) {
@@ -233,11 +236,7 @@ async function runPool<T>(values: readonly T[], worker: (value: T) => Promise<vo
   await Promise.all(Array.from({ length: workerCount }, runWorker));
 }
 
-function assertRemoteSize(
-  item: UploadItem,
-  exists: boolean,
-  remoteSize: number | undefined,
-): void {
+function assertRemoteSize(item: UploadItem, exists: boolean, remoteSize: number | undefined): void {
   if (!exists || item.mutable) return;
   if (remoteSize === undefined) throw new Error(`${item.key}: R2 listing omitted object size`);
   if (remoteSize === item.sizeBytes) return;
