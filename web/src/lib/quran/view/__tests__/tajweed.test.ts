@@ -1,4 +1,9 @@
-import { QuranScript } from "$lib/data/quran-types";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+
+import { QuranScript, QuranSourceId } from "$lib/data/quran-types";
+import { sourceProfile } from "$lib/quran/view/source-profiles";
 import {
   isTajweedScript,
   parseTajweedSegments,
@@ -23,6 +28,14 @@ const AS_SAJDAH_32_3 =
 const AS_SAJDAH_32_3_PLAIN =
   "أَمْ يَقُولُونَ ٱفْتَرَٮٰهُ\u200cۚ بَلْ هُوَ ٱلْحَقُّ مِن رَّبِّكَ لِتُنذِرَ قَوْمًا مَّآ أَتَـٰهُم مِّن نَّذِيرٍ مِّن قَبْلِكَ لَعَلَّهُمْ يَهْتَدُونَ";
 
+// Nested-group bytes from three real rows (2:190 inner-in-middle, 2:278
+// inner-at-start, 47:31 inner-at-end). The corpus nests exactly once and in
+// exactly 33 verses; the corpus describe below enforces that over all rows.
+const BAQARAH_2_190_TAIL = "وَلَا تَعْتَد[o[ُوٓ[s[اْ]\u200cۚ]";
+const BAQARAH_2_190_TAIL_PLAIN = "وَلَا تَعْتَدُوٓاْ\u200cۚ";
+const BAQARAH_2_278_NESTED = "[o[[s[و]ٲٓاْ]";
+const MUHAMMAD_47_31_NESTED = "[o[َ[s[اْ]]";
+
 describe("parseTajweedSegments", () => {
   it("passes non-tajweed text through as a single plain run", () => {
     expect(parseTajweedSegments("بِسْمِ ٱللَّهِ")).toEqual([{ text: "بِسْمِ ٱللَّهِ", rule: null }]);
@@ -42,7 +55,10 @@ describe("parseTajweedSegments", () => {
   it("parses a full fatihah 1:1 sample without losing or inventing text", () => {
     const segments = parseTajweedSegments(FATIHAH_1);
     expect(segments.filter((s) => s.rule !== null).length).toBeGreaterThan(0);
-    expect(segments.reduce((acc, s) => acc + s.text, "")).toBe(stripTajweedMarkup(FATIHAH_1));
+    // Real byte comparison (stripTajweedMarkup shares this code path, so
+    // comparing against it would be vacuous): the concatenation must equal
+    // the row's Quranic text exactly.
+    expect(segments.reduce((acc, s) => acc + s.text, "")).toBe("بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ");
   });
 
   it("treats literal brackets that do not form markup as plain text", () => {
@@ -55,6 +71,40 @@ describe("parseTajweedSegments", () => {
     expect(parseTajweedSegments("آمن [g[قلب")).toEqual([
       { text: "آمن ", rule: null },
       { text: "قلب", rule: "g" },
+    ]);
+  });
+
+  it("gives an inner group its own color inside an outer run (2:190)", () => {
+    // Real bytes: outer madda `o` wrapping a silent `s` group, with body text
+    // on both sides of it. Inner colors win inside outer runs; the outer body
+    // text keeps the outer rule.
+    expect(parseTajweedSegments(BAQARAH_2_190_TAIL)).toEqual([
+      { text: "وَلَا تَعْتَد", rule: null },
+      { text: "ُوٓ", rule: "o" },
+      { text: "اْ", rule: "s" },
+      { text: "\u200cۚ", rule: "o" },
+    ]);
+  });
+
+  it("parses a nested group at the start of the outer body (2:278)", () => {
+    expect(parseTajweedSegments(BAQARAH_2_278_NESTED)).toEqual([
+      { text: "و", rule: "s" },
+      { text: "ٲٓاْ", rule: "o" },
+    ]);
+  });
+
+  it("parses a nested group at the end of the outer body (47:31)", () => {
+    expect(parseTajweedSegments(MUHAMMAD_47_31_NESTED)).toEqual([
+      { text: "َ", rule: "o" },
+      { text: "اْ", rule: "s" },
+    ]);
+  });
+
+  it("keeps a closed inner group when the outer group is never closed", () => {
+    expect(parseTajweedSegments("[o[ُوٓ[s[اْ]\u200cۚ")).toEqual([
+      { text: "ُوٓ", rule: "o" },
+      { text: "اْ", rule: "s" },
+      { text: "\u200cۚ", rule: "o" },
     ]);
   });
 
@@ -72,7 +122,9 @@ describe("parseTajweedSegments", () => {
     // parser coalesces it with the adjacent plain text, so locate it there.
     const bare = segments.find((segment) => segment.text.includes("\u066E\u0670"));
     expect(bare?.rule).toBeNull();
-    expect(segments.reduce((acc, s) => acc + s.text, "")).toBe(stripTajweedMarkup(AS_SAJDAH_32_3));
+    // Real byte comparison against the row's known plain text (not against
+    // stripTajweedMarkup, which would be vacuous).
+    expect(segments.reduce((acc, s) => acc + s.text, "")).toBe(AS_SAJDAH_32_3_PLAIN);
   });
 
   it("parses rule letter b (idgham mutaqaribayn) from real DB rows", () => {
@@ -107,6 +159,11 @@ describe("stripTajweedMarkup", () => {
 
   it("strips rule b runs like every other rule (4:158)", () => {
     expect(stripTajweedMarkup(NISA_4_158)).toBe("بَل رَّفَعَهُ ٱللَّهُ إِلَيْهِ\u200cۚ وَكَانَ ٱللَّهُ عَزِيزًا حَكِيمًا");
+  });
+
+  it("strips nested group markup and keeps every Arabic codepoint (2:190)", () => {
+    expect(stripTajweedMarkup(BAQARAH_2_190_TAIL)).toBe(BAQARAH_2_190_TAIL_PLAIN);
+    expect(stripTajweedMarkup(BAQARAH_2_190_TAIL)).not.toMatch(/[[\]]/u);
   });
 
   it("drops the 32:3 letterless group's brackets and keeps its content", () => {
@@ -148,5 +205,99 @@ describe("tajweedRuleColor + isTajweedScript", () => {
     expect(isTajweedScript(QuranScript.IndoPak)).toBe(false);
     expect(isTajweedScript(QuranScript.SimpleClean)).toBe(false);
     expect(isTajweedScript(QuranScript.Translation)).toBe(false);
+  });
+});
+
+// Corpus-wide invariants over every row of db/quran/arabic/quran-tajweed.sqlite
+// (read-only open; db/ is gitignored and provisioned out of band, same
+// requirement source-view.test.ts already places on the test suite).
+const tajweedProfile = sourceProfile(QuranSourceId.Tajweed);
+
+function resolveTajweedDbPath(): string {
+  // vp test runs with cwd = web/ (the anchor source-view.test.ts relies on);
+  // also accept the repo root so diagnostics from there keep working.
+  const anchored = path.resolve(process.cwd(), "..", tajweedProfile.artifact.repositoryPath);
+  if (existsSync(anchored)) return anchored;
+  return path.resolve(process.cwd(), tajweedProfile.artifact.repositoryPath);
+}
+
+interface TajweedRow {
+  surah: number;
+  ayah: number;
+  text: string;
+}
+
+function readTajweedRows(): readonly TajweedRow[] {
+  const database = new DatabaseSync(resolveTajweedDbPath(), { readOnly: true });
+  try {
+    const rows = database
+      .prepare("SELECT sura AS surah, aya AS ayah, text FROM quran_text ORDER BY sura, aya")
+      .all();
+    return rows.map((row) => ({
+      surah: Number(row.surah),
+      ayah: Number(row.ayah),
+      text: String(row.text),
+    }));
+  } finally {
+    database.close();
+  }
+}
+
+// One nesting level is the corpus's entire nested depth: an outer group whose
+// body carries a complete inner group (pre/post body text may be empty). Flat
+// adjacent groups like `[g[مّ][i:0[َا]` never match — the inner group must sit
+// strictly inside the outer body.
+const NESTED_GROUP = /\[([a-z])(?::\d+)?\[([^[\]]*)\[([a-z])(?::\d+)?\[([^[\]]*)\]([^[\]]*)\]/u;
+
+describe("tajweed corpus invariants (all 6236 rows, read-only)", () => {
+  const rows = readTajweedRows();
+
+  it("loads the full tajweed mushaf", () => {
+    expect(rows).toHaveLength(tajweedProfile.canonicalRowCount);
+  });
+
+  it("leaves no markup bracket in any row after parse or strip", () => {
+    const violators: string[] = [];
+    for (const row of rows) {
+      if (parseTajweedSegments(row.text).some((segment) => /[[\]]/u.test(segment.text)))
+        violators.push(`${row.surah}:${row.ayah} parse`);
+      if (/[[\]]/u.test(stripTajweedMarkup(row.text)))
+        violators.push(`${row.surah}:${row.ayah} strip`);
+    }
+    expect(violators.join(", ")).toBe("");
+  });
+
+  it("preserves every non-markup byte of every row through strip", () => {
+    // Independent oracle (not the parser's own output): the corpus's ASCII is
+    // exactly markup — brackets, rule letters, `:` and id digits — plus spaces.
+    // Deleting it must equal the strip result byte-for-byte, per row.
+    const mismatches = rows
+      .filter((row) => stripTajweedMarkup(row.text) !== row.text.replace(/[[\]:a-z0-9]/gu, ""))
+      .map((row) => `${row.surah}:${row.ayah}`);
+    expect(mismatches.join(", ")).toBe("");
+  });
+
+  it("renders the 33 nested-group verses with inner colors inside outer runs", () => {
+    const nestedRows: { key: string; match: RegExpMatchArray }[] = [];
+    for (const row of rows) {
+      const match = row.text.match(NESTED_GROUP);
+      if (match) nestedRows.push({ key: `${row.surah}:${row.ayah}`, match });
+    }
+    // Byte-verified against the immutable DB: exactly 33 verses nest, each once.
+    expect(nestedRows).toHaveLength(33);
+    for (const { key, match } of nestedRows) {
+      const outerRule = match[1];
+      const pre = match[2] ?? "";
+      const innerRule = match[3];
+      const innerBody = match[4] ?? "";
+      const post = match[5] ?? "";
+      if (outerRule === undefined || innerRule === undefined)
+        throw new Error(`nested-group captures missing in ${key}`);
+      const expected: { text: string; rule: string | null }[] = [];
+      if (pre !== "") expected.push({ text: pre, rule: outerRule });
+      expected.push({ text: innerBody, rule: innerRule });
+      if (post !== "") expected.push({ text: post, rule: outerRule });
+      expect(parseTajweedSegments(match[0])).toEqual(expected);
+    }
   });
 });

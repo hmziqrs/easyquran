@@ -5,8 +5,11 @@ import { QuranScript, type QuranScript as QuranScriptValue } from "../../data/qu
  *
  * The tajweed mushaf DB carries inline rule segments in `text`, byte-for-byte:
  * `[h:1468[ٱ]` — `[` + single rule letter + optional `:<id>` + `[` + colored
- * run + `]`. Rendering and plain-text views parse it HERE only; the stored
- * text, the API wire format, and every non-tajweed source are untouched.
+ * run + `]`. Groups may nest one level deep (33 verses, e.g. 2:190's
+ * `[o[ُوٓ[s[اْ]‌ۚ]`): an inner rule group keeps its own color while the outer
+ * body text around it keeps the outer rule. Rendering and plain-text views
+ * parse it HERE only; the stored text, the API wire format, and every
+ * non-tajweed source are untouched.
  */
 
 export type TajweedRuleLetter =
@@ -73,18 +76,6 @@ interface ScanCursor {
   index: number;
 }
 
-function takeRun(text: string, cursor: ScanCursor): string {
-  const next = text.indexOf("[", cursor.index);
-  if (next === -1) {
-    const run = text.slice(cursor.index);
-    cursor.index = text.length;
-    return run;
-  }
-  const run = text.slice(cursor.index, next);
-  cursor.index = next;
-  return run;
-}
-
 /**
  * Try to read one `[x` or `[x:id[` markup opener at `cursor.index`.
  * Returns null (cursor untouched) when the bracket is literal text.
@@ -143,46 +134,78 @@ function coalescePlain(segments: readonly TajweedSegment[]): readonly TajweedSeg
   return out;
 }
 
+/**
+ * Parse runs from `cursor.index` (bracket-depth stack):
+ * - top level (`groupRule === null`): plain text, group bodies, literal brackets;
+ * - inside a group (`groupRule` set): body text carries the group's rule, inner
+ *   rule groups recurse with their own rule (inner colors win inside outer
+ *   runs), and the `]` closing THIS group ends the scan. A group left unclosed
+ *   at end-of-string keeps its parsed body — markup never drops Quranic text.
+ */
+function parseBody(
+  text: string,
+  cursor: ScanCursor,
+  segments: TajweedSegment[],
+  groupRule: TajweedRuleLetter | null,
+): void {
+  let plain = "";
+  const flush = (): void => {
+    if (plain !== "") {
+      segments.push({ text: plain, rule: groupRule });
+      plain = "";
+    }
+  };
+  while (cursor.index < text.length) {
+    const ch = text[cursor.index];
+    if (ch !== "[" && ch !== "]") {
+      plain += ch;
+      cursor.index += 1;
+      continue;
+    }
+    if (ch === "]") {
+      if (groupRule === null) {
+        // Literal close bracket outside any group: keep the byte.
+        plain += "]";
+        cursor.index += 1;
+        continue;
+      }
+      flush();
+      cursor.index += 1; // consume this group's closing bracket
+      return;
+    }
+    const opener = takeOpener(text, cursor);
+    if (opener === null) {
+      const bareClose = text.indexOf("]", cursor.index + 1);
+      if (isBareArabicGroup(text, cursor.index, bareClose)) {
+        // Letterless bracket group: render the Arabic content, drop brackets.
+        plain += text.slice(cursor.index + 1, bareClose);
+        cursor.index = bareClose + 1;
+        continue;
+      }
+      // Literal bracket, not markup: keep the byte.
+      plain += "[";
+      cursor.index += 1;
+      continue;
+    }
+    if (opener.bodyStart >= text.length) {
+      // Opener at end-of-string with no body: its bytes stay literal.
+      plain += text.slice(cursor.index, opener.bodyStart);
+      cursor.index = opener.bodyStart;
+      continue;
+    }
+    flush();
+    cursor.index = opener.bodyStart;
+    parseBody(text, cursor, segments, opener.rule);
+  }
+  // End of string: unclosed group keeps its parsed body (no closing bracket).
+  flush();
+}
+
 /** Parse tajweed markup into colored/plain runs. Non-tajweed text passes through as one run. */
 export function parseTajweedSegments(text: string): readonly TajweedSegment[] {
   if (!text.includes("[")) return [{ text, rule: null }];
   const segments: TajweedSegment[] = [];
-  const cursor: ScanCursor = { index: 0 };
-  while (cursor.index < text.length) {
-    if (text[cursor.index] !== "[") {
-      const run = takeRun(text, cursor);
-      if (run) segments.push({ text: run, rule: null });
-      continue;
-    }
-    const opener = takeOpener(text, cursor);
-    if (!opener) {
-      const bareClose = text.indexOf("]", cursor.index + 1);
-      if (isBareArabicGroup(text, cursor.index, bareClose)) {
-        // Letterless bracket group: render the Arabic content, drop brackets.
-        segments.push({ text: text.slice(cursor.index + 1, bareClose), rule: null });
-        cursor.index = bareClose + 1;
-        continue;
-      }
-      // Literal bracket, not markup: fold it into the trailing plain run.
-      const last = segments[segments.length - 1];
-      if (last && last.rule === null)
-        segments[segments.length - 1] = { text: `${last.text}[`, rule: null };
-      else segments.push({ text: "[", rule: null });
-      cursor.index += 1;
-      continue;
-    }
-    const close = text.indexOf("]", opener.bodyStart);
-    if (close === -1 && opener.bodyStart === text.length) {
-      // Opener at end-of-string with no body: emit the bracket literally.
-      segments.push({ text: "[", rule: null });
-      cursor.index += 1;
-      continue;
-    }
-    const end = close === -1 ? text.length : close;
-    const body = text.slice(opener.bodyStart, end);
-    if (body) segments.push({ text: body, rule: opener.rule });
-    cursor.index = close === -1 ? text.length : end + 1;
-  }
+  parseBody(text, { index: 0 }, segments, null);
   return coalescePlain(segments);
 }
 
