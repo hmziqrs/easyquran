@@ -22,8 +22,11 @@ type ArabicQuranSourcePlan = {
   };
 };
 
+// Reader default = annotated Uthmani (SSR + worker preferred source). Search stays on the
+// plain Tanzil Uthmani: the match corpus normalizes diacritics anyway, and the annotated
+// marks (U+06E2/U+06ED, stop signs) would only add normalization noise there.
 export const DEFAULT_QURAN_SOURCE_PLAN: ArabicQuranSourcePlan = Object.freeze({
-  reader: QuranSourceId.TanzilUthmani,
+  reader: QuranSourceId.AnnotatedUthmani,
   search: Object.freeze({
     match: QuranSourceId.TanzilUthmani,
     display: QuranSourceId.TanzilUthmani,

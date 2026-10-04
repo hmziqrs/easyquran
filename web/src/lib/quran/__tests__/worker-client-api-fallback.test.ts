@@ -118,7 +118,8 @@ describe("quranWorker.readSurah API fallback", () => {
     const fetchMock = mockFetchSurah();
     const surah = await quranWorker.readSurah(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/quran/sources/uthmani/surah/1",
+      // No explicit source → the plan default (annotated Uthmani mushaf).
+      "https://api.test/quran/sources/uthmani-annotated/surah/1",
       expect.objectContaining({ headers: { accept: "application/json" } }),
     );
     expect(surah.sourceId).toBe("uthmani");

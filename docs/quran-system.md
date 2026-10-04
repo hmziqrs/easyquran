@@ -42,11 +42,17 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 
 ## Sources and metadata
 
-- `quran-uthmani.sqlite` is display and Arabic-search corpus.
+- `quran-uthmani.sqlite` is the Arabic-search corpus and a selectable display script.
 - `quran-simple-clean.sqlite` is the readable API/canonical-view script.
 - `quran-indopak.sqlite` (Naveed Ahmad IndoPak text) and `quran-tajweed.sqlite` (Dar Al-Islam
   colored tajweed, via alquran.cloud) are mushaf-script variants added 2026-09.
-- All four expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are
+- `quran-uthmani-annotated.sqlite` (quran.com word-level lineage, added 2026-10) carries the
+  small-meem pausals (U+06E2/U+06ED), waqf stop marks, and sajdah signs the Tanzil edition
+  omits. Built by `scripts/quran/build-uthmani-annotated.ts`; registered as source id
+  `uthmani-annotated` and the reader default (`DEFAULT_QURAN_SOURCE_PLAN.reader`), while Arabic
+  search stays on the plain Tanzil corpus. Dev/CI provisioning knows it
+  (`deploy/fetch-quran-db.sh`); deployed-server provisioning does not yet.
+- All five expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are
   read directly and read-only; no consolidated canonical DB is built. The variants do not
   embed the bismillah in first ayahs (separate-row openers, measured 1/0/0/112/1); the trusted
   opener text is each variant's own 1:1.
@@ -65,7 +71,7 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
   absent upstream and come from Tanzil only), and all 188 QUL translations
   (`qul.r<N>.<slug>` ids; 91 languages, 16 RTL).
   Web decodes baked `[id, language, languageCode, direction, name, translator, filePath,
-  sizeBytes]` records. Production artifact selection uses baked id maps only.
+sizeBytes]` records. Production artifact selection uses baked id maps only.
 - Translation redistribution is non-commercial (Tanzil); QuranEnc terms require attribution,
   no alteration, and update-to-latest. QUL publishes no per-resource license: 0 of 195
   mirrored resources state terms, all marked unverified in the package index — resolve
@@ -303,13 +309,13 @@ changes Arabic scripture or translation-content semantics.
    (docs/research/navigation-audit.md M5). Scroll position rides in `?v={surah}:{ayah}` and
    `history.state`, never the path.
 10. URL scheme A (docs/research/url-scheme-a.md) drops both navigation prefixes: the default
-   UI locale `en` is unprefixed and `ar` lives under `/ar/`; the `/{ui}/app` double prefix and
-   the noindex `/app` reader hub are gone (the hub 308s to `/surah`; the resume card lives at
-   `/yours`). A first-match 308 rule table maps every legacy spelling — `/en/**`, `/app/**`,
-   `/ar/app/**` — to its live canonical in one hop with `cache-control: public, max-age=86400`.
-   `/en/**` is a permanently reserved word: no real route may ever appear there, or it would
-   collide with the redirect map. The bounded product pages (`/search`, `/settings`,
-   `/bookmarks`, `/yours`) gained `/ar` twins via the reroute table.
+    UI locale `en` is unprefixed and `ar` lives under `/ar/`; the `/{ui}/app` double prefix and
+    the noindex `/app` reader hub are gone (the hub 308s to `/surah`; the resume card lives at
+    `/yours`). A first-match 308 rule table maps every legacy spelling — `/en/**`, `/app/**`,
+    `/ar/app/**` — to its live canonical in one hop with `cache-control: public, max-age=86400`.
+    `/en/**` is a permanently reserved word: no real route may ever appear there, or it would
+    collide with the redirect map. The bounded product pages (`/search`, `/settings`,
+    `/bookmarks`, `/yours`) gained `/ar` twins via the reroute table.
 
 ---
 

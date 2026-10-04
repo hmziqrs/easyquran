@@ -267,7 +267,8 @@ describe("createReaderPersistence scheduling", () => {
     expect(read()).toMatchObject({
       v: 4,
       arabicFont: "amiri",
-      arabicScript: "uthmani",
+      // Untouched blob carries the v4 default script (annotated Uthmani).
+      arabicScript: "uthmani-annotated",
       translationSize: 17,
     });
     persistence.dispose();

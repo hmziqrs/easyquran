@@ -79,7 +79,9 @@ export const READER_DEFAULTS: ReaderState = {
   current: 1,
   fontSize: 33,
   arabicFont: "amiri",
-  arabicScript: QuranSourceId.TanzilUthmani,
+  // Default mushaf = fully annotated Uthmani (quran.com word lineage): small-meem
+  // pausals + waqf stop marks the plain Tanzil edition omits. Tanzil stays selectable.
+  arabicScript: QuranSourceId.AnnotatedUthmani,
   translationSize: 17,
   translationFamily: "sans",
   mode: "verse",
