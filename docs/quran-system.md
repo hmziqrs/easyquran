@@ -46,9 +46,11 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - `quran-simple-clean.sqlite` is the readable API/canonical-view script.
 - `quran-indopak.sqlite` (Naveed Ahmad IndoPak text) and `quran-tajweed.sqlite` (Dar Al-Islam
   colored tajweed, via alquran.cloud) are mushaf-script variants added 2026-09.
-- `quran-uthmani-annotated.sqlite` (quran.com word-level lineage, added 2026-10) carries the
-  small-meem pausals (U+06E2/U+06ED), waqf stop marks, and sajdah signs the Tanzil edition
-  omits. Built by `scripts/quran/build-uthmani-annotated.ts`; registered as source id
+- `quran-uthmani-annotated.sqlite` (quran.com word-level lineage, added 2026-10) differs from
+  Tanzil by small-meem pausal density (U+06E2 510→2445, U+06ED 99→4807) and three
+  precomposed-maddah encoding variants; sajdah signs (U+06E9 15=15) and inline waqf marks
+  (U+06D6 1682=1682, U+06DA 1972=1972) are identical in both. Built by
+  `scripts/quran/build-uthmani-annotated.ts`; registered as source id
   `uthmani-annotated` and the reader default (`DEFAULT_QURAN_SOURCE_PLAN.reader`), while Arabic
   search stays on the plain Tanzil corpus. Dev/CI provisioning knows it
   (`deploy/fetch-quran-db.sh`); deployed-server provisioning does not yet.
