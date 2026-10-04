@@ -50,6 +50,7 @@ import {
   settings_reading_arabic_font,
   settings_reading_script,
   settings_reading_script_uthmani,
+  settings_reading_script_uthmani_annotated,
   settings_reading_script_simple_clean,
   settings_reading_script_indopak,
   settings_reading_script_tajweed,
@@ -242,6 +243,7 @@ export interface SettingsCopy {
     readonly arabicScript: string;
     readonly scriptNames: {
       readonly uthmani: string;
+      readonly annotatedUthmani: string;
       readonly simpleClean: string;
       readonly indopak: string;
       readonly tajweed: string;
@@ -452,6 +454,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       arabicScript: noArgs(settings_reading_script),
       scriptNames: {
         uthmani: noArgs(settings_reading_script_uthmani),
+        annotatedUthmani: noArgs(settings_reading_script_uthmani_annotated),
         simpleClean: noArgs(settings_reading_script_simple_clean),
         indopak: noArgs(settings_reading_script_indopak),
         tajweed: noArgs(settings_reading_script_tajweed),

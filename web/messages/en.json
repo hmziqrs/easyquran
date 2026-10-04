@@ -374,6 +374,7 @@
   "settings_reading_arabic_font": "Arabic font",
   "settings_reading_script": "Arabic script (mushaf)",
   "settings_reading_script_uthmani": "Uthmani",
+  "settings_reading_script_uthmani_annotated": "Uthmani (annotated)",
   "settings_reading_script_simple_clean": "Simple",
   "settings_reading_script_indopak": "IndoPak",
   "settings_reading_script_tajweed": "Tajweed (colored)",

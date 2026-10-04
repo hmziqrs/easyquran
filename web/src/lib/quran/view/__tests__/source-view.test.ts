@@ -31,12 +31,20 @@ function load(sourceId: QuranSourceIdValue) {
   return { profile, rows, view: source.view };
 }
 
+function rowText(source: ReturnType<typeof load>, surah: number, ayah: number): string {
+  const row = source.rows.find((candidate) => candidate.surah === surah && candidate.ayah === ayah);
+  if (!row) throw new Error(`missing row ${surah}:${ayah}`);
+  return row.text;
+}
+
 const uthmani = load(QuranSourceId.TanzilUthmani);
+const annotated = load(QuranSourceId.AnnotatedUthmani);
 const simple = load(QuranSourceId.TanzilSimpleClean);
 
 describe("registered Quran source views", () => {
   it.each([
     ["uthmani", uthmani],
+    ["uthmani-annotated", annotated],
     ["simple-clean", simple],
   ] as const)("losslessly partitions every embedded %s first ayah", (_name, source) => {
     const firstBySurah = new Map(
@@ -77,6 +85,30 @@ describe("registered Quran source views", () => {
     expect(uthmani.view.normalization(1).bodyStartScalar).toBe(0);
     expect(uthmani.view.opener(1).kind).toBe(OpenerKind.Verse);
     expect(uthmani.view.opener(9)).toEqual({ kind: OpenerKind.None });
+  });
+
+  it("carries the quran.com annotations the Tanzil edition omits (default mushaf)", () => {
+    // 2:1 must not embed the bismillah — the annotated DB rides SeparateRow openers.
+    expect(annotated.view.normalization(2).packaging).toBe(OpenerPackaging.SeparateRow);
+    expect(annotated.view.body(2, 1, rowText(annotated, 2, 1))).toBe(rowText(annotated, 2, 1));
+
+    // Row-level F4 findings: waqf-lazim small meem on 106:4 جُوعٍ, the stop mark on
+    // 94:6, the sajdah sign on 32:15 — present in the annotated lineage. (94:4/94:8
+    // medallion-baked stops are quran.com font-glyph space (code_v1), not the public
+    // text_uthmani field — not recoverable from this lineage.)
+    expect(rowText(annotated, 106, 4)).toContain("\u06e2");
+    expect(rowText(annotated, 94, 6)).toContain("\u06ed");
+    expect(rowText(annotated, 32, 15)).toContain("\u06e9");
+    // The Tanzil edition omits the waqf-lazim mark and the 94:6 stop entirely.
+    expect(rowText(uthmani, 106, 4)).not.toContain("\u06e2");
+    expect(rowText(uthmani, 94, 6)).not.toMatch(/[\u06e2\u06ed]/u);
+  });
+
+  it("keeps the 80:3 maddah on يَزَّكَّىٰٓ in every Uthmani lineage", () => {
+    // F4 adjudication: the dropped-maddah capture was wrong — Tanzil, the annotated
+    // DB, and quran.com's word text all carry U+0653 here (verified against the API).
+    expect(rowText(uthmani, 80, 3)).toContain("\u0653");
+    expect(rowText(annotated, 80, 3)).toContain("\u0653");
   });
 
   it.each([

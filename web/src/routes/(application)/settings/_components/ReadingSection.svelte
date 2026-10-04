@@ -51,6 +51,7 @@
   }
 
   const SCRIPTS: readonly QuranSourceIdValue[] = [
+    QuranSourceId.AnnotatedUthmani,
     QuranSourceId.TanzilUthmani,
     QuranSourceId.TanzilSimpleClean,
     QuranSourceId.Indopak,
@@ -58,6 +59,7 @@
   ];
 
   function scriptLabel(script: QuranSourceIdValue): string {
+    if (script === QuranSourceId.AnnotatedUthmani) return copy.scriptNames.annotatedUthmani;
     if (script === QuranSourceId.TanzilSimpleClean) return copy.scriptNames.simpleClean;
     if (script === QuranSourceId.Indopak) return copy.scriptNames.indopak;
     if (script === QuranSourceId.Tajweed) return copy.scriptNames.tajweed;

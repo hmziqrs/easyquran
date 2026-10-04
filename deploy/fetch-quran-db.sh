@@ -137,12 +137,15 @@ assert_size() {
 
 echo "$BASE → $DEST (mode: $MODE)"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
+get "tanzil/arabic/quran-uthmani-annotated.sqlite" "$DEST/arabic/quran-uthmani-annotated.sqlite"
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
 get "tanzil/arabic/quran-indopak.sqlite" "$DEST/arabic/quran-indopak.sqlite"
 get "tanzil/arabic/quran-tajweed.sqlite" "$DEST/arabic/quran-tajweed.sqlite"
 get "tanzil/quran-data.xml" "$DEST/quran-data.xml"
 assert_sqlite "$DEST/arabic/quran-uthmani.sqlite"
 assert_size "$DEST/arabic/quran-uthmani.sqlite" 1593344
+assert_sqlite "$DEST/arabic/quran-uthmani-annotated.sqlite"
+assert_size "$DEST/arabic/quran-uthmani-annotated.sqlite" 1605632
 assert_sqlite "$DEST/arabic/quran-simple-clean.sqlite"
 assert_size "$DEST/arabic/quran-simple-clean.sqlite" 929792
 assert_sqlite "$DEST/arabic/quran-indopak.sqlite"
