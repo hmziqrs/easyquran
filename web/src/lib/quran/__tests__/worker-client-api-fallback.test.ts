@@ -29,7 +29,29 @@ const SURAH1 = {
   },
 };
 
-function okJson(body: typeof SURAH1): Response {
+// The plan default serves `uthmani-annotated`, so the no-source API fallback hits the
+// annotated URL — the canned body must describe that source, not the plain Tanzil one.
+// Bytes are the real annotated 1:1/1:2 (surah 1 is NumberedAyah: the opener IS verse 1).
+const ANNOTATED_SURAH1 = {
+  data: {
+    sourceId: "uthmani-annotated",
+    script: "uthmani",
+    verses: ["بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ", "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ"],
+    normalization: {
+      surah: 1,
+      sourceId: "uthmani-annotated",
+      script: "uthmani",
+      sourceProfile: "uthmani-annotated-qcom-words-v1",
+      packaging: "numbered-ayah",
+      openerKind: "verse",
+      openerText: "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+      openerEndScalar: 0,
+      bodyStartScalar: 0,
+    },
+  },
+};
+
+function okJson(body: typeof SURAH1 | typeof ANNOTATED_SURAH1): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -115,15 +137,15 @@ afterEach(() => {
 
 describe("quranWorker.readSurah API fallback", () => {
   it("serves from the live API when the wasm worker is not started (no-download mode)", async () => {
-    const fetchMock = mockFetchSurah();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson(ANNOTATED_SURAH1));
     const surah = await quranWorker.readSurah(1);
     expect(fetchMock).toHaveBeenCalledWith(
       // No explicit source → the plan default (annotated Uthmani mushaf).
       "https://api.test/quran/sources/uthmani-annotated/surah/1",
       expect.objectContaining({ headers: { accept: "application/json" } }),
     );
-    expect(surah.sourceId).toBe("uthmani");
-    expect(surah.verses).toEqual(["ٱلْحَمْدُ", "لِلَّهِ"]);
+    expect(surah.sourceId).toBe("uthmani-annotated");
+    expect(surah.verses).toEqual(["بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ", "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ"]);
   });
 });
 

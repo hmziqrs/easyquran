@@ -112,6 +112,25 @@ function takeOpener(
   return { rule: letter, bodyStart };
 }
 
+/**
+ * Bare bracket group: `[` + Arabic-only content + `]` with no rule letter —
+ * the corpus has exactly one (32:3 `فْتَرَ[ٮٰ]هُ`). The content is Quranic text
+ * the edition bracketed without a rule, so it must render and only the
+ * brackets drop. Non-Arabic or mixed content (a literal `[2]` footnote) is
+ * not a bare group and keeps its brackets.
+ */
+// \u200D (ZWJ) must stay the LAST class member: the linter reads a ZWJ followed by
+// another member as a joined character sequence; member order is otherwise irrelevant.
+const BARE_ARABIC_GROUP =
+  /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u200C\uFD70-\uFDFF\uFE70-\uFEFF\u200D]+$/u;
+
+/** Whether `[content]` at `open` is a letterless Arabic bracket group. */
+function isBareArabicGroup(text: string, open: number, close: number): boolean {
+  if (close === -1 || close === open + 1) return false;
+  const body = text.slice(open + 1, close);
+  return !body.includes("[") && BARE_ARABIC_GROUP.test(body);
+}
+
 /** Merge adjacent plain runs so literal brackets never split text. */
 function coalescePlain(segments: readonly TajweedSegment[]): readonly TajweedSegment[] {
   const out: TajweedSegment[] = [];
@@ -137,6 +156,13 @@ export function parseTajweedSegments(text: string): readonly TajweedSegment[] {
     }
     const opener = takeOpener(text, cursor);
     if (!opener) {
+      const bareClose = text.indexOf("]", cursor.index + 1);
+      if (isBareArabicGroup(text, cursor.index, bareClose)) {
+        // Letterless bracket group: render the Arabic content, drop brackets.
+        segments.push({ text: text.slice(cursor.index + 1, bareClose), rule: null });
+        cursor.index = bareClose + 1;
+        continue;
+      }
       // Literal bracket, not markup: fold it into the trailing plain run.
       const last = segments[segments.length - 1];
       if (last && last.rule === null)

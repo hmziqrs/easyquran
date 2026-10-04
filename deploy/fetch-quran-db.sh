@@ -58,6 +58,29 @@ get() {
   echo "  got $key"
 }
 
+# get_optional <r2-key> <local-path> — same contract as get, but a missing object is a
+# warn+skip instead of a hard failure. Used for the annotated Uthmani artifact, whose R2
+# upload is still pending (docs/quran-system.md Part 5): provisioning must keep working
+# on the plain sources until `just upload-sqlite` publishes it. Whatever DOES land on
+# disk is still gated by the caller's assert_sqlite/assert_size — a present but wrong
+# file never passes. Returns non-zero when the object was skipped.
+get_optional() {
+  local key="$1" out="$2" code=0
+  if [ -s "$out" ] && [ "${FORCE:-0}" != "1" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$out")"
+  curl -fsSL --retry 3 --retry-connrefused -o "$out.part" "$BASE/$key" || code=$?
+  if [ "$code" -eq 0 ]; then
+    mv "$out.part" "$out"
+    echo "  got $key"
+    return 0
+  fi
+  rm -f "$out.part"
+  echo "  ⚠ $key unavailable (curl exit $code) — skipping; publish it with \`just upload-sqlite\`" >&2
+  return 1
+}
+
 # Translation file names, one per line, straight out of the tracked catalogue (field 6) —
 # never from a bucket listing. node or python3, whichever the host has: a VPS running this in
 # `all` mode carries no toolchain, only the images it pulls.
@@ -137,15 +160,16 @@ assert_size() {
 
 echo "$BASE → $DEST (mode: $MODE)"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
-get "tanzil/arabic/quran-uthmani-annotated.sqlite" "$DEST/arabic/quran-uthmani-annotated.sqlite"
+if get_optional "tanzil/arabic/quran-uthmani-annotated.sqlite" "$DEST/arabic/quran-uthmani-annotated.sqlite"; then
+  assert_sqlite "$DEST/arabic/quran-uthmani-annotated.sqlite"
+  assert_size "$DEST/arabic/quran-uthmani-annotated.sqlite" 1605632
+fi
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
 get "tanzil/arabic/quran-indopak.sqlite" "$DEST/arabic/quran-indopak.sqlite"
 get "tanzil/arabic/quran-tajweed.sqlite" "$DEST/arabic/quran-tajweed.sqlite"
 get "tanzil/quran-data.xml" "$DEST/quran-data.xml"
 assert_sqlite "$DEST/arabic/quran-uthmani.sqlite"
 assert_size "$DEST/arabic/quran-uthmani.sqlite" 1593344
-assert_sqlite "$DEST/arabic/quran-uthmani-annotated.sqlite"
-assert_size "$DEST/arabic/quran-uthmani-annotated.sqlite" 1605632
 assert_sqlite "$DEST/arabic/quran-simple-clean.sqlite"
 assert_size "$DEST/arabic/quran-simple-clean.sqlite" 929792
 assert_sqlite "$DEST/arabic/quran-indopak.sqlite"

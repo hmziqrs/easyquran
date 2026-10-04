@@ -161,14 +161,25 @@ unchanged.
   circuit; no health probe is generated.
 
 Arabic primary plus up to five client-only stacked translations are supported. The reader's
-mushaf-script preference (Uthmani/Simple-clean/IndoPak/Tajweed, reader schema v4) selects the
-Arabic corpus for post-paint reads: Arabic routes stay prerendered on Uthmani, hydration
-re-reads visible pages through the worker/API ladder, and the worker stages variant artifacts
+mushaf-script preference (annotated Uthmani default; plain Uthmani/Simple-clean/IndoPak/Tajweed,
+reader schema v4) selects the Arabic corpus for post-paint reads: Arabic routes prerender and
+server-render on the annotated Uthmani default, hydration re-reads visible pages through the
+worker/API ladder, and the worker stages variant artifacts
 into OPFS on demand (same download/staging path as translations; runners stay resident once
-opened). Extras never
+opened). Worker boot is fail-soft on the reader seat: when the preferred (annotated) artifact
+cannot be downloaded, boot logs a console warning and serves reads from the remaining pinned
+source (plain Uthmani, which stays the Arabic-search corpus) instead of rejecting worker init;
+search and translation boot never depend on the preferred reader corpus. Extras never
 alter route identity, canonical URL, server HTML cache key, or primary delivery. `?more=` is
 client-mirrored state; cache keys strip it. Selected extras and current primary are pinned
 against OPFS eviction.
+
+Two rollout limitations gate the annotated default (2026-10): the annotated SQLite is not yet
+uploaded to R2 — `just upload-sqlite` publishes it; until then `deploy/fetch-quran-db.sh`
+warns and skips that key (a copy already on disk is still asserted to 1605632 bytes) and the
+worker serves its plain-Uthmani fallback — and the rust `Script::parse` does not know
+`uthmani-annotated`, so the degraded worker's API fallback for that source 404s until the
+rust side learns the script.
 
 Engagement-gated translation prefetch uses durable local reading activity. Explicit source
 selection bypasses the gate. Arabic-only reading never counts toward translation downloads.
@@ -301,10 +312,15 @@ changes Arabic scripture or translation-content semantics.
 6. Authentication remains client-hydrated and absent from every shared output/cache.
 7. Production artifact specs come from baked id maps. Staged validation and atomic pointer
    switching prevent incomplete downloads from becoming active.
-8. Mushaf-script selection is a device-side reader preference, not a route dimension. Arabic
-   SSG stays Uthmani-only (2 prerendered sources); Indopak/Tajweed/simple-clean never
-   prerender — they render through the post-paint worker/API upgrade. Translated routes stay
-   SSR + seven-day disk cache, unchanged.
+8. Mushaf-script selection is a device-side reader preference, not a route dimension. The
+   default mushaf is the annotated Uthmani edition (`uthmani-annotated`, quran.com word
+   lineage); Arabic SSG renders that default, plain Uthmani stays the search corpus, and
+   Simple-clean/Indopak/Tajweed never prerender — they render through the post-paint
+   worker/API upgrade. The worker boots fail-soft (annotated download failure degrades to
+   plain Uthmani with a console warning, never a rejected init). Translated routes stay
+   SSR + seven-day disk cache, unchanged. Rollout limits: the annotated DB awaits
+   `just upload-sqlite`, and rust `Script::parse` lacks `uthmani-annotated`, so the API
+   fallback 404s for it.
 9. The surah-local page scheme (`/app/{slug}/page/N` and its translated mirror) is removed:
    one URL per surah, page addressing is global `/app/page/N` only, and removed shapes
    permanently redirect (308) to the surah root anchored at the spread's first ayah

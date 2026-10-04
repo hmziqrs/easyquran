@@ -211,6 +211,36 @@ export async function __initValidatorRuntime(): Promise<void> {
   if (!sqlite3) sqlite3 = await init();
 }
 
+// Reader default for requests that name no source. Normally the plan's reader source,
+// but bootArabic may swap in the fallback when the preferred artifact cannot be
+// downloaded (see bootArabic).
+let readerDefault: QuranSourceId = DEFAULT_QURAN_SOURCE_PLAN.reader;
+
+async function stageQuranSource(
+  sourceId: QuranSourceId,
+  artifacts: readonly ArtifactSpec[],
+  coordinates: CanonicalQuranCoordinates,
+  persistent: boolean,
+): Promise<void> {
+  const spec = artifacts.find((artifact) => artifact.id === sourceId);
+  if (!spec) throw new Error(`artifact list missing Quran source ${sourceId}`);
+  const profile = resolveSourceProfile(spec.id);
+  status("downloading", sourceId);
+  const artifact = await ensureArtifact(spec, progressEmitter(spec), {
+    validate: stagedQuranValidator(),
+  });
+  const database = openReadOnly(artifact.bytes);
+  const runner = createWasmQueryRunner(database);
+  const source = loadQuranSource(runner, profile, coordinates);
+  sources.set(sourceId, {
+    bytes: artifact.bytes,
+    source,
+    store: artifact.store,
+    runner: persistent ? runner : null,
+  });
+  if (!persistent) database.close();
+}
+
 async function bootArabic(
   artifacts: readonly ArtifactSpec[],
   coordinates: CanonicalQuranCoordinates,
@@ -218,29 +248,36 @@ async function bootArabic(
   status("init");
   sqlite3 = await init();
 
-  const persistentSources = new Set([
-    DEFAULT_QURAN_SOURCE_PLAN.reader,
-    DEFAULT_QURAN_SOURCE_PLAN.search.display,
-  ]);
+  // Fail-soft reader boot: while the preferred reader artifact cannot be downloaded
+  // (e.g. the annotated R2 object is not uploaded yet), boot falls back to the
+  // remaining pinned source instead of rejecting worker init — search and
+  // translation boot never depend on the preferred reader corpus. If every pinned
+  // source fails, init still rejects.
+  const preferred = DEFAULT_QURAN_SOURCE_PLAN.reader;
+  const fallback = plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN).find((id) => id !== preferred);
+  const persistentSources = new Set([preferred, DEFAULT_QURAN_SOURCE_PLAN.search.display]);
+  readerDefault = preferred;
+  let readerDown = false;
+  try {
+    await stageQuranSource(preferred, artifacts, coordinates, true);
+  } catch (error) {
+    if (!fallback) throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[quran-worker] reader source ${preferred} unavailable (${detail}); falling back to ${fallback}`,
+    );
+    readerDefault = fallback;
+    readerDown = true;
+  }
   for (const sourceId of plannedSourceIds(DEFAULT_QURAN_SOURCE_PLAN)) {
-    const spec = artifacts.find((artifact) => artifact.id === sourceId);
-    if (!spec) throw new Error(`artifact list missing Quran source ${sourceId}`);
-    const profile = resolveSourceProfile(spec.id);
-    status("downloading", sourceId);
-    const artifact = await ensureArtifact(spec, progressEmitter(spec), {
-      validate: stagedQuranValidator(),
-    });
-    const database = openReadOnly(artifact.bytes);
-    const runner = createWasmQueryRunner(database);
-    const source = loadQuranSource(runner, profile, coordinates);
-    const persistent = persistentSources.has(sourceId);
-    sources.set(sourceId, {
-      bytes: artifact.bytes,
-      source,
-      store: artifact.store,
-      runner: persistent ? runner : null,
-    });
-    if (!persistent) database.close();
+    if (sourceId === preferred) continue;
+    // The fallback inherits the reader seat, so its runner must stay resident.
+    await stageQuranSource(
+      sourceId,
+      artifacts,
+      coordinates,
+      persistentSources.has(sourceId) || readerDown,
+    );
   }
 
   // One inventory drives temp cleanup, cached IDs, and initial pruning. Sweep
@@ -320,8 +357,24 @@ async function ensureArabicSource(sourceId: QuranSourceId): Promise<void> {
   }
 }
 
+// Boot may have demoted the preferred reader artifact to the fallback after a failed
+// download. Reads that still name the demoted id then serve the fallback seat instead
+// of erroring into the API ladder, which cannot serve that script either until the
+// rust Script::parse learns it (docs/quran-system.md Part 5). If a later on-demand
+// stage re-registers the preferred source, the seat mapping stops applying.
+function readerSeat(sourceId: QuranSourceId): QuranSourceId {
+  if (
+    sourceId === DEFAULT_QURAN_SOURCE_PLAN.reader &&
+    readerDefault !== sourceId &&
+    !sources.has(sourceId)
+  ) {
+    return readerDefault;
+  }
+  return sourceId;
+}
+
 function readSurah(num: number, sourceId?: QuranSourceId): QuranSurahText {
-  const state = sourceState(sourceId ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
+  const state = sourceState(readerSeat(sourceId ?? readerDefault));
   if (!state.runner) throw new Error("reader source is not open");
   return {
     sourceId: state.source.profile.sourceId,
@@ -348,7 +401,7 @@ function rowsToRangeText(
 }
 
 function readRange(from: number, to: number, sourceId?: QuranSourceId): QuranRangeText {
-  const state = sourceState(sourceId ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
+  const state = sourceState(readerSeat(sourceId ?? readerDefault));
   if (!state.runner) throw new Error("reader source is not open");
   return rowsToRangeText(readSourceRange(state.runner, state.source, from, to), (surah) =>
     state.source.view.normalization(surah),
@@ -714,8 +767,9 @@ const handlers = {
     runReaderOp(
       m.source,
       async () => {
-        await ensureArabicSource(arabicSourceId(m.source) ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
-        return readSurah(m.num, arabicSourceId(m.source));
+        const seat = readerSeat(arabicSourceId(m.source) ?? readerDefault);
+        await ensureArabicSource(seat);
+        return readSurah(m.num, seat);
       },
       (src) => readTranslationSurah(src, m.num),
     ),
@@ -723,8 +777,9 @@ const handlers = {
     runReaderOp(
       m.source,
       async () => {
-        await ensureArabicSource(arabicSourceId(m.source) ?? DEFAULT_QURAN_SOURCE_PLAN.reader);
-        return readRange(m.from, m.to, arabicSourceId(m.source));
+        const seat = readerSeat(arabicSourceId(m.source) ?? readerDefault);
+        await ensureArabicSource(seat);
+        return readRange(m.from, m.to, seat);
       },
       (src) => readTranslationRange(src, m.from, m.to),
     ),
