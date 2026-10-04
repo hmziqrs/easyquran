@@ -279,6 +279,7 @@
   "settings_storage_required_group": "لازمة للقراءة",
   "settings_storage_required_note": "النص العربي لازم لعمل القارئ ولا يمكن إزالته.",
   "settings_storage_script_uthmani": "عثماني",
+  "settings_storage_script_uthmani_annotated": "عثماني (بالوقوف)",
   "settings_storage_script_simple_clean": "مبسّط",
   "settings_storage_script_indopak": "إندوباكي",
   "settings_storage_script_tajweed": "تجويد",

@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { OfflinePack } from "$lib/components";
-  import { isArabicSourceId } from "$lib/data/quran-types";
+  import { isArabicSourceId, QuranSourceId } from "$lib/data/quran-types";
   import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
   import { sourceProfile } from "$lib/quran/view/source-profiles";
   import { purgeUserCaches } from "$lib/offline/messages";
@@ -108,6 +108,8 @@
 
   function artifactName(sourceId: string): string {
     if (isArabicSourceId(sourceId)) {
+      // Both Uthmani editions share QuranScript.Uthmani; resolve per profile so the rows get distinct labels.
+      if (sourceId === QuranSourceId.AnnotatedUthmani) return copy.annotatedUthmani;
       return copy.scripts[sourceProfile(sourceId).script];
     }
     const entry = TRANSLATION_CATALOGUE_BY_ID.get(sourceId);

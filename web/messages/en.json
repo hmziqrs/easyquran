@@ -279,6 +279,7 @@
   "settings_storage_required_group": "Required for reading",
   "settings_storage_required_note": "The Arabic text is required by the reader and cannot be removed.",
   "settings_storage_script_uthmani": "Uthmani",
+  "settings_storage_script_uthmani_annotated": "Uthmani (annotated)",
   "settings_storage_script_simple_clean": "Simple-clean",
   "settings_storage_script_indopak": "IndoPak",
   "settings_storage_script_tajweed": "Tajweed",

@@ -20,7 +20,7 @@ reciter pages.
 [`reader-core.svelte.ts`](../../web/src/lib/stores/reader-core.svelte.ts) or
 [`reader.svelte.ts`](../../web/src/lib/stores/reader.svelte.ts). Marketing explicitly places full
 recitation on the roadmap in
-[`(marketing)/+page.svelte`](../../web/src/routes/(marketing)/+page.svelte).
+[`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>).
 
 **Remaining:** licensing and attribution; reciter/recording catalogue; verse timing; surah/ayah
 queue; play/pause/seek/next/previous; persistent mini/full player; playback speed; background/media
@@ -48,7 +48,7 @@ word translation, transliteration, hover/hold vs below-word display, language, a
 - [Al-Fatihah reader](https://quran.com/al-fatihah) → settings → **Word By Word**
 
 **EasyQuran today:** an ayah renders as one plain text span in
-[`VerseRow.svelte`](../../web/src/routes/(application)/_reader/VerseRow.svelte). The only
+[`VerseRow.svelte`](<../../web/src/routes/(application)/_reader/VerseRow.svelte>). The only
 word-oriented code aligns search highlights; it is not a token corpus or reader tool. Word-level
 navigation is explicitly deferred in [`docs/quran-system.md`](../quran-system.md).
 
@@ -67,9 +67,9 @@ stacked. Word-by-word source and transliteration are separate choices.
 **EasyQuran today:** the multi-translation subsystem is shipped. Every reader route — surah, juz, or
 global page, Arabic or translated primary — can stack up to 5 extra translations, hydrated
 client-only by
-[`stacked-translations.svelte.ts`](../../web/src/routes/(application)/_reader/stacked-translations.svelte.ts)
+[`stacked-translations.svelte.ts`](<../../web/src/routes/(application)/_reader/stacked-translations.svelte.ts>)
 with selection via
-[`TranslationModal.svelte`](../../web/src/routes/(application)/_reader/TranslationModal.svelte).
+[`TranslationModal.svelte`](<../../web/src/routes/(application)/_reader/TranslationModal.svelte>).
 The primary SSG/SSR routes and their cache keys are untouched; the `?more=<id>,<id>` client mirror
 is stripped from cache keys by the service worker; selected extras (and the primary) pin against
 OPFS eviction; each extra renders with its own language/direction and translator attribution; and
@@ -90,7 +90,7 @@ verse pages.
 
 **EasyQuran today:** the UI exists, but
 [`tafsirFor`](../../web/src/lib/data/quran.ts) returns the literal placeholder “Sample commentary …
-in the full app”. [`VerseTools.svelte`](../../web/src/routes/(application)/_reader/VerseTools.svelte)
+in the full app”. [`VerseTools.svelte`](<../../web/src/routes/(application)/_reader/VerseTools.svelte>)
 labels this as Tafsir.
 
 **Remaining:** replace development sample content when implementing this feature; acquire licensed
@@ -120,7 +120,7 @@ traditions, long-form overview, multiple scholarly sources, and related learning
 - [Al-Fatihah information](https://quran.com/al-fatihah/info)
 
 **EasyQuran today:**
-[`ReaderHeader.svelte`](../../web/src/routes/(application)/_reader/ReaderHeader.svelte) shows
+[`ReaderHeader.svelte`](<../../web/src/routes/(application)/_reader/ReaderHeader.svelte>) shows
 number, English/Arabic name, revelation place, and verse count. No surah-info route exists.
 
 **Remaining:** sourced editorial data, long-form route/SEO, source tabs/citations, related-plan
@@ -137,7 +137,9 @@ translation, and word-by-word sizing.
 a script picker in Settings → Reading (reader schema v4); Tajweed markup renders as colored runs.
 
 **Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
-per-source font controls; dedicated Nastaleeq face for IndoPak.
+per-source font controls; dedicated Nastaleeq face for IndoPak — deliberately deferred: the DB's 9 PUA
+codepoints (U+E003–U+E022) are covered only by no-redistribution fonts (QuranWBW, PDMS Saleem) and
+DigitalKhatt (OFL) targets a different encoding; unblocked only by licensing outreach or a rebuilt DB.
 
 ### R09 — Pin and compare verses — Missing · P1
 
@@ -194,7 +196,7 @@ direct reference navigation, and page/Juz/Hizb context in the reader.
 sajda metadata/API already exist but lack equivalent web browse surfaces. Ayah browse is scoped to
 current surah.
 
-- [`Sidebar.svelte`](../../web/src/routes/(application)/_reader/Sidebar.svelte)
+- [`Sidebar.svelte`](<../../web/src/routes/(application)/_reader/Sidebar.svelte>)
 - [`quran-data.ts`](../../web/src/lib/data/quran-data.ts)
 - [`quran_v1/mod.rs`](../../rust/backend/api/src/modules/quran_v1/mod.rs)
 
@@ -295,7 +297,7 @@ reflection to QuranReflect.
 **EasyQuran today:** an inline textarea stores one plain string per verse and says “Saved on this
 device as you type.”
 
-- [`VerseTools.svelte`](../../web/src/routes/(application)/_reader/VerseTools.svelte)
+- [`VerseTools.svelte`](<../../web/src/routes/(application)/_reader/VerseTools.svelte>)
 - [`annotations.svelte.ts`](../../web/src/lib/stores/annotations.svelte.ts)
 
 **Remaining:** notes index/search/sort; timestamps; source-aware verse context; edit/delete/export;
@@ -369,12 +371,12 @@ highlights and keyboard access. Delivered in the command palette (Aug 2026): typ
 matching (fold keys + bounded edit distance), surah/juz alias nicknames (`tabarak`, `amma`), and
 offline translation full-text search over the user's cached translation DBs (worker-local) —
 see [`search-system.md`](../../docs/search-system.md). Delivered on a dedicated
-[`/app/search`](../../web/src/routes/(application)/search/+page.svelte) page (Aug 2026):
+[`/app/search`](<../../web/src/routes/(application)/search/+page.svelte>) page (Aug 2026):
 multi-translation merged search (client-side batches of 3 concurrent worker searches), per-source
 sections with load-more pagination, shareable `?q`/`?t` URLs, and translation download management.
 The reader drawer is intentionally untouched and still calls one 20-result query.
 
-- [`Results.svelte`](../../web/src/routes/(application)/_reader/Results.svelte)
+- [`Results.svelte`](<../../web/src/routes/(application)/_reader/Results.svelte>)
 - [`search.ts`](../../web/src/lib/quran/search.ts)
 - [`search/types.ts`](../../web/src/lib/quran/search/types.ts)
 - [`search-system.md`](../../docs/search-system.md)

@@ -138,6 +138,7 @@ import {
   settings_storage_script_tajweed,
   settings_storage_script_translation,
   settings_storage_script_uthmani,
+  settings_storage_script_uthmani_annotated,
   settings_storage_retry,
   settings_storage_store_idb,
   settings_storage_store_memory,
@@ -196,6 +197,8 @@ export interface SettingsCopy {
     readonly requiredGroup: string;
     readonly requiredNote: string;
     readonly scripts: Readonly<Record<QuranScript, string>>;
+    /** Annotated Uthmani shares QuranScript.Uthmani with the Tanzil edition, so storage rows resolve it separately. */
+    readonly annotatedUthmani: string;
     readonly stores: {
       readonly opfs: string;
       readonly idb: string;
@@ -363,6 +366,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         [QuranScript.Tajweed]: noArgs(settings_storage_script_tajweed),
         [QuranScript.Translation]: noArgs(settings_storage_script_translation),
       },
+      annotatedUthmani: noArgs(settings_storage_script_uthmani_annotated),
       stores: {
         opfs: noArgs(settings_storage_store_opfs),
         idb: noArgs(settings_storage_store_idb),

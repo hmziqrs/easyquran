@@ -265,9 +265,11 @@ Settings changes preserve:
 - Service-worker metadata may temporarily include orphaned data records until maintenance.
 - Reader persisted blob still has a multi-writer last-write-wins window.
 - Alternate Arabic font first paint uses Amiri until lazy font finishes loading.
-- IndoPak mushaf text has no dedicated Nastaleeq font yet; it renders in the chosen Arabic
-  font (KFGQPC Hafs recommended), and some verses carry KFGQPC PUA waqf codepoints that
-  non-KFGQPC faces may not cover.
+- IndoPak mushaf text has no dedicated Nastaleeq font: `quran-indopak.sqlite` carries 9 PUA
+  codepoints (U+E003–U+E022) and no offered Arabic font covers any of them. The fonts that do
+  cover them (QuranWBW, PDMS Saleem) forbid redistribution, and DigitalKhatt (OFL) targets a
+  different encoding — so a bundled face is deliberately skipped pending licensing outreach or a
+  rebuilt DB; IndoPak renders in the chosen Arabic font meanwhile.
 - Translation family is not persisted.
 - Real application build-version display needs new build-time plumbing.
 - Server preference sync has no storage, endpoint, or conflict policy yet.
