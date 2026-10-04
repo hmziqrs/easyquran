@@ -125,7 +125,9 @@ formatting and copy are centralized.
 
 `web/src/lib/config/reader-fonts.ts` owns Arabic font registry and allowlist:
 
-- Amiri is default and already shipped.
+- KFGQPC Uthmanic Hafs (bundled v22, the same face quran.com serves — they ship Ver18) is
+  default for mushaf parity; it covers the annotated edition's full annotation block and
+  composes the U+06DD ayah medallion natively. Amiri remains shipped and selectable.
 - Scheherazade New and Noto Naskh Arabic load lazily on first selection through `FontFace` and
   URL imports.
 - Alternate Quran font bytes never enter marketing bundle or offline pack.

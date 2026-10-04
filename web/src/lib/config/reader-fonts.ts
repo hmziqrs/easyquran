@@ -30,7 +30,11 @@ export const ARABIC_FONT_IDS: readonly ArabicFontId[] = [
   "kfgqpc-taha-v1-bold",
 ];
 
-export const DEFAULT_ARABIC_FONT: ArabicFontId = "amiri";
+// Quran.com's ayah-column face is KFGQPC Uthmanic Hafs (they serve Ver18; our
+// bundled copy is the newer Ver22), so mushaf parity defaults to it — it also
+// covers the annotated edition's full annotation block and composes U+06DD
+// without needing the ornament fallback.
+export const DEFAULT_ARABIC_FONT: ArabicFontId = "kfgqpc-hafs";
 export const DEFAULT_TRANSLATION_FAMILY: TranslationFamily = "sans";
 
 const ARABIC_FALLBACKS = `"Traditional Arabic", "Geeza Pro", serif`;

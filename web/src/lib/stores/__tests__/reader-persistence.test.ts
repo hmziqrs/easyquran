@@ -266,7 +266,7 @@ describe("createReaderPersistence scheduling", () => {
     persistence.writeNow();
     expect(read()).toMatchObject({
       v: 4,
-      arabicFont: "amiri",
+      arabicFont: "kfgqpc-hafs",
       // Untouched blob carries the v4 default script (annotated Uthmani).
       arabicScript: "uthmani-annotated",
       translationSize: 17,
@@ -395,7 +395,7 @@ describe("createReaderPersistence cross-tab re-apply", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
-    expect(core.s.arabicFont).toBe("amiri");
+    expect(core.s.arabicFont).toBe("kfgqpc-hafs");
     window.localStorage.setItem(
       KEY,
       JSON.stringify({
@@ -422,7 +422,7 @@ describe("createReaderPersistence cross-tab re-apply", () => {
     persistence.hydrate();
     window.localStorage.setItem("easyquran.prefs", JSON.stringify({ theme: "light" }));
     window.dispatchEvent(new StorageEvent("storage", { key: "easyquran.prefs" }));
-    expect(core.s.arabicFont).toBe("amiri");
+    expect(core.s.arabicFont).toBe("kfgqpc-hafs");
     expect(core.s.translationSize).toBe(17);
     persistence.dispose();
   });

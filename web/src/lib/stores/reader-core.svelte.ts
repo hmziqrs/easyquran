@@ -1,4 +1,8 @@
-import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
+import {
+  DEFAULT_ARABIC_FONT,
+  type ArabicFontId,
+  type TranslationFamily,
+} from "$lib/config/reader-fonts";
 import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
 import type { VerseKey } from "$lib/data/quran";
 import { QURAN_SOURCE_IDS, QuranSourceId } from "$lib/data/quran-types";
@@ -78,7 +82,7 @@ export const READER_DEFAULTS: ReaderState = {
   v: READER_SCHEMA_VERSION,
   current: 1,
   fontSize: 33,
-  arabicFont: "amiri",
+  arabicFont: DEFAULT_ARABIC_FONT,
   // Default mushaf = fully annotated Uthmani (quran.com word lineage): small-meem
   // pausals + waqf stop marks the plain Tanzil edition omits. Tanzil stays selectable.
   arabicScript: QuranSourceId.AnnotatedUthmani,

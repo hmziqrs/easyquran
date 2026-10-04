@@ -15,7 +15,7 @@ describe("PageHeightCache typography key", () => {
 
     reader.setArabicFont("scheherazade-new");
     expect(cache.get(3, 800)).not.toBe(1234);
-    reader.setArabicFont("amiri");
+    reader.setArabicFont("kfgqpc-hafs");
     expect(cache.get(3, 800)).toBe(1234);
 
     reader.growTranslation();

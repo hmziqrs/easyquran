@@ -150,7 +150,7 @@ describe("decodeSettingsDoc", () => {
       reading: {
         fontSize: 33,
         mode: "verse",
-        arabicFont: "amiri",
+        arabicFont: "kfgqpc-hafs",
         // Default mushaf = fully annotated Uthmani (F4); Tanzil stays selectable.
         arabicScript: "uthmani-annotated",
         translationSize: 17,
@@ -173,7 +173,7 @@ describe("decodeSettingsDoc", () => {
     expect(out?.reading).toEqual({
       fontSize: 33,
       mode: "verse",
-      arabicFont: "amiri",
+      arabicFont: "kfgqpc-hafs",
       arabicScript: "uthmani-annotated",
       translationSize: 17,
     });
