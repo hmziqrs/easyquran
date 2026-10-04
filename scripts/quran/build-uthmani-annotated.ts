@@ -16,10 +16,12 @@
  *
  * Usage: pnpm exec tsx scripts/quran/build-uthmani-annotated.ts [--out PATH] [--force]
  *
- * Guards (all exit 1 before any write or network fetch): --out refuses paths
- * under db/ other than the canonical artifact slot (that tree is immutable and
- * gitignored), an existing target is never overwritten without --force, and an
- * option-shaped token after --out is rejected instead of being taken as a path.
+ * Guards (all exit 1 before any write or network fetch): --out rejects
+ * option-shaped values in both the separated and `--out=` forms, refuses paths
+ * under db/ other than the canonical artifact slot — lexically and after
+ * realpath resolution, so a symlinked path segment cannot dodge the prefix
+ * check (lexical check stands when resolution fails) — refuses a directory
+ * target, and never overwrites an existing file without --force.
  */
 
 // Repo-root `vp check` type-checks with tsgolint, which does not auto-include
@@ -27,7 +29,7 @@
 // reference pulls the Node typings in under both checkers. No runtime effect.
 /// <reference types="node" />
 
-import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -91,7 +93,9 @@ function parseArgs(): CliOptions {
     }
     if (arg.startsWith("--out=")) {
       const value = arg.slice("--out=".length);
-      if (value.length === 0) fail("--out= requires a path");
+      if (value.length === 0 || value.startsWith("-")) {
+        fail(`--out= requires a path, got "${value}"`);
+      }
       if (outPath !== undefined) fail("--out given more than once");
       outPath = value;
       continue;
@@ -106,6 +110,33 @@ function parseArgs(): CliOptions {
 }
 
 /**
+ * Realpath of `target`, falling back to its deepest existing ancestor joined
+ * with the not-yet-existing tail — a fresh build names a file that does not
+ * exist yet. Returns undefined only if not even the filesystem root resolves.
+ */
+function realpathish(target: string): string | undefined {
+  try {
+    return realpathSync(target);
+  } catch {
+    const parent = path.dirname(target);
+    if (parent === target) return undefined;
+    const realParent = realpathish(parent);
+    return realParent === undefined ? undefined : path.join(realParent, path.basename(target));
+  }
+}
+
+/** True when the path sits inside db/ lexically or after realpath resolution. */
+function inDbTree(resolved: string, realResolved: string | undefined): boolean {
+  const dbRoot = path.join(REPO_ROOT, "db");
+  if (resolved === dbRoot || resolved.startsWith(`${dbRoot}${path.sep}`)) return true;
+  // A symlinked segment can dodge the lexical prefix (e.g. /tmp/link ->
+  // <repo>/db). If either side fails to resolve, the lexical result stands.
+  const realDbRoot = realpathish(dbRoot);
+  if (realDbRoot === undefined || realResolved === undefined) return false;
+  return realResolved === realDbRoot || realResolved.startsWith(`${realDbRoot}${path.sep}`);
+}
+
+/**
  * Default run rebuilds the canonical artifact in place. An explicit --out may
  * name that same slot but nothing else under db/: the tree is immutable and
  * gitignored, so ad-hoc artifacts there would vanish on a fresh clone.
@@ -113,9 +144,11 @@ function parseArgs(): CliOptions {
 function resolveOutPath(explicitOut: string | undefined): string {
   if (explicitOut === undefined) return DEFAULT_OUT;
   const resolved = path.resolve(explicitOut);
-  if (resolved === path.resolve(DEFAULT_OUT)) return resolved;
-  const dbRoot = path.join(REPO_ROOT, "db");
-  if (resolved === dbRoot || resolved.startsWith(`${dbRoot}${path.sep}`)) {
+  const defaultOut = path.resolve(DEFAULT_OUT);
+  const realResolved = realpathish(resolved);
+  if (resolved === defaultOut) return resolved;
+  if (realResolved !== undefined && realResolved === realpathish(defaultOut)) return resolved;
+  if (inDbTree(resolved, realResolved)) {
     fail(
       "--out refuses paths under db/ — that tree is immutable and gitignored; build outside db/ (e.g. /tmp) or drop --out to rebuild the canonical artifact",
     );
@@ -291,14 +324,25 @@ function adjudicate803(outPath: string): void {
 async function main(): Promise<void> {
   const { outPath: explicitOut, force } = parseArgs();
   const outPath = resolveOutPath(explicitOut);
-  if (existsSync(outPath) && !force) {
+  const existing = statSync(outPath, { throwIfNoEntry: false });
+  if (existing?.isDirectory()) {
+    fail(`--out target ${outPath} is a directory — name a file path`);
+  }
+  if (existing !== undefined && !force) {
     fail(`refusing to overwrite existing ${outPath} — pass --force to overwrite`);
   }
   log(`building ${path.relative(REPO_ROOT, outPath)} (id ${ARTIFACT_ID})`);
   const rows = await fetchAllVerses();
   writeDatabase(outPath, rows);
   verifyDatabase(outPath);
-  adjudicate803(outPath);
+  // Post-write diagnostics must never fail an already-verified build.
+  try {
+    adjudicate803(outPath);
+  } catch (error) {
+    process.stderr.write(
+      `build-uthmani-annotated: adjudication 80:3 failed (artifact already written and verified): ${String(error)}\n`,
+    );
+  }
   const sizeBytes = statSync(outPath).size;
   log(
     `done: ${TOTAL_ROWS} rows, sizeBytes ${sizeBytes} — bake into source-profiles.ts artifact.sizeBytes`,
