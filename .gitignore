@@ -55,3 +55,6 @@ rust/data/
 # ZCode session state (plans) — never repo material.
 .zcode/
 .vitest/
+
+# zflow chain evidence + reports (session material, never repo material).
+.zflow/
