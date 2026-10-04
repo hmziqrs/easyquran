@@ -7,14 +7,21 @@ import {
 } from "$lib/quran/view/tajweed";
 import { describe, expect, it } from "vite-plus/test";
 
-// Real bytes from db/quran/arabic/quran-tajweed.sqlite (1:1, 2:255 excerpt).
-const FATIHAH_1 = "بِسْمِ [h:1[ٱ]للَّهِ [h:2[ٱ][l[ل]رَّحْمَ[n[ـٰ]نِ [h:3[ٱ][l[ل]رَّح[p[ِي]مِ";
-const AYAT_AL_KURSI_EXCERPT = "ٱللَّهُ ل[o[َآ] إِلَ[n[ـٰ]هَ إِلَّا هُوَ [h:1468[ٱ]لْحَىُّ";
-// Real bytes from db/quran/arabic/quran-tajweed.sqlite (4:158, 77:20): rule
-// letter `b` = idgham mutaqaribayn (lam assimilating into ra, qaf into kaf).
-// \u200c is the ZWNJ Tanzil puts before the small-waqf sign, kept verbatim.
+// Real bytes from db/quran/arabic/quran-tajweed.sqlite (1:1, 2:255 excerpt,
+// 4:158, 77:20, 32:3). Byte-verified against read-only sqlite3 SELECTs; do not
+// hand-edit — regenerate from the DB if the edition ever changes.
+// 4:158/77:20: rule letter `b` = idgham mutaqaribayn (lam assimilating into
+// ra, qaf into kaf). \u200c is the ZWNJ Tanzil puts before the small-waqf
+// sign, kept verbatim.
+const FATIHAH_1 = "بِسْمِ [h:1[ٱ]للَّهِ [h:2[ٱ][l[ل]رَّحْمَ[n[ـٰ]نِ [h:3[ٱ][l[ل]رَّح[p[ِي]مِ";
+const AYAT_AL_KURSI_EXCERPT = "ٱللَّهُ ل[o[َآ] إِلَ[n[ـٰ]هَ إِلَّا هُوَ [h:1468[ٱ]لْحَىُّ"; // exact byte-prefix of the 2:255 row
 const NISA_4_158 = "بَ[b:3279[ل] رَّفَعَهُ [h:3280[ٱ]للَّهُ إِلَيْهِ\u200cۚ وَكَانَ [h:2653[ٱ]للَّهُ عَزِيزًا حَكِيمًا";
 const MURSALAT_77_20 = "أَلَمْ نَخْلُ[b:14217[ق]كّ[w:14218[ُم م]ّ[a:840[ِن م]ّ[o[َا]ٓ[a:10629[ءٍ م]َّه[p[ِي]نٍ";
+// 32:3 carries the corpus's only letterless bracket group, [ٮٰ].
+const AS_SAJDAH_32_3 =
+  "أَمْ يَقُولُونَ [h:6061[ٱ]فْتَرَ[ٮٰ]هُ\u200cۚ بَلْ هُوَ [h:8923[ٱ]لْحَقُّ م[u:770[ِن ر]َّبِّكَ لِتُ[f:4582[نذ]ِرَ قَوْ[a:10181[مًا م]ّ[o[َآ] أَتَ[n[ـٰ]ه[w:10182[ُم م]ّ[a:10183[ِن ن]َّذِي[a:10184[رٍ م]ِّ[f:18[ن ق]َ[q:19[بْ]لِكَ لَعَلَّهُمْ يَهْتَد[p[ُو]نَ";
+const AS_SAJDAH_32_3_PLAIN =
+  "أَمْ يَقُولُونَ ٱفْتَرَٮٰهُ\u200cۚ بَلْ هُوَ ٱلْحَقُّ مِن رَّبِّكَ لِتُنذِرَ قَوْمًا مَّآ أَتَـٰهُم مِّن نَّذِيرٍ مِّن قَبْلِكَ لَعَلَّهُمْ يَهْتَدُونَ";
 
 describe("parseTajweedSegments", () => {
   it("passes non-tajweed text through as a single plain run", () => {
@@ -52,7 +59,20 @@ describe("parseTajweedSegments", () => {
   });
 
   it("rejects id forms without digits or opening bracket", () => {
-    expect(parseTajweedSegments("[h:x[ٱ] [n[")).toEqual([{ text: "[h:x[ٱ] [n[", rule: null }]);
+    // The malformed `[h:x[` opener stays literal; the inner `[ٱ]` is a bare
+    // Arabic group, so only its brackets drop and the content survives.
+    expect(parseTajweedSegments("[h:x[ٱ] [n[")).toEqual([{ text: "[h:xٱ [n[", rule: null }]);
+  });
+
+  it("renders the corpus's only letterless bracket group (32:3) without dropping content", () => {
+    const segments = parseTajweedSegments(AS_SAJDAH_32_3);
+    // Every bracket in the row is markup or the bare group: none may survive.
+    for (const segment of segments) expect(segment.text).not.toMatch(/[[\]]/u);
+    // The bare group's content (\u066E\u0670) renders inside a PLAIN run — the
+    // parser coalesces it with the adjacent plain text, so locate it there.
+    const bare = segments.find((segment) => segment.text.includes("\u066E\u0670"));
+    expect(bare?.rule).toBeNull();
+    expect(segments.reduce((acc, s) => acc + s.text, "")).toBe(stripTajweedMarkup(AS_SAJDAH_32_3));
   });
 
   it("parses rule letter b (idgham mutaqaribayn) from real DB rows", () => {
@@ -74,7 +94,7 @@ describe("parseTajweedSegments", () => {
 
 describe("stripTajweedMarkup", () => {
   it("removes markup, keeps every colored run", () => {
-    expect(stripTajweedMarkup(FATIHAH_1)).toBe("بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ");
+    expect(stripTajweedMarkup(FATIHAH_1)).toBe("بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ");
   });
 
   it("is identity for plain text", () => {
@@ -82,11 +102,19 @@ describe("stripTajweedMarkup", () => {
   });
 
   it("round-trips real ayat al-kursi bytes", () => {
-    expect(stripTajweedMarkup(AYAT_AL_KURSI_EXCERPT)).toBe("ٱللَّهُ لَآ إِلَـٰهَ إِلَّا هُوَ ٱلْحَىُّ");
+    expect(stripTajweedMarkup(AYAT_AL_KURSI_EXCERPT)).toBe("ٱللَّهُ لَآ إِلَـٰهَ إِلَّا هُوَ ٱلْحَىُّ");
   });
 
   it("strips rule b runs like every other rule (4:158)", () => {
     expect(stripTajweedMarkup(NISA_4_158)).toBe("بَل رَّفَعَهُ ٱللَّهُ إِلَيْهِ\u200cۚ وَكَانَ ٱللَّهُ عَزِيزًا حَكِيمًا");
+  });
+
+  it("drops the 32:3 letterless group's brackets and keeps its content", () => {
+    const stripped = stripTajweedMarkup(AS_SAJDAH_32_3);
+    expect(stripped).toBe(AS_SAJDAH_32_3_PLAIN);
+    // \u066E\u0670 is the bare group's content: it must survive, brackets must not.
+    expect(stripped).toContain("\u066E\u0670");
+    expect(stripped).not.toMatch(/[[\]]/u);
   });
 });
 
