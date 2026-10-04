@@ -10,14 +10,9 @@ import { authState } from "$lib/auth/auth-state.svelte";
 import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
 import { consumeReturnTarget, setReturnTarget } from "$lib/auth/return-target";
 
-export type OAuthProvider = "google" | "apple" | "facebook" | "github";
+export type OAuthProvider = "google" | "github" | "discord";
 
-const PROVIDERS: ReadonlySet<string> = new Set<OAuthProvider>([
-  "google",
-  "apple",
-  "facebook",
-  "github",
-]);
+const PROVIDERS: ReadonlySet<string> = new Set<OAuthProvider>(["google", "github", "discord"]);
 
 export function isOAuthProvider(v: string): v is OAuthProvider {
   return PROVIDERS.has(v);

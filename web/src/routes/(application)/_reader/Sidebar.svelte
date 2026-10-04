@@ -200,26 +200,28 @@
 
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
-    <!-- One focus frame: the wrapper takes it (border → primary), the input drops its own
-         pill-shaped outline, which used to draw a second ring inside this box. -->
-    <div
-      class="flex items-center gap-2.5 rounded-md border border-border bg-background-subtle px-[13px] py-[11px] transition-colors focus-within:border-primary"
-    >
-      <Icon name="search" size={15} class="flex-none text-muted-foreground" />
+    <!-- shadcn icon-input pattern: the Input keeps its own border/background/focus ring;
+         the search glyph and clear button overlay it, so the 44px field stays the hit target. -->
+    <div class="relative">
+      <Icon
+        name="search"
+        size={15}
+        class="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
       <Input
         type="text"
         value={reader.query}
         {oninput}
         placeholder={copy.sidebar.searchPlaceholder}
         aria-label={copy.sidebar.searchLabel}
-        class="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-foreground shadow-none focus-visible:border-0 focus-visible:outline-none placeholder:text-muted-foreground"
+        class="ps-11 pe-11"
       />
       {#if reader.hasQuery}
         <button
           type="button"
           onclick={() => reader.clearQuery()}
           aria-label={copy.sidebar.clearSearch}
-          class="flex-none text-muted-foreground transition-colors hover:text-foreground"
+          class="absolute end-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
         >
           <Icon name="x" size={15} />
         </button>

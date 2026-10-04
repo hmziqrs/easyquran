@@ -921,7 +921,7 @@ export function createLogoutFlow(deps: FlowDeps = {}): LogoutFlow {
   return new LogoutFlow(deps.client ?? authClient, deps.state ?? authState);
 }
 
-const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = ["google", "apple", "facebook", "github"];
+const OAUTH_PROVIDERS: ReadonlyArray<OAuthProvider> = ["google", "github", "discord"];
 
 export function createOAuthFlows(deps: OAuthFlowDeps = {}) {
   // SAFETY: {} starts empty but the loop below assigns an OAuthFlow for every provider in OAUTH_PROVIDERS before return, so the record is complete at every key.

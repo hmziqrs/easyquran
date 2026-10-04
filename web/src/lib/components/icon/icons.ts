@@ -1,6 +1,8 @@
 export interface IconDef {
   viewBox: string;
   d: string;
+  /** Stroke glyph (lucide-style outline paths); default renders as a fill. */
+  stroke?: true;
 }
 
 export type IconName =
@@ -94,8 +96,10 @@ export const ICONS = {
     d: "M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z",
   },
   share: {
-    viewBox: "0 0 256 256",
-    d: "M176 160a39.89 39.89 0 0 0 28.62-12.09l25.94 18a39.82 39.82 0 1 0 8.52-13.79l-25.94-18a40.07 40.07 0 0 0 0-16.24l25.94-18a39.82 39.82 0 1 0-8.52-13.79l-25.94 18A40 40 0 1 0 176 160Zm0-128a24 24 0 1 1-24 24 24 24 0 0 1 24-24ZM64 152a24 24 0 1 1 24-24 24 24 0 0 1-24 24Zm143.9 56a24 24 0 1 1-24-24 24 24 0 0 1 24 24Z",
+    viewBox: "0 0 24 24",
+    stroke: true,
+    // lucide `share-2`: three nodes joined by lines — the canonical web share glyph.
+    d: "M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49",
   },
   rows: {
     viewBox: "0 0 256 256",

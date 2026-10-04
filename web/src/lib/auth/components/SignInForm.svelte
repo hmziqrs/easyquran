@@ -157,10 +157,14 @@
         {copy.forgotPasswordPrompt}
         <a href="/forgot-password" class="text-primary hover:underline">{copy.resetPasswordLink}</a>
       </span>
-      <span>
-        {copy.noAccountPrompt}
-        <a href="/register" class="text-primary hover:underline">{copy.createOneLink}</a>
-      </span>
+      <!-- Page variant has no tab switcher, so the register link is the only path there;
+           the modal carries Sign in / Create account tabs already — link would duplicate it. -->
+      {#if variant === "page"}
+        <span>
+          {copy.noAccountPrompt}
+          <a href="/register" class="text-primary hover:underline">{copy.createOneLink}</a>
+        </span>
+      {/if}
     {/snippet}
   </AuthForm>
 {/if}

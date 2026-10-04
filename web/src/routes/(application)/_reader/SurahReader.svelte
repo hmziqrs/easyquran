@@ -542,12 +542,6 @@
     void preserveViewport(change, true);
   }
 
-  function toggleNote(verseKey: string): void {
-    void preserveViewport(() => {
-      reader.toggleNote(verseKey);
-    }, true);
-  }
-
   function cachePage(pageData: SurahLocalPageData): void {
     reader.seedAyahs(
       pageData.ayahs.map((ayah) => ({
@@ -1058,7 +1052,6 @@
       totalAyahs={initial.surah.ayahCount}
       virtualGap={gap}
       {measure}
-      onToggleNote={() => toggleNote(entry.ayah.key)}
       stacked={lanesFor(entry.ayah.key, view.lead)}
       stackedPending={loadingFor(stackedController.state, entry.ayah.key)}
       stackedErrored={erroredFor(stackedController.state, entry.ayah.key)}
