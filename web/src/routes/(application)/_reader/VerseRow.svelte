@@ -163,8 +163,7 @@
         {/each}
       {:else}
         {text}
-      {/if}<span class="ayah-ornament arabic-marker" data-verse-anchor={vKey}
-        >&#x06DD;{toArabicDigits(n)}</span
+      {/if}<span class="ayah-ornament" data-verse-anchor={vKey}>&#x06DD;{toArabicDigits(n)}</span
       >
     </span>
   {/if}
@@ -219,10 +218,6 @@
   .verse-row .verse-text--translation {
     font-family: var(--reader-translation-family, var(--font-sans));
     text-align: start;
-  }
-
-  .verse-row .arabic-marker {
-    font-family: var(--reader-arabic-family, var(--font-arabic));
   }
 
   .verse-row .translation-marker {

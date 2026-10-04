@@ -7,6 +7,21 @@
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/amiri";
 
+/* End-of-ayah medallion face — a 4 KB Scheherazade New subset (SIL OFL 1.1, license in
+   static/fonts/ayah-ornament.OFL.txt; renamed "Ayah Ornament" per OFL Reserved Font Names).
+   Rebuild from the dependency, then rename name IDs 1/3/4/6 (fontTools 4.60.2):
+   python3 -m fontTools.subset \
+     node_modules/@fontsource/scheherazade-new/files/scheherazade-new-arabic-400-normal.woff2 \
+     --unicodes="U+06DD,U+0660-0669" --layout-features="*" --name-IDs="*" --flavor=woff2 */
+@font-face {
+  font-family: "Ayah Ornament";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ayah-ornament.woff2") format("woff2");
+  unicode-range: U+06DD, U+0660-0669;
+}
+
 @custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
 
 @theme {
@@ -918,12 +933,23 @@
 }
 
 /* Quran.com-style end-of-ayah medallion for the reader's Arabic column: the
-   U+06DD ARABIC END OF AYAH mark composes with the following Arabic-Indic
-   digits into a single ornament glyph inside the Quran font (Amiri and the
-   bundled Quran fonts carry the ligature), so the number arrives enclosed in
-   its ring instead of a painted pill. */
+   U+06DD ARABIC END OF AYAH mark must compose with its Arabic-Indic digits so
+   the number arrives enclosed in its ring. The reading faces cannot all do
+   that: the @fontsource/amiri subset ships no calt/liga lookups, both Uthman
+   Taha Naskh cmaps lack U+06DD (the mark fell back to Amiri mid-span and the
+   ring/digits split across faces), and Uthmanic Hafs draws a second empty
+   ring next to the composed one when the mark is spelled out. So the ornament
+   run is pinned to its own composing face (@font-face above) for EVERY
+   offered font. Fallbacks: faces that compose the mark (Scheherazade New,
+   Noto Naskh Arabic) or at least carry both halves without tofu (Amiri);
+   Uthmanic Hafs is deliberately excluded — its doubled ring is worse than an
+   unenclosed number. */
 @utility ayah-ornament {
   color: var(--primary);
+  font-family:
+    "Ayah Ornament", "Scheherazade New", "Noto Naskh Arabic", "Amiri", "Traditional Arabic",
+    "Geeza Pro", serif;
+  font-feature-settings: "calt", "liga";
   font-size: 0.86em;
   line-height: 1;
   vertical-align: middle;
