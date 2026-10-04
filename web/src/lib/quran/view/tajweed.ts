@@ -25,6 +25,7 @@ export type TajweedRuleLetter =
   | "a"
   | "u"
   | "d"
+  | "b"
   | "g";
 
 /**
@@ -49,6 +50,7 @@ const RULE_COLORS: Readonly<Record<TajweedRuleLetter, string>> = Object.freeze({
   a: "#169200", // idgham with ghunnah
   u: "#169200", // idgham without ghunnah
   d: "#a1a1a1", // idgham mutajanisayn/mutamathilayn
+  b: "#a1a1a1", // idgham mutaqaribayn (e.g. قُل رَّ, نَخْلُقْكُم)
   g: "#ff7e1e", // ghunnah
 });
 
