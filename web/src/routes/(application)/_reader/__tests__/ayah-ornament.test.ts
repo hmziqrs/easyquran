@@ -71,5 +71,9 @@ describe("end-of-ayah ornament run (36afeb2 regression guard)", () => {
     expect(families.indexOf("Scheherazade New")).toBeLessThan(families.indexOf("Amiri"));
     // The composing fallback must be loadable: a chain entry nothing loads still falls to Amiri
     expect(LAYOUT_CSS).toContain('@import "@fontsource/scheherazade-new/arabic-400.css";');
+    // Negative contract from 36afeb2: the KFGQPC registry faces stay out of the chain on
+    // purpose — Uthmanic Hafs draws a doubled empty ring behind the digits and the Taha
+    // cmaps lack U+06DD outright, so either would split the medallion again
+    expect(utility).not.toContain("KFGQPC");
   });
 });

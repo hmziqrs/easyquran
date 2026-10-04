@@ -55,9 +55,11 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
   search stays on the plain Tanzil corpus. Dev/CI provisioning knows it
   (`deploy/fetch-quran-db.sh`); deployed-server provisioning does not yet.
 - All five expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are
-  read directly and read-only; no consolidated canonical DB is built. The variants do not
-  embed the bismillah in first ayahs (separate-row openers, measured 1/0/0/112/1); the trusted
-  opener text is each variant's own 1:1.
+  read directly and read-only; no consolidated canonical DB is built. Tanzil Uthmani and
+  simple-clean embed the bismillah in first ayahs; the IndoPak/Tajweed variants and the
+  annotated edition do not — their openers ride a separate row (variant packaging measured
+  1/0/0/112/1 across numbered/embedded/chapter-flag/separate/absent), and the trusted opener
+  text is each such source's own 1:1.
 - Tajweed `text` carries inline rule markup verbatim (`[h:1468[ٱ]` segments). Rendering parses
   it in `web/src/lib/quran/view/tajweed.ts` (colored runs); plain-text views (copy, share,
   sidebar preview, title attributes) strip it there. Stored, wire, and non-tajweed text are

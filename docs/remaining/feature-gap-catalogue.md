@@ -133,8 +133,9 @@ translation, and word-by-word sizing.
 
 - [Al-Fatihah reader](https://quran.com/al-fatihah) → settings → **Arabic**
 
-**EasyQuran today:** all four Arabic sources are live (Uthmani, Simple-clean, IndoPak, Tajweed) with
-a script picker in Settings → Reading (reader schema v4); Tajweed markup renders as colored runs.
+**EasyQuran today:** all five Arabic sources are live (Uthmani-annotated — the default — plus
+Uthmani, Simple-clean, IndoPak, Tajweed) with a script picker in Settings → Reading (reader
+schema v4); Tajweed markup renders as colored runs.
 
 **Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
 per-source font controls; dedicated Nastaleeq face for IndoPak — deliberately deferred: the DB's 9 PUA

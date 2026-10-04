@@ -138,14 +138,17 @@ and viewport preservation. Arabic Quran fonts remain gated to Arabic source cont
 Persisted reader schema v4 includes:
 
 - `arabicFont`, allowlisted by registry; default `amiri`.
-- `arabicScript`, the mushaf script variant (`uthmani`, `simple-clean`, `indopak`, `tajweed`),
-  allowlisted against the Arabic source registry; default `uthmani`. Selected in the Reading
-  section above the font pills. It changes which Arabic corpus post-paint reads serve (see
-  `quran-system.md`); first paint of an Arabic route remains the prerendered Uthmani page.
+- `arabicScript`, the mushaf script variant (`uthmani-annotated`, `uthmani`, `simple-clean`,
+  `indopak`, `tajweed`), allowlisted against the Arabic source registry; default
+  `uthmani-annotated`. Selected in the Reading section above the font pills. It changes which
+  Arabic corpus post-paint reads serve (see `quran-system.md`); first paint of an Arabic route
+  remains the prerendered page of the annotated default, served from plain Uthmani where that
+  artifact is absent (fail-soft, `quran-system.md`).
 - `translationSize`, integer 13–28 px; default 17 px.
 
-Schema v4 migration is decode-side only: v3 blobs hydrate with the `uthmani` default, and
-future schemas are tolerated by reading supported fields only. The Tajweed variant renders
+Schema v4 migration is decode-side only: v3 blobs hydrate with the `uthmani-annotated`
+default, and future schemas are tolerated by reading supported fields only. The Tajweed
+variant renders
 markup as colored runs in `web/src/lib/quran/view/tajweed.ts`; plain-text surfaces (copy,
 share, sidebar previews, bismillah title attributes) strip the markup in views. IndoPak text
 renders in the user-chosen Arabic font; a dedicated Nastaleeq face is a known gap (§10).
