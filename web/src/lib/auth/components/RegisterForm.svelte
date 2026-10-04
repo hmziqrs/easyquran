@@ -203,10 +203,13 @@
       {/snippet}
     </form.Field>
     {#snippet footer()}
-      <span>
-        {copy.haveAccountPrompt}
-        <a href="/login" class="text-primary hover:underline">{copy.signIn}</a>
-      </span>
+      <!-- Same rule as SignInForm: link only where there is no tab switcher. -->
+      {#if variant === "page"}
+        <span>
+          {copy.haveAccountPrompt}
+          <a href="/login" class="text-primary hover:underline">{copy.signIn}</a>
+        </span>
+      {/if}
     {/snippet}
   </AuthForm>
 {/if}

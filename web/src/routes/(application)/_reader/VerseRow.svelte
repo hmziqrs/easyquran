@@ -3,11 +3,11 @@
   import type { Attachment } from "svelte/attachments";
   import { page } from "$app/state";
   import { reader } from "$lib/stores/reader.svelte";
-  import { toArabicDigits } from "$lib/data/quran";
   import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
   import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import type { StackedTranslation } from "$lib/data/quran-types";
+  import AyahOrnament from "./AyahOrnament.svelte";
 
   let {
     text,
@@ -19,7 +19,6 @@
     arabicPending = false,
     leadId,
     script = QuranScript.Uthmani,
-    onToggleNote,
     stacked = [],
     stackedPending = [],
     stackedErrored = [],
@@ -43,7 +42,6 @@
     /** The translation route's own lane, always first. */
     leadId?: string;
     script?: QuranScriptValue;
-    onToggleNote?: () => void;
     stacked?: readonly StackedTranslation[];
     stackedPending?: readonly string[];
     stackedErrored?: readonly string[];
@@ -54,9 +52,7 @@
     virtualGap?: number;
     measure?: Attachment<HTMLElement>;
   } = $props();
-  let Tools = $state<
-    Component<{ text: string; vKey: string; onToggleNote?: () => void }> | null
-  >(null);
+  let Tools = $state<Component<{ text: string; vKey: string }> | null>(null);
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
   // Tajweed markup renders as colored runs (view-only; the stored/wire text is
@@ -163,8 +159,7 @@
         {/each}
       {:else}
         {text}
-      {/if}<span class="ayah-ornament" data-verse-anchor={vKey}>&#x06DD;{toArabicDigits(n)}</span
-      >
+      {/if}<AyahOrnament {vKey} {n} />
     </span>
   {/if}
 
@@ -196,7 +191,7 @@
   {/if}
 
   {#if Tools}
-    <Tools {text} {vKey} {onToggleNote} />
+    <Tools {text} {vKey} />
   {/if}
 </li>
 

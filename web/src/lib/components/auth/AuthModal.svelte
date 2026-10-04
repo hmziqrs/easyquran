@@ -15,8 +15,6 @@
   import RegisterForm from "$lib/auth/components/RegisterForm.svelte";
   import OAuthButtons from "$lib/auth/components/OAuthButtons.svelte";
   import { getAuthCopy } from "$lib/i18n/auth-copy";
-  import { Brand } from "$lib/components/brand";
-  import { marketingHomeHref } from "$lib/i18n/marketing-copy";
 
   const copy = getAuthCopy();
 
@@ -46,21 +44,16 @@
       data-slot="auth-dialog"
       lang={copy.locale}
       dir={copy.direction}
-      class="fixed left-1/2 top-[10vh] z-[91] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface-raised outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+      class="fixed left-1/2 top-1/2 z-[91] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-surface-raised outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
     >
       <DialogPrimitive.Title class="sr-only">{copy.dialogTitle}</DialogPrimitive.Title>
       <DialogPrimitive.Description class="sr-only"
         >{copy.dialogDescription}</DialogPrimitive.Description
       >
       <DialogPrimitive.Close
-        class="absolute end-3.5 top-3.5 z-10 inline-flex size-9 items-center justify-center rounded-pill text-primary-foreground/80 transition-colors hover:bg-primary-foreground/15 hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
+        class="absolute end-3.5 top-3.5 z-10 inline-flex size-9 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         aria-label={copy.close}><Icon name="x" size={18} /></DialogPrimitive.Close
       >
-      <!-- Brand band (recon: modal carried no logo): accent fill + on-accent lockup
-           flush with the card top; the tabs below keep their own labels. -->
-      <div class="bg-primary px-6 py-5">
-        <Brand tone="on-accent" homeHref={marketingHomeHref(copy.locale)} />
-      </div>
       <div class="max-h-[82vh] overflow-y-auto px-6 py-7">
         <Tabs value={tab} onValueChange={(v) => (tab = v as "login" | "register")} class="flex flex-col gap-5">
           <TabsList class="self-start">
@@ -80,7 +73,7 @@
             <RegisterForm flow={registerFlow} variant="modal" onsuccess={onAuthSuccess} />
           </TabsContent>
         </Tabs>
-        <div class="mt-5">
+        <div class="mt-7">
           <OAuthButtons onPasskeySuccess={onAuthSuccess} />
         </div>
       </div>

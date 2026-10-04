@@ -20,23 +20,14 @@
 
   const providers: ReadonlyArray<{ id: OAuthProvider; label: string }> = [
     { id: "google", label: "Google" },
-    { id: "apple", label: "Apple" },
-    { id: "facebook", label: "Facebook" },
     { id: "github", label: "GitHub" },
+    { id: "discord", label: "Discord" },
   ];
 
-  const oauthPending = $derived(
-    oauth.google.pending ||
-      oauth.apple.pending ||
-      oauth.facebook.pending ||
-      oauth.github.pending,
-  );
+  const oauthPending = $derived(providers.some((p) => oauth[p.id].pending));
   const socialPending = $derived(oauthPending || passkey.pending);
   const oauthErrorCode = $derived(
-    oauth.google.lastErrorCode ??
-      oauth.apple.lastErrorCode ??
-      oauth.facebook.lastErrorCode ??
-      oauth.github.lastErrorCode,
+    providers.map((p) => oauth[p.id].lastErrorCode).find((c) => c !== null) ?? null,
   );
   const socialError = $derived(
     oauthErrorCode ? copy.oauthError : passkey.genericError,
@@ -66,37 +57,43 @@
     </p>
   {/if}
 
-  <div class="flex flex-col gap-2.5">
+  <!-- Providers are icon-only (label lives in aria-label/title); the passkey keeps its
+       dedicated labelled button below. -->
+  <div class="grid grid-cols-3 gap-2.5">
     {#each providers as p (p.id)}
       <Button
         type="button"
         variant="ghost"
         size="lg"
-        class="relative w-full"
+        aria-label={copy.continueWithProvider(p.label)}
+        title={copy.continueWithProvider(p.label)}
         disabled={socialPending}
         onclick={() => begin(p.id)}
       >
-        <OAuthIcon provider={p.id} size={16} class="absolute start-[18px] top-1/2 -translate-y-1/2" />
-        <span>{oauth[p.id].pending ? copy.pleaseWait : copy.continueWithProvider(p.label)}</span>
+        <OAuthIcon
+          provider={p.id}
+          size={20}
+          class="mx-auto transition-opacity {oauth[p.id].pending ? 'opacity-40' : ''}"
+        />
       </Button>
     {/each}
-    {#if passkey.supported}
-      <Button
-        type="button"
-        variant="ghost"
-        size="lg"
-        class="relative w-full"
-        disabled={socialPending}
-        onclick={passkeyLogin}
-      >
-        <KeyIcon
-          weight="fill"
-          size={16}
-          class="absolute start-[18px] top-1/2 -translate-y-1/2"
-          aria-hidden="true"
-        />
-        <span>{passkey.pending ? copy.pleaseWait : copy.continueWithPasskey}</span>
-      </Button>
-    {/if}
   </div>
+  {#if passkey.supported}
+    <Button
+      type="button"
+      variant="ghost"
+      size="lg"
+      class="relative w-full"
+      disabled={socialPending}
+      onclick={passkeyLogin}
+    >
+      <KeyIcon
+        weight="fill"
+        size={16}
+        class="absolute start-[18px] top-1/2 -translate-y-1/2"
+        aria-hidden="true"
+      />
+      <span>{passkey.pending ? copy.pleaseWait : copy.continueWithPasskey}</span>
+    </Button>
+  {/if}
 </section>

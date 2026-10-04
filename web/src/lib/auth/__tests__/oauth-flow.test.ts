@@ -97,17 +97,17 @@ describe("OAuthFlow.begin bootstrap-before-navigate", () => {
   it("omits a return target when none provided", async () => {
     const client = mockClient();
     const navigate = vi.fn();
-    const flow = createOAuthFlow("apple", { client, state: mockState(), navigate });
+    const flow = createOAuthFlow("discord", { client, state: mockState(), navigate });
     await flow.begin();
     expect(getReturnTarget()).toBeNull();
-    expect(navigate).toHaveBeenCalledWith("https://eq.test/api/auth/apple/v1/login");
+    expect(navigate).toHaveBeenCalledWith("https://eq.test/api/auth/discord/v1/login");
   });
 
   it("bootstrap failure blocks navigation and sets opaque error code", async () => {
     const client = mockClient();
     client.ensureAnonymousSession.mockRejectedValueOnce(new Error("csrf down"));
     const navigate = vi.fn();
-    const flow = createOAuthFlow("facebook", { client, state: mockState(), navigate });
+    const flow = createOAuthFlow("github", { client, state: mockState(), navigate });
     const res = await flow.begin("/x");
     expect(res).toBe(false);
     expect(navigate).not.toHaveBeenCalled();
@@ -116,7 +116,7 @@ describe("OAuthFlow.begin bootstrap-before-navigate", () => {
 });
 
 describe("OAuthFlow provider wiring", () => {
-  const providers: OAuthProvider[] = ["google", "apple", "facebook", "github"];
+  const providers: OAuthProvider[] = ["google", "discord", "github"];
   for (const p of providers) {
     it(`${p} builds a login URL on its own provider path`, () => {
       const client = mockClient();
@@ -225,7 +225,7 @@ describe("OAuthFlow.finish", () => {
 describe("OAuthFlow.reportFailure", () => {
   it("consumes the return target and surfaces opaque code only", () => {
     const client = mockClient();
-    const flow = createOAuthFlow("apple", { client, state: mockState(), navigate: vi.fn() });
+    const flow = createOAuthFlow("discord", { client, state: mockState(), navigate: vi.fn() });
     sessionStorage.setItem("eq:oauth-return", "/go");
     const res = flow.reportFailure("access_denied");
     expect(res.ok).toBe(false);

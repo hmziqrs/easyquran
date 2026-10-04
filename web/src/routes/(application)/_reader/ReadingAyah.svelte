@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { toArabicDigits } from "$lib/data/quran";
   import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
   import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
+  import AyahOrnament from "./AyahOrnament.svelte";
 
   let {
     text,
@@ -39,7 +39,7 @@
         {/each}
       {:else}
         {text}
-      {/if}<span class="ayah-ornament" data-verse-anchor={vKey}>&#x06DD;{toArabicDigits(n)}</span>
+      {/if}<AyahOrnament {vKey} {n} />
     </span>
   {/if}
 </span>

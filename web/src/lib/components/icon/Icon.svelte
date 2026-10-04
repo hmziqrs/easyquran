@@ -11,6 +11,7 @@
   }: { name: IconName; size?: number | string; class?: string; title?: string } = $props();
 
   const icon = $derived(ICONS[name]);
+  const stroked = $derived("stroke" in icon && icon.stroke === true);
   const labelled = $derived(title !== undefined);
 
   /* Directional glyphs mirror under RTL (plan 04 step 5 punt, landed here per plan 06):
@@ -38,7 +39,11 @@
     width={size}
     height={size}
     viewBox={icon.viewBox}
-    fill="currentColor"
+    fill={stroked ? "none" : "currentColor"}
+    stroke={stroked ? "currentColor" : undefined}
+    stroke-width={stroked ? 2 : undefined}
+    stroke-linecap={stroked ? "round" : undefined}
+    stroke-linejoin={stroked ? "round" : undefined}
     role={labelled ? "img" : "presentation"}
     aria-hidden={labelled ? undefined : "true"}
     aria-label={title}

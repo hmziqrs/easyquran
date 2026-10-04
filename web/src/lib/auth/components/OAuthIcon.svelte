@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { siGoogle, siApple, siFacebook, siGithub, type SimpleIcon } from "simple-icons";
+  import { siDiscord, siGithub, siGoogle, type SimpleIcon } from "simple-icons";
   import type { OAuthProvider } from "$lib/auth/oauth-flow.svelte";
 
   type Props = {
@@ -12,9 +12,8 @@
 
   const ICONS = {
     google: siGoogle,
-    apple: siApple,
-    facebook: siFacebook,
     github: siGithub,
+    discord: siDiscord,
   } satisfies Record<OAuthProvider, SimpleIcon>;
 
   let icon = $derived(ICONS[provider]);

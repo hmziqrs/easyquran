@@ -47,7 +47,7 @@
     aria-expanded={open}
     aria-label={copy.translations.open}
     title={copy.translations.open}
-    class="flex h-10 touch-manipulation items-center gap-2 rounded-md border border-border ps-3 pe-2.5 text-[14px] font-medium text-foreground transition-colors hover:border-primary"
+    class="flex h-10 w-10 touch-manipulation items-center justify-center gap-2 rounded-md border border-border text-[14px] font-medium text-foreground transition-colors hover:border-primary sm:w-auto sm:justify-start sm:ps-3 sm:pe-2.5"
   >
     <!-- U9: Google-Translate-style mark (rounded square, 文 + A with swap
          arrows). Static brand blue on purpose — the user asked for that logo
@@ -75,12 +75,13 @@
         <path d="m16.6 18.4-.9-.4.4-1" stroke-width="1.1" />
       </g>
     </svg>
-    <!-- The word, not just the mark (user pick): "Translations" plus how many are stacked. -->
-    <span>{copy.translations.open}</span>
+    <!-- Icon-only on mobile (the mark carries the meaning; aria-label names the action),
+         word + count + chevron from sm up. -->
+    <span class="hidden sm:block">{copy.translations.open}</span>
     {#if hiddenCount > 0}
       <span
         data-translation-count
-        class="flex h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-semibold tabular-nums text-primary-foreground"
+        class="hidden h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-semibold tabular-nums text-primary-foreground sm:flex"
       >
         {hiddenCount}
       </span>

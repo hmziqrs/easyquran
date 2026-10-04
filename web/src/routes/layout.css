@@ -296,10 +296,13 @@
 }
 
 [data-palette="sacred"][data-mode="light"] {
-  --background: oklch(0.98 0 0);
+  /* Light mirrors dark: the ground is the absolute extreme (white here, black in dark),
+     and surfaces tint one step away from it — footer/band/input fields read as the
+     gray-tinted sub-surface on the white page. */
+  --background: oklch(1 0 0);
   --background-subtle: oklch(0.968 0 0);
 
-  --surface: #ffffff;
+  --surface: oklch(0.98 0 0);
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
@@ -355,10 +358,10 @@
 }
 
 [data-palette="ink"][data-mode="light"] {
-  --background: oklch(0.98 0 0);
+  --background: oklch(1 0 0);
   --background-subtle: oklch(0.968 0 0);
 
-  --surface: #ffffff;
+  --surface: oklch(0.98 0 0);
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
@@ -470,10 +473,10 @@
 }
 
 [data-palette="sepia"][data-mode="light"] {
-  --background: oklch(0.98 0 0);
+  --background: oklch(1 0 0);
   --background-subtle: oklch(0.968 0 0);
 
-  --surface: #ffffff;
+  --surface: oklch(0.98 0 0);
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
@@ -588,10 +591,10 @@
 }
 
 [data-palette="sapphire"][data-mode="light"] {
-  --background: oklch(0.98 0 0);
+  --background: oklch(1 0 0);
   --background-subtle: oklch(0.968 0 0);
 
-  --surface: #ffffff;
+  --surface: oklch(0.98 0 0);
   --surface-raised: #ffffff;
   --surface-hover: oklch(0.953 0 0);
 
