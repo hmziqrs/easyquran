@@ -14,7 +14,12 @@
  * Every other DB under db/ is immutable: this tool writes ONLY the new artifact
  * (and reads the Tanzil DB read-only for the F4 adjudication report).
  *
- * Usage: pnpm exec tsx scripts/quran/build-uthmani-annotated.ts [--out PATH]
+ * Usage: pnpm exec tsx scripts/quran/build-uthmani-annotated.ts [--out PATH] [--force]
+ *
+ * Guards (all exit 1 before any write or network fetch): --out refuses paths
+ * under db/ other than the canonical artifact slot (that tree is immutable and
+ * gitignored), an existing target is never overwritten without --force, and an
+ * option-shaped token after --out is rejected instead of being taken as a path.
  */
 
 // Repo-root `vp check` type-checks with tsgolint, which does not auto-include
@@ -22,7 +27,7 @@
 // reference pulls the Node typings in under both checkers. No runtime effect.
 /// <reference types="node" />
 
-import { mkdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,23 +60,67 @@ function log(message: string): void {
   process.stdout.write(`${message}\n`);
 }
 
-function parseArgs(): { outPath: string } {
+/** Clear one-line error and a non-zero exit; every guard below runs pre-write. */
+function fail(message: string): never {
+  process.stderr.write(`build-uthmani-annotated: ${message}\n`);
+  process.exit(1);
+}
+
+interface CliOptions {
+  readonly outPath: string | undefined;
+  readonly force: boolean;
+}
+
+function parseArgs(): CliOptions {
   const args = process.argv.slice(2);
-  const supported = new Set(["--", "--out"]);
-  const isOutValue = (index: number): boolean => args[index - 1] === "--out";
-  const unknown = args.filter(
-    (arg, index) => !isOutValue(index) && !supported.has(arg) && !arg.startsWith("--out="),
-  );
-  if (unknown.length > 0) throw new Error(`unknown option(s): ${unknown.join(", ")}`);
-  const outFlag = args.find((arg) => arg.startsWith("--out="));
-  const outIndex = args.indexOf("--out");
-  if (outFlag) return { outPath: outFlag.slice("--out=".length) };
-  if (outIndex !== -1) {
-    const value = args[outIndex + 1];
-    if (!value) throw new Error("--out requires a path");
-    return { outPath: value };
+  const supported = new Set(["--", "--force"]);
+  let outPath: string | undefined;
+  let force = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (arg === "--out") {
+      const value = args[index + 1];
+      if (value === undefined || value.length === 0 || value.startsWith("-")) {
+        const shown = value === undefined ? "nothing" : `"${value}"`;
+        fail(`--out requires a path, got ${shown}`);
+      }
+      if (outPath !== undefined) fail("--out given more than once");
+      outPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--out=")) {
+      const value = arg.slice("--out=".length);
+      if (value.length === 0) fail("--out= requires a path");
+      if (outPath !== undefined) fail("--out given more than once");
+      outPath = value;
+      continue;
+    }
+    if (arg === "--force") {
+      force = true;
+      continue;
+    }
+    if (!supported.has(arg)) fail(`unknown option(s): ${arg}`);
   }
-  return { outPath: DEFAULT_OUT };
+  return { outPath, force };
+}
+
+/**
+ * Default run rebuilds the canonical artifact in place. An explicit --out may
+ * name that same slot but nothing else under db/: the tree is immutable and
+ * gitignored, so ad-hoc artifacts there would vanish on a fresh clone.
+ */
+function resolveOutPath(explicitOut: string | undefined): string {
+  if (explicitOut === undefined) return DEFAULT_OUT;
+  const resolved = path.resolve(explicitOut);
+  if (resolved === path.resolve(DEFAULT_OUT)) return resolved;
+  const dbRoot = path.join(REPO_ROOT, "db");
+  if (resolved === dbRoot || resolved.startsWith(`${dbRoot}${path.sep}`)) {
+    fail(
+      "--out refuses paths under db/ — that tree is immutable and gitignored; build outside db/ (e.g. /tmp) or drop --out to rebuild the canonical artifact",
+    );
+  }
+  return resolved;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -146,6 +195,7 @@ async function fetchAllVerses(): Promise<readonly Row[]> {
 
 function writeDatabase(outPath: string, rows: readonly Row[]): void {
   mkdirSync(path.dirname(outPath), { recursive: true });
+  // Reaching here means the target is fresh or --force was given.
   rmSync(outPath, { force: true });
   rmSync(`${outPath}-wal`, { force: true });
   rmSync(`${outPath}-shm`, { force: true });
@@ -204,6 +254,10 @@ function verifyDatabase(outPath: string): void {
 
 /** F4 adjudication: earlier capture claimed 80:3 lost the maddah; codepoint compare said 0 diffs. */
 function adjudicate803(outPath: string): void {
+  if (!existsSync(TANZIL_DB)) {
+    log(`adjudication 80:3 skipped — Tanzil DB absent at ${path.relative(REPO_ROOT, TANZIL_DB)}`);
+    return;
+  }
   const annotated = new DatabaseSync(outPath, { readOnly: true });
   const tanzil = new DatabaseSync(TANZIL_DB, { readOnly: true });
   try {
@@ -235,7 +289,11 @@ function adjudicate803(outPath: string): void {
 }
 
 async function main(): Promise<void> {
-  const { outPath } = parseArgs();
+  const { outPath: explicitOut, force } = parseArgs();
+  const outPath = resolveOutPath(explicitOut);
+  if (existsSync(outPath) && !force) {
+    fail(`refusing to overwrite existing ${outPath} — pass --force to overwrite`);
+  }
   log(`building ${path.relative(REPO_ROOT, outPath)} (id ${ARTIFACT_ID})`);
   const rows = await fetchAllVerses();
   writeDatabase(outPath, rows);
