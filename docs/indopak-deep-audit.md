@@ -112,7 +112,8 @@ this host; both Playwright and official geckodriver/native Firefox attempts fail
 Safari WebDriver is unavailable because remote automation is disabled. Prior focused native
 Safari/Firefox observations concern v2, not a new v3 full-platform pass. No iOS-device pass.
 
-Remaining native Safari and real-device coverage: [Safari testing plan](indopak-safari-testing-plan.md).
+Native macOS Safari 27.0 specimen pass and open layout review items: [Safari results](indopak-safari-results.md).
+Remaining real-device/production coverage: [Safari testing plan](indopak-safari-testing-plan.md).
 
 The 201-page Quran.com comparison is not a full 6,236-verse editorial/visual comparison.
 The public legacy full-corpus endpoint returned HTTP 403; current official

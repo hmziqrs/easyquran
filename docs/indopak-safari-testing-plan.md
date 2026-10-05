@@ -1,6 +1,8 @@
 # IndoPak Safari testing plan
 
-Created 2026-10-06. **Plan only; native Safari v3 and real-device checks remain pending.**
+Created 2026-10-06. **§2–3 run 2026-10-06: [results](indopak-safari-results.md). Native macOS
+Safari passes mechanical/ink checks with open layout review items; real-device, older-Safari,
+production-reader and Quran.com checks remain pending.**
 Font/renderer baseline: commit `104f049`, `indopak-reader-compat-v3`.
 Existing results and editorial findings: [deep audit](indopak-deep-audit.md).
 
@@ -13,12 +15,12 @@ completion criteria.
 
 | Environment                                        | Required coverage                                                         | Current status                                                  |
 | -------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Installed stable macOS Safari                      | Full occurrence/layout matrix, ink diagnostics, real reader               | Pending; remote automation disabled during previous audit       |
+| Installed stable macOS Safari                      | Full occurrence/layout matrix, ink diagnostics, real reader               | Safari 27.0 specimen pass, review items open; real reader open  |
 | Previous Safari/macOS version intended for support | Same full matrix and critical reader checks on separate host              | Pending; record exact available version before claiming support |
 | Real iPhone, current stable iOS                    | Full occurrence sweep, critical matrix, touch/zoom/cache tests            | Pending                                                         |
 | Real iPhone, oldest iOS intended for support       | Same device checks; prefer smallest supported screen                      | Pending; supported version must be recorded                     |
 | Real iPad, current stable iPadOS                   | Full occurrence sweep, critical matrix, portrait/landscape, narrow window | Pending                                                         |
-| Playwright WebKit on macOS                         | Repeatable baseline and regression diagnostics                            | Prior v3 pass; rerun against candidate commit                   |
+| Playwright WebKit on macOS                         | Repeatable baseline and regression diagnostics                            | WebKit 26.6 rerun against `6486488`: pass, review items open    |
 
 Use one device for multiple rows only when its recorded OS/version satisfies those rows.
 Unavailable hardware/version stays **untested**. Simulator and Safari Technology Preview may
@@ -40,12 +42,12 @@ strings as expectations. Reference fonts and screenshots stay outside tracked pr
 
 ## 2. Prepare and reproduce WebKit baseline
 
-- [ ] Record candidate commit and environment metadata; retain previous audit evidence.
-- [ ] Use repository-pinned Node/pnpm/Playwright and Python audit dependencies. Reuse
+- [x] Record candidate commit and environment metadata; retain previous audit evidence.
+- [x] Use repository-pinned Node/pnpm/Playwright and Python audit dependencies. Reuse
       `.cache/indopak-venv`; create it if absent, then install
       `scripts/fonts/indopak/audit-requirements.txt` into that environment when needed.
-- [ ] Start or reuse dev server at `http://localhost:5391`. Check specimen controls hydrate.
-- [ ] Generate fresh diagnostic inputs and run existing WebKit checks below. Inspect JSON
+- [x] Start or reuse dev server at `http://localhost:5391`. Check specimen controls hydrate.
+- [x] Generate fresh diagnostic inputs and run existing WebKit checks below. Inspect JSON
       reports and ink-analysis results as well as exit codes; raw overlap candidates require review.
 
 Run from repository root, with dev server running in another terminal:
@@ -65,21 +67,22 @@ INDOPAK_DEEP_FLOW=1 INDOPAK_DEEP_ENGINES=webkit node scripts/fonts/indopak/deep-
 ```
 
 Choose a new output directory for each candidate/run. `INDOPAK_DEEP_ENGINES=safari` is
-**not supported** by the existing harness; native runner described below must be implemented.
+**not supported**; native Safari runs through `scripts/fonts/indopak/safari-native-check.mjs`
+(see [font tooling](../scripts/fonts/indopak/README.md#native-macos-safari)).
 
 ## 3. Native macOS Safari automation
 
-- [ ] Enable Safari's developer menu and Allow Remote Automation on test host. If first-time
+- [x] Enable Safari's developer menu and Allow Remote Automation on test host. If first-time
       driver setup requires authorization, host owner completes `/usr/bin/safaridriver --enable`.
       Record original settings and restore them after testing when appropriate. Confirm setup
       against installed Safari UI and `man safaridriver`.
-- [ ] Create a small W3C WebDriver adapter around bundled `/usr/bin/safaridriver`, reusing
+- [x] Create a small W3C WebDriver adapter around bundled `/usr/bin/safaridriver`, reusing
       existing audit inputs and browser-side assertions. Keep native reports separate from WebKit.
-- [ ] Run one Safari session at a time. Use accessible control labels and existing specimen
+- [x] Run one Safari session at a time. Use accessible control labels and existing specimen
       identifiers. Wait for hydration, explicit font load and settled layout; avoid fixed sleeps.
-- [ ] Record requested and actual viewport dimensions. Browser-window dimensions and inner
+- [x] Record requested and actual viewport dimensions. Browser-window dimensions and inner
       viewport dimensions differ; do not label a run 320px unless the measured run is 320px.
-- [ ] Extend ink-analysis input handling for native captures, including screenshot scale/DPR.
+- [x] Extend ink-analysis input handling for native captures, including screenshot scale/DPR.
       Existing analyzer accepts Chromium/WebKit names only. Preserve original production-font
       captures alongside every diagnostic capture.
 
@@ -89,21 +92,21 @@ Safari includes its own WebDriver executable and requires enabling remote automa
 
 ### Full native matrix
 
-- [ ] `/design/indopak?audit=all`: all 1,243 specimen verses, including all **1,383 private
+- [x] `/design/indopak?audit=all`: all 1,243 specimen verses, including all **1,383 private
       occurrences across 1,218 verses** plus repertoire controls. Run reading and verse modes
       at every combination of 22/24/33/48/56px and 320/640/960px run width: 30 combinations.
       Add 390×844 viewport at 48px/320px in each mode: 32 combinations total.
-- [ ] `/design/indopak?audit=flow`: all 116 optional-ayah verses containing 121 occurrences,
+- [x] `/design/indopak?audit=flow`: all 116 optional-ayah verses containing 121 occurrences,
       with original same-surah neighbors. Reading mode, same 15 size/width combinations,
       plus 390×844 viewport at 48px/320px: 16 combinations.
-- [ ] Compare exact rendered text slices and ordered private codes with original DB strings;
+- [x] Compare exact rendered text slices and ordered private codes with original DB strings;
       preserve whitespace and format controls. Verify expected counts on every matrix run.
 - [ ] Check final Arabic word, intervening annotations and ayah ornament stay together;
       Arabic digits remain enclosed; no horizontal overflow, clipped ink or line collision.
-- [ ] Paint all 1,383 original neighboring-word excerpts using local diagnostic fonts.
+- [x] Paint all 1,383 original neighboring-word excerpts using local diagnostic fonts.
       Capture actual DOM for all E003/E004/E021 contexts, all 28 changed inline pause groups,
       candidate collisions and critical terminal chains. Include surrounding lines and padding.
-- [ ] Validate transparent negative controls, production/diagnostic geometry, ordinary-text
+- [x] Validate transparent negative controls, production/diagnostic geometry, ordinary-text
       reconstruction and private ink before interpreting overlap measurements. Calibrate any
       raster-edge tolerance for native screenshot scale and freeze it before reviewing failures.
       Existing WebKit's two-pixel tolerance does not automatically apply to every device/DPR.

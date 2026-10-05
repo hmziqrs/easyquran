@@ -93,6 +93,32 @@ Ink/boundary candidates stop approval until reviewed. Production-font/diagnostic
 comparisons use a recorded two-pixel edge tolerance; masks include shared cmap aliases. No restricted reference font is used
 to construct diagnostic fonts.
 
+## Native macOS Safari
+
+Playwright WebKit is not branded Safari. `safari-native-check.mjs` drives installed Safari
+through bundled `/usr/bin/safaridriver` (W3C WebDriver), reusing `deep_audit.py` inputs and
+the browser-side assertions in `deep-browser-shared.mjs`. Enable Safari → Settings →
+Advanced → "Show features for web developers", then Developer → "Allow remote automation"
+(first use may also need `safaridriver --enable`). One session at a time; an occluded
+automation window is fine (frame waits are timer-bounded, screenshots paint on demand).
+
+```sh
+export INDOPAK_DEEP_OUTPUT=.cache/indopak-safari/<run>
+python3 scripts/fonts/indopak/deep_audit.py --output "$INDOPAK_DEEP_OUTPUT"
+node scripts/fonts/indopak/safari-native-check.mjs
+python3 scripts/fonts/indopak/dom_ink_analysis.py --output "$INDOPAK_DEEP_OUTPUT" --engine safari
+INDOPAK_DEEP_FLOW=1 node scripts/fonts/indopak/safari-native-check.mjs
+python3 scripts/fonts/indopak/dom_ink_analysis.py --output "$INDOPAK_DEEP_OUTPUT" --engine safari-flow
+```
+
+Beyond the Playwright matrix it records environment metadata, requested versus measured
+viewport, `devicePixelRatio`, served-versus-packaged font bytes, page/run horizontal overflow,
+critical-verse captures (both modes, light/dark, 33/56px, 320/640px) and wrap-boundary sweeps.
+Element screenshots must match element box × DPR or the run is invalid. Ink analysis keeps
+the two-pixel edge tolerance in CSS pixels and scales it by capture DPR; overlap thresholds
+stay in raw device pixels (stricter at higher DPR). `INDOPAK_SAFARI_SKIP_CRITICAL=1` skips
+critical captures. Reports: `safari-report.json`, `safari-flow-report.json`.
+
 Live reference tool fetches all representative context pages with two concurrent requests,
 verifies deployed font family/resource, and stores unchanged reference assets outside repository
 (default `/tmp/easyquran-deep-reference`, override `INDOPAK_REFERENCE_OUTPUT`). Comparison
