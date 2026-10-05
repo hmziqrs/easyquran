@@ -1,8 +1,13 @@
 # IndoPak comparison with live Quran.com
 
+Latest: [2026-10-06 deep audit](indopak-deep-audit.md), version 3. It checks 201 live pages and
+all local private occurrences, repairs further placement defects, and records unresolved
+source-text differences. Version 2 findings below are historical and do not establish
+full-corpus placement approval.
+
 Observed 2026-10-05. **All nine symbol identities are corroborated. Version 2 repairs the
 preview defects and is integrated in both IndoPak reader modes.** The initial audit below
-records the failures that triggered the repair; the follow-up records current behavior.
+records the failures that triggered the repair; the follow-up records behavior measured for version 2.
 This is technical rendering verification, not printed-edition or recitation certification.
 
 ## Reference and method

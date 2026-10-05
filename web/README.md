@@ -28,9 +28,12 @@ In `web/`:
 Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`.
 
 Development-only IndoPak font specimen: `/design/indopak`, using provisioned IndoPak/Uthmani
-DBs and packaged OFL preview font. Production activation remains blocked by E004 bidi/shaping.
+DBs and packaged OFL compatibility font. Version 3 serves both IndoPak reader modes.
+`?audit=all` covers every private occurrence; `?audit=flow` checks optional-ayah marks with
+original neighboring verses. All specimen variants return 404 in production.
 Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md),
-[compatibility report](../docs/indopak-font-compatibility.md).
+[compatibility report](../docs/indopak-font-compatibility.md),
+[deep audit and unresolved source differences](../docs/indopak-deep-audit.md).
 
 ## Layout
 

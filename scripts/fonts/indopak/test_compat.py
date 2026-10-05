@@ -126,6 +126,7 @@ class CompatibilityTest(unittest.TestCase):
         optional = outlines[cmap[0xE021]]
         for pause in [0x06D9, 0x0615, 0x06DA, 0x06DB, 0xE01E]:
             self.assertLess(optional.xMax + 30, outlines[cmap[pause]].xMin)
+            self.assertGreater(optional.yMin, outlines[cmap[pause]].yMax + 10)
         inverted = outlines[cmap[0xE004]]
         hamza = outlines[cmap[0x0621]]
         gap = inverted.yMin - hamza.yMax

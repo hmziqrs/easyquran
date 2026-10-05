@@ -14,7 +14,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 OUTPUT = ROOT / "web/static/fonts"
-STEM = "indopak-reader-compat-v2"
+STEM = "indopak-reader-compat-v3"
 FAMILY = "IndoPak Reader Compat"
 
 
@@ -110,7 +110,7 @@ def make_glyph(font, entry):
         add_component(font, name, source, (1, 0, 0, 1, 30 - glyph.xMin, 0), advance, 1)
         return name
     if entry["codepoint"] == "U+E021":
-        add_component(font, name, source, (0.5, 0, 0, 0.5, -250, 820), 0, 3)
+        add_component(font, name, source, (0.5, 0, 0, 0.5, -250, 1120), 0, 3)
         return name
     raise ValueError(f"no reviewed construction: {entry['codepoint']}")
 
@@ -143,8 +143,8 @@ def add_mappings(font, mappings):
 
 
 def rename(font):
-    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;2.000",
-              4: f"{FAMILY} Regular", 5: "Version 2.000; private encoding compatibility",
+    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;3.000",
+              4: f"{FAMILY} Regular", 5: "Version 3.000; private encoding compatibility",
               6: "IndoPakReaderCompat-Regular", 16: FAMILY, 17: "Regular",
               18: f"{FAMILY} Regular", 21: FAMILY, 22: "Regular"}
     for record in font["name"].names:

@@ -1068,7 +1068,7 @@
       "implementation": "composite",
       "new_composite_required": true,
       "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
-      "positioning": "Half-scale dedicated Noto disputed-ayah 5 translated (-250,820). Separate ink lane left of the following pause mark; no borrowed ruku attachment anchor. Original PUA text is preserved.",
+      "positioning": "Half-scale dedicated Noto disputed-ayah 5 translated (-250,1120). Separate horizontal and vertical ink lanes avoid pause collisions across all 121 occurrences. No borrowed ruku attachment anchor. Original PUA text is preserved.",
       "contexts": [
         {
           "signature": "Zs|Mn||06D9,|E021,",

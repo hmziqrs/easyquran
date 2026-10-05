@@ -1,15 +1,15 @@
 [
   {
-    "filename": "indopak-reader-compat-v2.ttf",
+    "filename": "indopak-reader-compat-v3.ttf",
     "bytes": 201020,
-    "sha256": "83694fb5aef0c2783ec7835984f2614394473c699ec8a62e4d92f5766c910765",
+    "sha256": "361d7dfacd92b877cb88075ddfce2d404a5393758bedc8365e4115f69b10af19",
     "glyph_count": 1727,
     "names": {
       "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
       "1": "IndoPak Reader Compat",
-      "3": "indopak-reader-compat-v2;Regular;2.000",
+      "3": "indopak-reader-compat-v3;Regular;3.000",
       "4": "IndoPak Reader Compat Regular",
-      "5": "Version 2.000; private encoding compatibility",
+      "5": "Version 3.000; private encoding compatibility",
       "6": "IndoPakReaderCompat-Regular",
       "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
       "16": "IndoPak Reader Compat",
@@ -17,16 +17,16 @@
     }
   },
   {
-    "filename": "indopak-reader-compat-v2.woff2",
-    "bytes": 71212,
-    "sha256": "289bc1a674c5e05bd528a5220b4f9a601e6455c03e9eeb9b5131060ea2a1234a",
+    "filename": "indopak-reader-compat-v3.woff2",
+    "bytes": 71036,
+    "sha256": "1a4511404adaa510af35a4138cbb6d497fb10461a9abf836d4199676b70e95bd",
     "glyph_count": 1727,
     "names": {
       "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
       "1": "IndoPak Reader Compat",
-      "3": "indopak-reader-compat-v2;Regular;2.000",
+      "3": "indopak-reader-compat-v3;Regular;3.000",
       "4": "IndoPak Reader Compat Regular",
-      "5": "Version 2.000; private encoding compatibility",
+      "5": "Version 3.000; private encoding compatibility",
       "6": "IndoPakReaderCompat-Regular",
       "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
       "16": "IndoPak Reader Compat",

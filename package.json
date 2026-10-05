@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "font:indopak:preview": "python3 scripts/fonts/indopak/build.py --preview",
-    "font:indopak:audit": "python3 scripts/fonts/indopak/audit.py --font web/static/fonts/indopak-reader-compat-v2.ttf --font web/static/fonts/indopak-reader-compat-v2.woff2",
+    "font:indopak:audit": "python3 scripts/fonts/indopak/audit.py --font web/static/fonts/indopak-reader-compat-v3.ttf --font web/static/fonts/indopak-reader-compat-v3.woff2",
     "font:indopak:test": "python3 -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'",
     "font:indopak:browser": "node scripts/fonts/indopak/browser-check.mjs",
     "quran:check": "pnpm quran:typecheck && pnpm quran:test",

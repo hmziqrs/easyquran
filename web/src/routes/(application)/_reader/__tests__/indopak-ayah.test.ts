@@ -21,6 +21,12 @@ const cases = [
   "لِيَسُـوْۤء\uE004ا",
   "عَظِيۡمٌ \uE022",
   "بِسْمِ اللّٰهِ",
+  "تَسۡرَحُوۡنَ\uE01B",
+  "شِيۡبَا\uE01C  ۖ",
+  "بِمَلُوۡمٍ\uE01C\uE01A",
+  "الۡخَسِرِيۡنَ \uE01Aۙ",
+  "رَّحِيۡمٌ ۙ",
+  "سَرِيۡعُ الۡعِقَابِ\uE01A ۖ وَاِنَّهٗ لَـغَفُوۡرٌ رَّحِيۡمٌ\uE022",
 ];
 
 describe("IndoPak end signs", () => {
@@ -35,6 +41,19 @@ describe("IndoPak end signs", () => {
     });
     expect(indopakEnding(cases[2]!)).toMatchObject({ sign: "\uE022", following: "ؕ" });
     expect(indopakEnding("عَلَيۡهِمۡ \uE021ۙ غَيۡرِ").sign).toBe("");
+    for (const text of cases) {
+      const ending = indopakEnding(text);
+      expect(ending.lastWord).toMatch(/\p{L}/u);
+      expect(ending.annotations.map((annotation) => annotation.text).join("")).toBe(
+        ending.sign + ending.following,
+      );
+      expect(ending.bodyParts.map((part) => part.text).join("")).toBe(ending.body);
+    }
+    expect(indopakEnding("بِمَلُوۡمٍ\uE01C\uE01A").annotations).toHaveLength(2);
+    const paired = indopakEnding(cases.at(-1)!);
+    const inline = paired.bodyParts.find((part) => part.annotations.length > 0);
+    expect(inline?.text).toBe("\uE01A ۖ");
+    expect(inline?.annotations.at(-1)?.widthEm).toBe(0.491);
   });
 
   for (const [name, component] of Object.entries({ ReadingAyah, VerseRow })) {

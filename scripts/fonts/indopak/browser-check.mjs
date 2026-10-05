@@ -21,7 +21,7 @@ const manifest = JSON.parse(
 const inventory = JSON.parse(
   await readFile(path.join(root, "scripts/fonts/indopak/inventory.json"), "utf8"),
 );
-const font = await readFile(path.join(root, "web/static/fonts/indopak-reader-compat-v2.woff2"));
+const font = await readFile(path.join(root, "web/static/fonts/indopak-reader-compat-v3.woff2"));
 await mkdir(output, { recursive: true });
 const reports = [];
 
@@ -131,7 +131,9 @@ async function checkEndSigns(page, engine) {
       return {
         key: ornament.getAttribute("data-verse-anchor"),
         gap: frame.top - bottom,
-        lines: finalWord.getClientRects().length,
+        lines: new Set(
+          [...finalWord.getClientRects()].map((rectangle) => Math.round(rectangle.top)),
+        ).size,
       };
     });
   });
@@ -162,7 +164,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
       await document.fonts.load('33px "Ayah Ornament"', "\u06DD١٠١");
       await document.fonts.ready;
     });
-    const packaged = await page.request.get(`${base}/fonts/indopak-reader-compat-v2.woff2`);
+    const packaged = await page.request.get(`${base}/fonts/indopak-reader-compat-v3.woff2`);
     assert.equal(packaged.status(), 200);
     assert.ok((await packaged.body()).equals(font));
     const loaded = await page.evaluate(() =>

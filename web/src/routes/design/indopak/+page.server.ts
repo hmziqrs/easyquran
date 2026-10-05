@@ -30,7 +30,15 @@ function verse(database: DatabaseSync, key: string): string {
   return String(row.text);
 }
 
-export function load() {
+function neighbor(database: DatabaseSync, surah: number, ayah: number) {
+  const row = database
+    .prepare("SELECT text FROM quran_text WHERE sura = ? AND aya = ?")
+    .get(surah, ayah);
+  if (!row) return null;
+  return { key: `${surah}:${ayah}`, ayah, text: String(row.text) };
+}
+
+export function load({ url }: { url: URL }) {
   if (!dev) error(404, "Not found");
   const database = new DatabaseSync(databasePath("quran-indopak.sqlite"), { readOnly: true });
   const uthmani = new DatabaseSync(databasePath("quran-uthmani.sqlite"), { readOnly: true });
@@ -50,15 +58,48 @@ export function load() {
       labels.push(`${item.codepoint}: repertoire coverage`);
       contexts.set(key, labels);
     }
-    const specimens = [...contexts].map(([key, labels]) => ({
-      key,
-      labels,
-      text: verse(database, key),
-      ayah: Number(key.split(":")[1]),
-    }));
+    const flowAudit = url.searchParams.get("audit") === "flow";
+    const fullAudit = ["all", "flow"].includes(url.searchParams.get("audit") ?? "");
+    if (fullAudit) {
+      const rows = database
+        .prepare('SELECT sura, aya, text FROM quran_text ORDER BY "index"')
+        .all();
+      for (const row of rows) {
+        const text = String(row.text);
+        const codes = new Set<string>();
+        for (const character of text) {
+          if (/\p{Co}/u.test(character)) codes.add(character);
+        }
+        if (codes.size === 0) continue;
+        const key = `${Number(row.sura)}:${Number(row.aya)}`;
+        contexts.set(
+          key,
+          Array.from(
+            codes,
+            (character) => `U+${character.codePointAt(0)!.toString(16).toUpperCase()}`,
+          ),
+        );
+      }
+    }
+    const specimens = [...contexts]
+      .map(([key, labels]) => {
+        const [surah, ayah] = key.split(":").map(Number);
+        return {
+          key,
+          labels,
+          text: verse(database, key),
+          ayah: ayah!,
+          previous: flowAudit ? neighbor(database, surah!, ayah! - 1) : null,
+          next: flowAudit ? neighbor(database, surah!, ayah! + 1) : null,
+        };
+      })
+      .filter((specimen) => !flowAudit || specimen.text.includes("\uE021"));
     const diagnosticKey = "17:7";
     const diagnosticText = verse(database, diagnosticKey);
     return {
+      fullAudit,
+      flowAudit,
+      verseMode: url.searchParams.get("mode") === "verse",
       specimens,
       symbols: mapping.entries.map((entry) => ({
         codepoint: entry.codepoint,

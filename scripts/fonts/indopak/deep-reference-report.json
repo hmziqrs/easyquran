@@ -1,0 +1,217 @@
+{
+  "database_id": "quran-indopak",
+  "observed_at": "2026-10-05T19:27:17.162Z",
+  "font_style_observed_at": "2026-10-05T20:11:40.210Z",
+  "pages_checked": 201,
+  "reference_build_ids": ["cfO91iJO_kGMxzuatsf-J"],
+  "font_url": "https://quran.com/fonts/quran/hafs/nastaleeq/indopak/indopak-nastaleeq-waqf-lazim-v4.2.1.woff2",
+  "font_bytes": 83560,
+  "observed_word": {
+    "family": "IndoPak",
+    "class": "TextWord_word__DGwvu TextWord_IndoPak__7RG_R"
+  },
+  "context_classes_checked": 223,
+  "private_occurrences_checked": 281,
+  "private_counts": {
+    "U+E003": 4,
+    "U+E004": 1,
+    "U+E01A": 54,
+    "U+E01B": 39,
+    "U+E01C": 41,
+    "U+E01E": 42,
+    "U+E01F": 14,
+    "U+E021": 50,
+    "U+E022": 36
+  },
+  "private_code_sequences_identical": true,
+  "comparison_only_whitespace_and_format_removal": true,
+  "legacy_strings_matching_after_comparison": 191,
+  "legacy_differences": [
+    {
+      "key": "2:10",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 74,
+          "local_codes": [],
+          "reference_index": 74,
+          "reference_codes": ["U+06E2", "U+06D9"]
+        },
+        {
+          "kind": "delete",
+          "local_index": 75,
+          "local_codes": ["U+06D9", "U+06E2"],
+          "reference_index": 77,
+          "reference_codes": []
+        }
+      ]
+    },
+    {
+      "key": "2:219",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    },
+    {
+      "key": "2:233",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    },
+    {
+      "key": "2:243",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    },
+    {
+      "key": "3:171",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    },
+    {
+      "key": "4:142",
+      "differences": [
+        {
+          "kind": "delete",
+          "local_index": 52,
+          "local_codes": ["U+0648", "U+0652"],
+          "reference_index": 52,
+          "reference_codes": []
+        }
+      ]
+    },
+    {
+      "key": "7:206",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 97,
+          "local_codes": [],
+          "reference_index": 97,
+          "reference_codes": ["U+E022"]
+        },
+        {
+          "kind": "delete",
+          "local_index": 98,
+          "local_codes": ["U+E022"],
+          "reference_index": 99,
+          "reference_codes": []
+        }
+      ]
+    },
+    {
+      "key": "9:111",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    },
+    {
+      "key": "12:1",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 37,
+          "local_codes": [],
+          "reference_index": 37,
+          "reference_codes": ["U+0650"]
+        }
+      ]
+    },
+    {
+      "key": "13:5",
+      "differences": [
+        {
+          "kind": "insert",
+          "local_index": 0,
+          "local_codes": [],
+          "reference_index": 0,
+          "reference_codes": ["U+06DE"]
+        }
+      ]
+    }
+  ],
+  "served_pipeline_examples": [
+    {
+      "key": "16:6",
+      "legacy_final_word_private": ["U+E01B"],
+      "served_final_word_codes": ["U+064E", "U+0652", "U+064E", "U+064F", "U+0652", "U+064E"],
+      "served_ornament_codes": ["U+06DF", "U+06EA", "U+F505"]
+    },
+    {
+      "key": "73:17",
+      "legacy_final_word_private": ["U+E01C"],
+      "served_final_word_codes": ["U+0650", "U+0652", "U+064E"],
+      "served_ornament_codes": ["U+06DF", "U+06D7", "U+06D6", "U+F510"]
+    },
+    {
+      "key": "79:27",
+      "legacy_final_word_private": ["U+E01F"],
+      "served_final_word_codes": ["U+064E", "U+0670", "U+064E"],
+      "served_ornament_codes": ["U+06DF", "U+06D9", "U+F51A"]
+    },
+    {
+      "key": "51:54",
+      "legacy_final_word_private": ["U+E01C", "U+E01A"],
+      "served_final_word_codes": ["U+0650", "U+064E", "U+064F", "U+0652", "U+064D"],
+      "served_ornament_codes": ["U+06DF", "U+F637"]
+    },
+    {
+      "key": "26:51",
+      "legacy_final_word_private": ["U+E022"],
+      "served_final_word_codes": [
+        "U+0652",
+        "U+064F",
+        "U+0652",
+        "U+0650",
+        "U+0650",
+        "U+0652",
+        "U+064E"
+      ],
+      "served_ornament_codes": ["U+06DF", "U+0615", "U+06E0", "U+F532"]
+    },
+    {
+      "key": "43:15",
+      "legacy_final_word_private": ["U+E022"],
+      "served_final_word_codes": ["U+0651", "U+064F", "U+0650", "U+0652", "U+064C"],
+      "served_ornament_codes": ["U+06DF", "U+0615", "U+06E0", "U+F50E"]
+    }
+  ],
+  "limitations": [
+    "201 verse pages, not a full Quran.com corpus comparison",
+    "Legacy textIndopak field differs from current served word.text pipeline",
+    "Source differences require editorial review; no DB edits or reader normalization",
+    "No restricted reference font assets copied into repository or build"
+  ]
+}

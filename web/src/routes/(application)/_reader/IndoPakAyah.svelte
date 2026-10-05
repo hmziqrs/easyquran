@@ -6,12 +6,12 @@
   const ending = $derived(indopakEnding(text));
 </script>
 
-<span data-indopak-ayah>{ending.body}<span class="indopak-final-word">{ending.lastWord}<span class="indopak-ending" dir="rtl">{#if ending.sign}<span class="indopak-end-sign" dir="ltr"><span class:ruku={ending.ruku}>{ending.sign}</span>{#if ending.following}<span class="following">{ending.following}</span>{/if}</span>{/if}<span data-indopak-ornament><AyahOrnament {vKey} {n} /></span></span></span></span>
+<span data-indopak-ayah>{#each ending.bodyParts as part (part.offset)}{#if part.annotations.length}<span class="indopak-body-sign" dir="ltr">{#each part.annotations as annotation (annotation.offset)}<span style:width={annotation.widthEm === undefined ? undefined : `${annotation.widthEm}em`}>{annotation.text}</span>{/each}</span>{:else}{part.text}{/if}{/each}<span class="indopak-final-word">{ending.lastWord}<span class="indopak-ending" dir="rtl">{#if ending.sign}<span class="indopak-end-sign" dir="ltr">{#each ending.annotations as annotation (annotation.offset)}<span style:width={annotation.widthEm === undefined ? undefined : `${annotation.widthEm}em`}>{annotation.text}</span>{/each}</span>{/if}<span data-indopak-ornament><AyahOrnament {vKey} {n} /></span></span></span></span>
 
 <style>
   @font-face {
     font-family: "IndoPak Reader Compat";
-    src: url("/fonts/indopak-reader-compat-v2.woff2") format("woff2");
+    src: url("/fonts/indopak-reader-compat-v3.woff2") format("woff2");
     font-weight: 400;
     font-display: block;
   }
@@ -41,11 +41,10 @@
     unicode-bidi: isolate;
   }
 
-  .ruku {
-    width: 0.211em;
-  }
-
-  .following {
-    width: 0.227em;
+  .indopak-body-sign {
+    display: inline-flex;
+    gap: 0.08em;
+    unicode-bidi: isolate;
+    white-space: nowrap;
   }
 </style>

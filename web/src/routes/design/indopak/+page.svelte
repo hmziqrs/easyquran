@@ -4,6 +4,7 @@
   import { loadArabicFont } from "$lib/fonts/arabic-fonts";
   import { TooltipProvider } from "$lib/components/ui/tooltip";
   import ReadingAyah from "../../(application)/_reader/ReadingAyah.svelte";
+  import VerseRow from "../../(application)/_reader/VerseRow.svelte";
   import type { PageData } from "./$types";
 
   let { data }: { data: PageData } = $props();
@@ -29,10 +30,12 @@
     Nine private codes, 1,383 occurrences. {data.contextCount} context classes across
     {data.specimens.length} actual verses. Original DB strings pass unchanged to ReadingAyah.
   </p>
+  {#if data.fullAudit}<p>Full occurrence audit. Mode: {data.verseMode ? "verse" : "reading"}.</p>{/if}
+  {#if data.flowAudit}<p>Optional-ayah marks with original preceding and following verses.</p>{/if}
   <div class="controls">
     <label>Font size
       <select bind:value={size} disabled={!ready}>
-        {#each [24, 33, 48] as value (value)}<option value={value}>{value}px</option>{/each}
+        {#each [22, 24, 33, 48, 56] as value (value)}<option value={value}>{value}px</option>{/each}
       </select>
     </label>
     <label>Run width
@@ -78,7 +81,13 @@
           <h3>{specimen.key}</h3>
           <p class="context">{specimen.labels.join(" · ")}</p>
           <div class="run" dir="rtl">
-            <ReadingAyah text={specimen.text} n={specimen.ayah} vKey={specimen.key} script={QuranScript.IndoPak} />
+            {#if specimen.previous}<ReadingAyah text={specimen.previous.text} n={specimen.previous.ayah} vKey={specimen.previous.key} script={QuranScript.IndoPak} />&#32;{/if}
+            {#if data.verseMode}
+              <VerseRow text={specimen.text} n={specimen.ayah} vKey={specimen.key} script={QuranScript.IndoPak} />
+            {:else}
+              <ReadingAyah text={specimen.text} n={specimen.ayah} vKey={specimen.key} script={QuranScript.IndoPak} />
+            {/if}
+            {#if specimen.next}&#32;<ReadingAyah text={specimen.next.text} n={specimen.next.ayah} vKey={specimen.next.key} script={QuranScript.IndoPak} />{/if}
           </div>
         </article>
       {/each}
@@ -89,7 +98,7 @@
 <style>
   @font-face {
     font-family: "IndoPak Reader Compat";
-    src: url("/fonts/indopak-reader-compat-v2.woff2") format("woff2");
+    src: url("/fonts/indopak-reader-compat-v3.woff2") format("woff2");
     font-weight: 400;
     font-display: block;
   }

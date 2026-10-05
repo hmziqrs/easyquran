@@ -1,8 +1,9 @@
 # IndoPak compatibility font
 
-Version 2 is integrated into both IndoPak reader modes. Default Uthmani stays unchanged.
+Version 3 is integrated into both IndoPak reader modes. Default Uthmani stays unchanged.
 See [font/data evidence](../../../docs/indopak-font-compatibility.md) and
-[Quran.com comparison](../../../docs/indopak-qurancom-comparison.md).
+[Quran.com comparison](../../../docs/indopak-qurancom-comparison.md),
+[deep audit/source discrepancies](../../../docs/indopak-deep-audit.md).
 
 Run from repository root with Python 3.9+, Node 24+, and pnpm dependencies:
 
@@ -11,8 +12,8 @@ python3 -m venv .cache/indopak-venv
 .cache/indopak-venv/bin/pip install -r scripts/fonts/indopak/requirements.txt
 .cache/indopak-venv/bin/python scripts/fonts/indopak/build.py
 .cache/indopak-venv/bin/python scripts/fonts/indopak/audit.py \
-  --font web/static/fonts/indopak-reader-compat-v2.ttf \
-  --font web/static/fonts/indopak-reader-compat-v2.woff2
+  --font web/static/fonts/indopak-reader-compat-v3.ttf \
+  --font web/static/fonts/indopak-reader-compat-v3.woff2
 .cache/indopak-venv/bin/python -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'
 .cache/indopak-venv/bin/python scripts/fonts/indopak/validate.py \
   --upstream .cache/fonts/indopak/NotoNaskhArabic-wght.ttf
@@ -60,3 +61,40 @@ counts, `mapping.json` symbol identities/constructions, `outputs.json` packaged 
 `shaping-report.json` and `browser-report.json` validation, `qurancom-comparison.json` reference
 observations, `requirements.txt` pinned build/test dependencies. Font assets include complete
 OFL and modification log. Existing Quran text license/attribution is unchanged.
+
+## Full occurrence and live-reference audits
+
+Install additional audit dependencies with `pip install -r scripts/fonts/indopak/audit-requirements.txt`.
+Use the same Python environment as the pinned build. These are explicit audits, not boot/build paths.
+
+```sh
+python3 scripts/fonts/indopak/deep_audit.py
+node scripts/fonts/indopak/deep-browser-check.mjs
+python3 scripts/fonts/indopak/dom_ink_analysis.py --engine chromium
+python3 scripts/fonts/indopak/dom_ink_analysis.py --engine webkit
+INDOPAK_DEEP_FLOW=1 INDOPAK_DEEP_ENGINES=chromium,webkit node scripts/fonts/indopak/deep-browser-check.mjs
+python3 scripts/fonts/indopak/dom_ink_analysis.py --engine chromium-flow
+python3 scripts/fonts/indopak/dom_ink_analysis.py --engine webkit-flow
+node scripts/fonts/indopak/live-reference-check.mjs
+python3 scripts/fonts/indopak/compare_reference.py
+```
+
+Full output defaults to ignored `.cache/indopak-deep`; override with `INDOPAK_DEEP_OUTPUT` and
+`deep_audit.py --output`. `audit=all` adds every private-containing verse to the real reader
+specimen. `audit=flow` checks every optional-ayah verse with original same-surah neighbors.
+`INDOPAK_DEEP_ENGINES` selects engines; default includes Firefox, whose unavailable state
+produces nonzero exit while other engines continue. Never report that as a Firefox pass.
+
+`INDOPAK_DEEP_DIAGNOSTICS_ONLY=1` skips matrices for a targeted ink rerun;
+`INDOPAK_DEEP_KEYS` optionally narrows DOM captures. Reports distinguish diagnostic-only from
+full-matrix passes. Mask fonts preserve all original layout; transparent COLR layers isolate
+ink. DOM reconstruction, negative controls and outside-mask checks reject invalid diagnostics.
+Ink/boundary candidates stop approval until reviewed. Production-font/diagnostic raster
+comparisons use a recorded two-pixel edge tolerance; masks include shared cmap aliases. No restricted reference font is used
+to construct diagnostic fonts.
+
+Live reference tool fetches all representative context pages with two concurrent requests,
+verifies deployed font family/resource, and stores unchanged reference assets outside repository
+(default `/tmp/easyquran-deep-reference`, override `INDOPAK_REFERENCE_OUTPUT`). Comparison
+script checks ordered legacy private-code sequences, records source differences, and does not
+mutate or normalize DB/reader text. Full API access and qualified editorial review remain open.

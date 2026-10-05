@@ -1,10 +1,9 @@
 # IndoPak font compatibility
 
-Implemented 2026-10-05. Version 2 is active for IndoPak in both reading modes. The
-[live Quran.com audit](indopak-qurancom-comparison.md) established all nine symbol identities
-and exposed defects in the first preview. Those defects are now repaired: the inverted damma
-sits above hamza, the optional-ayah 5 is separate from its pause sign, and trailing zain/ruku
-signs sit above the ayah ornament. Original database strings remain exact.
+Implemented 2026-10-05; re-audited 2026-10-06. Version 3 is active for IndoPak in both
+reading modes. The [deep audit](indopak-deep-audit.md) found and repaired further optional-ayah,
+inline-pause and final-word grouping defects beyond the version 2 examples. It also records
+unresolved source-text discrepancies with Quran.com. Original database strings remain exact.
 
 This is a Noto-based open font, not a reproduction of Quran.com's Nastaleeq artwork. Technical
 integration approval does not establish the original printed edition or approve recitation
@@ -160,7 +159,7 @@ U+0657 and its attachment tables remain intact. This is deliberately scoped to t
 corpus and the browser renderer, not a general Unicode-property repair or approval for a
 native renderer that forces an entire verse into one Arabic run.
 
-E021 is a genuine optional-ayah 5 from Noto U+08E2, half scale, translated `(-250,820)`.
+E021 is a genuine optional-ayah 5 from Noto U+08E2, half scale, translated `(-250,1120)`.
 Its ink lies left of the following annotation, with a gap, rather than overprinting it.
 The original-source reference uses adjacent signs; Quran.com's modern served text instead
 uses a vertical stack and adds a small six. We preserve our source's two original signs.
@@ -182,9 +181,9 @@ unresolved mappings, conflicts, absent targets and inventory/context mismatches.
 reads or hashes Quran data. A manifest with unapproved rendering is rejected before download
 or output. Rebuild instructions are in the [tool README](../scripts/fonts/indopak/README.md).
 
-Family: `IndoPak Reader Compat`; PostScript: `IndoPakReaderCompat-Regular`; version 2.000.
+Family: `IndoPak Reader Compat`; PostScript: `IndoPakReaderCompat-Regular`; version 3.000.
 Genuine TTF and WOFF2 retain the full repertoire and layout. Complete OFL and FONTLOG are
-packaged alongside `web/static/fonts/indopak-reader-compat-v2.*`. The distinct name, explicit
+packaged alongside `web/static/fonts/indopak-reader-compat-v3.*`. The distinct name, explicit
 versioned URL and absence of `local()` ensure the packaged derivative is used. Separate
 rebuilds are byte-identical. Exact bytes, font-only checksums and name records are in
 [`outputs.json`](../scripts/fonts/indopak/outputs.json).
@@ -232,3 +231,10 @@ retain Noto's higher annotation lane; the glyph meanings stay distinct and genui
 sampled comparison does not prove pixel parity with Quran.com's different font or certify
 recitation/editorial accuracy. Original printed-edition/download provenance and qualified
 recitation review remain unresolved.
+
+## Version 3 full-occurrence audit
+
+The [2026-10-06 deep audit](indopak-deep-audit.md) supersedes the narrower version 2 placement
+checks recorded above. It covers all private occurrences, terminal pause chains, changed inline pairs
+and optional-ayah marks with neighboring verses. Source-text differences and platform gaps
+remain open; technical font integration is not editorial certification.

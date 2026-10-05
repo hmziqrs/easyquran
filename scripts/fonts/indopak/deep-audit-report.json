@@ -1,0 +1,289 @@
+{
+  "date": "2026-10-06",
+  "date_timezone": "Asia/Karachi",
+  "font_family": "IndoPak Reader Compat",
+  "font_version": "3.000",
+  "corpus": {
+    "database_id": "quran-indopak",
+    "database_open_mode": "ro&immutable=1",
+    "verses": 6236,
+    "private_verses": 1218,
+    "occurrences": 1383,
+    "symbols": {
+      "E003": 4,
+      "E004": 1,
+      "E01A": 242,
+      "E01B": 166,
+      "E01C": 145,
+      "E01E": 131,
+      "E01F": 20,
+      "E021": 121,
+      "E022": 553
+    },
+    "exact_excerpts": 1257,
+    "terminal_counts": {
+      "E01A": 46,
+      "E01B": 73,
+      "E01C": 23,
+      "E01E": 4,
+      "E01F": 6,
+      "E022": 553
+    },
+    "diagnostic_fonts": "Local OFL font only; original outlines, cmap, advances and layout retained. Transparent COLR layers isolate ink.",
+    "diagnostic_geometry_hinting_and_layout_verified": true,
+    "reference": {
+      "family": "AlQuran IndoPak by QuranWBW",
+      "version": "Version 4.2.1-WL ",
+      "symbols": [
+        {
+          "code": "E003",
+          "glyph": "uni0656",
+          "advance": 0,
+          "bounds": [202, -612, 356, -30],
+          "cmap_aliases": ["0656"]
+        },
+        {
+          "code": "E004",
+          "glyph": "uni0657",
+          "advance": 0,
+          "bounds": [160, 1362, 412, 2025],
+          "cmap_aliases": ["0657"]
+        },
+        {
+          "code": "E01A",
+          "glyph": "uniE01A",
+          "advance": 403,
+          "bounds": [-617, 820, 365, 1662],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E01B",
+          "glyph": "uniE01B",
+          "advance": 809,
+          "bounds": [-617, 820, 807, 1732],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E01C",
+          "glyph": "uniE01C",
+          "advance": 405,
+          "bounds": [-617, 820, 412, 1766],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E01E",
+          "glyph": "uniE01E",
+          "advance": 864,
+          "bounds": [56, 1258, 831, 1744],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E01F",
+          "glyph": "uniE01F",
+          "advance": 1274,
+          "bounds": [127, 1284, 1149, 1817],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E021",
+          "glyph": "uniE021",
+          "advance": 0,
+          "bounds": [-513, 1217, -294, 1601],
+          "cmap_aliases": []
+        },
+        {
+          "code": "E022",
+          "glyph": "uniE022",
+          "advance": 0,
+          "bounds": [-753, 1050, -93, 1711],
+          "cmap_aliases": []
+        }
+      ]
+    }
+  },
+  "repairs": {
+    "optional_ayah_transform": [-250, 1120],
+    "terminal_private_clusters": 705,
+    "old_final_groups_without_arabic_letter": 133,
+    "inline_annotation_groups": 28,
+    "inline_annotation_verses": 26
+  },
+  "engines": [
+    {
+      "engine": "chromium",
+      "version": "153.0.8010.12",
+      "full_corpus_matrices": 32,
+      "full_corpus_verses": 1243,
+      "full_corpus_private_occurrences": 1383,
+      "terminal_clusters": 705,
+      "continuous_matrices": 16,
+      "continuous_target_verses": 116,
+      "continuous_target_private_occurrences": 149,
+      "sizes_px": [22, 24, 33, 48, 56],
+      "widths_px": [320, 640, 960],
+      "phone_viewport": [390, 844],
+      "raw_raster_occurrences": 1383,
+      "raw_overlap_review_candidates": 19,
+      "raw_candidates_rechecked_in_actual_dom": true,
+      "dom_ink": [
+        {
+          "scope": "isolated",
+          "comparisons": 145,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        },
+        {
+          "scope": "continuous",
+          "comparisons": 117,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        },
+        {
+          "scope": "changed_inline",
+          "comparisons": 49,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        }
+      ],
+      "original_dom_text_exact": true
+    },
+    {
+      "engine": "webkit",
+      "version": "26.6",
+      "full_corpus_matrices": 32,
+      "full_corpus_verses": 1243,
+      "full_corpus_private_occurrences": 1383,
+      "terminal_clusters": 705,
+      "continuous_matrices": 16,
+      "continuous_target_verses": 116,
+      "continuous_target_private_occurrences": 149,
+      "sizes_px": [22, 24, 33, 48, 56],
+      "widths_px": [320, 640, 960],
+      "phone_viewport": [390, 844],
+      "raw_raster_occurrences": 1383,
+      "raw_overlap_review_candidates": 10,
+      "raw_candidates_rechecked_in_actual_dom": true,
+      "dom_ink": [
+        {
+          "scope": "isolated",
+          "comparisons": 142,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        },
+        {
+          "scope": "continuous",
+          "comparisons": 117,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        },
+        {
+          "scope": "changed_inline",
+          "comparisons": 49,
+          "invisible": 0,
+          "geometry_mismatch": 0,
+          "boundary_candidates": 0,
+          "overlap_candidates": 0
+        }
+      ],
+      "original_dom_text_exact": true
+    }
+  ],
+  "total_layout_matrices": 96,
+  "total_dom_ink_comparisons": 665,
+  "shaping": {
+    "verses_shaped": 6236,
+    "private_codes_exercised": 9,
+    "unaffected_runs_identical": 5015,
+    "notdef_count": 0,
+    "ttf_woff2_traces_identical": true,
+    "harfbuzz": "12.1.0",
+    "limitation": "Forced Arabic/RTL HarfBuzz runs do not model browser bidi itemization.",
+    "production_approved": true
+  },
+  "gates": {
+    "check": "passed_zero_errors_zero_warnings",
+    "lint": "passed_deny_warnings",
+    "web_test_files": 173,
+    "web_tests": 2182,
+    "font_tests": 8,
+    "audit_script_lint": "passed_deny_warnings",
+    "production_build": "passed",
+    "svelte_autofixer": "no_issues_or_suggestions"
+  },
+  "production_http": [
+    {
+      "path": "/design/indopak",
+      "status": 404
+    },
+    {
+      "path": "/design/indopak?audit=all",
+      "status": 404
+    },
+    {
+      "path": "/design/indopak?audit=flow",
+      "status": 404
+    },
+    {
+      "path": "/fonts/indopak-reader-compat-v3.woff2",
+      "status": 200,
+      "bytes": 71036,
+      "exact_packaged_bytes": true
+    }
+  ],
+  "unavailable_platforms": {
+    "firefox_automated": {
+      "status": "failed_or_unavailable",
+      "reason": "Playwright: profile folder unavailable; native Firefox/geckodriver: process launch/Marionette failure"
+    },
+    "safari_native_webdriver": "Remote automation disabled; setting unchanged",
+    "ios_device": "not tested"
+  },
+  "reference_report": "deep-reference-report.json",
+  "reference_pages": 201,
+  "reference_context_classes": 223,
+  "reference_private_occurrences": 281,
+  "reference_private_sequences_identical": true,
+  "source_differences_unresolved": true,
+  "editorial_certification": false,
+  "printed_edition_provenance_recovered": false,
+  "database_writes": false,
+  "database_versioning": false,
+  "quran_sha256_computed": false,
+  "restricted_font_assets_in_repository_or_build": false,
+  "approval_scope": "Measured font and reader behavior on this immutable corpus under tested Chromium/WebKit conditions; no perfect-font, full-platform or editorial claim",
+  "production_font_diagnostic_crosschecks": [
+    {
+      "engine": "chromium",
+      "comparisons": 23,
+      "production_font_comparisons": 23,
+      "raster_edge_tolerance_px": 2,
+      "geometry_mismatch": 0,
+      "overlap_candidates": 0,
+      "codes_checked": ["E003", "E004", "E01A", "E01B", "E01C", "E01E", "E01F", "E021", "E022"]
+    },
+    {
+      "engine": "webkit",
+      "comparisons": 23,
+      "production_font_comparisons": 23,
+      "raster_edge_tolerance_px": 2,
+      "geometry_mismatch": 0,
+      "overlap_candidates": 0,
+      "codes_checked": ["E003", "E004", "E01A", "E01B", "E01C", "E01E", "E01F", "E021", "E022"]
+    }
+  ],
+  "diagnostic_limitations": [
+    "Glyph-based masks also include standard cmap aliases: E003/U0656, E022/U08D6. All four E003 raw excerpts contain no U0656; full DOM 35:11 includes its ordinary U0656 too. U08D6 is absent from this corpus.",
+    "WebKit color/non-color text has small raster edge differences; original-vs-diagnostic comparison uses two-pixel edge tolerance, never a claim of exact pixel parity.",
+    "Masks aggregate same-glyph occurrences; semantic correctness and identical-ink contact between repeated copies require visual review."
+  ]
+}

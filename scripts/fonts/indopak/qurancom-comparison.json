@@ -167,7 +167,9 @@
     "technical_integration_approved": true,
     "limits": "No full-corpus Quran.com visual/editorial comparison or qualified recitation approval. Native Firefox focused E004 only; native Safari focused E004/E021/2:101. Automated Firefox unavailable; no iOS pass."
   },
-  "overall": "v2_technical_repairs_validated_editorial_provenance_open",
+  "v3_deep_audit": "deep-audit-report.json",
+  "v3_source_discrepancies": "deep-reference-report.json",
+  "overall": "v3_measured_repairs_validated_source_discrepancies_and_platform_gaps_open",
   "production_approved": true,
   "approval_scope": "Technical font and reader integration; no certification of source edition or recitation rulings."
 }
