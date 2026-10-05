@@ -3,7 +3,8 @@
 **Partial coverage. Not a Safari rendering approval.** Native macOS Safari 27.0 and Playwright
 WebKit pass every mechanical and ink check in the full specimen matrices. Layout review items
 A–E stay open. Older Safari, real iPhone/iPad, production reader and Quran.com rows remain
-untested. Plan: [Safari testing plan](indopak-safari-testing-plan.md). Earlier results and
+untested. Plan: [Safari testing plan](indopak-safari-testing-plan.md). Proposed fix
+direction, copying Quran.com's word-box layout and font: [Quran.com study](indopak-qurancom-rendering-study.md). Earlier results and
 editorial findings: [deep audit](indopak-deep-audit.md).
 
 ## Run record
