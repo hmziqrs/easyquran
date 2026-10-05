@@ -941,20 +941,11 @@
   vertical-align: middle;
 }
 
-/* Quran.com-style end-of-ayah medallion for the reader's Arabic column: the
-   U+06DD ARABIC END OF AYAH mark must compose with its Arabic-Indic digits so
-   the number arrives enclosed in its ring. The reading faces cannot all do
-   that: the @fontsource/amiri subset ships no calt/liga lookups, both Uthman
-   Taha Naskh cmaps lack U+06DD (the mark fell back to Amiri mid-span and the
-   ring/digits split across faces), and Uthmanic Hafs draws a second empty
-   ring next to the composed one when the mark is spelled out. So the ornament
-   run is pinned to its own composing face (@font-face above) for EVERY
-   offered font. Fallbacks: faces that compose the mark (Scheherazade New —
-   loaded above as the arabic-400 webfont so it is reachable during the
-   subset's swap window or if the 4 KB file 404s — Noto Naskh Arabic) or at
-   least carry both halves without tofu (Amiri); Uthmanic Hafs is deliberately
-   excluded — its doubled ring is worse than an unenclosed number. */
 @utility ayah-ornament {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
   color: var(--primary);
   font-family:
     "Ayah Ornament", "Scheherazade New", "Noto Naskh Arabic", "Amiri", "Traditional Arabic",
@@ -963,7 +954,7 @@
   font-size: 0.86em;
   line-height: 1;
   vertical-align: middle;
-  margin-inline-start: 0.12em;
+  margin-inline-end: 0.12em;
 }
 
 @utility reading-text {

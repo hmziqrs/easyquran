@@ -207,6 +207,12 @@ dependency or persisted settings field. Static font assets follow existing Svelt
 service-worker precache/version policy; they are separate from Quran offline data pack.
 Production default selection remains unchanged until rendering acceptance is met.
 
+End-of-ayah ornaments use a separate unbreakable, isolated LTR inline block. Without that
+boundary, the E01A ending at 2:101 splits the numeral run from its U+06DD frame; 2:86 also
+reproduces the failure. This fix is confined to the generated ornament, preserving the original
+Quran string and its RTL shaping. Browser checks cover one-, two- and three-digit endings,
+all specimen/control ornaments, mobile wrapping and the composing Scheherazade fallback.
+
 ## Validation and open acceptance items
 
 - Complete read-only corpus inventory compared with recorded inventory; packaged TTF/WOFF2

@@ -56,6 +56,9 @@ Override host with `INDOPAK_SPECIMEN_BASE`; screenshots/report default to ignore
 original strings, every inventory character, fetched packaged font bytes, font-family usage,
 multiple sizes/widths and mobile viewport. They also preserve a visual reproduction of the
 known E004 failure. A passing harness means those checks ran, not that positioning passed.
+End-of-ayah checks cover one-, two- and three-digit medallions in every specimen/control,
+including the Scheherazade fallback when the ornament font cannot load. Escaped digits widen
+the run beyond the composing face's one-em medallion; the harness rejects that regression.
 Engine failures are recorded while remaining engines continue; any failure exits nonzero.
 Recorded full automated Firefox run is unavailable on audited host; installed Firefox GUI
 inspection is reported separately alongside native Safari.

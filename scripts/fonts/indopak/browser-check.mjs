@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+
 import { chromium, firefox, webkit } from "playwright";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -26,6 +27,25 @@ const font = await readFile(
 await mkdir(output, { recursive: true });
 const reports = [];
 
+async function checkOrnaments(page, engine) {
+  const runs = await page.locator(".ayah-ornament").evaluateAll((elements) =>
+    elements.map((element) => ({
+      key: element.getAttribute("data-verse-anchor"),
+      width: element.getBoundingClientRect().width,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      text: element.textContent,
+    })),
+  );
+  assert.ok(runs.length > 0);
+  for (const run of runs) {
+    assert.ok(
+      run.width > 0 && run.width <= run.fontSize * 1.05,
+      `${engine}: ${run.key} digits escaped medallion (${run.width / run.fontSize}em)`,
+    );
+  }
+  return runs;
+}
+
 for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
   let browser;
   try {
@@ -42,6 +62,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     await page.getByLabel("Font size").selectOption("33");
     await page.evaluate(async () => {
       await document.fonts.load('33px "IndoPak Reader Compat Preview"', "\uE003\uE004\uE022");
+      await document.fonts.load('33px "Ayah Ornament"', "\u06DD١٠١");
       await document.fonts.ready;
     });
     const packaged = await page.request.get(`${base}/fonts/indopak-reader-compat-preview-v1.woff2`);
@@ -55,6 +76,10 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
       ),
     );
     assert.ok(loaded);
+    const ornaments = await checkOrnaments(page, name);
+    for (const digitCount of [1, 2, 3]) {
+      assert.ok(ornaments.some((run) => run.text.length === digitCount + 1));
+    }
     const specimens = await page.locator("[data-specimen]").evaluateAll((elements) =>
       elements.map((element) => ({
         key: element.getAttribute("data-specimen"),
@@ -100,6 +125,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
               elements.filter((element) => element.getBoundingClientRect().width <= 0).length,
           );
         assert.equal(empty, 0);
+        await checkOrnaments(page, name);
       }
     }
     await page.getByLabel("Font size").selectOption("48");
@@ -122,12 +148,27 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     await page
       .locator('[data-control="uthmani:1:7"]')
       .screenshot({ path: path.join(output, `${name}-uthmani-control.png`) });
+    await page.getByLabel("Font size").selectOption("33");
+    await page.getByLabel("Run width").selectOption("640");
+    await page
+      .locator('[data-specimen="2:101"]')
+      .screenshot({ path: path.join(output, `${name}-2-101-ornament.png`) });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByLabel("Font size").selectOption("33");
     await page.getByLabel("Run width").selectOption("320");
     await page
       .locator('[data-specimen="17:7"]')
       .screenshot({ path: path.join(output, `${name}-phone-17-7.png`) });
+    await checkOrnaments(page, name);
+    const fallbackPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await fallbackPage.route("**/fonts/ayah-ornament.woff2", (route) => route.abort());
+    await fallbackPage.goto(`${base}/design/indopak`);
+    await fallbackPage.evaluate(async () => {
+      await document.fonts.load('33px "Scheherazade New"', "\u06DD١٠١");
+      await document.fonts.ready;
+    });
+    await checkOrnaments(fallbackPage, `${name} fallback`);
+    await fallbackPage.close();
     assert.deepEqual(pageErrors, []);
     reports.push({
       engine: name,
@@ -137,6 +178,9 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
       status: "checks_passed_rendering_blocked",
       font_loaded_from_packaged_bytes: true,
       original_strings_preserved: true,
+      ornament_runs_checked: ornaments.length,
+      ornament_digit_lengths: [1, 2, 3],
+      ornament_fallback_checked: true,
       fontOnlyBidiFailure,
       sizes: [24, 33, 48],
       widths: [320, 640, 960],
