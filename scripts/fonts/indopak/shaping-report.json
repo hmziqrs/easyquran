@@ -1,0 +1,10 @@
+{
+  "verses_shaped": 6236,
+  "private_codes_exercised": 9,
+  "unaffected_runs_identical": 5015,
+  "notdef_count": 0,
+  "ttf_woff2_traces_identical": true,
+  "harfbuzz": "12.1.0",
+  "limitation": "Forced Arabic/RTL HarfBuzz runs do not model browser bidi itemization.",
+  "production_approved": false
+}

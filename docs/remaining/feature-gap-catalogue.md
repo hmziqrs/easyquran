@@ -138,9 +138,10 @@ Uthmani, Simple-clean, IndoPak, Tajweed) with a script picker in Settings → Re
 schema v4); Tajweed markup renders as colored runs.
 
 **Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
-per-source font controls; dedicated Nastaleeq face for IndoPak — deliberately deferred: the DB's 9 PUA
-codepoints (U+E003–U+E022) are covered only by no-redistribution fonts (QuranWBW, PDMS Saleem) and
-DigitalKhatt (OFL) targets a different encoding; unblocked only by licensing outreach or a rebuilt DB.
+per-source font controls; production IndoPak font compatibility. An OFL derivative now covers
+all nine PUA codes and ordinary corpus characters, with a development specimen. E004 in 17:7
+still fails browser bidi/shaping; exact edition provenance and qualified review remain open.
+See [`indopak-font-compatibility.md`](../indopak-font-compatibility.md). Quran DB remains immutable.
 
 ### R09 — Pin and compare verses — Missing · P1
 

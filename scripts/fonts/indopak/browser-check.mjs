@@ -1,0 +1,160 @@
+import assert from "node:assert/strict";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+import { chromium, firefox, webkit } from "playwright";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
+const output = process.env.INDOPAK_SPECIMEN_OUTPUT ?? path.join(root, ".cache/indopak-browser");
+const database = new DatabaseSync(path.join(root, "db/quran/arabic/quran-indopak.sqlite"), {
+  readOnly: true,
+});
+const rows = database.prepare("SELECT sura, aya, text FROM quran_text").all();
+database.close();
+const originals = new Map(rows.map((row) => [`${row.sura}:${row.aya}`, String(row.text)]));
+const manifest = JSON.parse(
+  await readFile(path.join(root, "scripts/fonts/indopak/mapping.json"), "utf8"),
+);
+const inventory = JSON.parse(
+  await readFile(path.join(root, "scripts/fonts/indopak/inventory.json"), "utf8"),
+);
+const font = await readFile(
+  path.join(root, "web/static/fonts/indopak-reader-compat-preview-v1.woff2"),
+);
+await mkdir(output, { recursive: true });
+const reports = [];
+
+for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
+  let browser;
+  try {
+    browser = await engine.launch({ headless: true, timeout: 30000 });
+    const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+    const pageErrors = [];
+    page.on("pageerror", (failure) => pageErrors.push(failure.message));
+    const response = await page.goto(`${base}/design/indopak`);
+    assert.equal(response.status(), 200);
+    await page
+      .getByRole("heading", { name: "IndoPak font compatibility preview", exact: true })
+      .waitFor();
+    await page.waitForFunction(() => !document.querySelector("select").disabled);
+    await page.getByLabel("Font size").selectOption("33");
+    await page.evaluate(async () => {
+      await document.fonts.load('33px "IndoPak Reader Compat Preview"', "\uE003\uE004\uE022");
+      await document.fonts.ready;
+    });
+    const packaged = await page.request.get(`${base}/fonts/indopak-reader-compat-preview-v1.woff2`);
+    assert.equal(packaged.status(), 200);
+    assert.ok((await packaged.body()).equals(font));
+    const loaded = await page.evaluate(() =>
+      [...document.fonts].some(
+        (face) =>
+          face.family.replaceAll('"', "") === "IndoPak Reader Compat Preview" &&
+          face.status === "loaded",
+      ),
+    );
+    assert.ok(loaded);
+    const specimens = await page.locator("[data-specimen]").evaluateAll((elements) =>
+      elements.map((element) => ({
+        key: element.getAttribute("data-specimen"),
+        text: element.querySelector(".verse-text")?.textContent ?? "",
+        family: getComputedStyle(element.querySelector(".verse-text")).fontFamily,
+      })),
+    );
+    for (const specimen of specimens) {
+      assert.ok(
+        specimen.text.includes(originals.get(specimen.key)),
+        `${name}: original string ${specimen.key}`,
+      );
+      assert.ok(specimen.family.includes("IndoPak Reader Compat Preview"));
+    }
+    for (const item of inventory.codepoints) {
+      const character = String.fromCodePoint(Number.parseInt(item.codepoint.slice(2), 16));
+      assert.ok(specimens.some((specimen) => specimen.text.includes(character)));
+    }
+    const contextCount = manifest.entries.reduce(
+      (total, entry) => total + entry.contexts.length,
+      0,
+    );
+    for (const size of [24, 33, 48]) {
+      await page.getByLabel("Font size").selectOption(String(size));
+      await page.waitForFunction(
+        (expected) =>
+          getComputedStyle(document.querySelector("[data-specimen] .verse-text")).fontSize ===
+          `${expected}px`,
+        size,
+      );
+      for (const width of [320, 640, 960]) {
+        await page.getByLabel("Run width").selectOption(String(width));
+        await page.waitForFunction(
+          (expected) =>
+            getComputedStyle(document.querySelector("[data-specimen]")).maxWidth ===
+            `${expected}px`,
+          width,
+        );
+        const empty = await page
+          .locator("[data-specimen] .verse-text")
+          .evaluateAll(
+            (elements) =>
+              elements.filter((element) => element.getBoundingClientRect().width <= 0).length,
+          );
+        assert.equal(empty, 0);
+      }
+    }
+    await page.getByLabel("Font size").selectOption("48");
+    await page.getByLabel("Run width").selectOption("960");
+    const originalShot = await page.locator('[data-diagnostic="original"]').screenshot();
+    const diagnosticShot = await page.locator('[data-diagnostic="unicode"]').screenshot();
+    const fontOnlyBidiFailure = !originalShot.equals(diagnosticShot);
+    assert.ok(
+      fontOnlyBidiFailure,
+      `${name}: known E004 bidi failure needs review if behavior changes`,
+    );
+    await writeFile(path.join(output, `${name}-17-7-original.png`), originalShot);
+    await writeFile(path.join(output, `${name}-17-7-unicode-diagnostic.png`), diagnosticShot);
+    for (const entry of manifest.entries) {
+      const key = entry.representative_verse_keys[0];
+      await page
+        .locator(`[data-specimen="${key}"]`)
+        .screenshot({ path: path.join(output, `${name}-${entry.codepoint.slice(2)}.png`) });
+    }
+    await page
+      .locator('[data-control="uthmani:1:7"]')
+      .screenshot({ path: path.join(output, `${name}-uthmani-control.png`) });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByLabel("Font size").selectOption("33");
+    await page.getByLabel("Run width").selectOption("320");
+    await page
+      .locator('[data-specimen="17:7"]')
+      .screenshot({ path: path.join(output, `${name}-phone-17-7.png`) });
+    assert.deepEqual(pageErrors, []);
+    reports.push({
+      engine: name,
+      version: browser.version(),
+      specimens: specimens.length,
+      context_classes: contextCount,
+      status: "checks_passed_rendering_blocked",
+      font_loaded_from_packaged_bytes: true,
+      original_strings_preserved: true,
+      fontOnlyBidiFailure,
+      sizes: [24, 33, 48],
+      widths: [320, 640, 960],
+      phone_viewport: [390, 844],
+      production_approved: false,
+    });
+  } catch (failure) {
+    reports.push({
+      engine: name,
+      status: "harness_failed",
+      error: failure.message,
+      production_approved: false,
+    });
+  } finally {
+    await browser?.close();
+  }
+}
+
+await writeFile(path.join(output, "report.json"), JSON.stringify(reports, null, 2) + "\n");
+console.log(JSON.stringify(reports, null, 2));
+if (reports.some((report) => report.status === "harness_failed")) process.exitCode = 1;

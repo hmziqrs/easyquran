@@ -1,0 +1,26 @@
+IndoPak Reader Compat Preview, version 1.000
+2026-10-05
+
+Derived solely from Noto Naskh Arabic 2.021, weight 400.
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)
+Licensed under SIL Open Font License 1.1; complete license accompanies font.
+Upstream revision/input checksums: scripts/fonts/indopak/upstream.json
+
+Modifications:
+- Instantiate weight axis at 400; retain full glyph repertoire and standard layout.
+- Add nine BMP private-use mappings without changing original Unicode mappings.
+- Reuse genuine subscript alef, inverted damma and high ain mark glyphs/anchors.
+- Compose five spacing pause glyphs from corresponding existing Noto annotation
+  glyphs, preserve outline height, assign nonzero advance and GDEF base class.
+- Compose high disputed-ayah mark from dedicated Noto U+08E2 glyph; add mark
+  attachment data based on existing Noto high-mark anchors.
+- Add outline-free U+2003 em space with one-em advance.
+- Rename family, PostScript, full, unique, typographic and WWS name records.
+- Package real TrueType TTF and WOFF2 without subsetting layout dependencies.
+
+No restricted font assets used. Reference font inspection established symbol
+identities only. No Quran data modified or redistributed by this font package.
+
+PREVIEW ONLY: browser bidi/shaping of U+E004 in 17:7 fails. Cmap aliases cannot
+change Unicode character properties. Full coverage is not rendering approval.
+Details: docs/indopak-font-compatibility.md

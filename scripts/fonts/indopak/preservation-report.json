@@ -1,0 +1,42 @@
+[
+  {
+    "id": "quran-indopak",
+    "bytes": 1634304,
+    "manual_sha512": "4c1244b08de5e4773ae231223710558e23b4cb0298aefd87906a3b2b7bef5f900115b0ebcff7c9a4de5d1404dca019b917d015f2d6e624f0eab78490087c6705",
+    "verses_before_and_after": 6236,
+    "bytes_unchanged": true,
+    "manual_sha512_before_after_equal": true
+  },
+  {
+    "id": "quran-simple-clean",
+    "bytes": 929792,
+    "manual_sha512": "15ee9c0d96661dda5d7bdffaecbe59c038c82a5ca2ce6dcaaaa57c634f9e7d1eeb7ad84ab4dd6d3d154ff37fb9d048be5f29df48d7119a0d790c2d704c4bd484",
+    "verses_before_and_after": 6236,
+    "bytes_unchanged": true,
+    "manual_sha512_before_after_equal": true
+  },
+  {
+    "id": "quran-tajweed",
+    "bytes": 2015232,
+    "manual_sha512": "298bd254a61f9141a3bd608abebdaf4cb7c8ca4578886de29daec780d937410f484f020fa6a6f43830f0b85604afbde3b392e4507c2c1205e3d4dc79de34adc9",
+    "verses_before_and_after": 6236,
+    "bytes_unchanged": true,
+    "manual_sha512_before_after_equal": true
+  },
+  {
+    "id": "quran-uthmani-annotated",
+    "bytes": 1605632,
+    "manual_sha512": "22afb61056278ecef009ad80174e2594455035cbbb9fea74f461e511bad94d98e7b2517e8bc9866cce4ad0e07b12c10c6e3f7140c72bfefce3b361e41204c15e",
+    "verses_before_and_after": 6236,
+    "bytes_unchanged": true,
+    "manual_sha512_before_after_equal": true
+  },
+  {
+    "id": "quran-uthmani",
+    "bytes": 1593344,
+    "manual_sha512": "4f96f9fbce26dca4f22e5230b31fca1fb1b51b84aa2bd0926556c9b2dcbcc2254cfdc7a3b441413d12f9d5088b81646cf7c87505a19fb5abc28e1716bb0776e0",
+    "verses_before_and_after": 6236,
+    "bytes_unchanged": true,
+    "manual_sha512_before_after_equal": true
+  }
+]

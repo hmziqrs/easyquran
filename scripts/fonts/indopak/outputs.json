@@ -1,0 +1,36 @@
+[
+  {
+    "filename": "indopak-reader-compat-preview-v1.ttf",
+    "bytes": 201032,
+    "sha256": "3a54f6421c2b017b553b8db7b13c5b7fd1f747f16ab5848f4c9148af1191b66d",
+    "glyph_count": 1726,
+    "names": {
+      "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
+      "1": "IndoPak Reader Compat Preview",
+      "3": "indopak-reader-compat-preview-v1;Regular;1.000",
+      "4": "IndoPak Reader Compat Preview Regular",
+      "5": "Version 1.000; compatibility preview",
+      "6": "IndoPakReaderCompatPreview-Regular",
+      "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
+      "16": "IndoPak Reader Compat Preview",
+      "21": "IndoPak Reader Compat Preview"
+    }
+  },
+  {
+    "filename": "indopak-reader-compat-preview-v1.woff2",
+    "bytes": 71260,
+    "sha256": "0d7b1194c16cfb9fda82ac53ad43b9fd6ce0bc5089b8551d7187873c492ec385",
+    "glyph_count": 1726,
+    "names": {
+      "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
+      "1": "IndoPak Reader Compat Preview",
+      "3": "indopak-reader-compat-preview-v1;Regular;1.000",
+      "4": "IndoPak Reader Compat Preview Regular",
+      "5": "Version 1.000; compatibility preview",
+      "6": "IndoPakReaderCompatPreview-Regular",
+      "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
+      "16": "IndoPak Reader Compat Preview",
+      "21": "IndoPak Reader Compat Preview"
+    }
+  }
+]

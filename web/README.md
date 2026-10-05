@@ -27,6 +27,11 @@ In `web/`:
 
 Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`.
 
+Development-only IndoPak font specimen: `/design/indopak`, using provisioned IndoPak/Uthmani
+DBs and packaged OFL preview font. Production activation remains blocked by E004 bidi/shaping.
+Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md),
+[compatibility report](../docs/indopak-font-compatibility.md).
+
 ## Layout
 
     src/

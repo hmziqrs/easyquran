@@ -1,0 +1,1507 @@
+{
+  "schema_version": 1,
+  "database_id": "quran-indopak",
+  "expected_private_codepoints": 9,
+  "expected_private_occurrences": 1383,
+  "semantic_review": "Font encoding compared with PDMS and QuranWBW reference faces; symbol identities corroborated with Unicode proposals. Exact printed edition and original mirror download revision not recovered. Recitation rulings require qualified review.",
+  "production_approved": false,
+  "renderer_blocker": "U+E004 in 17:7 has bidi class L and shapes separately from the hamza; a cmap alias cannot give it NSM or Arabic script properties.",
+  "entries": [
+    {
+      "codepoint": "U+E003",
+      "occurrences": 4,
+      "representative_verse_keys": ["5:7", "6:46", "35:2", "35:11"],
+      "meaning": "Subscript alef (kasra elongation)",
+      "unicode_equivalent": "U+0656",
+      "target_glyph": "uni0656",
+      "status": "verified",
+      "source_behavior": "mark",
+      "implementation": "reuse",
+      "new_composite_required": false,
+      "evidence": ["pdms-cmap-alias", "quranwbw-cmap-alias"],
+      "contexts": [
+        {
+          "signature": "Lo|Mn||06E4,|E003,",
+          "verse_key": "5:7",
+          "character_index": 77,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Mn||0615,|E003,",
+          "verse_key": "6:46",
+          "character_index": 139,
+          "count": 2
+        },
+        {
+          "signature": "Lo|Zs|||E003,",
+          "verse_key": "35:2",
+          "character_index": 119,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E004",
+      "occurrences": 1,
+      "representative_verse_keys": ["17:7"],
+      "meaning": "Inverted damma (waw elongation)",
+      "unicode_equivalent": "U+0657",
+      "target_glyph": "uni0657",
+      "status": "verified",
+      "source_behavior": "mark",
+      "implementation": "reuse",
+      "new_composite_required": false,
+      "evidence": ["pdms-cmap-alias", "quranwbw-cmap-alias"],
+      "contexts": [
+        {
+          "signature": "Lo|Lo|||E004,",
+          "verse_key": "17:7",
+          "character_index": 121,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E01A",
+      "occurrences": 242,
+      "representative_verse_keys": ["2:7", "2:34", "2:41", "2:85"],
+      "meaning": "Small high zain pause sign",
+      "unicode_equivalent": "U+0617",
+      "target_glyph": "uni0617",
+      "status": "verified",
+      "source_behavior": "spacing",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Zs|Zs|||E01A,",
+          "verse_key": "2:7",
+          "character_index": 89,
+          "count": 37
+        },
+        {
+          "signature": "Mn|Zs|064E,||E01A,E01C,",
+          "verse_key": "2:34",
+          "character_index": 104,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Zs|||E01A,",
+          "verse_key": "2:41",
+          "character_index": 146,
+          "count": 15
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E01A,",
+          "verse_key": "2:85",
+          "character_index": 106,
+          "count": 15
+        },
+        {
+          "signature": "Cf|Zs|||E01A,",
+          "verse_key": "2:86",
+          "character_index": 70,
+          "count": 52
+        },
+        {
+          "signature": "Mn|end|064E,||E01A,",
+          "verse_key": "2:101",
+          "character_index": 195,
+          "count": 9
+        },
+        {
+          "signature": "Mn|Zs|064B,||E01A,",
+          "verse_key": "2:138",
+          "character_index": 56,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06D6,||E01A,",
+          "verse_key": "2:168",
+          "character_index": 68,
+          "count": 12
+        },
+        {
+          "signature": "Mn|Zs|064E,||E01A,",
+          "verse_key": "2:185",
+          "character_index": 303,
+          "count": 18
+        },
+        {
+          "signature": "Mn|Zs|0650,||E01A,",
+          "verse_key": "2:219",
+          "character_index": 103,
+          "count": 18
+        },
+        {
+          "signature": "Mn|Zs|064F,||E01A,",
+          "verse_key": "3:26",
+          "character_index": 102,
+          "count": 5
+        },
+        {
+          "signature": "Mn|Co|0657,||E01A,E01C,",
+          "verse_key": "3:187",
+          "character_index": 110,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0651,064E,||E01A,",
+          "verse_key": "4:23",
+          "character_index": 320,
+          "count": 3
+        },
+        {
+          "signature": "Lo|Co|||E01A,E01C,",
+          "verse_key": "4:45",
+          "character_index": 65,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064C,||E01A,",
+          "verse_key": "4:81",
+          "character_index": 22,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Mn||06D9,|E01A,",
+          "verse_key": "4:142",
+          "character_index": 188,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0657,||E01A,",
+          "verse_key": "5:5",
+          "character_index": 391,
+          "count": 5
+        },
+        {
+          "signature": "Zs|end|||E01A,",
+          "verse_key": "7:191",
+          "character_index": 69,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|0653,||E01A,",
+          "verse_key": "7:195",
+          "character_index": 36,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Zs|||E01C,E01A,",
+          "verse_key": "10:16",
+          "character_index": 80,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|0656,06E4,||E01A,",
+          "verse_key": "11:25",
+          "character_index": 44,
+          "count": 1
+        },
+        {
+          "signature": "Co|Zs|||E01C,E01A,",
+          "verse_key": "11:46",
+          "character_index": 82,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Lo|0650,||E01A,",
+          "verse_key": "12:21",
+          "character_index": 177,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0651,064F,||E01A,",
+          "verse_key": "12:51",
+          "character_index": 185,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Lo|064F,||E01A,",
+          "verse_key": "12:100",
+          "character_index": 119,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064D,||E01A,",
+          "verse_key": "17:89",
+          "character_index": 70,
+          "count": 4
+        },
+        {
+          "signature": "Lo|end|||E01A,",
+          "verse_key": "19:25",
+          "character_index": 75,
+          "count": 2
+        },
+        {
+          "signature": "Zs|Lo|||E01A,",
+          "verse_key": "25:50",
+          "character_index": 53,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Zs|||E01E,E01A,",
+          "verse_key": "27:66",
+          "character_index": 74,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Zs|||E021,E01A,",
+          "verse_key": "28:23",
+          "character_index": 84,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Co|||E01A,E01F,",
+          "verse_key": "29:32",
+          "character_index": 71,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0656,||E01A,",
+          "verse_key": "31:33",
+          "character_index": 96,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064E,06D6,||E01A,",
+          "verse_key": "35:3",
+          "character_index": 163,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|064D,||E01A,",
+          "verse_key": "42:34",
+          "character_index": 57,
+          "count": 2
+        },
+        {
+          "signature": "Lo|Cf|||E01A,",
+          "verse_key": "45:15",
+          "character_index": 64,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Lo|||E01A,",
+          "verse_key": "48:29",
+          "character_index": 183,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0651,0650,||E01A,",
+          "verse_key": "49:12",
+          "character_index": 70,
+          "count": 1
+        },
+        {
+          "signature": "Co|end|||E01C,E01A,",
+          "verse_key": "51:54",
+          "character_index": 44,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064D,|06D6,|E01A,",
+          "verse_key": "54:11",
+          "character_index": 55,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|06E1,||E01A,",
+          "verse_key": "54:27",
+          "character_index": 73,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Mn||06D6,|E01A,",
+          "verse_key": "79:17",
+          "character_index": 39,
+          "count": 8
+        },
+        {
+          "signature": "Mn|end|064F,||E01A,",
+          "verse_key": "80:33",
+          "character_index": 29,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064E,|06D6,|E01A,",
+          "verse_key": "83:2",
+          "character_index": 58,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E01B",
+      "occurrences": 166,
+      "representative_verse_keys": ["2:16", "2:22", "2:23", "2:27"],
+      "meaning": "Small high sad pause sign",
+      "unicode_equivalent": "U+08D5",
+      "target_glyph": "uni08D5",
+      "status": "verified",
+      "source_behavior": "spacing",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Lo|Zs|||E01B,",
+          "verse_key": "2:16",
+          "character_index": 56,
+          "count": 21
+        },
+        {
+          "signature": "Mn|Zs|064B,||E01B,",
+          "verse_key": "2:22",
+          "character_index": 66,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|0656,||E01B,",
+          "verse_key": "2:23",
+          "character_index": 99,
+          "count": 5
+        },
+        {
+          "signature": "Cf|Zs|||E01B,",
+          "verse_key": "2:36",
+          "character_index": 72,
+          "count": 31
+        },
+        {
+          "signature": "Mn|Mn|06E1,|06DA,|E01B,",
+          "verse_key": "2:62",
+          "character_index": 179,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064D,||E01B,",
+          "verse_key": "2:113",
+          "character_index": 55,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|064E,||E01B,",
+          "verse_key": "2:128",
+          "character_index": 89,
+          "count": 13
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E01B,",
+          "verse_key": "2:187",
+          "character_index": 286,
+          "count": 15
+        },
+        {
+          "signature": "Mn|Zs|0650,||E01B,",
+          "verse_key": "2:198",
+          "character_index": 155,
+          "count": 10
+        },
+        {
+          "signature": "Mn|Zs|064F,||E01B,",
+          "verse_key": "2:245",
+          "character_index": 125,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|064F,||E01B,E01E,",
+          "verse_key": "3:135",
+          "character_index": 161,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0657,||E01B,",
+          "verse_key": "3:175",
+          "character_index": 54,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Lo|||E01B,",
+          "verse_key": "4:9",
+          "character_index": 92,
+          "count": 1
+        },
+        {
+          "signature": "Lo|end|||E01B,",
+          "verse_key": "4:155",
+          "character_index": 222,
+          "count": 8
+        },
+        {
+          "signature": "Cf|Lo|||E01B,",
+          "verse_key": "7:86",
+          "character_index": 179,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|0651,0650,||E01B,",
+          "verse_key": "8:5",
+          "character_index": 52,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|064E,||E01B,",
+          "verse_key": "16:6",
+          "character_index": 66,
+          "count": 5
+        },
+        {
+          "signature": "Mn|Zs|064C,||E01B,",
+          "verse_key": "16:117",
+          "character_index": 16,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Co|||E01B,E01E,",
+          "verse_key": "19:17",
+          "character_index": 38,
+          "count": 1
+        },
+        {
+          "signature": "Zs|end|||E01B,",
+          "verse_key": "19:31",
+          "character_index": 104,
+          "count": 2
+        },
+        {
+          "signature": "Mn|end|06D6,||E01B,",
+          "verse_key": "20:121",
+          "character_index": 143,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|064D,||E01B,",
+          "verse_key": "23:13",
+          "character_index": 48,
+          "count": 2
+        },
+        {
+          "signature": "Zs|Zs|||E01B,",
+          "verse_key": "24:22",
+          "character_index": 150,
+          "count": 7
+        },
+        {
+          "signature": "Mn|Mn|064E,|06D9,|E01B,",
+          "verse_key": "70:23",
+          "character_index": 47,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Mn|064C,|06D9,|E01B,",
+          "verse_key": "70:24",
+          "character_index": 50,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|0650,|06D9,|E01B,",
+          "verse_key": "70:25",
+          "character_index": 30,
+          "count": 7
+        },
+        {
+          "signature": "Mn|Mn|06E1,|06D9,|E01B,",
+          "verse_key": "74:2",
+          "character_index": 15,
+          "count": 16
+        },
+        {
+          "signature": "Mn|Mn|064F,|06D9,|E01B,",
+          "verse_key": "74:6",
+          "character_index": 27,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064D,|06D9,|E01B,",
+          "verse_key": "89:6",
+          "character_index": 41,
+          "count": 2
+        },
+        {
+          "signature": "Zs|Zs|||E021,E01B,",
+          "verse_key": "91:14",
+          "character_index": 29,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E01C",
+      "occurrences": 145,
+      "representative_verse_keys": ["2:5", "2:20", "2:25", "2:29"],
+      "meaning": "Small high qaf pause sign",
+      "unicode_equivalent": "U+08D7",
+      "target_glyph": "uni08D7",
+      "status": "verified",
+      "source_behavior": "spacing",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Cf|Zs|||E01C,",
+          "verse_key": "2:5",
+          "character_index": 41,
+          "count": 6
+        },
+        {
+          "signature": "Mn|Mn|0650,|06D9,|E01C,",
+          "verse_key": "2:20",
+          "character_index": 84,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06D9,||E01C,",
+          "verse_key": "2:25",
+          "character_index": 287,
+          "count": 2
+        },
+        {
+          "signature": "Lo|Zs|||E01C,",
+          "verse_key": "2:29",
+          "character_index": 57,
+          "count": 12
+        },
+        {
+          "signature": "Zs|Zs|||E01A,E01C,",
+          "verse_key": "2:34",
+          "character_index": 106,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064F,||E01C,",
+          "verse_key": "2:61",
+          "character_index": 374,
+          "count": 4
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E01C,",
+          "verse_key": "2:79",
+          "character_index": 59,
+          "count": 5
+        },
+        {
+          "signature": "Mn|Zs|0657,||E01C,",
+          "verse_key": "2:91",
+          "character_index": 131,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064E,06D9,||E01C,",
+          "verse_key": "2:101",
+          "character_index": 128,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064E,||E01C,",
+          "verse_key": "2:102",
+          "character_index": 160,
+          "count": 9
+        },
+        {
+          "signature": "Mn|Zs|064C,||E01C,",
+          "verse_key": "2:150",
+          "character_index": 174,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0650,||E01C,",
+          "verse_key": "2:217",
+          "character_index": 165,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|0656,||E01C,",
+          "verse_key": "2:233",
+          "character_index": 293,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064F,06D6,||E01C,",
+          "verse_key": "3:45",
+          "character_index": 85,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06D6,||E01C,",
+          "verse_key": "3:98",
+          "character_index": 62,
+          "count": 24
+        },
+        {
+          "signature": "Mn|end|064E,||E01C,",
+          "verse_key": "3:112",
+          "character_index": 333,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06D6,06DA,||E01C,",
+          "verse_key": "3:119",
+          "character_index": 137,
+          "count": 1
+        },
+        {
+          "signature": "Co|Zs|||E01A,E01C,",
+          "verse_key": "3:187",
+          "character_index": 111,
+          "count": 2
+        },
+        {
+          "signature": "Zs|Lo|||E01C,",
+          "verse_key": "4:101",
+          "character_index": 97,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Zs|||E01C,",
+          "verse_key": "5:20",
+          "character_index": 143,
+          "count": 42
+        },
+        {
+          "signature": "Mn|Zs|06D6,||E01C,E01A,",
+          "verse_key": "10:16",
+          "character_index": 78,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Co|06D6,||E01C,E01A,",
+          "verse_key": "11:46",
+          "character_index": 81,
+          "count": 1
+        },
+        {
+          "signature": "Lo|end|||E01C,",
+          "verse_key": "18:4",
+          "character_index": 55,
+          "count": 2
+        },
+        {
+          "signature": "Mn|end|06D6,||E01C,",
+          "verse_key": "18:13",
+          "character_index": 110,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|06DA,||E01C,",
+          "verse_key": "18:21",
+          "character_index": 118,
+          "count": 1
+        },
+        {
+          "signature": "Zs|end|||E01C,",
+          "verse_key": "19:56",
+          "character_index": 74,
+          "count": 6
+        },
+        {
+          "signature": "Mn|Zs|0650,||E01C,E01A,",
+          "verse_key": "28:15",
+          "character_index": 101,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Zs|||E01C,E01A,",
+          "verse_key": "28:15",
+          "character_index": 259,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Co|0657,||E01C,E01A,",
+          "verse_key": "29:32",
+          "character_index": 124,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|06D9,064D,||E01C,",
+          "verse_key": "34:3",
+          "character_index": 266,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Co|064D,||E01C,E01A,",
+          "verse_key": "51:54",
+          "character_index": 43,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064E,06D6,||E01C,",
+          "verse_key": "57:19",
+          "character_index": 79,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064D,06D6,||E01C,",
+          "verse_key": "76:2",
+          "character_index": 55,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0615,06D9,||E01C,",
+          "verse_key": "78:38",
+          "character_index": 53,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E01E",
+      "occurrences": 131,
+      "representative_verse_keys": ["2:83", "2:102", "2:157", "2:196"],
+      "meaning": "Small high word qif (stop)",
+      "unicode_equivalent": "U+08DE",
+      "target_glyph": "uni08DE",
+      "status": "verified",
+      "source_behavior": "spacing",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Mn|Zs|064E,||E01E,",
+          "verse_key": "2:83",
+          "character_index": 81,
+          "count": 7
+        },
+        {
+          "signature": "Mn|Zs|0615,||E01E,",
+          "verse_key": "2:102",
+          "character_index": 604,
+          "count": 3
+        },
+        {
+          "signature": "Cf|Zs|||E01E,",
+          "verse_key": "2:157",
+          "character_index": 60,
+          "count": 38
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E01E,",
+          "verse_key": "2:196",
+          "character_index": 304,
+          "count": 18
+        },
+        {
+          "signature": "Mn|Zs|064B,||E01E,",
+          "verse_key": "2:213",
+          "character_index": 33,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Zs|||E01E,",
+          "verse_key": "2:243",
+          "character_index": 122,
+          "count": 10
+        },
+        {
+          "signature": "Mn|Mn|0650,|06D9,|E01E,",
+          "verse_key": "2:251",
+          "character_index": 31,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06D9,||E01E,",
+          "verse_key": "2:256",
+          "character_index": 30,
+          "count": 4
+        },
+        {
+          "signature": "Mn|Zs|0650,||E01E,",
+          "verse_key": "2:281",
+          "character_index": 53,
+          "count": 8
+        },
+        {
+          "signature": "Mn|Zs|0656,||E01E,",
+          "verse_key": "2:285",
+          "character_index": 140,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064F,||E01E,",
+          "verse_key": "3:19",
+          "character_index": 43,
+          "count": 4
+        },
+        {
+          "signature": "Zs|Zs|||E01E,",
+          "verse_key": "3:89",
+          "character_index": 62,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Zs|||E01B,E01E,",
+          "verse_key": "3:135",
+          "character_index": 163,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064C,||E01E,",
+          "verse_key": "3:197",
+          "character_index": 16,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|064D,||E01E,",
+          "verse_key": "7:133",
+          "character_index": 109,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Lo|06DB,||E01E,",
+          "verse_key": "9:101",
+          "character_index": 93,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Lo|0650,||E01E,",
+          "verse_key": "9:101",
+          "character_index": 120,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Lo|||E01E,",
+          "verse_key": "9:111",
+          "character_index": 171,
+          "count": 3
+        },
+        {
+          "signature": "Mn|end|064E,||E01E,",
+          "verse_key": "10:37",
+          "character_index": 179,
+          "count": 1
+        },
+        {
+          "signature": "Lo|end|||E01E,",
+          "verse_key": "12:1",
+          "character_index": 42,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Mn||0614,|E01E,",
+          "verse_key": "12:108",
+          "character_index": 50,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0670,||E01E,",
+          "verse_key": "13:1",
+          "character_index": 9,
+          "count": 2
+        },
+        {
+          "signature": "Mn|end|064E,06D9,||E01E,",
+          "verse_key": "15:43",
+          "character_index": 47,
+          "count": 1
+        },
+        {
+          "signature": "Co|Zs|||E021,E01E,",
+          "verse_key": "18:22",
+          "character_index": 245,
+          "count": 1
+        },
+        {
+          "signature": "Co|Lo|||E01B,E01E,",
+          "verse_key": "19:17",
+          "character_index": 39,
+          "count": 1
+        },
+        {
+          "signature": "Co|Lo|||E021,E01E,",
+          "verse_key": "20:40",
+          "character_index": 218,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06DA,||E01E,",
+          "verse_key": "22:11",
+          "character_index": 154,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06DB,||E01E,",
+          "verse_key": "26:209",
+          "character_index": 9,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06D6,||E01E,",
+          "verse_key": "27:40",
+          "character_index": 182,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Zs|||E01E,E01A,",
+          "verse_key": "27:66",
+          "character_index": 72,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Co|||E01E,E01F,",
+          "verse_key": "28:25",
+          "character_index": 196,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Co|||E01E,E01F,",
+          "verse_key": "28:48",
+          "character_index": 192,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06DB,06DA,||E01E,",
+          "verse_key": "48:29",
+          "character_index": 316,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06DB,0615,||E01E,",
+          "verse_key": "65:10",
+          "character_index": 117,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Mn||0615,|E01E,",
+          "verse_key": "88:21",
+          "character_index": 10,
+          "count": 1
+        },
+        {
+          "signature": "Zs|Mn||06DB,|E01E,",
+          "verse_key": "97:5",
+          "character_index": 7,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E01F",
+      "occurrences": 20,
+      "representative_verse_keys": ["2:286", "18:71", "18:74", "20:21"],
+      "meaning": "Small high word waqfa (extended pause)",
+      "unicode_equivalent": "U+08DF",
+      "target_glyph": "uni08DF",
+      "status": "verified",
+      "source_behavior": "spacing",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Lo|Zs|||E01F,",
+          "verse_key": "2:286",
+          "character_index": 327,
+          "count": 6
+        },
+        {
+          "signature": "Lo|Lo|||E01F,",
+          "verse_key": "18:74",
+          "character_index": 12,
+          "count": 2
+        },
+        {
+          "signature": "Cf|Zs|||E01F,",
+          "verse_key": "20:21",
+          "character_index": 27,
+          "count": 1
+        },
+        {
+          "signature": "Co|Zs|||E01E,E01F,",
+          "verse_key": "28:25",
+          "character_index": 197,
+          "count": 2
+        },
+        {
+          "signature": "Co|Zs|||E01A,E01F,",
+          "verse_key": "29:32",
+          "character_index": 72,
+          "count": 1
+        },
+        {
+          "signature": "Cf|Lo|||E01F,",
+          "verse_key": "29:66",
+          "character_index": 56,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|0650,||E01F,",
+          "verse_key": "38:32",
+          "character_index": 95,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E01F,",
+          "verse_key": "68:36",
+          "character_index": 11,
+          "count": 1
+        },
+        {
+          "signature": "Lo|end|||E01F,",
+          "verse_key": "79:27",
+          "character_index": 55,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|06E1,||E01F,",
+          "verse_key": "88:17",
+          "character_index": 53,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E021",
+      "occurrences": 121,
+      "representative_verse_keys": ["1:7", "2:10", "2:114", "2:219"],
+      "meaning": "Disputed/optional end of ayah",
+      "unicode_equivalent": "U+08E2",
+      "target_glyph": "uni08E2",
+      "status": "verified",
+      "source_behavior": "mark",
+      "implementation": "composite",
+      "new_composite_required": true,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Zs|Mn||06D9,|E021,",
+          "verse_key": "1:7",
+          "character_index": 41,
+          "count": 4
+        },
+        {
+          "signature": "Mn|Mn|064C,|06D9,06E2,|E021,",
+          "verse_key": "2:10",
+          "character_index": 84,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064E,|0615,|E021,",
+          "verse_key": "2:114",
+          "character_index": 177,
+          "count": 7
+        },
+        {
+          "signature": "Cf|Mn||0615,|E021,",
+          "verse_key": "2:235",
+          "character_index": 245,
+          "count": 5
+        },
+        {
+          "signature": "Mn|Mn|064F,|06DA,|E021,",
+          "verse_key": "2:255",
+          "character_index": 54,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Mn|064C,|0615,|E021,",
+          "verse_key": "2:282",
+          "character_index": 1102,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|064E,||E021,",
+          "verse_key": "3:4",
+          "character_index": 52,
+          "count": 8
+        },
+        {
+          "signature": "Zs|Mn||0615,|E021,",
+          "verse_key": "3:92",
+          "character_index": 62,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064E,|06DA,|E021,",
+          "verse_key": "3:97",
+          "character_index": 47,
+          "count": 4
+        },
+        {
+          "signature": "Lo|Zs|||E021,",
+          "verse_key": "4:173",
+          "character_index": 203,
+          "count": 8
+        },
+        {
+          "signature": "Cf|Zs|||E021,",
+          "verse_key": "5:23",
+          "character_index": 151,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Mn|064F,|0615,|E021,",
+          "verse_key": "6:73",
+          "character_index": 94,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Mn|064D,|06DA,|E021,",
+          "verse_key": "6:161",
+          "character_index": 61,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06D9,064E,||E021,",
+          "verse_key": "7:137",
+          "character_index": 193,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Mn||06D9,|E021,",
+          "verse_key": "8:42",
+          "character_index": 215,
+          "count": 7
+        },
+        {
+          "signature": "Cf|Mn||06D9,|E021,",
+          "verse_key": "9:3",
+          "character_index": 128,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Mn|064F,|06D9,|E021,",
+          "verse_key": "9:36",
+          "character_index": 179,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Zs|||E021,",
+          "verse_key": "9:39",
+          "character_index": 53,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|064E,06D9,||E021,",
+          "verse_key": "10:22",
+          "character_index": 308,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0650,06D9,||E021,",
+          "verse_key": "10:57",
+          "character_index": 102,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064D,06D9,||E021,",
+          "verse_key": "11:82",
+          "character_index": 108,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064D,||E021,",
+          "verse_key": "13:5",
+          "character_index": 91,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064F,06D9,||E021,",
+          "verse_key": "13:16",
+          "character_index": 209,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|064E,0615,||E021,",
+          "verse_key": "13:17",
+          "character_index": 257,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|0650,|06D9,|E021,",
+          "verse_key": "13:18",
+          "character_index": 212,
+          "count": 7
+        },
+        {
+          "signature": "Zs|Mn||06DB,0615,|E021,",
+          "verse_key": "14:9",
+          "character_index": 90,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Co|064C,||E021,E01E,",
+          "verse_key": "18:22",
+          "character_index": 244,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Mn||0615,|E021,",
+          "verse_key": "18:86",
+          "character_index": 107,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064E,|06D9,|E021,",
+          "verse_key": "19:41",
+          "character_index": 36,
+          "count": 14
+        },
+        {
+          "signature": "Lo|Mn||06DA,|E021,",
+          "verse_key": "19:75",
+          "character_index": 68,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Mn|06E1,|06DA,|E021,",
+          "verse_key": "20:39",
+          "character_index": 181,
+          "count": 1
+        },
+        {
+          "signature": "Lo|Co|||E021,E01E,",
+          "verse_key": "20:40",
+          "character_index": 217,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064D,|06D9,|E021,",
+          "verse_key": "27:33",
+          "character_index": 60,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|064E,||E021,E01A,",
+          "verse_key": "28:23",
+          "character_index": 82,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064D,|0615,|E021,",
+          "verse_key": "32:10",
+          "character_index": 75,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Mn|064C,|06D9,|E021,",
+          "verse_key": "43:52",
+          "character_index": 52,
+          "count": 3
+        },
+        {
+          "signature": "Zs|Co|||E021,E01E,",
+          "verse_key": "47:4",
+          "character_index": 204,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|06E1,||E021,",
+          "verse_key": "47:4",
+          "character_index": 263,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|06D6,06DA,||E021,",
+          "verse_key": "65:10",
+          "character_index": 90,
+          "count": 2
+        },
+        {
+          "signature": "Mn|Zs|064C,||E021,",
+          "verse_key": "67:9",
+          "character_index": 38,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0656,||E021,",
+          "verse_key": "69:25",
+          "character_index": 43,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0615,||E021,",
+          "verse_key": "85:11",
+          "character_index": 102,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0657,||E021,",
+          "verse_key": "89:15",
+          "character_index": 75,
+          "count": 2
+        },
+        {
+          "signature": "Lo|Zs|||E021,E01B,",
+          "verse_key": "91:14",
+          "character_index": 27,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Zs|0650,||E021,",
+          "verse_key": "96:15",
+          "character_index": 29,
+          "count": 3
+        },
+        {
+          "signature": "Mn|Zs|0651,0650,||E021,",
+          "verse_key": "103:3",
+          "character_index": 75,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "codepoint": "U+E022",
+      "occurrences": 553,
+      "representative_verse_keys": ["1:7", "2:7", "2:20", "2:29"],
+      "meaning": "Small high ain, end of ruku",
+      "unicode_equivalent": "U+08D6",
+      "target_glyph": "uni08D6",
+      "status": "verified",
+      "source_behavior": "mark",
+      "implementation": "reuse",
+      "new_composite_required": false,
+      "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "contexts": [
+        {
+          "signature": "Mn|end|064E,||E022,",
+          "verse_key": "1:7",
+          "character_index": 96,
+          "count": 238
+        },
+        {
+          "signature": "Mn|end|064C,||E022,",
+          "verse_key": "2:7",
+          "character_index": 117,
+          "count": 58
+        },
+        {
+          "signature": "Zs|end|||E022,",
+          "verse_key": "2:96",
+          "character_index": 238,
+          "count": 5
+        },
+        {
+          "signature": "Mn|end|064F,||E022,",
+          "verse_key": "2:129",
+          "character_index": 175,
+          "count": 46
+        },
+        {
+          "signature": "Mn|end|0650,||E022,",
+          "verse_key": "2:152",
+          "character_index": 66,
+          "count": 45
+        },
+        {
+          "signature": "Mn|end|064D,||E022,",
+          "verse_key": "2:176",
+          "character_index": 124,
+          "count": 39
+        },
+        {
+          "signature": "Mn|end|06DB,06DA,||E022,",
+          "verse_key": "3:171",
+          "character_index": 107,
+          "count": 1
+        },
+        {
+          "signature": "Lo|end|||E022,",
+          "verse_key": "4:10",
+          "character_index": 134,
+          "count": 95
+        },
+        {
+          "signature": "So|end|||E022,",
+          "verse_key": "7:206",
+          "character_index": 108,
+          "count": 5
+        },
+        {
+          "signature": "Mn|end|064D,0615,||E022,",
+          "verse_key": "15:79",
+          "character_index": 60,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|0615,||E022,",
+          "verse_key": "18:82",
+          "character_index": 335,
+          "count": 3
+        },
+        {
+          "signature": "Mn|end|064B,||E022,",
+          "verse_key": "25:9",
+          "character_index": 88,
+          "count": 1
+        },
+        {
+          "signature": "Mn|Mn|064E,|0615,|E022,",
+          "verse_key": "26:51",
+          "character_index": 95,
+          "count": 1
+        },
+        {
+          "signature": "Cf|end|||E022,",
+          "verse_key": "37:113",
+          "character_index": 106,
+          "count": 4
+        },
+        {
+          "signature": "Mn|Mn|064C,|0615,|E022,",
+          "verse_key": "43:15",
+          "character_index": 83,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|06E1,||E022,",
+          "verse_key": "47:11",
+          "character_index": 93,
+          "count": 4
+        },
+        {
+          "signature": "Mn|end|064E,0615,||E022,",
+          "verse_key": "56:40",
+          "character_index": 30,
+          "count": 2
+        },
+        {
+          "signature": "Mn|end|064F,0615,||E022,",
+          "verse_key": "75:30",
+          "character_index": 38,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|0652,||E022,",
+          "verse_key": "88:26",
+          "character_index": 33,
+          "count": 1
+        },
+        {
+          "signature": "Mn|end|0657,||E022,",
+          "verse_key": "98:8",
+          "character_index": 184,
+          "count": 2
+        }
+      ]
+    }
+  ],
+  "verification_scope": "Verified means symbol identity and source encoding; generated metrics, browser placement, printed-edition provenance and recitation rulings have separate review status. No production approval.",
+  "evidence_details": {
+    "pdms-cmap-alias": {
+      "reference_input": "pdms-source-reference",
+      "finding": "E003 and U0656 share glyph; E004 and U0657 share glyph. No reference assets used."
+    },
+    "quranwbw-cmap-alias": {
+      "reference_input": "quranwbw-reference",
+      "finding": "Same equivalent cmap aliases independently corroborated. No reference assets used."
+    },
+    "pdms-source-reference": {
+      "reference_input": "pdms-source-reference",
+      "finding": "Upstream text README recommends PDMS Saleem for this PUA text encoding; inspected cmap, outlines and GDEF only. Five pause symbols have nonzero advance; four other symbols are zero-advance marks."
+    },
+    "quranwbw-reference": {
+      "reference_input": "quranwbw-reference",
+      "finding": "Independently inspected glyph identity for nine vendor PUA assignments; no glyphs or layout imported."
+    },
+    "unicode-quranic-marks": {
+      "document": "unicode-quranic-marks",
+      "finding": "Unicode proposals establish dedicated meanings of qif, waqfa, sad, qaf, ruku and disputed ayah signs; vendor assignments additionally established by reference fonts."
+    }
+  }
+}

@@ -1,0 +1,69 @@
+[
+  {
+    "engine": "chromium",
+    "version": "153.0.8010.12",
+    "specimens": 226,
+    "context_classes": 223,
+    "status": "checks_passed_rendering_blocked",
+    "font_loaded_from_packaged_bytes": true,
+    "original_strings_preserved": true,
+    "fontOnlyBidiFailure": true,
+    "sizes": [24, 33, 48],
+    "widths": [320, 640, 960],
+    "phone_viewport": [390, 844],
+    "production_approved": false
+  },
+  {
+    "engine": "firefox",
+    "status": "harness_failed",
+    "error": "Playwright Firefox 1543 cannot launch on this host: Could not find profile folder. Older 1509 builds also failed headless compositor/sandbox initialization; headed retry failed. Harness returns nonzero. No Firefox automated pass claimed.",
+    "production_approved": false,
+    "failed_at": "browser launch, before page navigation"
+  },
+  {
+    "engine": "webkit",
+    "version": "26.6",
+    "specimens": 226,
+    "context_classes": 223,
+    "status": "checks_passed_rendering_blocked",
+    "font_loaded_from_packaged_bytes": true,
+    "original_strings_preserved": true,
+    "fontOnlyBidiFailure": true,
+    "sizes": [24, 33, 48],
+    "widths": [320, 640, 960],
+    "phone_viewport": [390, 844],
+    "production_approved": false
+  },
+  {
+    "engine": "safari-native",
+    "version": "27.0",
+    "platform": "macOS 27.0",
+    "validation": "focused GUI screenshot inspection, separate from Playwright WebKit",
+    "font_size": 33,
+    "run_width": 640,
+    "observed": [
+      "17:7 original/Unicode comparison mismatch; original inverted damma not correctly attached",
+      "paired punctuation and mixed Arabic digits",
+      "IndoPak 1:1 and 112:1 controls",
+      "KFGQPC Uthmani 1:7 control"
+    ],
+    "fontOnlyBidiFailure": true,
+    "production_approved": false
+  },
+  {
+    "engine": "firefox-native",
+    "version": "147.0.1",
+    "platform": "macOS 27.0",
+    "validation": "focused GUI screenshot inspection, automated Playwright Firefox unavailable",
+    "font_size": 33,
+    "run_width": 640,
+    "observed": [
+      "17:7 original/Unicode comparison mismatch",
+      "paired punctuation and mixed Arabic digits",
+      "KFGQPC Uthmani 1:7 control",
+      "E003 in 5:7 with line wrapping"
+    ],
+    "fontOnlyBidiFailure": true,
+    "production_approved": false
+  }
+]

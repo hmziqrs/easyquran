@@ -153,7 +153,8 @@ default, and future schemas are tolerated by reading supported fields only. The 
 variant renders
 markup as colored runs in `web/src/lib/quran/view/tajweed.ts`; plain-text surfaces (copy,
 share, sidebar previews, bismillah title attributes) strip the markup in views. IndoPak text
-renders in the user-chosen Arabic font; a dedicated Nastaleeq face is a known gap (§10).
+renders in the user-chosen Arabic font; compatibility preview and its production blocker are
+documented in [`indopak-font-compatibility.md`](indopak-font-compatibility.md).
 
 Decode accepts known fields, bounds values, and tolerates future schemas by reading supported
 fields only. Whole-blob writes include both fields; presentation applies after hydration.
@@ -270,11 +271,13 @@ Settings changes preserve:
 - Service-worker metadata may temporarily include orphaned data records until maintenance.
 - Reader persisted blob still has a multi-writer last-write-wins window.
 - Alternate Arabic font first paint uses Amiri until lazy font finishes loading.
-- IndoPak mushaf text has no dedicated Nastaleeq font: `quran-indopak.sqlite` carries 9 PUA
-  codepoints (U+E003–U+E022) and no offered Arabic font covers any of them. The fonts that do
-  cover them (QuranWBW, PDMS Saleem) forbid redistribution, and DigitalKhatt (OFL) targets a
-  different encoding — so a bundled face is deliberately skipped pending licensing outreach or a
-  rebuilt DB; IndoPak renders in the chosen Arabic font meanwhile.
+- IndoPak text carries nine PUA codes, 1,383 occurrences. An OFL Noto compatibility preview
+  covers the complete repertoire, but E004 in 17:7 still fails browser bidi/shaping. Production
+  activation remains blocked; existing IndoPak font selection is unchanged. Equivalent
+  DigitalKhatt glyphs exist, but its audited conventional build also lacks 13 ordinary corpus
+  characters. No DB rebuild or restricted font asset is required for nominal coverage. Evidence,
+  reproducible font build and remaining display/semantic review:
+  [`indopak-font-compatibility.md`](indopak-font-compatibility.md).
 - Translation family is not persisted.
 - Real application build-version display needs new build-time plumbing.
 - Server preference sync has no storage, endpoint, or conflict policy yet.
