@@ -65,7 +65,7 @@ def validate(database, ttf, woff2, upstream):
             "unaffected_runs_identical": controls_checked, "notdef_count": 0,
             "ttf_woff2_traces_identical": True, "harfbuzz": hb.version_string(),
             "limitation": "Forced Arabic/RTL HarfBuzz runs do not model browser bidi itemization.",
-            "production_approved": False}
+            "production_approved": manifest["production_approved"]}
 
 
 def main():

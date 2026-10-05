@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "observed_at": "2026-10-05T17:57:05Z",
   "reference": {
     "site": "https://quran.com",
@@ -39,12 +39,22 @@
     "database_open_mode": "mode=ro&immutable=1",
     "full_1383_occurrence_or_223_context_comparison": false,
     "render_engines": [
-      { "engine": "chromium", "version": "153.0.8010.12", "cases": 10, "fonts_loaded": true },
-      { "engine": "webkit", "version": "26.6", "cases": 10, "fonts_loaded": true }
+      {
+        "engine": "chromium",
+        "version": "153.0.8010.12",
+        "cases": 10,
+        "fonts_loaded": true
+      },
+      {
+        "engine": "webkit",
+        "version": "26.6",
+        "cases": 10,
+        "fonts_loaded": true
+      }
     ],
     "live_browser_checks": ["2:101", "17:7", "1:7"],
     "reference_assets_entered_repository_or_font_build": false,
-    "database_or_packaged_fonts_modified": false
+    "original_audit_database_or_packaged_fonts_modified": false
   },
   "symbols": [
     {
@@ -53,7 +63,7 @@
       "identity": "corroborated",
       "reference_cmap_alias": "U+0656",
       "current_display_codes": ["U+0656"],
-      "placement": "subscript visible; sampled comparison only"
+      "preview_v1_placement": "subscript visible; sampled comparison only"
     },
     {
       "codepoint": "U+E004",
@@ -61,56 +71,56 @@
       "identity": "corroborated",
       "reference_cmap_alias": "U+0657",
       "current_display_codes": ["U+0657"],
-      "placement": "failed; existing original-PUA inverted-damma placement blocker"
+      "preview_v1_placement": "failed; existing original-PUA inverted-damma placement blocker"
     },
     {
       "codepoint": "U+E01A",
       "location": "2:7:9",
       "identity": "corroborated",
       "current_display_codes": ["U+0617"],
-      "placement": "local height/spacing differs; review required"
+      "preview_v1_placement": "local height/spacing differs; review required"
     },
     {
       "codepoint": "U+E01B",
       "location": "2:16:5",
       "identity": "corroborated",
       "current_display_codes": ["U+06EA"],
-      "placement": "local height/spacing differs; review required"
+      "preview_v1_placement": "local height/spacing differs; review required"
     },
     {
       "codepoint": "U+E01C",
       "location": "2:5:5",
       "identity": "corroborated",
       "current_display_codes": ["U+06D7"],
-      "placement": "local height/spacing differs; review required"
+      "preview_v1_placement": "local height/spacing differs; review required"
     },
     {
       "codepoint": "U+E01E",
       "location": "2:83:9",
       "identity": "corroborated",
       "current_display_codes": ["U+06EB"],
-      "placement": "local height/spacing differs; review required"
+      "preview_v1_placement": "local height/spacing differs; review required"
     },
     {
       "codepoint": "U+E01F",
       "location": "2:286:40",
       "identity": "corroborated",
       "current_display_codes": ["U+06E5"],
-      "placement": "local height/spacing differs; review required"
+      "preview_v1_placement": "local height/spacing differs; review required"
     },
     {
       "codepoint": "U+E021",
       "location": "1:7:4",
       "identity": "corroborated",
       "current_display_codes": ["U+06EC", "U+06E6"],
-      "placement": "failed; optional-ayah glyph overlaps adjacent U+06D9 in local preview"
+      "preview_v1_placement": "failed; optional-ayah glyph overlaps adjacent U+06D9 in local preview"
     },
     {
       "codepoint": "U+E022",
       "location": "1:7:9",
       "identity": "corroborated",
       "current_display_codes": ["U+06E0"],
-      "placement": "different pipeline: Quran.com moves ruku indication into end-marker word"
+      "preview_v1_placement": "different pipeline: Quran.com moves ruku indication into end-marker word"
     }
   ],
   "display_code_limit": "Codes describe observed glyph encoding in Quran.com's font, not standard Unicode semantic equivalences or replacement mappings for local data.",
@@ -120,11 +130,14 @@
     "glyphs": ["compat.E021", "uni06D9"],
     "shared_gpos_mark_class": 0,
     "shared_gpos_mark_anchor_y": 1030,
-    "anchors_x": { "compat.E021": 134, "uni06D9": 82 },
+    "anchors_x": {
+      "compat.E021": 134,
+      "uni06D9": 82
+    },
     "attachment_source_for_generated_glyph": "uni08D6",
     "overlap_observed_in_chromium_and_webkit": true,
     "same_glyph_unicode_diagnostic": "Temporary reference-only font adds U+08E2 alias to compat.E021. Both original E021 and diagnostic U+08E2 still crowd U+06D9. Do not attribute this defect solely to PUA bidi properties.",
-    "production_fix_delivered": false
+    "preview_v1_production_fix_delivered": false
   },
   "ornament_case": {
     "verse": "2:101",
@@ -134,6 +147,27 @@
     "zain_location": "Local source retains zain after final Arabic word; Quran.com served display moves zain into end-marker word.",
     "frame_shape": "Existing local Scheherazade medallion differs from Quran.com's circular precomposed marker; enclosure correctness confirmed, pixel parity not claimed."
   },
-  "overall": "symbol_identity_corroborated_rendering_acceptance_failed",
-  "production_approved": false
+  "original_audit_font": "IndoPak Reader Compat Preview 1.000",
+  "original_audit_overall": "symbol_identity_corroborated_rendering_acceptance_failed",
+  "original_audit_production_approved": false,
+  "v2_followup": {
+    "font_family": "IndoPak Reader Compat",
+    "font_version": "2.000",
+    "date": "2026-10-05",
+    "reference": "Same recorded live Quran.com 4.2.1-WL font, original excerpts, and served display strings from the initial audit; outside repository only.",
+    "cases_recompared": ["17:7:12 E004", "1:7:4 E021", "2:101 end zain and 101"],
+    "render_engines": ["Chromium 153.0.8010.12", "Playwright WebKit 26.6"],
+    "E004": "Genuine Noto inverted damma translated for the sole original PUA standalone run; above hamza with clearance. Original code preserved.",
+    "E021": "Genuine optional-ayah glyph occupies separate horizontal ink lane beside pause sign. No collision. Current Quran.com served text adds small six and vertically stacks three forms; local original two-code string is retained.",
+    "end_signs": "Original trailing zain/ruku signs are exact DOM slices positioned above the existing ornament. Last word and ornament wrap together. 101 enclosed; decorative shape differs from reference.",
+    "full_local_validation": "All 6236 strings shaped; 226 specimen verses cover 223 context classes and all 87 codepoints. Chromium/WebKit pass 9 size/width pairs, phone wrapping, exact original strings, end signs and ornaments.",
+    "negative_regression_both_engines": true,
+    "reference_assets_entered_repository_or_font_build": false,
+    "database_strings_modified": false,
+    "technical_integration_approved": true,
+    "limits": "No full-corpus Quran.com visual/editorial comparison or qualified recitation approval. Native Firefox focused E004 only; native Safari focused E004/E021/2:101. Automated Firefox unavailable; no iOS pass."
+  },
+  "overall": "v2_technical_repairs_validated_editorial_provenance_open",
+  "production_approved": true,
+  "approval_scope": "Technical font and reader integration; no certification of source edition or recitation rulings."
 }

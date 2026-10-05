@@ -3,6 +3,7 @@
   import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
   import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
   import AyahOrnament from "./AyahOrnament.svelte";
+  import IndoPakAyah from "./IndoPakAyah.svelte";
 
   let {
     text,
@@ -32,14 +33,16 @@
       {#if pending}<span class="pending" aria-hidden="true"></span>{:else}{text}{/if}<span class="ayah-marker" data-verse-anchor={vKey}>{n}</span>
     </span>
   {:else}
-    <span class="verse-text arabic-text text-quran-foreground" dir="rtl" lang="ar">
+    <span class="verse-text arabic-text text-quran-foreground" class:indopak={script === QuranScript.IndoPak} dir="rtl" lang="ar">
       {#if segments}
         {#each segments as segment, index (index)}
           {#if segment.rule}<span style:color={tajweedRuleColor(segment.rule)}>{segment.text}</span>{:else}{segment.text}{/if}
         {/each}
+      {:else if script === QuranScript.IndoPak}
+        <IndoPakAyah {text} {n} {vKey} />
       {:else}
         {text}
-      {/if}<AyahOrnament {vKey} {n} />
+      {/if}{#if script !== QuranScript.IndoPak}<AyahOrnament {vKey} {n} />{/if}
     </span>
   {/if}
 </span>
@@ -49,6 +52,10 @@
     font-family: var(--reader-arabic-family, var(--font-arabic));
     font-size: var(--reader-arabic-size, 33px);
     line-height: 2.15;
+  }
+
+  .arabic-text.indopak {
+    font-family: "IndoPak Reader Compat";
   }
 
   .translation-text {

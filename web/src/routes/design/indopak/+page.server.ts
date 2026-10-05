@@ -66,7 +66,6 @@ export function load() {
         occurrences: entry.occurrences,
       })),
       contextCount: mapping.entries.reduce((total, entry) => total + entry.contexts.length, 0),
-      blocker: mapping.renderer_blocker,
       diagnostic: {
         key: diagnosticKey,
         original: diagnosticText,

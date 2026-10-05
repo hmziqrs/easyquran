@@ -6,5 +6,5 @@
   "ttf_woff2_traces_identical": true,
   "harfbuzz": "12.1.0",
   "limitation": "Forced Arabic/RTL HarfBuzz runs do not model browser bidi itemization.",
-  "production_approved": false
+  "production_approved": true
 }

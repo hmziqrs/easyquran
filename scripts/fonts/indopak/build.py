@@ -1,5 +1,4 @@
 import argparse
-import copy
 import hashlib
 from importlib.metadata import version
 import json
@@ -15,8 +14,8 @@ from fontTools.varLib.instancer import instantiateVariableFont
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 OUTPUT = ROOT / "web/static/fonts"
-STEM = "indopak-reader-compat-preview-v1"
-FAMILY = "IndoPak Reader Compat Preview"
+STEM = "indopak-reader-compat-v2"
+FAMILY = "IndoPak Reader Compat"
 
 
 def require_versions():
@@ -95,37 +94,6 @@ def add_component(font, name, source, transform, advance, glyph_class):
     font["GDEF"].table.GlyphClassDef.classDefs[name] = glyph_class
 
 
-def copy_mark_attachment(font, source, target, anchor_x):
-    attached = 0
-    for lookup in font["GPOS"].table.LookupList.Lookup:
-        for raw in lookup.SubTable:
-            subtable = raw.ExtSubTable if lookup.LookupType == 9 else raw
-            if not hasattr(subtable, "MarkCoverage"):
-                continue
-            if source not in subtable.MarkCoverage.glyphs:
-                continue
-            record = copy.deepcopy(subtable.MarkArray.MarkRecord[
-                subtable.MarkCoverage.glyphs.index(source)])
-            record.MarkAnchor.XCoordinate = anchor_x
-            pairs = [*zip(subtable.MarkCoverage.glyphs, subtable.MarkArray.MarkRecord),
-                     (target, record)]
-            pairs.sort(key=lambda pair: font.getGlyphID(pair[0]))
-            subtable.MarkCoverage.glyphs = [pair[0] for pair in pairs]
-            subtable.MarkArray.MarkRecord = [pair[1] for pair in pairs]
-            subtable.MarkArray.MarkCount = len(pairs)
-            attached += 1
-    if not attached:
-        raise ValueError("no compatible high-mark attachment anchors")
-    gdef = font["GDEF"].table
-    if gdef.MarkAttachClassDef and source in gdef.MarkAttachClassDef.classDefs:
-        gdef.MarkAttachClassDef.classDefs[target] = gdef.MarkAttachClassDef.classDefs[source]
-    if gdef.MarkGlyphSetsDef:
-        for coverage in gdef.MarkGlyphSetsDef.Coverage:
-            if source in coverage.glyphs:
-                coverage.glyphs.append(target)
-                coverage.glyphs.sort(key=font.getGlyphID)
-
-
 def make_glyph(font, entry):
     source = entry["target_glyph"]
     if entry["implementation"] == "reuse":
@@ -133,14 +101,16 @@ def make_glyph(font, entry):
     name = "compat." + entry["codepoint"][2:]
     if name in font.getGlyphOrder():
         raise ValueError(f"duplicate generated glyph: {name}")
+    if entry["codepoint"] == "U+E004":
+        add_component(font, name, source, (1, 0, 0, 1, 122, -377), 0, 3)
+        return name
     if entry["source_behavior"] == "spacing":
         glyph = font["glyf"][source]
         advance = glyph.xMax - glyph.xMin + 60
         add_component(font, name, source, (1, 0, 0, 1, 30 - glyph.xMin, 0), advance, 1)
         return name
     if entry["codepoint"] == "U+E021":
-        add_component(font, name, source, (0.5, 0, 0, 0.5, 20, 820), 0, 3)
-        copy_mark_attachment(font, "uni08D6", name, 134)
+        add_component(font, name, source, (0.5, 0, 0, 0.5, -250, 820), 0, 3)
         return name
     raise ValueError(f"no reviewed construction: {entry['codepoint']}")
 
@@ -173,9 +143,9 @@ def add_mappings(font, mappings):
 
 
 def rename(font):
-    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;1.000",
-              4: f"{FAMILY} Regular", 5: "Version 1.000; compatibility preview",
-              6: "IndoPakReaderCompatPreview-Regular", 16: FAMILY, 17: "Regular",
+    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;2.000",
+              4: f"{FAMILY} Regular", 5: "Version 2.000; private encoding compatibility",
+              6: "IndoPakReaderCompat-Regular", 16: FAMILY, 17: "Regular",
               18: f"{FAMILY} Regular", 21: FAMILY, 22: "Regular"}
     for record in font["name"].names:
         if record.nameID in values:
@@ -257,7 +227,7 @@ def main():
     parser.add_argument("--manifest", type=Path, default=HERE / "mapping.json")
     args = parser.parse_args()
     for path in build(args.cache, args.output, args.manifest, args.preview):
-        print(f"PREVIEW ONLY: {path} ({path.stat().st_size} bytes)")
+        print(f"{path} ({path.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":

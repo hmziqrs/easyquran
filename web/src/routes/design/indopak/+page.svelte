@@ -23,8 +23,8 @@
 </svelte:head>
 
 <section aria-label="Font compatibility specimen" class="specimen-page" style:--reader-arabic-size={`${size}px`}>
-  <h1>IndoPak font compatibility preview</h1>
-  <p>Preview only. Production activation blocked: {data.blocker}</p>
+  <h1>IndoPak font compatibility specimen</h1>
+  <p>Packaged compatibility font, original text, and end signs anchored to the ayah ornament.</p>
   <p>
     Nine private codes, 1,383 occurrences. {data.contextCount} context classes across
     {data.specimens.length} actual verses. Original DB strings pass unchanged to ReadingAyah.
@@ -46,7 +46,7 @@
       <li>{symbol.codepoint} — {symbol.meaning} ({symbol.occurrences})</li>
     {/each}
   </ul>
-  <section aria-label="Known bidi failure" class="compat" style:max-width={`${width}px`}>
+  <section aria-label="Unicode property comparison" class="compat" style:max-width={`${width}px`}>
     <h2>17:7: original versus diagnostic comparison</h2>
     <p>Comparison changes only E004 to U+0657 in this development view. Never reader data.</p>
     <p data-diagnostic="original" class="diagnostic" dir="rtl" lang="ar">{data.diagnostic.original}</p>
@@ -88,8 +88,8 @@
 
 <style>
   @font-face {
-    font-family: "IndoPak Reader Compat Preview";
-    src: url("/fonts/indopak-reader-compat-preview-v1.woff2") format("woff2");
+    font-family: "IndoPak Reader Compat";
+    src: url("/fonts/indopak-reader-compat-v2.woff2") format("woff2");
     font-weight: 400;
     font-display: block;
   }
@@ -117,7 +117,7 @@
   }
 
   .compat {
-    --reader-arabic-family: "IndoPak Reader Compat Preview";
+    --reader-arabic-family: "IndoPak Reader Compat";
   }
 
   .uthmani {

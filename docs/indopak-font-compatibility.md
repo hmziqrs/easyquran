@@ -1,19 +1,22 @@
-# IndoPak font compatibility — preview, production blocked
+# IndoPak font compatibility
 
-Audit/build date: 2026-10-05. Concrete derivative and development integration are delivered.
-Production acceptance is **not met**: the original E004 inverted damma in 17:7 loses correct
-placement in browser shaping. The font is intentionally absent from production script/font
-selection. Removing missing-glyph boxes is not approval. A subsequent
-[live Quran.com comparison](indopak-qurancom-comparison.md) corroborates the nine symbol
-identities, but also reproduces E021/U+06D9 stacking overlap at 1:7. That repair remains open.
+Implemented 2026-10-05. Version 2 is active for IndoPak in both reading modes. The
+[live Quran.com audit](indopak-qurancom-comparison.md) established all nine symbol identities
+and exposed defects in the first preview. Those defects are now repaired: the inverted damma
+sits above hamza, the optional-ayah 5 is separate from its pause sign, and trailing zain/ruku
+signs sit above the ayah ornament. Original database strings remain exact.
+
+This is a Noto-based open font, not a reproduction of Quran.com's Nastaleeq artwork. Technical
+integration approval does not establish the original printed edition or approve recitation
+rulings. Platform validation and limits are recorded below.
 
 ## Repository and immutable baseline
 
 Reader is SvelteKit/browser, not a native app. Script selection lives in reader settings;
 font definitions are `web/src/lib/config/reader-fonts.ts`, lazy FontFace loading is
 `web/src/lib/fonts/arabic-fonts.ts`, and `ReadingAyah.svelte` renders verse strings. Existing
-default KFGQPC Uthmanic Hafs path, preference schema, source profiles and reader components
-remain unchanged. No changes to search, copying, bookmarks, translations or audio alignment.
+default KFGQPC Uthmanic Hafs path, preference schema and source profiles remain unchanged.
+Both reader components now select an explicit IndoPak font/render branch. No changes to search, copying, bookmarks, translations or audio alignment.
 
 IndoPak DB is provisioned at `db/quran/arabic/quran-indopak.sqlite`, table `quran_text`.
 Existing identity is `quran-indopak`; existing renderer profile is
@@ -71,8 +74,8 @@ IDs, inspected reference revisions/checksums and limitations are machine-readabl
 
 Manifest `verified` status means **symbol identity/source encoding**, not approval of browser
 placement or recitation rulings. Exact edition provenance and qualified recitation/editorial
-review remain separate open items. Generated composite metrics also need that review before
-production. The text's existing license/attribution is unchanged; OFL covers font software.
+review remain separate open items. Manifest production approval covers technical font and
+reader integration, not those editorial questions. The text's existing license/attribution is unchanged; OFL covers font software.
 
 ## Preferred candidate and base choice
 
@@ -119,137 +122,113 @@ and layout retained; no app/runtime font editor or shaper added.
 All derivative components are from the checksum-pinned Noto OFL input. Source behavior is
 four zero-advance marks and five spacing pause signs, not a blanket mark classification.
 
-| Private code | Count | Symbol / equivalent                   | Derivative implementation                                                                          |
-| ------------ | ----: | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| U+E003       |     4 | Subscript alef, U+0656                | Reuse genuine mark, GDEF class 3 and existing anchors                                              |
-| U+E004       |     1 | Inverted damma, U+0657                | Reuse genuine mark/anchors; browser failure remains                                                |
-| U+E01A       |   242 | Small high zain, U+0617               | Composite of existing annotation; nonzero advance, class 1                                         |
-| U+E01B       |   166 | Small high sad, U+08D5                | Dedicated sad composite; spacing/class 1                                                           |
-| U+E01C       |   145 | Small high qaf, U+08D7                | Dedicated qaf composite; spacing/class 1                                                           |
-| U+E01E       |   131 | Small high word qif, U+08DE           | Dedicated qif composite; spacing/class 1                                                           |
-| U+E01F       |    20 | Small high word waqfa, U+08DF         | Dedicated waqfa composite; spacing/class 1                                                         |
-| U+E021       |   121 | Disputed/optional end of ayah, U+08E2 | Dedicated glyph scaled/raised as high mark; zero advance, class 3; Noto high-mark attachment added |
-| U+E022       |   553 | Small high ain, end of ruku, U+08D6   | Reuse genuine high mark/anchors, class 3                                                           |
+| Private code | Count | Symbol / equivalent                   | Derivative implementation                                                     |
+| ------------ | ----: | ------------------------------------- | ----------------------------------------------------------------------------- |
+| U+E003       |     4 | Subscript alef, U+0656                | Reuse genuine mark, GDEF class 3 and existing anchors                         |
+| U+E004       |     1 | Inverted damma, U+0657                | Composite of genuine mark, translated for the standalone bidi run             |
+| U+E01A       |   242 | Small high zain, U+0617               | Composite of existing annotation; nonzero advance, class 1                    |
+| U+E01B       |   166 | Small high sad, U+08D5                | Dedicated sad composite; spacing/class 1                                      |
+| U+E01C       |   145 | Small high qaf, U+08D7                | Dedicated qaf composite; spacing/class 1                                      |
+| U+E01E       |   131 | Small high word qif, U+08DE           | Dedicated qif composite; spacing/class 1                                      |
+| U+E01F       |    20 | Small high word waqfa, U+08DF         | Dedicated waqfa composite; spacing/class 1                                    |
+| U+E021       |   121 | Disputed/optional end of ayah, U+08E2 | Dedicated glyph scaled/raised with a separate ink lane; zero advance, class 3 |
+| U+E022       |   553 | Small high ain, end of ruku, U+08D6   | Reuse genuine high mark/anchors, class 3                                      |
 
 Five spacing composites retain their source vertical placement; outline bounds plus side
 bearings determine advances. E021 uses dedicated disputed-ayah glyph, not a generic numeral
-or a ruku sign. Its transform and attachment are explicit in build script. No two distinct
+or a ruku sign. Its transform is explicit in the build script; v1's incorrect borrowed ruku anchor is removed. No two distinct
 private meanings share a target. Original cmap mappings/layout remain intact. U+2003 is a
 new empty glyph with one-em advance, preserving stored spacing.
 
 Mappings update applicable format 4/12 Unicode cmap tables. Supplementary additions use
 format 12; format 14 variation sequences remain untouched. Tests exercise those boundaries.
-GDEF classes, mark attachment/filter coverage, GSUB/GPOS compilation and reopened final
+GDEF classes, preserved standard attachment/filter coverage, GSUB/GPOS compilation and reopened final
 TTF/WOFF2 are checked. These are structural checks, not proof of correct browser positioning.
 
-## Exact font-only blocker and additional display requirement
+## Unicode properties and the version 2 repair
 
-Reproduction: development `/design/indopak`, original verse 17:7, sequence
-`لِيَسُـوْۤء\uE004ا`. E004 aliases the correct inverted-damma glyph, but retains Unicode
-category `Co`, combining class 0, unknown script and bidi class `L`. U+0657 is a combining
-mark with bidi `NSM`. Cmap, GDEF and GPOS cannot change a character's Unicode properties.
+The original 17:7 word is `لِيَسُـوْۤء\uE004ا`. Private E004 is category Co, combining
+class 0, script Unknown and bidi L; U+0657 is NSM. A cmap alias never changes those properties.
+Version 1 reused the Unicode glyph and depended on its Arabic attachment. Actual browser
+itemization split the private glyph into a standalone run, putting it near alif.
 
-Forced whole-run Arabic/RTL HarfBuzz can attach the glyph; browser bidi/script itemization
-can split/reorder the original PUA separately from hamza. Original and diagnostic U+0657
-comparison render differently: original loses correct inverted-damma placement. Real Safari
-27 reproduces loss; comparison attaches the sign to hamza. Diagnostic substitution exists
-only in the explicitly labelled development view. A tested word-scoped RTL isolate/override
-also failed; no bidi override was landed.
+Version 2 composes the same licensed Noto glyph with translation `(122,-377)` and zero
+advance. This places it above hamza in the sole E004 corpus context. The additional 50-unit
+clearance fixes the hamza collision seen in the earlier `(122,-427)` experiment. No copied
+GPOS anchor is added: it is an intrinsic glyph for the original standalone PUA run. Standard
+U+0657 and its attachment tables remain intact. This is deliberately scoped to this immutable
+corpus and the browser renderer, not a general Unicode-property repair or approval for a
+native renderer that forces an entire verse into one Arabic run.
 
-An OFL-only intrinsic-positioning experiment additionally composed E004 from Noto's existing
-U+0657 glyph with x/y translation `(122, -427)`, derived from forced-run hamza attachment,
-and shifted copied mark anchors to preserve full-run attachment. This made the mark visible
-but did not reproduce browser Unicode-mark placement: 9/9 size/width pairs differed in both
-Chromium and WebKit. Integer line heights removed screenshot rounding differences; remaining
-pixel difference was confined to the sign, showing collision with hamza. Experiment is not
-in packaged font. This strengthens the failed-placement finding without proving every
-possible intrinsic/contextual font construction impossible.
+E021 is a genuine optional-ayah 5 from Noto U+08E2, half scale, translated `(-250,820)`.
+Its ink lies left of the following annotation, with a gap, rather than overprinting it.
+The original-source reference uses adjacent signs; Quran.com's modern served text instead
+uses a vertical stack and adds a small six. We preserve our source's two original signs.
+The borrowed v1 ruku anchor was incorrect and is removed. Original U+08E2 is unchanged.
 
-The minimum unresolved display requirement is to treat this vendor code as the verified
-Arabic mark **during itemization and shaping**, while preserving original logical string and
-cluster/source indices. Ordinary FontFace/cmap API offers no per-character Unicode-property
-override. A property-aware shaping/display adapter would need to own the complete affected
-Arabic word/run, render shaped glyph positions and preserve original DOM/accessibility/copy
-text and reference alignment. Font-only aliasing does not supply that behavior. No custom
-engine, hidden production substitution, per-character wrappers or DB normalization introduced.
-This requirement is established; such an adapter remains unimplemented and would require
-separate selection/copy/accessibility validation. No claim that every conceivable font/layout
-approach has been disproved.
+Trailing zain/ruku needs a small display-layer change because the ornament uses another font
+and is a separate shaping run. `IndoPakAyah.svelte` groups the last word and ornament,
+positions the original trailing signs above the ornament, and isolates only that generated
+end cluster. It splits strings into exact slices, preserving every codepoint and logical DOM
+order; it adds no text replacement, bidi override, custom shaper or per-character wrapping.
+Two ruku-plus-pause endings (26:51, 43:15) retain both distinct signs. Font selection is
+confined to IndoPak; Uthmani and Tajweed remain on their existing paths.
 
-## Reproducible package and development integration
+## Reproducible package and integration
 
-[`build.py`](../scripts/fonts/indopak/build.py) verifies upstream font/license SHA-256 on
-download and cached reuse; these are **font input** checksums, never Quran checksums. Pinned
-FontTools 4.60.2, Brotli 1.2.0, uharfbuzz 0.51.7 are enforced. Reviewed Python 3.9.6/HarfBuzz
-12.1.0. Build rejects unresolved/conflicting mappings, missing targets and inventory/context
-mismatches. Default command refuses unapproved production; explicit `--preview` permits
-research build, retaining all semantic checks. Instructions:
-[`scripts/fonts/indopak/README.md`](../scripts/fonts/indopak/README.md).
+[`build.py`](../scripts/fonts/indopak/build.py) verifies pinned **font/license** input checksums
+on every use and enforces FontTools 4.60.2, Brotli 1.2.0 and uharfbuzz 0.51.7. It rejects
+unresolved mappings, conflicts, absent targets and inventory/context mismatches. It never
+reads or hashes Quran data. A manifest with unapproved rendering is rejected before download
+or output. Rebuild instructions are in the [tool README](../scripts/fonts/indopak/README.md).
 
-Distinct family `IndoPak Reader Compat Preview`, PostScript
-`IndoPakReaderCompatPreview-Regular`; family, full, unique, typographic, WWS and version names
-updated consistently. Original copyright/OFL name records preserved. Complete OFL and FONTLOG
-accompany font. No reserved upstream names reused as derivative family.
+Family: `IndoPak Reader Compat`; PostScript: `IndoPakReaderCompat-Regular`; version 2.000.
+Genuine TTF and WOFF2 retain the full repertoire and layout. Complete OFL and FONTLOG are
+packaged alongside `web/static/fonts/indopak-reader-compat-v2.*`. The distinct name, explicit
+versioned URL and absence of `local()` ensure the packaged derivative is used. Separate
+rebuilds are byte-identical. Exact bytes, font-only checksums and name records are in
+[`outputs.json`](../scripts/fonts/indopak/outputs.json).
 
-| Package |   Bytes | SHA-256, font only                                                 |
-| ------- | ------: | ------------------------------------------------------------------ |
-| TTF     | 201,032 | `3a54f6421c2b017b553b8db7b13c5b7fd1f747f16ab5848f4c9148af1191b66d` |
-| WOFF2   |  71,260 | `0d7b1194c16cfb9fda82ac53ad43b9fd6ce0bc5089b8551d7187873c492ec385` |
+`ReadingAyah` and `VerseRow` select the same font and end renderer for IndoPak. Copy tools
+continue receiving the original text prop. The font is registered through CSS and fetched
+only when used. Existing SvelteKit service-worker static precaching includes the versioned
+font and notices. No runtime dependency or persisted font preference is added.
 
-Files under `web/static/fonts/indopak-reader-compat-preview-v1.*`; 1,726 glyphs. TTF is genuine
-TrueType, not renamed OTF. Separate rebuilds produced byte-identical TTF/WOFF2/OFL. Static
-versioned `-v1` URL and unique family with no `local()` source prevent accidental installed
-font use. Font bytes fetched by browser are compared with packaged WOFF2. Future edits must
-bump asset version, following existing static font naming/cache approach.
+The `/design/indopak` development route covers all 223 inventoried context classes in 226
+verses, all 87 corpus characters, sizes 24/33/48, widths 320/640/960 and Uthmani controls.
+Its server returns 404 in production before DB access. Only a labelled diagnostic row uses
+an E004/U+0657 comparison string; no production reader text is substituted.
 
-Development route is not prerendered; production server load returns 404 before DB access.
-It uses actual `ReadingAyah`, complete original strings, multiple font sizes, wrap widths,
-verse digits, paired punctuation and unaffected IndoPak/Uthmani controls. No new runtime
-dependency or persisted settings field. Static font assets follow existing SvelteKit
-service-worker precache/version policy; they are separate from Quran offline data pack.
-Production default selection remains unchanged until rendering acceptance is met.
+The earlier shared LTR ornament isolation repair remains in place. Digits 1 through 286
+compose inside their frame, including 2:101 and the Scheherazade fallback.
 
-End-of-ayah ornaments use a separate unbreakable, isolated LTR inline block. Without that
-boundary, the E01A ending at 2:101 splits the numeral run from its U+06DD frame; 2:86 also
-reproduces the failure. This fix is confined to the generated ornament, preserving the original
-Quran string and its RTL shaping. Browser checks cover one-, two- and three-digit endings,
-all specimen/control ornaments, mobile wrapping and the composing Scheherazade fallback.
+## Validation and limits
 
-## Validation and open acceptance items
+- Read-only corpus audit: 6,236 verses, 727,385 characters, 87 codepoints; nine PUA codes,
+  1,383 occurrences. Inventory unchanged. Packaged TTF/WOFF2: zero missing visible characters.
+- HarfBuzz 12.1.0: all 6,236 original strings, zero notdef, equal TTF/WOFF2 traces. 5,015
+  unaffected runs exactly match upstream. Forced whole-run shaping verifies coverage and
+  regressions; actual browser paint checks verify the private mark positioning.
+- Project gates: `pnpm check` (zero errors/warnings), `pnpm lint` (deny warnings),
+  `pnpm test` (173 files, 2,182 tests) and production build pass. Packaged WOFF2 is served
+  byte-identically in production; the development specimen returns 404.
+- Eight Python regressions include cmap/property limits, manifests, coverage, layout,
+  checksums, supplementary/variation tables, mark collision and hamza clearance.
+- Reader regressions exercise both modes, exact DOM text after excluding the generated
+  ornament, unchanged Uthmani branch and trailing control/annotation order.
+- Automated Chromium 153.0.8010.12 and Playwright WebKit 26.6 exercise the full specimen,
+  nine size/width combinations and 390×844 viewport. Paint regressions reject the old E004
+  drift and E021 overlap. All ornaments remain enclosed; end signs clear the ornament and
+  stay with the final word. Browser font response equals packaged bytes.
+- Playwright Firefox cannot launch on this host (`Could not find profile folder`), including
+  an explicit persistent-profile retry. Harness reports failure and exits nonzero. Native
+  Firefox 147.0.1 supplies focused GUI evidence separately, not a full automated pass.
+- Native Safari and Firefox checks are documented in
+  [`browser-report.json`](../scripts/fonts/indopak/browser-report.json). Playwright WebKit
+  is not real Safari or iOS. No iOS device validation is claimed.
 
-- Complete read-only corpus inventory compared with recorded inventory; packaged TTF/WOFF2
-  have no missing visible/spacing characters or unmapped controls.
-- HarfBuzz 12.1.0 shaped all 6,236 original strings with forced Arabic/RTL; zero `.notdef`;
-  packaged TTF/decoded WOFF2 glyph IDs, advances, offsets and clusters agree. 5,015 unaffected
-  runs exactly match original Noto glyph names/positions/clusters. This does not simulate
-  browser bidi itemization. Recorded [`shaping-report.json`](../scripts/fonts/indopak/shaping-report.json).
-- Seven focused Python tests cover manifest rejection, checksum tampering, full packaged
-  coverage/layout/classes/advances, original cmap conflict protection, supplementary/variation
-  handling, differing PUA mark clusters/properties and production refusal.
-- Browser engine results, exact versions, specimen counts and known rendering failure are
-  recorded in [`browser-report.json`](../scripts/fonts/indopak/browser-report.json). Harness
-  exercises 24/33/48 px, 320/640/960 px widths, 390×844 viewport, original strings and all 87
-  characters. Screenshot inspection is separate from nominal DOM/coverage assertions.
-  Playwright 1.63.0: Chromium 153.0.8010.12 and WebKit 26.6 completed harness; both reproduce
-  E004 failure. Playwright Firefox failed launch before navigation (`Could not find profile
-folder`); older build also failed compositor initialization and headed retry. Harness exits
-  nonzero and records failure; no automated Firefox pass claimed.
-- Native Safari **27.0 on macOS 27.0**, GUI inspection: original/diagnostic 17:7 mismatch,
-  punctuation/digits, unaffected IndoPak controls, KFGQPC Uthmani 1:7 control. This focused
-  real-Safari check is separate from Playwright WebKit. No iOS device validation performed.
-- Installed Firefox **147.0.1 on macOS 27.0**, focused GUI inspection: original/diagnostic
-  17:7 mismatch, punctuation/digits, KFGQPC Uthmani 1:7, E003 in wrapped 5:7. This provides
-  actual Firefox evidence, but does not replace unavailable full automated Firefox checks.
-- Representative screenshots for each of nine private codes were inspected in Chromium and
-  WebKit. Pause forms remain distinct; no obvious clipping in those sampled runs. E004 failure
-  remains visible. This is not approval of all 223 contexts or exact editorial placement.
-- Production preview server: specimen HTTP 404; TTF, WOFF2, OFL and FONTLOG HTTP 200 with
-  exact packaged bytes; WOFF2 appears in existing generated versioned service-worker cache.
-- `pnpm check`: zero errors/warnings. `pnpm lint --deny-warnings`: pass. `pnpm test`: 172 files,
-  2,177 tests pass. Production build: pass. Quran DB bytes and counts unchanged.
-
-Remaining: original printed-edition/download provenance; qualified semantic/recitation review;
-full visual placement/collision review of generated composites; correct E004 browser
-itemization/shaping; E021/adjacent-mark stacking repair; complete platform acceptance and
-production script integration.
-Nominal font coverage and forced-run shaping pass; overall rendering acceptance fails.
+Reference fonts remain outside the repository and are never build inputs. Noto pause forms
+retain Noto's higher annotation lane; the glyph meanings stay distinct and genuine. This
+sampled comparison does not prove pixel parity with Quran.com's different font or certify
+recitation/editorial accuracy. Original printed-edition/download provenance and qualified
+recitation review remain unresolved.

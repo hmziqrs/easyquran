@@ -8,6 +8,7 @@
   import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
   import type { StackedTranslation } from "$lib/data/quran-types";
   import AyahOrnament from "./AyahOrnament.svelte";
+  import IndoPakAyah from "./IndoPakAyah.svelte";
 
   let {
     text,
@@ -55,8 +56,6 @@
   let Tools = $state<Component<{ text: string; vKey: string }> | null>(null);
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
-  // Tajweed markup renders as colored runs (view-only; the stored/wire text is
-  // verbatim — see lib/quran/view/tajweed.ts). Every other script renders raw.
   const tajweedSegments = $derived.by(() =>
     script === QuranScript.Tajweed ? parseTajweedSegments(text) : null,
   );
@@ -146,6 +145,7 @@
       dir="rtl"
       lang="ar"
       class="verse-text font-arabic leading-[2.15] text-quran-foreground"
+      class:indopak={script === QuranScript.IndoPak}
       style="font-size:var(--reader-arabic-size, 33px)"
     >
       {#if arabicPending}<span class="arabic-pending" aria-hidden="true"></span>{:else if tajweedSegments}
@@ -157,9 +157,11 @@
             {segment.text}
           {/if}
         {/each}
+      {:else if script === QuranScript.IndoPak}
+        <IndoPakAyah {text} {n} {vKey} />
       {:else}
         {text}
-      {/if}<AyahOrnament {vKey} {n} />
+      {/if}{#if script !== QuranScript.IndoPak || arabicPending}<AyahOrnament {vKey} {n} />{/if}
     </span>
   {/if}
 
@@ -208,6 +210,10 @@
 
   .verse-row .verse-text {
     font-family: var(--reader-arabic-family, var(--font-arabic));
+  }
+
+  .verse-row .verse-text.indopak {
+    font-family: "IndoPak Reader Compat";
   }
 
   .verse-row .verse-text--translation {

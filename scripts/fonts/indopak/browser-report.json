@@ -4,20 +4,47 @@
     "version": "153.0.8010.12",
     "specimens": 226,
     "context_classes": 223,
-    "status": "checks_passed_rendering_blocked",
+    "status": "checks_passed",
     "font_loaded_from_packaged_bytes": true,
     "original_strings_preserved": true,
-    "fontOnlyBidiFailure": true,
+    "ornament_runs_checked": 229,
+    "ornament_digit_lengths": [1, 2, 3],
+    "ornament_fallback_checked": true,
+    "private_mark_paint": {
+      "inverted_damma_difference_height_em": 0.25,
+      "optional_pause_ink_runs": [
+        [1292, 1314],
+        [1319, 1339]
+      ]
+    },
+    "end_signs_checked": 47,
     "sizes": [24, 33, 48],
     "widths": [320, 640, 960],
     "phone_viewport": [390, 844],
-    "production_approved": false
+    "production_approved": true,
+    "font_version": "2.000",
+    "negative_regression": {
+      "engine": "chromium",
+      "current": {
+        "inverted_damma_difference_height_em": 0.25,
+        "optional_pause_ink_runs": [
+          [1292, 1314],
+          [1319, 1339]
+        ]
+      },
+      "previous": {
+        "inverted_damma_difference_height_em": 0.625,
+        "optional_pause_ink_runs": [[1319, 1346]]
+      },
+      "both_regression_checks_reject_previous": true
+    }
   },
   {
     "engine": "firefox",
     "status": "harness_failed",
-    "error": "Playwright Firefox 1543 cannot launch on this host: Could not find profile folder. Older 1509 builds also failed headless compositor/sandbox initialization; headed retry failed. Harness returns nonzero. No Firefox automated pass claimed.",
+    "error": "Playwright Firefox 1543 cannot launch on this host: Could not find profile folder. Explicit persistent-profile retry also failed. Harness returns nonzero; no automated Firefox pass claimed.",
     "production_approved": false,
+    "font_version": "2.000",
     "failed_at": "browser launch, before page navigation"
   },
   {
@@ -25,45 +52,65 @@
     "version": "26.6",
     "specimens": 226,
     "context_classes": 223,
-    "status": "checks_passed_rendering_blocked",
+    "status": "checks_passed",
     "font_loaded_from_packaged_bytes": true,
     "original_strings_preserved": true,
-    "fontOnlyBidiFailure": true,
+    "ornament_runs_checked": 229,
+    "ornament_digit_lengths": [1, 2, 3],
+    "ornament_fallback_checked": true,
+    "private_mark_paint": {
+      "inverted_damma_difference_height_em": 0.25833333333333336,
+      "optional_pause_ink_runs": [
+        [1292, 1314],
+        [1319, 1339]
+      ]
+    },
+    "end_signs_checked": 47,
     "sizes": [24, 33, 48],
     "widths": [320, 640, 960],
     "phone_viewport": [390, 844],
-    "production_approved": false
+    "production_approved": true,
+    "font_version": "2.000",
+    "negative_regression": {
+      "engine": "webkit",
+      "current": {
+        "inverted_damma_difference_height_em": 0.25833333333333336,
+        "optional_pause_ink_runs": [
+          [1292, 1314],
+          [1319, 1339]
+        ]
+      },
+      "previous": {
+        "inverted_damma_difference_height_em": 0.6333333333333333,
+        "optional_pause_ink_runs": [[1319, 1346]]
+      },
+      "both_regression_checks_reject_previous": true
+    }
   },
   {
     "engine": "safari-native",
     "version": "27.0",
     "platform": "macOS 27.0",
+    "font_version": "2.000",
     "validation": "focused GUI screenshot inspection, separate from Playwright WebKit",
     "font_size": 33,
     "run_width": 640,
     "observed": [
-      "17:7 original/Unicode comparison mismatch; original inverted damma not correctly attached",
-      "paired punctuation and mixed Arabic digits",
-      "IndoPak 1:1 and 112:1 controls",
-      "KFGQPC Uthmani 1:7 control"
+      "17:7 original E004 above hamza; Unicode diagnostic remains a distinct comparison string",
+      "1:7 optional-ayah 5 and no-stop sign separate; ruku ain above ornament",
+      "2:101 three Arabic digits enclosed; zain above ornament"
     ],
-    "fontOnlyBidiFailure": true,
-    "production_approved": false
+    "full_matrix_pass_claimed": false
   },
   {
     "engine": "firefox-native",
     "version": "147.0.1",
     "platform": "macOS 27.0",
-    "validation": "focused GUI screenshot inspection, automated Playwright Firefox unavailable",
+    "font_version": "2.000",
+    "validation": "focused GUI screenshot inspection; Playwright Firefox unavailable",
     "font_size": 33,
     "run_width": 640,
-    "observed": [
-      "17:7 original/Unicode comparison mismatch",
-      "paired punctuation and mixed Arabic digits",
-      "KFGQPC Uthmani 1:7 control",
-      "E003 in 5:7 with line wrapping"
-    ],
-    "fontOnlyBidiFailure": true,
-    "production_approved": false
+    "observed": ["17:7 original E004 above hamza"],
+    "full_matrix_pass_claimed": false
   }
 ]

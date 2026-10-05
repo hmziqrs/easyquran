@@ -4,8 +4,8 @@
   "expected_private_codepoints": 9,
   "expected_private_occurrences": 1383,
   "semantic_review": "Font encoding compared with PDMS and QuranWBW reference faces; symbol identities corroborated with Unicode proposals. Exact printed edition and original mirror download revision not recovered. Recitation rulings require qualified review.",
-  "production_approved": false,
-  "renderer_blocker": "U+E004 in 17:7 has bidi class L and shapes separately from the hamza; a cmap alias cannot give it NSM or Arabic script properties.",
+  "production_approved": true,
+  "renderer_blocker": null,
   "entries": [
     {
       "codepoint": "U+E003",
@@ -49,9 +49,10 @@
       "target_glyph": "uni0657",
       "status": "verified",
       "source_behavior": "mark",
-      "implementation": "reuse",
-      "new_composite_required": false,
+      "implementation": "composite",
+      "new_composite_required": true,
       "evidence": ["pdms-cmap-alias", "quranwbw-cmap-alias"],
+      "positioning": "Zero-advance Noto inverted damma translated (122,-377) in its standalone L bidi run. Only corpus context: hamza/E004/alif in 17:7. Original U+0657 glyph and attachment stay intact.",
       "contexts": [
         {
           "signature": "Lo|Lo|||E004,",
@@ -73,6 +74,7 @@
       "implementation": "composite",
       "new_composite_required": true,
       "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "end_positioning": "Trailing end sign is laid out above the ayah ornament as one unbreakable end cluster; original codepoints and DOM order preserved.",
       "contexts": [
         {
           "signature": "Zs|Zs|||E01A,",
@@ -1066,6 +1068,7 @@
       "implementation": "composite",
       "new_composite_required": true,
       "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "positioning": "Half-scale dedicated Noto disputed-ayah 5 translated (-250,820). Separate ink lane left of the following pause mark; no borrowed ruku attachment anchor. Original PUA text is preserved.",
       "contexts": [
         {
           "signature": "Zs|Mn||06D9,|E021,",
@@ -1357,6 +1360,7 @@
       "implementation": "reuse",
       "new_composite_required": false,
       "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
+      "end_positioning": "Trailing end sign is laid out above the ayah ornament as one unbreakable end cluster; original codepoints and DOM order preserved.",
       "contexts": [
         {
           "signature": "Mn|end|064E,||E022,",
@@ -1481,7 +1485,7 @@
       ]
     }
   ],
-  "verification_scope": "Verified means symbol identity and source encoding; generated metrics, browser placement, printed-edition provenance and recitation rulings have separate review status. No production approval.",
+  "verification_scope": "Verified denotes symbol identity and source encoding. Production approval covers the pinned browser font and end-marker layout, not recitation rulings or printed-edition provenance.",
   "evidence_details": {
     "pdms-cmap-alias": {
       "reference_input": "pdms-source-reference",

@@ -1,4 +1,5 @@
 import copy
+import json
 import tempfile
 import unittest
 import unicodedata
@@ -51,8 +52,13 @@ class CompatibilityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "output"
             cache = Path(directory) / "cache"
+            invalid = copy.deepcopy(self.manifest)
+            invalid["production_approved"] = False
+            invalid["renderer_blocker"] = "unreviewed rendering"
+            manifest = Path(directory) / "mapping.json"
+            manifest.write_text(json.dumps(invalid))
             with self.assertRaisesRegex(ValueError, "production blocked"):
-                build(cache, output, HERE / "mapping.json", preview=False)
+                build(cache, output, manifest, preview=False)
             self.assertFalse(output.exists())
             self.assertFalse(cache.exists())
 
@@ -109,11 +115,22 @@ class CompatibilityTest(unittest.TestCase):
         try:
             original = shape(shaper, "ء\uE004ا")
             diagnostic = shape(shaper, "ء\u0657ا")
-            self.assertEqual([item[0] for item in original], [item[0] for item in diagnostic])
+            self.assertNotEqual([item[0] for item in original], [item[0] for item in diagnostic])
             self.assertNotEqual([item[1] for item in original], [item[1] for item in diagnostic])
-            self.assertFalse(self.manifest["production_approved"])
         finally:
             font.close()
+
+    def test_standalone_private_marks_have_separate_ink_lanes(self):
+        cmap = self.font.getBestCmap()
+        outlines = self.font["glyf"]
+        optional = outlines[cmap[0xE021]]
+        for pause in [0x06D9, 0x0615, 0x06DA, 0x06DB, 0xE01E]:
+            self.assertLess(optional.xMax + 30, outlines[cmap[pause]].xMin)
+        inverted = outlines[cmap[0xE004]]
+        hamza = outlines[cmap[0x0621]]
+        gap = inverted.yMin - hamza.yMax
+        self.assertGreater(gap, 40)
+        self.assertLess(gap, 150)
 
 
 if __name__ == "__main__":
