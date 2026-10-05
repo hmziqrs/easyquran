@@ -3,7 +3,9 @@
 Audit/build date: 2026-10-05. Concrete derivative and development integration are delivered.
 Production acceptance is **not met**: the original E004 inverted damma in 17:7 loses correct
 placement in browser shaping. The font is intentionally absent from production script/font
-selection. Removing missing-glyph boxes is not approval.
+selection. Removing missing-glyph boxes is not approval. A subsequent
+[live Quran.com comparison](indopak-qurancom-comparison.md) corroborates the nine symbol
+identities, but also reproduces E021/U+06D9 stacking overlap at 1:7. That repair remains open.
 
 ## Repository and immutable baseline
 
@@ -248,5 +250,6 @@ folder`); older build also failed compositor initialization and headed retry. Ha
 
 Remaining: original printed-edition/download provenance; qualified semantic/recitation review;
 full visual placement/collision review of generated composites; correct E004 browser
-itemization/shaping; complete platform acceptance and production script integration.
+itemization/shaping; E021/adjacent-mark stacking repair; complete platform acceptance and
+production script integration.
 Nominal font coverage and forced-run shaping pass; overall rendering acceptance fails.

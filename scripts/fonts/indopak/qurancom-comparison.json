@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-10-05T17:57:05Z",
+  "reference": {
+    "site": "https://quran.com",
+    "frontend_build_id": "cfO91iJO_kGMxzuatsf-J",
+    "quran_font_setting": "text_indopak",
+    "mushaf_lines": "15_lines",
+    "observed_word_font_family": "IndoPak",
+    "observed_end_marker_font_family": "IndoPak",
+    "font": {
+      "url": "https://quran.com/fonts/quran/hafs/nastaleeq/indopak/indopak-nastaleeq-waqf-lazim-v4.2.1.woff2",
+      "family": "AlQuran IndoPak by QuranWBW",
+      "version": "Version 4.2.1-WL",
+      "bytes": 83560,
+      "sha256_font_only": "ca2a573bd46af4a03f208ebfbaa0336242d0ea4199f1e20b1f06e1e2a1d87900",
+      "acquisition": "Observed CSS resource bundled through browser pageAssets; reference inspection outside repository only.",
+      "documented_ttf_url": "https://verses.quran.foundation/fonts/quran/hafs/nastaleeq/indopak/indopak-nastaleeq-waqf-lazim-v4.2.1.ttf",
+      "documented_ttf_bytes": 335984,
+      "documented_ttf_sha256_font_only": "4c8f002e7538ef6351ac676eb0f2c1708ecd17f6f8a5fc4a19dbc8eaf4dddff5",
+      "woff2_ttf_cmap_and_glyph_order_agree": true
+    },
+    "source_repository": "quran/quran.com-frontend-next",
+    "observed_master_revision": "74eb4e20f4e78cc11c055a3e130136e8dbb7743e",
+    "source_revision_is_proven_deployed_revision": false,
+    "source_paths": [
+      "src/styles/fonts.scss",
+      "src/components/dls/QuranWord/TextWord.tsx",
+      "src/components/dls/QuranWord/TextWord.module.scss"
+    ],
+    "independence_limit": "Quran.com uses the same QuranWBW font family already inspected at v4.2.2. This adds live deployment/text confirmation, not an independent printed-edition or qualified recitation review."
+  },
+  "scope": {
+    "private_codepoints": 9,
+    "comparison_cases": 10,
+    "live_verse_keys": ["2:101", "5:7", "17:7", "2:7", "2:16", "2:5", "2:83", "2:286", "1:7"],
+    "original_excerpts_found_in_local_database": 10,
+    "comparison_only_edge_operation": "Discard trailing U+200F on reference excerpts when checking containment in local DB text; never alter stored/reader text.",
+    "database_open_mode": "mode=ro&immutable=1",
+    "full_1383_occurrence_or_223_context_comparison": false,
+    "render_engines": [
+      { "engine": "chromium", "version": "153.0.8010.12", "cases": 10, "fonts_loaded": true },
+      { "engine": "webkit", "version": "26.6", "cases": 10, "fonts_loaded": true }
+    ],
+    "live_browser_checks": ["2:101", "17:7", "1:7"],
+    "reference_assets_entered_repository_or_font_build": false,
+    "database_or_packaged_fonts_modified": false
+  },
+  "symbols": [
+    {
+      "codepoint": "U+E003",
+      "location": "5:7:8",
+      "identity": "corroborated",
+      "reference_cmap_alias": "U+0656",
+      "current_display_codes": ["U+0656"],
+      "placement": "subscript visible; sampled comparison only"
+    },
+    {
+      "codepoint": "U+E004",
+      "location": "17:7:12",
+      "identity": "corroborated",
+      "reference_cmap_alias": "U+0657",
+      "current_display_codes": ["U+0657"],
+      "placement": "failed; existing original-PUA inverted-damma placement blocker"
+    },
+    {
+      "codepoint": "U+E01A",
+      "location": "2:7:9",
+      "identity": "corroborated",
+      "current_display_codes": ["U+0617"],
+      "placement": "local height/spacing differs; review required"
+    },
+    {
+      "codepoint": "U+E01B",
+      "location": "2:16:5",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06EA"],
+      "placement": "local height/spacing differs; review required"
+    },
+    {
+      "codepoint": "U+E01C",
+      "location": "2:5:5",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06D7"],
+      "placement": "local height/spacing differs; review required"
+    },
+    {
+      "codepoint": "U+E01E",
+      "location": "2:83:9",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06EB"],
+      "placement": "local height/spacing differs; review required"
+    },
+    {
+      "codepoint": "U+E01F",
+      "location": "2:286:40",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06E5"],
+      "placement": "local height/spacing differs; review required"
+    },
+    {
+      "codepoint": "U+E021",
+      "location": "1:7:4",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06EC", "U+06E6"],
+      "placement": "failed; optional-ayah glyph overlaps adjacent U+06D9 in local preview"
+    },
+    {
+      "codepoint": "U+E022",
+      "location": "1:7:9",
+      "identity": "corroborated",
+      "current_display_codes": ["U+06E0"],
+      "placement": "different pipeline: Quran.com moves ruku indication into end-marker word"
+    }
+  ],
+  "display_code_limit": "Codes describe observed glyph encoding in Quran.com's font, not standard Unicode semantic equivalences or replacement mappings for local data.",
+  "stack_defect": {
+    "verse": "1:7",
+    "sequence": ["U+E021", "U+06D9"],
+    "glyphs": ["compat.E021", "uni06D9"],
+    "shared_gpos_mark_class": 0,
+    "shared_gpos_mark_anchor_y": 1030,
+    "anchors_x": { "compat.E021": 134, "uni06D9": 82 },
+    "attachment_source_for_generated_glyph": "uni08D6",
+    "overlap_observed_in_chromium_and_webkit": true,
+    "same_glyph_unicode_diagnostic": "Temporary reference-only font adds U+08E2 alias to compat.E021. Both original E021 and diagnostic U+08E2 still crowd U+06D9. Do not attribute this defect solely to PUA bidi properties.",
+    "production_fix_delivered": false
+  },
+  "ornament_case": {
+    "verse": "2:101",
+    "number_enclosed": true,
+    "reference_end_word_codes": ["U+06DF", "U+0617", "U+F564"],
+    "local_ornament_codes": ["U+06DD", "U+0661", "U+0660", "U+0661"],
+    "zain_location": "Local source retains zain after final Arabic word; Quran.com served display moves zain into end-marker word.",
+    "frame_shape": "Existing local Scheherazade medallion differs from Quran.com's circular precomposed marker; enclosure correctness confirmed, pixel parity not claimed."
+  },
+  "overall": "symbol_identity_corroborated_rendering_acceptance_failed",
+  "production_approved": false
+}

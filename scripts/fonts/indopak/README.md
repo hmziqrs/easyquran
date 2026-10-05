@@ -4,6 +4,11 @@ Production blocked. This font demonstrates complete nominal coverage; it does no
 existing PUA text render correctly in browser bidi/shaping. See
 [evidence and remaining work](../../../docs/indopak-font-compatibility.md).
 
+[Live Quran.com comparison](../../../docs/indopak-qurancom-comparison.md) corroborates symbol
+identities and records the additional E021/no-stop stacking defect. Observed font/deployment
+pins and sampled results are in `qurancom-comparison.json`; reference assets remain outside
+the repository.
+
 Run from repository root with Python 3.9 or newer, Node 24 or newer, and pnpm workspace deps.
 Font dependencies are build/test tools only; none enter browser runtime.
 
