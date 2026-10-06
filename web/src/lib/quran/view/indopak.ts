@@ -67,8 +67,13 @@ function splitSpace(text: string): [string, string] {
   return [text.slice(0, text.length - space.length), space];
 }
 
+function splitMarkSpace(text: string): [string, string] {
+  const space = /\s[\s\p{Cf}]*$/u.exec(text)?.[0] ?? "";
+  return [text.slice(0, text.length - space.length), space];
+}
+
 function annotation(text: string, offset: number): IndoPakEndAnnotation {
-  const [mark, space] = splitSpace(text);
+  const [mark, space] = splitMarkSpace(text);
   const ink = annotationInkEm.get(text.charCodeAt(0));
   if (!ink) return { text, offset, mark, space, widthEm: undefined, indentEm: undefined };
   const [start, end] = ink;
@@ -139,20 +144,29 @@ function appendTo(word: WordDraft, part: IndoPakBodyPart) {
   }
 }
 
-function bodyWords(parts: readonly IndoPakBodyPart[]): IndoPakWord[] {
+const hasLetter = (text: string): boolean => /\p{L}/u.test(text);
+
+function segmentWords(parts: readonly IndoPakBodyPart[]): WordDraft[] {
   const words: WordDraft[] = [];
-  function place(part: IndoPakBodyPart, forceNew: boolean) {
+  function attach(part: IndoPakBodyPart) {
     const current = words.at(-1);
-    const signOnly = !/\p{L}/u.test(part.text);
-    if (current && !forceNew && (current.gap === "" || signOnly)) {
-      appendTo(current, part);
+    if (current) appendTo(current, part);
+    else words.push({ offset: part.offset, parts: [part], gap: "" });
+  }
+  function piece(segment: string, offset: number) {
+    const lead = /^[^\p{L}]*/u.exec(segment)?.[0] ?? "";
+    if (lead.length === segment.length || !words.length) {
+      attach({ text: segment, offset, annotations: [] });
       return;
     }
-    words.push({ offset: part.offset, parts: [part], gap: "" });
+    if (lead) attach({ text: lead, offset, annotations: [] });
+    const start = offset + lead.length;
+    const letters = { text: segment.slice(lead.length), offset: start, annotations: [] };
+    words.push({ offset: start, parts: [letters], gap: "" });
   }
   for (const part of parts) {
     if (part.annotations.length) {
-      place(part, false);
+      attach(part);
       continue;
     }
     for (const match of part.text.matchAll(/\s+|\S+/gu)) {
@@ -162,33 +176,36 @@ function bodyWords(parts: readonly IndoPakBodyPart[]): IndoPakWord[] {
         current.gap += match[0];
         continue;
       }
-      joinedSegments(match[0], offset).forEach((segment, index) => {
-        place({ text: segment.text, offset: segment.offset, annotations: [] }, index > 0);
-      });
+      for (const segment of joinedSegments(match[0], offset)) piece(segment.text, segment.offset);
     }
   }
-  return words.map((word) => ({
+  return words;
+}
+
+function toWord(word: WordDraft): IndoPakWord {
+  return {
     offset: word.offset,
     parts: word.parts,
     gap: word.gap,
     stop: word.parts.some((part) => STOP_SIGN.test(part.text)),
-  }));
+  };
 }
 
 export function indopakEnding(text: string): IndoPakEnding {
   const ending = /([-][-\p{M}\p{Cf}\s]*)$/u.exec(text);
   const suffix = ending?.[1] ?? "";
   const beforeSuffix = text.slice(0, ending?.index ?? text.length);
-  const finalWord = /([^\s​]*\p{L}[^\s​]*[^\p{L}]*)$/u.exec(beforeSuffix);
-  // A sign joined to the final word (no space) belongs to the word before it.
-  const lead = finalWord ? (/^[^\p{L}]*/u.exec(finalWord[0])?.[0] ?? "") : "";
-  const finalStart = (finalWord?.index ?? beforeSuffix.length) + lead.length;
+  const drafts = segmentWords(bodyParts(beforeSuffix));
+  const last = drafts.at(-1);
+  const finalDraft =
+    last && hasLetter(last.parts.map((part) => part.text).join("")) ? last : undefined;
+  const finalStart = finalDraft?.offset ?? beforeSuffix.length;
   const body = beforeSuffix.slice(0, finalStart);
   const ruku = suffix.startsWith("");
   const sign = /^[-][\p{Cf}]*/u.exec(suffix)?.[0] ?? "";
-  const parts = bodyParts(body);
   const lastWord = beforeSuffix.slice(finalStart);
   const [lastWordText, lastWordSpace] = splitSpace(lastWord);
+  const words = finalDraft ? drafts.slice(0, -1) : drafts;
   return {
     body,
     lastWord,
@@ -198,7 +215,7 @@ export function indopakEnding(text: string): IndoPakEnding {
     following: suffix.slice(sign.length),
     ruku,
     annotations: endAnnotations(suffix),
-    bodyParts: parts,
-    words: bodyWords(parts),
+    bodyParts: bodyParts(body),
+    words: words.map((word) => toWord(word)),
   };
 }

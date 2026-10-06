@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { pathToFileURL } from "node:url";
 
 import { dev } from "$app/environment";
 import { QuranScript } from "$lib/data/quran-types";
@@ -19,6 +20,12 @@ function databasePath(filename: string): string {
   return (
     candidates.find((candidate) => existsSync(candidate)) ?? error(503, "Provision Quran DBs first")
   );
+}
+
+function openReadOnly(filename: string): DatabaseSync {
+  const url = pathToFileURL(databasePath(filename));
+  url.search = "?mode=ro&immutable=1";
+  return new DatabaseSync(url, { readOnly: true });
 }
 
 function verse(database: DatabaseSync, key: string): string {
@@ -40,8 +47,8 @@ function neighbor(database: DatabaseSync, surah: number, ayah: number) {
 
 export function load({ url }: { url: URL }) {
   if (!dev) error(404, "Not found");
-  const database = new DatabaseSync(databasePath("quran-indopak.sqlite"), { readOnly: true });
-  const uthmani = new DatabaseSync(databasePath("quran-uthmani.sqlite"), { readOnly: true });
+  const database = openReadOnly("quran-indopak.sqlite");
+  const uthmani = openReadOnly("quran-uthmani.sqlite");
   try {
     const contexts = new Map<string, string[]>();
     for (const entry of mapping.entries) {
@@ -57,6 +64,10 @@ export function load({ url }: { url: URL }) {
       const labels = contexts.get(key) ?? [];
       labels.push(`${item.codepoint}: repertoire coverage`);
       contexts.set(key, labels);
+    }
+    for (const key of (url.searchParams.get("keys") ?? "").split(",")) {
+      if (!/^\d{1,3}:\d{1,3}$/u.test(key)) continue;
+      contexts.set(key, [...(contexts.get(key) ?? []), "Renderer regression"]);
     }
     const flowAudit = url.searchParams.get("audit") === "flow";
     const fullAudit = ["all", "flow"].includes(url.searchParams.get("audit") ?? "");

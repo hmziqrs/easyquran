@@ -1,0 +1,3450 @@
+{
+  "phase": "B",
+  "plan": "docs/indopak-v4-verification-plan.md#3-phase-b--renderer-logic-over-the-whole-corpus-new-tooling",
+  "command": "node scripts/fonts/indopak/segmentation_audit.mjs",
+  "database_id": "quran-indopak",
+  "database_open_mode": "ro&immutable=1",
+  "renderer": "web/src/lib/quran/view/indopak.ts indopakEnding (imported)",
+  "font": "web/static/fonts/indopak-reader-compat-v4.ttf",
+  "verses": 6236,
+  "history": {
+    "run1_failures": {
+      "R5.lead-pause.word": 29,
+      "R5.merged-words": 3
+    },
+    "run1_exceptions": {
+      "R5.lead-cf.word": 22,
+      "R5.lead-mark.word": 11,
+      "R5.sign-only-box": 1,
+      "R5.split-final-lead": 4,
+      "ink.multi-char-mark": 1
+    },
+    "run1_overflow_explained": "Prior engine run overflow (56px / 286px): 19:17 and 91:14 were merged-word boxes (311.1 / 305.2px), now split; 12:21 is one whitespace-free source token (277.5px + 15.1px stop margin = 292.6px) and still overflows.",
+    "fix": "indopak.ts segmentWords: one rule for all words. A box starts at a letter; letter-free text (sign token, glued sign/mark prefix incl. U+200B-led, inline cluster) joins the previous box with the whitespace before it. Annotation marks draw inner whitespace (+ following Cf) zero-width (4:171)."
+  },
+  "assertions": {
+    "failures": 0,
+    "failures_by_rule": {},
+    "failures_list": {},
+    "exceptions": 18,
+    "exceptions_by_rule": {
+      "R5.sign-only-box": 1,
+      "R5.verse-start-lead-cf": 17
+    },
+    "exceptions_list": {
+      "R5.verse-start-lead-cf": [
+        "2:198@0 200B",
+        "3:167@0 200B",
+        "5:26@0 200B",
+        "5:110@0 200B",
+        "6:145@0 200B",
+        "7:12@0 200B",
+        "10:20@0 200B",
+        "10:88@0 200B",
+        "11:61@0 200B",
+        "12:17@0 200B",
+        "13:13@0 200B",
+        "15:22@0 200B",
+        "19:19@0 200B",
+        "20:9@0 200B",
+        "26:32@0 200B",
+        "55:73@0 200B",
+        "64:14@0 200B"
+      ],
+      "R5.sign-only-box": ["76:17@0 200B _ 200B"]
+    },
+    "failure_diagnosis": {},
+    "exception_review": {
+      "R5.sign-only-box": "76:17 starts U+200B U+0020 U+200B: an ink-free verse-initial box, the only letter-free box in the corpus. Accepted leading case.",
+      "R5.verse-start-lead-cf": "Verse starts with invisible U+200B; it stays in the first box because nothing precedes it. No ink. Accepted."
+    }
+  },
+  "stop_set": {
+    "quran_com": [
+      "0615",
+      "0617",
+      "06D6",
+      "06D7",
+      "06D8",
+      "06D9",
+      "06DA",
+      "06DB",
+      "06DC",
+      "06E2",
+      "06E5",
+      "06EA",
+      "06EB"
+    ],
+    "private_pause_ruku": ["E01A", "E01B", "E01C", "E01E", "E01F", "E021", "E022"],
+    "source": "quran.com-frontend-next 74eb4e2 QuranWord.tsx INDO_PAK_STOP_SIGN_CHARS; mapping.json meanings"
+  },
+  "distribution": {
+    "boxes_per_verse": {
+      "min": 1,
+      "max": 131,
+      "mean": 12.55,
+      "total": 78292,
+      "histogram": {
+        "1-4": 1121,
+        "5-9": 1748,
+        "10-19": 2291,
+        "20-39": 962,
+        "40-79": 112,
+        "80-119": 1,
+        "120+": 1
+      },
+      "largest": ["2:282:131", "4:12:92", "73:20:79", "24:31:78", "24:61:76"]
+    },
+    "widest_box_per_verse_em_histogram": {
+      "0-0": 0,
+      "1-1": 70,
+      "2-2": 3289,
+      "3-3": 2810,
+      "4-4": 66,
+      "5-5": 1,
+      "6+": 0
+    },
+    "widest_boxes_56px": [
+      {
+        "key": "56:23",
+        "kind": "final",
+        "box": 1,
+        "offset": 12,
+        "length": 29,
+        "em": 5.746,
+        "px_56": 321.8,
+        "px_56_with_margin": 326.2,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 200B 06DA"
+      },
+      {
+        "key": "12:21",
+        "kind": "word",
+        "box": 18,
+        "offset": 168,
+        "length": 25,
+        "em": 4.955,
+        "px_56": 277.5,
+        "px_56_with_margin": 292.6,
+        "stop": true,
+        "in_prior_specimen_run": true,
+        "sketch": "w E01A w"
+      },
+      {
+        "key": "18:110",
+        "kind": "word",
+        "box": 17,
+        "offset": 159,
+        "length": 23,
+        "em": 4.883,
+        "px_56": 273.5,
+        "px_56_with_margin": 273.5,
+        "stop": false,
+        "in_prior_specimen_run": true,
+        "sketch": "w"
+      },
+      {
+        "key": "15:24",
+        "kind": "final",
+        "box": 6,
+        "offset": 69,
+        "length": 20,
+        "em": 4.626,
+        "px_56": 259.1,
+        "px_56_with_margin": 263.6,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "83:26",
+        "kind": "final",
+        "box": 5,
+        "offset": 49,
+        "length": 21,
+        "em": 4.6,
+        "px_56": 257.6,
+        "px_56_with_margin": 262.1,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 0615"
+      },
+      {
+        "key": "43:21",
+        "kind": "final",
+        "box": 7,
+        "offset": 53,
+        "length": 16,
+        "em": 4.597,
+        "px_56": 257.4,
+        "px_56_with_margin": 261.9,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "16:23",
+        "kind": "final",
+        "box": 12,
+        "offset": 91,
+        "length": 19,
+        "em": 4.545,
+        "px_56": 254.5,
+        "px_56_with_margin": 259,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "4:75",
+        "kind": "word",
+        "box": 7,
+        "offset": 54,
+        "length": 21,
+        "em": 4.503,
+        "px_56": 252.1,
+        "px_56_with_margin": 252.1,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "4:127",
+        "kind": "word",
+        "box": 24,
+        "offset": 225,
+        "length": 21,
+        "em": 4.503,
+        "px_56": 252.1,
+        "px_56_with_margin": 252.1,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "32:15",
+        "kind": "final",
+        "box": 14,
+        "offset": 126,
+        "length": 17,
+        "em": 4.425,
+        "px_56": 247.8,
+        "px_56_with_margin": 252.3,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 06E9"
+      },
+      {
+        "key": "15:95",
+        "kind": "final",
+        "box": 2,
+        "offset": 18,
+        "length": 20,
+        "em": 4.416,
+        "px_56": 247.3,
+        "px_56_with_margin": 251.8,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 06D9"
+      },
+      {
+        "key": "52:31",
+        "kind": "final",
+        "box": 5,
+        "offset": 43,
+        "length": 21,
+        "em": 4.416,
+        "px_56": 247.3,
+        "px_56_with_margin": 251.8,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w _ 0615"
+      },
+      {
+        "key": "52:37",
+        "kind": "final",
+        "box": 6,
+        "offset": 46,
+        "length": 19,
+        "em": 4.399,
+        "px_56": 246.4,
+        "px_56_with_margin": 250.8,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 06DC 064E w 0615"
+      },
+      {
+        "key": "29:38",
+        "kind": "final",
+        "box": 15,
+        "offset": 154,
+        "length": 18,
+        "em": 4.368,
+        "px_56": 244.6,
+        "px_56_with_margin": 249.1,
+        "stop": false,
+        "in_prior_specimen_run": true,
+        "sketch": "w 06D9"
+      },
+      {
+        "key": "26:29",
+        "kind": "final",
+        "box": 7,
+        "offset": 64,
+        "length": 17,
+        "em": 4.326,
+        "px_56": 242.3,
+        "px_56_with_margin": 246.7,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "14:44",
+        "kind": "word",
+        "box": 18,
+        "offset": 183,
+        "length": 24,
+        "em": 4.321,
+        "px_56": 242,
+        "px_56_with_margin": 242,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "37:172",
+        "kind": "final",
+        "box": 2,
+        "offset": 17,
+        "length": 17,
+        "em": 4.321,
+        "px_56": 242,
+        "px_56_with_margin": 246.5,
+        "stop": false,
+        "in_prior_specimen_run": true,
+        "sketch": "w"
+      },
+      {
+        "key": "15:75",
+        "kind": "final",
+        "box": 5,
+        "offset": 28,
+        "length": 21,
+        "em": 4.32,
+        "px_56": 241.9,
+        "px_56_with_margin": 246.4,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "37:26",
+        "kind": "final",
+        "box": 3,
+        "offset": 20,
+        "length": 16,
+        "em": 4.284,
+        "px_56": 239.9,
+        "px_56_with_margin": 244.4,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      },
+      {
+        "key": "18:74",
+        "kind": "word",
+        "box": 0,
+        "offset": 0,
+        "length": 20,
+        "em": 4.28,
+        "px_56": 239.7,
+        "px_56_with_margin": 254.8,
+        "stop": true,
+        "in_prior_specimen_run": true,
+        "sketch": "w E01F w"
+      },
+      {
+        "key": "21:19",
+        "kind": "final",
+        "box": 12,
+        "offset": 102,
+        "length": 18,
+        "em": 4.277,
+        "px_56": 239.5,
+        "px_56_with_margin": 244,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 200B 06DA"
+      },
+      {
+        "key": "37:14",
+        "kind": "final",
+        "box": 3,
+        "offset": 23,
+        "length": 17,
+        "em": 4.277,
+        "px_56": 239.5,
+        "px_56_with_margin": 244,
+        "stop": false,
+        "in_prior_specimen_run": true,
+        "sketch": "w"
+      },
+      {
+        "key": "84:21",
+        "kind": "final",
+        "box": 5,
+        "offset": 42,
+        "length": 16,
+        "em": 4.277,
+        "px_56": 239.5,
+        "px_56_with_margin": 244,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w _ 0615 _ 06E9"
+      },
+      {
+        "key": "8:62",
+        "kind": "final",
+        "box": 11,
+        "offset": 103,
+        "length": 20,
+        "em": 4.227,
+        "px_56": 236.7,
+        "px_56_with_margin": 241.2,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w 06D9"
+      },
+      {
+        "key": "15:67",
+        "kind": "final",
+        "box": 3,
+        "offset": 30,
+        "length": 17,
+        "em": 4.173,
+        "px_56": 233.7,
+        "px_56_with_margin": 238.2,
+        "stop": false,
+        "in_prior_specimen_run": false,
+        "sketch": "w"
+      }
+    ],
+    "overflow_prediction_56px": {
+      "specimen_320": {
+        "column_px": 286,
+        "border_box": ["56:23"],
+        "with_margin": ["12:21", "56:23"],
+        "border_box_in_prior_specimen_run": [],
+        "with_margin_in_prior_specimen_run": ["12:21"]
+      },
+      "reader_viewport_320": {
+        "column_px": 272,
+        "border_box": ["12:21", "18:110", "56:23"],
+        "with_margin": ["12:21", "18:110", "56:23"],
+        "border_box_in_prior_specimen_run": ["12:21", "18:110"],
+        "with_margin_in_prior_specimen_run": ["12:21", "18:110"]
+      },
+      "prior_run_before_fix": ["12:21", "19:17", "91:14"]
+    },
+    "whitespace_splits": 71990,
+    "final_word_inner_space": {
+      "_ 06D9": 309,
+      "_ 200B 06DA": 8,
+      "_ 06D9 200B 06DB": 1,
+      "_ 0615 200B 06DB": 1,
+      "_ 06D9 06D6": 1,
+      "_ 06DB 06DA": 3,
+      "_ 0615": 151,
+      "_ 06DA": 89,
+      "_ 06D9 200B _ 06DA": 1,
+      "_ 06E2 _ 06D9": 1,
+      "_ 200B 06DA 06D9": 2,
+      "_ 06DB 06D9 _ 06DA _ _ 06D6": 1,
+      "_ 200B _ 06D6 _ 200B 06DA": 2,
+      "_ 200B 06D6 _ 200B _ 06DA": 1,
+      "_ 200B 06D6": 6,
+      "_ 200B 200B 06D6 _ 200B 06DA": 1,
+      "_ 06D6 200B _ 06DA": 6,
+      "_ 06D6 _ 06DA": 1,
+      "_ 06D6 _ 200B _ 06DA": 1,
+      "_ 200B 06D6 _ 200B 06DA": 4,
+      "_ 06E9": 7,
+      "_ 200B 06D8": 2,
+      "_ 06D8": 5,
+      "_ 200B 06D6 06DA 200B 200B 200B": 1,
+      "_ 200B _ 06D6 200B _ 06DA": 1,
+      "_ 06D6 _ 200B 06DA": 5,
+      "_ 06D9 200B 06DA": 2,
+      "_ 06D6 200B 06DA": 12,
+      "_ 06E9 _ 0615": 1,
+      "_ 200B 06D6 200B _ 06DA": 1,
+      "_ 06DB 06DA _ 06D9": 2,
+      "_ 06D6": 5,
+      "_ 06D6 _ 200B 200B 06DA": 1,
+      "_ 200B 06D6 200B 06DA": 3,
+      "_ 06DB _ 200B 06D6": 1,
+      "_ 200B _ 06D6 _ 200B _ 06DA": 1,
+      "_ 06DB 06DA _ 06D6": 1,
+      "_ 06D6 06DA": 2,
+      "_ 200B _ 06D6 200B 06DA": 1,
+      "_ 06DA _ 06D6": 3,
+      "_ 06DB 200B 06DA": 1,
+      "_ 06DB 200B 06D9": 2,
+      "_ 200B _ 06DB 200B 06DA": 1,
+      "_ 06DB 06DA _ _ 06D6": 1,
+      "_ 06D9 _ 06DA": 1,
+      "_ 06DA 200B 06D6": 1,
+      "_ 06D9 06DA": 1,
+      "_ 06ED 06D9": 1,
+      "_ 06DA 06D6": 1,
+      "_ 0615 _ 06E9": 1
+    },
+    "zwsp_splits": {
+      "count": 15,
+      "into_final_word": 0,
+      "by_signs": {
+        "200B 06DA": 2,
+        "(none)": 3,
+        "200B 200B": 1,
+        "E01B": 2,
+        "E01E": 3,
+        "0615": 2,
+        "E01F": 1,
+        "E01A": 1
+      },
+      "list": [
+        "2:286@255:200B 06DA",
+        "3:50@108",
+        "4:140@243:200B 200B",
+        "7:86@180:E01B",
+        "9:111@172:E01E",
+        "10:72@56:0615",
+        "17:7@47:E01E",
+        "24:2@83:E01B",
+        "27:44@157",
+        "28:71@146:0615",
+        "29:66@57:E01F",
+        "38:10@63:E01E",
+        "48:17@191:200B 06DA",
+        "48:29@184:E01A",
+        "49:10@68"
+      ]
+    },
+    "prefix_moves": {
+      "count": 51,
+      "into_final_word": 4,
+      "by_signs": {
+        "200B": 5,
+        "0615": 9,
+        "200B 06DA": 4,
+        "E021 06D9": 1,
+        "E01B": 1,
+        "E01C": 3,
+        "06DA": 3,
+        "06D9": 4,
+        "06E8": 11,
+        "200B 06DB E01E": 1,
+        "200B 0615": 1,
+        "200B E01E 0614": 1,
+        "064E": 2,
+        "200B 06D9": 1,
+        "E01B E01E": 1,
+        "E01A": 1,
+        "E021 E01E": 1,
+        "E01E 06DB": 1
+      },
+      "list": [
+        "2:26@60:200B",
+        "2:26@100:200B",
+        "2:229@83:0615",
+        "2:282@227:200B 06DA",
+        "3:28@224:0615",
+        "3:49@42:E021 06D9",
+        "4:9@93:E01B",
+        "4:34@366:0615",
+        "4:101@98:E01C",
+        "5:110@180:06DA",
+        "6:134@32:06D9",
+        "7:69@128:06DA",
+        "7:158@74:06E8",
+        "7:177@17:06E8",
+        "9:24@109:06E8",
+        "9:30@32:06E8",
+        "9:101@94:200B 06DB E01E",
+        "10:36@44:0615",
+        "11:29@49:0615",
+        "11:46@48:200B 06DA",
+        "11:65@71:200B 0615",
+        "11:86@64:06DA",
+        "12:3@94:E01C",
+        "12:53@98:0615",
+        "12:68@54:0615",
+        "12:108@52:200B E01E 0614",
+        "14:18@66:06E8",
+        "14:26@52:06E8",
+        "14:52@125:064E",
+        "15:61@29:06E8",
+        "16:87@39:06E8",
+        "18:29@92:200B 06D9",
+        "18:63@184:E01C",
+        "18:77@55:06E8",
+        "18:86@111:200B",
+        "18:88@57:06E8",
+        "19:17@40:E01B E01E",
+        "20:69@55:0615",
+        "22:63@96:0615",
+        "24:45@49:200B 06DA",
+        "25:50@54:E01A",
+        "26:105@25:06E8",
+        "32:10@79:200B",
+        "34:34@79:06D9",
+        "40:48@56:06D9",
+        "47:4@206:E021 E01E",
+        "48:25@273:200B",
+        "59:7@266:064E",
+        "76:21@91:200B 06DA",
+        "91:14@33:06D9",
+        "97:5@9:E01E 06DB"
+      ]
+    },
+    "cluster_splits": {
+      "count": 0,
+      "into_final_word": 0,
+      "by_signs": {},
+      "list": []
+    },
+    "stop_boxes": {
+      "count": 5765,
+      "of_word_boxes": 72056,
+      "by_reason": {
+        "both": 262,
+        "quran_com_sign": 5112,
+        "private_pause_or_ruku": 391
+      },
+      "boxes_per_sign": {
+        "0615": 3040,
+        "06D6": 163,
+        "06D8": 54,
+        "06D9": 432,
+        "06DA": 1216,
+        "06DB": 49,
+        "06DC": 2,
+        "06E2": 533,
+        "06EB": 3,
+        "E01A": 196,
+        "E01B": 93,
+        "E01C": 121,
+        "E01E": 127,
+        "E01F": 14,
+        "E021": 121
+      },
+      "final_words_holding_stop_sign_no_stop_margin": 2062
+    },
+    "end_stacks": {
+      "verses_with_end_signs": 705,
+      "ruku": 553,
+      "rows": {
+        "1": 610,
+        "2": 95
+      },
+      "multi_sign": 95,
+      "max_rows": 2,
+      "max_height_em": 0.72,
+      "multi_sign_keys": [
+        "4:142:E01A+06D9",
+        "17:74:E01C+06D9",
+        "19:1:E01E+06DA",
+        "21:78:E01C+06D9",
+        "23:33:E01B+06D9",
+        "23:35:E01B+06D9",
+        "23:36:E01B+06D9",
+        "23:37:E01B+06D9",
+        "24:37:E01C+06D9",
+        "26:51:E022+0615",
+        "26:80:E01B+06D9",
+        "29:25:E01C+06D9",
+        "33:38:E01A+06D9",
+        "37:75:E01A+06D6",
+        "37:76:E01A+06D6",
+        "37:77:E01A+06D6",
+        "37:78:E01A+06D6",
+        "43:15:E022+0615",
+        "44:20:E01A+06DA",
+        "44:47:E01C+06D6",
+        "51:54:E01C+E01A",
+        "53:24:E01A+06D6",
+        "54:11:E01A+06D6",
+        "69:46:E01A+06D6",
+        "70:23:E01B+06D9",
+        "70:24:E01B+06D9",
+        "70:25:E01B+06D9",
+        "70:26:E01B+06D9",
+        "70:32:E01B+06D9",
+        "70:33:E01B+06D9",
+        "73:17:E01C+06D6",
+        "74:2:E01B+06D9",
+        "74:3:E01B+06D9",
+        "74:4:E01B+06D9",
+        "74:5:E01B+06D9",
+        "74:6:E01B+06D9",
+        "74:15:E01C+06D9",
+        "76:30:E01C+06D6",
+        "78:7:E01B+06D9",
+        "78:13:E01B+06D9",
+        "78:21:E01B+06D9",
+        "79:17:E01A+06D6",
+        "79:20:E01A+06D6",
+        "79:21:E01A+06D6",
+        "79:22:E01A+06D6",
+        "79:23:E01A+06D6",
+        "79:24:E01A+06D6",
+        "79:34:E01A+06D6",
+        "81:1:E01B+06D9",
+        "81:2:E01B+06D9",
+        "81:3:E01B+06D9",
+        "81:4:E01B+06D9",
+        "81:5:E01B+06D9",
+        "81:6:E01B+06D9",
+        "81:7:E01B+06D9",
+        "81:8:E01B+06D9",
+        "81:10:E01B+06D9",
+        "81:11:E01B+06D9",
+        "81:12:E01B+06D9",
+        "81:13:E01B+06D9",
+        "83:2:E01A+06D6",
+        "83:29:E01A+06D6",
+        "83:30:E01A+06D6",
+        "83:31:E01A+06D6",
+        "84:22:E01A+06D6",
+        "84:23:E01A+06D6",
+        "87:2:E01B+06D9",
+        "87:3:E01B+06D9",
+        "87:4:E01B+06D9",
+        "87:16:E01A+06D6",
+        "89:6:E01B+06D9",
+        "89:7:E01B+06D9",
+        "89:8:E01B+06D9",
+        "89:9:E01B+06D9",
+        "89:10:E01B+06D9",
+        "89:11:E01B+06D9",
+        "89:12:E01B+06D9",
+        "89:27:E01C+06D6",
+        "90:11:E01A+06D6",
+        "91:1:E01B+06D9",
+        "91:2:E01B+06D9",
+        "91:3:E01B+06D9",
+        "91:4:E01B+06D9",
+        "91:5:E01B+06D9",
+        "91:6:E01B+06D9",
+        "91:7:E01B+06D9",
+        "91:8:E01B+06D9",
+        "91:9:E01B+06D9",
+        "91:11:E01B+06D9",
+        "91:12:E01B+06D9",
+        "91:14:E01B+06D9",
+        "92:12:E01A+06D6",
+        "104:4:E01A+06D6",
+        "105:4:E01B+06D9",
+        "114:4:E01B+06D9"
+      ],
+      "last_word_space": {
+        "2003": 2,
+        "(none)": 6208,
+        "0020": 26
+      }
+    },
+    "inline_clusters": {
+      "count": 28,
+      "signs": {
+        "2": 28
+      },
+      "list": [
+        "2:20@84:E01C+06D9",
+        "2:34@104:E01A+E01C",
+        "2:62@179:E01B+06DA",
+        "2:251@31:E01E+06D9",
+        "3:135@161:E01B+E01E",
+        "3:187@110:E01A+E01C",
+        "4:45@65:E01A+E01C",
+        "4:171@260:E01E+06DA",
+        "6:165@163:E01A+06D6",
+        "10:16@78:E01C+E01A",
+        "11:46@81:E01C+E01A",
+        "14:27@141:E01E+06D9",
+        "18:27@82:E01E+06DA",
+        "19:17@38:E01B+E01E",
+        "19:30@28:E01E+0615",
+        "24:37@118:E01B+06D9",
+        "27:66@72:E01E+E01A",
+        "28:15@101:E01C+E01A",
+        "28:15@259:E01C+E01A",
+        "28:25@196:E01E+E01F",
+        "28:48@192:E01E+E01F",
+        "29:32@71:E01A+E01F",
+        "29:32@124:E01C+E01A",
+        "32:24@74:E01E+0615",
+        "55:11@18:E01B+06D9",
+        "88:21@10:E01E+0615",
+        "91:14@29:E01B+06D9",
+        "97:5@7:E01E+06DB"
+      ]
+    },
+    "annotation_leads": {
+      "0615": {
+        "advance": 0,
+        "count": 5,
+        "with_ink_box": 5,
+        "where": ["end", "inline"]
+      },
+      "06D6": {
+        "advance": 0,
+        "count": 29,
+        "with_ink_box": 29,
+        "where": ["end", "inline"]
+      },
+      "06D9": {
+        "advance": 0,
+        "count": 68,
+        "with_ink_box": 68,
+        "where": ["end", "inline"]
+      },
+      "06DA": {
+        "advance": 0,
+        "count": 5,
+        "with_ink_box": 5,
+        "where": ["end", "inline"]
+      },
+      "06DB": {
+        "advance": 0,
+        "count": 1,
+        "with_ink_box": 1,
+        "where": ["inline"]
+      },
+      "E01A": {
+        "advance": 506,
+        "count": 57,
+        "with_ink_box": 0,
+        "where": ["end", "inline"]
+      },
+      "E01B": {
+        "advance": 948,
+        "count": 79,
+        "with_ink_box": 0,
+        "where": ["end", "inline"]
+      },
+      "E01C": {
+        "advance": 627,
+        "count": 33,
+        "with_ink_box": 0,
+        "where": ["end", "inline"]
+      },
+      "E01E": {
+        "advance": 1005,
+        "count": 17,
+        "with_ink_box": 0,
+        "where": ["end", "inline"]
+      },
+      "E01F": {
+        "advance": 1143,
+        "count": 9,
+        "with_ink_box": 0,
+        "where": ["end", "inline"]
+      },
+      "E022": {
+        "advance": 0,
+        "count": 553,
+        "with_ink_box": 553,
+        "where": ["end"]
+      }
+    }
+  },
+  "context_coverage": {
+    "classes": 223,
+    "covered": 223,
+    "inventory_mismatches": [],
+    "phase_c_capture_keys": [
+      "5:5",
+      "18:22",
+      "47:4",
+      "29:32",
+      "27:66",
+      "28:25",
+      "19:58",
+      "20:40",
+      "3:135",
+      "28:15",
+      "91:14",
+      "2:112",
+      "2:20",
+      "2:34",
+      "2:41",
+      "25:60",
+      "2:150",
+      "28:81",
+      "4:23",
+      "2:101",
+      "2:213",
+      "2:253",
+      "57:19",
+      "29:60",
+      "106:4",
+      "114:4",
+      "19:31",
+      "13:16",
+      "31:33",
+      "3:187",
+      "48:29",
+      "18:82",
+      "9:101",
+      "17:7",
+      "19:17",
+      "28:23",
+      "51:54",
+      "65:10",
+      "1:7",
+      "2:257",
+      "2:281",
+      "7:157",
+      "2:5",
+      "16:70",
+      "35:7",
+      "2:10",
+      "2:22",
+      "5:7",
+      "2:62",
+      "19:56",
+      "20:121",
+      "2:91",
+      "2:96",
+      "2:102",
+      "2:113",
+      "13:18",
+      "2:138",
+      "97:5",
+      "103:3",
+      "2:285",
+      "7:29",
+      "12:1",
+      "47:21",
+      "18:63",
+      "27:10",
+      "38:23",
+      "2:233",
+      "2:251",
+      "3:26",
+      "3:45",
+      "3:89",
+      "3:92",
+      "3:97",
+      "3:112",
+      "3:119",
+      "3:171",
+      "3:175",
+      "4:45",
+      "4:9",
+      "20:89",
+      "65:12",
+      "4:81",
+      "4:142",
+      "4:155",
+      "4:173",
+      "5:23",
+      "6:46",
+      "6:73",
+      "6:161",
+      "7:86",
+      "7:133",
+      "7:137",
+      "7:191",
+      "7:195",
+      "8:5",
+      "9:3",
+      "9:36",
+      "10:16",
+      "10:22",
+      "10:37",
+      "10:57",
+      "11:25",
+      "11:46",
+      "11:82",
+      "12:21",
+      "12:51",
+      "12:100",
+      "12:108",
+      "13:1",
+      "13:5",
+      "13:17",
+      "14:9",
+      "15:43",
+      "15:79",
+      "16:6",
+      "16:117",
+      "18:4",
+      "18:21",
+      "18:74",
+      "18:86",
+      "19:25",
+      "19:75",
+      "20:21",
+      "20:39",
+      "22:11",
+      "23:13",
+      "25:9",
+      "25:50",
+      "26:51",
+      "26:209",
+      "27:33",
+      "27:40",
+      "28:48",
+      "29:66",
+      "32:10",
+      "34:3",
+      "35:2",
+      "35:3",
+      "37:113",
+      "38:32",
+      "42:34",
+      "43:15",
+      "45:15",
+      "47:11",
+      "49:12",
+      "54:11",
+      "54:27",
+      "56:40",
+      "67:9",
+      "68:36",
+      "69:25",
+      "70:23",
+      "70:24",
+      "70:25",
+      "74:2",
+      "74:6",
+      "75:30",
+      "76:2",
+      "78:38",
+      "79:17",
+      "79:27",
+      "80:33",
+      "83:2",
+      "85:11",
+      "88:17",
+      "88:21",
+      "88:26",
+      "89:6",
+      "89:15",
+      "98:8"
+    ],
+    "phase_c_review_keys": [
+      "2:198",
+      "3:167",
+      "5:26",
+      "5:110",
+      "6:145",
+      "7:12",
+      "10:20",
+      "10:88",
+      "11:61",
+      "12:17",
+      "13:13",
+      "15:22",
+      "19:19",
+      "20:9",
+      "26:32",
+      "55:73",
+      "64:14",
+      "76:17",
+      "2:286",
+      "3:50",
+      "4:140",
+      "9:111",
+      "10:72",
+      "24:2",
+      "27:44",
+      "28:71",
+      "38:10",
+      "48:17",
+      "49:10",
+      "2:26",
+      "2:229",
+      "2:282",
+      "3:28",
+      "3:49",
+      "4:34",
+      "4:101",
+      "6:134",
+      "7:69",
+      "7:158",
+      "7:177",
+      "9:24",
+      "9:30",
+      "10:36",
+      "11:29",
+      "11:65",
+      "11:86",
+      "12:3",
+      "12:53",
+      "12:68",
+      "14:18",
+      "14:26",
+      "14:52",
+      "15:61",
+      "16:87",
+      "18:29",
+      "18:77",
+      "18:88",
+      "20:69",
+      "22:63",
+      "24:45",
+      "26:105",
+      "34:34",
+      "40:48",
+      "48:25",
+      "59:7",
+      "76:21",
+      "17:74",
+      "19:1",
+      "21:78",
+      "23:33",
+      "23:35",
+      "23:36",
+      "23:37",
+      "24:37",
+      "26:80",
+      "29:25",
+      "33:38",
+      "37:75",
+      "37:76",
+      "37:77",
+      "37:78",
+      "44:20",
+      "44:47",
+      "53:24",
+      "69:46",
+      "70:26",
+      "70:32",
+      "70:33",
+      "73:17",
+      "74:3",
+      "74:4",
+      "74:5",
+      "74:15",
+      "76:30",
+      "78:7",
+      "78:13",
+      "78:21",
+      "79:20",
+      "79:21",
+      "79:22",
+      "79:23",
+      "79:24",
+      "79:34",
+      "81:1",
+      "81:2",
+      "81:3",
+      "81:4",
+      "81:5",
+      "81:6",
+      "81:7",
+      "81:8",
+      "81:10",
+      "81:11",
+      "81:12",
+      "81:13",
+      "83:29",
+      "83:30",
+      "83:31",
+      "84:22",
+      "84:23",
+      "87:2",
+      "87:3",
+      "87:4",
+      "87:16",
+      "89:7",
+      "89:8",
+      "89:9",
+      "89:10",
+      "89:11",
+      "89:12",
+      "89:27",
+      "90:11",
+      "91:1",
+      "91:2",
+      "91:3",
+      "91:4",
+      "91:5",
+      "91:6",
+      "91:7",
+      "91:8",
+      "91:9",
+      "91:11",
+      "91:12",
+      "92:12",
+      "104:4",
+      "105:4",
+      "56:23",
+      "18:110"
+    ],
+    "map": [
+      {
+        "code": "E003",
+        "signature": "Lo|Mn||06E4,|E003,",
+        "count": 1,
+        "first": "5:7",
+        "capture": "5:7",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E003",
+        "signature": "Lo|Mn||0615,|E003,",
+        "count": 2,
+        "first": "6:46",
+        "capture": "6:46",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E003",
+        "signature": "Lo|Zs|||E003,",
+        "count": 1,
+        "first": "35:2",
+        "capture": "35:2",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E004",
+        "signature": "Lo|Lo|||E004,",
+        "count": 1,
+        "first": "17:7",
+        "capture": "17:7",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Zs|||E01A,",
+        "count": 37,
+        "first": "2:7",
+        "capture": "28:25",
+        "roles": {
+          "word": 34,
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064E,||E01A,E01C,",
+        "count": 1,
+        "first": "2:34",
+        "capture": "2:34",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Lo|Zs|||E01A,",
+        "count": 15,
+        "first": "2:41",
+        "capture": "2:41",
+        "roles": {
+          "word": 14,
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|06E1,||E01A,",
+        "count": 15,
+        "first": "2:85",
+        "capture": "4:23",
+        "roles": {
+          "word": 15
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Cf|Zs|||E01A,",
+        "count": 52,
+        "first": "2:86",
+        "capture": "5:5",
+        "roles": {
+          "word": 52
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|end|064E,||E01A,",
+        "count": 9,
+        "first": "2:101",
+        "capture": "2:101",
+        "roles": {
+          "end-stack": 9
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064B,||E01A,",
+        "count": 1,
+        "first": "2:138",
+        "capture": "2:138",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|06D6,||E01A,",
+        "count": 12,
+        "first": "2:168",
+        "capture": "29:60",
+        "roles": {
+          "word": 12
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064E,||E01A,",
+        "count": 18,
+        "first": "2:185",
+        "capture": "19:58",
+        "roles": {
+          "word": 8,
+          "end-stack": 10
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0650,||E01A,",
+        "count": 18,
+        "first": "2:219",
+        "capture": "7:157",
+        "roles": {
+          "word": 15,
+          "inline-cluster": 1,
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064F,||E01A,",
+        "count": 5,
+        "first": "3:26",
+        "capture": "3:26",
+        "roles": {
+          "word": 5
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Co|0657,||E01A,E01C,",
+        "count": 1,
+        "first": "3:187",
+        "capture": "3:187",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0651,064E,||E01A,",
+        "count": 3,
+        "first": "4:23",
+        "capture": "4:23",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Lo|Co|||E01A,E01C,",
+        "count": 1,
+        "first": "4:45",
+        "capture": "4:45",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064C,||E01A,",
+        "count": 3,
+        "first": "4:81",
+        "capture": "4:81",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Mn||06D9,|E01A,",
+        "count": 1,
+        "first": "4:142",
+        "capture": "4:142",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0657,||E01A,",
+        "count": 5,
+        "first": "5:5",
+        "capture": "5:5",
+        "roles": {
+          "word": 5
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|end|||E01A,",
+        "count": 3,
+        "first": "7:191",
+        "capture": "7:191",
+        "roles": {
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0653,||E01A,",
+        "count": 3,
+        "first": "7:195",
+        "capture": "7:195",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Zs|||E01C,E01A,",
+        "count": 3,
+        "first": "10:16",
+        "capture": "28:15",
+        "roles": {
+          "inline-cluster": 3
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0656,06E4,||E01A,",
+        "count": 1,
+        "first": "11:25",
+        "capture": "11:25",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Co|Zs|||E01C,E01A,",
+        "count": 2,
+        "first": "11:46",
+        "capture": "29:32",
+        "roles": {
+          "inline-cluster": 2
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Lo|0650,||E01A,",
+        "count": 1,
+        "first": "12:21",
+        "capture": "12:21",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0651,064F,||E01A,",
+        "count": 1,
+        "first": "12:51",
+        "capture": "12:51",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Lo|064F,||E01A,",
+        "count": 1,
+        "first": "12:100",
+        "capture": "12:100",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064D,||E01A,",
+        "count": 4,
+        "first": "17:89",
+        "capture": "19:58",
+        "roles": {
+          "word": 4
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Lo|end|||E01A,",
+        "count": 2,
+        "first": "19:25",
+        "capture": "19:25",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Lo|||E01A,",
+        "count": 1,
+        "first": "25:50",
+        "capture": "25:50",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Zs|||E01E,E01A,",
+        "count": 1,
+        "first": "27:66",
+        "capture": "27:66",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Zs|Zs|||E021,E01A,",
+        "count": 1,
+        "first": "28:23",
+        "capture": "28:23",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Cf|Co|||E01A,E01F,",
+        "count": 1,
+        "first": "29:32",
+        "capture": "29:32",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0656,||E01A,",
+        "count": 1,
+        "first": "31:33",
+        "capture": "31:33",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|064E,06D6,||E01A,",
+        "count": 1,
+        "first": "35:3",
+        "capture": "35:3",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|end|064D,||E01A,",
+        "count": 2,
+        "first": "42:34",
+        "capture": "42:34",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Lo|Cf|||E01A,",
+        "count": 1,
+        "first": "45:15",
+        "capture": "45:15",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Cf|Lo|||E01A,",
+        "count": 1,
+        "first": "48:29",
+        "capture": "48:29",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Zs|0651,0650,||E01A,",
+        "count": 1,
+        "first": "49:12",
+        "capture": "49:12",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Co|end|||E01C,E01A,",
+        "count": 1,
+        "first": "51:54",
+        "capture": "51:54",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Mn|064D,|06D6,|E01A,",
+        "count": 1,
+        "first": "54:11",
+        "capture": "54:11",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|end|06E1,||E01A,",
+        "count": 1,
+        "first": "54:27",
+        "capture": "54:27",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Lo|Mn||06D6,|E01A,",
+        "count": 8,
+        "first": "79:17",
+        "capture": "79:17",
+        "roles": {
+          "end-stack": 8
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|end|064F,||E01A,",
+        "count": 1,
+        "first": "80:33",
+        "capture": "80:33",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01A",
+        "signature": "Mn|Mn|064E,|06D6,|E01A,",
+        "count": 1,
+        "first": "83:2",
+        "capture": "83:2",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Lo|Zs|||E01B,",
+        "count": 21,
+        "first": "2:16",
+        "capture": "18:22",
+        "roles": {
+          "word": 8,
+          "end-stack": 13
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064B,||E01B,",
+        "count": 2,
+        "first": "2:22",
+        "capture": "2:22",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|0656,||E01B,",
+        "count": 5,
+        "first": "2:23",
+        "capture": "2:112",
+        "roles": {
+          "word": 5
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Cf|Zs|||E01B,",
+        "count": 31,
+        "first": "2:36",
+        "capture": "2:41",
+        "roles": {
+          "word": 30,
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|06E1,|06DA,|E01B,",
+        "count": 1,
+        "first": "2:62",
+        "capture": "2:62",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064D,||E01B,",
+        "count": 2,
+        "first": "2:113",
+        "capture": "2:113",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064E,||E01B,",
+        "count": 13,
+        "first": "2:128",
+        "capture": "2:213",
+        "roles": {
+          "word": 7,
+          "end-stack": 6
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|06E1,||E01B,",
+        "count": 15,
+        "first": "2:187",
+        "capture": "5:5",
+        "roles": {
+          "word": 15
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|0650,||E01B,",
+        "count": 10,
+        "first": "2:198",
+        "capture": "114:4",
+        "roles": {
+          "word": 8,
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064F,||E01B,",
+        "count": 3,
+        "first": "2:245",
+        "capture": "19:31",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064F,||E01B,E01E,",
+        "count": 1,
+        "first": "3:135",
+        "capture": "3:135",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|0657,||E01B,",
+        "count": 1,
+        "first": "3:175",
+        "capture": "3:175",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Zs|Lo|||E01B,",
+        "count": 1,
+        "first": "4:9",
+        "capture": "4:9",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Lo|end|||E01B,",
+        "count": 8,
+        "first": "4:155",
+        "capture": "4:155",
+        "roles": {
+          "end-stack": 8
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Cf|Lo|||E01B,",
+        "count": 2,
+        "first": "7:86",
+        "capture": "7:86",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|0651,0650,||E01B,",
+        "count": 1,
+        "first": "8:5",
+        "capture": "8:5",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|end|064E,||E01B,",
+        "count": 5,
+        "first": "16:6",
+        "capture": "16:6",
+        "roles": {
+          "end-stack": 5
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Zs|064C,||E01B,",
+        "count": 1,
+        "first": "16:117",
+        "capture": "16:117",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Zs|Co|||E01B,E01E,",
+        "count": 1,
+        "first": "19:17",
+        "capture": "19:17",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Zs|end|||E01B,",
+        "count": 2,
+        "first": "19:31",
+        "capture": "19:31",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|end|06D6,||E01B,",
+        "count": 1,
+        "first": "20:121",
+        "capture": "20:121",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|end|064D,||E01B,",
+        "count": 2,
+        "first": "23:13",
+        "capture": "23:13",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Zs|Zs|||E01B,",
+        "count": 7,
+        "first": "24:22",
+        "capture": "91:14",
+        "roles": {
+          "word": 1,
+          "inline-cluster": 1,
+          "end-stack": 5
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|064E,|06D9,|E01B,",
+        "count": 2,
+        "first": "70:23",
+        "capture": "70:23",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|064C,|06D9,|E01B,",
+        "count": 1,
+        "first": "70:24",
+        "capture": "70:24",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|0650,|06D9,|E01B,",
+        "count": 7,
+        "first": "70:25",
+        "capture": "70:25",
+        "roles": {
+          "end-stack": 7
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|06E1,|06D9,|E01B,",
+        "count": 16,
+        "first": "74:2",
+        "capture": "74:2",
+        "roles": {
+          "end-stack": 16
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|064F,|06D9,|E01B,",
+        "count": 1,
+        "first": "74:6",
+        "capture": "74:6",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Mn|Mn|064D,|06D9,|E01B,",
+        "count": 2,
+        "first": "89:6",
+        "capture": "89:6",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01B",
+        "signature": "Zs|Zs|||E021,E01B,",
+        "count": 1,
+        "first": "91:14",
+        "capture": "91:14",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Cf|Zs|||E01C,",
+        "count": 6,
+        "first": "2:5",
+        "capture": "2:5",
+        "roles": {
+          "word": 6
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Mn|0650,|06D9,|E01C,",
+        "count": 1,
+        "first": "2:20",
+        "capture": "2:20",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06D9,||E01C,",
+        "count": 2,
+        "first": "2:25",
+        "capture": "47:4",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Lo|Zs|||E01C,",
+        "count": 12,
+        "first": "2:29",
+        "capture": "2:112",
+        "roles": {
+          "word": 10,
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Zs|Zs|||E01A,E01C,",
+        "count": 1,
+        "first": "2:34",
+        "capture": "2:34",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064F,||E01C,",
+        "count": 4,
+        "first": "2:61",
+        "capture": "25:60",
+        "roles": {
+          "word": 3,
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06E1,||E01C,",
+        "count": 5,
+        "first": "2:79",
+        "capture": "2:150",
+        "roles": {
+          "word": 5
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|0657,||E01C,",
+        "count": 1,
+        "first": "2:91",
+        "capture": "2:91",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064E,06D9,||E01C,",
+        "count": 1,
+        "first": "2:101",
+        "capture": "2:101",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064E,||E01C,",
+        "count": 9,
+        "first": "2:102",
+        "capture": "19:58",
+        "roles": {
+          "word": 6,
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064C,||E01C,",
+        "count": 1,
+        "first": "2:150",
+        "capture": "2:150",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|0650,||E01C,",
+        "count": 3,
+        "first": "2:217",
+        "capture": "28:81",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|0656,||E01C,",
+        "count": 1,
+        "first": "2:233",
+        "capture": "2:233",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064F,06D6,||E01C,",
+        "count": 2,
+        "first": "3:45",
+        "capture": "3:45",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06D6,||E01C,",
+        "count": 24,
+        "first": "3:98",
+        "capture": "29:60",
+        "roles": {
+          "word": 24
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|end|064E,||E01C,",
+        "count": 2,
+        "first": "3:112",
+        "capture": "3:112",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06D6,06DA,||E01C,",
+        "count": 1,
+        "first": "3:119",
+        "capture": "3:119",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Co|Zs|||E01A,E01C,",
+        "count": 2,
+        "first": "3:187",
+        "capture": "3:187",
+        "roles": {
+          "inline-cluster": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Zs|Lo|||E01C,",
+        "count": 3,
+        "first": "4:101",
+        "capture": "18:63",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Zs|Zs|||E01C,",
+        "count": 42,
+        "first": "5:20",
+        "capture": "18:82",
+        "roles": {
+          "word": 39,
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06D6,||E01C,E01A,",
+        "count": 1,
+        "first": "10:16",
+        "capture": "10:16",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Co|06D6,||E01C,E01A,",
+        "count": 1,
+        "first": "11:46",
+        "capture": "11:46",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Lo|end|||E01C,",
+        "count": 2,
+        "first": "18:4",
+        "capture": "18:4",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|end|06D6,||E01C,",
+        "count": 3,
+        "first": "18:13",
+        "capture": "27:10",
+        "roles": {
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|06DA,||E01C,",
+        "count": 1,
+        "first": "18:21",
+        "capture": "18:21",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Zs|end|||E01C,",
+        "count": 6,
+        "first": "19:56",
+        "capture": "19:56",
+        "roles": {
+          "end-stack": 6
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|0650,||E01C,E01A,",
+        "count": 1,
+        "first": "28:15",
+        "capture": "28:15",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Cf|Zs|||E01C,E01A,",
+        "count": 1,
+        "first": "28:15",
+        "capture": "28:15",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Co|0657,||E01C,E01A,",
+        "count": 1,
+        "first": "29:32",
+        "capture": "29:32",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|end|06D9,064D,||E01C,",
+        "count": 1,
+        "first": "34:3",
+        "capture": "34:3",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Co|064D,||E01C,E01A,",
+        "count": 1,
+        "first": "51:54",
+        "capture": "51:54",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064E,06D6,||E01C,",
+        "count": 1,
+        "first": "57:19",
+        "capture": "57:19",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|064D,06D6,||E01C,",
+        "count": 1,
+        "first": "76:2",
+        "capture": "76:2",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01C",
+        "signature": "Mn|Zs|0615,06D9,||E01C,",
+        "count": 1,
+        "first": "78:38",
+        "capture": "78:38",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|064E,||E01E,",
+        "count": 7,
+        "first": "2:83",
+        "capture": "28:81",
+        "roles": {
+          "word": 7
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|0615,||E01E,",
+        "count": 3,
+        "first": "2:102",
+        "capture": "2:102",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Cf|Zs|||E01E,",
+        "count": 38,
+        "first": "2:157",
+        "capture": "27:66",
+        "roles": {
+          "word": 33,
+          "inline-cluster": 4,
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06E1,||E01E,",
+        "count": 18,
+        "first": "2:196",
+        "capture": "3:135",
+        "roles": {
+          "word": 18
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|064B,||E01E,",
+        "count": 1,
+        "first": "2:213",
+        "capture": "2:213",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Lo|Zs|||E01E,",
+        "count": 10,
+        "first": "2:243",
+        "capture": "2:253",
+        "roles": {
+          "word": 10
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Mn|0650,|06D9,|E01E,",
+        "count": 1,
+        "first": "2:251",
+        "capture": "2:251",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06D9,||E01E,",
+        "count": 4,
+        "first": "2:256",
+        "capture": "16:70",
+        "roles": {
+          "word": 4
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|0650,||E01E,",
+        "count": 8,
+        "first": "2:281",
+        "capture": "2:281",
+        "roles": {
+          "word": 7,
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|0656,||E01E,",
+        "count": 1,
+        "first": "2:285",
+        "capture": "2:285",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|064F,||E01E,",
+        "count": 4,
+        "first": "3:19",
+        "capture": "47:21",
+        "roles": {
+          "word": 4
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Zs|Zs|||E01E,",
+        "count": 3,
+        "first": "3:89",
+        "capture": "3:89",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Zs|Zs|||E01B,E01E,",
+        "count": 1,
+        "first": "3:135",
+        "capture": "3:135",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|064C,||E01E,",
+        "count": 3,
+        "first": "3:197",
+        "capture": "38:23",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|064D,||E01E,",
+        "count": 2,
+        "first": "7:133",
+        "capture": "7:133",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Lo|06DB,||E01E,",
+        "count": 1,
+        "first": "9:101",
+        "capture": "9:101",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Lo|0650,||E01E,",
+        "count": 1,
+        "first": "9:101",
+        "capture": "9:101",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Cf|Lo|||E01E,",
+        "count": 3,
+        "first": "9:111",
+        "capture": "17:7",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|end|064E,||E01E,",
+        "count": 1,
+        "first": "10:37",
+        "capture": "10:37",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Lo|end|||E01E,",
+        "count": 1,
+        "first": "12:1",
+        "capture": "12:1",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Cf|Mn||0614,|E01E,",
+        "count": 1,
+        "first": "12:108",
+        "capture": "12:108",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|0670,||E01E,",
+        "count": 2,
+        "first": "13:1",
+        "capture": "13:1",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|end|064E,06D9,||E01E,",
+        "count": 1,
+        "first": "15:43",
+        "capture": "15:43",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Co|Zs|||E021,E01E,",
+        "count": 1,
+        "first": "18:22",
+        "capture": "18:22",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Co|Lo|||E01B,E01E,",
+        "count": 1,
+        "first": "19:17",
+        "capture": "19:17",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Co|Lo|||E021,E01E,",
+        "count": 2,
+        "first": "20:40",
+        "capture": "47:4",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06DA,||E01E,",
+        "count": 2,
+        "first": "22:11",
+        "capture": "22:11",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06DB,||E01E,",
+        "count": 2,
+        "first": "26:209",
+        "capture": "26:209",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06D6,||E01E,",
+        "count": 1,
+        "first": "27:40",
+        "capture": "27:40",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Lo|Zs|||E01E,E01A,",
+        "count": 1,
+        "first": "27:66",
+        "capture": "27:66",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Cf|Co|||E01E,E01F,",
+        "count": 1,
+        "first": "28:25",
+        "capture": "28:25",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Lo|Co|||E01E,E01F,",
+        "count": 1,
+        "first": "28:48",
+        "capture": "28:48",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06DB,06DA,||E01E,",
+        "count": 1,
+        "first": "48:29",
+        "capture": "48:29",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Mn|Zs|06DB,0615,||E01E,",
+        "count": 1,
+        "first": "65:10",
+        "capture": "65:10",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Zs|Mn||0615,|E01E,",
+        "count": 1,
+        "first": "88:21",
+        "capture": "88:21",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01E",
+        "signature": "Zs|Mn||06DB,|E01E,",
+        "count": 1,
+        "first": "97:5",
+        "capture": "97:5",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Lo|Zs|||E01F,",
+        "count": 6,
+        "first": "2:286",
+        "capture": "31:33",
+        "roles": {
+          "word": 6
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Lo|Lo|||E01F,",
+        "count": 2,
+        "first": "18:74",
+        "capture": "18:74",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Cf|Zs|||E01F,",
+        "count": 1,
+        "first": "20:21",
+        "capture": "20:21",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Co|Zs|||E01E,E01F,",
+        "count": 2,
+        "first": "28:25",
+        "capture": "28:25",
+        "roles": {
+          "inline-cluster": 2
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Co|Zs|||E01A,E01F,",
+        "count": 1,
+        "first": "29:32",
+        "capture": "29:32",
+        "roles": {
+          "inline-cluster": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Cf|Lo|||E01F,",
+        "count": 1,
+        "first": "29:66",
+        "capture": "29:66",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Mn|end|0650,||E01F,",
+        "count": 1,
+        "first": "38:32",
+        "capture": "38:32",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Mn|Zs|06E1,||E01F,",
+        "count": 1,
+        "first": "68:36",
+        "capture": "68:36",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Lo|end|||E01F,",
+        "count": 1,
+        "first": "79:27",
+        "capture": "79:27",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E01F",
+        "signature": "Mn|end|06E1,||E01F,",
+        "count": 4,
+        "first": "88:17",
+        "capture": "88:17",
+        "roles": {
+          "end-stack": 4
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Zs|Mn||06D9,|E021,",
+        "count": 4,
+        "first": "1:7",
+        "capture": "1:7",
+        "roles": {
+          "word": 4
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064C,|06D9,06E2,|E021,",
+        "count": 1,
+        "first": "2:10",
+        "capture": "2:10",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064E,|0615,|E021,",
+        "count": 7,
+        "first": "2:114",
+        "capture": "20:40",
+        "roles": {
+          "word": 7
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Cf|Mn||0615,|E021,",
+        "count": 5,
+        "first": "2:235",
+        "capture": "2:257",
+        "roles": {
+          "word": 5
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064F,|06DA,|E021,",
+        "count": 2,
+        "first": "2:255",
+        "capture": "13:16",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064C,|0615,|E021,",
+        "count": 2,
+        "first": "2:282",
+        "capture": "35:7",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064E,||E021,",
+        "count": 8,
+        "first": "3:4",
+        "capture": "7:29",
+        "roles": {
+          "word": 8
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Zs|Mn||0615,|E021,",
+        "count": 1,
+        "first": "3:92",
+        "capture": "3:92",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064E,|06DA,|E021,",
+        "count": 4,
+        "first": "3:97",
+        "capture": "3:97",
+        "roles": {
+          "word": 4
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Zs|||E021,",
+        "count": 8,
+        "first": "4:173",
+        "capture": "4:173",
+        "roles": {
+          "word": 8
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Cf|Zs|||E021,",
+        "count": 3,
+        "first": "5:23",
+        "capture": "5:23",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064F,|0615,|E021,",
+        "count": 2,
+        "first": "6:73",
+        "capture": "6:73",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064D,|06DA,|E021,",
+        "count": 1,
+        "first": "6:161",
+        "capture": "6:161",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|06D9,064E,||E021,",
+        "count": 1,
+        "first": "7:137",
+        "capture": "7:137",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Mn||06D9,|E021,",
+        "count": 7,
+        "first": "8:42",
+        "capture": "20:89",
+        "roles": {
+          "word": 7
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Cf|Mn||06D9,|E021,",
+        "count": 2,
+        "first": "9:3",
+        "capture": "9:3",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064F,|06D9,|E021,",
+        "count": 3,
+        "first": "9:36",
+        "capture": "9:36",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Zs|Zs|||E021,",
+        "count": 2,
+        "first": "9:39",
+        "capture": "106:4",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064E,06D9,||E021,",
+        "count": 1,
+        "first": "10:22",
+        "capture": "10:22",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0650,06D9,||E021,",
+        "count": 1,
+        "first": "10:57",
+        "capture": "10:57",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064D,06D9,||E021,",
+        "count": 1,
+        "first": "11:82",
+        "capture": "11:82",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064D,||E021,",
+        "count": 1,
+        "first": "13:5",
+        "capture": "13:5",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064F,06D9,||E021,",
+        "count": 1,
+        "first": "13:16",
+        "capture": "13:16",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064E,0615,||E021,",
+        "count": 1,
+        "first": "13:17",
+        "capture": "13:17",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|0650,|06D9,|E021,",
+        "count": 7,
+        "first": "13:18",
+        "capture": "13:18",
+        "roles": {
+          "word": 7
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Zs|Mn||06DB,0615,|E021,",
+        "count": 1,
+        "first": "14:9",
+        "capture": "14:9",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Co|064C,||E021,E01E,",
+        "count": 1,
+        "first": "18:22",
+        "capture": "18:22",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Mn||0615,|E021,",
+        "count": 1,
+        "first": "18:86",
+        "capture": "18:86",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064E,|06D9,|E021,",
+        "count": 14,
+        "first": "19:41",
+        "capture": "20:40",
+        "roles": {
+          "word": 14
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Mn||06DA,|E021,",
+        "count": 3,
+        "first": "19:75",
+        "capture": "19:75",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|06E1,|06DA,|E021,",
+        "count": 1,
+        "first": "20:39",
+        "capture": "20:39",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Co|||E021,E01E,",
+        "count": 1,
+        "first": "20:40",
+        "capture": "20:40",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064D,|06D9,|E021,",
+        "count": 2,
+        "first": "27:33",
+        "capture": "27:33",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064E,||E021,E01A,",
+        "count": 1,
+        "first": "28:23",
+        "capture": "28:23",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064D,|0615,|E021,",
+        "count": 2,
+        "first": "32:10",
+        "capture": "32:10",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Mn|064C,|06D9,|E021,",
+        "count": 3,
+        "first": "43:52",
+        "capture": "65:12",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Zs|Co|||E021,E01E,",
+        "count": 1,
+        "first": "47:4",
+        "capture": "47:4",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|06E1,||E021,",
+        "count": 2,
+        "first": "47:4",
+        "capture": "47:4",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|06D6,06DA,||E021,",
+        "count": 2,
+        "first": "65:10",
+        "capture": "65:10",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|064C,||E021,",
+        "count": 1,
+        "first": "67:9",
+        "capture": "67:9",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0656,||E021,",
+        "count": 1,
+        "first": "69:25",
+        "capture": "69:25",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0615,||E021,",
+        "count": 1,
+        "first": "85:11",
+        "capture": "85:11",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0657,||E021,",
+        "count": 2,
+        "first": "89:15",
+        "capture": "89:15",
+        "roles": {
+          "word": 2
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Lo|Zs|||E021,E01B,",
+        "count": 1,
+        "first": "91:14",
+        "capture": "91:14",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0650,||E021,",
+        "count": 3,
+        "first": "96:15",
+        "capture": "114:4",
+        "roles": {
+          "word": 3
+        }
+      },
+      {
+        "code": "E021",
+        "signature": "Mn|Zs|0651,0650,||E021,",
+        "count": 1,
+        "first": "103:3",
+        "capture": "103:3",
+        "roles": {
+          "word": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064E,||E022,",
+        "count": 238,
+        "first": "1:7",
+        "capture": "5:5",
+        "roles": {
+          "end-stack": 238
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064C,||E022,",
+        "count": 58,
+        "first": "2:7",
+        "capture": "2:20",
+        "roles": {
+          "end-stack": 58
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Zs|end|||E022,",
+        "count": 5,
+        "first": "2:96",
+        "capture": "2:96",
+        "roles": {
+          "end-stack": 5
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064F,||E022,",
+        "count": 46,
+        "first": "2:129",
+        "capture": "2:253",
+        "roles": {
+          "end-stack": 46
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|0650,||E022,",
+        "count": 45,
+        "first": "2:152",
+        "capture": "57:19",
+        "roles": {
+          "end-stack": 45
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064D,||E022,",
+        "count": 39,
+        "first": "2:176",
+        "capture": "106:4",
+        "roles": {
+          "end-stack": 39
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|06DB,06DA,||E022,",
+        "count": 1,
+        "first": "3:171",
+        "capture": "3:171",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Lo|end|||E022,",
+        "count": 95,
+        "first": "4:10",
+        "capture": "18:22",
+        "roles": {
+          "end-stack": 95
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "So|end|||E022,",
+        "count": 5,
+        "first": "7:206",
+        "capture": "25:60",
+        "roles": {
+          "end-stack": 5
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064D,0615,||E022,",
+        "count": 1,
+        "first": "15:79",
+        "capture": "15:79",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|0615,||E022,",
+        "count": 3,
+        "first": "18:82",
+        "capture": "18:82",
+        "roles": {
+          "end-stack": 3
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064B,||E022,",
+        "count": 1,
+        "first": "25:9",
+        "capture": "25:9",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|Mn|064E,|0615,|E022,",
+        "count": 1,
+        "first": "26:51",
+        "capture": "26:51",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Cf|end|||E022,",
+        "count": 4,
+        "first": "37:113",
+        "capture": "37:113",
+        "roles": {
+          "end-stack": 4
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|Mn|064C,|0615,|E022,",
+        "count": 1,
+        "first": "43:15",
+        "capture": "43:15",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|06E1,||E022,",
+        "count": 4,
+        "first": "47:11",
+        "capture": "47:11",
+        "roles": {
+          "end-stack": 4
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064E,0615,||E022,",
+        "count": 2,
+        "first": "56:40",
+        "capture": "56:40",
+        "roles": {
+          "end-stack": 2
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|064F,0615,||E022,",
+        "count": 1,
+        "first": "75:30",
+        "capture": "75:30",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|0652,||E022,",
+        "count": 1,
+        "first": "88:26",
+        "capture": "88:26",
+        "roles": {
+          "end-stack": 1
+        }
+      },
+      {
+        "code": "E022",
+        "signature": "Mn|end|0657,||E022,",
+        "count": 2,
+        "first": "98:8",
+        "capture": "98:8",
+        "roles": {
+          "end-stack": 2
+        }
+      }
+    ]
+  },
+  "layout_model": {
+    "size_px": 56,
+    "size_adjust": 1.25,
+    "ornament_em": 0.68,
+    "inline_gap_em": 0.16,
+    "stop_margin_em": 0.27,
+    "final_margin_em": 0.08,
+    "end_row_em": 0.36,
+    "note": "Box = inline-block border box: plain parts shaped RTL, inline sign items at widthEm or shaped advance plus gaps, final word + ornament; zero-width .indopak-space excluded."
+  }
+}

@@ -96,6 +96,27 @@ Ink/boundary candidates stop approval until reviewed. Production-font/diagnostic
 comparisons use a recorded two-pixel edge tolerance; masks include shared cmap aliases. No restricted reference font is used
 to construct diagnostic fonts.
 
+## Renderer segmentation audit (Phase B)
+
+`segmentation_audit.mjs` imports the real `indopakEnding` (`web/src/lib/quran/view/indopak.ts`,
+Node 24 type stripping) and checks its word boxes, splits, final word, end/inline annotations,
+`stop` flags and ink boxes on all 6,236 verses (DB via `node:sqlite`, `mode=ro&immutable=1`).
+`box_widths.py` shapes every box with the v4 TTF (venv HarfBuzz) for 56px widths and overflow
+prediction. It also maps all 223 inventory context classes to capture verses for Phase C.
+
+```sh
+node scripts/fonts/indopak/segmentation_audit.mjs
+```
+
+Summary (no Quran text): `segmentation-report.json`. Full per-verse detail goes to
+`INDOPAK_PHASEB_OUTPUT` (default `.cache/indopak-v4/2026-10-06-run1/phaseB/segmentation-full.json`).
+Exit 1 on any assertion failure.
+
+The development specimen accepts `?keys=19:17,91:14,97:5,56:23` to include regression
+verses without private codes. Use the summary's `context_coverage.phase_c_capture_keys`
+and `phase_c_review_keys` for the browser capture set. Current verification status and
+evidence paths: [v4 results](../../../docs/indopak-v4-results.md).
+
 ## Native macOS Safari
 
 Playwright WebKit is not branded Safari. `safari-native-check.mjs` drives installed Safari

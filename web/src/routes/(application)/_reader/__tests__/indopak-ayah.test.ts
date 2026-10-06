@@ -100,6 +100,97 @@ describe("IndoPak end signs", () => {
     ]);
   });
 
+  const [qala, araayta, idh] = [
+    "\u0642\u064E\u0627\u0644\u064E",
+    "\u0627\u064E\u0631\u064E\u0621\u064E\u064A\u06E1\u062A\u064E",
+    "\u0627\u0650\u0630\u06E1",
+  ];
+  const glued: [source: string, text: string, words: string[], last: string][] = [
+    [
+      "ZWSP split without a sign",
+      `${qala}\u200B${araayta} ${idh}`,
+      [`${qala}\u200B`, araayta],
+      idh,
+    ],
+    ["2:229 pause sign", `${qala} \u0615${araayta} ${idh}`, [`${qala} \u0615`, araayta], idh],
+    [
+      "2:282 ZWSP-led sign",
+      `${qala} \u200B\u06DA${araayta} ${idh}`,
+      [`${qala} \u200B\u06DA`, araayta],
+      idh,
+    ],
+    ["4:9 private pause", `${qala} \uE01B${araayta} ${idh}`, [`${qala} \uE01B`, araayta], idh],
+    [
+      "19:17 cluster",
+      `${qala} \uE01B\uE01E${araayta} ${idh}`,
+      [`${qala} \uE01B\uE01E`, araayta],
+      idh,
+    ],
+    [
+      "91:14 spaced cluster",
+      `${qala}\uE021 \uE01B\u2003 \u06D9${araayta} ${idh}`,
+      [`${qala}\uE021 \uE01B\u2003 \u06D9`, araayta],
+      idh,
+    ],
+    ["7:158 mark in the body", `${qala} \u06E8${araayta} ${idh}`, [`${qala} \u06E8`, araayta], idh],
+    ["15:61 mark before the final word", `${qala} \u06E8${araayta}`, [`${qala} \u06E8`], araayta],
+    ["18:63 pause before the final word", `${qala} \uE01C${araayta}`, [`${qala} \uE01C`], araayta],
+    ["76:17 ink-free first box", `\u200B \u200B ${qala} ${idh}`, ["\u200B \u200B", qala], idh],
+  ];
+
+  it("starts every word box at a letter and keeps glued signs with the preceding word", () => {
+    for (const [source, text, words, last] of glued) {
+      const ending = indopakEnding(text);
+      const boxes = ending.words.map((word) => word.parts.map((part) => part.text).join(""));
+      expect(boxes, source).toEqual(words);
+      expect(ending.lastWordText, source).toBe(last);
+      expect(ending.body + ending.lastWord + ending.sign + ending.following, source).toBe(text);
+      for (const box of boxes.slice(1)) expect(box, source).toMatch(/^\p{L}/u);
+    }
+    const stops = (text: string) => indopakEnding(text).words.map((word) => word.stop);
+    expect(stops(`${qala} \u0615${araayta} ${idh}`)).toEqual([true, false]);
+    expect(stops(`${qala} \uE01B\uE01E${araayta} ${idh}`)).toEqual([true, false]);
+    expect(stops(`${qala} \u06E8${araayta} ${idh}`)).toEqual([false, false]);
+  });
+
+  it("draws whitespace inside the final word and inside sign marks without dropping it", () => {
+    const final = indopakEnding(`${qala} ${araayta} \u200B\u06DA`);
+    expect(final.lastWordText).toBe(`${araayta} \u200B\u06DA`);
+    expect(final.lastWordSpace).toBe("");
+    const inline = indopakEnding(`${qala}\u200B\uE01E \u200B\u06DA ${araayta} ${idh}`);
+    const cluster = inline.words[0]?.parts.find((part) => part.annotations.length > 0);
+    expect(cluster?.text).toBe("\uE01E \u200B\u06DA");
+    expect(cluster?.annotations.map(({ mark, space }) => [mark, space])).toEqual([
+      ["\uE01E", " \u200B"],
+      ["\u06DA", ""],
+    ]);
+    expect(
+      indopakEnding("\u0628\u0650\u0645\u064E\u0644\u064F\u0648\u06E1\u0645\u064D\uE01A\u200F")
+        .annotations[0],
+    ).toMatchObject({
+      mark: "\uE01A\u200F",
+      space: "",
+    });
+  });
+
+  it("renders glued-sign verses with exact text and letter-led word boxes", async () => {
+    for (const [source, text] of glued) {
+      const target = document.createElement("div");
+      const instance = mount(ReadingAyah, {
+        target,
+        props: { text, n: 7, vKey: "2:7", script: QuranScript.IndoPak },
+      });
+      const verse = target.querySelector("[data-indopak-ayah]")!;
+      const copy = verse.cloneNode(true);
+      if (!(copy instanceof Element)) throw new Error("Missing IndoPak text element");
+      copy.querySelector("[data-indopak-ornament]")!.remove();
+      expect(copy.textContent, source).toBe(text);
+      const words = [...verse.querySelectorAll(".indopak-word")].slice(1);
+      for (const word of words) expect(word.textContent, source).toMatch(/^\p{L}/u);
+      await unmount(instance);
+    }
+  });
+
   for (const [name, component] of Object.entries({ ReadingAyah, VerseRow })) {
     it(`${name} renders original text once and keeps the mark with the number`, async () => {
       for (const text of cases) {
