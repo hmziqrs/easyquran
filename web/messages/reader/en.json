@@ -1,5 +1,8 @@
 {
   "reader_opening": "Opening the reader…",
+  "reader_indopak_font_loading": "Loading the IndoPak text font…",
+  "reader_indopak_font_unavailable": "The IndoPak text font couldn't load. Reload this page to try again, or choose another script.",
+  "reader_reload_page": "Reload page",
   "reader_surah_page": "Surah {surah} · Page {page} of {count}",
   "reader_surah_pages": "Surah pages",
   "reader_page": "Page {page}",

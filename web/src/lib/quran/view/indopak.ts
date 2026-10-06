@@ -42,12 +42,8 @@ export interface IndoPakWord {
   readonly stop: boolean;
 }
 
-/**
- * [xMin, xMax] ink extents in em of the zero-advance annotation marks in
- * indopak-reader-compat-v4 (SIL Lateef SemiBold base), including its 125% size-adjust.
- * Measured from the packaged font; checked by scripts/fonts/indopak tests.
- */
 const annotationInkEm = new Map<number, readonly [number, number]>([
+  [0x0614, [-0.31, 0.258]],
   [0x0615, [0.247, 0.516]],
   [0x06d6, [-0.212, 0.255]],
   [0x06d7, [-0.18, 0.18]],
@@ -56,6 +52,7 @@ const annotationInkEm = new Map<number, readonly [number, number]>([
   [0x06da, [-0.146, 0.138]],
   [0x06db, [-0.054, 0.052]],
   [0x06dc, [-0.222, 0.217]],
+  [0xe021, [-0.394, -0.199]],
   [0xe022, [-0.077, 0.172]],
 ]);
 
@@ -85,12 +82,12 @@ function round(value: number): number {
 }
 
 function endAnnotations(suffix: string, base = 0): IndoPakEndAnnotation[] {
-  const parts = [...suffix.matchAll(/[-ؕۖ-ۜ][^-ؕۖ-ۜ]*/gu)];
+  const parts = [...suffix.matchAll(/[-ؔؕۖ-ۜ][^-ؔؕۖ-ۜ]*/gu)];
   return parts.map((part) => annotation(part[0], base + part.index));
 }
 
 function bodyParts(text: string): IndoPakBodyPart[] {
-  const clusters = text.matchAll(/[-](?:[\p{M}\p{Cf}\s]*[-ؕۖ-ۜ])+[\p{M}\p{Cf}]*/gu);
+  const clusters = text.matchAll(/[-ؔؕۖ-ۜ](?:[\p{M}\p{Cf}\s]*[-ؔؕۖ-ۜ])+[\p{M}\p{Cf}]*/gu);
   const parts: IndoPakBodyPart[] = [];
   let offset = 0;
   for (const cluster of clusters) {

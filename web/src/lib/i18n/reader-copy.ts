@@ -110,6 +110,9 @@ import {
   reader_open_note_tafsir,
   reader_open_panel,
   reader_opening,
+  reader_indopak_font_loading,
+  reader_indopak_font_unavailable,
+  reader_reload_page,
   reader_original,
   reader_page_abbreviation,
   reader_page_count,
@@ -236,6 +239,9 @@ export interface ReaderUiCopy {
   readonly appearanceTrigger: string;
   readonly shell: {
     readonly opening: string;
+    readonly indopakFontLoading: string;
+    readonly indopakFontUnavailable: string;
+    readonly reloadPage: string;
     readonly surahPage: (surah: number, page: number, count: number) => string;
     readonly surahPagesLabel: string;
     readonly surahNavLabel: string;
@@ -475,6 +481,9 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
     appearanceTrigger: noArgs(reader_customize_appearance),
     shell: {
       opening: noArgs(reader_opening),
+      indopakFontLoading: noArgs(reader_indopak_font_loading),
+      indopakFontUnavailable: noArgs(reader_indopak_font_unavailable),
+      reloadPage: noArgs(reader_reload_page),
       surahPage: (surah, page, count) => reader_surah_page({ surah, page, count }, options),
       surahPagesLabel: noArgs(reader_surah_pages),
       surahNavLabel: noArgs(reader_surah_nav_label),

@@ -1,4 +1,7 @@
 {
+  "reader_indopak_font_loading": "جارٍ تحميل خط النص الهندي الباكستاني…",
+  "reader_indopak_font_unavailable": "تعذّر تحميل خط النص الهندي الباكستاني. أعد تحميل الصفحة للمحاولة مجددًا، أو اختر رسمًا آخر.",
+  "reader_reload_page": "إعادة تحميل الصفحة",
   "reader_opening": "جارٍ فتح القارئ…",
   "reader_surah_page": "السورة {surah} · الصفحة {page} من {count}",
   "reader_surah_pages": "صفحات السورة",

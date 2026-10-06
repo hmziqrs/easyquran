@@ -3,7 +3,8 @@ IndoPak Reader Compat, version 4.000
 
 Derived solely from SIL Lateef 4.400 SemiBold (South Asian Arabic design).
 Copyright (c) 1994-2025, SIL Global (https://www.sil.org/), with Reserved Font Names
-"Lateef" and "SIL"; neither name is used for this derivative.
+"Lateef" and "SIL"; neither appears in this derivative's primary font names.
+Original manufacturer/designer names and URLs remain author attribution.
 Licensed under SIL Open Font License 1.1; complete license accompanies font.
 Upstream revision/input checksums: scripts/fonts/indopak/upstream.json
 Versions 2 and 3 were derived from Noto Naskh Arabic 2.021 (see their own FONTLOG files).
@@ -26,7 +27,9 @@ Modifications:
   separate horizontal and vertical ink lanes from following pause signs; GDEF mark class.
 - Map the U+FE8E alef-final presentation form to Lateef's own final alef glyph.
 - Redraw the 1-, 2- and 3-digit end-of-ayah enclosures as plain rings (Lateef's "Simplified A"
-  geometry, 110-unit stroke); digit composition and placement remain Lateef's.
+  geometry, 110-unit stroke). Scale marker-only Extended Arabic-Indic medium/small digits
+  to 80%/75% about their individual centres, retaining advances and placement. This prevents
+  Urdu digits such as 14 and 85 touching the circular enclosure; ordinary digits stay intact.
 - Set usWeightClass 400 so the face is served as the regular weight.
 - Rename family, PostScript, full, unique, typographic, WWS and description records.
 - Package genuine TrueType TTF and WOFF2 without subsetting layout dependencies.

@@ -56,6 +56,17 @@ describe("IndoPak end signs", () => {
     expect(inline?.annotations.at(-1)).toMatchObject({ widthEm: 0.467, indentEm: 0.212 });
   });
 
+  it.each(["\u06D9\uE01C", "\u06DA\uE01A", "\uE021\u06D9", "\uE01E\u0614"])(
+    "isolates every mark in the inline sign pair %s",
+    (pair) => {
+      const text = `قَالَ${pair} ثُمَّ قَالَ`;
+      const ending = indopakEnding(text);
+      const cluster = ending.words[0]?.parts.find((part) => part.annotations.length > 0);
+      expect(cluster?.annotations.map((item) => item.mark)).toEqual(Array.from(pair));
+      expect(ending.bodyParts.map((part) => part.text).join("") + ending.lastWord).toBe(text);
+    },
+  );
+
   it("splits the body into Quran.com-style word boxes without changing text", () => {
     for (const text of cases) {
       const ending = indopakEnding(text);

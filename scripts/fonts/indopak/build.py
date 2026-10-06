@@ -8,6 +8,7 @@ import urllib.request
 
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
@@ -31,6 +32,7 @@ E021_OFFSET = (-800, 1390)
 # circular markers of printed IndoPak mushafs (and Quran.com's reference reader).
 AYAH_RING_STROKE = 110
 AYAH_ENCLOSURES = ("uni06DD", "uni06DD.2", "uni06DD.3")
+AYAH_DIGIT_SCALES = {"medium": 0.8, "small": 0.75}
 
 
 def require_versions():
@@ -171,12 +173,25 @@ def ring(center, outer, inner):
 
 
 def simplify_ayah_marker(font):
-    """Plain circular enclosures (digits keep the base font's own placement)."""
     for name in AYAH_ENCLOSURES:
         x_min, y_min, x_max, y_max = bounds(font, name.replace("uni06DD", "uni06DD.alt"))
         center = ((x_min + x_max) / 2, (y_min + y_max) / 2)
         outer = min(x_max - x_min, y_max - y_min) / 2
         glyph = ring(center, outer, outer - AYAH_RING_STROKE)
+        glyph.recalcBounds(font["glyf"])
+        font["glyf"][name] = glyph
+        font["hmtx"][name] = (font["hmtx"][name][0], glyph.xMin)
+    for name in font.getGlyphOrder():
+        if not name.startswith("uni06F") or not name.endswith((".medium", ".small")):
+            continue
+        x_min, y_min, x_max, y_max = bounds(font, name)
+        center_x = (x_min + x_max) / 2
+        center_y = (y_min + y_max) / 2
+        scale = AYAH_DIGIT_SCALES[name.rsplit(".", 1)[1]]
+        pen = TTGlyphPen(None)
+        transform = (scale, 0, 0, scale, center_x * (1 - scale), center_y * (1 - scale))
+        font.getGlyphSet()[name].draw(TransformPen(pen, transform))
+        glyph = pen.glyph()
         glyph.recalcBounds(font["glyf"])
         font["glyf"][name] = glyph
         font["hmtx"][name] = (font["hmtx"][name][0], glyph.xMin)

@@ -98,7 +98,8 @@
 <style>
   @font-face {
     font-family: "IndoPak Reader Compat";
-    src: url("/fonts/indopak-reader-compat-v4.woff2") format("woff2");
+    src: url("/fonts/indopak-reader-compat-v4.woff2") format("woff2"),
+      url("/fonts/indopak-reader-compat-v4.ttf") format("truetype");
     font-weight: 400;
     font-display: block;
     size-adjust: 125%;

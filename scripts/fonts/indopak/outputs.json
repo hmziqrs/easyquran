@@ -1,8 +1,8 @@
 [
   {
     "filename": "indopak-reader-compat-v4.ttf",
-    "bytes": 242176,
-    "sha256": "7d025ebda1355d3add5b397136558f088b71c3001dec27e0141ea15b257dfbd5",
+    "bytes": 242160,
+    "sha256": "e763eee58e13a73c05adfb3e2f305ba73c7b6301fbe2a0e1f2360d7e248e98f5",
     "glyph_count": 1837,
     "base": "SIL Lateef 4.400 SemiBold",
     "names": {
@@ -19,8 +19,8 @@
   },
   {
     "filename": "indopak-reader-compat-v4.woff2",
-    "bytes": 91876,
-    "sha256": "dccfbd517b915473a8adb291fab601817dc2676d1e84d2d0972683e6e185d53e",
+    "bytes": 92416,
+    "sha256": "a3f5f15ba0c92501da4ce192e31d3881cd700050c65d01314a3acb9472cacc9a",
     "glyph_count": 1837,
     "base": "SIL Lateef 4.400 SemiBold",
     "names": {

@@ -104,6 +104,30 @@ describe("applyHeaders CSP stamping", () => {
   });
 });
 
+describe("versioned IndoPak font caching", () => {
+  it.each(["woff2", "ttf"])(
+    "keeps the v4 %s immutable on success and revalidation",
+    (extension) => {
+      for (const status of [200, 304]) {
+        const { headers, response } = stubResponse();
+        applyHeaders(response, `/fonts/indopak-reader-compat-v4.${extension}`, status);
+        expect(headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+      }
+    },
+  );
+
+  it("allows missing editions and unversioned fonts to be revalidated", () => {
+    for (const [path, status] of [
+      ["/fonts/indopak-reader-compat-v99.woff2", 404],
+      ["/fonts/indopak-reader-compat.woff2", 200],
+    ] as const) {
+      const { headers, response } = stubResponse();
+      applyHeaders(response, path, status);
+      expect(headers.get("cache-control")).toBe("no-cache");
+    }
+  });
+});
+
 describe("isMissingModule import guard", () => {
   it("treats Node missing-module rejections as the expected no-build condition", () => {
     const esm: NodeJS.ErrnoException = new Error("Cannot find module './build/handler.js'");

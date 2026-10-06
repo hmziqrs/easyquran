@@ -6,6 +6,7 @@
   import { getReaderUiCopy } from "$lib/i18n/reader-copy";
   import { translationIdFromSegments } from "$lib/data/quran";
   import { reader } from "$lib/stores/reader.svelte";
+  import { indopakFont } from "$lib/quran/view/indopak-font.svelte";
   import { stickyNav } from "$lib/stores/sticky-nav.svelte";
   import AppSidebar from "./Sidebar.svelte";
   import { changeTypography } from "./typography-change";
@@ -27,8 +28,6 @@
 
   let headerTop = $derived(stickyNav.collapsed ? "0px" : `${stickyNav.height}px`);
 
-  // Route-primary translation id, derived exactly like the app layout's
-  // worker-pinning effect does from the /t/[lang]/[translator] params.
   const primaryId = $derived(
     page.params.lang && page.params.translator
       ? translationIdFromSegments(page.params.lang, page.params.translator)
@@ -51,8 +50,6 @@
       style:top={headerTop}
       class="sticky z-10 border-b border-border bg-background/85 backdrop-blur-xl transition-[top] duration-200 ease-out"
     >
-      <!-- One frame with the site nav above and the page column below: 1200px, 24px gutter,
-           56px tall like the nav, every control 40px. -->
       <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-3 px-6">
         {#if mounted}
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
@@ -63,8 +60,6 @@
           <PositionIndicator initial={position} />
         {/if}
         {#if mounted}
-          <!-- Arabic size lives in the sticky bar so it is always in reach (user pick); the
-               reader's typography effect keeps the reading position across the change. -->
           <div
             class="ms-auto flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"
             role="group"
@@ -93,6 +88,14 @@
     </header>
 
     <Container class="py-6">
+      {#if mounted && reader.arabicScript === "indopak" && indopakFont.status === "loading"}
+        <p role="status" class="mb-4 text-sm text-foreground-secondary">{copy.shell.indopakFontLoading}</p>
+      {:else if mounted && reader.arabicScript === "indopak" && indopakFont.status === "error"}
+        <div role="alert" class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-border p-4 text-sm">
+          <p>{copy.shell.indopakFontUnavailable}</p>
+          <button type="button" onclick={() => window.location.reload()} class="rounded-md border border-border px-3 py-2">{copy.shell.reloadPage}</button>
+        </div>
+      {/if}
       {@render children()}
     </Container>
   </SidebarInset>

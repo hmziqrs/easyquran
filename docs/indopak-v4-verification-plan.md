@@ -5,6 +5,10 @@ word layout"). **Plan only. Nothing below counts as passed until its evidence ex
 the v3-era [Safari testing plan](indopak-safari-testing-plan.md). That plan's device, delivery and
 Quran.com sections are folded in here and extended to the new font and layout.
 
+Owner decisions, 2026-10-06: use iOS simulators and Android emulators for device verification;
+use Quran.com as the reference. Simulator evidence is labelled separately from physical-device
+evidence. No qualified human reviewer or named printed edition has been selected.
+
 Background: [Quran.com study](indopak-qurancom-rendering-study.md) (what Quran.com does and why v4
 copies it), [font record](indopak-font-compatibility.md#version-4-2026-10-06-sil-lateef-base-qurancom-style-layout),
 [v3 Safari results](indopak-safari-results.md), [deep audit and source discrepancies](indopak-deep-audit.md),
@@ -28,7 +32,7 @@ passed. Editorial and recitation approval stay separate from rendering approval 
 | R9  | Visual similarity     | Side-by-side review sheets (§5.4) scored by the owner and, where possible, a qualified reviewer. Scores are recorded per category; no category is "worse than v3"                                                                     |
 | R10 | Engine/platform reach | Chromium, Playwright WebKit, native macOS Safari, Firefox (Gecko), iOS Safari, iPadOS Safari and Android Chrome all pass R1–R7. Each platform is recorded with exact versions                                                         |
 | R11 | Delivery              | Production serves `indopak-reader-compat-v4.woff2` with byte equality to the package. Behaviour on older browsers without `size-adjust`, and on slow or failed font loads, is defined and acceptable                                  |
-| R12 | Licensing             | OFL text and FONTLOG ship with the font. Reserved Font Names "Lateef" and "SIL" never appear in our font names. No restricted font asset (QuranWBW, PDMS, KFGQPC) in repo or build                                                    |
+| R12 | Licensing             | OFL text and FONTLOG ship with the font. Reserved Font Names "Lateef" and "SIL" stay absent from primary font names; original author attribution stays. No restricted font asset (QuranWBW, PDMS, KFGQPC) in repo or build            |
 | R13 | Hard rules            | DBs untouched (read-only `mode=ro&immutable=1`), no Quran-data SHA-256, `db/` untracked, three web gates green                                                                                                                        |
 
 ## 1. Current state at `584569c`
@@ -77,10 +81,19 @@ Owner: agent. Time: about 30 minutes.
 
 - [ ] Web gates: `pnpm --dir web check`, `pnpm --dir web lint`, `pnpm --dir web test`. All three
       must be green; a warning is a failure.
-- [ ] Licence/name audit: dump every `name` record. "Lateef" and "SIL" may appear only in
-      copyright, trademark and licence records (IDs 0, 7, 13). OFL file is present beside the
+- [ ] Licence/name audit: dump every `name` record. "Lateef" and "SIL" must be absent from
+      primary family, full, unique, PostScript, typographic, WWS and description names.
+      Original manufacturer/designer names and URLs remain attribution (IDs 8, 9, 11, 12),
+      alongside copyright, trademark and licence records (IDs 0, 7, 13).
+      [OFL §3](https://openfontlicense.org/open-font-license-official-text/) restricts reserved
+      names in the primary name presented to users; §4 permits attribution.
+      OFL file is present beside the
       font. FONTLOG matches `build.py` constants (side bearing 123, ring stroke 110, E004 and E021
       offsets).
+
+The earlier IDs 0/7/13-only wording incorrectly treated author attribution as a derivative
+family name. [OpenType name-table definitions](https://learn.microsoft.com/en-us/typography/opentype/spec/name)
+distinguish manufacturer, designer and their URLs from family/full/PostScript names.
 
 Pass: all green. Fail: fix at source and restart Phase A.
 

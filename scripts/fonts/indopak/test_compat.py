@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 import re
 import tempfile
 import unittest
@@ -7,17 +8,42 @@ import unicodedata
 from pathlib import Path
 
 from fontTools.pens.boundsPen import BoundsPen
+from fontTools.pens.basePen import BasePen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
 from audit import is_private, missing_coverage
 from build import HERE, ROOT, STEM, add_mappings, build, checked_entries, obtain_input, read_json
 from validate import shape, shaping_font
+import uharfbuzz as hb
 
 
 FONT = ROOT / f"web/static/fonts/{STEM}.woff2"
 RENDERER = ROOT / "web/src/lib/quran/view/indopak.ts"
 SIZE_ADJUST = 1.25
+
+
+class OutlinePoints(BasePen):
+    def __init__(self, glyphs):
+        super().__init__(glyphs)
+        self.points = []
+
+    def _moveTo(self, point):
+        self.points.append(point)
+
+    def _lineTo(self, point):
+        self.points.append(point)
+
+    def _qCurveToOne(self, control, end):
+        start = self._getCurrentPoint()
+        for step in range(1, 65):
+            t = step / 64
+            self.points.append(tuple((1 - t) ** 2 * start[axis] +
+                                     2 * (1 - t) * t * control[axis] + t ** 2 * end[axis]
+                                     for axis in range(2)))
+
+    def _closePath(self):
+        pass
 
 
 class CompatibilityTest(unittest.TestCase):
@@ -153,6 +179,45 @@ class CompatibilityTest(unittest.TestCase):
             glyph_set[name].draw(pen)
             x_min, y_min, x_max, y_max = pen.bounds
             self.assertAlmostEqual(x_max - x_min, y_max - y_min, delta=4)
+
+    def test_all_ayah_numbers_have_digit_ink_inside_the_ring(self):
+        font, shaper = shaping_font(FONT)
+        try:
+            glyphs = font.getGlyphSet()
+            outlines = {}
+            for name in font.getGlyphOrder():
+                if name.startswith("uni06F") and name.endswith((".medium", ".small")):
+                    pen = OutlinePoints(glyphs)
+                    glyphs[name].draw(pen)
+                    outlines[name] = pen.points
+            for number in range(1, 287):
+                buffer = hb.Buffer()
+                buffer.add_str("\u06dd" + "".join(chr(0x06F0 + int(digit)) for digit in str(number)))
+                buffer.direction = "ltr"
+                buffer.script = "arab"
+                buffer.language = "ur"
+                hb.shape(shaper, buffer)
+                advance = 0
+                center = None
+                inner = 0
+                for info, position in zip(buffer.glyph_infos, buffer.glyph_positions):
+                    name = font.getGlyphName(info.codepoint)
+                    if name.startswith("uni06DD"):
+                        pen = BoundsPen(glyphs)
+                        glyphs[name].draw(pen)
+                        left, bottom, right, top = pen.bounds
+                        center = ((left + right) / 2 + advance + position.x_offset,
+                                  (bottom + top) / 2 + position.y_offset)
+                        inner = (right - left) / 2 - 110
+                    else:
+                        self.assertIsNotNone(center)
+                        radius = max(math.hypot(x + advance + position.x_offset - center[0],
+                                                y + position.y_offset - center[1])
+                                     for x, y in outlines[name])
+                        self.assertGreater(inner - radius, 20, msg=f"{number}: {name}")
+                    advance += position.x_advance
+        finally:
+            font.close()
 
     def test_renderer_ink_table_matches_packaged_marks(self):
         source = RENDERER.read_text(encoding="utf-8")

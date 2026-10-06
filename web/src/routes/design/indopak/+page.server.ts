@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { dev } from "$app/environment";
 import { QuranScript } from "$lib/data/quran-types";
 import { error } from "@sveltejs/kit";
+import { clamp } from "es-toolkit";
 
 import inventory from "../../../../../scripts/fonts/indopak/inventory.json";
 import mapping from "../../../../../scripts/fonts/indopak/mapping.json";
@@ -70,8 +71,26 @@ export function load({ url }: { url: URL }) {
       contexts.set(key, [...(contexts.get(key) ?? []), "Renderer regression"]);
     }
     const flowAudit = url.searchParams.get("audit") === "flow";
-    const fullAudit = ["all", "flow"].includes(url.searchParams.get("audit") ?? "");
-    if (fullAudit) {
+    const corpusAudit = url.searchParams.get("audit") === "corpus";
+    const fullAudit = ["all", "flow", "corpus"].includes(url.searchParams.get("audit") ?? "");
+    if (corpusAudit) {
+      contexts.clear();
+      const offset = clamp(
+        Number.parseInt(url.searchParams.get("offset") ?? "0", 10) || 0,
+        0,
+        6236,
+      );
+      const limit = clamp(
+        Number.parseInt(url.searchParams.get("limit") ?? "256", 10) || 256,
+        1,
+        512,
+      );
+      const rows = database
+        .prepare('SELECT sura, aya FROM quran_text ORDER BY "index" LIMIT ? OFFSET ?')
+        .all(limit, offset);
+      for (const row of rows)
+        contexts.set(`${Number(row.sura)}:${Number(row.aya)}`, ["Whole corpus verification"]);
+    } else if (fullAudit) {
       const rows = database
         .prepare('SELECT sura, aya, text FROM quran_text ORDER BY "index"')
         .all();

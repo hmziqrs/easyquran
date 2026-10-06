@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import {
@@ -55,6 +56,7 @@ type EndArgs = [chunk?: unknown, encoding?: BufferEncoding | null, callback?: ()
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const HSTS = "max-age=31536000; includeSubDomains";
 const packPattern = /^\/offline\/pack\.[A-Za-z0-9_-]+\.json$/u;
+const versionedIndopakFontPattern = /^\/fonts\/indopak-reader-compat-v[1-9]\d*\.(?:woff2|ttf)$/u;
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 const prerenderedDir = "build/prerendered";
@@ -254,7 +256,8 @@ export function applyHeaders(
     } else if (
       pathname.startsWith("/_app/immutable/") ||
       pathname.startsWith("/_quran/tanzil/") ||
-      packPattern.test(pathname)
+      packPattern.test(pathname) ||
+      ((statusCode === 200 || statusCode === 304) && versionedIndopakFontPattern.test(pathname))
     ) {
       response.setHeader("Cache-Control", IMMUTABLE);
     } else {
