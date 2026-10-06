@@ -174,7 +174,8 @@ export function overlapCandidates(painted) {
     }));
 }
 export function controlsReady() {
-  return !document.querySelector("select").disabled;
+  const control = document.querySelector("select");
+  return !!control && !control.disabled;
 }
 export function specimenKeySets() {
   const keys = (selector) =>
@@ -594,8 +595,10 @@ export function layoutOverflow() {
 }
 export function hideFixedOverlays() {
   for (const candidate of document.querySelectorAll("body *")) {
+    if (candidate.closest("[data-ring-grid]")) continue;
     if (["fixed", "sticky"].includes(getComputedStyle(candidate).position)) {
       candidate.setAttribute("data-audit-hide", "");
+      candidate.style.setProperty("visibility", "hidden", "important");
     }
   }
 }
@@ -617,15 +620,27 @@ export async function addFont({ name, base64, sizeAdjust }) {
   const face = new FontFace(name, bytes, { sizeAdjust });
   document.fonts.add(await face.load());
 }
-export function buildRingGrid(size) {
+export function buildRingGrid(options) {
+  const {
+    size,
+    first = 1,
+    last = 286,
+    columns = 12,
+    fixed = false,
+  } = typeof options === "number" ? { size: options } : options;
   document.querySelector("[data-ring-grid]")?.remove();
   const prototype = document.querySelector("[data-indopak-ornament] .ayah-ornament");
   const source = getComputedStyle(prototype);
   const grid = document.createElement("div");
   grid.dataset.ringGrid = "";
-  grid.style.cssText =
-    "display:grid;grid-template-columns:repeat(12,80px);gap:8px;padding:4px;width:max-content;background:white;color:black";
-  for (let number = 1; number <= 286; number += 1) {
+  grid.style.cssText = `display:grid;grid-template-columns:repeat(${columns},80px);gap:8px;padding:4px;width:max-content;background:white;color:black`;
+  if (fixed) {
+    grid.style.position = "fixed";
+    grid.style.top = "0";
+    grid.style.left = "0";
+    grid.style.zIndex = "2147483647";
+  }
+  for (let number = first; number <= last; number += 1) {
     const cell = document.createElement("div");
     cell.dataset.ringNumber = String(number);
     cell.style.cssText =
@@ -643,6 +658,10 @@ export function buildRingGrid(size) {
   document.body.append(grid);
   return {
     size,
+    first,
+    last,
+    columns,
+    fixed,
     direction: source.direction,
     features: source.fontFeatureSettings,
     language: "ur",

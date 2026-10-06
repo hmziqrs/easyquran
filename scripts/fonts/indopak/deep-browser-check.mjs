@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { chromium, firefox, webkit } from "playwright";
+import { _android, chromium, firefox, webkit } from "playwright";
 
 import {
   DESKTOP_VIEWPORT,
@@ -42,6 +42,7 @@ const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopa
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
 const corpus = await loadCorpus(output);
 const reports = [];
+const skipRings = process.env.INDOPAK_DEEP_SKIP_RINGS === "1";
 const diagnosticsOnly = process.env.INDOPAK_DEEP_DIAGNOSTICS_ONLY === "1";
 const engines = (process.env.INDOPAK_DEEP_ENGINES ?? "chromium,firefox,webkit").split(",");
 const targetKeys = process.env.INDOPAK_DEEP_KEYS?.split(",");
@@ -53,28 +54,66 @@ async function captureRings(page, engine) {
   const records = [];
   await page.evaluate(hideFixedOverlays);
   try {
+    const native = engine.startsWith("android");
+    const batchSize = native ? 12 : 286;
     for (const size of SIZES) {
-      const record = await page.evaluate(buildRingGrid, size);
-      const images = {};
-      let original;
-      let layoutDrift = 0;
-      for (const kind of ["Original", "Actual", "Ring", "Digits"]) {
-        await page.evaluate(setRingGridKind, kind);
-        await page.evaluate(() => document.fonts.ready);
-        const geometry = await page.evaluate(ringGridGeometry);
-        if (!original) original = geometry;
-        layoutDrift = Math.max(layoutDrift, assertRingLayout(original, geometry));
-        const filename = `${engine}-ring-${size}-${kind.toLowerCase()}.png`;
-        await page.locator("[data-ring-grid]").screenshot({ path: path.join(output, filename) });
-        images[kind] = filename;
+      for (let first = 1; first <= 286; first += batchSize) {
+        const last = Math.min(first + batchSize - 1, 286);
+        const record = await page.evaluate(buildRingGrid, {
+          size,
+          first,
+          last,
+          columns: native ? 3 : 12,
+          fixed: native,
+        });
+        const images = {};
+        let original;
+        let layoutDrift = 0;
+        await page.locator("[data-ring-grid]").scrollIntoViewIfNeeded();
+        await page.evaluate(
+          () =>
+            new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+        );
+        for (const kind of ["Original", "Actual", "Ring", "Digits"]) {
+          await page.evaluate(setRingGridKind, kind);
+          await page.evaluate(() => document.fonts.ready);
+          const geometry = await page.evaluate(ringGridGeometry);
+          if (!original) original = geometry;
+          layoutDrift = Math.max(layoutDrift, assertRingLayout(original, geometry));
+          await page.evaluate(hideFixedOverlays);
+          const suffix = native ? `-${first}-${last}` : "";
+          const filename = `${engine}-ring-${size}${suffix}-${kind.toLowerCase()}.png`;
+          if (native) {
+            const viewport = await page.evaluate(() => [innerWidth, innerHeight]);
+            assert.ok(
+              geometry.width <= viewport[0] && geometry.height <= viewport[1],
+              "Native ring batch must fit viewport",
+            );
+            await page.screenshot({
+              path: path.join(output, filename),
+              clip: {
+                x: 0,
+                y: 0,
+                width: geometry.width,
+                height: geometry.height,
+              },
+            });
+          } else {
+            await page
+              .locator("[data-ring-grid]")
+              .screenshot({ path: path.join(output, filename) });
+          }
+          images[kind] = filename;
+        }
+        records.push({
+          ...record,
+          ...original,
+          images,
+          maximum_layout_drift_css_px: layoutDrift,
+          layout_tolerance_css_px: 1 / 64,
+        });
       }
-      records.push({
-        ...record,
-        ...original,
-        images,
-        maximum_layout_drift_css_px: layoutDrift,
-        layout_tolerance_css_px: 1 / 64,
-      });
+      console.log(`${engine}: ring size ${size}, all 286 numbers captured`);
     }
   } finally {
     await page.evaluate(removeRingGrid);
@@ -83,7 +122,7 @@ async function captureRings(page, engine) {
     path.join(output, `${engine}-ring-images.json`),
     JSON.stringify(records, null, 2) + "\n",
   );
-  return records.length * 286;
+  return records.reduce((total, record) => total + record.numbers.length, 0);
 }
 
 async function captureDomInk(page, engine, painted) {
@@ -153,16 +192,45 @@ async function inspectDom(page) {
   return { ...summary, ...(await page.evaluate(layoutOverflow)) };
 }
 
-for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
+for (const [name, engine] of Object.entries({ chromium, firefox, webkit, android: null })) {
   if (!engines.includes(name)) continue;
   let browser;
+  let device;
+  let deviceMetadata;
   try {
-    browser = await engine.launch({ headless: true, timeout: 15000 });
-    const page = await browser.newPage({
-      viewport: DESKTOP_VIEWPORT,
-      deviceScaleFactor: 2,
-      serviceWorkers: "block",
-    });
+    let page;
+    let version;
+    if (name === "android") {
+      assert.equal(
+        diagnosticsOnly,
+        true,
+        "Use android-browser-check.mjs for the native viewport matrix",
+      );
+      [device] = await _android.devices({ omitDriverInstall: true });
+      assert.ok(device, "Android emulator unavailable");
+      browser = await device.launchBrowser({ viewport: null, serviceWorkers: "block" });
+      page = await browser.newPage();
+      version = (await device.shell("dumpsys package com.android.chrome"))
+        .toString()
+        .match(/versionName=(\S+)/u)?.[1];
+      deviceMetadata = {
+        platform: "Android emulator; not physical device",
+        serial: device.serial(),
+        model: device.model(),
+        android: (await device.shell("getprop ro.build.version.release")).toString().trim(),
+        sdk: (await device.shell("getprop ro.build.version.sdk")).toString().trim(),
+      };
+    } else {
+      browser = await engine.launch({ headless: true, timeout: 15000 });
+      page = await browser.newPage({
+        viewport: DESKTOP_VIEWPORT,
+        deviceScaleFactor: 2,
+        serviceWorkers: "block",
+      });
+      version = browser.version();
+    }
+    page.setDefaultTimeout(120_000);
+    page.setDefaultNavigationTimeout(120_000);
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const matrices = [];
@@ -173,12 +241,19 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     let ringCases = 0;
     for (const mode of diagnosticsOnly || flowOnly ? ["reading"] : ["reading", "verse"]) {
       const audit = flowOnly ? "flow" : "all";
+      const extras = targetKeys ?? corpus.captureKeys;
+      const urlKeys = name === "android" && !targetKeys ? [] : extras;
       const response = await page.goto(
-        `${base}/design/indopak?audit=${audit}&mode=${mode}&keys=${corpus.captureKeys.join(",")}`,
+        `${base}/design/indopak?audit=${audit}&mode=${mode}&keys=${urlKeys.join(",")}`,
+        { waitUntil: "domcontentloaded", timeout: 120_000 },
       );
       assert.equal(response.status(), 200);
       await page.waitForFunction(controlsReady);
       await page.evaluate(() => document.fonts.ready);
+      if (deviceMetadata) {
+        deviceMetadata.viewport = await page.evaluate(() => [innerWidth, innerHeight]);
+        deviceMetadata.dpr = await page.evaluate(() => devicePixelRatio);
+      }
       for (const kind of ["Ring", "Digits"])
         await page.evaluate(addFont, await diagnosticFont(output, kind));
       await page.evaluate(addFont, {
@@ -214,7 +289,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
         for (const kind of diagnosticKinds(corpus.codes)) {
           await page.evaluate(addFont, await diagnosticFont(output, kind));
         }
-        ringCases = await captureRings(page, flowOnly ? `${name}-flow` : name);
+        if (!skipRings) ringCases = await captureRings(page, flowOnly ? `${name}-flow` : name);
         const occurrences = corpus.occurrences.filter(
           (item) => !targetKeys || targetKeys.includes(item.key),
         );
@@ -260,10 +335,12 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     assert.deepEqual(errors, []);
     reports.push({
       engine: name,
-      version: browser.version(),
+      version,
+      device: deviceMetadata,
       status: "mechanical_checks_passed",
       scope: {
         diagnostics_only: diagnosticsOnly,
+        rings: skipRings ? "skipped" : "captured",
         smoke,
         flow: flowOnly,
         target_keys: targetKeys ?? null,
@@ -288,6 +365,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     });
   } finally {
     await browser?.close();
+    await device?.close();
   }
   await writeFile(
     path.join(output, `${name}${flowOnly ? "-flow" : ""}-browser-report.json`),

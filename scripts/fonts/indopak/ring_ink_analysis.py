@@ -10,6 +10,10 @@ from dom_ink_analysis import EDGE_TOLERANCE_CSS_PX, count, dilated_ink, fill_edg
 
 def analyze(output, engine):
     records = json.loads((output / f"{engine}-ring-images.json").read_text())
+    pairs = [(record["size"], number["number"]) for record in records for number in record["numbers"]]
+    expected = {(size, number) for size in [22, 24, 33, 48, 56] for number in range(1, 287)}
+    if len(pairs) != len(set(pairs)) or set(pairs) != expected:
+        raise ValueError("Ring capture must cover every number exactly once at each size")
     results = []
     for record in records:
         fills = {fill_edges(output / filename) for filename in record["images"].values()}
