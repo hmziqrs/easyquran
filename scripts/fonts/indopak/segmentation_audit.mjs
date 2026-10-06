@@ -40,7 +40,7 @@ const REVIEW = {
   "final.inline-private-sign":
     "A private pause sign inside the final word is drawn as plain text, not as an isolated inline sign.",
   "ink.multi-char-mark":
-    "An annotation mark holds more than its sign (e.g. inner whitespace); check its ink box.",
+    "2:10 keeps U+06D9+U+06E2 and 7:137 keeps U+06D9+U+064E as attached combining-mark groups. Chromium 56px/640px original captures show their marks above the preceding word, with clear adjacent letters and no detached line start. Accepted geometry; no editorial sign-off implied.",
 };
 const HISTORY = {
   run1_failures: { "R5.lead-pause.word": 29, "R5.merged-words": 3 },

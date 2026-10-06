@@ -59,7 +59,7 @@
     "exception_review": {
       "R5.sign-only-box": "76:17 starts U+200B U+0020 U+200B: an ink-free verse-initial box, the only letter-free box in the corpus. Accepted leading case.",
       "R5.verse-start-lead-cf": "Verse starts with invisible U+200B; it stays in the first box because nothing precedes it. No ink. Accepted.",
-      "ink.multi-char-mark": "An annotation mark holds more than its sign (e.g. inner whitespace); check its ink box."
+      "ink.multi-char-mark": "2:10 keeps U+06D9+U+06E2 and 7:137 keeps U+06D9+U+064E as attached combining-mark groups. Chromium 56px/640px original captures show their marks above the preceding word, with clear adjacent letters and no detached line start. Accepted geometry; no editorial sign-off implied."
     }
   },
   "stop_set": {
