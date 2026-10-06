@@ -1,5 +1,8 @@
 # IndoPak Safari testing plan
 
+> **Superseded** for font v4 (`584569c`) by the [v4 verification plan](indopak-v4-verification-plan.md),
+> which folds in this plan's device, delivery and Quran.com sections. Kept as the v3 record.
+
 Created 2026-10-06. **§2–3 run 2026-10-06: [results](indopak-safari-results.md). Native macOS
 Safari passes mechanical/ink checks with open layout review items; real-device, older-Safari,
 production-reader and Quran.com checks remain pending.**
