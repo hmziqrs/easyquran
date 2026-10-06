@@ -53,7 +53,51 @@ describe("IndoPak end signs", () => {
     const paired = indopakEnding(cases.at(-1)!);
     const inline = paired.bodyParts.find((part) => part.annotations.length > 0);
     expect(inline?.text).toBe("\uE01A ۖ");
-    expect(inline?.annotations.at(-1)?.widthEm).toBe(0.491);
+    expect(inline?.annotations.at(-1)).toMatchObject({ widthEm: 0.467, indentEm: 0.212 });
+  });
+
+  it("splits the body into Quran.com-style word boxes without changing text", () => {
+    for (const text of cases) {
+      const ending = indopakEnding(text);
+      const words = ending.words
+        .map((word) => word.parts.map((part) => part.text).join("") + word.gap)
+        .join("");
+      expect(words).toBe(ending.body);
+      expect(ending.lastWordText + ending.lastWordSpace).toBe(ending.lastWord);
+      for (const word of ending.words) expect(word.parts.length).toBeGreaterThan(0);
+    }
+    const paired = indopakEnding(cases.at(-1)!);
+    const texts = paired.words.map((word) => word.parts.map((part) => part.text).join(""));
+    const tokens = cases.at(-1)!.split(" ");
+    expect(texts).toEqual([tokens[0], `${tokens[1]} ${tokens[2]}`, tokens[3], tokens[4]]);
+    expect(paired.words.map((word) => word.stop)).toEqual([false, true, false, false]);
+  });
+
+  it("keeps standalone and ZWSP-joined pause signs with the preceding word", () => {
+    const standalone = indopakEnding("السَّمَآءُ\u200B ؕ بَنٰهَا\uE01F");
+    expect(standalone.words.map((word) => word.parts.map((part) => part.text).join(""))).toEqual([
+      "السَّمَآءُ\u200B ؕ",
+    ]);
+    expect(standalone.words[0]?.stop).toBe(true);
+    const joined = indopakEnding("لِاَنۡفُسِكُمۡ\u200B\uE01Eوَاِنۡ اَسَاۡتُمۡ فَلَهَا");
+    expect(joined.words.map((word) => word.parts.map((part) => part.text).join(""))).toEqual([
+      "لِاَنۡفُسِكُمۡ\u200B\uE01E",
+      "وَاِنۡ",
+      "اَسَاۡتُمۡ",
+    ]);
+    const final = indopakEnding("كُمۡ\u200B\uE01Eوَاِنۡ");
+    expect(final.lastWord).toBe("وَاِنۡ");
+    expect(final.body).toBe("كُمۡ\u200B\uE01E");
+  });
+
+  it("draws source whitespace inside end clusters at zero width without dropping it", () => {
+    const ending = indopakEnding("الۡمُطۡمَئِنَّةُ\u2003\uE01C\u2003\u06D6");
+    expect(ending.lastWordText).toBe("الۡمُطۡمَئِنَّةُ");
+    expect(ending.lastWordSpace).toBe("\u2003");
+    expect(ending.annotations.map(({ mark, space }) => [mark, space])).toEqual([
+      ["\uE01C", "\u2003"],
+      ["\u06D6", ""],
+    ]);
   });
 
   for (const [name, component] of Object.entries({ ReadingAyah, VerseRow })) {
@@ -70,9 +114,12 @@ describe("IndoPak end signs", () => {
         copy.querySelector("[data-indopak-ornament]")!.remove();
         expect(copy.textContent).toBe(text);
         expect(verse.querySelectorAll(".ayah-ornament")).toHaveLength(1);
-        expect(verse.querySelector(".indopak-final-word .ayah-ornament")?.textContent).toBe(
-          "\u06DD١٠١",
-        );
+        const ornament = verse.querySelector(".indopak-final-word .ayah-ornament");
+        expect(ornament?.textContent).toBe("\u06DD۱۰۱");
+        expect(ornament?.getAttribute("lang")).toBe("ur");
+        for (const word of verse.querySelectorAll(".indopak-word")) {
+          expect(word.querySelector(".ayah-ornament")).toBeNull();
+        }
         await unmount(instance);
       }
     });

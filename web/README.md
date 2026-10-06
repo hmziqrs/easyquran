@@ -28,7 +28,8 @@ In `web/`:
 Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`.
 
 Development-only IndoPak font specimen: `/design/indopak`, using provisioned IndoPak/Uthmani
-DBs and packaged OFL compatibility font. Version 3 serves both IndoPak reader modes.
+DBs and packaged OFL compatibility font. Version 4 (SIL Lateef base, Quran.com-style word
+boxes) serves both IndoPak reader modes.
 `?audit=all` covers every private occurrence; `?audit=flow` checks optional-ayah marks with
 original neighboring verses. All specimen variants return 404 in production.
 Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md),

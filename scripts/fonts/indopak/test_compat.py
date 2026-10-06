@@ -1,10 +1,12 @@
 import copy
 import json
+import re
 import tempfile
 import unittest
 import unicodedata
 from pathlib import Path
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
@@ -14,6 +16,8 @@ from validate import shape, shaping_font
 
 
 FONT = ROOT / f"web/static/fonts/{STEM}.woff2"
+RENDERER = ROOT / "web/src/lib/quran/view/indopak.ts"
+SIZE_ADJUST = 1.25
 
 
 class CompatibilityTest(unittest.TestCase):
@@ -123,15 +127,47 @@ class CompatibilityTest(unittest.TestCase):
     def test_standalone_private_marks_have_separate_ink_lanes(self):
         cmap = self.font.getBestCmap()
         outlines = self.font["glyf"]
+        per_mille = self.font["head"].unitsPerEm / 1000
         optional = outlines[cmap[0xE021]]
         for pause in [0x06D9, 0x0615, 0x06DA, 0x06DB, 0xE01E]:
-            self.assertLess(optional.xMax + 30, outlines[cmap[pause]].xMin)
-            self.assertGreater(optional.yMin, outlines[cmap[pause]].yMax + 10)
+            self.assertLess(optional.xMax + 30 * per_mille, outlines[cmap[pause]].xMin)
+            self.assertGreater(optional.yMin, outlines[cmap[pause]].yMax + 10 * per_mille)
         inverted = outlines[cmap[0xE004]]
         hamza = outlines[cmap[0x0621]]
         gap = inverted.yMin - hamza.yMax
-        self.assertGreater(gap, 40)
-        self.assertLess(gap, 150)
+        self.assertGreater(gap, 40 * per_mille)
+        self.assertLess(gap, 150 * per_mille)
+
+    def test_spacing_pause_signs_share_one_raised_lane(self):
+        cmap = self.font.getBestCmap()
+        outlines = self.font["glyf"]
+        bottoms = [outlines[cmap[code]].yMin for code in [0xE01A, 0xE01B, 0xE01C, 0xE01E, 0xE01F]]
+        self.assertGreaterEqual(min(bottoms), 1000)
+        self.assertLess(max(bottoms) - min(bottoms), 0.1 * self.font["head"].unitsPerEm)
+
+    def test_ayah_sign_is_a_plain_ring_enclosing_its_digits(self):
+        glyph_set = self.font.getGlyphSet()
+        for name in ["uni06DD", "uni06DD.2", "uni06DD.3"]:
+            self.assertEqual(self.font["glyf"][name].numberOfContours, 2)
+            pen = BoundsPen(glyph_set)
+            glyph_set[name].draw(pen)
+            x_min, y_min, x_max, y_max = pen.bounds
+            self.assertAlmostEqual(x_max - x_min, y_max - y_min, delta=4)
+
+    def test_renderer_ink_table_matches_packaged_marks(self):
+        source = RENDERER.read_text(encoding="utf-8")
+        table = dict(re.findall(r"\[0x([0-9a-f]{4}), \[(-?[0-9.]+, -?[0-9.]+)\]\]", source))
+        self.assertEqual(len(table), 9)
+        cmap = self.font.getBestCmap()
+        glyph_set = self.font.getGlyphSet()
+        upm = self.font["head"].unitsPerEm
+        for code, extents in table.items():
+            pen = BoundsPen(glyph_set)
+            glyph_set[cmap[int(code, 16)]].draw(pen)
+            expected = [pen.bounds[0] / upm * SIZE_ADJUST, pen.bounds[2] / upm * SIZE_ADJUST]
+            actual = [float(value) for value in extents.split(",")]
+            for want, got in zip(expected, actual):
+                self.assertAlmostEqual(want, got, delta=0.001, msg=code)
 
 
 if __name__ == "__main__":

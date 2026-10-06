@@ -1,6 +1,9 @@
 # IndoPak compatibility font
 
-Version 3 is integrated into both IndoPak reader modes. Default Uthmani stays unchanged.
+Version 4 is integrated into both IndoPak reader modes. Default Uthmani stays unchanged.
+It is built on SIL Lateef SemiBold (OFL, South Asian letterforms) to match Quran.com's IndoPak
+look; see [Quran.com study](../../../docs/indopak-qurancom-rendering-study.md). Versions 2–3
+(Noto Naskh base) stay packaged for cached clients.
 See [font/data evidence](../../../docs/indopak-font-compatibility.md) and
 [Quran.com comparison](../../../docs/indopak-qurancom-comparison.md),
 [deep audit/source discrepancies](../../../docs/indopak-deep-audit.md).
@@ -12,11 +15,11 @@ python3 -m venv .cache/indopak-venv
 .cache/indopak-venv/bin/pip install -r scripts/fonts/indopak/requirements.txt
 .cache/indopak-venv/bin/python scripts/fonts/indopak/build.py
 .cache/indopak-venv/bin/python scripts/fonts/indopak/audit.py \
-  --font web/static/fonts/indopak-reader-compat-v3.ttf \
-  --font web/static/fonts/indopak-reader-compat-v3.woff2
+  --font web/static/fonts/indopak-reader-compat-v4.ttf \
+  --font web/static/fonts/indopak-reader-compat-v4.woff2
 .cache/indopak-venv/bin/python -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'
 .cache/indopak-venv/bin/python scripts/fonts/indopak/validate.py \
-  --upstream .cache/fonts/indopak/NotoNaskhArabic-wght.ttf
+  --upstream .cache/fonts/indopak/Lateef-SemiBold.ttf
 ```
 
 Equivalent commands when pinned Python dependencies are installed globally:
@@ -52,7 +55,7 @@ remaining engines continue; any engine failure exits nonzero. On this host autom
 cannot launch. Focused native Firefox/Safari evidence is reported separately.
 
 `production_approved` denotes technical browser integration, not printed-edition provenance
-or recitation approval. Noto's annotation style differs from Quran.com's Nastaleeq style.
+or recitation approval. Lateef's letterforms resemble, but are not, Quran.com's restricted font.
 E004 intrinsic positioning is scoped to its one immutable corpus context and actual browser
 bidi runs; forced whole-verse shaping is not a substitute for browser position verification.
 

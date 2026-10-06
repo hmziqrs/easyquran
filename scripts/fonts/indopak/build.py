@@ -2,20 +2,35 @@ import argparse
 import hashlib
 from importlib.metadata import version
 import json
+import math
 from pathlib import Path
 import urllib.request
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
-from fontTools.varLib.instancer import instantiateVariableFont
 
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 OUTPUT = ROOT / "web/static/fonts"
-STEM = "indopak-reader-compat-v3"
+STEM = "indopak-reader-compat-v4"
 FAMILY = "IndoPak Reader Compat"
+VERSION = "4.000"
+
+# Construction geometry in base-font units (Lateef, 2048/em), tuned against browser ink
+# measurements. Spacing pause signs keep their outline and gain side bearings; signs the base
+# draws at baseline height (qif/waqfa) are lifted to the shared pause-sign lane.
+SIGN_SIDEBEARING = 123
+PAUSE_LANE_BOTTOM = 1000
+E004_OFFSET = (239, -353)
+E021_SCALE = 0.5
+E021_OFFSET = (-800, 1390)
+# Ayah ring: Lateef's "Simplified A" enclosure geometry with a heavier stroke, closer to the
+# circular markers of printed IndoPak mushafs (and Quran.com's reference reader).
+AYAH_RING_STROKE = 110
+AYAH_ENCLOSURES = ("uni06DD", "uni06DD.2", "uni06DD.3")
 
 
 def require_versions():
@@ -82,6 +97,12 @@ def checked_entries(manifest, font, inventory):
     return entries
 
 
+def bounds(font, name):
+    pen = BoundsPen(font.getGlyphSet())
+    font.getGlyphSet()[name].draw(pen)
+    return pen.bounds
+
+
 def add_component(font, name, source, transform, advance, glyph_class):
     order = [*font.getGlyphOrder(), name]
     pen = TTGlyphPen(font.getGlyphSet())
@@ -102,17 +123,63 @@ def make_glyph(font, entry):
     if name in font.getGlyphOrder():
         raise ValueError(f"duplicate generated glyph: {name}")
     if entry["codepoint"] == "U+E004":
-        add_component(font, name, source, (1, 0, 0, 1, 122, -377), 0, 3)
+        add_component(font, name, source, (1, 0, 0, 1, *E004_OFFSET), 0, 3)
         return name
     if entry["source_behavior"] == "spacing":
-        glyph = font["glyf"][source]
-        advance = glyph.xMax - glyph.xMin + 60
-        add_component(font, name, source, (1, 0, 0, 1, 30 - glyph.xMin, 0), advance, 1)
+        x_min, y_min, x_max, _ = bounds(font, source)
+        lift = max(0, PAUSE_LANE_BOTTOM - y_min)
+        advance = round(x_max - x_min) + 2 * SIGN_SIDEBEARING
+        transform = (1, 0, 0, 1, round(SIGN_SIDEBEARING - x_min), round(lift))
+        add_component(font, name, source, transform, advance, 1)
         return name
     if entry["codepoint"] == "U+E021":
-        add_component(font, name, source, (0.5, 0, 0, 0.5, -250, 1120), 0, 3)
+        transform = (E021_SCALE, 0, 0, E021_SCALE, *E021_OFFSET)
+        add_component(font, name, source, transform, 0, 3)
         return name
     raise ValueError(f"no reviewed construction: {entry['codepoint']}")
+
+
+def single_substitute(font, feature, glyph):
+    table = font["GSUB"].table
+    for record in table.FeatureList.FeatureRecord:
+        if record.FeatureTag != feature:
+            continue
+        for index in record.Feature.LookupListIndex:
+            for subtable in table.LookupList.Lookup[index].SubTable:
+                mapping = getattr(getattr(subtable, "ExtSubTable", subtable), "mapping", None)
+                if mapping and glyph in mapping:
+                    return mapping[glyph]
+    raise ValueError(f"no {feature} substitute for {glyph}")
+
+
+def ring(center, outer, inner):
+    pen = TTGlyphPen(None)
+    for radius, clockwise in [(outer, True), (inner, False)]:
+        steps = 16
+        angles = [2 * math.pi * index / steps for index in range(steps)]
+        if clockwise:
+            angles = [-angle for angle in angles]
+        control = radius / math.cos(math.pi / steps)
+        points = []
+        for index, angle in enumerate(angles):
+            half = angle + (angles[1] - angles[0]) / 2
+            points.append((round(center[0] + control * math.cos(half)),
+                           round(center[1] + control * math.sin(half))))
+        pen.qCurveTo(*points, None)
+        pen.closePath()
+    return pen.glyph()
+
+
+def simplify_ayah_marker(font):
+    """Plain circular enclosures (digits keep the base font's own placement)."""
+    for name in AYAH_ENCLOSURES:
+        x_min, y_min, x_max, y_max = bounds(font, name.replace("uni06DD", "uni06DD.alt"))
+        center = ((x_min + x_max) / 2, (y_min + y_max) / 2)
+        outer = min(x_max - x_min, y_max - y_min) / 2
+        glyph = ring(center, outer, outer - AYAH_RING_STROKE)
+        glyph.recalcBounds(font["glyf"])
+        font["glyf"][name] = glyph
+        font["hmtx"][name] = (font["hmtx"][name][0], glyph.xMin)
 
 
 def add_mappings(font, mappings):
@@ -143,10 +210,11 @@ def add_mappings(font, mappings):
 
 
 def rename(font):
-    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;3.000",
-              4: f"{FAMILY} Regular", 5: "Version 3.000; private encoding compatibility",
-              6: "IndoPakReaderCompat-Regular", 16: FAMILY, 17: "Regular",
-              18: f"{FAMILY} Regular", 21: FAMILY, 22: "Regular"}
+    """Our own names; the base's Reserved Font Names stay out of every name record we set."""
+    values = {1: FAMILY, 2: "Regular", 3: f"{STEM};Regular;{VERSION}",
+              4: f"{FAMILY} Regular", 5: f"Version {VERSION}; private encoding compatibility",
+              6: "IndoPakReaderCompat-Regular", 10: "IndoPak Quran reader font with compatibility mappings",
+              16: FAMILY, 17: "Regular", 18: f"{FAMILY} Regular", 21: FAMILY, 22: "Regular"}
     for record in font["name"].names:
         if record.nameID in values:
             record.string = values[record.nameID].encode(record.getEncoding())
@@ -154,6 +222,7 @@ def rename(font):
         font["name"].setName(value, name_id, 3, 1, 0x409)
     if "DSIG" in font:
         del font["DSIG"]
+    font["OS/2"].usWeightClass = 400
 
 
 def validate_package(path, mappings, inventory, original):
@@ -192,18 +261,22 @@ def build(cache, output, manifest_path, preview):
     path = obtain_input(upstream["build_inputs"][0], cache)
     license_path = obtain_input(upstream["build_inputs"][1], cache)
     font = TTFont(path, recalcTimestamp=False)
-    font = instantiateVariableFont(font, {"wght": 400}, inplace=True)
-    font.recalcTimestamp = False
+    if "fvar" in font or "glyf" not in font:
+        raise ValueError("expected a static TrueType base font")
     inventory = read_json(HERE / "inventory.json")
     original = dict(font.getBestCmap())
     entries = checked_entries(manifest, font, inventory)
     mappings = {int(entry["codepoint"][2:], 16): make_glyph(font, entry) for entry in entries}
-    pen = TTGlyphPen(None)
-    order = [*font.getGlyphOrder(), "compat.emspace"]
-    font["glyf"]["compat.emspace"] = pen.glyph()
-    font["hmtx"]["compat.emspace"] = (font["head"].unitsPerEm, 0)
-    font.setGlyphOrder(order)
-    mappings[0x2003] = "compat.emspace"
+    if 0x2003 not in original:
+        pen = TTGlyphPen(None)
+        order = [*font.getGlyphOrder(), "compat.emspace"]
+        font["glyf"]["compat.emspace"] = pen.glyph()
+        font["hmtx"]["compat.emspace"] = (font["head"].unitsPerEm, 0)
+        font.setGlyphOrder(order)
+        mappings[0x2003] = "compat.emspace"
+    if 0xFE8E not in original:
+        mappings[0xFE8E] = single_substitute(font, "fina", original[0x0627])
+    simplify_ayah_marker(font)
     add_mappings(font, mappings)
     rename(font)
     output.mkdir(parents=True, exist_ok=True)

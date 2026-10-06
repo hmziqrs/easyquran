@@ -1,34 +1,36 @@
 [
   {
-    "filename": "indopak-reader-compat-v3.ttf",
-    "bytes": 201020,
-    "sha256": "361d7dfacd92b877cb88075ddfce2d404a5393758bedc8365e4115f69b10af19",
-    "glyph_count": 1727,
+    "filename": "indopak-reader-compat-v4.ttf",
+    "bytes": 242176,
+    "sha256": "7d025ebda1355d3add5b397136558f088b71c3001dec27e0141ea15b257dfbd5",
+    "glyph_count": 1837,
+    "base": "SIL Lateef 4.400 SemiBold",
     "names": {
-      "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
+      "0": "Copyright (c) 1994-2025 SIL Global.",
       "1": "IndoPak Reader Compat",
-      "3": "indopak-reader-compat-v3;Regular;3.000",
+      "3": "indopak-reader-compat-v4;Regular;4.000",
       "4": "IndoPak Reader Compat Regular",
-      "5": "Version 3.000; private encoding compatibility",
+      "5": "Version 4.000; private encoding compatibility",
       "6": "IndoPakReaderCompat-Regular",
-      "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
+      "13": "Copyright (c) 1994-2025, SIL Global (https://www.sil.org/).\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1, with Reserved Font Nam",
       "16": "IndoPak Reader Compat",
       "21": "IndoPak Reader Compat"
     }
   },
   {
-    "filename": "indopak-reader-compat-v3.woff2",
-    "bytes": 71036,
-    "sha256": "1a4511404adaa510af35a4138cbb6d497fb10461a9abf836d4199676b70e95bd",
-    "glyph_count": 1727,
+    "filename": "indopak-reader-compat-v4.woff2",
+    "bytes": 91876,
+    "sha256": "dccfbd517b915473a8adb291fab601817dc2676d1e84d2d0972683e6e185d53e",
+    "glyph_count": 1837,
+    "base": "SIL Lateef 4.400 SemiBold",
     "names": {
-      "0": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
+      "0": "Copyright (c) 1994-2025 SIL Global.",
       "1": "IndoPak Reader Compat",
-      "3": "indopak-reader-compat-v3;Regular;3.000",
+      "3": "indopak-reader-compat-v4;Regular;4.000",
       "4": "IndoPak Reader Compat Regular",
-      "5": "Version 3.000; private encoding compatibility",
+      "5": "Version 4.000; private encoding compatibility",
       "6": "IndoPakReaderCompat-Regular",
-      "13": "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org",
+      "13": "Copyright (c) 1994-2025, SIL Global (https://www.sil.org/).\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1, with Reserved Font Nam",
       "16": "IndoPak Reader Compat",
       "21": "IndoPak Reader Compat"
     }

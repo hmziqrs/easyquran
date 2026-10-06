@@ -46,7 +46,9 @@ def validate(database, ttf, woff2, upstream):
         if trace != shape(web_shaper, text):
             raise ValueError(f"TTF/WOFF2 shaping disagreement at {sura}:{aya}")
         covered_private.update(ord(char) for char in text if ord(char) in private)
-        if not any(ord(char) in private or ord(char) == 0x2003 for char in text):
+        # Runs with private codes, U+2003 or the U+FE8E presentation-form alias are changed
+        # deliberately; every other run must shape exactly like the upstream base font.
+        if not any(ord(char) in private or ord(char) in {0x2003, 0xFE8E} for char in text):
             current_names = [(tt.getGlyphName(item[0]), *item[1:]) for item in trace]
             original_names = [(original.getGlyphName(item[0]), *item[1:])
                               for item in shape(original_shaper, text)]

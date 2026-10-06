@@ -81,13 +81,13 @@
           <h3>{specimen.key}</h3>
           <p class="context">{specimen.labels.join(" · ")}</p>
           <div class="run" dir="rtl">
-            {#if specimen.previous}<ReadingAyah text={specimen.previous.text} n={specimen.previous.ayah} vKey={specimen.previous.key} script={QuranScript.IndoPak} />&#32;{/if}
+            {#if specimen.previous}<ReadingAyah text={specimen.previous.text} n={specimen.previous.ayah} vKey={specimen.previous.key} script={QuranScript.IndoPak} />{" "}{/if}
             {#if data.verseMode}
               <VerseRow text={specimen.text} n={specimen.ayah} vKey={specimen.key} script={QuranScript.IndoPak} />
             {:else}
               <ReadingAyah text={specimen.text} n={specimen.ayah} vKey={specimen.key} script={QuranScript.IndoPak} />
             {/if}
-            {#if specimen.next}&#32;<ReadingAyah text={specimen.next.text} n={specimen.next.ayah} vKey={specimen.next.key} script={QuranScript.IndoPak} />{/if}
+            {#if specimen.next}{" "}<ReadingAyah text={specimen.next.text} n={specimen.next.ayah} vKey={specimen.next.key} script={QuranScript.IndoPak} />{/if}
           </div>
         </article>
       {/each}
@@ -98,9 +98,10 @@
 <style>
   @font-face {
     font-family: "IndoPak Reader Compat";
-    src: url("/fonts/indopak-reader-compat-v3.woff2") format("woff2");
+    src: url("/fonts/indopak-reader-compat-v4.woff2") format("woff2");
     font-weight: 400;
     font-display: block;
+    size-adjust: 125%;
   }
 
   .specimen-page {

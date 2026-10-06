@@ -52,7 +52,7 @@
       "implementation": "composite",
       "new_composite_required": true,
       "evidence": ["pdms-cmap-alias", "quranwbw-cmap-alias"],
-      "positioning": "Zero-advance Noto inverted damma translated (122,-377) in its standalone L bidi run. Only corpus context: hamza/E004/alif in 17:7. Original U+0657 glyph and attachment stay intact.",
+      "positioning": "Zero-advance Lateef inverted damma translated (239,-353) in its standalone L bidi run (v4; v3 used Noto at (122,-377)). Only corpus context: hamza/E004/alif in 17:7. Original U+0657 glyph and attachment stay intact.",
       "contexts": [
         {
           "signature": "Lo|Lo|||E004,",
@@ -334,7 +334,8 @@
           "character_index": 58,
           "count": 1
         }
-      ]
+      ],
+      "spacing_construction": "Lateef annotation outline with 123-unit side bearings and GDEF base class; outlines drawn below y=1000 (qif, waqfa) are lifted to the shared pause lane."
     },
     {
       "codepoint": "U+E01B",
@@ -529,7 +530,8 @@
           "character_index": 29,
           "count": 1
         }
-      ]
+      ],
+      "spacing_construction": "Lateef annotation outline with 123-unit side bearings and GDEF base class; outlines drawn below y=1000 (qif, waqfa) are lifted to the shared pause lane."
     },
     {
       "codepoint": "U+E01C",
@@ -748,7 +750,8 @@
           "character_index": 53,
           "count": 1
         }
-      ]
+      ],
+      "spacing_construction": "Lateef annotation outline with 123-unit side bearings and GDEF base class; outlines drawn below y=1000 (qif, waqfa) are lifted to the shared pause lane."
     },
     {
       "codepoint": "U+E01E",
@@ -979,7 +982,8 @@
           "character_index": 7,
           "count": 1
         }
-      ]
+      ],
+      "spacing_construction": "Lateef annotation outline with 123-unit side bearings and GDEF base class; outlines drawn below y=1000 (qif, waqfa) are lifted to the shared pause lane."
     },
     {
       "codepoint": "U+E01F",
@@ -1054,7 +1058,8 @@
           "character_index": 53,
           "count": 4
         }
-      ]
+      ],
+      "spacing_construction": "Lateef annotation outline with 123-unit side bearings and GDEF base class; outlines drawn below y=1000 (qif, waqfa) are lifted to the shared pause lane."
     },
     {
       "codepoint": "U+E021",
@@ -1068,7 +1073,7 @@
       "implementation": "composite",
       "new_composite_required": true,
       "evidence": ["pdms-source-reference", "quranwbw-reference", "unicode-quranic-marks"],
-      "positioning": "Half-scale dedicated Noto disputed-ayah 5 translated (-250,1120). Separate horizontal and vertical ink lanes avoid pause collisions across all 121 occurrences. No borrowed ruku attachment anchor. Original PUA text is preserved.",
+      "positioning": "Half-scale dedicated Lateef disputed-ayah sign translated (-800,1390) (v4; v3 used Noto at (-250,1120)). Separate horizontal and vertical ink lanes avoid pause collisions across all 121 occurrences. No borrowed ruku attachment anchor. Original PUA text is preserved.",
       "contexts": [
         {
           "signature": "Zs|Mn||06D9,|E021,",
@@ -1485,7 +1490,7 @@
       ]
     }
   ],
-  "verification_scope": "Verified denotes symbol identity and source encoding. Production approval covers the pinned browser font and end-marker layout, not recitation rulings or printed-edition provenance.",
+  "verification_scope": "Verified denotes symbol identity and source encoding. Production approval covers the pinned browser font (v4, SIL Lateef SemiBold base) and end-marker layout, not recitation rulings or printed-edition provenance.",
   "evidence_details": {
     "pdms-cmap-alias": {
       "reference_input": "pdms-source-reference",

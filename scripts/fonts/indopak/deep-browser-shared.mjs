@@ -13,6 +13,10 @@ export const WIDTHS = [320, 640, 960];
 export const DESKTOP_VIEWPORT = { width: 1100, height: 900 };
 export const PHONE_VIEWPORT = { width: 390, height: 844 };
 export const SCREENSHOT_KEYS = ["17:7", "1:7", "2:101", "16:6", "73:17", "51:54", "26:51", "43:15"];
+// Must equal the production @font-face size-adjust so diagnostic and production ink align.
+export const SIZE_ADJUST = "125%";
+// Ring advance 1844/2048 × 1.25 = 1.126em; uncomposed digits would add their own advances.
+const ORNAMENT_MAX_EM = 1.15;
 const EXTRA_DOM_KEYS = ["12:1", "16:6", "73:17", "51:54", "79:27", "26:51", "43:15", "4:142"];
 
 export async function loadCorpus(output) {
@@ -37,7 +41,11 @@ export async function diagnosticFont(output, kind) {
   const data = await readFile(
     path.join(output, `audit-${kind.toLowerCase().replaceAll(" ", "-")}.woff2`),
   );
-  return { name: `IndoPak Audit ${kind}`, base64: data.toString("base64") };
+  return {
+    name: `IndoPak Audit ${kind}`,
+    base64: data.toString("base64"),
+    sizeAdjust: SIZE_ADJUST,
+  };
 }
 
 export function domKinds(code) {
@@ -84,7 +92,7 @@ export function assertSpecimens(specimens, { occurrences, originals }, flowOnly)
     assert.equal(specimen.text, originals[specimen.key], `Changed text ${specimen.key}`);
     count += specimen.privateCount;
     assert.ok(
-      specimen.ornament_width_em > 0 && specimen.ornament_width_em <= 1.05,
+      specimen.ornament_width_em > 0 && specimen.ornament_width_em <= ORNAMENT_MAX_EM,
       `Escaped ornament ${specimen.key}`,
     );
     assert.equal(specimen.final_lines, 1, `Split final word ${specimen.key}`);
@@ -218,9 +226,9 @@ export function setAuditStyle(css) {
 }
 
 // Browser side.
-export async function addFont({ name, base64 }) {
+export async function addFont({ name, base64, sizeAdjust }) {
   const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-  const face = new FontFace(name, bytes);
+  const face = new FontFace(name, bytes, { sizeAdjust });
   document.fonts.add(await face.load());
 }
 

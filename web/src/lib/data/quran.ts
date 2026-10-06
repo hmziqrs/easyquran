@@ -146,6 +146,12 @@ const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 export const toArabicDigits = (n: number | string): string =>
   String(n).replace(/[0-9]/g, (d) => ARABIC_DIGITS[+d] ?? d);
 
+const EASTERN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+
+/** Extended Arabic-Indic digits: the South Asian numerals printed in IndoPak mushafs. */
+export const toEasternDigits = (n: number | string): string =>
+  String(n).replace(/[0-9]/g, (d) => EASTERN_DIGITS[+d] ?? d);
+
 export const surahMeta = (s: Pick<CatalogEntry, "place" | "ayahCount">): string =>
   `${s.place === "meccan" ? "Meccan" : "Medinan"} · ${s.ayahCount} verses`;
 

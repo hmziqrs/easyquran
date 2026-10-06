@@ -1,11 +1,35 @@
 # IndoPak font compatibility
 
-Implemented 2026-10-05; re-audited 2026-10-06. Version 3 is active for IndoPak in both
-reading modes. The [deep audit](indopak-deep-audit.md) found and repaired further optional-ayah,
+Implemented 2026-10-05; re-audited 2026-10-06. **Version 4 is active for IndoPak in both
+reading modes** (see below); versions 2–3 remain packaged for cached clients. Version 3 history: The [deep audit](indopak-deep-audit.md) found and repaired further optional-ayah,
 inline-pause and final-word grouping defects beyond the version 2 examples. It also records
 unresolved source-text discrepancies with Quran.com. Original database strings remain exact.
 
-This is a Noto-based open font, not a reproduction of Quran.com's Nastaleeq artwork. Technical
+## Version 4 (2026-10-06): SIL Lateef base, Quran.com-style layout
+
+Goal: render as close to Quran.com's IndoPak reader as an open font allows
+([study](indopak-qurancom-rendering-study.md)). Quran.com's AlQuran IndoPak by QuranWBW forbids
+modification, so v4 is built on SIL Lateef 4.400 SemiBold (OFL; South Asian lam, qaf, kaf, yeh
+and heh) instead of Noto Naskh. No restricted outline or layout data is used or traced.
+
+- **Mappings:** unchanged. The nine private codes reuse Lateef's own dedicated Quranic glyphs.
+  E004, E021 and the five spacing pause signs are re-tuned for Lateef's 2048-unit em. U+FE8E
+  aliases Lateef's final alef.
+- **Ayah marker:** Lateef's 1/2/3-digit end-of-ayah enclosures are redrawn as plain rings,
+  shown in the text colour with Urdu-form Extended Arabic-Indic digits, as in IndoPak mushafs.
+- **Serving:** `size-adjust: 125%` matches Quran.com's letter size per px.
+- **Layout:** copied from Quran.com. Every word is an unbreakable box, so lines break only at
+  source whitespace. Standalone and ZWSP-joined pause signs stay with the preceding word.
+  Words with stop signs get Quran.com's wider gap. End signs stack above the ring. The final
+  word keeps its number (Quran.com can orphan it).
+- **Text:** DOM text remains the exact DB string.
+- **Checks:** zero `.notdef` across 6,236 verses, TTF/WOFF2 traces identical, and 5,015
+  unaffected verses shape exactly like upstream Lateef. Font tests also check the ring
+  geometry, the shared pause lane and the renderer's ink table against the packaged font.
+  Browser results: [Safari results](indopak-safari-results.md).
+
+The rest of this document records versions 1–3. Earlier versions were Noto-based open fonts,
+not reproductions of Quran.com's Nastaleeq artwork. Technical
 integration approval does not establish the original printed edition or approve recitation
 rulings. Platform validation and limits are recorded below.
 

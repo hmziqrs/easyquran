@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "$lib/components/ui/tooltip";
-  import { parseKey, toArabicDigits } from "$lib/data/quran";
+  import { parseKey, toArabicDigits, toEasternDigits } from "$lib/data/quran";
   import type { CatalogEntry, Place, SajdaEntry } from "$lib/data/quran-types";
   import { peekQuranData } from "$lib/data/quran-data-client";
   import { positionForGlobal, type ReaderPositionState } from "$lib/data/mushaf-divisions";
@@ -8,7 +8,18 @@
   import { getSearchCopy } from "$lib/i18n/search-copy";
   import { positionLabel } from "./position-label";
 
-  let { vKey, n }: { vKey: string; n: number } = $props();
+  let {
+    vKey,
+    n,
+    digits = "arabic",
+  }: {
+    vKey: string;
+    n: number;
+    /** "urdu": Extended Arabic-Indic digits in their Urdu forms, as printed in IndoPak mushafs. */
+    digits?: "arabic" | "urdu";
+  } = $props();
+
+  const numerals = $derived(digits === "urdu" ? toEasternDigits(n) : toArabicDigits(n));
 
   const copy = getReaderUiCopy();
   const searchCopy = getSearchCopy();
@@ -57,7 +68,8 @@
         tabindex="-1"
         class="ayah-ornament cursor-help"
         data-verse-anchor={vKey}
-      >&#x06DD;{toArabicDigits(n)}</span>
+        lang={digits === "urdu" ? "ur" : undefined}
+      >&#x06DD;{numerals}</span>
     {/snippet}
   </TooltipTrigger>
   <!-- Card, not the default dark chip: surah identity (English meaning always present),
