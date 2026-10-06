@@ -52,6 +52,7 @@
 
   .indopak-end-sign {
     position: absolute;
+    pointer-events: none;
     left: 50%;
     bottom: 0.17em;
     display: flex;
