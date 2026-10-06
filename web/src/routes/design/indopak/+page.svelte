@@ -15,6 +15,13 @@
   onMount(() => {
     ready = true;
     void loadArabicFont("kfgqpc-hafs");
+    const label = new URL(window.location.href).searchParams.get("simulator");
+    if (import.meta.env.DEV && label && /^[a-z0-9-]{1,80}$/.test(label)) {
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = `/__indopak_simulator_module?label=${encodeURIComponent(label)}`;
+      document.head.append(script);
+    }
   });
 </script>
 
