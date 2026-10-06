@@ -90,6 +90,7 @@
         getItemKey: (index) => currentItems[index]?.key ?? index,
         rangeExtractor: (range) => extractRange(range, focus),
         measureElement: measureNode,
+        useAnimationFrameWithResizeObserver: true,
       });
       if (previousLayout !== currentLayout) {
         previousLayout = currentLayout;
@@ -134,11 +135,19 @@
       const margin = node.getBoundingClientRect().top + window.scrollY;
       if (Math.abs(margin - scrollMargin) > 0.5) scrollMargin = margin;
     };
-    const observer = new ResizeObserver(updateMargin);
+    let frame: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        updateMargin();
+      });
+    });
     observer.observe(node);
     updateMargin();
     return () => {
       observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
       if (list === node) list = null;
     };
   };
