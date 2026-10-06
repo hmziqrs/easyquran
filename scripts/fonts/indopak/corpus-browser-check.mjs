@@ -38,6 +38,8 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
       viewport: { width: 1100, height: 900 },
       serviceWorkers: "block",
     });
+    page.setDefaultTimeout(120_000);
+    page.setDefaultNavigationTimeout(120_000);
     page.on("pageerror", (error) => errors.push(error.message));
     for (const mode of ["reading", "verse"]) {
       for (let offset = 0; offset < 6236; offset += 256) {
