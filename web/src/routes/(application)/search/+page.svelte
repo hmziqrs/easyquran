@@ -28,7 +28,7 @@
 
   let quranData = $state<QuranData | null>(null);
   let pickerOpen = $state(false);
-  let adoptedSelection = false;
+  let adoptedSelection = $state(false);
   let lastSelectionKey: string | null = null;
 
   const committedTooShort = $derived(
@@ -98,6 +98,7 @@
   });
 
   $effect(() => {
+    if (!adoptedSelection || engine.inputQuery.trim() !== engine.committedQuery) return;
     const next = serializeSearchState(engine.committedQuery, searchSelection.ids);
     if (next === page.url.search) return;
     try {
