@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { chromium, firefox, webkit } from "playwright";
+import { copySpecimens } from "./clipboard-browser-shared.mjs";
 import {
   addFont,
   assertSpecimens,
@@ -18,10 +19,13 @@ import {
 
 const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopak-deep");
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
+const verifyCopy = process.env.INDOPAK_CORPUS_COPY === "1";
+const destination = process.env.INDOPAK_CORPUS_OUTPUT ?? output;
 const selected = (process.env.INDOPAK_DEEP_ENGINES ?? "chromium,webkit").split(",");
 const corpus = await loadCorpus(output);
 const reports = [];
 await mkdir(output, { recursive: true });
+await mkdir(destination, { recursive: true });
 for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
   if (!selected.includes(name)) continue;
   const rows = [];
@@ -61,6 +65,16 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
           });
           assert.equal(specimens.length, Math.min(256, 6236 - offset));
           const summary = assertSpecimens(specimens, corpus, false, true, true);
+          let copied = 0;
+          if (verifyCopy) {
+            const copies = await page.evaluate(copySpecimens);
+            assert.equal(copies.length, specimens.length);
+            for (const item of copies) {
+              assert.equal(item.handled, true, `Copy event ${item.key}`);
+              assert.equal(item.copied, corpus.originals[item.key], `Copied source ${item.key}`);
+            }
+            copied = copies.length;
+          }
           const overflow = await page.evaluate(layoutOverflow);
           assert.ok(
             overflow.run_overflow.every((key) => ["12:21", "18:110", "56:23"].includes(key)),
@@ -80,6 +94,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
             private_occurrences: summary.private_occurrences,
             ring_checks: summary.ring_checks,
             end_clusters: summary.end_clusters,
+            copied_verses: copied,
             ...overflow,
           });
         }
@@ -104,7 +119,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     await browser?.close();
   }
   await writeFile(
-    path.join(output, `${name}-corpus-report.json`),
+    path.join(destination, `${name}-corpus-report.json`),
     JSON.stringify(reports.at(-1), null, 2) + "\n",
   );
 }

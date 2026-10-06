@@ -16,9 +16,12 @@ import {
   WIDTHS,
 } from "./deep-browser-shared.mjs";
 import { freePort, Session } from "./safari-native-check.mjs";
+import { copySpecimens } from "./clipboard-browser-shared.mjs";
 
 const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopak-deep");
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
+const verifyCopy = process.env.INDOPAK_CORPUS_COPY === "1";
+const destination = process.env.INDOPAK_CORPUS_OUTPUT ?? output;
 const corpus = await loadCorpus(output);
 const port = await freePort();
 const driver = spawn("/usr/bin/safaridriver", ["-p", String(port)], { stdio: "ignore" });
@@ -26,6 +29,7 @@ const session = new Session(`http://127.0.0.1:${port}`);
 const report = { engine: "safari", status: "failed", rows: [], errors: [] };
 const keySets = new Map();
 await mkdir(output, { recursive: true });
+await mkdir(destination, { recursive: true });
 
 function installErrorRecording() {
   function record(message) {
@@ -40,7 +44,7 @@ function installErrorRecording() {
 
 async function save() {
   await writeFile(
-    path.join(output, "safari-corpus-report.json"),
+    path.join(destination, "safari-corpus-report.json"),
     JSON.stringify(report, null, 2) + "\n",
   );
 }
@@ -81,6 +85,16 @@ try {
         });
         assert.equal(specimens.length, Math.min(256, 6236 - offset));
         const summary = assertSpecimens(specimens, corpus, false, true, true);
+        let copied = 0;
+        if (verifyCopy) {
+          const copies = await session.execute(copySpecimens);
+          assert.equal(copies.length, specimens.length);
+          for (const item of copies) {
+            assert.equal(item.handled, true, `Copy event ${item.key}`);
+            assert.equal(item.copied, corpus.originals[item.key], `Copied source ${item.key}`);
+          }
+          copied = copies.length;
+        }
         const overflow = await session.execute(layoutOverflow);
         assert.equal(overflow.page_overflow, false);
         assert.ok(
@@ -93,7 +107,15 @@ try {
           assert.ok(!keySets.get(matrix).has(specimen.key));
           keySets.get(matrix).add(specimen.key);
         }
-        report.rows.push({ mode, offset, ...state, viewport, ...summary, ...overflow });
+        report.rows.push({
+          mode,
+          offset,
+          ...state,
+          viewport,
+          ...summary,
+          ...overflow,
+          copied_verses: copied,
+        });
       }
       report.errors.push(
         ...(await session.execute(() => {
