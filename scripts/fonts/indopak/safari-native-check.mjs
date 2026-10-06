@@ -1,12 +1,10 @@
-// Native macOS Safari pass over the deep-audit specimen via the bundled
-// /usr/bin/safaridriver (W3C WebDriver). Reuses deep_audit.py inputs and the browser-side
-// assertions shared with deep-browser-check.mjs; reports stay separate from Playwright WebKit.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
 import {
   DESKTOP_VIEWPORT,
@@ -16,11 +14,14 @@ import {
   WIDTHS,
   addFont,
   assertSpecimens,
+  assertRingLayout,
   auditStyle,
+  buildRingGrid,
   captureTargets,
   controlsReady,
   diagnosticFont,
   diagnosticKinds,
+  fontAdjustmentEvidence,
   domImageName,
   domKinds,
   hideFixedOverlays,
@@ -30,7 +31,11 @@ import {
   overlapCandidates,
   paintFailures,
   paintOccurrences,
+  paintShapingOccurrences,
   root,
+  removeRingGrid,
+  ringGridGeometry,
+  setRingGridKind,
   setAuditStyle,
   specimenKeySets,
 } from "./deep-browser-shared.mjs";
@@ -42,7 +47,8 @@ const flowOnly = process.env.INDOPAK_DEEP_FLOW === "1";
 const skipCritical = process.env.INDOPAK_SAFARI_SKIP_CRITICAL === "1";
 const targetKeys = process.env.INDOPAK_DEEP_KEYS?.split(",");
 const engine = flowOnly ? "safari-flow" : "safari";
-const fontPath = "/fonts/indopak-reader-compat-v3.woff2";
+const fontPath = "/fonts/indopak-reader-compat-v4.woff2";
+const smoke = process.env.INDOPAK_DEEP_SMOKE === "1";
 const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
 const CRITICAL_KEYS = [
   "2:101",
@@ -82,7 +88,7 @@ const mapping = JSON.parse(
 );
 await mkdir(output, { recursive: true });
 
-function freePort() {
+export function freePort() {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.once("error", reject);
@@ -97,14 +103,18 @@ function pngSize(buffer) {
   return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
 }
 
-class Session {
+export class Session {
   constructor(endpoint) {
     this.endpoint = endpoint;
     this.id = null;
   }
 
   async raw(method, route, body) {
-    const init = { method, headers: { "content-type": "application/json" } };
+    const init = {
+      method,
+      headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(120_000),
+    };
     if (body !== undefined) init.body = JSON.stringify(body);
     const response = await fetch(`${this.endpoint}${route}`, init);
     const json = await response.json();
@@ -118,7 +128,7 @@ class Session {
     return this.raw(method, `/session/${this.id}${route}`, body);
   }
 
-  async start() {
+  async start(extraCapabilities = {}) {
     const value = await this.raw("POST", "/session", {
       capabilities: {
         alwaysMatch: {
@@ -126,6 +136,7 @@ class Session {
           pageLoadStrategy: "normal",
           "safari:automaticInspection": false,
           "safari:automaticProfiling": false,
+          ...extraCapabilities,
         },
       },
     });
@@ -208,7 +219,6 @@ class Session {
       "xpath",
       `//label[starts-with(normalize-space(.), "${label}")]//select`,
     );
-    // Option clicks are not interactable while the select is scrolled out of view.
     await this.execute((target) => target.scrollIntoView({ block: "center" }), {
       [ELEMENT]: select,
     });
@@ -394,7 +404,10 @@ function environment(capabilities) {
 }
 
 async function inspect(session, extra = {}) {
-  const specimens = await session.execute(inspectSpecimens);
+  const specimens = await session.execute(inspectSpecimens, {
+    requireInk: true,
+    fontReference: corpus.fontReference,
+  });
   const summary = assertSpecimens(specimens, corpus, flowOnly);
   return {
     ...extra,
@@ -406,9 +419,29 @@ async function inspect(session, extra = {}) {
 
 async function openSpecimen(session, mode) {
   const audit = flowOnly ? "flow" : "all";
-  await session.navigate(`${base}/design/indopak?audit=${audit}&mode=${mode}`);
+  await session.executeAsync(async () => {
+    if (!("serviceWorker" in navigator)) return true;
+    for (const registration of await navigator.serviceWorker.getRegistrations())
+      await registration.unregister();
+    return true;
+  });
+  await session.navigate(
+    `${base}/design/indopak?audit=${audit}&mode=${mode}&keys=${corpus.captureKeys.join(",")}`,
+  );
   await session.waitFor(controlsReady);
   await session.executeAsync(framesPainted);
+  for (const kind of ["Ring", "Digits"])
+    await session.executeAsync(addFont, await diagnosticFont(output, kind));
+  await session.executeAsync(addFont, {
+    ...(await diagnosticFont(output, "Upstream")),
+    sizeAdjust: "100%",
+  });
+  const adjustment = await session.executeAsync(fontAdjustmentEvidence, corpus.fontReference);
+  assert.ok(
+    adjustment.check && adjustment.samples.every((sample) => sample.honoured),
+    `Size-adjust unsupported: ${JSON.stringify(adjustment)}`,
+  );
+  return adjustment;
 }
 
 async function choose(session, size, width) {
@@ -417,10 +450,6 @@ async function choose(session, size, width) {
   await session.waitFor(settled, [size, width ?? null]);
 }
 
-// Element screenshot plus a check that Safari returned the whole element box at the
-// recorded devicePixelRatio, so viewport clipping cannot pass as a valid capture.
-// Safari clips element screenshots to the viewport, so the element is scrolled to the top
-// and the viewport grows (height only; width and line breaking stay fixed) when it is taller.
 async function shot(session, element, label) {
   let rect = await session.command("GET", `/element/${element}/rect`);
   const [innerWidth, innerHeight] = await session.execute(() => [
@@ -476,15 +505,45 @@ async function captureDomInk(session, painted) {
         await writeFile(path.join(output, filename), png);
         images[kind] = filename;
       }
+      await session.execute(setAuditStyle, auditStyle("Original", occurrence.key));
+      const [specimen] = await session.execute(inspectSpecimens, {
+        requireInk: true,
+        fontReference: corpus.fontReference,
+        keys: [occurrence.key],
+      });
+      const scopes = specimen.occurrences.filter((item) => item.code === occurrence.code);
+      assert.equal(
+        scopes.length,
+        corpus.occurrences.filter(
+          (item) => item.key === occurrence.key && item.code === occurrence.code,
+        ).length,
+      );
       records.push({
         key: occurrence.key,
         code: occurrence.code,
         images,
         scale: captureScale,
         css_size: [rect.width, rect.height],
+        occurrences: scopes,
+        ring_check: specimen.ring_check,
+        end_rows: specimen.end_rows,
       });
-      if (records.length % 25 === 0)
+      if (records.length % 25 === 0) {
+        await writeFile(
+          path.join(output, `${engine}-dom-progress.json`),
+          JSON.stringify(
+            {
+              complete: false,
+              expected_cases: targets.size,
+              captured_cases: records.length,
+              records,
+            },
+            null,
+            2,
+          ) + "\n",
+        );
         console.log(`${engine}: DOM ink ${records.length}/${targets.size}`);
+      }
     }
   } finally {
     await session.execute(setAuditStyle, "");
@@ -499,6 +558,44 @@ async function captureDomInk(session, painted) {
     `${engine}: element screenshots do not match element boxes`,
   );
   return records.length;
+}
+
+async function captureRings(session) {
+  const records = [];
+  await session.execute(hideFixedOverlays);
+  try {
+    for (const size of SIZES) {
+      const record = await session.execute(buildRingGrid, size);
+      const images = {};
+      let original;
+      let layoutDrift = 0;
+      for (const kind of ["Original", "Actual", "Ring", "Digits"]) {
+        await session.execute(setRingGridKind, kind);
+        await session.executeAsync(framesPainted);
+        const geometry = await session.execute(ringGridGeometry);
+        if (!original) original = geometry;
+        layoutDrift = Math.max(layoutDrift, assertRingLayout(original, geometry));
+        const element = await session.find("css selector", "[data-ring-grid]");
+        const filename = `${engine}-ring-${size}-${kind.toLowerCase()}.png`;
+        await writeFile(path.join(output, filename), (await shot(session, element, filename)).png);
+        images[kind] = filename;
+      }
+      records.push({
+        ...record,
+        ...original,
+        images,
+        maximum_layout_drift_css_px: layoutDrift,
+        layout_tolerance_css_px: 1 / 64,
+      });
+    }
+  } finally {
+    await session.execute(removeRingGrid);
+  }
+  await writeFile(
+    path.join(output, `${engine}-ring-images.json`),
+    JSON.stringify(records, null, 2) + "\n",
+  );
+  return records.length * 286;
 }
 
 async function screenshotKeys(session, keys, name) {
@@ -616,7 +713,10 @@ async function main() {
   const critical = [];
   let desktop;
   let painted = [];
+  let shaping = [];
+  const adjustments = [];
   let domCaptures = 0;
+  let ringCases = 0;
   let phone;
   let font;
   try {
@@ -634,7 +734,7 @@ async function main() {
     captureScale = await session.execute(() => window.devicePixelRatio);
     for (const mode of diagnosticsOnly || flowOnly ? ["reading"] : ["reading", "verse"]) {
       await session.setViewport(DESKTOP_VIEWPORT);
-      await openSpecimen(session, mode);
+      adjustments.push({ mode, ...(await openSpecimen(session, mode)) });
       if (!font) {
         const evidence = await session.executeAsync(fontEvidence, fontPath);
         const served = Buffer.from(evidence.base64, "base64");
@@ -652,8 +752,14 @@ async function main() {
         assert.ok(font.identical_to_package, "Served font differs from packaged font");
         assert.ok(font.faces.includes("loaded"), "IndoPak Reader Compat face did not load");
       }
-      for (const size of diagnosticsOnly ? [] : SIZES) {
-        for (const width of WIDTHS) {
+      let sizes = SIZES;
+      let widths = WIDTHS;
+      if (smoke) {
+        sizes = [33, 56];
+        widths = [320, 640];
+      }
+      for (const size of diagnosticsOnly ? [] : sizes) {
+        for (const width of widths) {
           await choose(session, size, width);
           matrices.push(await inspect(session, { mode: flowOnly ? "flow" : mode, size, width }));
         }
@@ -663,12 +769,21 @@ async function main() {
         for (const kind of diagnosticKinds(corpus.codes)) {
           await session.executeAsync(addFont, await diagnosticFont(output, kind));
         }
-        painted = await session.executeAsync(paintOccurrences, corpus.occurrences);
+        ringCases = await captureRings(session);
+        const occurrences = corpus.occurrences.filter(
+          (item) => !targetKeys || targetKeys.includes(item.key),
+        );
+        painted = await session.executeAsync(paintOccurrences, occurrences);
+        shaping = await session.executeAsync(paintShapingOccurrences, occurrences);
+        await writeFile(
+          path.join(output, `${engine}-shaping-only.json`),
+          JSON.stringify(shaping, null, 2) + "\n",
+        );
         await writeFile(
           path.join(output, `${engine}-paint.json`),
           JSON.stringify(painted, null, 2) + "\n",
         );
-        const failures = paintFailures(painted);
+        const failures = paintFailures(shaping);
         assert.equal(
           failures.length,
           0,
@@ -707,11 +822,18 @@ async function main() {
     const sweepFailures = critical.flatMap((pass) =>
       pass.sweeps.filter((sweep) => sweep.failures.length > 0),
     );
-    const candidates = overlapCandidates(painted);
+    const candidates = overlapCandidates(shaping);
     Object.assign(report, {
       status: diagnosticsOnly ? "diagnostic_checks_passed" : "mechanical_checks_passed",
       viewport: { desktop, phone },
       font,
+      font_adjustment: adjustments,
+      scope: {
+        smoke,
+        diagnostics_only: diagnosticsOnly,
+        flow: flowOnly,
+        target_keys: targetKeys ?? null,
+      },
       matrices,
       layout_overflow_review: overflow.map(
         ({ mode, size, width, page_overflow, run_overflow }) => ({
@@ -728,9 +850,12 @@ async function main() {
       tallest_capture_viewport: tallestViewport,
       capture_mismatches: captureMismatches,
       raster_occurrences: painted.length,
-      invisible_or_clipped: paintFailures(painted).length,
+      shaping_invisible_or_clipped: paintFailures(shaping).length,
       dom_ink_cases: domCaptures,
-      overlap_candidates: candidates,
+      ring_dom_cases: ringCases,
+      ring_dom_approval: "ring_ink_analysis.py",
+      shaping_only_overlap_candidates: candidates,
+      overlap_candidates_source: "dom_ink_analysis.py",
       overlap_is_review_candidate_not_automatic_semantic_failure: true,
     });
     if (overflow.length > 0 || sweepFailures.length > 0 || captureMismatches.length > 0)
@@ -777,4 +902,5 @@ async function main() {
     process.exitCode = 1;
 }
 
-await main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await main();

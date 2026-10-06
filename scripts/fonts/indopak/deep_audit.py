@@ -9,10 +9,13 @@ from fontTools.colorLib.builder import buildCOLR, buildCPAL
 from fontTools.ttLib import TTFont
 
 from audit import DATABASE, ROOT, is_private, read_verses
-from build import STEM
+from build import AYAH_ENCLOSURES, AYAH_RING_STROKE, STEM
 
 
 FONT = ROOT / f"web/static/fonts/{STEM}.ttf"
+UPSTREAM = ROOT / ".cache/fonts/indopak/Lateef-SemiBold.ttf"
+SIZE_ADJUST = 1.25
+REFERENCE_KEYS = ("1:1", "112:1")
 
 
 def excerpts(rows):
@@ -64,7 +67,7 @@ def diagnostics(output, codes, font_path):
         code_glyphs = {code: original.getBestCmap()[code] for code in codes}
         private_glyphs = set(code_glyphs.values())
         original_state = rendering_state(original)
-    kinds = ["Actual", "Base", *[f"{code:04X}" for code in codes],
+    kinds = ["Actual", "Base", "Ring", "Digits", *[f"{code:04X}" for code in codes],
              *[f"Except {code:04X}" for code in codes]]
     for kind in kinds:
         with TTFont(font_path) as font:
@@ -72,12 +75,14 @@ def diagnostics(output, codes, font_path):
             for name in font.getGlyphOrder():
                 except_code = kind.startswith("Except ")
                 target = None
-                if kind not in {"Actual", "Base"}:
+                if kind not in {"Actual", "Base", "Ring", "Digits"}:
                     target = code_glyphs[int(kind.split()[-1], 16)]
-                keep = kind not in {"Actual", "Base"} and not except_code and name == target
+                keep = kind not in {"Actual", "Base", "Ring", "Digits"} and not except_code and name == target
                 hidden_glyph = not keep and ((kind == "Base" and name in private_glyphs) or
                       (except_code and name == target) or
-                      (kind not in {"Actual", "Base"} and not except_code))
+                      (kind == "Ring" and name not in AYAH_ENCLOSURES) or
+                      (kind == "Digits" and name in AYAH_ENCLOSURES) or
+                      (kind not in {"Actual", "Base", "Ring", "Digits"} and not except_code))
                 palette = 0xFFFF
                 if hidden_glyph:
                     palette = 0
@@ -112,11 +117,62 @@ def reference_report(path, codes):
         return result
 
 
+def font_reference(output, rows, font_path, upstream_path):
+    import uharfbuzz as hb
+
+    from validate import shape, shaping_font
+
+    texts = {f"{sura}:{aya}": text for sura, aya, text in rows}
+    with TTFont(upstream_path) as source:
+        renamed(source, "IndoPak Audit Upstream")
+        source.flavor = "woff2"
+        source.save(output / "audit-upstream.woff2")
+    fonts = {}
+    shapers = {}
+    for label, path in [("upstream", upstream_path), ("packaged", font_path)]:
+        font, shaper = shaping_font(path)
+        fonts[label] = {"path": str(Path(path).resolve().relative_to(ROOT)),
+                        "family": font["name"].getDebugName(1),
+                        "units_per_em": font["head"].unitsPerEm}
+        shapers[label] = (font["head"].unitsPerEm, shaper)
+    words = []
+    for key in REFERENCE_KEYS:
+        for word in texts[key].split():
+            if any(is_private(ord(c)) or unicodedata.category(c) == "Cf" for c in word):
+                continue
+            if not any(unicodedata.category(c).startswith("L") for c in word):
+                continue
+            advances = {label: sum(glyph[2] for glyph in shape(shaper, word)) / upem
+                        for label, (upem, shaper) in shapers.items()}
+            words.append({"key": key, "text": word,
+                          "upstream_advance_em": round(advances["upstream"], 6),
+                          "packaged_advance_em": round(advances["packaged"], 6),
+                          "advances_identical": advances["upstream"] == advances["packaged"]})
+    report = {"size_adjust": SIZE_ADJUST,
+              "ring_stroke_em": AYAH_RING_STROKE / fonts["packaged"]["units_per_em"] * SIZE_ADJUST,
+              "harfbuzz": hb.version_string(),
+              "shaping": {"direction": "rtl", "script": "arab", "language": "ar"},
+              "fonts": fonts, "words": words}
+    with TTFont(font_path) as packaged:
+        from build import bounds
+        signs = [0x0614, 0x0615, *range(0x06D6, 0x06DD), 0xE01A, 0xE01B, 0xE01C, 0xE01E, 0xE01F, 0xE021, 0xE022]
+        report["single_signs"] = {f"{code:04X}": [value / packaged["head"].unitsPerEm * SIZE_ADJUST
+                                                  for value in bounds(packaged, packaged.getBestCmap()[code])]
+                                  for code in signs}
+        report["ayah_enclosures"] = [[value / packaged["head"].unitsPerEm * SIZE_ADJUST
+                                      for value in bounds(packaged,name)] for name in AYAH_ENCLOSURES]
+    (output / "font-reference.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / ".cache/indopak-deep")
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--font", type=Path, default=FONT)
+    parser.add_argument("--upstream", type=Path, default=UPSTREAM,
+                        help="pinned upstream Lateef TTF for the size-adjust reference")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     rows = read_verses(DATABASE)
@@ -137,6 +193,12 @@ def main():
               }
     if args.reference:
         report["reference"] = reference_report(args.reference, codes)
+    if args.upstream.exists():
+        reference = font_reference(args.output, rows, args.font, args.upstream)
+        report["font_reference_words"] = len(reference["words"])
+    else:
+        report["font_reference_words"] = None
+        print(f"warning: {args.upstream} missing; size-adjust reference not written")
     (args.output / "corpus-report.json").write_text(json.dumps(report, indent=2) + "\n",
                                                    encoding="utf-8")
     print(json.dumps(report, indent=2))
