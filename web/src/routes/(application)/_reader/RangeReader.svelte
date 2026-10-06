@@ -137,8 +137,6 @@
     ctx.kind === SourceKind.Arabic ? null : translationIdFromSegments(ctx.lang, ctx.translator),
   );
   const isArabic = $derived(rangeSourceId === null);
-  // Arabic range reads serve the persisted script preference (variant corpus via
-  // the worker/API ladder); the key includes it so a script switch re-reads.
   const readSourceId = $derived(rangeSourceId ?? reader.arabicScript);
   const viewKey = $derived(`${readSourceId}:${data.kind}:${data.index}`);
   trackReaderView({ key: () => viewKey, sourceId: () => rangeSourceId });
@@ -226,11 +224,13 @@
     const serverData = data;
     const sourceId = readSourceId;
     const key = rangeRouteKey(sourceId, serverData.kind, serverData.index);
-    const serverSnapshot: RangeDisplaySnapshot = {
+    let serverSnapshot: RangeDisplaySnapshot = {
       ayahs: serverData.ayahs,
       normalizations: serverData.normalizations,
       surahs: serverData.surahs,
     };
+    if (serverSnapshot.normalizations.some((normalization) => normalization.sourceId !== sourceId))
+      serverSnapshot = { ayahs: [], normalizations: [], surahs: [] };
     const decision = coord.installServer(key, serverSnapshot);
     displayed = serverSnapshot;
     readStatus = serverSnapshot.ayahs.length > 0 ? "ready" : "loading";
@@ -242,7 +242,7 @@
       if (status !== "ready") return;
       const retryKey = coord.canRetry();
       if (!retryKey) return;
-      void runClientRead(retryKey, data, rangeSourceId);
+      void runClientRead(retryKey, data, retryKey.sourceId);
     });
     return stop;
   });

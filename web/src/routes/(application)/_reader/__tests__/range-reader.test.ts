@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import RangeReader from "../RangeReader.svelte";
 import RangeReaderHost from "./RangeReaderHost.svelte";
+import { reader } from "$lib/stores/reader.svelte";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   siteConfig: { apiBase: "https://api.test/quran" },
@@ -343,7 +344,39 @@ describe("RangeReader mount — post-paint swap wiring + surah-metadata derivati
     if (mounted) await unmount(mounted);
     mounted = undefined;
     quranWorker.dispose();
+    reader.setArabicScript("uthmani-annotated");
     if (target.parentNode) target.parentNode.removeChild(target);
+  });
+
+  it("reads the saved Arabic script instead of retaining another script's complete server snapshot", async () => {
+    nav.params = { lang: "", translator: "" };
+    reader.setArabicScript("indopak");
+    const complete = rangePage({
+      index: 1,
+      startGlobal: 1,
+      endGlobal: 2,
+      ayahs: [ayah(1, 1, 1)],
+      normalizations: [norm(1, "uthmani-annotated")],
+      surahs: [surah(1)],
+    });
+    const recovered = {
+      ayahs: [ayah(1, 1, 1)],
+      normalizations: [norm(1, "indopak")],
+    };
+    apiReads.readRange.mockResolvedValue(recovered);
+    wireMocks.decodeArabicRange.mockReturnValue(recovered);
+    mounted = mount(RangeReader, { target, props: { data: complete } });
+    await flushMicrotasks(20);
+
+    expect(apiReads.readRange).toHaveBeenCalledWith(
+      "indopak",
+      1,
+      2,
+      undefined,
+      expect.any(Function),
+    );
+    expect(target.textContent ?? "").toMatch(/Al-Fatihah/);
+    expect(target.textContent ?? "").not.toMatch(/Surah 1/);
   });
 
   it("runs the client read after a degraded SSR paint and swaps in derived ayahs + surah metadata", async () => {
@@ -375,7 +408,7 @@ describe("RangeReader mount — post-paint swap wiring + surah-metadata derivati
       startGlobal: 5700,
       endGlobal: 5720,
       ayahs: [ayah(1, 1, 5700)],
-      normalizations: [norm(1, "uthmani")],
+      normalizations: [norm(1, "en.sahih")],
       surahs: [surah(1)],
     });
 
