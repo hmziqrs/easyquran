@@ -13,6 +13,7 @@ const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopa
 const destination = process.env.INDOPAK_READER_OUTPUT ?? output;
 const base = process.env.INDOPAK_READER_BASE ?? "http://127.0.0.1:5392";
 const engine = process.env.INDOPAK_READER_ENGINE ?? "chromium";
+const blockTelemetry = process.env.INDOPAK_READER_BLOCK_TELEMETRY === "1";
 const modes = (process.env.INDOPAK_READER_MODES ?? "reading,verse").split(",");
 const size = Number(process.env.INDOPAK_READER_SIZE ?? 33);
 const corpus = await loadCorpus(output);
@@ -25,12 +26,24 @@ const surahs = catalog[1]
   .filter((surah) => !selected || selected.includes(surah.number));
 const records = [];
 const errors = [];
+const windowErrors = [];
 let browser;
 let page;
 let session;
 let driver;
 let version;
 await mkdir(destination, { recursive: true });
+
+function installReaderErrors() {
+  function record(message) {
+    const key = "indopak-reader-errors";
+    const values = JSON.parse(sessionStorage.getItem(key) ?? "[]");
+    values.push({ message, url: location.href });
+    sessionStorage.setItem(key, JSON.stringify(values));
+  }
+  window.addEventListener("error", (event) => record(event.message));
+  window.addEventListener("unhandledrejection", (event) => record(String(event.reason)));
+}
 
 async function evaluate(fn, arg) {
   if (session) return session.executeAsync(fn, arg);
@@ -40,16 +53,7 @@ async function evaluate(fn, arg) {
 async function navigate(url) {
   if (session) {
     await session.navigate(url);
-    await session.execute(() => {
-      function record(message) {
-        const key = "indopak-reader-errors";
-        const values = JSON.parse(sessionStorage.getItem(key) ?? "[]");
-        values.push({ message, url: location.href });
-        sessionStorage.setItem(key, JSON.stringify(values));
-      }
-      window.addEventListener("error", (event) => record(event.message));
-      window.addEventListener("unhandledrejection", (event) => record(String(event.reason)));
-    });
+    await session.execute(installReaderErrors);
     return;
   }
   const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120_000 });
@@ -108,6 +112,7 @@ function scrollStep() {
 
 try {
   if (engine === "safari") {
+    assert.equal(blockTelemetry, false, "Native Safari cannot intercept telemetry requests");
     const port = await freePort();
     driver = spawn("/usr/bin/safaridriver", ["--port", String(port)], { stdio: "ignore" });
     session = new Session(`http://127.0.0.1:${port}`);
@@ -131,6 +136,9 @@ try {
       viewport: { width: 390, height: 844 },
       serviceWorkers: "block",
     });
+    if (blockTelemetry)
+      await page.route("https://firebaseinstallations.googleapis.com/**", (route) => route.abort());
+    await page.addInitScript(installReaderErrors);
     await page.addInitScript(
       ({ mode, size }) => {
         if (localStorage.getItem("easyquran.reader")) return;
@@ -201,16 +209,14 @@ try {
       for (let n = 1; n <= surah.count; n += 1) assert.ok(seen.has(`${surah.number}:${n}`));
       await evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await screenshot(last);
-      if (session) {
-        errors.push(
-          ...(await session.execute(() => {
-            const key = "indopak-reader-errors";
-            const values = JSON.parse(sessionStorage.getItem(key) ?? "[]");
-            sessionStorage.removeItem(key);
-            return values;
-          })),
-        );
-      }
+      windowErrors.push(
+        ...(await evaluate(() => {
+          const key = "indopak-reader-errors";
+          const values = JSON.parse(sessionStorage.getItem(key) ?? "[]");
+          sessionStorage.removeItem(key);
+          return values;
+        })),
+      );
       records.push({
         ...surah,
         mode,
@@ -232,6 +238,7 @@ try {
     }
   }
   assert.deepEqual(errors, []);
+  assert.deepEqual(windowErrors, []);
   await writeFile(
     path.join(destination, `${engine}-reader-report.json`),
     JSON.stringify(
@@ -247,6 +254,8 @@ try {
         database_open_mode: "ro&immutable=1",
         programmatic_scroll: true,
         errors,
+        window_errors: windowErrors,
+        firebase_installations_blocked: blockTelemetry,
         results: records,
       },
       null,
@@ -257,7 +266,16 @@ try {
   await writeFile(
     path.join(destination, `${engine}-reader-report.json`),
     JSON.stringify(
-      { engine, version, status: "failed", error: String(error.stack), errors, results: records },
+      {
+        engine,
+        version,
+        status: "failed",
+        error: String(error.stack),
+        errors,
+        window_errors: windowErrors,
+        firebase_installations_blocked: blockTelemetry,
+        results: records,
+      },
       null,
       2,
     ) + "\n",
