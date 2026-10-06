@@ -20,6 +20,7 @@
   import { startAnalytics } from "$lib/boot/analytics";
   import { startCrashReporting } from "$lib/boot/crash-reporting";
   import { deLocalizeUrl } from "$lib/paraglide/runtime";
+  import { copyIndopakSelection } from "$lib/quran/view/indopak-copy";
 
   let { children } = $props();
 
@@ -148,6 +149,8 @@
 
   const jsonLdText = JSON.stringify(siteJsonLdGraph());
 </script>
+
+<svelte:document oncopy={copyIndopakSelection} />
 
 <svelte:head>
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
