@@ -624,7 +624,7 @@ export function buildRingGrid(size) {
   const grid = document.createElement("div");
   grid.dataset.ringGrid = "";
   grid.style.cssText =
-    "display:grid;grid-template-columns:repeat(12,80px);gap:8px;width:max-content;background:white;color:black";
+    "display:grid;grid-template-columns:repeat(12,80px);gap:8px;padding:4px;width:max-content;background:white;color:black";
   for (let number = 1; number <= 286; number += 1) {
     const cell = document.createElement("div");
     cell.dataset.ringNumber = String(number);

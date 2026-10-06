@@ -43,6 +43,7 @@ import {
 const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopak-deep");
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
 const diagnosticsOnly = process.env.INDOPAK_DEEP_DIAGNOSTICS_ONLY === "1";
+const ringsOnly = process.env.INDOPAK_SAFARI_RINGS_ONLY === "1";
 const flowOnly = process.env.INDOPAK_DEEP_FLOW === "1";
 const skipCritical = process.env.INDOPAK_SAFARI_SKIP_CRITICAL === "1";
 const targetKeys = process.env.INDOPAK_DEEP_KEYS?.split(",");
@@ -732,7 +733,9 @@ async function main() {
     report.environment = environment(capabilities);
     desktop = await session.setViewport(DESKTOP_VIEWPORT);
     captureScale = await session.execute(() => window.devicePixelRatio);
-    for (const mode of diagnosticsOnly || flowOnly ? ["reading"] : ["reading", "verse"]) {
+    for (const mode of diagnosticsOnly || flowOnly || ringsOnly
+      ? ["reading"]
+      : ["reading", "verse"]) {
       await session.setViewport(DESKTOP_VIEWPORT);
       adjustments.push({ mode, ...(await openSpecimen(session, mode)) });
       if (!font) {
@@ -758,18 +761,19 @@ async function main() {
         sizes = [33, 56];
         widths = [320, 640];
       }
-      for (const size of diagnosticsOnly ? [] : sizes) {
+      for (const size of diagnosticsOnly || ringsOnly ? [] : sizes) {
         for (const width of widths) {
           await choose(session, size, width);
           matrices.push(await inspect(session, { mode: flowOnly ? "flow" : mode, size, width }));
         }
       }
-      if (!diagnosticsOnly) console.log(`${engine}: full ${mode} matrix passed`);
+      if (!diagnosticsOnly && !ringsOnly) console.log(`${engine}: full ${mode} matrix passed`);
       if (mode === "reading") {
         for (const kind of diagnosticKinds(corpus.codes)) {
           await session.executeAsync(addFont, await diagnosticFont(output, kind));
         }
         ringCases = await captureRings(session);
+        if (ringsOnly) continue;
         const occurrences = corpus.occurrences.filter(
           (item) => !targetKeys || targetKeys.includes(item.key),
         );
@@ -824,13 +828,15 @@ async function main() {
     );
     const candidates = overlapCandidates(shaping);
     Object.assign(report, {
-      status: diagnosticsOnly ? "diagnostic_checks_passed" : "mechanical_checks_passed",
+      status:
+        diagnosticsOnly || ringsOnly ? "diagnostic_checks_passed" : "mechanical_checks_passed",
       viewport: { desktop, phone },
       font,
       font_adjustment: adjustments,
       scope: {
         smoke,
         diagnostics_only: diagnosticsOnly,
+        rings_only: ringsOnly,
         flow: flowOnly,
         target_keys: targetKeys ?? null,
       },
@@ -877,7 +883,7 @@ async function main() {
     driver.kill();
   }
   await writeFile(
-    path.join(output, `${engine}-report.json`),
+    path.join(output, `${engine}${ringsOnly ? "-rings-capture" : ""}-report.json`),
     JSON.stringify(report, null, 2) + "\n",
   );
   const {
