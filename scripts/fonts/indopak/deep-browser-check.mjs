@@ -128,6 +128,9 @@ async function captureRings(page, engine) {
 }
 
 async function captureDomInk(page, engine, painted) {
+  const nativeClient = engine.startsWith("android")
+    ? await page.context().newCDPSession(page)
+    : null;
   const sets = await page.evaluate(specimenKeySets);
   const targets = captureTargets({ occurrences: corpus.occurrences, painted, targetKeys, ...sets });
   await page.evaluate(hideFixedOverlays);
@@ -150,7 +153,12 @@ async function captureDomInk(page, engine, painted) {
         });
         const filename = domImageName(engine, occurrence.key, kind);
         if (engine.startsWith("android") || viewportTiles) {
-          nativeTiles[kind] = await captureNativeSpecimen(page, occurrence.key, filename);
+          nativeTiles[kind] = await captureNativeSpecimen(
+            page,
+            occurrence.key,
+            filename,
+            nativeClient,
+          );
           const original = nativeTiles.Original.geometry;
           const current = nativeTiles[kind].geometry;
           for (const field of ["left", "top", "width", "height"])
@@ -165,6 +173,10 @@ async function captureDomInk(page, engine, painted) {
         images[kind] = filename;
       }
       await page.evaluate(setAuditStyle, auditStyle("Original", occurrence.key));
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       const [specimen] = await page.evaluate(inspectSpecimens, {
         requireInk: true,
         fontReference: corpus.fontReference,
@@ -192,6 +204,7 @@ async function captureDomInk(page, engine, painted) {
     }
   } finally {
     await page.evaluate(setAuditStyle, "");
+    if (nativeClient) await nativeClient.detach();
   }
   await writeFile(
     path.join(output, `${engine}-dom-images.json`),
@@ -200,7 +213,68 @@ async function captureDomInk(page, engine, painted) {
   return records.length;
 }
 
-async function captureNativeSpecimen(page, key, filename) {
+async function captureNativeViewport(page, filename, client) {
+  if (!client) {
+    return { buffer: await page.screenshot({ path: path.join(output, filename) }), origin: [0, 0] };
+  }
+  await page.evaluate(async () => {
+    const marker = document.createElement("div");
+    marker.id = "indopak-viewport-origin";
+    marker.style.cssText =
+      "position:fixed;top:8px;left:8px;width:4px;height:4px;background:rgb(255,0,255);z-index:2147483647;pointer-events:none";
+    marker.setAttribute("aria-hidden", "true");
+    document.body.append(marker);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  try {
+    const screenshot = await client.send("Page.captureScreenshot", {
+      format: "png",
+      fromSurface: false,
+      captureBeyondViewport: false,
+    });
+    const origin = await page.evaluate(async (data) => {
+      const picture = new Image();
+      picture.src = `data:image/png;base64,${data}`;
+      await picture.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = picture.width;
+      canvas.height = 64;
+      const context = canvas.getContext("2d");
+      context.drawImage(picture, 0, 0);
+      const pixels = context.getImageData(0, 0, 64, 64).data;
+      let left = 64;
+      let top = 64;
+      let right = 0;
+      let bottom = 0;
+      for (let y = 0; y < 64; y += 1) {
+        for (let x = 0; x < 64; x += 1) {
+          const offset = (y * 64 + x) * 4;
+          if (pixels[offset] !== 255 || pixels[offset + 1] !== 0 || pixels[offset + 2] !== 255)
+            continue;
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x + 1);
+          bottom = Math.max(bottom, y + 1);
+        }
+      }
+      if (
+        Math.abs(right - left - 4 * devicePixelRatio) > 1 ||
+        Math.abs(bottom - top - 4 * devicePixelRatio) > 1
+      )
+        throw new Error(
+          `Native viewport calibration missing or scaled: ${left},${top},${right},${bottom}; DPR ${devicePixelRatio}`,
+        );
+      return [left - Math.round(8 * devicePixelRatio), top - Math.round(8 * devicePixelRatio)];
+    }, screenshot.data);
+    const buffer = Buffer.from(screenshot.data, "base64");
+    await writeFile(path.join(output, filename), buffer);
+    return { buffer, origin };
+  } finally {
+    await page.evaluate(() => document.getElementById("indopak-viewport-origin")?.remove());
+  }
+}
+
+async function captureNativeSpecimen(page, key, filename, client) {
   const initial = await page.locator(`[data-specimen="${key}"]`).evaluate((element) => {
     const box = element.getBoundingClientRect();
     return {
@@ -247,13 +321,17 @@ async function captureNativeSpecimen(page, key, filename) {
     ])
       assert.ok(Math.abs(actual - expected) <= 1 / 64, "Native tile changed specimen geometry");
     const tileFile = filename.replace(/\.png$/u, `-tile-${tiles.length}.png`);
-    const buffer = await page.screenshot({ path: path.join(output, tileFile) });
+    const { buffer, origin: viewportOrigin } = await captureNativeViewport(page, tileFile, client);
     const pixels = [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
-    const left = Math.round(box.left * box.dpr);
-    const origin = Math.round(box.top * box.dpr);
-    const top = Math.max(0, origin);
+    const left = viewportOrigin[0] + Math.round(box.left * box.dpr);
+    const origin = viewportOrigin[1] + Math.round(box.top * box.dpr);
+    const top = Math.max(viewportOrigin[1], origin);
     const destination = top - origin;
-    const bottom = Math.min(pixels[1], top + height - destination);
+    const bottom = Math.min(
+      pixels[1],
+      viewportOrigin[1] + Math.round(box.viewport[1] * box.dpr),
+      top + height - destination,
+    );
     assert.ok(left >= 0 && left + width <= pixels[0]);
     assert.ok(top >= 0 && bottom > top && destination <= covered);
     const next = destination + bottom - top;
@@ -264,6 +342,8 @@ async function captureNativeSpecimen(page, key, filename) {
       crop: [left, top, left + width, bottom],
       destination,
       viewport: box.viewport,
+      viewport_origin: viewportOrigin,
+      capture_method: client ? "CDP view; fromSurface=false" : "Playwright viewport",
       scroll: box.scroll,
     });
     covered = next;

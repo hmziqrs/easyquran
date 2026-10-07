@@ -134,6 +134,11 @@ Ring captures use twelve-number batches in three columns; analysis requires each
 screenshots. Fixed overlays are hidden after scrolling and before each capture. Native
 DOM results record DPR and remain distinct from the separate Android geometry matrix.
 Each native DOM image is assembled from actual viewport screenshots after scrolling.
+Android uses CDP `fromSurface=false`: Chrome's surface captures can reflow text differently
+from the actual emulator display. A fixed calibration marker measures the pixel origin and
+checks DPR before cropping; it stays outside specimen crops. Native Android DOM analysis
+rejects surface tiles. The eight former failing occurrence scopes pass with actual view
+capture and unchanged ink tolerances.
 Tile crops, scroll offsets, dimensions and complete row coverage are recorded and checked;
 missing/repeated rows and out-of-viewport crops fail. Analysis rejects older oversized native
 element screenshots, which can repeat viewport content on Android. Failed attempts stay ignored.

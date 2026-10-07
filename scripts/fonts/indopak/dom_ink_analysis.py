@@ -63,6 +63,10 @@ def analyze(output, engine):
     originals_checked = 0
     scales = set()
     for record in records:
+        if native_viewport and record.get("native_tiles"):
+            if any(tile.get("capture_method") != "CDP view; fromSurface=false"
+                   for capture in record["native_tiles"].values() for tile in capture["tiles"]):
+                raise ValueError("Android surface capture can reflow text; recapture actual view pixels")
         for kind, capture in record.get("native_tiles", {}).items():
             stitch_native_capture(output, record["images"][kind], capture)
         scale = record.get("scale", 1)
