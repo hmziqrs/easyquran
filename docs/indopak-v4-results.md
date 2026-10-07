@@ -1,6 +1,7 @@
 # IndoPak v4 verification progress
 
-Updated 2026-10-07. **Verification incomplete; no editorial or recitation approval.**
+Updated 2026-10-07. **Engineering validation complete within the agreed scope; editorial and
+recitation approval remain separate.**
 
 Evidence lives on this Mac under `.cache/indopak-v4/2026-10-06-run2/` (called `run2`
 below). Screenshots, reference fonts and full corpus reports stay ignored. The
@@ -323,3 +324,17 @@ Production search/download/bookmarks at `a2ab265` pass in both engines: three ac
 20 exact Arabic and 20 exact English snippets each, actual picker download, translated
 2:64 navigation and bookmark 1:7; zero runtime/console errors. Evidence:
 `search-bookmark-production-translation-boot/`.
+
+## Local workspace cleanup
+
+On 2026-10-07, removed 2,493,653,828 bytes (about 2.5 GB) of disposable audit files:
+four production/performance build copies, two old Playwright runtime installations and
+two generated browser probes. Source snapshots remain in `run2/scratch-sources/` as four
+archives totaling 8,254,130 bytes, excluding builds, dependencies, DBs, environment files
+and symlinks. Old runtime package manifests are retained there too.
+
+Audit reports, screenshots, review sheets, font inputs, Python audit environment and
+reproduction provenance remain available. Provisioned `db/` and shipped font metadata
+were checked before/after and stayed unchanged; selected final reports and review files
+also stayed unchanged. The local removal manifest is `run2/cleanup.json`.
+Removed scratch builds need reconstruction before rerunning their server commands.

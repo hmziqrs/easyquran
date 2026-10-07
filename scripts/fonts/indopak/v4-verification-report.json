@@ -510,5 +510,17 @@
       "evidence": "simulators/ipad-clipboard-control-codepoints.json"
     },
     "conclusion": "No font/renderer change justified; retain exact DOM copy pass separately from native OS paste limitation."
+  },
+  "workspace_cleanup": {
+    "date": "2026-10-07",
+    "status": "passed",
+    "removed_paths": 8,
+    "removed_bytes": 2493653828,
+    "source_archives": 4,
+    "source_archive_bytes": 8254130,
+    "evidence": "cleanup.json",
+    "preserved_sources": "scratch-sources/",
+    "canonical_db_and_font_metadata_unchanged": true,
+    "retained_evidence_unchanged": true
   }
 }

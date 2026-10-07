@@ -407,3 +407,16 @@ INDOPAK_PERFORMANCE_OUTPUT=.cache/indopak-v4/2026-10-06-run2/performance \
 Map both ports/API through adb first. Do not launch another Android browser session during
 this run, or rebuild the served candidate while timings are collected. Failed baseline
 attempts remain invalid evidence rather than a performance regression claim.
+
+## Audit workspace cleanup
+
+Keep result JSON, capture PNGs, review sheets and provenance until review is complete.
+Disposable app build copies and temporary Playwright installations can be removed once
+servers stop. Before removing app copies, preserve source snapshots without `db/`, `.env*`,
+`node_modules`, generated build output or symlinks. Keep provisioned DBs and font inputs.
+
+The 2026-10-07 cleanup removed four app copies, two old runtimes and generated native probes.
+Source archives and runtime manifests remain under
+`.cache/indopak-v4/2026-10-06-run2/scratch-sources/`; `cleanup.json` records removals and checks.
+The archived code/provenance supports recreating old builds; dependency, DB and environment
+links must be supplied locally. `simulator-probe.mjs` regenerates the private simulator module.
