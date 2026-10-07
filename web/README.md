@@ -36,6 +36,12 @@ Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indop
 [compatibility report](../docs/indopak-font-compatibility.md),
 [deep audit and unresolved source differences](../docs/indopak-deep-audit.md).
 
+Development-only homepage comparisons: `/design/home/cobalt`, `/design/home/mono`,
+`/design/home/slate`, and `/design/home/berry`. Each uses baked surah metadata, with
+local controls for Onest/Nunito/JetBrains Mono, accent, neutral background, and light/dark
+mode. Selecting another variant resets the controls; reader appearance preferences are
+unaffected. These previews return 404 in production and are linked from `/design` in dev.
+
 ## Layout
 
     src/

@@ -8,6 +8,7 @@
 
   let { children } = $props();
 
+  const homeReview = $derived(page.url.pathname.startsWith("/design/home/"));
   const parts = $derived(page.url.pathname.replace(/^\/design\/?/, "").split("/").filter(Boolean));
   // SAFETY: parts[0] is a raw URL segment, not a validated value; the `kind in VARIANTS` check below
   // gates every use, so any mismatch falls back to the empty list.
@@ -31,36 +32,40 @@
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<div class="flex min-h-screen flex-col">
-  <header
-    class="sticky top-0 z-50 border-b border-line bg-bg-elev/85 backdrop-blur-xl"
-  >
-    <div class="mx-auto flex w-full max-w-[1440px] flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
-      <a href="/design" class="font-mono text-xs uppercase tracking-wide text-fg-2 hover:text-fg">
-        Design&nbsp;/&nbsp;variants
-      </a>
+{#if homeReview}
+  <main id="main" tabindex="-1">{@render children()}</main>
+{:else}
+  <div class="flex min-h-screen flex-col">
+    <header
+      class="sticky top-0 z-50 border-b border-line bg-bg-elev/85 backdrop-blur-xl"
+    >
+      <div class="mx-auto flex w-full max-w-[1440px] flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
+        <a href="/design" class="font-mono text-xs uppercase tracking-wide text-fg-2 hover:text-fg">
+          Design&nbsp;/&nbsp;variants
+        </a>
 
-      {#if kind}
-        <span class="text-xs text-fg-4">{kind}</span>
-        <div class="flex items-center gap-1">
-          {#each list as v (v.id)}
-            <a
-              href={`/design/${kind}/${v.id}`}
-              class={cn(tab, current === v.id ? tabOn : tabOff)}
-            >
-              {v.id.toUpperCase()} · {v.name}
-            </a>
-          {/each}
+        {#if kind}
+          <span class="text-xs text-fg-4">{kind}</span>
+          <div class="flex items-center gap-1">
+            {#each list as v (v.id)}
+              <a
+                href={`/design/${kind}/${v.id}`}
+                class={cn(tab, current === v.id ? tabOn : tabOff)}
+              >
+                {v.id.toUpperCase()} · {v.name}
+              </a>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="ms-auto flex items-center gap-3 text-xs text-fg-4">
+          <a href="/" class="transition-colors hover:text-fg">live site →</a>
         </div>
-      {/if}
-
-      <div class="ms-auto flex items-center gap-3 text-xs text-fg-4">
-        <a href="/" class="transition-colors hover:text-fg">live site →</a>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <main id="main" tabindex="-1" class="flex-1">{@render children()}</main>
-</div>
+    <main id="main" tabindex="-1" class="flex-1">{@render children()}</main>
+  </div>
 
-<Tweaks locale="en" triggerLabel="Customize appearance" loadCopy={loadTweaksCopy} />
+  <Tweaks locale="en" triggerLabel="Customize appearance" loadCopy={loadTweaksCopy} />
+{/if}

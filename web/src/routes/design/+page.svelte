@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { dev } from "$app/environment";
+
   import { VARIANTS, type VariantKind } from "./_variants/registry";
 
   const groups: { kind: VariantKind; title: string; blurb: string }[] = [
@@ -36,6 +38,22 @@
       in one palette is the wrong layout.
     </p>
   </header>
+
+  {#if dev}
+    <section class="flex flex-col gap-5 border-b border-line py-11">
+      <div class="flex flex-col gap-2">
+        <h2 class="text-[26px] tracking-[-0.02em]">Homepage studies</h2>
+        <p class="max-w-[62ch] text-[15px] leading-[1.6] text-fg-3">
+          Four quieter directions. Compare Onest and JetBrains Mono, restrained accents,
+          flat backgrounds, and softer surfaces. Every adjustment stays inside the preview.
+        </p>
+      </div>
+      <a
+        href="/design/home/cobalt"
+        class="w-fit rounded-md border border-line-2 bg-bg-1 px-5 py-3 text-[14px] font-semibold text-fg transition-colors hover:border-accent-line hover:bg-bg-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      >Compare Cobalt, Monochrome, Slate, and Berry <span aria-hidden="true">→</span></a>
+    </section>
+  {/if}
 
   {#each groups as g (g.kind)}
     <section class="flex flex-col gap-6 border-b border-line py-11 last:border-b-0">
