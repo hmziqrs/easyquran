@@ -481,6 +481,19 @@ export function inspectSpecimens(options = {}) {
           const character = node.textContent[index];
           if (!/\p{Co}/u.test(character)) continue;
           const box = nodeInk(node);
+          const code = character.codePointAt(0).toString(16).toUpperCase();
+          const sign = options.fontReference?.single_signs?.[code];
+          if (sign) {
+            const glyphRange = document.createRange();
+            glyphRange.setStart(node, index);
+            glyphRange.setEnd(node, index + 1);
+            const glyph = glyphRange.getBoundingClientRect();
+            const size = Number.parseFloat(getComputedStyle(node.parentElement).fontSize);
+            box.left = Math.min(box.left, glyph.left + sign[0] * size);
+            box.right = Math.max(box.right, glyph.left + sign[2] * size);
+            box.top = Math.min(box.top, box.baseline - sign[3] * size);
+            box.bottom = Math.max(box.bottom, box.baseline - sign[1] * size);
+          }
           const range = document.createRange();
           range.selectNodeContents(node);
           const layout = range.getBoundingClientRect();

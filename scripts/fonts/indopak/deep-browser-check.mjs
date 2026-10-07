@@ -43,6 +43,8 @@ const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
 const corpus = await loadCorpus(output);
 const reports = [];
 const skipRings = process.env.INDOPAK_DEEP_SKIP_RINGS === "1";
+const viewportTiles = process.env.INDOPAK_DEEP_VIEWPORT_TILES === "1";
+const skipDom = process.env.INDOPAK_DEEP_SKIP_DOM === "1";
 const diagnosticsOnly = process.env.INDOPAK_DEEP_DIAGNOSTICS_ONLY === "1";
 const engines = (process.env.INDOPAK_DEEP_ENGINES ?? "chromium,firefox,webkit").split(",");
 const targetKeys = process.env.INDOPAK_DEEP_KEYS?.split(",");
@@ -129,7 +131,7 @@ async function captureDomInk(page, engine, painted) {
   const sets = await page.evaluate(specimenKeySets);
   const targets = captureTargets({ occurrences: corpus.occurrences, painted, targetKeys, ...sets });
   await page.evaluate(hideFixedOverlays);
-  if (engine.startsWith("android")) {
+  if (engine.startsWith("android") || viewportTiles) {
     await page.screenshot();
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
@@ -147,7 +149,7 @@ async function captureDomInk(page, engine, painted) {
           await document.fonts.ready;
         });
         const filename = domImageName(engine, occurrence.key, kind);
-        if (engine.startsWith("android")) {
+        if (engine.startsWith("android") || viewportTiles) {
           nativeTiles[kind] = await captureNativeSpecimen(page, occurrence.key, filename);
           const original = nativeTiles.Original.geometry;
           const current = nativeTiles[kind].geometry;
@@ -400,7 +402,8 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit, android
         );
         await page.getByLabel("Font size").selectOption("56");
         await page.getByLabel("Run width").selectOption("640");
-        domCaptures = await captureDomInk(page, flowOnly ? `${name}-flow` : name, painted);
+        if (!skipDom)
+          domCaptures = await captureDomInk(page, flowOnly ? `${name}-flow` : name, painted);
         console.log(`${name}: ${domCaptures} original DOM ink comparisons captured`);
       }
       if (diagnosticsOnly) continue;
@@ -430,6 +433,8 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit, android
       scope: {
         diagnostics_only: diagnosticsOnly,
         rings: skipRings ? "skipped" : "captured",
+        dom: skipDom ? "skipped" : "captured",
+        viewport_tiles: viewportTiles,
         smoke,
         flow: flowOnly,
         target_keys: targetKeys ?? null,
