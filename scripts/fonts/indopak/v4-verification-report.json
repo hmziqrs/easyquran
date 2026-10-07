@@ -136,10 +136,15 @@
     "chromium": "passed 6236 verses in 32 states",
     "webkit": "passed 6236 verses in 32 states",
     "evidence": "corpus-copy-scoped/",
-    "native_safari": "fresh unlocked-Mac full sweep in progress; previous readiness retry failed after 48 rows",
+    "native_safari": "passed 6236 verses in 32 states, 800 batches, zero errors",
     "firefox": "passed 6236 verses in 32 states; Firefox 155.0",
     "firefox_evidence": "corpus-copy-firefox-final/firefox-corpus-report.json",
-    "native_safari_evidence": "corpus-copy-safari-unlocked/safari-corpus-report.json"
+    "native_safari_evidence": "corpus-copy-safari-resumed/safari-corpus-report.json",
+    "native_safari_resume": {
+      "complete_rows_reused": 512,
+      "partial_rows_discarded": 9,
+      "legacy_scope": "explicitly accepted for known unchanged renderer/font; future checkpoints require source and font scope equality"
+    }
   },
   "delivery": {
     "network": "phaseC-final/delivery/report.json",
@@ -161,11 +166,10 @@
     "line_spacing_followup_build": "C8ogpWPjm5fic3yLrNxLc"
   },
   "platform_gaps": [
-    "Android full tiled DOM/neighbor ink",
+    "Android full actual-view DOM/neighbor ink",
     "iPhone/iPad full DOM ink and native reader interactions",
-    "iPad narrow/split view",
     "oldest iOS/iPadOS versions",
-    "native find-in-page",
+    "production native find-in-page and OS selection/copy",
     "VoiceOver/TalkBack"
   ],
   "review_gaps": ["owner visual scores", "qualified editorial review", "named printed edition"],
@@ -181,7 +185,7 @@
     "firefox": "128+",
     "oldest_versions_verified": false,
     "actual_runs": {
-      "chromium111": "combined 1338 cases/1383 occurrences and 1430 rings pass; corrected-driver 32-state matrix in progress",
+      "chromium111": "32 matrix states, 1338 DOM cases/1383 occurrences, 1430 rings, 16 neighbor states/149 occurrences; zero ink failures",
       "firefox128": "32 matrix states, 1338 DOM cases/1383 occurrences, 1430 ring cases, 16 neighbor states/149 occurrences; zero failures"
     },
     "evidence": {
@@ -189,7 +193,9 @@
       "firefox128_flow": "floor-firefox128-flow/",
       "chromium111_rings": "floor-chromium111/chromium-ring-report.json",
       "chromium111_ink": "floor-chromium111-reviewed/chromium-dom-report.json",
-      "chromium111_recaptures": "floor-chromium111-tiled-smoke/"
+      "chromium111_recaptures": "floor-chromium111-tiled-smoke/",
+      "chromium111_matrix": "floor-chromium111-reviewed/chromium-browser-report.json",
+      "chromium111_flow": "floor-chromium111-flow/"
     }
   },
   "source_text_committed": false,
@@ -207,17 +213,24 @@
     "platform": "Android emulator; not physical device"
   },
   "android_dom_ink": {
-    "status": "raw capture invalid; actual viewport tiled recapture in progress",
+    "status": "actual view smoke passed; full actual-view recapture running",
     "cases": 1338,
     "occurrences": 1383,
     "raw_invisible_occurrences": 280,
     "raw_geometry_mismatch": 15,
     "evidence": "phaseC-android-full/android-dom-report.json",
-    "reason": "oversized native element screenshots repeat viewport content",
+    "reason": "Chrome surface screenshots reflow text differently from actual device view; analyzer now rejects Android surface tiles",
     "tiled_smoke": "phaseC-android-tiled-smoke-v2/",
     "approval": false,
     "tiled_smoke_status": "11 cases / 12 occurrences / zero failures",
-    "tiled_full": "phaseC-android-tiled-full/"
+    "tiled_full": "phaseC-android-tiled-full/",
+    "surface_tiles": "phaseC-android-tiled-full/android-dom-report.json",
+    "surface_invisible_occurrences": 40,
+    "surface_geometry_mismatch": 0,
+    "actual_view_smoke": "android-view-smoke/android-dom-report.json",
+    "actual_view_smoke_status": "8 cases / 8 occurrences / zero invisible, geometry, boundary or overlap failures",
+    "actual_view_full": "phaseC-android-view-full/",
+    "capture_method": "CDP Page.captureScreenshot fromSurface=false; independent raster-origin/DPR calibration"
   },
   "search_result_action_commit": "23d905e",
   "reader_requested_url_commit": "cf6f3ec",
@@ -225,13 +238,17 @@
   "font_adjustment_audit_commit": "990c617",
   "reference_viewport_capture_commit": "328178b",
   "android_neighbor_ink": {
-    "status": "raw capture invalid; tiled recapture required",
+    "status": "surface tiles invalid; actual view recapture follows full DOM sweep",
     "cases": 142,
     "occurrences": 149,
     "raw_invisible_occurrences": 85,
     "raw_geometry_mismatch": 6,
     "evidence": "phaseC-android-full/android-flow-dom-report.json",
-    "approval": false
+    "approval": false,
+    "surface_tiles": "phaseC-android-tiled-full/android-flow-dom-report.json",
+    "surface_invisible_occurrences": 6,
+    "surface_geometry_mismatch": 0,
+    "actual_view_full": "phaseC-android-view-full/"
   },
   "search_bookmark": {
     "chromium_dev": "passed Arabic/English twenty exact snippets each, picker download, requested translated verse 2:64, bookmark 1:7",
@@ -321,6 +338,22 @@
           "states": 15,
           "viewport": [1180, 734],
           "dpr": 2
+        },
+        {
+          "evidence": "simulators/ipad-narrow-reading.json",
+          "orientation": "narrow native window",
+          "mode": "reading",
+          "states": 15,
+          "viewport": [497, 636],
+          "dpr": 2
+        },
+        {
+          "evidence": "simulators/ipad-narrow-verse.json",
+          "orientation": "narrow native window",
+          "mode": "verse",
+          "states": 15,
+          "viewport": [497, 636],
+          "dpr": 2
         }
       ],
       "dom_ink_mask_analysis": "not performed"
@@ -391,7 +424,16 @@
     "conditions": "same app/dependencies/local environment, actual Android emulator, fourfold CPU throttling, three trials per variant/surah; counters start after DOMContentLoaded"
   },
   "native_control": {
-    "status": "Mac locked again after completed geometry checks; manual unlock requested",
-    "remaining": "native find, selection and reader controls; restore iPhone Capture Keyboard to off"
-  }
+    "status": "Mac unlocked; native iPhone/iPad phrase finding passed within specimen scope",
+    "evidence": "simulators/native-controls-report.json",
+    "phrase_source": "immutable indopak 19:17",
+    "find": "1 of 1, continuous visible highlight across two word boxes on both simulators",
+    "ipad_page_zoom": "115%; restored 100%",
+    "capture_keyboard": "off on both simulators",
+    "remaining": "production native find, OS selection/copy, history and assistive-technology pronunciation",
+    "ipad_narrow": "both modes, 15 states each, 497x636/DPR2; further native resize attempt unchanged",
+    "ipad_history": "back restores reading URL; forward restores verse URL; specimen scope"
+  },
+  "android_view_capture_commit": "0fb325d",
+  "corpus_checkpoint_commit": "a462aef"
 }

@@ -32,6 +32,7 @@ Later changes preserve the font and glyph geometry. The production full-surah sw
 | Native route matrix       | `interactions-production/safari-range-report.json`                                                                                                      | 24 Arabic surah/page/juz states pass; errors observed after font readiness                                                                                                |
 | Selection copying         | `corpus-copy-scoped/chromium-corpus-report.json`, `webkit-corpus-report.json`                                                                           | All 6,236 verses × 32 states copy exact immutable text                                                                                                                    |
 | Firefox selection copying | `corpus-copy-firefox-final/firefox-corpus-report.json`                                                                                                  | All 6,236 verses × 32 states, 800 batches, zero errors                                                                                                                    |
+| Native Safari copying     | `corpus-copy-safari-resumed/safari-corpus-report.json`                                                                                                  | All 6,236 verses × 32 states, 800 batches, zero errors; 512 complete checkpoint rows reused, nine partial rows rerun                                                      |
 | Ring hover                | `interactions-tooltip-dev/pointer-regression.json`, `pointer-pixel-comparison.json`                                                                     | Chromium/WebKit tooltip opens; before/after screenshots pixel-identical                                                                                                   |
 | Chromium interactions     | `interactions-tooltip-scoped/chromium-interaction-report.json`                                                                                          | Script settings, history, mode/reload, bookmark persistence, selected OS clipboard and copy button pass                                                                   |
 | Chromium search/bookmarks | `search-bookmark-reveal-pinned/chromium-search-bookmark-report.json`                                                                                    | Dev: twenty exact Arabic/English snippets each, actual translation picker download, requested translated verse 2:64, bookmark-list verse 1:7; zero runtime/console errors |
@@ -39,6 +40,8 @@ Later changes preserve the font and glyph geometry. The production full-surah sw
 | Android emulator          | `phaseC-final/android/android-report.json`                                                                                                              | 12 geometry states, full 1,280-specimen scroll, 1,383 occurrences, rotation, pinch zoom, history and font equality pass                                                   |
 | Android ring ink          | `phaseC-android-batched-smoke/android-ring-report.json`                                                                                                 | All 1–286 numbers × five sizes; 1,430 cases, zero failures at DPR 2.625                                                                                                   |
 | iPhone/iPad simulators    | `simulators/{iphone,ipad}-{portrait,landscape}-{reading,verse}.json` (iPhone landscape reading uses `-v2`)                                              | 15 geometry states per mode/orientation/device; exact specimen text, font adjustment and canvas rings pass; DOM masks not performed                                       |
+| Native mobile find        | `simulators/native-controls-report.json`                                                                                                                | Exact 19:17 phrase found across two word boxes on iPhone/iPad; visible continuous highlight; specimen scope                                                               |
+| Narrow iPad Safari        | `simulators/ipad-narrow-{reading,verse}.json`, `native-controls-report.json`                                                                            | 497×636/DPR 2 native window, both modes × 15 geometry states pass; further narrowing unchanged; back/forward restore specimen mode URLs                                   |
 | Quran.com corpus          | `reference-current/full-reference-report.json`                                                                                                          | All 114 chapters/6,236 verses compared; 201 sampled website pages agree with proxy fields                                                                                 |
 | Reference layout/sheets   | `review/*-layout-report.json`, `line-parity-summary.json`, `index.html`                                                                                 | Capture and comparison complete within recorded viewport limits; scores still blank                                                                                       |
 
@@ -71,7 +74,7 @@ R1–R7 entries apply only to the scopes above. Shared requirements:
 | -------------------------------- | ------------------------------------------------------------------------------------- |
 | R8 reference identity/boundaries | Full corpus compared with classified differences; source/editorial review open        |
 | R9 owner visual scores           | Pending; no scores supplied                                                           |
-| R10 platform reach               | Incomplete: mobile DOM ink, narrow iPad/device interactions, oldest iOS versions      |
+| R10 platform reach               | Incomplete: mobile DOM ink, production device interactions, oldest iOS versions       |
 | R11 delivery/support floor       | Production delivery passes; oldest-version validation pending                         |
 | R12 licensing                    | Pass: OFL/FONTLOG packaged; primary names clean; original author attribution retained |
 | R13 hard rules                   | Pass: immutable DB reads, no automated Quran hashes, no tracked DB, all gates green   |
@@ -208,8 +211,10 @@ integral advance rounding invalidated the original 132px normalized width probe.
 compares at equal effective size, keeping the 1/32 CSS-pixel tolerance; seven positive and
 seven deliberately unadjusted negative samples behave correctly. Firefox 128 passes 32
 matrix states, all 1,338 DOM cases/1,383 occurrences, 1,430 ring cases and 149 neighbor
-occurrences in 16 states. Chromium 111 rings and combined 1,338-case/1,383-occurrence ink analysis pass;
-final corrected-driver matrix remains in progress. Its old Playwright 1.31 driver injected service-worker registration into
+occurrences in 16 states. Chromium 111 also passes all 32 matrix states, combined
+1,338-case/1,383-occurrence ink analysis, 1,430 rings and all 16 neighbor states/149
+occurrences. Evidence: `floor-chromium111-reviewed/` and `floor-chromium111-flow/`.
+Its old Playwright 1.31 driver injected service-worker registration into
 an insecure-origin page with no service-worker API; raw errors remain retained. The corrected
 run uses the current driver with the same official Chromium 111 binary. Eight affected ink
 cases were recaptured with real viewport tiles and character ranges plus independent font
@@ -219,13 +224,28 @@ No fallback for older unsupported engines was added. Only iOS 27 is installed; t
 
 Simulator WebDriver repeatedly found no matching session host. The dev-only in-page probe
 produced actual iPhone and iPad portrait/landscape geometry reports in both modes, 15 states
-each; it explicitly records DOM mask analysis as not performed. Native checks resumed after unlock. Mac then relocked before native
-find/control checks finished; manual unlock is requested. iPad narrow/split view, Safari text size, zoom/history/copy and full iOS ink
-coverage remain open. Android full DOM ink capture completed, but oversized element screenshots
+each; it explicitly records DOM mask analysis as not performed. Native checks resumed after
+unlock. iPhone and iPad Find on Page locate the exact immutable 19:17 phrase across two word
+boxes, with a continuous visible highlight. iPad native Page Zoom reaches 115% and was restored
+to 100%; both simulators have Capture Keyboard off. Evidence:
+`simulators/native-controls-report.json`. These are specimen checks; production find, OS
+selection/copy, production history and full iOS ink coverage remain open.
+Native iPad window resizing reaches 497×636 at DPR 2; further narrowing produced no change.
+Both modes pass all 15 geometry states in this window. Native Back restores the reading URL
+and Forward restores the verse URL. Reports and full-resolution native pixels are retained
+under `simulators/`; these checks remain within specimen scope.
+Android full DOM ink capture completed, but oversized element screenshots
 repeat viewport content: 280/1,383 occurrence scopes are blank and 15 cases have geometry
 mismatches. Neighbor flow similarly has 85/149 blank scopes and six mismatches. These are
-invalid diagnostics, not accepted collision results. Actual viewport tiled recapture is in
-progress, with full geometry and row-coverage guards. Native ring batches and the earlier
+invalid diagnostics, not accepted collision results. The subsequent surface-based viewport
+tiles eliminate geometry mismatches but still leave 40 full-run and six neighbor occurrences
+invisible. Native screenshots prove that Chrome surface capture reflows text differently from
+the actual view despite unchanged DOM geometry. The harness now captures CDP view pixels
+(`fromSurface=false`) and validates DPR and raster origin with an external calibration square.
+The analyzer rejects Android surface tiles. Eight previously failing cases now pass with zero
+invisible signs, geometry mismatches, boundary or overlap candidates and unchanged tolerances.
+Evidence: `android-view-smoke/`; full actual-view recapture is in progress under
+`phaseC-android-view-full/`. Native ring batches and the earlier
 six-case DOM smoke pass. Oversized early ring screenshots and a desktop floating-button obstruction
 are retained as invalid capture attempts; clean recaptures pass without changing tolerances.
 Android performance comparison completed 12 trials with equal `cabdcca` app infrastructure,
@@ -255,9 +275,8 @@ fonts and the audit server disables HMR. Frozen tolerances remain 2 CSS pixels �
 3 raw collision pixels. Ring recapture adds 4px grid padding outside digit cells; no threshold
 was widened. Original invalid/failed captures remain distinct from their replacements.
 
-**Open:** complete native selection-copy sweep;
-Android/iOS DOM ink; narrow iPad/device interactions and oldest iOS versions;
-native find and VoiceOver/TalkBack;
+**Open:** Android/iOS full DOM ink; production device interactions and oldest iOS versions;
+production native find, OS selection/copy and VoiceOver/TalkBack;
 owner scores and qualified editorial/printed-edition review. No 100% completion claim is made.
 
 Production reader actions (Chromium and WebKit, `cabdcca`) now pass five actions each with
