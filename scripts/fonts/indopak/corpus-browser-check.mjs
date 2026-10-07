@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { chromium, firefox, webkit } from "playwright";
+import { _android, chromium, firefox, webkit } from "playwright";
 import { copySpecimens } from "./clipboard-browser-shared.mjs";
 import {
   addFont,
@@ -26,18 +26,40 @@ const corpus = await loadCorpus(output);
 const reports = [];
 await mkdir(output, { recursive: true });
 await mkdir(destination, { recursive: true });
-for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
+for (const [name, engine] of Object.entries({ chromium, firefox, webkit, android: null })) {
   if (!selected.includes(name)) continue;
   const rows = [];
   const keySets = new Map();
   const errors = [];
   let browser;
+  let device;
+  let deviceMetadata;
+  let version;
   try {
-    browser = await engine.launch({ headless: true });
-    const page = await browser.newPage({
-      viewport: { width: 1100, height: 900 },
-      serviceWorkers: "block",
-    });
+    let page;
+    if (name === "android") {
+      [device] = await _android.devices({ omitDriverInstall: true });
+      assert.ok(device, "Android emulator unavailable");
+      browser = await device.launchBrowser({ viewport: null, serviceWorkers: "block" });
+      page = await browser.newPage();
+      version = (await device.shell("dumpsys package com.android.chrome"))
+        .toString()
+        .match(/versionName=(\S+)/u)?.[1];
+      deviceMetadata = {
+        platform: "Android emulator; not physical device",
+        serial: device.serial(),
+        model: device.model(),
+        android: (await device.shell("getprop ro.build.version.release")).toString().trim(),
+        sdk: (await device.shell("getprop ro.build.version.sdk")).toString().trim(),
+      };
+    } else {
+      browser = await engine.launch({ headless: true });
+      page = await browser.newPage({
+        viewport: { width: 1100, height: 900 },
+        serviceWorkers: "block",
+      });
+      version = browser.version();
+    }
     page.setDefaultTimeout(120_000);
     page.setDefaultNavigationTimeout(120_000);
     page.on("pageerror", (error) => errors.push(error.message));
@@ -49,6 +71,11 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
         assert.equal(response.status(), 200);
         await page.waitForFunction(controlsReady);
         await page.evaluate(() => document.fonts.ready);
+        const nativeViewport = await page.evaluate(() => [innerWidth, innerHeight]);
+        if (deviceMetadata) {
+          deviceMetadata.viewport = nativeViewport;
+          deviceMetadata.dpr = await page.evaluate(() => devicePixelRatio);
+        }
         for (const kind of ["Ring", "Digits"])
           await page.evaluate(addFont, await diagnosticFont(output, kind));
         const states = SIZES.flatMap((size) =>
@@ -56,11 +83,14 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
         );
         states.push({ size: 48, width: 320, phone: true });
         for (const state of states) {
-          await page.setViewportSize(
-            state.phone ? { width: 390, height: 844 } : { width: 1100, height: 900 },
-          );
+          if (!deviceMetadata)
+            await page.setViewportSize(
+              state.phone ? { width: 390, height: 844 } : { width: 1100, height: 900 },
+            );
           await page.getByLabel("Font size").selectOption(String(state.size));
           await page.getByLabel("Run width").selectOption(String(state.width));
+          const viewport = await page.evaluate(() => [innerWidth, innerHeight]);
+          if (deviceMetadata) assert.deepEqual(viewport, nativeViewport, "Native viewport drift");
           const specimens = await page.evaluate(inspectSpecimens, {
             requireInk: true,
             fontReference: corpus.fontReference,
@@ -92,6 +122,8 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
             mode,
             offset,
             ...state,
+            viewport,
+            actual_columns: [...new Set(specimens.map((item) => item.container_width))],
             specimens: summary.specimens,
             private_occurrences: summary.private_occurrences,
             ring_checks: summary.ring_checks,
@@ -108,7 +140,12 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     assert.deepEqual(errors, []);
     reports.push({
       engine: name,
-      version: browser.version(),
+      version,
+      device: deviceMetadata,
+      scope: {
+        viewport: deviceMetadata ? "unchanged native viewport" : "desktop and phone viewports",
+        copy: verifyCopy ? "DOM selection/copy event; OS clipboard not read" : "not checked",
+      },
       status: "passed",
       unique_verses_per_matrix: 6236,
       matrices: keySets.size,
@@ -119,6 +156,7 @@ for (const [name, engine] of Object.entries({ chromium, firefox, webkit })) {
     reports.push({ engine: name, status: "failed", error: String(error.stack), rows, errors });
   } finally {
     await browser?.close();
+    await device?.close();
   }
   await writeFile(
     path.join(destination, `${name}-corpus-report.json`),

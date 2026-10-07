@@ -270,6 +270,21 @@ save atomically. Older reports without scope metadata require explicit
 `INDOPAK_CORPUS_RESUME_LEGACY=1` after confirming their provenance; keep the original report.
 Only font/code bytes are hashed. Immutable Quran data remains identified by source id.
 
+For native Android corpus checks, use `INDOPAK_DEEP_ENGINES=android` and reverse port 5391
+with `adb`. Run after other Android browser sweeps finish. All 6,236 verses are checked in
+both modes, five sizes and the recorded run-width states. The actual native viewport stays
+unchanged; requested run widths clamp to the device column. Each row records the real
+viewport and column widths. Copy checks validate DOM selection/copy events; they do not
+read the OS clipboard.
+
+```sh
+INDOPAK_SPECIMEN_BASE=http://127.0.0.1:5391 INDOPAK_DEEP_ENGINES=android \
+  INDOPAK_DEEP_OUTPUT=.cache/indopak-v4/2026-10-06-run2/phaseC-final \
+  INDOPAK_CORPUS_COPY=1 \
+  INDOPAK_CORPUS_OUTPUT=.cache/indopak-v4/2026-10-06-run2/corpus-copy-android \
+  node scripts/fonts/indopak/corpus-browser-check.mjs
+```
+
 The Playwright interaction matrix covers surah/page/juz and English translation routes,
 both modes, 22/56px, light/dark, exact source text, font size and clipping. Actions cover
 script settings, history, mode/reload, anonymous bookmark persistence, selection/copy and
