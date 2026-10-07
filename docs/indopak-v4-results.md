@@ -62,23 +62,31 @@ iPad: A16/iPadOS 27 simulator, Safari, DPR 2, 820×1094 portrait and 1180×734 l
 | Requirement                   | Chromium | PW WebKit | Native Safari | Firefox Linux | Android emulator | iPhone simulator | iPad simulator |
 | ----------------------------- | -------- | --------- | ------------- | ------------- | ---------------- | ---------------- | -------------- |
 | R1 exact text                 | P        | P         | P             | P             | P                | P specimens      | P specimens    |
-| R2 no missing/fallback glyphs | P        | P         | P             | P             | M                | M                | M              |
-| R3 placement                  | P        | P         | P             | P             | M                | M                | M              |
-| R4 no collisions              | P        | P         | P             | P             | M                | M                | M              |
+| R2 no missing/fallback glyphs | P        | P         | P             | P             | P                | M                | M              |
+| R3 placement                  | P        | P         | P             | P             | P                | M                | M              |
+| R4 no collisions              | P        | P         | P             | P             | P                | M                | M              |
 | R5 word/final-cluster breaks  | P        | P         | P             | P             | P                | P specimens      | P specimens    |
 | R6 overflow                   | E        | E         | E             | E             | E                | E specimens      | E specimens    |
-| R7 ring/stack ink             | P        | P         | P             | P             | Rings P; stack M | M                | M              |
+| R7 ring/stack ink             | P        | P         | P             | P             | P                | M                | M              |
 
-R1–R7 entries apply only to the scopes above. Shared requirements:
+R1–R7 entries apply only to the scopes above. Exact-copy passes validate DOM copy-event
+payloads; native OS paste can reorder combining marks, as documented below.
 
-| Requirement                      | Current result                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------- |
-| R8 reference identity/boundaries | Full corpus compared with classified differences; source/editorial review open        |
-| R9 owner visual scores           | Pending; no scores supplied                                                           |
-| R10 platform reach               | Incomplete: mobile DOM ink, production device interactions, oldest iOS versions       |
-| R11 delivery/support floor       | Production delivery passes; oldest-version validation pending                         |
-| R12 licensing                    | Pass: OFL/FONTLOG packaged; primary names clean; original author attribution retained |
-| R13 hard rules                   | Pass: immutable DB reads, no automated Quran hashes, no tracked DB, all gates green   |
+Owner decision, 2026-10-07: current mobile-browser coverage is sufficient. Exhaustive mobile
+integration is deferred to native-app work. Current iOS/iPadOS geometry/native samples and
+full Android ink/ring/neighbor checks supplement the passing desktop engines. Deferred checks
+remain untested; this decision does not imply desktop engines prove every mobile behavior.
+
+Shared requirements:
+
+| Requirement                      | Current result                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| R8 reference identity/boundaries | Full corpus compared with classified differences; source/editorial review open                 |
+| R9 owner visual scores           | Pending; no scores supplied                                                                    |
+| R10 platform reach               | Owner accepts current mobile coverage; full iOS ink/native integration and oldest iOS deferred |
+| R11 delivery/support floor       | Production delivery, Chrome 111 and Firefox 128 pass; oldest Safari/iOS untested               |
+| R12 licensing                    | Pass: OFL/FONTLOG packaged; primary names clean; original author attribution retained          |
+| R13 hard rules                   | Pass: immutable DB reads, no automated Quran hashes, no tracked DB, all gates green            |
 
 ## Candidate changes
 
@@ -245,8 +253,12 @@ Desktop Safari native Find returns one cross-box phrase match on the targeted sp
 screenshot capture was unavailable. Details: `simulators/native-controls-report.json`.
 VoiceOver was enabled, its gesture notice dismissed and individual word focus observed on
 production 1:1. VoiceOver was restored off; speech and private-code behavior remain unverified.
-Mac relocked during the subsequent desktop clipboard control; native UI checks await manual
-unlock. The Android runs continue independently.
+Native UI later resumed. Desktop Safari fixed-text clipboard control preserves all 51 code
+points but swaps U+0651/U+064E at two positions. Native paste is canonically equivalent,
+but exact code-point equality fails outside the reader/font. iPad paste events show the same
+reordering; its textarea value also differs. Evidence: `simulators/desktop-safari-clipboard-control-attempt1.json`
+and `simulators/ipad-clipboard-control-codepoints.json`. No renderer change was justified;
+exact DOM copy payloads and OS paste outcomes remain distinct.
 Android full DOM ink capture completed, but oversized element screenshots
 repeat viewport content: 280/1,383 occurrence scopes are blank and 15 cases have geometry
 mismatches. Neighbor flow similarly has 85/149 blank scopes and six mismatches. These are
@@ -261,8 +273,9 @@ Evidence: `android-view-smoke/`; full actual-view analysis now passes all 1,338 
 invisible signs, geometry mismatches, boundary, overlap or ambiguous scopes. Evidence:
 `phaseC-android-view-full/android-dom-report.json`. The neighbor capture was interrupted by
 an Android guest system crash (`DeadSystemException` in System UI and other guest services).
-Raw failure/crash logs remain under `android-view-flow-interrupted/`; a separate retry runs
-in `phaseC-android-view-flow/`. Native ring batches and the earlier
+Raw failure/crash logs remain under `android-view-flow-interrupted/`. The separate retry
+passes all 142 cases/149 neighbor occurrences, with zero invisible, geometry, boundary,
+overlap or ambiguous-scope failures: `phaseC-android-view-flow/android-flow-dom-report.json`. Native ring batches and the earlier
 six-case DOM smoke pass. Oversized early ring screenshots and a desktop floating-button obstruction
 are retained as invalid capture attempts; clean recaptures pass without changing tolerances.
 Android performance comparison completed 12 trials with equal `cabdcca` app infrastructure,
@@ -292,10 +305,16 @@ fonts and the audit server disables HMR. Frozen tolerances remain 2 CSS pixels �
 3 raw collision pixels. Ring recapture adds 4px grid padding outside digit cells; no threshold
 was widened. Original invalid/failed captures remain distinct from their replacements.
 
-**Open:** Android neighbor ink and whole-corpus copy events; iOS full DOM ink;
-complete production device interactions and oldest iOS versions;
-production native find, OS selection/copy and VoiceOver/TalkBack;
-owner scores and qualified editorial/printed-edition review. No 100% completion claim is made.
+**Engineering scope:** desktop validation complete; current mobile coverage accepted by the
+owner on 2026-10-07. Full mobile integration, iOS DOM masks, oldest iOS and complete
+assistive-technology/OS clipboard checks are deferred to native-app work.
+
+Android corpus-copy run logged 18 complete reading batches (4,608 verses × 16 run states)
+before the emulator/process went offline. No final report exists; this is an interrupted run,
+not a full-corpus pass. Log: `corpus-copy-android.log`; rerun deferred under the revised scope.
+
+**Human review:** owner visual scores and qualified editorial/printed-edition approval remain
+open. Engineering acceptance does not establish recitation or editorial approval.
 
 Production reader actions (Chromium and WebKit, `cabdcca`) now pass five actions each with
 zero runtime/console errors in `interactions-production-api-fixed/`. SDK fixtures use the

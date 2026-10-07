@@ -144,6 +144,17 @@
       "complete_rows_reused": 512,
       "partial_rows_discarded": 9,
       "legacy_scope": "explicitly accepted for known unchanged renderer/font; future checkpoints require source and font scope equality"
+    },
+    "android": {
+      "status": "interrupted; full corpus not passed",
+      "log": "corpus-copy-android.log",
+      "complete_reading_batches_logged": 18,
+      "verses_per_logged_reading_state": 4608,
+      "states_per_batch": 16,
+      "reason": "Emulator and audit process were no longer online; final report absent.",
+      "scope": "DOM selection/copy events; OS clipboard not read",
+      "rerun": "Deferred under owner-revised mobile-browser scope",
+      "tool_commit": "83a149e"
     }
   },
   "delivery": {
@@ -166,11 +177,8 @@
     "line_spacing_followup_build": "C8ogpWPjm5fic3yLrNxLc"
   },
   "platform_gaps": [
-    "Android neighbor ink and whole-corpus copy events",
-    "iPhone/iPad full DOM ink and native reader interactions",
-    "oldest iOS/iPadOS versions",
-    "production native find-in-page and OS selection/copy",
-    "VoiceOver/TalkBack"
+    "Deferred under owner-revised mobile-browser scope: iOS/iPadOS full DOM masks, oldest runtimes and complete native reader/OS clipboard/assistive-technology integration",
+    "Desktop native exact OS clipboard control reorders Arabic combining marks; DOM copy payload remains exact"
   ],
   "review_gaps": ["owner visual scores", "qualified editorial review", "named printed edition"],
   "scope_limits": [
@@ -236,7 +244,8 @@
     "boundary_candidates": 0,
     "overlap_candidates": 0,
     "ambiguous_occurrence_scopes": 0,
-    "approval_scope": "mechanical DOM ink only; not editorial or recitation approval"
+    "approval_scope": "mechanical DOM ink only; not editorial or recitation approval",
+    "raw_evidence": "phaseC-android-full/android-dom-report.json"
   },
   "search_result_action_commit": "23d905e",
   "reader_requested_url_commit": "cf6f3ec",
@@ -244,19 +253,25 @@
   "font_adjustment_audit_commit": "990c617",
   "reference_viewport_capture_commit": "328178b",
   "android_neighbor_ink": {
-    "status": "first view capture interrupted by Android guest system crash; retry running",
+    "status": "passed full actual-view neighbor DOM ink scope",
     "cases": 142,
     "occurrences": 149,
     "raw_invisible_occurrences": 85,
     "raw_geometry_mismatch": 6,
     "evidence": "phaseC-android-full/android-flow-dom-report.json",
-    "approval": false,
+    "approval": true,
     "surface_tiles": "phaseC-android-tiled-full/android-flow-dom-report.json",
     "surface_invisible_occurrences": 6,
     "surface_geometry_mismatch": 0,
-    "actual_view_full": "phaseC-android-view-flow/",
+    "actual_view_full": "phaseC-android-view-flow/android-flow-dom-report.json",
     "interrupted_evidence": "android-view-flow-interrupted/",
-    "guest_crash_log": "android-view-flow-guest-crash.log"
+    "guest_crash_log": "android-view-flow-guest-crash.log",
+    "invisible_occurrences": 0,
+    "geometry_mismatches": 0,
+    "boundary_candidates": 0,
+    "overlap_candidates": 0,
+    "ambiguous_occurrence_scopes": 0,
+    "approval_scope": "mechanical DOM ink only; not editorial or recitation approval"
   },
   "search_bookmark": {
     "chromium_dev": "passed Arabic/English twenty exact snippets each, picker download, requested translated verse 2:64, bookmark 1:7",
@@ -450,5 +465,50 @@
   },
   "android_view_capture_commit": "0fb325d",
   "corpus_checkpoint_commit": "a462aef",
-  "environment_evidence": "env.json"
+  "environment_evidence": "env.json",
+  "mobile_browser_scope": {
+    "decision_date": "2026-10-07",
+    "owner_decision": "Good-enough mobile-browser coverage accepted; exhaustive mobile browser integration not required. Native apps will have their own validation.",
+    "accepted_evidence": [
+      "Desktop Chromium/WebKit/native Safari full mechanical, ink and copy matrices",
+      "Current iOS/iPadOS simulator portrait/landscape geometry and targeted native controls",
+      "Android Chrome emulator full DOM ink, neighbor ink and ring audit"
+    ],
+    "status": "accepted within owner-revised mobile-browser scope",
+    "deferred": [
+      "iOS/iPadOS full DOM ink masks",
+      "oldest iOS/iPadOS runtime coverage",
+      "full mobile OS selection/clipboard and assistive-technology behavior",
+      "complete production mobile interaction matrix"
+    ],
+    "limits": "Acceptance does not turn deferred or interrupted checks into passes; desktop engines alone do not prove every mobile behavior."
+  },
+  "native_clipboard_control": {
+    "scope": "Independent fixed-text write/paste control outside reader/font",
+    "desktop_safari": {
+      "status": "exact code-point equality failed; canonical equality observed",
+      "viewport": [800, 600],
+      "expected_codepoints": 51,
+      "pasted_codepoints": 51,
+      "deltas": [
+        {
+          "indices": [16, 17],
+          "expected": ["U+0651", "U+064E"],
+          "pasted": ["U+064E", "U+0651"]
+        },
+        {
+          "indices": [28, 29],
+          "expected": ["U+0651", "U+064E"],
+          "pasted": ["U+064E", "U+0651"]
+        }
+      ],
+      "evidence": "simulators/desktop-safari-clipboard-control-attempt1.json",
+      "detailed_deltas_source": "native clipboard control diagnostic output observed during this run"
+    },
+    "ipad": {
+      "status": "paste event shows same combining-mark reordering; textarea value differs further",
+      "evidence": "simulators/ipad-clipboard-control-codepoints.json"
+    },
+    "conclusion": "No font/renderer change justified; retain exact DOM copy pass separately from native OS paste limitation."
+  }
 }

@@ -12,8 +12,9 @@ evidence. No qualified human reviewer or named printed edition has been selected
 Progress, 2026-10-07: completed boxes below refer to the final `b4b58f7` font/renderer and
 subsequent integration repairs, with exact scopes in [results](indopak-v4-results.md).
 Desktop mechanical/ink checks, corpus selection copying, production route/delivery checks,
-reference comparison and current Firefox/Chrome support-floor checks are complete. Mobile
-full ink, oldest iOS, assistive-technology checks and human review remain open. Native Safari
+reference comparison and current Firefox/Chrome support-floor checks are complete. Owner accepts current mobile-browser coverage on 2026-10-07;
+full mobile integration, iOS ink masks, oldest iOS and assistive-technology checks are deferred
+to native-app work. Human review remains open. Native Safari
 reference width 320 measured 336; that reference-capture condition remains incomplete.
 Performance is measured on the authorized Android emulator; no physical-device result is claimed.
 
@@ -24,24 +25,25 @@ copies it), [font record](indopak-font-compatibility.md#version-4-2026-10-06-sil
 
 ## 0. What "verified to standard" means
 
-v4 is approved only when every row below has evidence. A missing platform is **untested**, never
-passed. Editorial and recitation approval stay separate from rendering approval (§9).
+Engineering acceptance follows the owner-revised mobile-browser scope in §7. Deferred or
+missing checks remain **untested**, never passed. Editorial and recitation approval stay
+separate from rendering acceptance (§9); owner scores are not supplied by automated checks.
 
-| #   | Requirement           | Measurable acceptance                                                                                                                                                                                                                 |
-| --- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Text integrity        | DOM text of every verse equals the DB string exactly, in every engine, mode, size and width. Copy/paste returns the same code points. No normalization, ever                                                                          |
-| R2  | Coverage              | Zero `.notdef` across 6,236 verses (TTF, WOFF2, every browser). All 9 private codes, U+FE8E, U+2003 and U+200B handled                                                                                                                |
-| R3  | Sign visibility       | Every one of the 1,383 private occurrences paints visible, unclipped ink, both in the canvas excerpt and in the real DOM                                                                                                              |
-| R4  | No collisions         | Zero DOM overlap/boundary candidates after review. Any accepted exception is listed by verse, code, engine and reason, with its capture                                                                                               |
-| R5  | Line breaking         | Breaks occur only at source whitespace between word boxes, or after a ZWSP-joined sign. No pause sign starts a line. The final word and its ayah marker never separate. The final word is never split                                 |
-| R6  | Overflow              | No horizontal overflow at the matrix sizes (22–56px) and widths (320–960px), except unbreakable source words wider than the column. Those are listed with their measured width                                                        |
-| R7  | End-of-ayah           | Ring encloses its digits (1–3). Digits are Urdu-form Extended Arabic-Indic. Trailing signs are stacked, centred above the ring, clear of the ring, the word and the previous line                                                     |
-| R8  | Quran.com parity      | Sign identity and order match Quran.com's legacy `textIndopak` for every compared verse; differences are only those already recorded as source discrepancies. Word boundaries match Quran.com words except documented joined clusters |
-| R9  | Visual similarity     | Side-by-side review sheets (§5.4) scored by the owner and, where possible, a qualified reviewer. Scores are recorded per category; no category is "worse than v3"                                                                     |
-| R10 | Engine/platform reach | Chromium, Playwright WebKit, native macOS Safari, Firefox (Gecko), iOS Safari, iPadOS Safari and Android Chrome all pass R1–R7. Each platform is recorded with exact versions                                                         |
-| R11 | Delivery              | Production serves `indopak-reader-compat-v4.woff2` with byte equality to the package. Behaviour on older browsers without `size-adjust`, and on slow or failed font loads, is defined and acceptable                                  |
-| R12 | Licensing             | OFL text and FONTLOG ship with the font. Reserved Font Names "Lateef" and "SIL" stay absent from primary font names; original author attribution stays. No restricted font asset (QuranWBW, PDMS, KFGQPC) in repo or build            |
-| R13 | Hard rules            | DBs untouched (read-only `mode=ro&immutable=1`), no Quran-data SHA-256, `db/` untracked, three web gates green                                                                                                                        |
+| #   | Requirement           | Measurable acceptance                                                                                                                                                                                                                     |
+| --- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Text integrity        | DOM text of every verse equals the DB string exactly, in every engine, mode, size and width. Copy/paste returns the same code points. No normalization, ever                                                                              |
+| R2  | Coverage              | Zero `.notdef` across 6,236 verses (TTF, WOFF2, every browser). All 9 private codes, U+FE8E, U+2003 and U+200B handled                                                                                                                    |
+| R3  | Sign visibility       | Every one of the 1,383 private occurrences paints visible, unclipped ink, both in the canvas excerpt and in the real DOM                                                                                                                  |
+| R4  | No collisions         | Zero DOM overlap/boundary candidates after review. Any accepted exception is listed by verse, code, engine and reason, with its capture                                                                                                   |
+| R5  | Line breaking         | Breaks occur only at source whitespace between word boxes, or after a ZWSP-joined sign. No pause sign starts a line. The final word and its ayah marker never separate. The final word is never split                                     |
+| R6  | Overflow              | No horizontal overflow at the matrix sizes (22–56px) and widths (320–960px), except unbreakable source words wider than the column. Those are listed with their measured width                                                            |
+| R7  | End-of-ayah           | Ring encloses its digits (1–3). Digits are Urdu-form Extended Arabic-Indic. Trailing signs are stacked, centred above the ring, clear of the ring, the word and the previous line                                                         |
+| R8  | Quran.com parity      | Sign identity and order match Quran.com's legacy `textIndopak` for every compared verse; differences are only those already recorded as source discrepancies. Word boundaries match Quran.com words except documented joined clusters     |
+| R9  | Visual similarity     | Side-by-side review sheets (§5.4) scored by the owner and, where possible, a qualified reviewer. Scores are recorded per category; no category is "worse than v3"                                                                         |
+| R10 | Engine/platform reach | Desktop Chromium, WebKit, native macOS Safari and Firefox pass R1–R7. Current native iOS/iPadOS geometry/controls and Android full ink meet the owner-revised mobile-browser scope (§7); exact versions and deferred checks are recorded. |
+| R11 | Delivery              | Production serves `indopak-reader-compat-v4.woff2` with byte equality to the package. Behaviour on older browsers without `size-adjust`, and on slow or failed font loads, is defined and acceptable                                      |
+| R12 | Licensing             | OFL text and FONTLOG ship with the font. Reserved Font Names "Lateef" and "SIL" stay absent from primary font names; original author attribution stays. No restricted font asset (QuranWBW, PDMS, KFGQPC) in repo or build                |
+| R13 | Hard rules            | DBs untouched (read-only `mode=ro&immutable=1`), no Quran-data SHA-256, `db/` untracked, three web gates green                                                                                                                            |
 
 ## 1. Current state at `584569c`
 
@@ -276,7 +278,7 @@ Firefox all exit at startup).
 
 Pass: R1–R7 in Gecko, or Firefox stays explicitly **untested**.
 
-## 7. Phase F — Real devices
+## 7. Phase F — Device platforms (authorized simulators/emulators)
 
 Owner: owner (devices) plus agent (pages, scripts, analysis).
 
@@ -289,16 +291,15 @@ Owner: owner (devices) plus agent (pages, scripts, analysis).
   - Decide before testing the oldest iOS.
 - [x] **Serve the dev server on the LAN** (`pnpm --dir web dev --host 0.0.0.0 --port 5391`). Open
       the private specimen from the devices; it stays 404 in production.
-- [ ] **iPhone (current iOS and the oldest supported), iPad (current, split-view narrowest),
-      Android phone (current Chrome):**
-  - critical verses at the minimum, default and maximum reader sizes, portrait and landscape
-  - full-specimen scroll sweep
-  - pinch zoom, Safari text-size, rotation, dark mode
-  - back/forward
-  - copy/paste of a verse, comparing code points
+- [x] **Owner-revised mobile-browser scope, 2026-10-07:** passing desktop Chromium/WebKit,
+      current iOS/iPadOS simulator geometry and targeted native controls, plus full Android
+      emulator DOM/ring/neighbor ink coverage are sufficient for mobile browsers.
+      Exhaustive integration belongs to later native-app validation. Full iOS ink masks,
+      oldest iOS, complete production mobile interactions, OS selection/clipboard and
+      assistive-technology checks remain deferred, without being reported as passes.
 - [x] **Automation where available:** iOS Safari WebDriver (`safaridriver` with a paired device,
       `safari:useSimulator=false`) and Android Chrome via `adb` + Playwright `_android`.
-      Simulator and emulator results are labelled as such and never stand in for a device pass.
+      Simulator/emulator results stay labelled; no physical-device result is claimed.
 
 ## 8. Phase G — Production reader and delivery
 
@@ -326,8 +327,10 @@ Owner: agent. Time: about 2 hours.
 - [ ] **Accessibility:** `lang`/`dir` on verses and the ornament (`lang="ur"` digits).
       VoiceOver and TalkBack read the verse text (private-code behaviour recorded). Find-in-page
       (Cmd+F) finds words across box boundaries. Selection highlight spans whole verses.
-- [ ] **Performance:** layout cost of about 15 inline-block spans per verse in long surahs (2,
-      26). Long-task and CLS numbers before and after v4 on a mid-range Android.
+- [x] **Performance:** layout cost in long surahs 2/26 measured before/after v4 on the
+      authorized Android emulator, with fourfold CPU throttling and 12 trials. Results record
+      long tasks, mounted spans and CLS; faster medians accompany higher recorded CLS.
+      No physical mid-range-device or visual-stability improvement is claimed.
 - [x] `/design/indopak`, `?audit=all` and `?audit=flow` return 404 in production.
 
 ## 9. Phase H — Editorial and recitation review (human)
