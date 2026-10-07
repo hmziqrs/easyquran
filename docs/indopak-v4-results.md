@@ -38,6 +38,7 @@ Later changes preserve the font and glyph geometry. The production full-surah sw
 | Chromium search/bookmarks | `search-bookmark-reveal-pinned/chromium-search-bookmark-report.json`                                                                                    | Dev: twenty exact Arabic/English snippets each, actual translation picker download, requested translated verse 2:64, bookmark-list verse 1:7; zero runtime/console errors |
 | Font delivery             | `phaseC-final/delivery/report.json`, `offline-report.json`                                                                                              | Exact packaged bytes, immutable headers, slow load, TTF fallback, explicit failure/reload, offline reload pass                                                            |
 | Android emulator          | `phaseC-final/android/android-report.json`                                                                                                              | 12 geometry states, full 1,280-specimen scroll, 1,383 occurrences, rotation, pinch zoom, history and font equality pass                                                   |
+| Android full DOM ink      | `phaseC-android-view-full/android-dom-report.json`                                                                                                      | 1,338 cases, all 1,383 occurrences; zero invisible, geometry, boundary, overlap or ambiguous scopes; actual view pixels                                                   |
 | Android ring ink          | `phaseC-android-batched-smoke/android-ring-report.json`                                                                                                 | All 1–286 numbers × five sizes; 1,430 cases, zero failures at DPR 2.625                                                                                                   |
 | iPhone/iPad simulators    | `simulators/{iphone,ipad}-{portrait,landscape}-{reading,verse}.json` (iPhone landscape reading uses `-v2`)                                              | 15 geometry states per mode/orientation/device; exact specimen text, font adjustment and canvas rings pass; DOM masks not performed                                       |
 | Native mobile find        | `simulators/native-controls-report.json`                                                                                                                | Exact 19:17 phrase found across two word boxes on iPhone/iPad; visible continuous highlight; specimen scope                                                               |
@@ -242,6 +243,10 @@ independent fixed-text clipboard control outside the app fails too. Failed contr
 fixture and pixels are retained; no font/renderer change was justified by that control.
 Desktop Safari native Find returns one cross-box phrase match on the targeted specimen;
 screenshot capture was unavailable. Details: `simulators/native-controls-report.json`.
+VoiceOver was enabled, its gesture notice dismissed and individual word focus observed on
+production 1:1. VoiceOver was restored off; speech and private-code behavior remain unverified.
+Mac relocked during the subsequent desktop clipboard control; native UI checks await manual
+unlock. The Android runs continue independently.
 Android full DOM ink capture completed, but oversized element screenshots
 repeat viewport content: 280/1,383 occurrence scopes are blank and 15 cases have geometry
 mismatches. Neighbor flow similarly has 85/149 blank scopes and six mismatches. These are
@@ -252,8 +257,12 @@ the actual view despite unchanged DOM geometry. The harness now captures CDP vie
 (`fromSurface=false`) and validates DPR and raster origin with an external calibration square.
 The analyzer rejects Android surface tiles. Eight previously failing cases now pass with zero
 invisible signs, geometry mismatches, boundary or overlap candidates and unchanged tolerances.
-Evidence: `android-view-smoke/`; full actual-view recapture is in progress under
-`phaseC-android-view-full/`. Native ring batches and the earlier
+Evidence: `android-view-smoke/`; full actual-view analysis now passes all 1,338 cases and 1,383 occurrences, with zero
+invisible signs, geometry mismatches, boundary, overlap or ambiguous scopes. Evidence:
+`phaseC-android-view-full/android-dom-report.json`. The neighbor capture was interrupted by
+an Android guest system crash (`DeadSystemException` in System UI and other guest services).
+Raw failure/crash logs remain under `android-view-flow-interrupted/`; a separate retry runs
+in `phaseC-android-view-flow/`. Native ring batches and the earlier
 six-case DOM smoke pass. Oversized early ring screenshots and a desktop floating-button obstruction
 are retained as invalid capture attempts; clean recaptures pass without changing tolerances.
 Android performance comparison completed 12 trials with equal `cabdcca` app infrastructure,
@@ -283,7 +292,8 @@ fonts and the audit server disables HMR. Frozen tolerances remain 2 CSS pixels �
 3 raw collision pixels. Ring recapture adds 4px grid padding outside digit cells; no threshold
 was widened. Original invalid/failed captures remain distinct from their replacements.
 
-**Open:** Android/iOS full DOM ink; production device interactions and oldest iOS versions;
+**Open:** Android neighbor ink and whole-corpus copy events; iOS full DOM ink;
+complete production device interactions and oldest iOS versions;
 production native find, OS selection/copy and VoiceOver/TalkBack;
 owner scores and qualified editorial/printed-edition review. No 100% completion claim is made.
 

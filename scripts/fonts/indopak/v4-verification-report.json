@@ -166,7 +166,7 @@
     "line_spacing_followup_build": "C8ogpWPjm5fic3yLrNxLc"
   },
   "platform_gaps": [
-    "Android full actual-view DOM/neighbor ink",
+    "Android neighbor ink and whole-corpus copy events",
     "iPhone/iPad full DOM ink and native reader interactions",
     "oldest iOS/iPadOS versions",
     "production native find-in-page and OS selection/copy",
@@ -213,15 +213,15 @@
     "platform": "Android emulator; not physical device"
   },
   "android_dom_ink": {
-    "status": "actual view smoke passed; full actual-view recapture running",
+    "status": "passed full actual-view DOM ink scope",
     "cases": 1338,
     "occurrences": 1383,
     "raw_invisible_occurrences": 280,
     "raw_geometry_mismatch": 15,
-    "evidence": "phaseC-android-full/android-dom-report.json",
+    "evidence": "phaseC-android-view-full/android-dom-report.json",
     "reason": "Chrome surface screenshots reflow text differently from actual device view; analyzer now rejects Android surface tiles",
     "tiled_smoke": "phaseC-android-tiled-smoke-v2/",
-    "approval": false,
+    "approval": true,
     "tiled_smoke_status": "11 cases / 12 occurrences / zero failures",
     "tiled_full": "phaseC-android-tiled-full/",
     "surface_tiles": "phaseC-android-tiled-full/android-dom-report.json",
@@ -230,7 +230,13 @@
     "actual_view_smoke": "android-view-smoke/android-dom-report.json",
     "actual_view_smoke_status": "8 cases / 8 occurrences / zero invisible, geometry, boundary or overlap failures",
     "actual_view_full": "phaseC-android-view-full/",
-    "capture_method": "CDP Page.captureScreenshot fromSurface=false; independent raster-origin/DPR calibration"
+    "capture_method": "CDP Page.captureScreenshot fromSurface=false; independent raster-origin/DPR calibration",
+    "invisible_occurrences": 0,
+    "geometry_mismatches": 0,
+    "boundary_candidates": 0,
+    "overlap_candidates": 0,
+    "ambiguous_occurrence_scopes": 0,
+    "approval_scope": "mechanical DOM ink only; not editorial or recitation approval"
   },
   "search_result_action_commit": "23d905e",
   "reader_requested_url_commit": "cf6f3ec",
@@ -238,7 +244,7 @@
   "font_adjustment_audit_commit": "990c617",
   "reference_viewport_capture_commit": "328178b",
   "android_neighbor_ink": {
-    "status": "surface tiles invalid; actual view recapture follows full DOM sweep",
+    "status": "first view capture interrupted by Android guest system crash; retry running",
     "cases": 142,
     "occurrences": 149,
     "raw_invisible_occurrences": 85,
@@ -248,7 +254,9 @@
     "surface_tiles": "phaseC-android-tiled-full/android-flow-dom-report.json",
     "surface_invisible_occurrences": 6,
     "surface_geometry_mismatch": 0,
-    "actual_view_full": "phaseC-android-view-full/"
+    "actual_view_full": "phaseC-android-view-flow/",
+    "interrupted_evidence": "android-view-flow-interrupted/",
+    "guest_crash_log": "android-view-flow-guest-crash.log"
   },
   "search_bookmark": {
     "chromium_dev": "passed Arabic/English twenty exact snippets each, picker download, requested translated verse 2:64, bookmark 1:7",
@@ -424,7 +432,7 @@
     "conditions": "same app/dependencies/local environment, actual Android emulator, fourfold CPU throttling, three trials per variant/surah; counters start after DOMContentLoaded"
   },
   "native_control": {
-    "status": "Mac unlocked; native iPhone/iPad phrase finding passed within specimen scope",
+    "status": "completed native scopes retained; Mac relocked, manual unlock requested",
     "evidence": "simulators/native-controls-report.json",
     "phrase_source": "immutable indopak 19:17",
     "find": "1 of 1, continuous visible highlight across two word boxes on both simulators",
@@ -436,7 +444,9 @@
     "desktop_find": "Safari native Find returns one cross-box phrase match; specimen scope; screenshot unavailable",
     "ipad_production": "Al-Fatihah at 497x636; IndoPak script preference, both modes, light/dark, reload and native phrase find pass within single-surah visual scope",
     "ipad_clipboard": "verse prefix exact in native address field; full multiline result unverified because independent static clipboard control also failed",
-    "clipboard_control_evidence": "simulators/ipad-clipboard-control.json"
+    "clipboard_control_evidence": "simulators/ipad-clipboard-control.json",
+    "voiceover": "enabled, gesture notice dismissed and individual word focus observed on production 1:1; restored off; speech/private-code behavior unverified",
+    "voiceover_evidence": "simulators/ipad-voiceover-verse-focus.png"
   },
   "android_view_capture_commit": "0fb325d",
   "corpus_checkpoint_commit": "a462aef",
