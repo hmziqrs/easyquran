@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -17,16 +18,62 @@ import {
 } from "./deep-browser-shared.mjs";
 import { freePort, Session } from "./safari-native-check.mjs";
 import { copySpecimens } from "./clipboard-browser-shared.mjs";
+import { corpusRowId, corpusStates, resumeCorpus } from "./corpus-checkpoint.mjs";
 
 const output = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopak-deep");
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
 const verifyCopy = process.env.INDOPAK_CORPUS_COPY === "1";
 const destination = process.env.INDOPAK_CORPUS_OUTPUT ?? output;
 const corpus = await loadCorpus(output);
+const states = corpusStates(SIZES, WIDTHS);
+const keys = Object.keys(corpus.originals).sort((left, right) => {
+  const a = left.split(":").map(Number);
+  const b = right.split(":").map(Number);
+  return a[0] - b[0] || a[1] - b[1];
+});
+const font = await readFile(path.join(root, "web/static/fonts/indopak-reader-compat-v4.woff2"));
+const rendererSources = {};
+for (const filename of [
+  "web/src/lib/quran/view/indopak.ts",
+  "web/src/routes/(application)/_reader/IndoPakAyah.svelte",
+  "web/src/routes/layout.css",
+]) {
+  const code = await readFile(path.join(root, filename));
+  rendererSources[filename] = createHash("sha256").update(code).digest("hex");
+}
+const scope = {
+  schema: 1,
+  source_id: "indopak",
+  verses: keys.length,
+  batch_size: 256,
+  modes: ["reading", "verse"],
+  states,
+  verify_copy: verifyCopy,
+  base,
+  font_sha256: createHash("sha256").update(font).digest("hex"),
+  renderer_sources: rendererSources,
+};
+const report = { engine: "safari", status: "failed", scope, rows: [], errors: [] };
+const completed = new Set();
+const resumePath = process.env.INDOPAK_CORPUS_RESUME;
+let previousVersion;
+if (resumePath) {
+  const saved = JSON.parse(await readFile(resumePath, "utf8"));
+  const resumed = resumeCorpus(
+    saved,
+    scope,
+    keys,
+    corpus.occurrences,
+    process.env.INDOPAK_CORPUS_RESUME_LEGACY === "1",
+  );
+  report.rows = resumed.rows;
+  previousVersion = resumed.version;
+  report.resume = { path: resumePath, ...resumed, rows: resumed.rows.length };
+  for (const row of report.rows) completed.add(corpusRowId(row));
+}
 const port = await freePort();
 const driver = spawn("/usr/bin/safaridriver", ["-p", String(port)], { stdio: "ignore" });
 const session = new Session(`http://127.0.0.1:${port}`);
-const report = { engine: "safari", status: "failed", rows: [], errors: [] };
 const keySets = new Map();
 await mkdir(output, { recursive: true });
 await mkdir(destination, { recursive: true });
@@ -43,10 +90,9 @@ function installErrorRecording() {
 }
 
 async function save() {
-  await writeFile(
-    path.join(destination, "safari-corpus-report.json"),
-    JSON.stringify(report, null, 2) + "\n",
-  );
+  const target = path.join(destination, "safari-corpus-report.json");
+  await writeFile(`${target}.tmp`, JSON.stringify(report, null, 2) + "\n");
+  await rename(`${target}.tmp`, target);
 }
 
 try {
@@ -59,8 +105,18 @@ try {
     await delay(100);
   }
   report.version = await session.start();
+  if (previousVersion) {
+    for (const name of ["browserVersion", "safari:platformVersion", "safari:platformBuildVersion"])
+      assert.equal(report.version[name], previousVersion[name], `Browser changed: ${name}`);
+  }
+  for (const row of report.rows) {
+    const matrix = `${row.mode}:${row.size}:${row.width}:${row.phone}`;
+    if (!keySets.has(matrix)) keySets.set(matrix, new Set());
+    for (const key of keys.slice(row.offset, row.offset + 256)) keySets.get(matrix).add(key);
+  }
   for (const mode of ["reading", "verse"]) {
     for (let offset = 0; offset < 6236; offset += 256) {
+      if (states.every((state) => completed.has(corpusRowId({ mode, offset, ...state })))) continue;
       await session.navigate(
         `${base}/design/indopak?audit=corpus&limit=256&offset=${offset}&mode=${mode}`,
       );
@@ -69,10 +125,6 @@ try {
       await session.executeAsync(() => document.fonts.ready.then(() => true));
       for (const kind of ["Ring", "Digits"])
         await session.executeAsync(addFont, await diagnosticFont(output, kind));
-      const states = SIZES.flatMap((size) =>
-        WIDTHS.map((width) => ({ size, width, phone: false })),
-      );
-      states.push({ size: 48, width: 320, phone: true });
       for (const state of states) {
         const viewport = await session.setViewport(
           state.phone ? { width: 390, height: 844 } : { width: 1100, height: 900 },

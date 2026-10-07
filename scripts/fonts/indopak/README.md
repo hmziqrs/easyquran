@@ -257,6 +257,14 @@ INDOPAK_INTERACTION_OUTPUT=.cache/indopak-v4/2026-10-06-run2/interactions \
   node scripts/fonts/indopak/reader-range-safari-check.mjs
 ```
 
+`INDOPAK_CORPUS_RESUME=/absolute/path/safari-corpus-report.json` resumes Safari from complete
+256-verse batches. The checkpoint validates ordered states, copy/occurrence counts, viewport,
+overflow, ending clearance, source id, font and renderer code identity, and browser version.
+Partial batches rerun because their runtime-error collection may not have finished. Reports
+save atomically. Older reports without scope metadata require explicit
+`INDOPAK_CORPUS_RESUME_LEGACY=1` after confirming their provenance; keep the original report.
+Only font/code bytes are hashed. Immutable Quran data remains identified by source id.
+
 The Playwright interaction matrix covers surah/page/juz and English translation routes,
 both modes, 22/56px, light/dark, exact source text, font size and clipping. Actions cover
 script settings, history, mode/reload, anonymous bookmark persistence, selection/copy and
