@@ -24,7 +24,7 @@
   const direction = $derived(TRANSLATION_CATALOGUE_BY_ID.get(section.id)?.direction ?? "ltr");
 
   function opened(): void {
-    openVerse(hit.surah, hit.ayah, section.kind === "translation" ? section.id : undefined);
+    openVerse(hit.surah, hit.ayah, section.kind === "translation" ? section.id : undefined)();
   }
 </script>
 
