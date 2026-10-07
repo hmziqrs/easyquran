@@ -6,6 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 from audit import ROOT
+from native_capture import stitch_native_capture
 
 EDGE_TOLERANCE_CSS_PX = 2
 
@@ -54,15 +55,25 @@ def dilated_ink(image, window):
 
 def analyze(output, engine):
     records = json.loads((output / f"{engine}-dom-images.json").read_text())
+    native_viewport = None
+    if engine.startswith("android"):
+        browser = json.loads((output / f"{engine}-browser-report.json").read_text())
+        native_viewport = browser["device"]["viewport"]
     results = []
     originals_checked = 0
     scales = set()
     for record in records:
+        for kind, capture in record.get("native_tiles", {}).items():
+            stitch_native_capture(output, record["images"][kind], capture)
         scale = record.get("scale", 1)
         scales.add(scale)
         edge = round(EDGE_TOLERANCE_CSS_PX * scale)
         window = 2 * edge + 1
         images = record["images"]
+        if native_viewport and not record.get("native_tiles"):
+            with Image.open(output / images["Actual"]) as image:
+                if image.height > math.ceil(native_viewport[1] * scale):
+                    raise ValueError("Native capture exceeds viewport; recapture with real scroll tiles")
         fills = {fill_edges(output / name) for name in images.values()}
         if len(fills) != 1:
             raise ValueError(f"Capture fill differs between diagnostic images: {record['key']}")

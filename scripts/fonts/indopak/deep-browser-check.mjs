@@ -129,10 +129,17 @@ async function captureDomInk(page, engine, painted) {
   const sets = await page.evaluate(specimenKeySets);
   const targets = captureTargets({ occurrences: corpus.occurrences, painted, targetKeys, ...sets });
   await page.evaluate(hideFixedOverlays);
+  if (engine.startsWith("android")) {
+    await page.screenshot();
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+  }
   const records = [];
   try {
     for (const occurrence of targets.values()) {
       const images = {};
+      const nativeTiles = {};
       for (const kind of domKinds(occurrence.code)) {
         await page.evaluate(setAuditStyle, auditStyle(kind, occurrence.key));
         await page.evaluate(async () => {
@@ -140,9 +147,19 @@ async function captureDomInk(page, engine, painted) {
           await document.fonts.ready;
         });
         const filename = domImageName(engine, occurrence.key, kind);
-        await page
-          .locator(`[data-specimen="${occurrence.key}"]`)
-          .screenshot({ path: path.join(output, filename) });
+        if (engine.startsWith("android")) {
+          nativeTiles[kind] = await captureNativeSpecimen(page, occurrence.key, filename);
+          const original = nativeTiles.Original.geometry;
+          const current = nativeTiles[kind].geometry;
+          for (const field of ["left", "top", "width", "height"])
+            assert.ok(
+              Math.abs(original[field] - current[field]) <= 1 / 64,
+              "Native diagnostic changed specimen geometry",
+            );
+        } else
+          await page
+            .locator(`[data-specimen="${occurrence.key}"]`)
+            .screenshot({ path: path.join(output, filename) });
         images[kind] = filename;
       }
       await page.evaluate(setAuditStyle, auditStyle("Original", occurrence.key));
@@ -162,6 +179,7 @@ async function captureDomInk(page, engine, painted) {
         key: occurrence.key,
         code: occurrence.code,
         images,
+        native_tiles: nativeTiles,
         occurrences: scopes,
         scale: await page.evaluate(() => window.devicePixelRatio),
         ring_check: specimen.ring_check,
@@ -178,6 +196,77 @@ async function captureDomInk(page, engine, painted) {
     JSON.stringify(records, null, 2) + "\n",
   );
   return records.length;
+}
+
+async function captureNativeSpecimen(page, key, filename) {
+  const initial = await page.locator(`[data-specimen="${key}"]`).evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return {
+      left: box.left + scrollX,
+      top: box.top + scrollY,
+      width: box.width,
+      height: box.height,
+      dpr: devicePixelRatio,
+    };
+  });
+  const width = Math.round(initial.width * initial.dpr);
+  const height = Math.round(initial.height * initial.dpr);
+  const tiles = [];
+  let covered = 0;
+  while (covered < height) {
+    const offset = Math.max(0, covered - 64) / initial.dpr;
+    await page.evaluate(
+      ({ top, offset: scrollOffset }) =>
+        window.scrollTo({ top: top + scrollOffset - 8, left: 0, behavior: "instant" }),
+      { top: initial.top, offset },
+    );
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await page.evaluate(hideFixedOverlays);
+    const box = await page.locator(`[data-specimen="${key}"]`).evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        scroll: scrollY,
+        viewport: [innerWidth, innerHeight],
+        dpr: devicePixelRatio,
+      };
+    });
+    assert.equal(box.dpr, initial.dpr);
+    for (const [actual, expected] of [
+      [box.left, initial.left],
+      [box.top + box.scroll, initial.top],
+      [box.width, initial.width],
+      [box.height, initial.height],
+    ])
+      assert.ok(Math.abs(actual - expected) <= 1 / 64, "Native tile changed specimen geometry");
+    const tileFile = filename.replace(/\.png$/u, `-tile-${tiles.length}.png`);
+    const buffer = await page.screenshot({ path: path.join(output, tileFile) });
+    const pixels = [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
+    const left = Math.round(box.left * box.dpr);
+    const origin = Math.round(box.top * box.dpr);
+    const top = Math.max(0, origin);
+    const destination = top - origin;
+    const bottom = Math.min(pixels[1], top + height - destination);
+    assert.ok(left >= 0 && left + width <= pixels[0]);
+    assert.ok(top >= 0 && bottom > top && destination <= covered);
+    const next = destination + bottom - top;
+    assert.ok(next > covered, "Native tile scroll made no progress");
+    tiles.push({
+      file: tileFile,
+      pixels,
+      crop: [left, top, left + width, bottom],
+      destination,
+      viewport: box.viewport,
+      scroll: box.scroll,
+    });
+    covered = next;
+  }
+  return { size: [width, height], dpr: initial.dpr, geometry: initial, tiles };
 }
 
 async function inspectDom(page) {
