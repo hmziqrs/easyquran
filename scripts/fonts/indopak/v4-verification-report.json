@@ -432,8 +432,13 @@
     "capture_keyboard": "off on both simulators",
     "remaining": "production native find, OS selection/copy, history and assistive-technology pronunciation",
     "ipad_narrow": "both modes, 15 states each, 497x636/DPR2; further native resize attempt unchanged",
-    "ipad_history": "back restores reading URL; forward restores verse URL; specimen scope"
+    "ipad_history": "back restores reading URL; forward restores verse URL; specimen scope",
+    "desktop_find": "Safari native Find returns one cross-box phrase match; specimen scope; screenshot unavailable",
+    "ipad_production": "Al-Fatihah at 497x636; IndoPak script preference, both modes, light/dark, reload and native phrase find pass within single-surah visual scope",
+    "ipad_clipboard": "verse prefix exact in native address field; full multiline result unverified because independent static clipboard control also failed",
+    "clipboard_control_evidence": "simulators/ipad-clipboard-control.json"
   },
   "android_view_capture_commit": "0fb325d",
-  "corpus_checkpoint_commit": "a462aef"
+  "corpus_checkpoint_commit": "a462aef",
+  "environment_evidence": "env.json"
 }

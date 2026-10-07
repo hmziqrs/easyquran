@@ -234,6 +234,14 @@ Native iPad window resizing reaches 497×636 at DPR 2; further narrowing produce
 Both modes pass all 15 geometry states in this window. Native Back restores the reading URL
 and Forward restores the verse URL. Reports and full-resolution native pixels are retained
 under `simulators/`; these checks remain within specimen scope.
+Native iPad production Al-Fatihah also adopts the IndoPak preference, switches between
+verse/reading modes, toggles light/dark and keeps reading mode after reload. Native Find
+locates the exact 1:1 phrase across boxes. The copy button confirms success and native address
+paste contains the exact verse prefix/reference. Multiline paste remains unverified: an
+independent fixed-text clipboard control outside the app fails too. Failed control metadata,
+fixture and pixels are retained; no font/renderer change was justified by that control.
+Desktop Safari native Find returns one cross-box phrase match on the targeted specimen;
+screenshot capture was unavailable. Details: `simulators/native-controls-report.json`.
 Android full DOM ink capture completed, but oversized element screenshots
 repeat viewport content: 280/1,383 occurrence scopes are blank and 15 cases have geometry
 mismatches. Neighbor flow similarly has 85/149 blank scopes and six mismatches. These are

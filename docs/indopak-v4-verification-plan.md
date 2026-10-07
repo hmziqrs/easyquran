@@ -9,6 +9,14 @@ Owner decisions, 2026-10-06: use iOS simulators and Android emulators for device
 use Quran.com as the reference. Simulator evidence is labelled separately from physical-device
 evidence. No qualified human reviewer or named printed edition has been selected.
 
+Progress, 2026-10-07: completed boxes below refer to the final `b4b58f7` font/renderer and
+subsequent integration repairs, with exact scopes in [results](indopak-v4-results.md).
+Desktop mechanical/ink checks, corpus selection copying, production route/delivery checks,
+reference comparison and current Firefox/Chrome support-floor checks are complete. Mobile
+full ink, oldest iOS, assistive-technology checks and human review remain open. Native Safari
+reference width 320 measured 336; that reference-capture condition remains incomplete.
+Performance is measured on the authorized Android emulator; no physical-device result is claimed.
+
 Background: [Quran.com study](indopak-qurancom-rendering-study.md) (what Quran.com does and why v4
 copies it), [font record](indopak-font-compatibility.md#version-4-2026-10-06-sil-lateef-base-qurancom-style-layout),
 [v3 Safari results](indopak-safari-results.md), [deep audit and source discrepancies](indopak-deep-audit.md),
@@ -63,12 +71,12 @@ Already done (re-run in §2 anyway, because the candidate changed after some of 
 
 Owner: agent. Time: about 30 minutes.
 
-- [ ] Record the candidate commit, `git status` (only `.claude/launch.json` may be untracked),
+- [x] Record the candidate commit, `git status` (only `.claude/launch.json` may be untracked),
       Node, pnpm, Playwright, Python, fontTools, HarfBuzz and macOS versions in `.cache/indopak-v4/<run>/env.json`.
-- [ ] Reproducible build: run `build.py` twice into two temp dirs. TTF and WOFF2 must be
+- [x] Reproducible build: run `build.py` twice into two temp dirs. TTF and WOFF2 must be
       byte-identical to each other and to `web/static/fonts/indopak-reader-compat-v4.*`
       (`outputs.json` sizes and checksums; font checksums are not Quran data).
-- [ ] Font tests, coverage and shaping:
+- [x] Font tests, coverage and shaping:
 
   ```sh
   .cache/indopak-venv/bin/python -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'
@@ -79,9 +87,9 @@ Owner: agent. Time: about 30 minutes.
     --upstream .cache/fonts/indopak/Lateef-SemiBold.ttf
   ```
 
-- [ ] Web gates: `pnpm --dir web check`, `pnpm --dir web lint`, `pnpm --dir web test`. All three
+- [x] Web gates: `pnpm --dir web check`, `pnpm --dir web lint`, `pnpm --dir web test`. All three
       must be green; a warning is a failure.
-- [ ] Licence/name audit: dump every `name` record. "Lateef" and "SIL" must be absent from
+- [x] Licence/name audit: dump every `name` record. "Lateef" and "SIL" must be absent from
       primary family, full, unique, PostScript, typographic, WWS and description names.
       Original manufacturer/designer names and URLs remain attribution (IDs 8, 9, 11, 12),
       alongside copyright, trademark and licence records (IDs 0, 7, 13).
@@ -102,7 +110,7 @@ Pass: all green. Fail: fix at source and restart Phase A.
 Owner: agent. Time: about 2 hours including tooling. Unit tests cover 13 hand-picked strings;
 this phase proves the segmentation rules on all 6,236 immutable strings.
 
-- [ ] **Build `scripts/fonts/indopak/segmentation_audit.mjs`.** It reads the DB read-only through
+- [x] **Build `scripts/fonts/indopak/segmentation_audit.mjs`.** It reads the DB read-only through
       `node:sqlite`, imports `indopakEnding` from `web/src/lib/quran/view/indopak.ts` (via the
       Vite/tsx loader), and writes `segmentation-report.json`. It asserts per verse:
   - Words + gaps + final word + suffix concatenate to the exact DB string (R1).
@@ -116,12 +124,12 @@ this phase proves the segmentation rules on all 6,236 immutable strings.
     pause/ruku code.
   - Every annotation that needs an ink box has one (zero-advance marks), and none is applied
     to a spacing glyph.
-- [ ] **Distribution report**: word-box count per verse, longest box in em at 56px (from
+- [x] **Distribution report**: word-box count per verse, longest box in em at 56px (from
       HarfBuzz advances × 1.25), ZWSP-split count, stop-box count, multi-sign end stacks (count
       and maximum height). The longest boxes predict R6 overflow cases before any browser runs.
-- [ ] **Context coverage**: map the 223 context classes in `inventory.json` to concrete verses,
+- [x] **Context coverage**: map the 223 context classes in `inventory.json` to concrete verses,
       so every class appears in Phase C captures.
-- [ ] Add a DB-free unit test for each new edge case the audit discovers (`indopak-ayah.test.ts`).
+- [x] Add a DB-free unit test for each new edge case the audit discovers (`indopak-ayah.test.ts`).
 
 Pass: zero assertion failures; every listed exception reviewed and justified in the report.
 
@@ -132,21 +140,21 @@ Owner: agent; the host owner keeps Safari "Allow remote automation" on during ru
 
 ### 4.1 Harness updates before running
 
-- [ ] **Word-box-aware paint diagnostics.** Make `paintOccurrences` draw each excerpt through the
+- [x] **Word-box-aware paint diagnostics.** Make `paintOccurrences` draw each excerpt through the
       same segmentation as the renderer, either as separate runs per word box with the CSS gaps
       or through DOM capture only. Raw canvas candidates must again mean something. Keep the
       old single-run paint as a separate "shaping-only" report.
-- [ ] **New DOM assertions in `inspectSpecimens`** (both runners):
+- [x] **New DOM assertions in `inspectSpecimens`** (both runners):
   - No `.indopak-word` box starts a line with only signs.
   - Each `.indopak-end-sign` row's ink box sits above the ring top with at least 0.02em
     clearance and is horizontally centred within ±0.05em of the ring centre.
   - Stacked end signs don't cross the previous line's ink box.
   - The ornament box is ≤ 1.15em and the digits' ink lies inside the ring's inner circle
     (sampled by canvas at the ornament rect).
-- [ ] **Clipping check in the real reader** (not only the specimen): scroll rows of the virtual
+- [x] **Clipping check in the real reader** (not only the specimen): scroll rows of the virtual
       list (`ReaderVirtualList`) and the page reader; confirm stacked signs on a row's first line
       are not clipped by row boundaries or `contain` rules.
-- [ ] Record `getComputedStyle` font descriptors: `size-adjust` honoured
+- [x] Record `getComputedStyle` font descriptors: `size-adjust` honoured
       (`document.fonts.check` plus measured advance of a known word equals 1.25× upstream).
 
 ### 4.2 Runs
@@ -156,11 +164,11 @@ For each engine: `audit=all` (both modes × 22/24/33/48/56px × 320/640/960px + 
 tolerances: 2 CSS px edge tolerance × DPR, overlap ≥ 3 raw device px, capture-fill cropping only
 for identical pure-black full-width edge lines.
 
-- [ ] Chromium (Playwright): `INDOPAK_DEEP_ENGINES=chromium node scripts/fonts/indopak/deep-browser-check.mjs`, flow, ink analysis.
-- [ ] WebKit (Playwright): same with `webkit`.
-- [ ] Native macOS Safari: `node scripts/fonts/indopak/safari-native-check.mjs` plus flow, including
+- [x] Chromium (Playwright): `INDOPAK_DEEP_ENGINES=chromium node scripts/fonts/indopak/deep-browser-check.mjs`, flow, ink analysis.
+- [x] WebKit (Playwright): same with `webkit`.
+- [x] Native macOS Safari: `node scripts/fonts/indopak/safari-native-check.mjs` plus flow, including
       the 16 critical states (light/dark × 33/56px × 320/640px × both modes) and wrap sweeps.
-- [ ] Specific v4 re-checks:
+- [x] Specific v4 re-checks:
   - the 28/20 previous overlap cases (3:193, 4:143, 18:18, 30:25, 77:23, 2:168, 4:140, 4:141,
     6:146, 7:83, 10:16, 11:46, 21:92, 46:26, 3:98, 3:119, 3:173, 6:138, 29:46, 29:60, 37:31,
     40:28, 43:81, 58:1, 6:141, 7:195, 46:23, 73:20, 19:1, 51:54)
@@ -187,16 +195,16 @@ two concurrent requests at most.
 
 ### 5.1 Sign identity and order — full corpus
 
-- [ ] **Decide the data source:**
+- [x] **Decide the data source:**
   - Quran Foundation API (needs the owner's Developer Console account; full 6,236 verses, words
     with `text_indopak`)
   - or per-verse pages' `__NEXT_DATA__` (6,236 pages; slow but public)
-- [ ] **Build the comparator** (extend `compare_reference.py`): for every verse, compare our
+- [x] **Build the comparator** (extend `compare_reference.py`): for every verse, compare our
       ordered private-code sequence with Quran.com's legacy `textIndopak` (exact) and with its
       served `word.text` through the observed code table (E01A↔U+0617, E01B↔U+06EA,
       E01C↔U+06D7, E01E↔U+06EB, E01F↔U+06E5, …). That table describes their font's encoding,
       not Unicode equivalence.
-- [ ] Output `full-reference-report.json`: per-verse match, with classified differences:
+- [x] Output `full-reference-report.json`: per-verse match, with classified differences:
       already recorded (4:142, 12:1, 2:10, 7:206, six rub-el-hizb) / new / served-vs-legacy only.
 
 Pass: every difference is classified. New source differences go to §9 editorial review and are
@@ -204,10 +212,10 @@ never "fixed" in the DB.
 
 ### 5.2 Word-boundary parity
 
-- [ ] For each verse, compare our word boxes (Phase B output) with Quran.com's word list
+- [x] For each verse, compare our word boxes (Phase B output) with Quran.com's word list
       (positions, `char_type_name=word`; end-marker words excluded). Map by order, comparing
       letters only, with marks and signs stripped for the comparison only.
-- [ ] Report verses whose box count differs, with the cause: joined source clusters (18:110
+- [x] Report verses whose box count differs, with the cause: joined source clusters (18:110
       type), ZWSP joins, signs attached to a different word, or Quran.com splitting where our
       source has no whitespace.
 
@@ -219,18 +227,18 @@ Quran.com's attachment become renderer bugs for §10.
 - [ ] **Conditions:** Quran.com single-ayah page at 390×844 (26px, 318px column), 320×640, and
       1280×900, in Chromium, WebKit and Safari. Our reader runs at the same CSS width and size
       (26px with `size-adjust` 125%).
-- [ ] **Sample:** the 116 flow verses, all critical verses, and a stratified random 300 verses
+- [x] **Sample:** the 116 flow verses, all critical verses, and a stratified random 300 verses
       (seeded, listed in the report).
-- [ ] Record the first word of each line in both readers. Metrics: % verses with identical breaks,
+- [x] Record the first word of each line in both readers. Metrics: % verses with identical breaks,
       mean line-count difference, and verses where ours wraps earlier or later by more than one
       word.
-- [ ] **Tracked, not gating:** font metrics legitimately differ. Investigate any verse whose
+- [x] **Tracked, not gating:** font metrics legitimately differ. Investigate any verse whose
       line count differs by 2 or more (spacing too wide or narrow) and any case where Quran.com
       fits a final word plus marker on a line that we wrap.
 
 ### 5.4 Visual review sheets (human-scored)
 
-- [ ] For each of the 9 private codes, a representative of every context class, plus ordinary
+- [x] For each of the 9 private codes, a representative of every context class, plus ordinary
       pause signs, generate side-by-side crops: Quran.com | ours v4 | ours v3. Use the same
       text size, light theme, 2× DPR. Group them into sheets of 12 (`.cache/indopak-v4/review/*.png`)
       with an index HTML.
@@ -242,7 +250,7 @@ Quran.com's attachment become renderer bugs for §10.
   - ring and digits
   - word spacing
   - overall line rhythm
-- [ ] **Targeted pairs:** 2:101, 1:7, 17:7, 6:165, 79:27, 89:27, 83:31, 4:142, 2:286, 18:110,
+- [x] **Targeted pairs:** 2:101, 1:7, 17:7, 6:165, 79:27, 89:27, 83:31, 4:142, 2:286, 18:110,
       71:23, 91:1, 104:4, 16:6, 73:17, 51:54, 26:51, 43:15, 35:11, 5:7.
 
 Pass: no category below 3 without a recorded follow-up, and no category scored worse than v3.
@@ -259,7 +267,7 @@ Pass: no category below 3 without a recorded follow-up, and no category scored w
 Automated Firefox cannot launch on this Mac (Playwright Firefox, geckodriver and headless
 Firefox all exit at startup).
 
-- [ ] **Option 1 (preferred):** a Linux host or container (OrbStack is installed) running
+- [x] **Option 1 (preferred):** a Linux host or container (OrbStack is installed) running
       Playwright Firefox against the dev server. Run the full Phase C matrix and ink analysis
       (`--engine firefox` support must be added to `dom_ink_analysis.py`).
 - [ ] **Option 2:** another Mac or Windows machine with geckodriver.
@@ -272,14 +280,14 @@ Pass: R1–R7 in Gecko, or Firefox stays explicitly **untested**.
 
 Owner: owner (devices) plus agent (pages, scripts, analysis).
 
-- [ ] **Decide the support floor.** `size-adjust` needs Safari/iOS 17+, Chrome 92+ and
+- [x] **Decide the support floor.** `size-adjust` needs Safari/iOS 17+, Chrome 92+ and
       Firefox 92+. On older engines the text renders 20% smaller.
   - Either accept that and document it,
   - or add a fallback: `@supports not (size-adjust: 125%)` cannot detect a descriptor, so the
     fallback would be a measured `font-size` multiplier on `.arabic-text.indopak` when
     `document.fonts` reports no adjustment.
   - Decide before testing the oldest iOS.
-- [ ] **Serve the dev server on the LAN** (`pnpm --dir web dev --host 0.0.0.0 --port 5391`). Open
+- [x] **Serve the dev server on the LAN** (`pnpm --dir web dev --host 0.0.0.0 --port 5391`). Open
       the private specimen from the devices; it stays 404 in production.
 - [ ] **iPhone (current iOS and the oldest supported), iPad (current, split-view narrowest),
       Android phone (current Chrome):**
@@ -288,7 +296,7 @@ Owner: owner (devices) plus agent (pages, scripts, analysis).
   - pinch zoom, Safari text-size, rotation, dark mode
   - back/forward
   - copy/paste of a verse, comparing code points
-- [ ] **Automation where available:** iOS Safari WebDriver (`safaridriver` with a paired device,
+- [x] **Automation where available:** iOS Safari WebDriver (`safaridriver` with a paired device,
       `safari:useSimulator=false`) and Android Chrome via `adb` + Playwright `_android`.
       Simulator and emulator results are labelled as such and never stand in for a device pass.
 
@@ -296,23 +304,23 @@ Owner: owner (devices) plus agent (pages, scripts, analysis).
 
 Owner: agent. Time: about 2 hours.
 
-- [ ] `just web-build prod` (or `pnpm --dir web build`), then `pnpm --dir web start`.
-- [ ] **Font delivery:**
+- [x] `just web-build prod` (or `pnpm --dir web build`), then `pnpm --dir web start`.
+- [x] **Font delivery:**
   - The network panel shows `indopak-reader-compat-v4.woff2` with bytes equal to the package.
   - There is no request for v3 unless an old client is cached.
   - Cache headers are immutable.
-- [ ] **Service worker:** the precache includes v4. Measure precache size: all v2/v3/v4 TTFs and
+- [x] **Service worker:** the precache includes v4. Measure precache size: all v2/v3/v4 TTFs and
       WOFF2s are in `files`. Decide whether to drop TTFs and old versions from precache (perf
       ticket, not a blocker).
-- [ ] **Font load:** a slow font (3G throttling) and a failed font request (blocked URL). Capture
+- [x] **Font load:** a slow font (3G throttling) and a failed font request (blocked URL). Capture
       initial and settled rendering. `font-display: block` hides text for up to about 3s, then
       falls back. Record what fallback shows for private codes (expected: tofu or nothing).
       Decide whether that is acceptable or needs a fallback face.
-- [ ] **Real reader routes**, both modes, light/dark, smallest/largest size:
+- [x] **Real reader routes**, both modes, light/dark, smallest/largest size:
   - Arabic `/{surah}` and `/page`, `/juz`, translated `/t/**` (SSR + disk cache)
   - script switching Uthmani ↔ IndoPak; reopening settings; back/forward restoration
   - search result snippets, bookmarks, verse tools; tooltip on the ring ornament
-- [ ] **114-surah sweep** in production in Chromium and Safari at the default size, both modes.
+- [x] **114-surah sweep** in production in Chromium and Safari at the default size, both modes.
       Visit every verse (6,236) through the virtual list, assert R1 per rendered verse, and
       capture a screenshot of each surah's first and last screen.
 - [ ] **Accessibility:** `lang`/`dir` on verses and the ornament (`lang="ur"` digits).
@@ -320,7 +328,7 @@ Owner: agent. Time: about 2 hours.
       (Cmd+F) finds words across box boundaries. Selection highlight spans whole verses.
 - [ ] **Performance:** layout cost of about 15 inline-block spans per verse in long surahs (2,
       26). Long-task and CLS numbers before and after v4 on a mid-range Android.
-- [ ] `/design/indopak`, `?audit=all` and `?audit=flow` return 404 in production.
+- [x] `/design/indopak`, `?audit=all` and `?audit=flow` return 404 in production.
 
 ## 9. Phase H — Editorial and recitation review (human)
 
@@ -355,14 +363,14 @@ Rendering approval is not editorial approval.
 
 ## 11. Reporting
 
-- [ ] `docs/indopak-v4-results.md`: a pass / fail / untested table for R1–R13 × platform, with
+- [x] `docs/indopak-v4-results.md`: a pass / fail / untested table for R1–R13 × platform, with
       exact versions, commit, evidence paths, and accepted exceptions with captures. Remaining
       gaps are stated in bold.
-- [ ] Update the study doc (v4 implemented), the Safari results (v3 → superseded), the deep audit
+- [x] Update the study doc (v4 implemented), the Safari results (v3 → superseded), the deep audit
       links, `scripts/fonts/indopak/README.md`, and machine reports
       (`browser-report.json`, `deep-audit-report.json`, `shaping-report.json`,
       `full-reference-report.json`).
-- [ ] Commit evidence summaries only; screenshots and reference assets stay in ignored `.cache/`.
+- [x] Commit evidence summaries only; screenshots and reference assets stay in ignored `.cache/`.
 
 ## 12. Order, owners and decisions needed
 
