@@ -2,15 +2,19 @@
   import ReaderVirtualList from "../ReaderVirtualList.svelte";
   import type { ReaderVirtualItem } from "../virtual-reader";
 
-  let { items }: { items: readonly ReaderVirtualItem[] } = $props();
+  let { items, preserving = false }: { items: readonly ReaderVirtualItem[]; preserving?: boolean } = $props();
   let list: ReaderVirtualList<ReaderVirtualItem> | undefined = $state();
 
   export async function reveal(key: string, localPage: number): Promise<void> {
     await list?.reveal(key, localPage);
   }
+
+  export function finishReveal(): void {
+    preserving = false;
+  }
 </script>
 
-<ReaderVirtualList bind:this={list} {items} tag="ol" layoutKey="test">
+<ReaderVirtualList bind:this={list} {items} {preserving} tag="ol" layoutKey="test">
   {#snippet item(entry, index, gap, measure)}
     <li
       {@attach measure}

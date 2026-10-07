@@ -1121,7 +1121,7 @@
           items={renderItems}
           tag={reader.isVerseMode ? "ol" : "div"}
           layoutKey={renderLayoutKey}
-          preserving={suppressScroll}
+          preserving={suppressScroll || anchorScrolling}
           onRendered={syncRendered}
           onResize={repairReaderItem}
           item={renderReaderItem}

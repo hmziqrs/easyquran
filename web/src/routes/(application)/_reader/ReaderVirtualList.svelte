@@ -35,10 +35,11 @@
   let list: HTMLElement | null = $state(null);
   let scrollMargin = $state(0);
   let focusedKey = $state<string | null>(null);
+  let revealedKey = $state<string | null>(null);
   let previousLayout = "";
   const sizes = new Map<string, number>();
 
-  function extractRange(range: Range, focus: string | null): number[] {
+  function extractRange(range: Range, focus: string | null, revealKey: string | null): number[] {
     const buffer = clamp((model.scrollRect?.height ?? 720) * 0.8, 500, 1200);
     const offset = model.scrollOffset ?? 0;
     const start = model.getVirtualItemForOffset(Math.max(0, offset - buffer))?.index ?? range.startIndex;
@@ -46,7 +47,8 @@
       offset + (model.scrollRect?.height ?? 0) + buffer,
     )?.index ?? range.endIndex;
     const pinned = focus === null ? -1 : items.findIndex((entry) => entry.key === focus);
-    return bufferedIndexes(start, end, range.count, pinned);
+    const revealed = revealKey === null ? -1 : items.findIndex((entry) => entry.key === revealKey);
+    return bufferedIndexes(start, end, range.count, pinned, revealed);
   }
 
   const virtualizer = createWindowVirtualizer<HTMLElement>({
@@ -78,6 +80,7 @@
     const currentLayout = layoutKey;
     const currentItems = items;
     const focus = focusedKey;
+    const revealKey = preserving ? revealedKey : null;
     const enabled = mounted;
     const margin = scrollMargin;
     const element = list;
@@ -88,7 +91,7 @@
         scrollMargin: margin,
         estimateSize: (index) => currentItems[index]?.estimate ?? 200,
         getItemKey: (index) => currentItems[index]?.key ?? index,
-        rangeExtractor: (range) => extractRange(range, focus),
+        rangeExtractor: (range) => extractRange(range, focus, revealKey),
         measureElement: measureNode,
         useAnimationFrameWithResizeObserver: true,
       });
@@ -167,9 +170,11 @@
   }
 
   export async function reveal(verseKey: string | null, localPage: number): Promise<void> {
+    await tick();
     let index = items.findIndex((entry) => entry.verseKey === verseKey);
     if (index < 0) index = items.findIndex((entry) => entry.localPage === localPage);
     if (index < 0 || !mounted) return;
+    revealedKey = items[index]?.key ?? null;
     await tick();
     model.scrollToIndex(index, { align: "center", behavior: "auto" });
     await tick();

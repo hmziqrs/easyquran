@@ -1,5 +1,5 @@
 import type { Ayah, SurahLocalPageData } from "$lib/data/quran-types";
-import { clamp } from "es-toolkit";
+import { clamp, uniq } from "es-toolkit";
 
 export interface ReaderVirtualItem {
   key: string;
@@ -21,16 +21,19 @@ export interface PageRenderItem extends ReaderVirtualItem {
 
 export type ReaderRenderItem = AyahRenderItem | PageRenderItem;
 
-export function bufferedIndexes(start: number, end: number, count: number, pinned = -1): number[] {
+export function bufferedIndexes(
+  start: number,
+  end: number,
+  count: number,
+  ...pinned: number[]
+): number[] {
   if (count <= 0) return [];
   const first = clamp(start, 0, count - 1);
   const last = clamp(end, first, count - 1);
   const indexes = Array.from({ length: last - first + 1 }, (_, index) => first + index);
-  if (pinned >= 0 && pinned < count && (pinned < first || pinned > last)) {
-    indexes.push(pinned);
-    indexes.sort((a, b) => a - b);
-  }
-  return indexes;
+  return uniq([...indexes, ...pinned.filter((index) => index >= 0 && index < count)]).sort(
+    (a, b) => a - b,
+  );
 }
 
 export function estimateTextHeight(

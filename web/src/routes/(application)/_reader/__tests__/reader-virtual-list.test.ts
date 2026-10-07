@@ -79,6 +79,7 @@ describe("reader virtualization", () => {
     expect(bufferedIndexes(-4, 3, 10, 9)).toEqual([0, 1, 2, 3, 9]);
     expect(bufferedIndexes(7, 20, 10, 8)).toEqual([7, 8, 9]);
     expect(bufferedIndexes(0, 0, 0, 0)).toEqual([]);
+    expect(bufferedIndexes(2, 3, 10, 0, 9, 9)).toEqual([0, 2, 3, 9]);
   });
 
   it("fills tall viewport without fixed item cap", async () => {
@@ -105,5 +106,22 @@ describe("reader virtualization", () => {
     await view.reveal("2:251", 13);
     expect(target.querySelector('[data-verse-key="2:251"]')).not.toBeNull();
     expect(target.querySelectorAll("[data-index]").length).toBeLessThan(30);
+  });
+
+  it("pins a requested row until reveal ends when scrolling is temporarily blocked", async () => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    view = mount(ReaderVirtualListHost, { target, props: { items, preserving: true } });
+    await tick();
+    const focused = target.querySelector<HTMLButtonElement>('[data-index="0"] button');
+    focused?.focus();
+    await tick();
+    await view.reveal("2:251", 13);
+    expect(target.querySelector('[data-verse-key="2:251"]')).not.toBeNull();
+    expect(focused?.isConnected).toBe(true);
+    expect(target.querySelector('[data-index="100"]')).toBeNull();
+    expect(target.querySelectorAll("[data-index]").length).toBeLessThan(31);
+    view.finishReveal();
+    await tick();
+    expect(target.querySelector('[data-verse-key="2:251"]')).toBeNull();
   });
 });
