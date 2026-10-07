@@ -1,0 +1,63 @@
+@font-face {
+  font-family: "Nunito Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("fonts/nunito-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/geist-mono-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Amiri";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/amiri-arabic-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Amiri";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/amiri-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans Arabic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/noto-sans-arabic-arabic-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans Arabic";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/noto-sans-arabic-arabic-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Scheherazade New";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/scheherazade-new-arabic-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Ayah Ornament";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ayah-ornament.woff2") format("woff2");
+}
+@font-face {
+  font-family: "KFGQPC Uthmanic Hafs";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/uthmanic-hafs-v22.ttf") format("truetype");
+}

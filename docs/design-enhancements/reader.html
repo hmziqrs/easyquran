@@ -1,0 +1,1493 @@
+<!doctype html>
+
+<html
+  data-arabic-font="kfgqpc-hafs"
+  data-concept="current"
+  data-mode="light"
+  data-page="reader"
+  data-palette="sacred"
+  data-reader-mode="verse"
+  dir="ltr"
+  lang="en"
+  style="
+    --reader-arabic-size: 33px;
+    --reader-arabic-family:
+      &quot;KFGQPC Uthmanic Hafs&quot;, &quot;Amiri&quot;, &quot;Traditional Arabic&quot;,
+      &quot;Geeza Pro&quot;, serif;
+    --reader-translation-size: 17px;
+    --reader-translation-family: var(--font-sans);
+  "
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta content="noindex, nofollow" name="robots" />
+    <title>Reader visual concepts · EasyQuran</title>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const concept = params.get("concept") ?? "current";
+      const mode = params.get("mode") ?? "light";
+      const type = params.get("type") ?? "nunito";
+      if (["nunito", "manrope"].includes(type)) document.documentElement.dataset.type = type;
+      if (["current", "outline", "color"].includes(concept))
+        document.documentElement.dataset.concept = concept;
+      if (["light", "dark"].includes(mode)) document.documentElement.dataset.mode = mode;
+    </script>
+    <link href="snapshot-fonts.css" rel="stylesheet" />
+    <link href="concept-fonts.css" rel="stylesheet" />
+    <link href="reader-base.css" rel="stylesheet" />
+    <link href="variants.css" rel="stylesheet" />
+  </head>
+  <body data-page="reader">
+    <div style="display: contents">
+      <a
+        class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[100] focus:rounded focus:bg-surface focus:px-3 focus:py-2 focus:text-body-s focus:text-foreground focus:shadow-md"
+        href="#main"
+        >Skip to content</a
+      >
+      <div class="flex min-h-screen flex-col svelte-sqod93" data-reader-root="" dir="ltr" lang="en">
+        <a
+          class="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[101] focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:text-foreground svelte-sqod93"
+          href="#main"
+          >Skip to content</a
+        >
+        <nav
+          aria-label="Primary"
+          class="sticky z-50 border-b border-border bg-background transition-[top] duration-200 ease-out"
+          style="top: 0px"
+        >
+          <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-4 px-6">
+            <span class="flex-none"
+              ><a
+                aria-label="EasyQuran · home"
+                class="group inline-flex items-center gap-2.5"
+                href="/"
+                ><span
+                  aria-hidden="true"
+                  class="flex size-8 items-center justify-center rounded-sm font-arabic text-[17px] font-bold leading-none bg-primary text-primary-foreground"
+                  dir="rtl"
+                  lang="ar"
+                  >ق</span
+                >
+                <span class="text-[20px] font-extrabold tracking-[-0.035em] text-foreground"
+                  >easy<span class="text-primary">quran</span></span
+                ></a
+              ></span
+            >
+            <nav
+              aria-label="Primary"
+              class="hidden items-center gap-6 text-[15px] font-bold lg:flex"
+            >
+              <a class="text-muted transition-colors hover:text-primary" href="/surah">Surahs</a
+              ><a class="text-muted transition-colors hover:text-primary" href="/juz">Juz</a
+              ><a class="text-muted transition-colors hover:text-primary" href="/pages">Pages</a
+              ><a class="text-muted transition-colors hover:text-primary" href="/yours">Yours</a>
+            </nav>
+            <button
+              aria-keyshortcuts="Meta+K Control+K"
+              aria-label="Search the Qur'an"
+              class="group h-10 min-w-0 flex-grow items-center gap-3 rounded-pill border border-border px-4 text-start transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring hidden ms-auto lg:flex"
+              title="Search the Qur'an (⌘K)"
+              type="button"
+            >
+              <svg
+                aria-label="Search the Qur'an"
+                class="flex-none text-muted"
+                fill="currentColor"
+                height="17"
+                role="img"
+                viewBox="0 0 256 256"
+                width="17"
+              >
+                <title>Search the Qur'an</title>
+                <path
+                  d="m229.66 218.34-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72 72.08 72.08 0 0 1-72-72"
+                ></path>
+              </svg>
+              <span class="min-w-0 flex-grow truncate text-body text-muted">Search the Qur'an</span>
+              <span
+                aria-hidden="true"
+                class="hidden flex-none items-center gap-[3px] rounded-pill bg-background-subtle px-[9px] py-[5px] text-[13px] font-bold text-muted sm:flex"
+                ><span>⌘</span><span>K</span></span
+              >
+            </button>
+            <div class="ms-auto flex items-center gap-2">
+              <button
+                aria-keyshortcuts="Meta+K Control+K"
+                aria-label="Search the Qur'an"
+                class="inline-flex h-[38px] w-[38px] items-center justify-center rounded-pill border border-border-strong text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring lg:hidden"
+                title="Search the Qur'an (⌘K)"
+                type="button"
+              >
+                <svg
+                  aria-label="Search the Qur'an"
+                  fill="currentColor"
+                  height="18"
+                  role="img"
+                  viewBox="0 0 256 256"
+                  width="18"
+                >
+                  <title>Search the Qur'an</title>
+                  <path
+                    d="m229.66 218.34-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72 72.08 72.08 0 0 1-72-72"
+                  ></path>
+                </svg>
+              </button>
+              <a
+                aria-label="Change language"
+                class="hidden flex-none text-[15px] font-bold text-muted transition-colors hover:text-primary lg:inline-flex"
+                dir="rtl"
+                href="/ar/al-fatihah?mode=verse&amp;more=en.sahih"
+                hreflang="ar"
+                lang="ar"
+                >العربية</a
+              >
+              <button
+                aria-label="Toggle theme"
+                class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                title="Toggle theme"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="currentColor"
+                  height="18"
+                  role="presentation"
+                  viewBox="0 0 256 256"
+                  width="18"
+                >
+                  <path
+                    d="M120 40V16a8 8 0 0 1 16 0v24a8 8 0 0 1-16 0m72 88a64 64 0 1 1-64-64 64.07 64.07 0 0 1 64 64m-16 0a48 48 0 1 0-48 48 48.05 48.05 0 0 0 48-48M58.34 69.66a8 8 0 0 0 11.32-11.32l-16-16a8 8 0 0 0-11.32 11.32Zm0 116.68-16 16a8 8 0 0 0 11.32 11.32l16-16a8 8 0 0 0-11.32-11.32M192 72a8 8 0 0 0 5.66-2.34l16-16a8 8 0 0 0-11.32-11.32l-16 16A8 8 0 0 0 192 72m5.66 114.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32-11.32ZM48 128a8 8 0 0 0-8-8H16a8 8 0 0 0 0 16h24a8 8 0 0 0 8-8m80 80a8 8 0 0 0-8 8v24a8 8 0 0 0 16 0v-24a8 8 0 0 0-8-8m112-88h-24a8 8 0 0 0 0 16h24a8 8 0 0 0 0-16"
+                  ></path>
+                </svg>
+              </button>
+              <a
+                aria-label="Sign in"
+                class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                href="/login"
+                title="Sign in"
+                ><svg
+                  aria-label="Sign in"
+                  fill="currentColor"
+                  height="18"
+                  role="img"
+                  viewBox="0 0 256 256"
+                  width="18"
+                >
+                  <title>Sign in</title>
+                  <path
+                    d="M230.92 212c-15.23-26.33-38.7-45.21-66.09-54.16a72 72 0 1 0-73.66 0c-27.39 8.94-50.86 27.82-66.09 54.16a8 8 0 1 0 13.85 8c18.84-32.56 52.14-52 89.07-52s70.23 19.44 89.07 52a8 8 0 1 0 13.85-8M72 96a56 56 0 1 1 56 56 56.06 56.06 0 0 1-56-56"
+                  ></path></svg
+              ></a>
+              <button
+                aria-controls="site-panel"
+                aria-expanded="false"
+                aria-label="Open panel"
+                class="inline-flex size-10 items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors duration-150 hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                title="Open panel"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="currentColor"
+                  height="20"
+                  role="presentation"
+                  viewBox="0 0 256 256"
+                  width="20"
+                >
+                  <path
+                    d="M224 128a8 8 0 0 1-8 8H40a8 8 0 0 1 0-16h176a8 8 0 0 1 8 8M40 72h176a8 8 0 0 0 0-16H40a8 8 0 0 0 0 16m176 112H40a8 8 0 0 0 0 16h176a8 8 0 0 0 0-16"
+                  ></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </nav>
+        <main class="flex-1 pb-28 svelte-sqod93" id="main" tabindex="-1">
+          <section class="concept-reader" data-reader-shell="" dir="ltr" lang="en">
+            <div
+              class="group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar"
+              data-slot="sidebar-wrapper"
+              style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem"
+            >
+              <main
+                class="bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2 relative flex w-full flex-1 flex-col"
+                data-slot="sidebar-inset"
+              >
+                <header
+                  class="sticky z-10 border-b border-border bg-background/85 backdrop-blur-xl transition-[top] duration-200 ease-out concept-site-header"
+                  style="top: 56px"
+                >
+                  <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-3 px-6">
+                    <button
+                      aria-label="Toggle Sidebar"
+                      class="group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-pill border border-transparent font-sans tracking-tight transition-[background-color,border-color,color,transform,filter] duration-150 ease-out active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 bg-transparent text-foreground hover:bg-surface-hover size-9 p-0 cn-sidebar-trigger"
+                      data-sidebar="trigger"
+                      data-slot="sidebar-trigger"
+                      title="Toggle Sidebar"
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide-icon lucide lucide-panel-left"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <rect height="18" rx="2" width="18" x="3" y="3"></rect>
+                        <path d="M9 3v18"></path>
+                      </svg>
+                      <span class="sr-only">Toggle Sidebar</span>
+                    </button>
+                    <div class="flex-none">
+                      <button
+                        aria-expanded="false"
+                        aria-haspopup="dialog"
+                        aria-label="Translations"
+                        class="flex h-10 w-10 touch-manipulation items-center justify-center gap-2 rounded-md border border-border text-[14px] font-medium text-foreground transition-colors hover:border-primary sm:w-auto sm:justify-start sm:ps-3 sm:pe-2.5"
+                        title="Translations"
+                        type="button"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class="flex-none"
+                          height="17"
+                          viewBox="0 0 24 24"
+                          width="17"
+                        >
+                          <rect fill="#1a73e8" height="24" rx="5.5" width="24"></rect>
+                          <g
+                            fill="none"
+                            stroke="#ffffff"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M5.9 6.8h7.4" stroke-width="1.5"></path>
+                            <path d="M9.6 6.8v4.7" stroke-width="1.5"></path>
+                            <path d="m9.6 9.3-3 4.1M9.6 9.3l3 4.1" stroke-width="1.5"></path>
+                            <path d="m13.3 17.9 1.9-3.8 1.9 3.8" stroke-width="1.3"></path>
+                            <path d="M14 16.6h2.4" stroke-width="1.3"></path>
+                            <path d="M12.4 12.5c1-.7 2.3-.9 3.5-.4" stroke-width="1.1"></path>
+                            <path d="m15.4 11.3 1 .3-.3 1" stroke-width="1.1"></path>
+                            <path d="M18.9 15.4c-.2 1.2-1 2.2-2.1 2.7" stroke-width="1.1"></path>
+                            <path d="m16.6 18.4-.9-.4.4-1" stroke-width="1.1"></path>
+                          </g>
+                        </svg>
+                        <span class="hidden sm:block">Translations</span>
+                        <span
+                          class="hidden h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-semibold tabular-nums text-primary-foreground sm:flex"
+                          data-translation-count=""
+                          >1</span
+                        >
+                        <svg
+                          aria-hidden="true"
+                          class="lucide-icon lucide lucide-chevron-down hidden size-4 flex-none text-foreground-secondary sm:block"
+                          fill="none"
+                          height="24"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
+                          width="24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path d="m6 9 6 6 6-6"></path>
+                        </svg>
+                      </button>
+                    </div>
+                    <span
+                      class="hidden min-w-0 truncate text-sm font-medium text-foreground-secondary sm:inline"
+                      >1. Al-Fatihah
+                      <span class="ms-1 font-arabic text-base" dir="rtl" lang="ar"
+                        >الفاتحة</span
+                      ></span
+                    >
+                    <span class="flex-none text-[12px] tabular-nums text-muted"
+                      >Page 1 · Juz 1 · Hizb 1</span
+                    >
+                    <div
+                      aria-label="Arabic text size"
+                      class="ms-auto flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"
+                      role="group"
+                    >
+                      <button
+                        aria-label="Smaller Arabic text"
+                        class="flex h-[34px] w-8 items-center justify-center rounded-sm text-[13px] text-foreground transition-colors hover:bg-surface-hover sm:w-9"
+                        type="button"
+                      >
+                        A−
+                      </button>
+                      <span aria-hidden="true" class="h-4 w-px bg-border"></span>
+                      <button
+                        aria-label="Larger Arabic text"
+                        class="flex h-[34px] w-8 items-center justify-center rounded-sm text-[15px] text-foreground transition-colors hover:bg-surface-hover sm:w-9"
+                        type="button"
+                      >
+                        A+
+                      </button>
+                    </div>
+                  </div>
+                </header>
+                <div class="mx-auto w-full px-6 max-w-[1200px] py-6 concept-reading-container">
+                  <div class="reader-stack flex flex-col gap-4 svelte-1pb8v4t">
+                    <div class="svelte-1pb8v4t">
+                      <div
+                        class="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-reader-divider py-4 concept-chapter-header"
+                      >
+                        <span
+                          aria-hidden="true"
+                          class="flex size-9 flex-none items-center justify-center rounded-pill bg-primary text-[13px] font-semibold tabular-nums text-primary-foreground"
+                          >1</span
+                        >
+                        <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                          <h1 class="text-[21px] font-semibold tracking-[-0.015em] text-foreground">
+                            <span class="sr-only">1.</span>Al-Fatihah
+                          </h1>
+                          <span
+                            class="font-arabic text-[24px] leading-none text-foreground"
+                            dir="rtl"
+                            lang="ar"
+                            >الفاتحة</span
+                          >
+                          <span class="text-[13.5px] text-foreground-secondary"
+                            >Meccan · 7 verses</span
+                          >
+                        </div>
+                        <div
+                          aria-label="Reading mode"
+                          class="flex w-full items-center gap-0.5 rounded-md border border-border p-0.5 sm:ms-auto sm:w-auto"
+                          role="group"
+                        >
+                          <button
+                            aria-pressed="true"
+                            class="flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-sm px-3 text-[13px] font-medium transition-colors text-foreground-secondary hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:text-background sm:flex-none"
+                            type="button"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              fill="currentColor"
+                              height="13"
+                              role="presentation"
+                              viewBox="0 0 256 256"
+                              width="13"
+                            >
+                              <path
+                                d="M208 72a8 8 0 0 1-8 8H56a8 8 0 0 1 0-16h144a8 8 0 0 1 8 8Zm0 56a8 8 0 0 1-8 8H56a8 8 0 0 1 0-16h144a8 8 0 0 1 8 8Zm0 56a8 8 0 0 1-8 8H56a8 8 0 0 1 0-16h144a8 8 0 0 1 8 8Z"
+                              ></path>
+                            </svg>
+                            <span class="hidden sm:inline">Ayah-by-Ayah</span>
+                            <span class="sm:hidden">Ayahs</span>
+                          </button>
+                          <button
+                            aria-pressed="false"
+                            class="flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-sm px-3 text-[13px] font-medium transition-colors text-foreground-secondary hover:text-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:text-background sm:flex-none"
+                            type="button"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              fill="currentColor"
+                              height="13"
+                              role="presentation"
+                              viewBox="0 0 256 256"
+                              width="13"
+                            >
+                              <path
+                                d="M216 64a8 8 0 0 1-8 8H48a8 8 0 0 1 0-16h160a8 8 0 0 1 8 8Zm-8 40H48a8 8 0 0 0 0 16h160a8 8 0 0 0 0-16Zm0 48H48a8 8 0 0 0 0 16h160a8 8 0 0 0 0-16Zm-16 48H48a8 8 0 0 0 0 16h144a8 8 0 0 0 0-16Z"
+                              ></path>
+                            </svg>
+                            <span>Reading</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div aria-live="polite" class="sr-only svelte-1pb8v4t"></div>
+                      <div
+                        class="reader-pages svelte-1pb8v4t"
+                        data-source-kind="arabic"
+                        tabindex="-1"
+                      >
+                        <ol
+                          class="virtual-reader-list svelte-jaanab"
+                          data-reader-virtual-list="true"
+                          style="padding-top: 0px; padding-bottom: 0px"
+                        >
+                          <li
+                            aria-posinset="1"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="0"
+                            data-local-page="1"
+                            data-verse-key="1:1"
+                            id="ayah-1-1"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:1"
+                                id="bits-c14"
+                                tabindex="-1"
+                                type="button"
+                                >۝١</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >In the name of Allah, the Entirely Merciful, the Especially
+                                Merciful.
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:1</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c34"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c35"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c36"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="2"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="1"
+                            data-local-page="1"
+                            data-verse-key="1:2"
+                            id="ayah-1-2"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:2"
+                                id="bits-c15"
+                                tabindex="-1"
+                                type="button"
+                                >۝٢</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >[All] praise is [due] to Allah, Lord of the worlds -
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:2</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c64"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c65"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c66"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="3"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="2"
+                            data-local-page="1"
+                            data-verse-key="1:3"
+                            id="ayah-1-3"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:3"
+                                id="bits-c16"
+                                tabindex="-1"
+                                type="button"
+                                >۝٣</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >The Entirely Merciful, the Especially Merciful,
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:3</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c40"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c41"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c42"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="4"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="3"
+                            data-local-page="1"
+                            data-verse-key="1:4"
+                            id="ayah-1-4"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >مَـٰلِكِ يَوْمِ ٱلدِّينِ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:4"
+                                id="bits-c17"
+                                tabindex="-1"
+                                type="button"
+                                >۝٤</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >Sovereign of the Day of Recompense.
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:4</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c46"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c47"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c48"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="5"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="4"
+                            data-local-page="1"
+                            data-verse-key="1:5"
+                            id="ayah-1-5"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:5"
+                                id="bits-c18"
+                                tabindex="-1"
+                                type="button"
+                                >۝٥</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >It is You we worship and You we ask for help.
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:5</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c28"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c29"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c30"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="6"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="5"
+                            data-local-page="1"
+                            data-verse-key="1:6"
+                            id="ayah-1-6"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:6"
+                                id="bits-c19"
+                                tabindex="-1"
+                                type="button"
+                                >۝٦</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >Guide us to the straight path -
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:6</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c52"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c53"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c54"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                          <li
+                            aria-posinset="7"
+                            aria-setsize="7"
+                            class="verse-row group relative scroll-mt-24 border-b border-reader-divider pb-[26px] pt-[60px] svelte-1ztn4k"
+                            data-index="6"
+                            data-local-page="1"
+                            data-verse-key="1:7"
+                            id="ayah-1-7"
+                            style="margin-block-start: 0px"
+                          >
+                            <span
+                              class="verse-text font-arabic leading-[2.15] text-quran-foreground svelte-1ztn4k"
+                              dir="rtl"
+                              lang="ar"
+                              style="font-size: var(--reader-arabic-size, 33px)"
+                              >صِرَٰطَ ٱلَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ ٱلْمَغْضُوبِ
+                              عَلَيْهِمْ وَلَا ٱلضَّآلِّينَ<span
+                                class="ayah-ornament cursor-help"
+                                data-delay-duration="300"
+                                data-slot="tooltip-trigger"
+                                data-state="closed"
+                                data-tooltip-trigger=""
+                                data-verse-anchor="1:7"
+                                id="bits-c20"
+                                tabindex="-1"
+                                type="button"
+                                >۝٧</span
+                              >
+                            </span>
+                            <div class="verse-lanes svelte-1ztn4k">
+                              <span class="verse-extra svelte-1ztn4k" dir="auto" lang="en"
+                                >The path of those upon whom You have bestowed favor, not of those
+                                who have evoked [Your] anger or of those who are astray.
+                                <span class="verse-extra-credit svelte-1ztn4k" dir="ltr"
+                                  >— <bdi class="svelte-1ztn4k">Saheeh International</bdi></span
+                                ></span
+                              >
+                            </div>
+                            <div
+                              class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 svelte-ld5jrh"
+                            >
+                              <span
+                                class="font-mono text-[11.5px] tracking-wide text-foreground-secondary svelte-ld5jrh"
+                                >1:7</span
+                              >
+                              <div class="flex items-center gap-0.5 svelte-ld5jrh">
+                                <button
+                                  aria-label="Bookmark this verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c58"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M184 32H72a16 16 0 0 0-16 16v176a8 8 0 0 0 12.24 6.78L128 193.43l59.77 37.35A8 8 0 0 0 200 224V48a16 16 0 0 0-16-16m0 177.57-51.77-32.35a8 8 0 0 0-8.48 0L72 209.57V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Copy ayah"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c59"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="currentColor"
+                                    height="15"
+                                    role="presentation"
+                                    viewBox="0 0 256 256"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z"
+                                    ></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  aria-label="Share verse"
+                                  class="flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover text-foreground-secondary hover:text-foreground svelte-ld5jrh"
+                                  data-delay-duration="300"
+                                  data-slot="tooltip-trigger"
+                                  data-state="closed"
+                                  data-tooltip-trigger=""
+                                  id="bits-c60"
+                                  tabindex="0"
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    height="15"
+                                    role="presentation"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    viewBox="0 0 24 24"
+                                    width="15"
+                                  >
+                                    <path
+                                      d="M18 2a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 16a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM8.59 13.51l6.83 3.98M15.41 6.51 8.59 10.49"
+                                    ></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        </ol>
+                      </div>
+                      <span aria-live="polite" class="sr-only svelte-1pb8v4t"
+                        >Page 1 · Juz 1 · Hizb 1</span
+                      >
+                      <nav aria-label="Surah navigation" class="flex flex-col gap-3">
+                        <div
+                          class="mx-[calc(50%_-_50vw)] border-t border-border bg-surface px-6 py-9"
+                        >
+                          <div
+                            class="mx-auto flex w-full max-w-[42rem] flex-col items-center gap-5 text-center"
+                          >
+                            <h2 class="text-[17px] font-semibold text-foreground">
+                              End of Surah Al-Fatihah
+                            </h2>
+                            <a
+                              class="rounded-pill border border-border px-4 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                              href="/al-fatihah"
+                              >Read again</a
+                            >
+                            <div class="grid w-full gap-2 sm:grid-cols-2">
+                              <span></span>
+                              <a
+                                aria-label="Next surah: Al-Baqarah"
+                                class="flex min-w-0 items-center justify-end gap-2 rounded-lg bg-primary px-4 py-3 text-end transition-colors duration-150 ease-out hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                                href="/al-baqarah"
+                                title="Next surah: Al-Baqarah"
+                                ><span class="flex min-w-0 flex-col"
+                                  ><span class="flex min-w-0 items-center justify-end gap-1.5"
+                                    ><span
+                                      class="flex-none text-[12px] font-semibold text-primary-foreground/70"
+                                      dir="ltr"
+                                      >2</span
+                                    >
+                                    <span
+                                      class="truncate text-sm font-medium text-primary-foreground"
+                                      >Al-Baqarah</span
+                                    >
+                                    <span
+                                      class="truncate font-arabic text-[15px] text-primary-foreground/85"
+                                      >البقرة</span
+                                    ></span
+                                  >
+                                  <span class="truncate text-[11.5px] text-primary-foreground/75"
+                                    >The Cow</span
+                                  ></span
+                                >
+                                <span aria-hidden="true" class="flex-none">→</span></a
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </section>
+        </main>
+        <footer class="border-t border-border bg-surface">
+          <div class="mx-auto w-full max-w-[1440px] px-5 md:px-8 lg:px-12 xl:px-18">
+            <div
+              class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[380px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-10"
+            >
+              <div class="col-span-2 flex flex-col gap-3 md:col-span-1">
+                <div class="flex items-center gap-2.5">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-[30px] items-center justify-center rounded-full bg-primary font-arabic text-[16px] font-bold leading-none text-primary-foreground"
+                    dir="rtl"
+                    lang="ar"
+                    >ق</span
+                  >
+                  <span class="text-[19px] font-extrabold tracking-[-0.035em] text-foreground"
+                    >easy<span class="text-primary">quran</span></span
+                  >
+                </div>
+                <p class="max-w-[34ch] text-body text-foreground-secondary">
+                  A free Qur'an reader — growing into hadith, audio, deeds and native apps.
+                </p>
+              </div>
+              <nav aria-label="Product" class="flex flex-col gap-2.5">
+                <h2 class="text-micro text-muted">Product</h2>
+                <ul class="grid gap-2.5">
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/al-fatihah?mode=verse&amp;more=en.sahih"
+                      >Read the Qur'an</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/bookmarks"
+                      >Bookmarks</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/#why"
+                      >What's inside</a
+                    >
+                  </li>
+                </ul>
+              </nav>
+              <nav aria-label="Company" class="flex flex-col gap-2.5">
+                <h2 class="text-micro text-muted">Company</h2>
+                <ul class="grid gap-2.5">
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/about"
+                      >About</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/faq"
+                      >FAQ</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/contact"
+                      >Contact</a
+                    >
+                  </li>
+                </ul>
+              </nav>
+              <nav aria-label="Legal" class="flex flex-col gap-2.5">
+                <h2 class="text-micro text-muted">Legal</h2>
+                <ul class="grid gap-2.5">
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/privacy"
+                      >Privacy Policy</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground"
+                      href="/terms"
+                      >Terms of Service</a
+                    >
+                  </li>
+                </ul>
+              </nav>
+            </div>
+            <div class="flex flex-wrap items-center gap-5 pb-11">
+              <span class="text-body text-muted"
+                >© 2026 easyquran. Built by
+                <a
+                  class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
+                  href="https://oxlabs.dev"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  >oxlabs.dev</a
+                >
+                ·
+                <a
+                  class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
+                  href="https://x.com/hmziqrs"
+                  rel="me noopener noreferrer"
+                  target="_blank"
+                  >@@hmziqrs</a
+                ></span
+              >
+              <span
+                class="ms-auto font-arabic text-body-l leading-none text-muted"
+                dir="rtl"
+                lang="ar"
+                >وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ</span
+              >
+            </div>
+          </div>
+        </footer>
+      </div>
+      <div
+        class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3"
+        dir="ltr"
+        lang="en"
+      ></div>
+      <div
+        aria-atomic="true"
+        aria-live="assertive"
+        id="svelte-announcer"
+        style="
+          position: absolute;
+          left: 0;
+          top: 0;
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          overflow: hidden;
+          white-space: nowrap;
+          width: 1px;
+          height: 1px;
+        "
+      >
+        Surah 1, Al-Fatihah · EasyQuran
+      </div>
+    </div>
+    <script src="snapshot.js"></script>
+  </body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta content="noindex, nofollow" name="robots" />
+    <title>EasyQuran · current design studies</title>
+    <link href="snapshot-fonts.css" rel="stylesheet" />
+    <link href="gallery.css" rel="stylesheet" />
+    <script defer="" src="gallery.js"></script>
+  </head>
+  <body>
+    <header class="lab-header">
+      <a class="lab-brand" href="index.html">EasyQuran <span>Design studies</span></a>
+      <span class="scope">Visual concepts · existing layout</span>
+    </header>
+    <main>
+      <div class="intro">
+        <div>
+          <h1>Our design, refined.</h1>
+          <p>
+            Same white and black neutrals. Same four accents. Better cards, outlines, radius and
+            section rhythm.
+          </p>
+        </div>
+        <button aria-pressed="false" class="baseline" data-concept="current" type="button">
+          Current design
+        </button>
+      </div>
+      <div aria-label="Design direction" class="directions" role="group">
+        <button aria-pressed="true" data-concept="outline" type="button">
+          <span class="direction-top">Sharper outlines</span
+          ><span class="direction-detail"
+            >Nunito · color on borders and numbers · 12px cards</span
+          ></button
+        ><button aria-pressed="false" data-concept="color" type="button">
+          <span class="direction-top">Color cards</span
+          ><span class="direction-detail"
+            >Nunito · existing solid accents · 18px rounded cards</span
+          >
+        </button>
+      </div>
+      <div class="comparison-bar">
+        <p aria-live="polite" id="description">
+          White surfaces, stronger outlines, existing colors on edges and labels. Same flat design.
+        </p>
+        <div class="controls">
+          <label
+            >Font
+            <select id="type">
+              <option value="nunito">Current Nunito</option>
+              <option value="manrope">Try Manrope</option>
+            </select></label
+          >
+          <label
+            >View
+            <select id="view">
+              <option value="both">Home + reader</option>
+              <option value="home">Homepage</option>
+              <option value="reader">Reader</option>
+            </select>
+          </label>
+          <label
+            >Width
+            <select id="device">
+              <option value="desktop">Desktop · 1440 px</option>
+              <option value="mobile">Mobile · 390 px</option>
+            </select>
+          </label>
+          <button aria-pressed="false" id="mode" type="button">Dark mode</button>
+        </div>
+      </div>
+      <div class="previews" data-device="desktop" data-view="both">
+        <section aria-label="Homepage preview" class="preview" data-page="home">
+          <div class="preview-caption">
+            <h2>Homepage</h2>
+            <a
+              href="home.html?concept=outline&amp;mode=light&amp;type=nunito"
+              id="home-link"
+              rel="noopener"
+              target="_blank"
+              >Open full size ↗</a
+            >
+          </div>
+          <div class="viewport">
+            <iframe
+              id="home-frame"
+              sandbox="allow-scripts allow-same-origin"
+              src="home.html?concept=outline&amp;mode=light&amp;type=nunito"
+              title="Homepage design concept"
+            ></iframe>
+          </div>
+        </section>
+        <section aria-label="Reader preview" class="preview" data-page="reader">
+          <div class="preview-caption">
+            <h2>Reader</h2>
+            <a
+              href="reader.html?concept=outline&amp;mode=light&amp;type=nunito"
+              id="reader-link"
+              rel="noopener"
+              target="_blank"
+              >Open full size ↗</a
+            >
+          </div>
+          <div class="viewport">
+            <iframe
+              id="reader-frame"
+              sandbox="allow-scripts allow-same-origin"
+              src="reader.html?concept=outline&amp;mode=light&amp;type=nunito"
+              title="Reader design concept"
+            ></iframe>
+          </div>
+        </section>
+      </div>
+      <footer class="lab-footer">
+        <span
+          >Switch cards or fonts independently. Current design remains available for
+          comparison.</span
+        >
+        <span>Page actions illustrative. Theme and Arabic size controls work.</span>
+      </footer>
+    </main>
+  </body>
+</html>

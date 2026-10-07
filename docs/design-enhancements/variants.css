@@ -1,0 +1,250 @@
+html[data-concept]:where(:not([data-concept="current"])) {
+  --elev-sm: none;
+  --elev-md: none;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+html[data-type="manrope"]:not([data-concept="current"]) {
+  --font-sans: "Manrope", "Noto Sans Arabic", system-ui, sans-serif;
+  --text-display-xl: 72px;
+  --text-display-xl--font-weight: 750;
+  --text-body-xl--font-weight: 500;
+  --text-body-l--font-weight: 500;
+  --text-body--font-weight: 500;
+  --text-caption--font-weight: 500;
+}
+
+[data-hue="1"] {
+  --item-fill: var(--hue-1);
+  --item-soft: var(--hue-1-soft);
+  --item-ink: var(--hue-1-legible);
+  --item-on: var(--on-hue-1);
+}
+[data-hue="2"] {
+  --item-fill: var(--hue-2);
+  --item-soft: var(--hue-2-soft);
+  --item-ink: var(--hue-2-legible);
+  --item-on: var(--on-hue-2);
+}
+[data-hue="3"] {
+  --item-fill: var(--hue-3);
+  --item-soft: var(--hue-3-soft);
+  --item-ink: var(--hue-3-legible);
+  --item-on: var(--on-hue-3);
+}
+[data-hue="4"] {
+  --item-fill: var(--hue-4);
+  --item-soft: var(--hue-4-soft);
+  --item-ink: var(--hue-4-legible);
+  --item-on: var(--on-hue-4);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-hero {
+  padding-block: 76px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-hero form {
+  border-color: var(--border-strong);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-hero form:focus-within {
+  outline: 2px solid var(--hue-1-legible);
+  outline-offset: 3px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-quicklink {
+  background: var(--surface);
+  color: var(--item-ink);
+  border-color: color-mix(in oklab, var(--item-ink) 32%, var(--border));
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-metrics {
+  padding-inline: 20px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-metrics-grid {
+  max-width: 1296px;
+  margin-inline: auto;
+  gap: 14px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-metric-card {
+  height: 100%;
+  min-height: 204px;
+  border-radius: 14px;
+  padding: 28px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-metric-1 {
+  --card-fill: var(--hue-1);
+  --card-soft: var(--hue-1-soft);
+  --card-ink: var(--hue-1-legible);
+}
+html[data-concept]:where(:not([data-concept="current"])) .concept-metric-2 {
+  --card-fill: var(--hue-2);
+  --card-soft: var(--hue-2-soft);
+  --card-ink: var(--hue-2-legible);
+}
+html[data-concept]:where(:not([data-concept="current"])) .concept-metric-3 {
+  --card-fill: var(--hue-3);
+  --card-soft: var(--hue-3-soft);
+  --card-ink: var(--hue-3-legible);
+}
+html[data-concept]:where(:not([data-concept="current"])) .concept-metric-4 {
+  --card-fill: var(--hue-4);
+  --card-soft: var(--hue-4-soft);
+  --card-ink: var(--hue-4-legible);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) #surahs .concept-surah-link {
+  border-color: var(--border-strong);
+  border-radius: 12px;
+  padding-block: 18px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) #surahs .concept-surah-link:hover {
+  border-color: var(--item-ink);
+  background: var(--surface);
+  outline: 1px solid var(--item-ink);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) #why {
+  border-block: 1px solid var(--border);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-reading-container {
+  max-width: 1120px;
+}
+
+html[data-concept]:where(:not([data-concept="current"])) .concept-chapter-header {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding-inline: 16px;
+}
+
+html[data-concept]:where(:not([data-concept="current"]))
+  .concept-chapter-header
+  button[aria-pressed="true"] {
+  background: var(--hue-1);
+  color: var(--on-hue-1);
+}
+
+html[data-concept]:where(:not([data-concept="current"]))
+  button[aria-label="Translations"]
+  > svg
+  > rect {
+  fill: var(--hue-2);
+}
+
+html[data-concept]:where(:not([data-concept="current"])) [data-translation-count] {
+  background: var(--hue-2);
+  color: var(--on-hue-2);
+}
+
+html[data-concept]:where(:not([data-concept="current"]))
+  .verse-toolbar
+  button[aria-label*="bookmark" i] {
+  color: var(--hue-4-legible);
+}
+
+html[data-concept]:where(:not([data-concept="current"]))
+  .verse-toolbar
+  button[aria-label*="bookmark" i]:hover {
+  background: var(--hue-4-soft);
+}
+
+html[data-concept="outline"] .concept-hero h1 > span {
+  color: var(--hue-1-legible);
+  background: var(--background);
+  outline: 2px solid var(--hue-1-legible);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+html[data-concept="outline"] .concept-hero form {
+  border-radius: 16px;
+}
+
+html[data-concept="outline"] .concept-metric-card {
+  color: var(--foreground) !important;
+  background: var(--background) !important;
+  border: 1px solid var(--border-strong);
+  border-top: 3px solid var(--card-ink);
+}
+
+html[data-concept="outline"] .concept-metric-value {
+  color: var(--card-ink);
+}
+html[data-concept="outline"] .concept-metric-icon {
+  color: var(--card-ink) !important;
+  background: var(--card-soft) !important;
+}
+html[data-concept="outline"] .concept-metric-note {
+  color: var(--foreground-secondary) !important;
+}
+
+html[data-concept="color"] {
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 20px;
+}
+
+html[data-concept="color"] .concept-hero h1 > span {
+  border-radius: 20px;
+}
+html[data-concept="color"] .concept-metric-card {
+  border-radius: 20px;
+}
+html[data-concept="color"] #surahs .concept-surah-link {
+  border-radius: 18px;
+  border-color: var(--border);
+}
+html[data-concept="color"] .concept-chapter-header {
+  border-radius: 18px;
+}
+
+html[data-concept="color"][data-reader-mode="verse"] .verse-row {
+  border: 1px solid var(--reader-divider);
+  border-radius: 18px;
+  margin-block: 14px;
+  padding-inline: 24px;
+}
+
+html[data-concept="color"][data-reader-mode="verse"] .verse-toolbar {
+  inset-inline: 24px;
+}
+
+@media (min-width: 768px) {
+  html[data-concept]:where(:not([data-concept="current"])) .concept-metrics {
+    padding-inline: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html[data-concept]:where(:not([data-concept="current"])) .concept-metrics {
+    padding-inline: 48px;
+  }
+}
+
+@media (min-width: 1280px) {
+  html[data-concept]:where(:not([data-concept="current"])) .concept-metrics {
+    padding-inline: 72px;
+  }
+}
+
+@media (max-width: 767px) {
+  html[data-concept]:where(:not([data-concept="current"])) .concept-hero {
+    padding-block: 48px;
+  }
+  html[data-concept="color"][data-reader-mode="verse"] .verse-row {
+    padding-inline: 16px;
+  }
+  html[data-concept="color"][data-reader-mode="verse"] .verse-toolbar {
+    inset-inline: 16px;
+  }
+  html[data-type="manrope"]:not([data-concept="current"]) {
+    --text-display-xl: 40px;
+  }
+}
