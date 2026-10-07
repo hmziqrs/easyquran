@@ -10,6 +10,7 @@ const inputs = process.env.INDOPAK_DEEP_OUTPUT ?? path.join(root, ".cache/indopa
 const output = path.resolve(process.env.INDOPAK_REVIEW_OUTPUT ?? path.join(inputs, "review"));
 const base = process.env.INDOPAK_SPECIMEN_BASE ?? "http://localhost:5391";
 const engine = process.env.INDOPAK_REVIEW_ENGINE ?? "chromium";
+const captureAll = process.env.INDOPAK_REVIEW_CAPTURE_ALL === "1";
 const baselineCommit = "104f049";
 const corpus = await loadCorpus(inputs);
 const targeted = [
@@ -131,6 +132,7 @@ const report = {
   status: "incomplete",
   recorded_at: new Date().toISOString(),
   baseline,
+  capture_scope: captureAll ? "all_viewports_current_engine" : "chromium_390_review_keys",
   line_anchor_source:
     "Quran.com word.textIndopak letter offsets; geometry from actual served word DOM",
   reference_sizing: "26px comparison size; adaptive native size recorded before override",
@@ -158,17 +160,17 @@ if (process.env.INDOPAK_REVIEW_RESUME === "1") {
   assert.deepEqual(previous.sample, report.sample);
   assert.equal(previous.version, report.version);
   assert.equal(previous.baseline.commit, baselineCommit);
+  assert.equal(previous.capture_scope ?? "chromium_390_review_keys", report.capture_scope);
   await writeFile(
     path.join(output, `${engine}-layout-prior-attempt.json`),
     JSON.stringify(previous, null, 2) + "\n",
   );
   for (const key of keys) {
     if (previous.rows.filter((row) => row.key === key).length !== 3) continue;
-    if (
-      engine === "chromium" &&
-      reviewKeys.has(key) &&
-      !previous.captures.some((capture) => capture.key === key)
-    )
+    let expectedCaptures = 0;
+    if (captureAll) expectedCaptures = 3;
+    else if (engine === "chromium" && reviewKeys.has(key)) expectedCaptures = 1;
+    if (previous.captures.filter((capture) => capture.key === key).length !== expectedCaptures)
       continue;
     completed.add(key);
   }
@@ -262,11 +264,18 @@ try {
             Math.abs(ours.line_starts.length - observed.line_starts.length) >= 2 ||
             (comparable && offsets.at(-1) !== referenceOffsets.at(-1) && !observed.marker_orphaned),
         });
-        if (index !== 0 || !reviewKeys.has(key) || engine !== "chromium") continue;
-        const filename = key.replace(":", "-");
+        if (!captureAll && (index !== 0 || !reviewKeys.has(key) || engine !== "chromium")) continue;
+        let filename = key.replace(":", "-");
+        if (captureAll) filename = `${engine}-${viewport.width}-${filename}`;
         const referenceFile = `${filename}-qurancom.png`;
         const v4File = `${filename}-v4.png`;
         const v3File = `${filename}-v3.png`;
+        await element.scrollIntoViewIfNeeded();
+        await reference.evaluate(
+          () =>
+            new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+        );
+        await reference.evaluate(hideFixedOverlays);
         await element.screenshot({ path: path.join(output, referenceFile) });
         const run = local.locator(`[data-specimen="${key}"] .run`);
         await run.screenshot({ path: path.join(output, v4File) });
@@ -289,6 +298,7 @@ try {
           .screenshot({ path: path.join(output, v3File) });
         report.captures.push({
           key,
+          viewport,
           width: observed.width,
           size: observed.size,
           dpr: 2,
@@ -298,6 +308,7 @@ try {
           build_id: observed.build_id,
           font_urls: observed.font_urls,
         });
+        await local.locator(`[data-review-v3="${key}"]`).evaluate((element) => element.remove());
       }
       await save();
       console.log(`${engine}: reference layout ${key} (${report.rows.length / 3}/${keys.length})`);
