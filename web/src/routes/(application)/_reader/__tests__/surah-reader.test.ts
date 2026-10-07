@@ -24,6 +24,7 @@ const {
   quranStore,
   invalidateAllSpy,
   gotoSpy,
+  replaceStateSpy,
   readerStub,
   mountStub,
   headerProps,
@@ -42,6 +43,7 @@ const {
   quranStore: { status: "idle" as string, error: null as string | null },
   invalidateAllSpy: vi.fn().mockResolvedValue(undefined),
   gotoSpy: vi.fn().mockResolvedValue(undefined),
+  replaceStateSpy: vi.fn(),
   readerStub: {
     hasLastRead: false,
     // Mirrors the real store contract's default mushaf script (schema v4 field).
@@ -82,7 +84,7 @@ vi.mock("$app/navigation", () => ({
   beforeNavigate: () => {},
   goto: gotoSpy,
   invalidateAll: invalidateAllSpy,
-  replaceState: () => {},
+  replaceState: replaceStateSpy,
 }));
 vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
 vi.mock("$app/state", () => ({ page: nav }));
@@ -234,6 +236,7 @@ beforeEach(() => {
   });
   invalidateAllSpy.mockReset().mockResolvedValue(undefined);
   gotoSpy.mockReset().mockResolvedValue(undefined);
+  replaceStateSpy.mockClear();
   quranStore.status = "idle";
   quranStore.error = null;
   readerStub.seedAyahs.mockReset();
@@ -290,6 +293,26 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("SurahReader anchor history", () => {
+  it.each([true, false])(
+    "protects a requested anchor while scrolling=%s",
+    async (anchorScrolling) => {
+      const view = mount(SurahReader, {
+        target,
+        props: { ...propsFor(pageData({ ayahs: 7, pageCount: 1 })), anchorScrolling },
+      });
+      for (let frame = 0; frame < 5; frame += 1) {
+        await flushMicrotasks(20);
+        flushRaf();
+      }
+      await flushMicrotasks(20);
+      if (anchorScrolling) expect(replaceStateSpy).not.toHaveBeenCalled();
+      else expect(replaceStateSpy).toHaveBeenCalled();
+      await unmount(view);
+    },
+  );
 });
 
 describe("SurahReader W7 single-page empty recovery", () => {

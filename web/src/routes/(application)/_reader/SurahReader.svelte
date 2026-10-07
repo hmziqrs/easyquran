@@ -570,10 +570,7 @@
   let lastWrittenPage: number | null = null;
 
   function writeHistoryState(localPage = visibleLocalPage): void {
-    // Guard the whole write: after a keyed swap / hot update the prop can already
-    // be gone while beforeNavigate or a settled loadPage still calls in. A skipped
-    // history write is harmless; a snapshot of a half-torn reader is a crash.
-    if (!initial) return;
+    if (!initial || anchorScrolling) return;
     const snapshot = historySnapshot(localPage);
     // One URL per surah: the path never moves, so the restore snapshot rides in
     // history.state on the current path and the settled verse position rides in
