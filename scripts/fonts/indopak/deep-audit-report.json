@@ -285,5 +285,6 @@
     "Glyph-based masks also include standard cmap aliases: E003/U0656, E022/U08D6. All four E003 raw excerpts contain no U0656; full DOM 35:11 includes its ordinary U0656 too. U08D6 is absent from this corpus.",
     "WebKit color/non-color text has small raster edge differences; original-vs-diagnostic comparison uses two-pixel edge tolerance, never a claim of exact pixel parity.",
     "Masks aggregate same-glyph occurrences; semantic correctness and identical-ink contact between repeated copies require visual review."
-  ]
+  ],
+  "superseded_for_current_renderer_by": "v4-verification-report.json"
 }

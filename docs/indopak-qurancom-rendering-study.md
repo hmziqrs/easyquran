@@ -77,7 +77,20 @@ Open alternative: [DigitalKhatt IndoPak](https://github.com/DigitalKhatt/indopak
 based on the 13-line IndoPak mushaf, beta 2024-12). It is not what Quran.com uses and has not
 been evaluated against our encoding.
 
-## Recommendation
+## Implemented v4 direction
+
+The word-box approach is implemented in v4 using an OFL Lateef SemiBold derivative.
+Pause signs stay with the preceding word and the final word keeps its marker. The restricted
+QuranWBW font remains a comparison asset outside the repository/build. No licensed account
+or redistribution approval was supplied, so the packaged font remains the open derivative.
+V2/v3 assets remain available for cached clients. Current verification, full corpus comparison,
+line parity and owner-review gaps are recorded in [v4 results](indopak-v4-results.md).
+
+A fixed 15-line mushaf mode still requires a separate licensed layout dataset; it is outside
+this flowing-reader implementation. The following recommendations are historical research,
+not instructions to load a restricted font in the shipped app.
+
+## Original recommendation
 
 1. **Copy Quran.com's verse layout now.** Use atomic word boxes, break only between words, put
    pause signs inside the preceding word, and use Quran.com's two gap sizes. Keep our one

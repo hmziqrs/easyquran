@@ -1,5 +1,11 @@
 # IndoPak deep audit — 2026-10-06
 
+This document preserves the v3 audit and source-provenance findings. Current v4 uses Lateef
+and fresh four-engine/full-corpus evidence; see [v4 results](indopak-v4-results.md).
+The full current Quran.com comparison classifies served encoding and word-boundary differences
+for all 6,236 verses. Source/editorial discrepancies below remain open; the v3 Noto metrics
+are historical and do not describe v4.
+
 Version 3 repairs additional placement and wrapping defects found by auditing every private
 occurrence. Measured Chromium/WebKit rendering passes. **Source-text discrepancies remain
 unresolved; neither perfect parity with Quran.com nor editorial/recitation approval is claimed.**

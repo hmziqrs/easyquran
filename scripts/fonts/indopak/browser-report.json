@@ -37,7 +37,8 @@
         "optional_pause_ink_runs": [[1319, 1346]]
       },
       "both_regression_checks_reject_previous": true
-    }
+    },
+    "expanded_verification": "v4-verification-report.json"
   },
   {
     "engine": "firefox",
@@ -45,7 +46,8 @@
     "error": "Playwright Firefox 1543 cannot launch on this host: Could not find profile folder. Explicit persistent-profile retry also failed. Harness returns nonzero; no automated Firefox pass claimed.",
     "production_approved": false,
     "font_version": "2.000",
-    "failed_at": "browser launch, before page navigation"
+    "failed_at": "browser launch, before page navigation",
+    "expanded_verification": "v4-verification-report.json"
   },
   {
     "engine": "webkit",
@@ -85,7 +87,8 @@
         "optional_pause_ink_runs": [[1319, 1346]]
       },
       "both_regression_checks_reject_previous": true
-    }
+    },
+    "expanded_verification": "v4-verification-report.json"
   },
   {
     "engine": "safari-native",
@@ -100,7 +103,8 @@
       "1:7 optional-ayah 5 and no-stop sign separate; ruku ain above ornament",
       "2:101 three Arabic digits enclosed; zain above ornament"
     ],
-    "full_matrix_pass_claimed": false
+    "full_matrix_pass_claimed": false,
+    "expanded_verification": "v4-verification-report.json"
   },
   {
     "engine": "firefox-native",
@@ -111,6 +115,7 @@
     "font_size": 33,
     "run_width": 640,
     "observed": ["17:7 original E004 above hamza"],
-    "full_matrix_pass_claimed": false
+    "full_matrix_pass_claimed": false,
+    "expanded_verification": "v4-verification-report.json"
   }
 ]

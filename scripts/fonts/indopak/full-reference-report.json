@@ -1,0 +1,28 @@
+{
+  "status": "full_corpus_compared_editorial_review_pending",
+  "reference_build": "cfO91iJO_kGMxzuatsf-J",
+  "reference_font_version": "4.2.1",
+  "reference_font_bytes": 83560,
+  "chapters": 114,
+  "verses": 6236,
+  "actual_website_confirmations": 201,
+  "private_occurrences": 1383,
+  "private_comparison_failures": 0,
+  "served_sequence_comparison": {
+    "identical": 5778,
+    "order_only": 191,
+    "pipeline": 267
+  },
+  "word_boundaries": {
+    "identical": 5417,
+    "reference_joined": 788,
+    "source_joined": 26,
+    "letter_pipeline": 2,
+    "mixed": 3
+  },
+  "raw_evidence": ".cache/indopak-v4/2026-10-06-run2/reference-current/full-reference-report.json",
+  "expanded_verification": "v4-verification-report.json",
+  "source_text_modified": false,
+  "reference_assets_in_build": false,
+  "editorial_approval": false
+}

@@ -1,0 +1,397 @@
+{
+  "status": "verification_incomplete",
+  "date": "2026-10-07",
+  "evidence_root": ".cache/indopak-v4/2026-10-06-run2/",
+  "font_renderer_commit": "b4b58f7",
+  "reader_measurement_commit": "7ccce6a",
+  "route_source_commit": "0fede6b",
+  "selection_copy_commit": "da69f33",
+  "tooltip_pointer_commit": "d570f9b",
+  "font_bytes": {
+    "ttf": 242160,
+    "woff2": 92416
+  },
+  "web_gates": {
+    "check_errors": 0,
+    "check_warnings": 0,
+    "lint": "passed",
+    "tests_passed": 2209,
+    "evidence": [
+      "web-check-translation-boot-v2.log",
+      "web-lint-translation-boot-v2.log",
+      "web-test-translation-boot-v2.log"
+    ],
+    "test_max_workers": 4
+  },
+  "segmentation": {
+    "verses": 6236,
+    "boxes": 78297,
+    "contexts": 223,
+    "failures": 0,
+    "reviewed_exceptions": 20,
+    "evidence": "phaseB/segmentation-full.json"
+  },
+  "desktop": [
+    {
+      "engine": "chromium",
+      "version": "153.0.8010.12",
+      "corpus_status": "passed",
+      "verses_per_state": 6236,
+      "corpus_states": 32,
+      "ink_cases": 1338,
+      "private_occurrences": 1383,
+      "invisible": 0,
+      "geometry_mismatches": 0,
+      "boundary_candidates": 0,
+      "collision_candidates": 0,
+      "ring_cases": 1430,
+      "ring_failures": 0,
+      "neighbor_occurrences": 149,
+      "evidence_prefix": "phaseC-final/chromium"
+    },
+    {
+      "engine": "webkit",
+      "version": "26.6",
+      "corpus_status": "passed",
+      "verses_per_state": 6236,
+      "corpus_states": 32,
+      "ink_cases": 1338,
+      "private_occurrences": 1383,
+      "invisible": 0,
+      "geometry_mismatches": 0,
+      "boundary_candidates": 0,
+      "collision_candidates": 0,
+      "ring_cases": 1430,
+      "ring_failures": 0,
+      "neighbor_occurrences": 149,
+      "evidence_prefix": "phaseC-final/webkit"
+    },
+    {
+      "engine": "safari",
+      "version": {
+        "safari:platformVersion": "27.0",
+        "safari:automaticInspection": false,
+        "webkit:WebRTC": {
+          "DisableICECandidateFiltering": false,
+          "DisableInsecureMediaCapture": false
+        },
+        "webkit:alwaysAllowAutoplay": false,
+        "browserVersion": "27.0",
+        "strictFileInteractability": false,
+        "safari:useSimulator": false,
+        "browserName": "Safari",
+        "safari:platformBuildVersion": "26A428",
+        "setWindowRect": true,
+        "safari:automaticProfiling": false,
+        "acceptInsecureCerts": false,
+        "pageLoadStrategy": "normal",
+        "safari:experimentalWebSocketUrl": false,
+        "platformName": "macOS",
+        "safari:diagnose": false
+      },
+      "corpus_status": "passed",
+      "verses_per_state": 6236,
+      "corpus_states": 32,
+      "ink_cases": 1338,
+      "private_occurrences": 1383,
+      "invisible": 0,
+      "geometry_mismatches": 0,
+      "boundary_candidates": 0,
+      "collision_candidates": 0,
+      "ring_cases": 1430,
+      "ring_failures": 0,
+      "neighbor_occurrences": 149,
+      "evidence_prefix": "phaseC-final/safari"
+    },
+    {
+      "engine": "firefox",
+      "version": "155.0",
+      "corpus_status": "passed",
+      "verses_per_state": 6236,
+      "corpus_states": 32,
+      "ink_cases": 1338,
+      "private_occurrences": 1383,
+      "invisible": 0,
+      "geometry_mismatches": 0,
+      "boundary_candidates": 0,
+      "collision_candidates": 0,
+      "ring_cases": 1430,
+      "ring_failures": 0,
+      "neighbor_occurrences": 149,
+      "evidence_prefix": "phaseC-final/firefox"
+    }
+  ],
+  "production_reader": {
+    "verses_per_mode": 6236,
+    "surahs_per_mode": 114,
+    "modes": ["reading", "verse"],
+    "size": 33,
+    "viewport": [390, 844],
+    "chromium": "production-final/chromium-reader-report.json",
+    "native_safari": "production-final/safari-reader-report.json",
+    "webkit_controlled": "production-telemetry-blocked/webkit-reader-report.json",
+    "webkit_condition": "Firebase Installations explicitly blocked; raw unmodified failure retained"
+  },
+  "copy": {
+    "chromium": "passed 6236 verses in 32 states",
+    "webkit": "passed 6236 verses in 32 states",
+    "evidence": "corpus-copy-scoped/",
+    "native_safari": "fresh unlocked-Mac full sweep in progress; previous readiness retry failed after 48 rows",
+    "firefox": "passed 6236 verses in 32 states; Firefox 155.0",
+    "firefox_evidence": "corpus-copy-firefox-final/firefox-corpus-report.json",
+    "native_safari_evidence": "corpus-copy-safari-unlocked/safari-corpus-report.json"
+  },
+  "delivery": {
+    "network": "phaseC-final/delivery/report.json",
+    "offline": "phaseC-final/delivery/offline-report.json",
+    "status": "passed"
+  },
+  "reference": {
+    "build": "cfO91iJO_kGMxzuatsf-J",
+    "font_version": "4.2.1",
+    "font_bytes": 83560,
+    "chapters": 114,
+    "verses": 6236,
+    "observed_pages": 201,
+    "evidence": "reference-current/full-reference-report.json",
+    "line_parity": "review/line-parity-summary.json",
+    "owner_scores": "pending",
+    "reference_assets_in_build": false,
+    "line_spacing_assessment": "line-spacing-review-clean/technical-assessment.json",
+    "line_spacing_followup_build": "C8ogpWPjm5fic3yLrNxLc"
+  },
+  "platform_gaps": [
+    "Android full tiled DOM/neighbor ink",
+    "iPhone/iPad full DOM ink and native reader interactions",
+    "iPad narrow/split view",
+    "oldest iOS/iPadOS versions",
+    "native find-in-page",
+    "VoiceOver/TalkBack"
+  ],
+  "review_gaps": ["owner visual scores", "qualified editorial review", "named printed edition"],
+  "scope_limits": [
+    "emulators/simulators are not physical-device evidence",
+    "canvas ring samples do not establish full DOM ring ink",
+    "native Safari minimum inner width is 336, not requested 320",
+    "font-only pointer change has two-engine pixel equality; native hover validation pending"
+  ],
+  "support_target": {
+    "safari_ios_ipados": "17+",
+    "chrome": "111+",
+    "firefox": "128+",
+    "oldest_versions_verified": false,
+    "actual_runs": {
+      "chromium111": "combined 1338 cases/1383 occurrences and 1430 rings pass; corrected-driver 32-state matrix in progress",
+      "firefox128": "32 matrix states, 1338 DOM cases/1383 occurrences, 1430 ring cases, 16 neighbor states/149 occurrences; zero failures"
+    },
+    "evidence": {
+      "firefox128": "floor-firefox128/",
+      "firefox128_flow": "floor-firefox128-flow/",
+      "chromium111_rings": "floor-chromium111/chromium-ring-report.json",
+      "chromium111_ink": "floor-chromium111-reviewed/chromium-dom-report.json",
+      "chromium111_recaptures": "floor-chromium111-tiled-smoke/"
+    }
+  },
+  "source_text_committed": false,
+  "quran_data_hashed": false,
+  "editorial_approval": false,
+  "results_document": "docs/indopak-v4-results.md",
+  "search_query_hydration_commit": "4ff7e48",
+  "android_ring_ink": {
+    "cases": 1430,
+    "failures": 0,
+    "numbers": [1, 286],
+    "sizes": [22, 24, 33, 48, 56],
+    "dpr": 2.625,
+    "evidence": "phaseC-android-batched-smoke/android-ring-report.json",
+    "platform": "Android emulator; not physical device"
+  },
+  "android_dom_ink": {
+    "status": "raw capture invalid; actual viewport tiled recapture in progress",
+    "cases": 1338,
+    "occurrences": 1383,
+    "raw_invisible_occurrences": 280,
+    "raw_geometry_mismatch": 15,
+    "evidence": "phaseC-android-full/android-dom-report.json",
+    "reason": "oversized native element screenshots repeat viewport content",
+    "tiled_smoke": "phaseC-android-tiled-smoke-v2/",
+    "approval": false,
+    "tiled_smoke_status": "11 cases / 12 occurrences / zero failures",
+    "tiled_full": "phaseC-android-tiled-full/"
+  },
+  "search_result_action_commit": "23d905e",
+  "reader_requested_url_commit": "cf6f3ec",
+  "reader_reveal_pin_commit": "cabdcca",
+  "font_adjustment_audit_commit": "990c617",
+  "reference_viewport_capture_commit": "328178b",
+  "android_neighbor_ink": {
+    "status": "raw capture invalid; tiled recapture required",
+    "cases": 142,
+    "occurrences": 149,
+    "raw_invisible_occurrences": 85,
+    "raw_geometry_mismatch": 6,
+    "evidence": "phaseC-android-full/android-flow-dom-report.json",
+    "approval": false
+  },
+  "search_bookmark": {
+    "chromium_dev": "passed Arabic/English twenty exact snippets each, picker download, requested translated verse 2:64, bookmark 1:7",
+    "evidence": "search-bookmark-reveal-pinned/chromium-search-bookmark-report.json",
+    "production": "Chromium and WebKit each pass three actions, forty exact Arabic/English snippets, actual picker download, translated verse 2:64 and bookmark 1:7; zero runtime/console errors",
+    "production_candidate_commit": "a2ab265",
+    "production_evidence": "search-bookmark-production-translation-boot/",
+    "webkit_dev": "three actions pass after worker boot fix; zero runtime/console errors",
+    "webkit_dev_evidence": "search-bookmark-translation-boot-dev/webkit-search-bookmark-report.json"
+  },
+  "translation_worker_boot_commit": "a2ab265",
+  "native_capture_commit": "0fe9055",
+  "private_bearing_audit_commit": "45b06fa",
+  "reader_interaction_audit_commit": "1ca3f9c",
+  "mobile_geometry": {
+    "iphone": {
+      "status": "passed within specimen geometry scope",
+      "runtime": "27.0 simulator",
+      "reports": [
+        {
+          "evidence": "simulators/iphone-portrait-reading.json",
+          "orientation": "portrait",
+          "mode": "reading",
+          "states": 15,
+          "viewport": [402, 714],
+          "dpr": 3
+        },
+        {
+          "evidence": "simulators/iphone-portrait-verse.json",
+          "orientation": "portrait",
+          "mode": "verse",
+          "states": 15,
+          "viewport": [402, 714],
+          "dpr": 3
+        },
+        {
+          "evidence": "simulators/iphone-landscape-reading-v2.json",
+          "orientation": "landscape",
+          "mode": "reading",
+          "states": 15,
+          "viewport": [750, 338],
+          "dpr": 3
+        },
+        {
+          "evidence": "simulators/iphone-landscape-verse.json",
+          "orientation": "landscape",
+          "mode": "verse",
+          "states": 15,
+          "viewport": [750, 338],
+          "dpr": 3
+        }
+      ],
+      "dom_ink_mask_analysis": "not performed"
+    },
+    "ipad": {
+      "status": "passed within specimen geometry scope",
+      "runtime": "27.0 simulator",
+      "reports": [
+        {
+          "evidence": "simulators/ipad-portrait-reading.json",
+          "orientation": "portrait",
+          "mode": "reading",
+          "states": 15,
+          "viewport": [820, 1094],
+          "dpr": 2
+        },
+        {
+          "evidence": "simulators/ipad-portrait-verse.json",
+          "orientation": "portrait",
+          "mode": "verse",
+          "states": 15,
+          "viewport": [820, 1094],
+          "dpr": 2
+        },
+        {
+          "evidence": "simulators/ipad-landscape-reading.json",
+          "orientation": "landscape",
+          "mode": "reading",
+          "states": 15,
+          "viewport": [1180, 734],
+          "dpr": 2
+        },
+        {
+          "evidence": "simulators/ipad-landscape-verse.json",
+          "orientation": "landscape",
+          "mode": "verse",
+          "states": 15,
+          "viewport": [1180, 734],
+          "dpr": 2
+        }
+      ],
+      "dom_ink_mask_analysis": "not performed"
+    }
+  },
+  "production_interactions": {
+    "candidate_commit": "cabdcca",
+    "status": "Chromium and WebKit five actions each passed with zero runtime/console errors",
+    "evidence": "interactions-production-api-fixed/",
+    "fixtures": "packaged public Firebase config, local installation, empty analytics; service workers blocked"
+  },
+  "android_performance": {
+    "status": "measured, emulator scope only",
+    "app_commit": "cabdcca",
+    "v3_renderer_commit": "104f049",
+    "v4_renderer_commit": "b4b58f7",
+    "evidence": "performance-api-fixed/android-performance-report.json",
+    "summary": [
+      {
+        "variant": "v3",
+        "surah": 2,
+        "trials": 3,
+        "ready_ms": 2236,
+        "total_ms": 23518,
+        "maximum_mounted_spans": 98,
+        "cls": 0.011,
+        "long_tasks": 54,
+        "errors": 0,
+        "verses_seen": [286, 286, 286]
+      },
+      {
+        "variant": "v3",
+        "surah": 26,
+        "trials": 3,
+        "ready_ms": 2289,
+        "total_ms": 7817,
+        "maximum_mounted_spans": 216,
+        "cls": 0.477,
+        "long_tasks": 18,
+        "errors": 0,
+        "verses_seen": [227, 227, 227]
+      },
+      {
+        "variant": "v4",
+        "surah": 2,
+        "trials": 3,
+        "ready_ms": 1752,
+        "total_ms": 20530,
+        "maximum_mounted_spans": 492,
+        "cls": 0.083,
+        "long_tasks": 52,
+        "errors": 0,
+        "verses_seen": [286, 286, 286]
+      },
+      {
+        "variant": "v4",
+        "surah": 26,
+        "trials": 3,
+        "ready_ms": 1851,
+        "total_ms": 7328,
+        "maximum_mounted_spans": 650,
+        "cls": 0.55,
+        "long_tasks": 17,
+        "errors": 0,
+        "verses_seen": [227, 227, 227]
+      }
+    ],
+    "conditions": "same app/dependencies/local environment, actual Android emulator, fourfold CPU throttling, three trials per variant/surah; counters start after DOMContentLoaded"
+  },
+  "native_control": {
+    "status": "Mac locked again after completed geometry checks; manual unlock requested",
+    "remaining": "native find, selection and reader controls; restore iPhone Capture Keyboard to off"
+  }
+}

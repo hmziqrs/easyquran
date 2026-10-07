@@ -1,4 +1,9 @@
-# IndoPak Safari test results — 2026-10-06
+# IndoPak Safari v3 test results — 2026-10-06
+
+**Historical v3 evidence, superseded for the current candidate by
+[v4 verification results](indopak-v4-results.md).** V4 has fresh native Safari ink, whole-corpus,
+neighbor-flow, production-reader and Quran.com layout results. Those scopes do not supply
+older-iOS coverage, owner scores or qualified editorial approval. Items below describe v3.
 
 **Partial coverage. Not a Safari rendering approval.** Native macOS Safari 27.0 and Playwright
 WebKit pass every mechanical and ink check in the full specimen matrices. Layout review items

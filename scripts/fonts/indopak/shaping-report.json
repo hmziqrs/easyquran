@@ -6,5 +6,7 @@
   "ttf_woff2_traces_identical": true,
   "harfbuzz": "12.1.0",
   "limitation": "Forced Arabic/RTL HarfBuzz runs do not model browser bidi itemization.",
-  "production_approved": true
+  "production_approved": true,
+  "approval_scope": "Shaping checks: no .notdef, unaffected runs and TTF/WOFF2 traces. Overall browser/editorial verification is recorded separately.",
+  "expanded_verification": "v4-verification-report.json"
 }
