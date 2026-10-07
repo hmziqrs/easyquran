@@ -508,7 +508,13 @@ export const quranWorker = {
     return request<boolean>((id) => ({ id, type: "hasTranslation", source }));
   },
   ensureTranslation(source: QuranReaderSource): Promise<void> {
-    return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(() => undefined);
+    function download(): Promise<void> {
+      return request<null>((id) => ({ id, type: "ensureTranslation", source })).then(
+        () => undefined,
+      );
+    }
+    if (isReady) return download();
+    return quranWorker.whenReady().then(download);
   },
   setPinnedTranslations(ids: readonly string[]): Promise<void> {
     desiredPinnedTranslations = [...ids];

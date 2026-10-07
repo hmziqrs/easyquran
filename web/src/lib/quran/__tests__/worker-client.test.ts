@@ -89,6 +89,33 @@ async function startReady(): Promise<FakeWorker> {
 }
 
 describe("quranWorker request settlement", () => {
+  it("waits for worker boot before downloading a translation", async () => {
+    const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
+    const fake = FakeWorker.last!;
+    const download = quranWorker.ensureTranslation("en.sahih");
+    await Promise.resolve();
+    expect(fake.posted.map((message) => message.type)).toEqual(["init"]);
+    const init = fake.posted[0]!;
+    fake.emit("message", { id: init.id, ok: true, result: null });
+    await started;
+    await Promise.resolve();
+    const request = fake.posted.at(-1)!;
+    expect(request.type).toBe("ensureTranslation");
+    fake.emit("message", { id: request.id, ok: true, result: null });
+    await expect(download).resolves.toBeUndefined();
+  });
+
+  it("rejects a queued translation download when worker boot fails", async () => {
+    const started = quranWorker.start(ARTIFACTS, QURAN_DATA.coordinates);
+    const bootFailure = expect(started).rejects.toThrow("boot failed");
+    const download = quranWorker.ensureTranslation("en.sahih");
+    const downloadFailure = expect(download).rejects.toThrow("boot failed");
+    const fake = FakeWorker.last!;
+    fake.emit("error", { error: new Error("boot failed"), message: "boot failed" });
+    await Promise.all([bootFailure, downloadFailure]);
+    expect(fake.posted.map((message) => message.type)).toEqual(["init"]);
+  });
+
   it("coalesces pre-ready pinned translations and sends only latest state", async () => {
     const first = quranWorker.setPinnedTranslations(["en.sahih"]);
     const second = quranWorker.setPinnedTranslations(["ur.jalandhry", "en.sahih"]);
