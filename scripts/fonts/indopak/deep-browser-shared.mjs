@@ -542,7 +542,9 @@ export function paintOccurrences(items) {
 
 export async function fontAdjustmentEvidence(reference) {
   const sampleText = reference.words.map((word) => word.text).join(" ");
+  const effectiveSize = 33 * reference.size_adjust;
   await document.fonts.load('33px "IndoPak Reader Compat"', sampleText);
+  await document.fonts.load(`${effectiveSize}px "IndoPak Audit Upstream"`, sampleText);
   await document.fonts.load('132px "IndoPak Audit Upstream"', sampleText);
   const samples = [];
   for (const word of reference.words) {
@@ -555,15 +557,18 @@ export async function fontAdjustmentEvidence(reference) {
     document.body.append(element);
     const width = element.getBoundingClientRect().width;
     element.style.fontFamily = '"IndoPak Audit Upstream"';
+    element.style.fontSize = `${effectiveSize}px`;
+    const expected = element.getBoundingClientRect().width;
     element.style.fontSize = "132px";
     const upstream = element.getBoundingClientRect().width / 4;
     element.remove();
-    const expected = upstream * reference.size_adjust;
     const harfbuzz = word.packaged_advance_em * reference.size_adjust * 33;
     samples.push({
       key: word.key,
       width,
       upstream_33_px: upstream,
+      upstream_normalized_adjusted_px: upstream * reference.size_adjust,
+      upstream_effective_font_size_css_px: effectiveSize,
       expected,
       harfbuzz_expected: harfbuzz,
       engine_shaping_delta_px: width - harfbuzz,
@@ -578,7 +583,7 @@ export async function fontAdjustmentEvidence(reference) {
       .map((face) => ({ status: face.status, size_adjust: face.sizeAdjust })),
     samples,
     advance_tolerance_css_px: 1 / 32,
-    reference_measurement: "Same engine, pinned upstream face at 132px divided by four",
+    reference_measurement: "Same engine, pinned upstream face at identical effective font size",
   };
 }
 export function layoutOverflow() {
