@@ -203,9 +203,12 @@
 
 <svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
+<!-- data-tweaks-root: layout.css hides this floating trigger while any modal dialog is open —
+     z-[1000] keeps it over page chrome, but it must never float above a modal's overlay. -->
 <div
   lang={locale}
   dir={direction}
+  data-tweaks-root
   class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3"
 >
   {#if open && copy && paletteCopy}

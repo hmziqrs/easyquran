@@ -451,17 +451,35 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("navigates to another translation preserving position and records the source", async () => {
-    h.nav.url = new URL("https://example.test/t/ms/basmeih/juz/30");
+    h.nav.url = new URL("https://example.test/t/en/sahih/juz/30");
     await open({ primaryId: "en.sahih" });
-    const link = switchLinks().find((a) =>
-      a.getAttribute("aria-label")?.includes("Saheeh International"),
-    );
-    expect(link?.getAttribute("href")).toContain("/t/en/sahih/juz/30");
+    // The route primary has no switch of its own: it is already the page.
+    expect(
+      switchLinks().some((a) => a.getAttribute("aria-label")?.includes("Saheeh International")),
+    ).toBe(false);
+    const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
+    expect(link?.getAttribute("href")).toContain("/t/en/pickthall/juz/30");
     link?.click();
-    expect(h.setSourceId).toHaveBeenCalledWith("en.sahih");
+    expect(h.setSourceId).toHaveBeenCalledWith("en.pickthall");
     await settle();
     // modal closed after the primary switch
     expect(document.querySelector("input[type='search']")).toBeNull();
+  });
+
+  it("checks a row when its name is tapped and keeps the modal open", async () => {
+    await open({ primaryId: "en.sahih" });
+    const row = pane().querySelector('li[data-translation-row="en.pickthall"]');
+    // The name sits inside the toggle label, never inside a link.
+    const label = row?.querySelector("label[data-row-target]");
+    expect(label?.querySelector("a")).toBeNull();
+    // SAFETY: the label's first text span is the translation name
+    const name = label?.querySelector("span.truncate") as HTMLElement | null;
+    expect(name?.textContent?.trim()).toBe("Pickthall");
+    name?.click();
+    await settle();
+    expect([...stackedTranslations.ids]).toEqual(["en.pickthall"]);
+    expect(h.setSourceId).not.toHaveBeenCalled();
+    expect(document.querySelector("input[type='search']")).not.toBeNull();
   });
 
   it("disables unselected rows when the cap of five extras is reached", async () => {
@@ -633,9 +651,10 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
     // >=44px cover + no double-tap-zoom window on it
     expect(label?.className).toContain("min-h-11");
     expect(label?.className).toContain("touch-manipulation");
-    // the name link stretches to the full row height (>=44px target) and keeps
-    // the primary-switch role
+    // the trailing primary-switch link stretches to the full row height (>=44px
+    // target) and sits beside the label, never inside it
     const link = row?.querySelector("a[data-switch]");
+    expect(link?.closest("label")).toBeNull();
     expect(link?.className).toContain("self-stretch");
     // clicking the row cover (not the checkbox) toggles the selection
     label?.click();

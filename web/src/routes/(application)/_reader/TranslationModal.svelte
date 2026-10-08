@@ -295,11 +295,12 @@
     return t.translator.trim().toLowerCase() !== t.name.trim().toLowerCase();
   }
 
-  // Row cover classes (stress S9): one >=44px (min-h-11) cover per row, so the
-  // checkbox zone and the switch link both sit on full-row targets. "toggle"
-  // rows are labels whose whole surface toggles the checkbox; "locked" mirrors
-  // a disabled checkbox (reading mode / cap); "static" covers primary rows,
-  // which have no checkbox to associate (switching stays on the name link).
+  // Row cover classes (stress S9): one >=44px (min-h-11) cover per row. "toggle"
+  // rows are labels whose whole surface — checkbox, name, author — toggles the
+  // checkbox and keeps the modal open; "locked" mirrors a disabled checkbox
+  // (cap reached); "static" covers primary rows, which have no checkbox to
+  // associate. Switching the primary is a separate trailing control, never the
+  // name: a tap on a name must check it, not navigate away and close.
   // touch-manipulation kills the double-tap-zoom window without breaking the
   // pane's scroll (stress S13).
   function rowCoverClass(kind: "toggle" | "locked" | "static"): string {
@@ -353,13 +354,18 @@
 
 <Dialog.Root bind:open>
   <Dialog.Portal>
-    <Dialog.Overlay class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+    <Dialog.Overlay
+      class="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+    />
+    <!-- Phones get a bottom sheet with a fixed height, so swapping rail ↔ pane never
+         makes the sheet jump; md+ keeps the centered dialog. -->
     <Dialog.Content
-      class="fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[min(94vw,780px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover bg-clip-padding pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] text-popover-foreground shadow-lg"
+      class="fixed bottom-0 left-0 right-0 z-50 flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-border bg-popover bg-clip-padding pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 max-md:data-[state=open]:slide-in-from-bottom-10 md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:h-auto md:max-h-[85vh] md:w-[min(94vw,780px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:border md:pt-[env(safe-area-inset-top)] md:data-[state=open]:zoom-in-95"
     >
       <!-- S11 (stress A3): env(safe-area-inset-*) padding keeps modal content
            clear of notches/home indicators on devices that report insets. -->
-      <div class="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+      <div class="mx-auto mt-2 h-1 w-10 flex-none rounded-full bg-border-strong md:hidden" aria-hidden="true"></div>
+      <div class="flex items-center justify-between gap-3 px-5 pb-3 pt-2 md:pt-4">
         <Dialog.Title class="text-[17px] font-semibold leading-tight">
           {picking ? copy.shell.readingTranslationPick : copy.stacked.title}
         </Dialog.Title>
@@ -389,7 +395,7 @@
             oninput={(e) => (searchQuery = e.currentTarget.value)}
             placeholder={copy.stacked.searchPlaceholder}
             aria-label={copy.stacked.searchPlaceholder}
-            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
+            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-base text-foreground shadow-none outline-none md:text-sm placeholder:text-muted-foreground focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
           {#if searchQuery !== ""}
             <!-- S9 (stress A1): the clear affordance stays visually small, but
@@ -411,7 +417,7 @@
           {#if quickRows.length > 0}
             <div data-quick-picks class="flex items-center gap-3 px-5 py-3">
               <span class="flex-none text-xs text-muted-foreground">{copy.shell.readingRecent}</span>
-              <div class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain">
+              <div class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {#each quickRows as t (t.id)}
                   {@const current = t.id === readPick?.current}
                   <button
@@ -437,14 +443,17 @@
                  momentum; overscroll-contain stops end-of-strip flicks from
                  chaining to the page behind the modal (S12). -->
             <div
-              class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain"
+              class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {#each selectedRows as t (t.id)}
                 {@const isPrimary = t.id === primaryId}
                 {@const extraIndex = selectedIds.indexOf(t.id)}
                 <div
                   data-chip={t.id}
-                  class="group/chip inline-flex h-11 max-w-full flex-none touch-manipulation items-center gap-1 rounded-pill border border-border bg-background-subtle pe-0.5 ps-2.5 transition-colors hover:border-border-strong"
+                  class={[
+                    "group/chip inline-flex h-11 max-w-full flex-none touch-manipulation items-center gap-1 rounded-pill border border-border bg-background-subtle ps-2.5 transition-colors hover:border-border-strong",
+                    isPrimary ? "pe-3" : "pe-0.5",
+                  ]}
                 >
                   <span class="flex-none text-xs leading-none" aria-hidden="true">
                     {flagFor(t.languageCode).flag}
@@ -508,14 +517,16 @@
                       <Icon name="arrow-right" size={12} class="rotate-90" />
                     </button>
                   {/if}
-                  <button
-                    type="button"
-                    onclick={() => remove(t.id)}
-                    aria-label={copy.stacked.remove}
-                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground"
-                  >
-                    <Icon name="x" size={13} />
-                  </button>
+                  {#if !isPrimary}
+                    <button
+                      type="button"
+                      onclick={() => remove(t.id)}
+                      aria-label={copy.stacked.remove}
+                      class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground"
+                    >
+                      <Icon name="x" size={13} />
+                    </button>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -563,10 +574,9 @@
                FocusEvent-cast — they are bits-ui's own onfocus/onblur. -->
           <!-- S9/S10 (stress A1/A2): the row body is a <label> tied to the row
                checkbox, so checkbox + name + author + the touch-only source
-               line form one >=44px toggle target; the name link stays a link
-               (primary switch) but self-stretches to the full row height, so
-               it also lands on a >=44px target. Primary rows keep a plain
-               cover — no checkbox to associate. -->
+               line form one >=44px toggle target. The primary switch is a
+               separate full-height trailing link beside the label. Primary
+               rows keep a plain cover — no checkbox to associate. -->
 
           <Tooltip>
             <TooltipTrigger tabindex={-1}>
@@ -580,7 +590,7 @@
                   onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
                   onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
                   data-translation-row={t.id}
-                  class="flex rounded-lg transition-colors {checked
+                  class="group/row flex rounded-lg transition-colors {checked
                     ? 'bg-primary/10'
                     : 'hover:bg-surface-hover'}"
                 >
@@ -613,60 +623,29 @@
                       class="size-[18px] flex-none cursor-pointer touch-manipulation accent-primary disabled:cursor-not-allowed"
                     />
                   {/if}
-                  {#if href}
-                    <a
-                      href={publicHref(readerHrefFor(copy.locale, href))}
-                      data-switch
-                      data-sveltekit-preload-data="hover"
-                      onclick={() => onPrimary(t)}
-                      aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
-                      class="flex min-w-0 flex-1 cursor-pointer touch-manipulation flex-col justify-center self-stretch"
-                    >
-                      <span class="block truncate text-sm font-medium text-foreground">
-                        {t.name}
-                      </span>
-                      {#if hasAuthorLine(t)}
-                        <span
-                          data-author-line
-                          class="block truncate text-[12.5px] leading-snug text-muted-foreground"
-                        >
-                          {t.translator}
-                        </span>
-                      {/if}
-                      <!-- S10 (stress A2): provenance is hover-tooltip-only, so
-                           coarse pointers get it as a muted text line instead
-                           ([@media(hover:hover)]:hidden keeps hover devices on
-                           the clean one/two-line row). -->
-                      <span
-                        data-row-source
-                        class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
-                      >
-                        {copy.translations.sourceLabel(translationSourceOf(t.id))}
-                      </span>
-                    </a>
-                  {:else}
-                    <span
-                      class="flex min-w-0 flex-1 flex-col justify-center self-stretch"
-                    >
-                      <span class="block truncate text-sm font-medium text-foreground">
-                        {t.name}
-                      </span>
-                      {#if hasAuthorLine(t)}
-                        <span
-                          data-author-line
-                          class="block truncate text-[12.5px] leading-snug text-muted-foreground"
-                        >
-                          {t.translator}
-                        </span>
-                      {/if}
-                      <span
-                        data-row-source
-                        class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
-                      >
-                        {copy.translations.sourceLabel(translationSourceOf(t.id))}
-                      </span>
+                  <span class="flex min-w-0 flex-1 flex-col justify-center self-stretch">
+                    <span class="block truncate text-sm font-medium text-foreground">
+                      {t.name}
                     </span>
-                  {/if}
+                    {#if hasAuthorLine(t)}
+                      <span
+                        data-author-line
+                        class="block truncate text-[12.5px] leading-snug text-muted-foreground"
+                      >
+                        {t.translator}
+                      </span>
+                    {/if}
+                    <!-- S10 (stress A2): provenance is hover-tooltip-only, so
+                         coarse pointers get it as a muted text line instead
+                         ([@media(hover:hover)]:hidden keeps hover devices on
+                         the clean one/two-line row). -->
+                    <span
+                      data-row-source
+                      class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
+                    >
+                      {copy.translations.sourceLabel(translationSourceOf(t.id))}
+                    </span>
+                  </span>
                   {#if isPrimary}
                     <span
                       class="flex-none rounded-pill bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
@@ -697,6 +676,22 @@
                     >
                       {@render coverBody()}
                     </label>
+                  {/if}
+                  {#if href && !isPrimary}
+                    <!-- Switch the route primary to this translation (keeps the
+                         reading position). Revealed on row hover/focus where a
+                         pointer can hover; always shown on touch. -->
+                    <a
+                      href={publicHref(readerHrefFor(copy.locale, href))}
+                      data-switch
+                      data-sveltekit-preload-data="hover"
+                      onclick={() => onPrimary(t)}
+                      aria-label={`${copy.translations.switchTo}: ${rowLabel(t)}`}
+                      title={copy.translations.switchTo}
+                      class="flex w-11 flex-none cursor-pointer touch-manipulation items-center justify-center self-stretch rounded-lg text-muted-foreground transition-[opacity,color] hover:text-foreground focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/row:opacity-100 [@media(hover:hover)]:group-focus-within/row:opacity-100"
+                    >
+                      <Icon name="arrow-right" size={15} />
+                    </a>
                   {/if}
                 </li>
               {/snippet}
@@ -779,13 +774,11 @@
                     {l.language}
                   </span>
                   {#if l.autonym !== null}
-                    <!-- dir=auto: RTL/script autonyms render in their own direction -->
-                    <span
-                      data-language-autonym
-                      dir="auto"
-                      class="truncate text-xs leading-tight text-muted-foreground"
-                    >
-                      {l.autonym}
+                    <!-- bdi dir=auto: an RTL autonym keeps its own direction but
+                         stays start-aligned under the name (a block with dir=auto
+                         flipped العربية to the far edge). -->
+                    <span class="truncate text-xs leading-tight text-muted-foreground">
+                      <bdi data-language-autonym dir="auto">{l.autonym}</bdi>
                     </span>
                   {/if}
                 </span>
@@ -798,7 +791,7 @@
 
           <section
             data-language-pane
-            class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 touch-manipulation flex-col overflow-y-auto overscroll-contain"
+            class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain"
           >
             {#if searchActive}
               <div class="flex items-center gap-2 px-4 pb-1 pt-3">

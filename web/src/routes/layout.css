@@ -966,6 +966,12 @@
   word-spacing: 0.14em;
 }
 
+/* The floating appearance trigger (Tweaks, z-1000) never sits above a modal's overlay. Unlayered
+   on purpose: a rule inside @layer base would lose to the trigger's own `flex` utility. */
+body:has([role="dialog"][aria-modal="true"]) [data-tweaks-root] {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
