@@ -1,27 +1,33 @@
 import { randomBytes } from "node:crypto";
 
-import { building } from "$app/environment";
-import { QURAN } from "$lib/config/site";
-import { SURAH_COUNT } from "$lib/data/quran-data";
-import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
-import { MARKETING_PATHS, MARKETING_PUBLICATIONS, type MarketingPageId } from "$lib/i18n/marketing";
-import { paraglideMiddleware } from "$lib/paraglide/server";
+import { building } from "$app/env";
+import type { RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
+
+import { QURAN } from "#lib/config/site.js";
+import { SURAH_COUNT } from "#lib/data/quran-data.js";
+import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "#lib/i18n/locales.js";
+import {
+  MARKETING_PATHS,
+  MARKETING_PUBLICATIONS,
+  type MarketingPageId,
+} from "#lib/i18n/marketing.js";
+import { paraglideMiddleware } from "#lib/paraglide/server.js";
 import {
   agentNotFoundMarkdown,
   appendVaryAccept,
   mdSiblingRequest,
   notAcceptableBody,
   preferredType,
-} from "$lib/server/markdown-negotiation";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { diskCacheKey, getCachedHtml, setCachedHtml } from "$lib/server/quran-disk-cache";
+} from "#lib/server/markdown-negotiation.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { diskCacheKey, getCachedHtml, setCachedHtml } from "#lib/server/quran-disk-cache.js";
 import {
   localizedReaderLocale,
   parseReaderRoute,
   surahLocalRedirectTarget,
   type ParsedReaderRoute,
-} from "$lib/server/reader-route";
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+} from "#lib/server/reader-route.js";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
@@ -467,9 +473,12 @@ export const handle: Handle = async ({ event, resolve }) => {
       response = notFound(event);
     } else if (useI18n) {
       const resolved: NonceHolder = {};
-      response = await paraglideMiddleware(event.request, async ({ request, locale }) => {
+      response = await paraglideMiddleware(event.request, async ({ locale }) => {
         if (!isUiLocale(locale)) return notFound(event);
-        event.request = request;
+        // kit 3 made `event.request` readonly. The kit 2 code re-assigned
+        // paraglide's re-localized Request here, but nothing downstream reads
+        // `event.request.url` (only method + headers, which the localized
+        // clone preserves verbatim), so the assignment is dropped, not replaced.
         const readerRoute = readerLocale ? parseReaderRoute(event.route.id, event.params) : null;
         const out = await resolveRequest(event, resolve, locale, readerRoute, requestHasCookie);
         resolved.nonce = out.nonce;

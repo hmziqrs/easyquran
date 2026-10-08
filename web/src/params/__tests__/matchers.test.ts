@@ -1,11 +1,16 @@
-import { textVariantEntries } from "$lib/seo/render";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+import { textVariantEntries } from "#lib/seo/render.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
-import { match as marketingText } from "../marketingText";
-import { match as surahSlug } from "../surahSlug";
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
+
+import { matchMarketingText as marketingText, matchSurahSlug as surahSlug } from "../../params.js";
 
 /**
  * Dispatcher split for the two same-depth single-segment `.md` families
@@ -13,38 +18,40 @@ import { match as surahSlug } from "../surahSlug";
  * `[surah].md` would otherwise be resolved by SvelteKit's param-name
  * tie-break). The matchers make the two families disjoint by construction:
  * `about.md` can only be the marketing twin, `al-baqarah.md` only the reader
- * twin, and an unknown slug matches neither (404).
+ * twin, and an unknown slug matches neither (404). Kit 3 matchers return the
+ * parsed param on match and `undefined` on no-match (the boolean `true`/`false`
+ * era is gone), so these specs assert the echoed slug or `undefined`.
  */
 describe("[slug=marketingText] matcher", () => {
   it("admits exactly the six marketing text-variant slugs", () => {
-    expect(marketingText("index")).toBe(true);
-    expect(marketingText("about")).toBe(true);
-    expect(marketingText("faq")).toBe(true);
-    expect(marketingText("contact")).toBe(true);
-    expect(marketingText("privacy")).toBe(true);
-    expect(marketingText("terms")).toBe(true);
+    expect(marketingText("index")).toBe("index");
+    expect(marketingText("about")).toBe("about");
+    expect(marketingText("faq")).toBe("faq");
+    expect(marketingText("contact")).toBe("contact");
+    expect(marketingText("privacy")).toBe("privacy");
+    expect(marketingText("terms")).toBe("terms");
   });
 
   it("rejects reader slugs, reserved words, and junk", () => {
-    expect(marketingText("al-baqarah")).toBe(false);
-    expect(marketingText("juz")).toBe(false);
-    expect(marketingText("search")).toBe(false);
-    expect(marketingText("Index")).toBe(false);
-    expect(marketingText("")).toBe(false);
-    expect(marketingText("about/extra")).toBe(false);
+    expect(marketingText("al-baqarah")).toBeUndefined();
+    expect(marketingText("juz")).toBeUndefined();
+    expect(marketingText("search")).toBeUndefined();
+    expect(marketingText("Index")).toBeUndefined();
+    expect(marketingText("")).toBeUndefined();
+    expect(marketingText("about/extra")).toBeUndefined();
   });
 
   it("admits exactly the prerendered textVariantEntries set", () => {
     const entries = textVariantEntries().map((entry) => entry.slug);
     expect(entries).toHaveLength(6);
-    for (const slug of entries) expect(marketingText(slug)).toBe(true);
+    for (const slug of entries) expect(marketingText(slug)).toBe(slug);
   });
 });
 
 describe("[surah=surahSlug] matcher", () => {
   it("admits baked surah slugs", () => {
     for (const surah of QURAN_DATA.surahs) {
-      expect(surahSlug(surah.slug)).toBe(true);
+      expect(surahSlug(surah.slug)).toBe(surah.slug);
     }
     expect(QURAN_DATA.surahs.length).toBe(114);
   });
@@ -69,24 +76,24 @@ describe("[surah=surahSlug] matcher", () => {
       "privacy",
       "terms",
     ]) {
-      expect(surahSlug(word), word).toBe(false);
+      expect(surahSlug(word), word).toBeUndefined();
     }
   });
 
   it("rejects non-grammar input", () => {
-    expect(surahSlug("Al-Fatihah")).toBe(false);
-    expect(surahSlug("-al-fatihah")).toBe(false);
-    expect(surahSlug("al-fatihah-")).toBe(false);
-    expect(surahSlug("")).toBe(false);
-    expect(surahSlug("2")).toBe(false);
+    expect(surahSlug("Al-Fatihah")).toBeUndefined();
+    expect(surahSlug("-al-fatihah")).toBeUndefined();
+    expect(surahSlug("al-fatihah-")).toBeUndefined();
+    expect(surahSlug("")).toBeUndefined();
+    expect(surahSlug("2")).toBeUndefined();
   });
 
   it("keeps the two .md families disjoint (dispatcher invariant)", () => {
     const marketing = textVariantEntries().map((entry) => entry.slug);
     for (const surah of QURAN_DATA.surahs) {
       expect(marketing, surah.slug).not.toContain(surah.slug);
-      expect(marketingText(surah.slug)).toBe(false);
+      expect(marketingText(surah.slug)).toBeUndefined();
     }
-    for (const slug of marketing) expect(surahSlug(slug)).toBe(false);
+    for (const slug of marketing) expect(surahSlug(slug)).toBeUndefined();
   });
 });

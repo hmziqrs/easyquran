@@ -1,12 +1,13 @@
 import { goto } from "$app/navigation";
-import { resumeCtxFor, surahAyahPathFor, type SurahRouteContext } from "$lib/data/quran";
-import { loadQuranData } from "$lib/data/quran-data-client";
-import type { UiLocale } from "$lib/i18n/locales";
-import { publicHref } from "$lib/i18n/public-href";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { getLocale } from "$lib/paraglide/runtime.js";
-import type { LastReadAnchor } from "$lib/stores/reader-core.svelte";
-import { reader } from "$lib/stores/reader.svelte";
+
+import { loadQuranData } from "#lib/data/quran-data-client.js";
+import { resumeCtxFor, surahAyahPathFor, type SurahRouteContext } from "#lib/data/quran.js";
+import type { UiLocale } from "#lib/i18n/locales.js";
+import { publicHref } from "#lib/i18n/public-href.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
+import type { LastReadAnchor } from "#lib/stores/reader-core.svelte.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 export type ResumeOptions = { replaceState?: boolean; anchor?: LastReadAnchor | null };
 
@@ -25,11 +26,15 @@ export async function resumeToVerse(
     reader.openVerse(num, n, sourceId);
     if (options.anchor) reader.setPendingAnchor(options.anchor);
     // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
+    // kit 3 merged keepFocus/noScroll into one `reset` flag. The old options kept
+    // focus only when replacing while scroll-to-anchor always ran; one flag cannot
+    // split the two, and every current caller passes replaceState: false (both old
+    // flags meant "reset"), so reset stays true and only `replace` varies.
     await goto(
       publicHref(readerHrefFor(getLocale() as UiLocale, surahAyahPathFor(resumeCtx, surah, n))),
       {
-        keepFocus: !options.replaceState,
-        replaceState: options.replaceState,
+        reset: true,
+        replace: options.replaceState,
       },
     );
     return true;

@@ -1,7 +1,13 @@
 /// <reference types="@sveltejs/kit" />
 /// <reference lib="webworker" />
 
-import { base, build, files, version } from "$service-worker";
+// Kit 3 removed `$service-worker`: `version` now comes from `$app/env`, the
+// Vite-generated file list (`build`) is `$app/manifest`'s `immutable`, the
+// static-dir file list (`files`) is its `assets`, and `base`-prefixed paths
+// are built with `resolve()` from `$app/paths`.
+import { version } from "$app/env";
+import { assets, immutable } from "$app/manifest";
+import { resolve } from "$app/paths";
 
 import {
   SKIP_WAITING,
@@ -44,18 +50,30 @@ const META_STORE = "meta";
 export const PRUNE_GRACE_MS = 10 * 60 * 1000;
 export const PRUNE_DEADLINE_KEY = "pruneDeadline";
 
-const SHELL_ROUTE = `${base}/404.html`;
+// SAFETY: kit 3 `$app/paths` has no `base` export; resolve()'s pathname branch
+// (non-leading-slash argument) prefixes the base path without a route lookup.
+// `404.html` and `quran-meta/…` are build artifacts outside the generated `Path`
+// union, so resolve is re-branded to the plain pathname signature.
+const resolveAny = resolve as unknown;
+// SAFETY: carried over from `resolveAny` above — same function value, only
+// re-branded to the string-pathname signature the precache lists need.
+const resolvePath = resolveAny as (pathname: string) => string;
+const SHELL_ROUTE = resolvePath("404.html");
 const NAV_TIMEOUT_MS = 3500;
 export const PAGES_MAX = 300;
 export const DATA_MAX = 400;
 export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
 
+// kit 2's `$service-worker.build` + `.files` become `manifest.immutable`
+// (Vite output) + `manifest.assets` (static dir); both are `{ path }` objects.
+const PRECACHE_FILES: string[] = [...immutable, ...assets].map((entry) => entry.path);
+
 const PRECACHE = Array.from(
-  new Set([...build, ...files, "/", "/surah", `${base}/quran-meta/quran-data.json`]),
+  new Set([...PRECACHE_FILES, "/", "/surah", resolvePath("quran-meta/quran-data.json")]),
 );
 
-const IMMUTABLE = new Set([...build, ...files]);
+const IMMUTABLE = new Set(PRECACHE_FILES);
 
 export function normalizeDataKey(url: string | URL): string {
   const u = url instanceof URL ? url : new URL(url, sw.location.origin);

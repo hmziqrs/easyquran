@@ -1,5 +1,6 @@
-import { deLocalizeUrl } from "$lib/paraglide/runtime";
-import type { Reroute } from "@sveltejs/kit";
+import type { Reroute } from "@sveltejs/kit/hooks";
+
+import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
 
 const SURAH_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
