@@ -127,7 +127,7 @@ export function buildReport(dir: string): string {
 </style>
 <main>
   <h1>EasyQuran SSR runtime benchmark</h1>
-  <p class="sub">Same <code>adapter-node</code> build, three runtimes · profile <code>${meta.profile.id}</code> · ${new Date(meta.at).toLocaleString()}</p>
+  <p class="sub">One <code>adapter-bun</code> build, served by Bun · profile <code>${meta.profile.id}</code> · ${new Date(meta.at).toLocaleString()}</p>
   ${meta.note ? `<p class="banner"><strong>Directional only.</strong> ${meta.note}</p>` : ""}
   <dl class="facts">
     <div><dt>host</dt><dd>${meta.cpus}× ${meta.cpuModel ?? "cpu"} · ${meta.memGb} GB</dd></div>

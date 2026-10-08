@@ -1,6 +1,6 @@
 # EasyQuran — web
 
-SvelteKit 2 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-node`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`).
+SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `pnpm build` shells out to `bun run --bun vp build` (adapter-bun's `adapt()` calls `Bun.build`) and `pnpm start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
 
 ## Run
 
@@ -11,7 +11,7 @@ Repo root (`just` picks DB source):
 
     just web-dev local     # dev, SQLite served at /_quran from the gitignored db/quran/
     just web-dev prod      # dev, same-origin gateway to R2
-    just web-build prod    # adapter-node build + Arabic prerender output
+    just web-build prod    # SvelteKit 3 build under bun (adapter-bun) + Arabic prerender output
     just docker-up local   # Bun web + Axum API, localhost:8080 / :8888
 
 `PUBLIC_ENV` = `local|prod`. Selects DB origin only. `pnpm dev`->local, `pnpm build`->prod, Docker always prod.
@@ -21,7 +21,7 @@ space as an allowlisted streaming gateway to R2, so OPFS downloads never depend 
 In `web/`:
 
     pnpm dev | build | preview
-    pnpm start      # run the production build + static/dynamic header policy
+    pnpm start      # bun server.ts — production build + static/dynamic header policy
     pnpm check      # svelte-check + worker tsconfig
     vp lint | fmt | check
 

@@ -1,0 +1,16 @@
+{
+  // The bench harness is plain TypeScript over node builtins — it does not build
+  // against the web app's `$app/tsconfig` base. `types: ["node"]` resolves
+  // @types/node from the repo-root node_modules. `allowImportingTsExtensions`
+  // matches the harness's explicit `.ts` relative imports and requires noEmit.
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

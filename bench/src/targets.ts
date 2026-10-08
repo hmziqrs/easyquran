@@ -5,7 +5,6 @@ import { Zipf, rng } from "./zipf.ts";
 
 const TRANSLATION_ALPHA = 1.0;
 const SURAH_ALPHA = 0.8;
-const FIRST_PAGE_SHARE = 0.55;
 /** Cap on distinct lines written per stage — vegeta cycles the file when it runs out. */
 const MAX_TARGET_LINES = 60_000;
 
@@ -20,18 +19,22 @@ export interface TargetSet {
   readonly distinct: readonly string[];
 }
 
-function translatedSurahUrl(id: string, slug: string, page: number): string {
+/**
+ * Translated surah root (scheme A, one URL per surah): the whole server-visible cache key.
+ * Page drift is client-side virtualization on this URL; page-shaped traffic belongs to the
+ * global-page family (`/t/{lang}/{translator}/page/{n}`), not a surah path tail.
+ */
+function translatedSurahUrl(id: string, slug: string): string {
   const { lang, translator } = segmentsOf(id);
-  const base = `/app/${slug}/t/${lang}/${translator}`;
-  return page > 1 ? `${base}/page/${page}` : base;
+  return `/${slug}/t/${lang}/${translator}`;
 }
 
-/** Prerendered Arabic HTML: served off disk by adapter-node, no SSR, no upstream call. */
-function arabicUrl(ks: Keyspace, sIndex: number, roll: number, page: number): string {
+/** Prerendered Arabic HTML: served off disk by adapter-bun, no SSR, no upstream call. */
+function arabicUrl(ks: Keyspace, sIndex: number, roll: number): string {
   const surah = ks.surahs[sIndex]!;
-  if (roll < 0.7) return page > 1 ? `/app/${surah.slug}/page/${page}` : `/app/${surah.slug}`;
-  if (roll < 0.9) return `/app/page/${1 + Math.floor((roll - 0.7) * 5 * 604)}`;
-  return `/app/juz/${1 + Math.floor((roll - 0.9) * 10 * 30)}`;
+  if (roll < 0.7) return `/${surah.slug}`;
+  if (roll < 0.9) return `/page/${1 + Math.floor((roll - 0.7) * 5 * 604)}`;
+  return `/juz/${1 + Math.floor((roll - 0.9) * 10 * 30)}`;
 }
 
 /**
@@ -53,15 +56,10 @@ export function buildTargets(suite: string, count: number, file: string, seed = 
   for (let i = 0; i < lines; i += 1) {
     const sIndex = surahs.sample();
     const surah = ks.surahs[sIndex]!;
-    // Readers open at the top and drift down: page 1 dominates, the rest share the tail.
-    const page =
-      surah.localPages === 1 || coin() < FIRST_PAGE_SHARE
-        ? 1
-        : 2 + Math.floor(coin() * (surah.localPages - 1));
     const url =
       suite === "translated-surah"
-        ? translatedSurahUrl(usable[translations.sample()]!, surah.slug, page)
-        : arabicUrl(ks, sIndex, coin(), page);
+        ? translatedSurahUrl(usable[translations.sample()]!, surah.slug)
+        : arabicUrl(ks, sIndex, coin());
     urls.push(url);
     distinct.add(url);
   }

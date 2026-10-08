@@ -27,8 +27,8 @@ Navigation parity with the Quran's own print model, as quran.com implements it:
    usable from any reader route, not only from a surah route.
 3. **quran.com's next/prev semantics per view.** Surah view = continuous scroll over
    **one canonical URL**, closed by an end-of-surah card linking the next/prev
-   *surah*; page view (`/app/page/N`) and juz view keep explicit next/prev links
-   *within their own family*. No path rewrite while scrolling; no per-spread
+   _surah_; page view (`/app/page/N`) and juz view keep explicit next/prev links
+   _within their own family_. No path rewrite while scrolling; no per-spread
    canonicals.
 
 What we deliberately do **not** adopt (see D9/D10, §4): quran.com's "translation is
@@ -41,24 +41,24 @@ from sitemap `<loc>`).
 
 ## 2. Confirmed discrepancies and decisions
 
-| ID | Where (verified) | Gap | Severity | Decision |
-| --- | --- | --- | --- | --- |
-| D1 | `web/src/lib/data/quran.ts:55-62`, `app/[surah]/page/[localPage]/+page.server.ts:11-18`, `_reader/ReaderHeader.svelte:61`, `_reader/ReaderPageNav.svelte:52-74`, `lib/data/quran-data.ts:293-320`, `_reader/Sidebar.svelte:84-87` | Surah reader paginates by surah-LOCAL page numbers; one printed page splits across multiple surah URLs (page 601 = local page 1 of surahs 103, 104 **and** 105) | high | **Remove the surah-local page scheme.** Surah = one canonical URL; page addressing = global `/app/page/N` only; every label shows the global page |
-| D2 | `_reader/SurahReader.svelte:859-867,636-657,190-195`, `_reader/translation-nav.ts:63-66` | Scroll rewrites the history entry's **path** to `/app/{slug}/page/N`; canonical churns with scroll | medium | Scroll never changes path. Position rides in `history.state` (already snapshot-based) + `?v={surah}:{ayah}` query only — path and canonical stay the bare surah URL |
-| D3 | `_reader/SurahPageRoute.svelte:32-42`, `messages/reader/en.json:248` | A long surah = up to 48 self-canonical page URLs with 48 titles (verified: 48 al-baqarah locs) | medium | One canonical (`/app/{slug}`), one title, one description per surah; delete `reader_seo_surah_page_title` usage |
-| D4 | `lib/server/quran-page-shape.ts:46-66`, `_reader/SurahPageRoute.svelte:178-185`, `app/page/[n]/+page.svelte:31-35` | `<link rel="prev/next">` pagination chain incl. cross-surah targets | medium | Remove all rel=prev/next (ignored by Google since 2019). Visible next/prev controls stay: surah cards in surah view, page links in page view |
-| D5 | `_reader/ReaderShell.svelte:40-80`, `_reader/ReaderHeader.svelte:46-61` | No live mushaf position in the sticky bar; only label shown is surah-local | medium | Sticky bar gains "Page {global} · Juz {juz}" (quran.com ContextMenu pattern), live from scroll, SSR'd with the route's initial position |
-| D6 | `lib/data/quran-data.ts:83-89`, `_reader/Sidebar.svelte:35`, routes tree (no `hizb/`, `rub/`) | Hizb (60) and rub' (240) baked in data, no route/tab/display | medium | Add `/app/hizb/{1..60}` + `/app/rub/{1..240}` routes mirroring the juz family (derived from baked HizbQuarter starts — no DB change); sticky bar shows hizb; juz-index quarter grid links to rub routes |
-| D7 | `_reader/Sidebar.svelte:235,278-279,54-63` | Ayah tab empty on any non-surah route | medium | Ayah tab falls back to the reader's current/last-read surah (`reader.setCurrent` store field, default 1) instead of rendering nothing |
-| D8 | `app/surah/+page.svelte:13,19-21`, `app/juz/+page.svelte:12,18-24`, `app/pages/+page.svelte:14,20-22` | All three index pages hardcode `arabicCtx`; rows drop translation context the sidebar preserves | medium | Index rows derive ctx from the reader's active source after hydration (`resumeCtxFor` pattern); prerendered HTML stays Arabic (deterministic, matches sitemap) |
-| D9 | `lib/data/quran.ts:79-96`, `lib/data/translations.json` (378 entries) | One content location addressable at hundreds of translation URLs | low | **Keep.** Documented product divergence (docs/quran-system.md Part 5 #1-2); sitemap policy already bounds the SEO surface |
-| D10 | `lib/data/quran.ts:79-87` vs `:89-96`, `_reader/translation-nav.ts:30-57` | `/t/` sits after the slug for surahs, before it for ranges; parser needs the `tIdx===1` branch | low | Keep both top-level shapes (follows D9). The surah-local **page tail** dies with D1, which simplifies `positionOf`; keep the asymmetry, document it |
-| D11 | `sitemap.xml/+server.ts:96`, `app/+page.svelte:107`, `components/seo/Seo.svelte:154-157` | Sitemap lists `/en/app`; the page renders noindex with no canonical | low | Drop `plainReaderEntryUrl("home")` from the sitemap — sitemap matches robots |
-| D12 | `sitemap.xml/+server.ts:90-95,40-54` | Translated routes appear only as hreflang alternates, never `<loc>` | low | **Keep** (follows D9). One canonical per content location; translation routes stay discovery-only |
-| D13 | `sitemap.xml/+server.ts:40-54`, `lib/i18n/seo.ts:56-58` | 60,928 hreflang alternates marking content languages on en-UI URLs — not UI-language variants; Google ignores the cluster | low | Remove the per-translation alternates block from reader URLs; keep `ar` + `x-default` pointing at the Arabic canonical `<loc>` |
-| D14 | `lib/server/reader-route-guards.ts:8-12`, `lib/i18n/reader.ts:7,15`, `lib/server/reader-route.ts:137` | `/app/2` hard-404s; no numeric chapter alias (quran.com 308s `/2` → `/al-baqarah`) | low | Add a 308 numeric alias `/app/{1..114}` → `/app/{slug}` (localized prefix preserved) in `hooks.server.ts`, before the parse-404 |
-| D15 | `hooks.server.ts:167-178` | Legacy `/app/*` → `/en/app/*` is 307 + no-store; target is deterministic `/en` | low | Upgrade to 308 permanent with a bounded public cache (`max-age=86400`) |
-| D16 | `_reader/ReaderPageNav.svelte:76-103` (rendered at `SurahReader.svelte:1178`), `quran-page-shape.ts:30-34` | Surah end is a bare prev/next pill pair — no end-of-chapter card grammar | low | Upgrade to the quran.com end card: heading, "Read again" (→ surah root), next/prev surah cards with meaning subtitle; boundary nulls (Fatihah/Nas) already correct |
+| ID  | Where (verified)                                                                                                                                                                                                                  | Gap                                                                                                                                                             | Severity | Decision                                                                                                                                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | `web/src/lib/data/quran.ts:55-62`, `app/[surah]/page/[localPage]/+page.server.ts:11-18`, `_reader/ReaderHeader.svelte:61`, `_reader/ReaderPageNav.svelte:52-74`, `lib/data/quran-data.ts:293-320`, `_reader/Sidebar.svelte:84-87` | Surah reader paginates by surah-LOCAL page numbers; one printed page splits across multiple surah URLs (page 601 = local page 1 of surahs 103, 104 **and** 105) | high     | **Remove the surah-local page scheme.** Surah = one canonical URL; page addressing = global `/app/page/N` only; every label shows the global page                                                       |
+| D2  | `_reader/SurahReader.svelte:859-867,636-657,190-195`, `_reader/translation-nav.ts:63-66`                                                                                                                                          | Scroll rewrites the history entry's **path** to `/app/{slug}/page/N`; canonical churns with scroll                                                              | medium   | Scroll never changes path. Position rides in `history.state` (already snapshot-based) + `?v={surah}:{ayah}` query only — path and canonical stay the bare surah URL                                     |
+| D3  | `_reader/SurahPageRoute.svelte:32-42`, `messages/reader/en.json:248`                                                                                                                                                              | A long surah = up to 48 self-canonical page URLs with 48 titles (verified: 48 al-baqarah locs)                                                                  | medium   | One canonical (`/app/{slug}`), one title, one description per surah; delete `reader_seo_surah_page_title` usage                                                                                         |
+| D4  | `lib/server/quran-page-shape.ts:46-66`, `_reader/SurahPageRoute.svelte:178-185`, `app/page/[n]/+page.svelte:31-35`                                                                                                                | `<link rel="prev/next">` pagination chain incl. cross-surah targets                                                                                             | medium   | Remove all rel=prev/next (ignored by Google since 2019). Visible next/prev controls stay: surah cards in surah view, page links in page view                                                            |
+| D5  | `_reader/ReaderShell.svelte:40-80`, `_reader/ReaderHeader.svelte:46-61`                                                                                                                                                           | No live mushaf position in the sticky bar; only label shown is surah-local                                                                                      | medium   | Sticky bar gains "Page {global} · Juz {juz}" (quran.com ContextMenu pattern), live from scroll, SSR'd with the route's initial position                                                                 |
+| D6  | `lib/data/quran-data.ts:83-89`, `_reader/Sidebar.svelte:35`, routes tree (no `hizb/`, `rub/`)                                                                                                                                     | Hizb (60) and rub' (240) baked in data, no route/tab/display                                                                                                    | medium   | Add `/app/hizb/{1..60}` + `/app/rub/{1..240}` routes mirroring the juz family (derived from baked HizbQuarter starts — no DB change); sticky bar shows hizb; juz-index quarter grid links to rub routes |
+| D7  | `_reader/Sidebar.svelte:235,278-279,54-63`                                                                                                                                                                                        | Ayah tab empty on any non-surah route                                                                                                                           | medium   | Ayah tab falls back to the reader's current/last-read surah (`reader.setCurrent` store field, default 1) instead of rendering nothing                                                                   |
+| D8  | `app/surah/+page.svelte:13,19-21`, `app/juz/+page.svelte:12,18-24`, `app/pages/+page.svelte:14,20-22`                                                                                                                             | All three index pages hardcode `arabicCtx`; rows drop translation context the sidebar preserves                                                                 | medium   | Index rows derive ctx from the reader's active source after hydration (`resumeCtxFor` pattern); prerendered HTML stays Arabic (deterministic, matches sitemap)                                          |
+| D9  | `lib/data/quran.ts:79-96`, `lib/data/translations.json` (378 entries)                                                                                                                                                             | One content location addressable at hundreds of translation URLs                                                                                                | low      | **Keep.** Documented product divergence (docs/quran-system.md Part 5 #1-2); sitemap policy already bounds the SEO surface                                                                               |
+| D10 | `lib/data/quran.ts:79-87` vs `:89-96`, `_reader/translation-nav.ts:30-57`                                                                                                                                                         | `/t/` sits after the slug for surahs, before it for ranges; parser needs the `tIdx===1` branch                                                                  | low      | Keep both top-level shapes (follows D9). The surah-local **page tail** dies with D1, which simplifies `positionOf`; keep the asymmetry, document it                                                     |
+| D11 | `sitemap.xml/+server.ts:96`, `app/+page.svelte:107`, `components/seo/Seo.svelte:154-157`                                                                                                                                          | Sitemap lists `/en/app`; the page renders noindex with no canonical                                                                                             | low      | Drop `plainReaderEntryUrl("home")` from the sitemap — sitemap matches robots                                                                                                                            |
+| D12 | `sitemap.xml/+server.ts:90-95,40-54`                                                                                                                                                                                              | Translated routes appear only as hreflang alternates, never `<loc>`                                                                                             | low      | **Keep** (follows D9). One canonical per content location; translation routes stay discovery-only                                                                                                       |
+| D13 | `sitemap.xml/+server.ts:40-54`, `lib/i18n/seo.ts:56-58`                                                                                                                                                                           | 60,928 hreflang alternates marking content languages on en-UI URLs — not UI-language variants; Google ignores the cluster                                       | low      | Remove the per-translation alternates block from reader URLs; keep `ar` + `x-default` pointing at the Arabic canonical `<loc>`                                                                          |
+| D14 | `lib/server/reader-route-guards.ts:8-12`, `lib/i18n/reader.ts:7,15`, `lib/server/reader-route.ts:137`                                                                                                                             | `/app/2` hard-404s; no numeric chapter alias (quran.com 308s `/2` → `/al-baqarah`)                                                                              | low      | Add a 308 numeric alias `/app/{1..114}` → `/app/{slug}` (localized prefix preserved) in `hooks.server.ts`, before the parse-404                                                                         |
+| D15 | `hooks.server.ts:167-178`                                                                                                                                                                                                         | Legacy `/app/*` → `/en/app/*` is 307 + no-store; target is deterministic `/en`                                                                                  | low      | Upgrade to 308 permanent with a bounded public cache (`max-age=86400`)                                                                                                                                  |
+| D16 | `_reader/ReaderPageNav.svelte:76-103` (rendered at `SurahReader.svelte:1178`), `quran-page-shape.ts:30-34`                                                                                                                        | Surah end is a bare prev/next pill pair — no end-of-chapter card grammar                                                                                        | low      | Upgrade to the quran.com end card: heading, "Read again" (→ surah root), next/prev surah cards with meaning subtitle; boundary nulls (Fatihah/Nas) already correct                                      |
 
 ---
 
@@ -101,7 +101,7 @@ translated mirrors):
   fallback if the anchor proves noisy (open question Q2).
 - Keeping the deleted routes' loaders as thin 308 loaders was rejected: the hooks
   layer must handle them anyway (prerendered files for removed routes no longer
-  exist, so adapter-node falls through to SSR), and one builder + one hook branch
+  exist, so adapter-bun falls through to SSR), and one builder + one hook branch
   covers Arabic, translated, and text-variant shapes uniformly.
 
 **Prerender impact (Arabic routes):** `readerPrerenderEntries`
@@ -146,7 +146,7 @@ stay SSR + disk cache — no policy change.
 
 - `surahAyahPathFor` (`:140-145`) is **repurposed**: drops the `localPage`
   argument, returns `` `/app/${slug}#ayah-${num}-${ayah} `` (Arabic) /
-  `` /app/${slug}/t/${lang}/${translator}#ayah-… `` (translated). Call sites to
+  `/app/${slug}/t/${lang}/${translator}#ayah-…` (translated). Call sites to
   update: `Sidebar.svelte:307-313`, `SurahPageRoute.svelte:118-122`, search
   results sources under `web/src/lib/search/` (nav-guard-globbed).
 - `surahLocalPagePathFor` (`:128-138`) and `surahLocalPagePath` (`:55-62`) are
@@ -178,7 +178,7 @@ page payload. Labels use `copy.range.item("page", globalPage)`.
   heading ("End of Surah {name}"), "Read again" link (surah root via
   `surahPathFor`), prev/next surah cards carrying `meaning`, prev/next nulls
   render nothing (existing behavior). New copy keys per §7; hotkeys untouched
-  (any new keyboard affordance goes through `$lib/hotkeys.svelte.ts` per
+  (any new keyboard affordance goes through `#lib/hotkeys.svelte.ts` per
   AGENTS.md).
 
 ### 3.2 Sticky position indicator (D5)
@@ -216,11 +216,11 @@ page payload. Labels use `copy.range.item("page", globalPage)`.
     `app/t/[lang]/[translator]/juz/[n]/+page.server.ts`).
 - Counts: `RUB_COUNT = RANGE_COUNTS[RangeKind.HizbQuarter]` (=240, baked,
   `quran-data.ts:87`); `HIZB_COUNT = 60`, asserted as
-  `RANGE_COUNTS[RangeKind.HizbQuarter] % 4 === 0` at module load. Hizb *i* is the
+  `RANGE_COUNTS[RangeKind.HizbQuarter] % 4 === 0` at module load. Hizb _i_ is the
   union of quarters `4i-3..4i`: `startGlobal = quarter(4i-3).startGlobal`,
   `endGlobal = quarter(4i).endGlobal`. This is metadata math on the baked JSON —
   the Quran DBs are untouched (hard rule).
-- Range data: rub *n* = `QURAN_DATA.rangeByIndex(RangeKind.HizbQuarter, n)`
+- Range data: rub _n_ = `QURAN_DATA.rangeByIndex(RangeKind.HizbQuarter, n)`
   directly; hizb needs a small derivation helper next to `requireRangeIndex`
   (`reader-route-guards.ts`), returning the same `RangeEntry` shape so
   `loadRangeData`/`loadTranslationRangeData` work unmodified (both fetch by
@@ -297,7 +297,7 @@ page payload. Labels use `copy.range.item("page", globalPage)`.
   test `/^[1-9]\d*$/` and `1 ≤ n ≤ 114` against the localized-de-Localized
   pathname; target = same prefix + `/app/{QURAN_DATA.surahByNum(n).slug}` +
   query/hash. `QURAN_DATA` is already in the hooks bundle graph via
-  `$lib/server/reader-route.ts` (its `rangeRoute` uses it). `/app/115`+ still 404;
+  `#lib/server/reader-route.ts` (its `rangeRoute` uses it). `/app/115`+ still 404;
   digits never collide with `RESERVED_SURAH_SEGMENTS`.
 - Legacy locale redirect (D15): `legacyReaderRedirect` (`:167-178`) →
   `status: 308`, `cache-control: public, max-age=86400` (target is
@@ -325,14 +325,14 @@ Each milestone ships alone with `pnpm -C web check`, `pnpm -C web lint`,
 `pnpm -C web test` green (message-key changes also run `pnpm i18n:check` first —
 it gates the other three). No milestone mixes data, rendering, and navigation.
 
-| # | Ships | IDs | Rough shape |
-| --- | --- | --- | --- |
-| M1 | Global page labels + sticky position indicator | D5, D1-labels | Store field, `PositionIndicator.svelte`, `ReaderHeader`/sr-only relabel to `globalPage`, shared `juzOf` helper, degraded-pill relabel prep. No URL, route, or sitemap change |
-| M2 | Sitemap/robots hygiene | D11, D13 | Sitemap drops `/app` home + reader alternates block; sitemap tests updated. Zero reader-facing change |
-| M3 | Redirect hygiene | D14, D15 | Numeric alias 308, legacy 307→308; hooks + `reader-route.test.ts`/hook tests. Zero canonical change |
-| M4 | Sidebar + index context | D7, D8 | `ayahTabSurah` helper + Sidebar fallback; index ctx derivation. No URL change |
-| M5 | **One URL per surah** | D1, D2, D3, D4, D10-tail, D16 | Route dirs removed, 308 builder + hook branch, `parseReaderPath` shapes dropped, helpers repurposed/deleted, canonical/title stable, scroll stops path rewrite, end-of-surah card, prerender entries −1096 pages, sitemap −548 locs, docs updated |
-| M6 | Hizb + rub addressing | D6 | Helpers, 8 route dirs (4 shapes × arabic/translated × .md), guards/validator/parser, sticky hizb, juz-index grid repoint, prerender +600 pages |
+| #   | Ships                                          | IDs                           | Rough shape                                                                                                                                                                                                                                       |
+| --- | ---------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1  | Global page labels + sticky position indicator | D5, D1-labels                 | Store field, `PositionIndicator.svelte`, `ReaderHeader`/sr-only relabel to `globalPage`, shared `juzOf` helper, degraded-pill relabel prep. No URL, route, or sitemap change                                                                      |
+| M2  | Sitemap/robots hygiene                         | D11, D13                      | Sitemap drops `/app` home + reader alternates block; sitemap tests updated. Zero reader-facing change                                                                                                                                             |
+| M3  | Redirect hygiene                               | D14, D15                      | Numeric alias 308, legacy 307→308; hooks + `reader-route.test.ts`/hook tests. Zero canonical change                                                                                                                                               |
+| M4  | Sidebar + index context                        | D7, D8                        | `ayahTabSurah` helper + Sidebar fallback; index ctx derivation. No URL change                                                                                                                                                                     |
+| M5  | **One URL per surah**                          | D1, D2, D3, D4, D10-tail, D16 | Route dirs removed, 308 builder + hook branch, `parseReaderPath` shapes dropped, helpers repurposed/deleted, canonical/title stable, scroll stops path rewrite, end-of-surah card, prerender entries −1096 pages, sitemap −548 locs, docs updated |
+| M6  | Hizb + rub addressing                          | D6                            | Helpers, 8 route dirs (4 shapes × arabic/translated × .md), guards/validator/parser, sticky hizb, juz-index grid repoint, prerender +600 pages                                                                                                    |
 
 Ordering rationale: M1–M4 are independent, low-risk, and each shrinks the M5 diff
 (labels already global before routes move; sitemap correct before its inventory
@@ -348,7 +348,7 @@ core and lands with its tests in one reviewable unit. M6 is additive and isolate
   repo already uses for `/page/1`); fragment preserves spread-level deep links;
   sitemap regenerates from the same `readerPrerenderEntries` source so the
   declared index set and the served set cannot disagree; the al-baqarah
-  relevance-dilution (48 canonicals) is the *point* of the migration — expect
+  relevance-dilution (48 canonicals) is the _point_ of the migration — expect
   transient ranking churn on surah queries while consolidation propagates.
 - **Prerender set changes.** M5 removes 1096 prerendered pages; M6 adds 600.
   Both flow through `readerPrerenderHrefs` uniqueness assert (duplicates fail the
@@ -421,7 +421,7 @@ core and lands with its tests in one reviewable unit. M6 is additive and isolate
   → null/404; translated shape round-trips lang/translator. Runs against
   `QURAN_DATA`, i.e. against the real 604-page map, no fixtures.
 - `web/src/lib/data/__tests__/mushaf-divisions.test.ts` — hizb/rub derivation
-  from the baked JSON: counts 60/240; hizb *i* spans quarters `4i-3..4i`; first
+  from the baked JSON: counts 60/240; hizb _i_ spans quarters `4i-3..4i`; first
   verse of hizb 1 = `1:1`, last of hizb 60 = `114:6` (end of corpus); hizb/rub
   ranges tile 1..6236 with no gap/overlap (same invariant style as the boot-time
   range asserts); `ceil(quarterOf(global)/4)` sticky-helper mapping spot-checked
@@ -459,7 +459,7 @@ delta (expected: −1096 pages/−548 locs, then +600 pages/+300 locs).
 ## 8. Open questions (decisions not made here)
 
 1. **Q1 — hizb/rub prerender budget (D6/M6).** +600 prerendered pages is within
-   the existing bounded pattern but is the only milestone that *grows* the build.
+   the existing bounded pattern but is the only milestone that _grows_ the build.
    If the owner prefers the minimal move: ship sticky-bar hizb + juz-index grid
    repoint to global pages first, defer the routes. Default in this plan: full
    routes.

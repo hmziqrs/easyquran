@@ -1,12 +1,21 @@
 # EasyQuran SSR runtime benchmark — design
 
-Static, reproducible load benchmark of the **same `adapter-node` build** executed on three JS
-runtimes, measuring how the translated-page SSR path and its disk-TTL HTML cache behave under
-realistic, popularity-skewed traffic.
+Static, reproducible load benchmark of the production web server — SvelteKit 3 + adapter-bun,
+served by `bun ./web/server.ts` — measuring how the translated-page SSR path and its disk-TTL
+HTML cache behave under realistic, popularity-skewed traffic.
 
-Status: **design** (not yet implemented). Everything below is decided; nothing here changes app
-behavior — the harness is read-only against `web/` and `rust/` except for env vars and a
-disposable cache dir.
+Status: **design** (a harness skeleton exists under `bench/src/`; no `just bench-*` recipes
+yet). Everything here is design; nothing changes app behavior — the harness is read-only
+against `web/` and `rust/` except for env vars and a disposable cache dir.
+
+**Amendment (2026-10, SvelteKit 3 migration).** The original design compared node and bun
+executing one `adapter-node` build. Production is now adapter-bun: `web/server.ts` is a custom
+`Bun.serve` entry over the adapter's `build/adapter-bun.js` hand-off, and the build itself runs
+under bun (`pnpm build` → `bun run --bun vp build`; `adapt()` calls `Bun.build`). Node cannot
+execute that output, so the cross-runtime A/B is dead. Facts below (URL shapes, adapter names,
+build command) are updated; sections that still encode the dead premise (§3 matrix, §8
+interleave) are marked historical pending a redesign call — single-runtime characterization or
+a bun-version A/B — which this document does not make.
 
 ---
 
@@ -17,7 +26,9 @@ disposable cache dir.
    (disk read) — and the ratio at which each runtime falls over.
 3. How TTL expiry, LRU budget eviction, and Zipf popularity interact — specifically whether a hot
    head starves the long tail out of the cache.
-4. Whether bun 1.4 can run this production server at all, and at what cost.
+4. Settled by the SvelteKit 3 migration: bun runs this production server (adapter-bun,
+   `bun ./web/server.ts`). The open residue is where that one runtime saturates and how the
+   disk-TTL cache behaves on it.
 
 **Non-goals.** Absolute capacity numbers (generator shares the host), CDN/edge behavior, browser
 render, Rust API benchmarking (Axum is a fixed dependency here, kept out of saturation on purpose).
@@ -29,10 +40,10 @@ render, Rust API benchmarking (Axum is a fixed dependency here, kept out of satu
 ```
 ┌─ same Mac (16 cores / 128 GB) ───────────────────────────────────────────┐
 │                                                                          │
-│  vegeta  ──HTTP/1.1 keep-alive──▶  web server (one runtime at a time)     │
+│  vegeta  ──HTTP/1.1 keep-alive──▶  web server (bun; see §3)              │
 │  (targets streamed from a                 :3100                          │
-│   pre-generated Zipf list)          node ./web/server.ts                 │
-│                                     bun  ./web/server.ts                 │
+│   pre-generated Zipf list)          bun ./web/server.ts                  │
+│                                     (adapter-bun hand-off; see §3)       │
 │                                          │                               │
 │                                          │ INTERNAL_QURAN_API_BASE       │
 │                                          ▼                               │
@@ -60,24 +71,31 @@ visible rather than silently attributed to the runtime.
 
 ## 3. Runtime matrix
 
-| slot | binary | source |
-| --- | --- | --- |
-| `node24` | `node` v24.11.1 | already installed |
-| `bun14` | `bun` 1.4.0 | already installed |
+**Historical design, invalidated by the SvelteKit 3 migration.** The matrix compared `node24`
+and `bun14` executing one `adapter-node` build. Production is now adapter-bun — `web/server.ts`
+is a custom `Bun.serve` entry over the adapter's `build/adapter-bun.js` hand-off — and node
+cannot execute that output (`Bun.serve`/`Bun.file` and the adapter's own runtime are bun-only).
+`bench/src/config.ts` still lists both slots and must be reworked before any run; the redesign
+call — single-runtime characterization of production bun, or a bun-version A/B — is deliberately
+not made here.
 
-Both execute the **identical** `web/build` output produced by one `pnpm build`
-(`PUBLIC_ENV=prod`). The build is produced once, its build-id recorded, and never rebuilt mid-matrix
-— the disk cache key is namespaced by SvelteKit's build id, so a rebuild would silently invalidate
-every scenario's cache.
+| slot    | binary                                             | source            |
+| ------- | -------------------------------------------------- | ----------------- |
+| `bun14` | `bun` ≥ 1.4 (deployed image `oven/bun:1.4.2-slim`) | already installed |
 
-### bun compat shim
+What survives unchanged: the build is produced once by one `pnpm build` (which runs
+`bun run --bun vp build` under `PUBLIC_ENV=prod`), its build-id recorded, and never rebuilt
+mid-matrix — the disk cache key is namespaced by SvelteKit's build id (`build-${version}` in
+`web/src/lib/server/quran-disk-cache.ts`), so a rebuild would silently invalidate every
+scenario's cache.
 
-`web/src/lib/server/quran-node-query-runner.ts` uses `node:sqlite` (Node 24 native). If bun cannot
-resolve it, the harness injects a **bench-only** preload (`bench/shims/bun-node-sqlite.ts`, loaded
-via `bun --preload`) that maps `node:sqlite` onto `bun:sqlite`. App code is untouched. The report
-states explicitly that bun rows used a different SQLite binding — that is a real, disclosed
-difference in the comparison, not a hidden one. If bun still cannot boot, that result is recorded
-as a finding and the runtime is skipped for the remainder of the matrix.
+### bun compat shim (retired)
+
+The original design preloaded a bench-only `bench/shims/bun-node-sqlite.ts` mapping `node:sqlite`
+onto `bun:sqlite` in case bun could not resolve it. Moot twice over: bun 1.4+ implements
+`node:sqlite` natively (`DatabaseSync` opens the corpus — the production Arabic prerender
+already reads sqlite under bun), and the app now runs on bun in production, so there is no
+second binding to disclose. App code stays untouched either way.
 
 ---
 
@@ -85,15 +103,19 @@ as a finding and the runtime is skipped for the remainder of the matrix.
 
 Each family is its own benchmark run with its own targets and its own report row.
 
-| suite | URL shape | what it exercises |
-| --- | --- | --- |
-| `translated-surah` | `/app/<slug>/t/<lang>/<translator>[/page/<n>]` | SSR + disk cache + Axum range fetch |
-| `translated-page` | `/app/t/<lang>/<translator>/page/<n>` | same, global-page keyspace (604) |
-| `translated-juz` | `/app/t/<lang>/<translator>/juz/<n>` | same, largest payloads (30 juz) |
-| `arabic-prerendered` | `/app/<slug>`, `/app/page/<n>`, `/app/juz/<n>` | adapter-node static file serving, no SSR |
-| `immutable-assets` | `/_app/immutable/**` | static throughput ceiling / header path |
-| `data-json` | `?__data.json` client navs | SvelteKit data path (explicitly **not** cached by hooks) |
-| `text-endpoints` | `/[slug].md`, `/[slug].txt`, `/llms.txt`, `/sitemap.xml` | crawler/LLM surface |
+| suite                | URL shape                                                | what it exercises                                                   |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- |
+| `translated-surah`   | `/<slug>/t/<lang>/<translator>`                          | SSR + disk cache + Axum range fetch                                 |
+| `translated-page`    | `/t/<lang>/<translator>/page/<n>`                        | same, global-page keyspace (604)                                    |
+| `translated-juz`     | `/t/<lang>/<translator>/juz/<n>`                         | same, largest payloads (30 juz)                                     |
+| `arabic-prerendered` | `/<slug>`, `/page/<n>`, `/juz/<n>`                       | adapter-bun static file serving (native `Bun.serve` routes), no SSR |
+| `immutable-assets`   | `/_app/immutable/**`                                     | static throughput ceiling / header path                             |
+| `data-json`          | `?__data.json` client navs                               | SvelteKit data path (explicitly **not** cached by hooks)            |
+| `text-endpoints`     | `/[slug].md`, `/[slug].txt`, `/llms.txt`, `/sitemap.xml` | crawler/LLM surface                                                 |
+
+Reader paths are scheme A — prefix-less, no `/app` marker (legacy shapes 308) — and one URL per
+surah (no surah-local page tails); see `docs/quran-system.md` Part 5. Targets that use legacy
+shapes would measure the redirect table, not the reader.
 
 `arabic-prerendered` + `immutable-assets` serve as the control: they share the runtime and HTTP
 stack but skip SSR entirely, so translated-page cost is `translated-* minus control`.
@@ -113,8 +135,9 @@ what makes the comparison an A/B rather than three separate experiments).
   catalogue order. Head ≈ 5 ids take ~45% of traffic; the tail is never zero.
 - **Index weight** — Zipf(α = 0.8) over the family's index space, re-ranked so the known-popular
   units come first: surahs `1, 2, 18, 36, 55, 67, 112, 113, 114`, juz `1, 30, 29`, pages `1, 2, 582+`.
-- **Local page** — for multi-page surahs, page 1 gets 55%, remaining pages share the rest Zipf-wise
-  (readers open at the top and drift down).
+- **Local page** — retired as a URL dimension (one URL per surah since the navigation audit's
+  M5; page drift is client-side virtualization on the surah root). Page popularity now lives
+  only in the global-page families above.
 
 Targets are pre-generated to a plain vegeta targets file per (suite × scenario × stage) with the
 exact request count that stage needs, then streamed with `-lazy`. Pre-generation keeps sampling
@@ -139,7 +162,7 @@ rate:   100 → 1,000 → 5,000 → 10,000 → 25,000 → 100,000   req/s (targe
 - 10 s warmup at stage-1 rate before stage 1, discarded.
 - 3 s inter-stage gap; 30 s cooldown between scenarios (thermal).
 - **Saturation policy: record and continue.** Every stage runs to 100k regardless of failure.
-  Reported per stage: *offered* rate vs *achieved* rate, error taxonomy (conn refused, timeout,
+  Reported per stage: _offered_ rate vs _achieved_ rate, error taxonomy (conn refused, timeout,
   reset, non-2xx), and latency at achieved rate.
 - Generator connection cap `-max-workers` tuned per stage (≤ 4,096) so vegeta sheds load instead of
   exhausting file descriptors; `ulimit -n` raised to 65,536 in the recipe and the effective value
@@ -151,16 +174,16 @@ rate:   100 → 1,000 → 5,000 → 10,000 → 25,000 → 100,000   req/s (targe
 
 Each runs against `translated-surah` by default; `--deep` extends the set to the other suites.
 
-| id | setup | question |
-| --- | --- | --- |
-| `cold` | cache dir wiped, no warmup priming | miss-storm cost; how much SSR+Axum a runtime sustains with 0% hit ratio |
-| `warm` | cache pre-primed with the **distinct keys the stage's Zipf stream actually touches** (not the 76k key space — priming that is 5+ min per run), TTL 7 d, budget 256 MiB | hit-path ceiling; disk read + HTTP throughput |
-| `zipf-steady` | cache starts empty, natural Zipf traffic, prod TTL/budget | realistic hit-ratio curve over time; the headline number |
-| `ttl-expiry` | `QURAN_SSR_CACHE_TTL_MS=15000`, primed cache | re-render waves as entries age out mid-ladder |
-| `lru-evict` | `QURAN_SSR_CACHE_BUDGET_BYTES=16MiB` (~forces churn), Zipf traffic | eviction rate, write amplification, whether budget enforcement itself costs |
-| `tail-starvation` | shrunk budget + Zipf(α=1.3) hot head, tail requests tagged separately | **does the hot head evict the tail?** Hit ratio reported separately for head / body / tail cohorts |
-| `stampede` | primed single key, TTL set to expire exactly at t=0, N concurrent requests for that one key | do concurrent misses collapse to one render, or does every request render? (Today's `hooks.server.ts` has no single-flight — this scenario is expected to expose that, and quantifies it) |
-| `compression` | `warm` run twice: `Accept-Encoding: gzip, br` vs identity | compression cost as a runtime differentiator (bun vs node zlib) |
+| id                | setup                                                                                                                                                                  | question                                                                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cold`            | cache dir wiped, no warmup priming                                                                                                                                     | miss-storm cost; how much SSR+Axum a runtime sustains with 0% hit ratio                                                                                                                   |
+| `warm`            | cache pre-primed with the **distinct keys the stage's Zipf stream actually touches** (not the 76k key space — priming that is 5+ min per run), TTL 7 d, budget 256 MiB | hit-path ceiling; disk read + HTTP throughput                                                                                                                                             |
+| `zipf-steady`     | cache starts empty, natural Zipf traffic, prod TTL/budget                                                                                                              | realistic hit-ratio curve over time; the headline number                                                                                                                                  |
+| `ttl-expiry`      | `QURAN_SSR_CACHE_TTL_MS=15000`, primed cache                                                                                                                           | re-render waves as entries age out mid-ladder                                                                                                                                             |
+| `lru-evict`       | `QURAN_SSR_CACHE_BUDGET_BYTES=16MiB` (~forces churn), Zipf traffic                                                                                                     | eviction rate, write amplification, whether budget enforcement itself costs                                                                                                               |
+| `tail-starvation` | shrunk budget + Zipf(α=1.3) hot head, tail requests tagged separately                                                                                                  | **does the hot head evict the tail?** Hit ratio reported separately for head / body / tail cohorts                                                                                        |
+| `stampede`        | primed single key, TTL set to expire exactly at t=0, N concurrent requests for that one key                                                                            | do concurrent misses collapse to one render, or does every request render? (Today's `hooks.server.ts` has no single-flight — this scenario is expected to expose that, and quantifies it) |
+| `compression`     | `warm` run twice: `Accept-Encoding: gzip, br` vs identity                                                                                                              | compression cost as a runtime differentiator (bun vs node zlib)                                                                                                                           |
 
 Between every scenario: server killed, cache dir wiped, fresh dir created, server restarted, health
 probe polled until ready.
@@ -171,8 +194,9 @@ probe polled until ready.
 
 - Fresh web server process + wiped `QURAN_SSR_CACHE_DIR` per scenario.
 - Axum: started once, pre-warmed, shared, sampled.
-- **3 repeats per (runtime × suite × scenario), interleaved** `node24 → bun14 → node24 → …`
-  so thermal drift and background-load drift hit both equally. **Median** of the 3 reported,
+- **3 repeats per (runtime × suite × scenario), interleaved** (historical interleave
+  `node24 → bun14 → node24 → …`; meaningless until §3's redesign call lands) so thermal drift
+  and background-load drift hit every slot equally. **Median** of the 3 reported,
   with min/max spread — a spread > 10% on any cell is flagged in the report as untrustworthy.
 - 10 s warmup discarded, 30 s cooldown between scenarios.
 - Pre-flight gate, aborts the run if violated: load average below threshold, both ports free, disk
@@ -183,12 +207,12 @@ probe polled until ready.
 
 ### Profiles
 
-| profile | scope | repeats | ladder | wall clock |
-| --- | --- | --- | --- | --- |
-| `quick` | `translated-surah` × `zipf-steady` | 1 | 3 stages × 12 s | ~5 min |
-| `15m` | `translated-surah` × `cold`,`warm`,`zipf-steady` | 1 | 4 stages (200 / 2k / 10k / 50k) × 8 s, 2 s gaps, 5 s warmup, 5 s cooldown | **~10.5 min** |
-| `full` | `translated-surah` × `cold`,`warm`,`zipf-steady` | 3 | 6 stages × 12 s | ~80 min |
-| `deep` | `full` + the 5 cache scenarios on `translated-surah` + 1 throughput pass per remaining suite | 3 (2 for deep-only cells) | 6 stages × 12 s | ~3.8 h (2.5 h at 2 repeats) |
+| profile | scope                                                                                        | repeats                   | ladder                                                                    | wall clock                  |
+| ------- | -------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------- | --------------------------- |
+| `quick` | `translated-surah` × `zipf-steady`                                                           | 1                         | 3 stages × 12 s                                                           | ~5 min                      |
+| `15m`   | `translated-surah` × `cold`,`warm`,`zipf-steady`                                             | 1                         | 4 stages (200 / 2k / 10k / 50k) × 8 s, 2 s gaps, 5 s warmup, 5 s cooldown | **~10.5 min**               |
+| `full`  | `translated-surah` × `cold`,`warm`,`zipf-steady`                                             | 3                         | 6 stages × 12 s                                                           | ~80 min                     |
+| `deep`  | `full` + the 5 cache scenarios on `translated-surah` + 1 throughput pass per remaining suite | 3 (2 for deep-only cells) | 6 stages × 12 s                                                           | ~3.8 h (2.5 h at 2 repeats) |
 
 The `15m` profile is a **directional** ranking tool, not a publishable measurement: single pass
 means no spread, so every cell is emitted with `"confidence": "unverified"` and the report renders
@@ -251,7 +275,7 @@ bench/
 ├── .gitignore             # .tools/ .run/ results/
 ├── .tools/                # vegeta via brew
 ├── .run/                  # per-scenario cache dirs, pid files, target files (disposable)
-├── shims/bun-node-sqlite.ts
+├── shims/bun-node-sqlite.ts   # retired by the kit 3 migration — never created
 ├── src/
 │   ├── config.ts          # runtimes, suites, scenarios, ladder, seeds
 │   ├── keyspace.ts        # catalogue + metadata load, family index spaces
@@ -280,16 +304,20 @@ just bench-report     # rebuild report.html from an existing results dir
 
 ## 12. Known limits, stated up front
 
-- **Generator shares the host.** All numbers are *relative between runtimes*, not absolute capacity.
+- **Generator shares the host.** All numbers are _relative between runtimes_, not absolute capacity.
   Stages where vegeta CPU% is the ceiling are marked generator-bound in the report and excluded from
   runtime conclusions.
 - **100k RPS will not be reached** for SSR suites on this topology. Those stages measure overload
   and failure behavior, which is the point of keeping them.
-- **bun rows may use `bun:sqlite`** via the bench shim — disclosed per row, never silently merged.
+- **The bun shim is retired** — every row exercises the same `node:sqlite` binding bun runs in
+  production, so there is no per-row binding difference to disclose.
 - **Axum is in the path** for every translated miss. Its CPU is reported; if it saturates, that
   stage's conclusion is about the pair, not the runtime.
 - **12 s stages** weaken p999 confidence at 100 req/s (~1,200 samples). p999 is reported but marked
   low-confidence below stage 3.
 - Quran data is untouched: read-only sqlite, no hashing anywhere in the harness, cache dirs are
   disposable HTML only. Per `AGENTS.MD`, no SHA-256 over Quran data in any bench path.
+
+```
+
 ```

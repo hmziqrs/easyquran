@@ -37,7 +37,8 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
   source id, API source, DB, migration, request header, or query parameter.
 - Reader navigation preserves translation context. Use the `surah*For(ctx, …)`,
   `globalPagePathFor(ctx, …)`, and `juzPathFor(ctx, …)` helpers, then `readerHrefFor(ui, …)`.
-  Components never use Arabic-only helpers or hand-build `/app/` URLs.
+  Components never use Arabic-only helpers or hand-build reader URL strings (no `/app`
+  marker, no bare `/page|/juz|/t` literals).
 - No machine translation ships. Quran text is not UI copy.
 
 ## Sources and metadata
@@ -153,8 +154,9 @@ unchanged.
   Quran bytes, size, path, or delivery origin.
 - Service worker cache buckets cover app shell, bounded pages, bounded `__data.json`, and
   offline pack. `/api/` always bypasses Cache Storage.
-- Translated HTML uses an adapter-node disk cache keyed by build id, source id, route shape,
-  index, and bounded UI locale. Cookie-bearing or session-setting responses bypass it.
+- Translated HTML uses a server disk cache (`web/src/lib/server/quran-disk-cache.ts`, served
+  under adapter-bun) keyed by build id, source id, route shape, index, and bounded UI locale.
+  Cookie-bearing or session-setting responses bypass it.
 - Browser source reads use one ladder: local → API → local re-check → typed failure. Cold
   translations may download through the worker during the final local attempt.
 - Browser and SSR share a range fetcher that chunks requests to 300 ayahs and rejects partial
@@ -189,7 +191,10 @@ selection bypasses the gate. Arabic-only reading never counts toward translation
 ## Web delivery
 
 - Arabic-source pages are built from local SQLite without WASM on first paint.
-- Translated-source pages render on Bun; Node remains build-only for Arabic prerender.
+- Translated-source pages render on Bun; the SvelteKit build itself runs under Bun too
+  (adapter-bun's `adapt()` calls `Bun.build`, and the Arabic prerender reads sqlite through
+  bun's `node:sqlite`). Node remains for ancillary tooling scripts only (i18n codegen,
+  offline pack).
 - Public reader paths are prefix-less for the default UI (`/al-baqarah`, `/page/13`,
   `/juz/1`) and `/ar`-prefixed for Arabic UI (`/ar/al-baqarah`); there is no `/app` marker
   segment (scheme A, docs/research/url-scheme-a.md). Every legacy spelling — `/en/**`,
@@ -246,7 +251,7 @@ changes Arabic scripture or translation-content semantics.
 `web/i18n-namespaces.json`, then emits committed typed barrels under
 `web/src/lib/i18n/m/`. Unclaimed or multiply claimed keys fail generation.
 
-- Global `$lib/paraglide/messages.js` imports are banned.
+- Global `#lib/paraglide/messages.js` imports are banned.
 - Page copy stays in page namespaces; shared chrome resolves once in layout.
 - Appearance/settings panel copy loads lazily when its surface opens.
 - Catalog files stay coarse; prefixes organize chunk ownership.
