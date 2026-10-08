@@ -3,11 +3,20 @@ import { readFile } from "node:fs/promises";
 const LOCALES = ["en", "ar"];
 const DOMAINS = ["messages", "messages/reader", "messages/auth"];
 
+/**
+ * @param {string} domain
+ * @param {string} locale
+ */
 const readCatalog = async (domain, locale) => {
   const path = new URL(`../${domain}/${locale}.json`, import.meta.url);
   return JSON.parse(await readFile(path, "utf8"));
 };
 
+/**
+ * @param {unknown} value
+ * @param {string} prefix
+ * @param {Map<string, unknown>} out
+ */
 const flatten = (value, prefix = "", out = new Map()) => {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- value is JSON.parse'd catalog content; this is the boundary discrimination
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -20,14 +29,20 @@ const flatten = (value, prefix = "", out = new Map()) => {
   return out;
 };
 
+/**
+ * @param {unknown} value
+ * @param {boolean} structural
+ * @param {boolean} complex
+ * @returns {unknown[]}
+ */
 const signature = (value, structural = false, complex = false) => {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- catalog leaf discrimination on untyped JSON.parse output
   if (typeof value === "string") {
     if (structural) return ["literal", value];
     if (complex) return ["text"];
     const parameters = [...value.matchAll(/\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}/gu)]
-      .map((match) => match[1])
-      .sort();
+      .map((match) => match[1] ?? "")
+      .sort((a, b) => a.localeCompare(b));
     return ["text", parameters];
   }
   if (Array.isArray(value)) {
@@ -49,6 +64,10 @@ const signature = (value, structural = false, complex = false) => {
   return [typeof value];
 };
 
+/**
+ * @param {string} message
+ * @returns {never}
+ */
 const fail = (message) => {
   throw new Error(`[i18n] ${message}`);
 };
@@ -65,6 +84,11 @@ const catalogs = Object.fromEntries(
   ),
 );
 
+/**
+ * @param {Map<string, unknown>} source
+ * @param {Map<string, unknown>} candidate
+ * @param {string} label
+ */
 const compareCatalog = (source, candidate, label) => {
   const missing = [...source.keys()].filter((key) => !candidate.has(key));
   const unknown = [...candidate.keys()].filter((key) => !source.has(key));
@@ -103,8 +127,15 @@ const byLocale = Object.fromEntries(
 );
 
 const base = byLocale.en;
+// Throws are for the type checker (noUncheckedIndexedAccess): inline `throw`
+// narrows in every checker, unlike a call to the `never`-returning fail().
+// byLocale is built from LOCALES, so a missing entry is impossible and these
+// never fire at runtime.
+if (!base) throw new Error("[i18n] en catalog missing");
 for (const locale of LOCALES.slice(1)) {
-  compareCatalog(base, byLocale[locale], locale);
+  const catalog = byLocale[locale];
+  if (!catalog) throw new Error(`[i18n] ${locale} catalog missing`);
+  compareCatalog(base, catalog, locale);
 }
 
 console.log(`[i18n] ${base.size} messages valid across ${LOCALES.join(", ")}`);

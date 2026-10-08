@@ -1,13 +1,7 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "extends": "$app/tsconfig",
   "compilerOptions": {
     "rewriteRelativeImportExtensions": true,
-    "allowJs": true,
-    "checkJs": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -15,12 +9,16 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "moduleResolution": "bundler"
-  }
-  // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
-  // except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
-  //
-  // To make changes to top-level options such as include and exclude, we recommend extending
-  // the generated config; see https://svelte.dev/docs/kit/configuration#typescript
+    "noUnusedParameters": true
+  },
+  // `allowJs`, `checkJs`, `esModuleInterop`, `moduleResolution: "bundler"` and friends
+  // now come from the generated `$app/tsconfig` base that `svelte-kit sync` writes.
+  // `*` covers the root config files (vite.config.ts, vitest.config.ts, the two vite
+  // plugins, server.ts, paraglide.config.js) — kit 2's generated tsconfig included
+  // `*.js`/`*.ts` at the root, and `*` is the shape the kit 3 migration guide shows.
+  // `scripts` keeps the build-time generators (gen-offline-pack, gen-message-namespaces,
+  // …) under the same project config so `pnpm check` and the pre-commit hook cover them.
+  "include": ["src", "scripts", "*"],
+  // The service worker is type-checked separately by tsconfig.worker.json (webworker lib).
+  "exclude": ["src/service-worker.ts"]
 }

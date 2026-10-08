@@ -26,8 +26,6 @@ import { launch, prepare } from "./browser.ts";
 import { VISUAL_ROOT } from "./capture.ts";
 import { DEFAULT_PALETTE, isMode, isPalette, MODES, type Mode, type Palette } from "./matrix.ts";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const DEFAULT_STATES = ["rest", "hover", "focus", "active"] as const;
 type State = (typeof DEFAULT_STATES)[number];
 

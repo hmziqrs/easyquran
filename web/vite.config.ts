@@ -1,5 +1,5 @@
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
-import adapter from "@sveltejs/adapter-node";
+import adapter from "@sveltejs/adapter-bun";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, lazyPlugins } from "vite-plus";
@@ -59,6 +59,20 @@ export default defineConfig({
     },
     options: { typeAware: true, typeCheck: true },
   },
+  // adapter-bun externalizes package.json `dependencies` in the SSR build (they must
+  // exist in node_modules at runtime). The web image deliberately ships NO node_modules:
+  // everything the server bundle imports must be bundled in. gen-offline-pack.ts (postbuild)
+  // fails the build if a bare import ever leaks through this list.
+  ssr: {
+    noExternal: [
+      "clsx",
+      "es-toolkit",
+      "simple-icons",
+      "tailwind-merge",
+      "tailwind-variants",
+      "valibot",
+    ],
+  },
   optimizeDeps: {
     // `@sqlite.org/sqlite-wasm` is imported only by the OPFS worker, which is loaded through
     // `new Worker(new URL(...))` — a graph Vite's cold dependency scan never crawls. Left out,
@@ -99,11 +113,9 @@ export default defineConfig({
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
       },
       serviceWorker: {
+        // Kit 3 removed `serviceWorker.files` — the precache filter now lives in
+        // src/service-worker.ts, which picks its file list from `$app/manifest`.
         register: false,
-        files: (file) =>
-          !/\.DS_Store/.test(file) &&
-          !file.startsWith("quran-meta/") &&
-          !/^(_headers|_redirects|robots\.txt|og\.png)$/.test(file),
       },
       adapter: adapter({
         precompress: true,
