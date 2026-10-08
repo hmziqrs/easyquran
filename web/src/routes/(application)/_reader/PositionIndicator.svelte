@@ -16,4 +16,4 @@
 </script>
 
 <!-- Plain live text, quran.com's page-info pattern — not links. Inherits shell direction. -->
-<span class="flex-none text-[12px] tabular-nums text-muted">{positionLabel(copy, position)}</span>
+<span class="min-w-0 truncate text-[12px] tabular-nums text-muted">{positionLabel(copy, position)}</span>

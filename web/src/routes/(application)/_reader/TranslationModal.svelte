@@ -21,12 +21,6 @@
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { Icon } from "#lib/components/icon/index.js";
-  import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-  } from "#lib/components/ui/tooltip/index.js";
   import { hrefFor, liveReaderPosition } from "./translation-nav";
   import type { ReadPick } from "./reading-flow";
   import { translationMatchesQuery } from "./translation-search";
@@ -39,13 +33,12 @@
     entries: TranslationCatalogueEntry[];
   };
 
-  // Provenance color identity lives ONLY inside the rich row tooltip (U19):
-  // the source chip's dot reads on the inverted (bg-foreground) surface in
-  // both light and dark themes. Rows themselves carry no dot.
-  const PROVENANCE_DOT = {
-    qul: "bg-violet-500",
-    quranenc: "bg-sky-500",
-    tanzil: "bg-emerald-500",
+  // Provenance rides every row's meta line as the source's own short name (a
+  // proper noun, not copy); the full credit stays in the title attribute.
+  const SOURCE_SHORT = {
+    qul: "QUL",
+    quranenc: "QuranEnc",
+    tanzil: "Tanzil",
   } satisfies Record<TranslationProvenance, string>;
 
   let {
@@ -93,14 +86,24 @@
     browserBoostCodes = browserLanguageCodes(navigator.languages);
   });
 
-  // Auto-select the rail language on open: Reading anchors on the text it
-  // flows; the stack modal opens on the rail's first language (Arabic).
+  // Auto-select the rail language on open, where the reader most likely wants
+  // to be: Reading anchors on the text it flows; the stack modal on its first
+  // selected translation; with nothing selected, the reader's own top browser
+  // language, then English, then the rail's first language.
   $effect(() => {
     if (!open || railLanguage !== null) return;
-    const anchorId = readPick?.current ?? null;
+    const anchorId = readPick?.current ?? selectedIds[0] ?? null;
     const anchorEntry = anchorId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(anchorId) : undefined;
-    railLanguage = anchorEntry?.language ?? languages[0]?.language ?? null;
+    railLanguage = anchorEntry?.language ?? defaultLanguage();
   });
+
+  function defaultLanguage(): string | null {
+    for (const code of [...browserBoostCodes, "en"]) {
+      const group = languages.find((l) => l.code === code);
+      if (group) return group.language;
+    }
+    return languages[0]?.language ?? null;
+  }
 
   // Live-url first (stress S1): on a scrolled surah route page.url still
   // holds the bare surah slug while window.location carries the reader's
@@ -249,6 +252,17 @@
     return rows;
   });
 
+  // Rail dot: languages holding a selected text (or Reading's flowing text).
+  const languagesInUse = $derived.by(() => {
+    const ids = picking ? [readPick?.current] : selectedIds;
+    const inUse = new Set<string>();
+    for (const id of ids) {
+      const entry = id ? TRANSLATION_CATALOGUE_BY_ID.get(id) : undefined;
+      if (entry) inUse.add(entry.language);
+    }
+    return inUse;
+  });
+
   // Mobile: the pane replaces the rail once a language is chosen; searching
   // always shows the pane (the rail is filtered anyway). md+ shows both.
   const paneVisible = $derived(mobilePane || searchActive);
@@ -296,17 +310,13 @@
   // touch-manipulation kills the double-tap-zoom window without breaking the
   // pane's scroll (stress S13).
   function rowCoverClass(kind: "toggle" | "locked"): string {
-    const base = "flex min-h-11 flex-1 touch-manipulation items-center gap-1.5 px-3";
+    const base = "flex min-h-11 min-w-0 flex-1 touch-manipulation items-center gap-3 px-3 py-2";
     if (kind === "toggle") return `${base} cursor-pointer`;
-    return `${base} cursor-not-allowed`;
+    return `${base} cursor-not-allowed opacity-50`;
   }
   function rowHref(t: TranslationCatalogueEntry): `/${string}` | null {
     const seg = translationSegmentsFromId(t.id);
     return hrefFor(position, { id: t.id, lang: seg.lang, translator: seg.translator });
-  }
-  function formatSize(bytes: number): string {
-    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
   function selectLanguage(language: string): void {
@@ -343,36 +353,40 @@
     <Dialog.Overlay
       class="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0"
     />
-    <!-- Phones get a bottom sheet with a fixed height, so swapping rail ↔ pane never
-         makes the sheet jump; md+ keeps the centered dialog. -->
+    <!-- Phones get a bottom sheet, md+ a centered dialog. Both have a FIXED height, so
+         switching languages (17 rows vs 1) or searching never makes the surface jump. -->
     <Dialog.Content
-      class="fixed bottom-0 left-0 right-0 z-50 flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-border bg-popover bg-clip-padding pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 max-md:data-[state=open]:slide-in-from-bottom-10 md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:h-auto md:max-h-[85vh] md:w-[min(94vw,780px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:border md:pt-[env(safe-area-inset-top)] md:data-[state=open]:zoom-in-95"
+      class="fixed bottom-0 left-0 right-0 z-50 flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-border bg-popover bg-clip-padding pb-[env(safe-area-inset-bottom)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in-0 max-md:data-[state=open]:slide-in-from-bottom-10 md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:h-[min(720px,86vh)] md:w-[min(94vw,880px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:border md:pt-[env(safe-area-inset-top)] md:data-[state=open]:zoom-in-95"
     >
       <!-- S11 (stress A3): env(safe-area-inset-*) padding keeps modal content
            clear of notches/home indicators on devices that report insets. -->
-      <div class="mx-auto mt-2 h-1 w-10 flex-none rounded-full bg-border-strong md:hidden" aria-hidden="true"></div>
-      <div class="flex items-center justify-between gap-3 px-5 pb-3 pt-2 md:pt-4">
-        <Dialog.Title class="text-[17px] font-semibold leading-tight">
-          {picking ? copy.shell.readingTranslationPick : copy.stacked.title}
-        </Dialog.Title>
-        <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
-        <Dialog.Close>
-          {#snippet child({ props })}
-            <button
-              {...props}
-              type="button"
-              aria-label={copy.translations.close}
-              class="flex h-11 w-11 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-            >
-              <Icon name="x" size={15} />
-            </button>
-          {/snippet}
-        </Dialog.Close>
-      </div>
+      <div
+        class="mx-auto mt-2 h-1 w-10 flex-none rounded-full bg-border-strong md:hidden"
+        aria-hidden="true"
+      ></div>
 
-      <div class="px-5">
+      <div class="flex flex-none flex-col gap-3 px-4 pb-3 pt-1 md:px-5 md:pt-3">
+        <div class="flex items-center gap-3">
+          <Dialog.Title class="text-[17px] font-semibold leading-tight">
+            {picking ? copy.shell.readingTranslationPick : copy.stacked.title}
+          </Dialog.Title>
+          <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
+          <Dialog.Close>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                aria-label={copy.translations.close}
+                class="-me-2.5 ms-auto flex h-11 w-11 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              >
+                <Icon name="x" size={16} />
+              </button>
+            {/snippet}
+          </Dialog.Close>
+        </div>
+
         <div
-          class="flex h-10 items-center gap-2.5 rounded-lg border border-border bg-background-subtle px-3.5 transition-colors focus-within:border-border-strong"
+          class="flex h-11 items-center gap-2.5 rounded-lg border border-border bg-background-subtle px-3.5 transition-colors focus-within:border-border-strong md:h-10"
         >
           <Icon name="search" size={15} class="flex-none text-muted-foreground" />
           <input
@@ -381,7 +395,7 @@
             oninput={(e) => (searchQuery = e.currentTarget.value)}
             placeholder={copy.stacked.searchPlaceholder}
             aria-label={copy.stacked.searchPlaceholder}
-            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-base text-foreground shadow-none outline-none md:text-sm placeholder:text-muted-foreground focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
+            class="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-base text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:outline-none md:text-sm [&::-webkit-search-cancel-button]:hidden"
           />
           {#if searchQuery !== ""}
             <!-- S9 (stress A1): the clear affordance stays visually small, but
@@ -396,14 +410,14 @@
             </button>
           {/if}
         </div>
-      </div>
 
-      <TooltipProvider delayDuration={300}>
         {#if picking}
           {#if quickRows.length > 0}
-            <div data-quick-picks class="flex items-center gap-3 px-5 py-3">
+            <div data-quick-picks class="flex items-center gap-3">
               <span class="flex-none text-xs text-muted-foreground">{copy.shell.readingRecent}</span>
-              <div class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div
+                class="flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 overflow-x-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
                 {#each quickRows as t (t.id)}
                   {@const current = t.id === readPick?.current}
                   <button
@@ -411,11 +425,13 @@
                     data-quick-pick={t.id}
                     aria-pressed={current}
                     onclick={() => pick(t.id)}
-                    class="inline-flex h-11 max-w-full flex-none cursor-pointer touch-manipulation items-center gap-1.5 rounded-pill border px-3 text-[13px] font-medium transition-colors {current
+                    class="inline-flex h-11 max-w-full flex-none cursor-pointer touch-manipulation items-center gap-1.5 rounded-pill border px-3 text-[13px] font-medium transition-colors md:h-8 {current
                       ? 'border-primary bg-primary/10 text-foreground'
                       : 'border-border bg-background-subtle text-foreground hover:border-border-strong'}"
                   >
-                    <span class="flex-none text-xs leading-none" aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                    <span class="flex-none text-xs leading-none" aria-hidden="true"
+                      >{flagFor(t.languageCode).flag}</span
+                    >
                     <span class="min-w-0 truncate" dir="auto">{t.name}</span>
                   </button>
                 {/each}
@@ -423,7 +439,7 @@
             </div>
           {/if}
         {:else if selectedRows.length > 0}
-          <div data-selected-chips class="flex items-start justify-between gap-3 px-5 py-3">
+          <div data-selected-chips class="flex items-center justify-between gap-3">
             <!-- S14 (stress B1): a single horizontal scroll row, never a wrapped
                  chip wall — the strip costs one row max and keeps touch
                  momentum; overscroll-contain stops end-of-strip flicks from
@@ -435,13 +451,13 @@
                 {@const extraIndex = selectedIds.indexOf(t.id)}
                 <div
                   data-chip={t.id}
-                  class="group/chip inline-flex h-11 max-w-full flex-none touch-manipulation items-center gap-1 rounded-pill border border-border bg-background-subtle ps-2.5 pe-0.5 transition-colors hover:border-border-strong"
+                  class="group/chip inline-flex h-11 max-w-full flex-none touch-manipulation items-center gap-1 rounded-pill border border-border bg-background-subtle ps-2.5 pe-0.5 transition-colors hover:border-border-strong md:h-8"
                 >
                   <span class="flex-none text-xs leading-none" aria-hidden="true">
                     {flagFor(t.languageCode).flag}
                   </span>
                   <span class="min-w-0 truncate text-[13px] font-medium text-foreground">
-                    {t.name}
+                    <bdi>{t.name}</bdi>
                   </span>
                   <!-- S8/S9 (stress A2/A1): the hover-reveal compiles only
                        under @media(hover:hover), so coarse pointers get the
@@ -459,7 +475,7 @@
                     onclick={() => reorder(t.id, -1)}
                     disabled={extraIndex <= 0}
                     aria-label={copy.stacked.moveUp}
-                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 md:h-8 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <Icon name="arrow-right" size={12} class="-rotate-90" />
                   </button>
@@ -468,7 +484,7 @@
                     onclick={() => reorder(t.id, 1)}
                     disabled={extraIndex === -1 || extraIndex >= selectedIds.length - 1}
                     aria-label={copy.stacked.moveDown}
-                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 md:h-8 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <Icon name="arrow-right" size={12} class="rotate-90" />
                   </button>
@@ -476,7 +492,7 @@
                     type="button"
                     onclick={() => remove(t.id)}
                     aria-label={copy.stacked.remove}
-                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground"
+                    class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground md:h-8"
                   >
                     <Icon name="x" size={13} />
                   </button>
@@ -484,307 +500,255 @@
               {/each}
             </div>
             <div
-              class="flex flex-none self-stretch touch-manipulation items-center gap-2.5 text-xs text-muted-foreground"
+              class="flex flex-none touch-manipulation items-center gap-2.5 text-xs text-muted-foreground"
             >
-              <span
-                class="tabular-nums"
-                title={copy.translations.capNote(STACKED_MAX_EXTRAS)}
-              >
+              <span class="tabular-nums" title={copy.translations.capNote(STACKED_MAX_EXTRAS)}>
                 {copy.stacked.count(selectedIds.length, STACKED_MAX_EXTRAS)}
               </span>
-              {#if selectedIds.length > 0}
-                <!-- S9 (stress A1): Clear all is ~46x16 visually; real vertical
-                     padding plus a before-pseudo give a >=44px effective
-                     target with zero visible change (the button has no
-                     background of its own). -->
-                <button
-                  type="button"
-                  onclick={clear}
-                  class="relative cursor-pointer touch-manipulation py-2.5 transition-colors before:absolute before:-inset-2 before:content-[''] hover:text-foreground"
-                >
-                  {copy.stacked.clear}
-                </button>
-              {/if}
+              <!-- S9 (stress A1): Clear all is ~46x16 visually; real vertical
+                   padding plus a before-pseudo give a >=44px effective
+                   target with zero visible change (the button has no
+                   background of its own). -->
+              <button
+                type="button"
+                onclick={clear}
+                class="relative cursor-pointer touch-manipulation py-2.5 transition-colors before:absolute before:-inset-2 before:content-[''] hover:text-foreground"
+              >
+                {copy.stacked.clear}
+              </button>
             </div>
           </div>
         {/if}
+      </div>
 
-        <div
-          class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[260px_1fr]"
-        >
-          {#snippet translationRow(t: TranslationCatalogueEntry, withLanguage: boolean)}
+      <div
+        class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
+      >
+        {#snippet translationRow(t: TranslationCatalogueEntry, withLanguage: boolean)}
           {@const checked = picking ? t.id === readPick?.current : selectedIds.includes(t.id)}
           {@const disabled = !picking && isFull && !checked}
           {@const href = picking ? null : rowHref(t)}
-          {@const native = nativeNameFor(t.languageCode)}
-          <!-- U16: the rich tooltip triggers from the whole row. The trigger
-               props land on the li via the child snippet; tabindex stays -1
-               (the row itself is not a tab stop) and focus is forwarded with
-               the bubbling focusin/focusout so keyboard focus on the row's
-               checkbox/link opens the tooltip too. SAFETY: the child-snippet
-               props bag is untyped, so the forwarded trigger handlers carry a
-               FocusEvent-cast — they are bits-ui's own onfocus/onblur. -->
-          <!-- S9/S10 (stress A1/A2): the row body is a <label> tied to the row
-               checkbox, so checkbox + name + author + the touch-only source
-               line form one >=44px toggle target. The translation's own
-               route link is a separate full-height trailing control beside
-               the label. -->
-
-          <Tooltip>
-            <TooltipTrigger tabindex={-1}>
-              {#snippet child({ props })}
-                <!-- omit-pattern destructure: bits-ui merges a button-only
-                     `type` into the trigger props; it is meaningless on an li
-                     and must not reach the DOM. -->
-                {@const { type: _triggerType, ...rowProps } = props}
-                <li
-                  {...rowProps}
-                  onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
-                  onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
-                  data-translation-row={t.id}
-                  class="group/row flex rounded-lg transition-colors {checked
-                    ? 'bg-primary/10'
-                    : 'hover:bg-surface-hover'}"
+          {@const source = translationSourceOf(t.id)}
+          <!-- One row anatomy everywhere: a fixed two-line block (name, then a muted
+               meta line — language when searching, translator when it differs from
+               the name, and always the source), so every row has the same height and
+               the list reads as one rhythm. The row body is a <label> tied to the row
+               checkbox (S9/S10), so the whole surface is one >=44px toggle target;
+               the go-to link is a separate trailing control beside it. -->
+          <li
+            data-translation-row={t.id}
+            class="group/row flex rounded-lg transition-colors {checked
+              ? 'bg-primary/10'
+              : 'hover:bg-surface-hover'}"
+          >
+            {#snippet coverBody()}
+              {#if picking}
+                <!-- Reading's picker: a check marks the text flowing now, no checkbox. -->
+                <span
+                  class="flex size-[18px] flex-none items-center justify-center text-primary"
+                  aria-hidden="true"
                 >
-                  {#snippet coverBody()}
+                  {#if checked}<Icon name="check" size={16} />{/if}
+                </span>
+              {:else}
+                <!-- Native checkbox, restyled: appearance-none keeps every native
+                     behaviour (label toggle, keyboard, disabled) while the box and
+                     its check read in the theme instead of the browser grey. -->
+                <span class="relative flex size-[18px] flex-none items-center justify-center">
+                  <input
+                    id={`tmodal-${t.id}`}
+                    type="checkbox"
+                    {checked}
+                    {disabled}
+                    onchange={() => toggle(t.id)}
+                    aria-label={rowLabel(t)}
+                    class="peer size-[18px] flex-none cursor-pointer touch-manipulation appearance-none rounded-[5px] border-[1.5px] border-border-strong bg-transparent transition-colors checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed"
+                  />
+                  <Icon
+                    name="check"
+                    size={12}
+                    class="pointer-events-none absolute text-primary-foreground opacity-0 peer-checked:opacity-100"
+                  />
+                </span>
+              {/if}
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="truncate text-[14px] font-medium leading-5 text-foreground">
+                  <bdi>{t.name}</bdi>
+                </span>
+                <span
+                  class="flex min-w-0 items-center gap-1.5 text-[12px] leading-4 text-muted-foreground"
+                >
                   {#if withLanguage}
-                    <span
-                      data-row-language
-                      class="w-[88px] flex-none truncate text-xs text-muted-foreground"
-                    >
+                    <span data-row-language class="flex-none">
                       <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
                       {t.language}
                     </span>
+                    <span class="flex-none" aria-hidden="true">·</span>
                   {/if}
-                  {#if picking}
-                    <!-- Reading's picker: a check marks the text flowing now, no checkbox. -->
-                    <span class="flex w-[18px] flex-none justify-center text-primary" aria-hidden="true">
-                      {#if checked}<Icon name="check" size={15} />{/if}
-                    </span>
-                  {:else}
-                    <input
-                      id={`tmodal-${t.id}`}
-                      type="checkbox"
-                      checked={checked}
-                      disabled={disabled}
-                      onchange={() => toggle(t.id)}
-                      aria-label={rowLabel(t)}
-                      class="size-[18px] flex-none cursor-pointer touch-manipulation accent-primary disabled:cursor-not-allowed"
-                    />
+                  {#if hasAuthorLine(t)}
+                    <span data-author-line class="min-w-0 truncate"><bdi>{t.translator}</bdi></span>
+                    <span class="flex-none" aria-hidden="true">·</span>
                   {/if}
-                  <span class="flex min-w-0 flex-1 flex-col justify-center self-stretch">
-                    <span class="block truncate text-sm font-medium text-foreground">
-                      {t.name}
-                    </span>
-                    {#if hasAuthorLine(t)}
-                      <span
-                        data-author-line
-                        class="block truncate text-[12.5px] leading-snug text-muted-foreground"
-                      >
-                        {t.translator}
-                      </span>
-                    {/if}
-                    <!-- S10 (stress A2): provenance is hover-tooltip-only, so
-                         coarse pointers get it as a muted text line instead
-                         ([@media(hover:hover)]:hidden keeps hover devices on
-                         the clean one/two-line row). -->
-                    <span
-                      data-row-source
-                      class="block truncate text-[11px] leading-tight text-muted-foreground [@media(hover:hover)]:hidden"
-                    >
-                      {copy.translations.sourceLabel(translationSourceOf(t.id))}
-                    </span>
-                  </span>
-                  {/snippet}
-                  {#if picking}
-                    <button
-                      type="button"
-                      data-row-pick={t.id}
-                      aria-pressed={checked}
-                      onclick={() => pick(t.id)}
-                      class="{rowCoverClass('toggle')} text-start"
-                    >
-                      {@render coverBody()}
-                    </button>
-                  {:else}
-                    <label
-                      data-row-target
-                      for={`tmodal-${t.id}`}
-                      class={rowCoverClass(disabled ? "locked" : "toggle")}
-                    >
-                      {@render coverBody()}
-                    </label>
-                  {/if}
-                  {#if href}
-                    <!-- Navigate to this translation's own route at the same
-                         reading position — pure navigation, no side effects.
-                         Revealed on row hover/focus where a pointer can
-                         hover; always shown on touch. -->
-                    <a
-                      href={publicHref(readerHrefFor(copy.locale, href))}
-                      data-switch
-                      data-sveltekit-preload-data="hover"
-                      onclick={() => (open = false)}
-                      aria-label={`${copy.translations.goTo}: ${rowLabel(t)}`}
-                      title={copy.translations.goTo}
-                      class="flex w-11 flex-none cursor-pointer touch-manipulation items-center justify-center self-stretch rounded-lg text-muted-foreground transition-[opacity,color] hover:text-foreground focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/row:opacity-100 [@media(hover:hover)]:group-focus-within/row:opacity-100"
-                    >
-                      <Icon name="arrow-right" size={15} />
-                    </a>
-                  {/if}
-                </li>
-              {/snippet}
-            </TooltipTrigger>
-            <TooltipContent
-              class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
-            >
-              <span class="text-[12px] font-semibold">{t.name}</span>
-              <span
-                class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+                  <span
+                    data-row-source
+                    class="flex-none"
+                    title={copy.translations.sourceLabel(source)}>{SOURCE_SHORT[source]}</span
+                  >
+                </span>
+              </span>
+            {/snippet}
+            {#if picking}
+              <button
+                type="button"
+                data-row-pick={t.id}
+                aria-pressed={checked}
+                onclick={() => pick(t.id)}
+                class="{rowCoverClass('toggle')} text-start"
               >
+                {@render coverBody()}
+              </button>
+            {:else}
+              <label
+                data-row-target
+                for={`tmodal-${t.id}`}
+                class={rowCoverClass(disabled ? "locked" : "toggle")}
+              >
+                {@render coverBody()}
+              </label>
+            {/if}
+            {#if href}
+              <!-- Navigate to this translation's own route at the same
+                   reading position — pure navigation, no side effects.
+                   Revealed on row hover/focus where a pointer can
+                   hover; always shown on touch. -->
+              <a
+                href={publicHref(readerHrefFor(copy.locale, href))}
+                data-switch
+                data-sveltekit-preload-data="hover"
+                onclick={() => (open = false)}
+                aria-label={`${copy.translations.goTo}: ${rowLabel(t)}`}
+                title={copy.translations.goTo}
+                class="flex w-11 flex-none cursor-pointer touch-manipulation items-center justify-center self-stretch rounded-lg text-muted-foreground transition-[opacity,color] hover:text-foreground focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/row:opacity-100 [@media(hover:hover)]:group-focus-within/row:opacity-100"
+              >
+                <Icon name="arrow-right" size={15} />
+              </a>
+            {/if}
+          </li>
+        {/snippet}
+
+        <nav
+          data-language-rail
+          aria-label={copy.translations.languagesLabel}
+          class="{paneVisible
+            ? 'hidden'
+            : 'flex'} min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:flex md:border-e"
+        >
+          {#each languages as l, i (l.language)}
+            {@const active = l.language === activeLanguage}
+            <!-- One line per language: flag, name, autonym (muted, truncating),
+                 an in-use dot when one of its translations is selected, count. -->
+            <button
+              data-language-option={l.language}
+              type="button"
+              tabindex={active ? 0 : -1}
+              aria-current={active ? "true" : undefined}
+              onclick={() => selectLanguage(l.language)}
+              onkeydown={(e) => onRailKeydown(e, i)}
+              class="flex h-11 flex-none cursor-pointer touch-manipulation items-center gap-2.5 rounded-md px-2.5 text-start transition-colors md:h-9 {active
+                ? 'bg-surface-hover text-foreground'
+                : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'}"
+            >
+              <span class="flex-none text-base leading-none" aria-hidden="true">{l.flag}</span>
+              <span class="flex min-w-0 flex-1 items-baseline gap-1.5">
                 <span
-                  class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[translationSourceOf(t.id)]}"
+                  data-language-name
+                  class="flex-none text-[14px] {active ? 'font-semibold' : 'font-medium'}"
+                  >{l.language}</span
+                >
+                {#if l.autonym !== null}
+                  <!-- bdi dir=auto: an RTL autonym keeps its own direction but
+                       stays start-aligned after the name. -->
+                  <bdi
+                    data-language-autonym
+                    dir="auto"
+                    class="min-w-0 truncate text-[12px] text-muted-foreground">{l.autonym}</bdi
+                  >
+                {/if}
+              </span>
+              {#if languagesInUse.has(l.language)}
+                <span
+                  data-language-in-use
+                  class="size-1.5 flex-none rounded-full bg-primary"
                   aria-hidden="true"
                 ></span>
-                {copy.translations.sourceLabel(translationSourceOf(t.id))}
-              </span>
-              <dl class="flex w-full flex-col gap-0.5 text-[11px]">
-                {#if t.translator !== null}
-                  <div class="flex w-full gap-2">
-                    <dt class="w-[4.5rem] flex-none text-background/60">
-                      {copy.translations.tooltipTranslator}
-                    </dt>
-                    <dd class="min-w-0 flex-1">{t.translator}</dd>
-                  </div>
-                {/if}
-                <div class="flex w-full gap-2">
-                  <dt class="w-[4.5rem] flex-none text-background/60">
-                    {copy.translations.tooltipLanguage}
-                  </dt>
-                  <dd class="min-w-0 flex-1">
-                    <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
-                    {t.language}
-                    {#if native !== null}
-                      <!-- dir=auto: RTL/script autonyms must render in their own direction -->
-                      (<span dir="auto">{native}</span>)
-                    {/if}
-                  </dd>
-                </div>
-                <div class="flex w-full gap-2">
-                  <dt class="w-[4.5rem] flex-none text-background/60">
-                    {copy.translations.tooltipSize}
-                  </dt>
-                  <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
-                </div>
-                <div class="flex w-full gap-2">
-                  <dt class="w-[4.5rem] flex-none text-background/60">
-                    {copy.translations.tooltipDirection}
-                  </dt>
-                  <dd class="min-w-0 flex-1">{copy.translations.dirLabel(t.direction)}</dd>
-                </div>
-              </dl>
-            </TooltipContent>
-          </Tooltip>
-          {/snippet}
-          <nav
-            data-language-rail
-            aria-label={copy.translations.languagesLabel}
-            class="{paneVisible ? 'hidden' : 'flex'} md:flex min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:border-e"
-          >
-            {#each languages as l, i (l.language)}
-              {@const active = l.language === activeLanguage}
-              <button
-                data-language-option={l.language}
-                type="button"
-                tabindex={active ? 0 : -1}
-                aria-current={active ? "true" : undefined}
-                onclick={() => selectLanguage(l.language)}
-                onkeydown={(e) => onRailKeydown(e, i)}
-                class="flex h-[52px] flex-none cursor-pointer touch-manipulation items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors {active
-                  ? 'bg-primary/10 text-foreground'
-                  : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'}"
-              >
-                <span class="flex-none text-lg leading-none" aria-hidden="true">{l.flag}</span>
-                <span class="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-                  <span
-                    data-language-name
-                    class="truncate text-[15px] leading-tight {active ? 'font-medium' : ''}"
-                  >
-                    {l.language}
-                  </span>
-                  {#if l.autonym !== null}
-                    <!-- bdi dir=auto: an RTL autonym keeps its own direction but
-                         stays start-aligned under the name (a block with dir=auto
-                         flipped العربية to the far edge). -->
-                    <span class="truncate text-xs leading-tight text-muted-foreground">
-                      <bdi data-language-autonym dir="auto">{l.autonym}</bdi>
-                    </span>
-                  {/if}
-                </span>
-                <span class="flex-none text-xs tabular-nums text-muted-foreground">
-                  {l.entries.length}
-                </span>
-              </button>
-            {/each}
-          </nav>
-
-          <section
-            data-language-pane
-            class="{paneVisible ? 'flex' : 'hidden'} md:flex min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain"
-          >
-            {#if searchActive}
-              <div class="flex items-center gap-2 px-4 pb-1 pt-3">
-                <button
-                  type="button"
-                  onclick={backToRail}
-                  aria-label={copy.translations.back}
-                  class="flex h-11 -ms-2 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
-                >
-                  <Icon name="arrow-right" size={14} class="rotate-180" />
-                  {copy.translations.back}
-                </button>
-                <p data-results-count class="text-[13px] text-muted-foreground">
-                  {copy.translations.results(matches.length)}
-                </p>
-              </div>
-              {#if matches.length === 0}
-                <p class="px-4 py-3 text-sm text-muted-foreground" role="status">
-                  {copy.translations.noMatches}
-                </p>
-              {:else}
-                <ul class="flex flex-col gap-0.5 px-2 pb-4">
-                  {#each searchRows as t (t.id)}
-                    {@render translationRow(t, true)}
-                  {/each}
-                </ul>
               {/if}
-            {:else if activeLanguage !== null}
-              <div class="flex items-center gap-2 px-4 pb-1 pt-3">
-                <button
-                  type="button"
-                  onclick={backToRail}
-                  aria-label={copy.translations.back}
-                  class="flex h-11 -ms-2 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
-                >
-                  <Icon name="arrow-right" size={14} class="rotate-180" />
-                  {copy.translations.back}
-                </button>
-                <h3 class="text-[15px] font-semibold text-foreground">{activeLanguage}</h3>
-                <span data-results-count class="text-[13px] text-muted-foreground">
-                  {copy.translations.results(activeEntries.length)}
-                </span>
-              </div>
-              <ul class="flex flex-col gap-0.5 px-2 pb-4">
-                {#each activeEntries as t (t.id)}
-                  {@render translationRow(t, false)}
+              <span class="flex-none text-[12px] tabular-nums text-muted-foreground">
+                {l.entries.length}
+              </span>
+            </button>
+          {/each}
+        </nav>
+
+        <section
+          data-language-pane
+          class="{paneVisible
+            ? 'flex'
+            : 'hidden'} min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain md:flex"
+        >
+          {#snippet paneBack()}
+            <button
+              type="button"
+              onclick={backToRail}
+              aria-label={copy.translations.back}
+              class="-ms-2 flex h-11 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
+            >
+              <Icon name="arrow-right" size={14} class="rotate-180" />
+              {copy.translations.back}
+            </button>
+          {/snippet}
+          <!-- Sticky pane header: the language stays named while its list scrolls. -->
+          {#if searchActive}
+            <div
+              class="sticky top-0 z-10 flex h-12 flex-none items-center gap-2 border-b border-border bg-popover px-4"
+            >
+              {@render paneBack()}
+              <p data-results-count class="text-[13px] text-muted-foreground">
+                {copy.translations.results(matches.length)}
+              </p>
+            </div>
+            {#if matches.length === 0}
+              <p class="px-4 py-6 text-sm text-muted-foreground" role="status">
+                {copy.translations.noMatches}
+              </p>
+            {:else}
+              <ul class="flex flex-col gap-0.5 p-2">
+                {#each searchRows as t (t.id)}
+                  {@render translationRow(t, true)}
                 {/each}
               </ul>
             {/if}
-          </section>
-        </div>
-      </TooltipProvider>
+          {:else if activeLanguage !== null}
+            <div
+              class="sticky top-0 z-10 flex h-12 flex-none items-center gap-2 border-b border-border bg-popover px-4"
+            >
+              {@render paneBack()}
+              <h3 class="text-[15px] font-semibold text-foreground">{activeLanguage}</h3>
+              <span data-results-count class="text-[13px] text-muted-foreground">
+                {copy.translations.results(activeEntries.length)}
+              </span>
+            </div>
+            <ul class="flex flex-col gap-0.5 p-2">
+              {#each activeEntries as t (t.id)}
+                {@render translationRow(t, false)}
+              {/each}
+            </ul>
+          {/if}
+        </section>
+      </div>
 
-      <div class="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
+      <div
+        class="flex flex-none items-center justify-between gap-3 border-t border-border px-4 py-3 md:px-5"
+      >
         <p data-cap-note class="text-xs text-muted-foreground">
           {#if picking}
             {copy.shell.readingPickNote}
@@ -798,7 +762,7 @@
           type="button"
           data-done
           onclick={() => (open = false)}
-          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover md:h-9"
         >
           {copy.translations.done}
         </button>

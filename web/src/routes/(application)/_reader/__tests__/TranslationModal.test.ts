@@ -231,9 +231,10 @@ describe("TranslationModal — master-detail layout", () => {
     const english = railOption("English");
     expect(english?.textContent).toContain("\u{1F1EC}\u{1F1E7}");
     expect(english?.textContent).toContain("4");
-    // U17 height must survive the rail's flex column: flex-none keeps the
-    // rows from shrinking below h-[52px] to min-content (vision r7 item 36).
-    expect(english?.className).toContain("h-[52px]");
+    // One compact line per language (44px touch target, 36px on md+); flex-none
+    // keeps the rows from shrinking to min-content in the rail's flex column.
+    expect(english?.className).toContain("h-11");
+    expect(english?.className).toContain("md:h-9");
     expect(english?.className).toContain("flex-none");
   });
 
@@ -280,13 +281,22 @@ describe("TranslationModal — master-detail layout", () => {
     );
   });
 
-  it("defaults the rail to Arabic on open", async () => {
+  it("opens on the reader's browser language, falling back to English", async () => {
+    // jsdom's navigator.languages is ["en-US"]: English, not the rail's first row.
     await open();
     const active = railOptions().find((b) => b.getAttribute("aria-current") === "true");
-    expect(active?.getAttribute("data-language-option")).toBe("Arabic");
+    expect(active?.getAttribute("data-language-option")).toBe("English");
     // the pane header names the language with a quiet count
-    expect(pane().querySelector("h3")?.textContent).toContain("Arabic");
-    expect(paneRowIds()).toEqual(["ar.muyassar"]);
+    expect(pane().querySelector("h3")?.textContent).toContain("English");
+    expect(paneRowIds()).toEqual(["qul.en.ahmed", "en.pickthall", "en.sahih", "en.wahiduddin"]);
+  });
+
+  it("opens on the first selected translation's language and dots languages in use", async () => {
+    stackedTranslations.setIds(["ur.jalandhry"]);
+    await open();
+    expect(pane().querySelector("h3")?.textContent).toContain("Urdu");
+    expect(railOption("Urdu")?.querySelector("[data-language-in-use]")).not.toBeNull();
+    expect(railOption("English")?.querySelector("[data-language-in-use]")).toBeNull();
   });
 
   it("scrolls the selected rail row into view (open auto-select and keyboard moves)", async () => {
@@ -361,12 +371,14 @@ describe("TranslationModal — master-detail layout", () => {
     // translator mirrors the name: no duplicated second line
     const sahih = pane().querySelector('li[data-translation-row="en.sahih"]');
     expect(sahih?.querySelector("[data-author-line]")).toBeNull();
-    // every row carries an 18px checkbox and is itself the rich-tooltip
-    // trigger (U16: hover anywhere / keyboard focus on the row opens it)
-    expect(pickthall?.querySelector('input[type="checkbox"]')?.className).toContain("size-[18px]");
-    expect(pickthall?.hasAttribute("data-tooltip-trigger")).toBe(true);
-    // U19: no colored source dot anywhere in the rows — provenance is
-    // tooltip-only now
+    // every row carries an 18px theme-styled checkbox and no hover tooltip:
+    // everything the row has to say is on the row itself
+    const box = pickthall?.querySelector('input[type="checkbox"]');
+    expect(box?.className).toContain("size-[18px]");
+    expect(box?.className).toContain("appearance-none");
+    expect(box?.className).toContain("checked:bg-primary");
+    expect(pickthall?.hasAttribute("data-tooltip-trigger")).toBe(false);
+    // no colored source dot anywhere in the rows
     expect(document.querySelectorAll("li[data-translation-row] span.size-2")).toHaveLength(0);
   });
 
@@ -730,15 +742,16 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
     expect(remove?.className).toContain("before:-inset-x-2");
   });
 
-  it("shows the provenance label as an inline muted line on coarse pointers only", async () => {
+  it("shows the source on every row's meta line, on every pointer", async () => {
     await open();
     await selectEnglish();
     const source = pane().querySelector(
       'li[data-translation-row="en.pickthall"] [data-row-source]',
     );
-    expect(source?.textContent).toContain("Tanzil");
-    // hover-capable devices keep the clean row (tooltip carries provenance)
-    expect(source?.className).toContain("[@media(hover:hover)]:hidden");
+    expect(source?.textContent?.trim()).toBe("Tanzil");
+    // the full credit stays one hover away, the short name is always visible
+    expect(source?.getAttribute("title")).toContain("tanzil.net");
+    expect(source?.className).not.toContain("hidden");
   });
 
   it("contains overscroll in the scroll containers and pads the dialog for safe areas", async () => {

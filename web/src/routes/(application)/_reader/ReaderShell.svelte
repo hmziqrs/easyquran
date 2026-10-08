@@ -55,10 +55,14 @@
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
           <TranslationButton {routeTranslationId} />
         {/if}
-        {@render header()}
-        {#if position}
-          <PositionIndicator initial={position} />
-        {/if}
+        <!-- Title + live position may clip and truncate, never push the text-size
+             control off a phone screen (that widened the whole page on range routes). -->
+        <div class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden whitespace-nowrap">
+          {@render header()}
+          {#if position}
+            <PositionIndicator initial={position} />
+          {/if}
+        </div>
         {#if mounted}
           <div
             class="ms-auto flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"
