@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyHeaders, isMissingModule } from "../../../../server";
+import { variables } from "../../../env";
+import {
+  applyHeaders,
+  buildEnvModule,
+  DYNAMIC_PUBLIC_ENV_VARS,
+  envModuleResponse,
+  isMissingModule,
+  isStaticMethod,
+} from "../../../../server";
 
 const THEME_SCRIPT = `const theme = localStorage.getItem("theme");document.dir = "ltr";`;
 
@@ -132,5 +140,87 @@ describe("isMissingModule import guard", () => {
     // with zero log.
     expect(isMissingModule(new SyntaxError("Unexpected end of input"))).toBe(false);
     expect(isMissingModule(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("/_app/env.js route", () => {
+  // SAFETY: src/env.ts's `variables` is a literal-keyed mapped type; this test
+  // only reads the public/static flags, so it is re-branded to that entry shape.
+  const declaredDynamicPublic = Object.entries(
+    variables as Record<string, { public?: boolean; static?: boolean }>,
+  )
+    .filter(([, config]) => config.public === true && config.static !== true)
+    .map(([name]) => name);
+
+  it("serves exactly the dynamic public vars declared in src/env.ts", () => {
+    // kit 3 compiles an import of /_app/env.js into the built service worker
+    // whenever such a var exists; adapter-bun never materializes the module,
+    // so web/server.ts must — for exactly this set, or registration dies.
+    expect([...DYNAMIC_PUBLIC_ENV_VARS].sort()).toEqual([...declaredDynamicPublic].sort());
+  });
+
+  it("serves a no-cache JS module read from process.env at request time", async () => {
+    const previousEnv = process.env.PUBLIC_ENV;
+    const previousKey = process.env.PUBLIC_FCM_VAPID_KEY;
+    process.env.PUBLIC_ENV = "integration";
+    delete process.env.PUBLIC_FCM_VAPID_KEY;
+    try {
+      const response = envModuleResponse(
+        new Request("http://localhost/_app/env.js"),
+        "/_app/env.js",
+      );
+      if (response === null) throw new Error("/_app/env.js route did not match");
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/javascript");
+      // Never cached stale: a pinned copy would freeze a previous deploy's env.
+      expect(response.headers.get("cache-control")).toBe("no-cache");
+      // Same module shape kit's own builder.generateEnvModule() writes.
+      const body = await response.text();
+      expect(body.startsWith("export const env=")).toBe(true);
+      // SAFETY: buildEnvModule() writes `export const env=` + JSON.stringify of a
+      // string-valued record (shape test below), so JSON.parse returns exactly
+      // Record<string, string>.
+      const payload = JSON.parse(body.slice("export const env=".length)) as Record<string, string>;
+      for (const name of DYNAMIC_PUBLIC_ENV_VARS) expect(name in payload).toBe(true);
+      expect(payload.PUBLIC_ENV).toBe("integration");
+      expect(payload.PUBLIC_FCM_VAPID_KEY).toBe("");
+    } finally {
+      process.env.PUBLIC_ENV = previousEnv;
+      if (previousKey === undefined) delete process.env.PUBLIC_FCM_VAPID_KEY;
+      else process.env.PUBLIC_FCM_VAPID_KEY = previousKey;
+    }
+  });
+
+  it("escapes line terminators that are raw-forbidden in pre-ES2019 string literals", () => {
+    const module = buildEnvModule(["PUBLIC_ENV"], { PUBLIC_ENV: "a\u2028b\u2029c" });
+    expect(module).toBe('export const env={"PUBLIC_ENV":"a\\u2028b\\u2029c"}');
+  });
+
+  it("returns null off-path — nothing beyond the exact module path is intercepted", () => {
+    expect(
+      envModuleResponse(new Request("http://localhost/_app/env.js.map"), "/_app/env.js.map"),
+    ).toBeNull();
+    expect(envModuleResponse(new Request("http://localhost/"), "/")).toBeNull();
+  });
+});
+
+describe("static layer method gate", () => {
+  it("serves GET/HEAD only — other methods fall through to the kit handler", () => {
+    // Regression: the static layer used to answer POST /al-fatihah with the
+    // prerendered page body and 200. Non-GET/HEAD now reaches kit, which
+    // answers 405 on SSR routes and 404 on prerendered-only paths (kit 3's
+    // server instance excludes prerendered routes) — never the file body.
+    expect(isStaticMethod("GET")).toBe(true);
+    expect(isStaticMethod("HEAD")).toBe(true);
+    for (const method of ["POST", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
+      expect(isStaticMethod(method)).toBe(false);
+    }
+    // The env module route applies the same gate: POST /_app/env.js falls through.
+    expect(
+      envModuleResponse(
+        new Request("http://localhost/_app/env.js", { method: "POST" }),
+        "/_app/env.js",
+      ),
+    ).toBeNull();
   });
 });

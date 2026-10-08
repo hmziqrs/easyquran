@@ -67,6 +67,7 @@ export default defineConfig({
     noExternal: [
       "clsx",
       "es-toolkit",
+      "firebase",
       "simple-icons",
       "tailwind-merge",
       "tailwind-variants",
@@ -113,8 +114,13 @@ export default defineConfig({
           filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
       },
       serviceWorker: {
-        // Kit 3 removed `serviceWorker.files` — the precache filter now lives in
-        // src/service-worker.ts, which picks its file list from `$app/manifest`.
+        // Kit 3 reduced this option to `register` (+ registration options) — there is
+        // no `files` filter (verified against @sveltejs/kit 3.0.1 types) and the
+        // `$app/manifest` asset walk is unfiltered. The kit 2 exclusions therefore
+        // live in src/service-worker.ts's PRECACHE_FILES filter: dotfiles (the
+        // server's isDotfile refuses them, so a precache fetch 404s and SW install
+        // dies), `_headers`/`_redirects`/`robots.txt`/`og.png`, and the `quran-meta/`
+        // prefix (quran-data.json is precached deliberately by the PRECACHE line).
         register: false,
       },
       adapter: adapter({
