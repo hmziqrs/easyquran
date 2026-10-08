@@ -525,11 +525,15 @@ async function lateStaticResponse(request: Request, pathname: string): Promise<R
 // /_app/env.js — kit 3's runtime env module. With dynamic public vars declared
 // in src/env.ts, kit compiles `import { env } from "/_app/env.js"` into the
 // built client output (the service worker; pages receive their values through
-// the SSR pass). adapter-node materializes that module from the running
-// process; adapter-bun 1.0.0 never calls builder.generateEnvModule(), so this
-// entry serves it instead — built per request from process.env, restricted to
-// exactly the declared dynamic public set (unset reads as "", like the
-// optionalString schema in src/env.ts). Deliberate sync: this list must mirror
+// the SSR pass). kit's own handler already answers this URL — respond.js:359
+// routes GET /_app/env.js to get_public_env(), built from the env passed to
+// Server.init below — but its response carries only an etag and no
+// cache-control. The custom route exists to pre-empt that answer, not to
+// substitute for a missing one: it runs before the static table (see
+// handleRequest) and answers `cache-control: no-cache`, built per request
+// from process.env, restricted to exactly the declared dynamic public set
+// (unset reads as "", like the optionalString schema in src/env.ts).
+// Deliberate sync: this list must mirror
 // src/env.ts's `public: true` vars; server-headers.test.ts asserts the two
 // stay in step (src/env.ts itself is NOT importable here — the web image ships
 // no node_modules, so no @sveltejs/kit/env at runtime).

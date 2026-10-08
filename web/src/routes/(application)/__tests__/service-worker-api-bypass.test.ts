@@ -10,8 +10,16 @@ vi.mock("$app/env", () => ({
 vi.mock("$app/manifest", () => ({
   // SAFETY: $app/manifest mock; kit 3 emits entry paths WITHOUT a leading
   // slash, so "favicon.png" doubles as the normalization fixture while
-  // "robots.txt" doubles as the precache-exclusion fixture.
-  assets: [{ path: "robots.txt" }],
+  // "robots.txt" doubles as the named precache-exclusion fixture. ".DS_Store"
+  // (dotfile) and "quran-meta/translations.json" (catalogue prefix) exercise
+  // the other two filter branches; "quran-meta/quran-data.json" is excluded by
+  // that same filter and returns only via the deliberate PRECACHE re-add.
+  assets: [
+    { path: "robots.txt" },
+    { path: ".DS_Store" },
+    { path: "quran-meta/translations.json" },
+    { path: "quran-meta/quran-data.json" },
+  ],
   immutable: [{ path: "favicon.png" }],
   prerendered: [],
   routes: [],
@@ -252,8 +260,15 @@ describe("kit 3 manifest entries normalize to leading-slash, filtered precache",
     // The hand-added entries normalize through the same pathname branch.
     expect(keys).toContain("/");
     expect(keys).toContain("/surah");
-    // robots.txt (named exclusion), and dotfiles/quran-meta/** by the same filter.
+    // robots.txt (named exclusion), .DS_Store (dotfile), and quran-meta/**
+    // (catalogue prefix) are all filtered out of the precache — a dotfile or
+    // catalogue entry that leaked through would 4xx/fail at install time.
     expect(keys).not.toContain("/robots.txt");
+    expect(keys).not.toContain("/.DS_Store");
+    expect(keys).not.toContain("/quran-meta/translations.json");
+    // quran-data.json IS precached, but only through the deliberate re-add in
+    // PRECACHE (service-worker.ts) — the filter above excluded it.
+    expect(keys).toContain("/quran-meta/quran-data.json");
   });
 
   it("serves a precached manifest asset cache-first with no background revalidate", async () => {

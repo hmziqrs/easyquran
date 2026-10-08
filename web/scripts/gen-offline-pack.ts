@@ -19,9 +19,13 @@ const MANIFEST_PATH = path.join(OFFLINE_DIR, "manifest.json");
 // fail the build here instead, naming the culprit.
 //
 // Static import/export statements stay line-anchored (rollup always emits them
-// at line start). Dynamic imports do NOT: the bundle carries them mid-line and
-// await-prefixed (`fn(a, await import("firebase/analytics"))`), so `import(`
-// is matched anywhere on the line. The lookbehind rejects member access
+// at line start) — including bare side-effect imports (`import "firebase/app";`),
+// which carry no from-clause for the static regex to anchor on and so get
+// their own line-anchored arm. Dynamic imports do NOT: the bundle carries
+// them mid-line and await-prefixed (`fn(a, await import("firebase/analytics"))`),
+// so `import(` is matched anywhere on the line, at EVERY occurrence — a
+// relative dynamic import early on a line must not mask a later bare one.
+// The lookbehind rejects member access
 // (`foo.import("…")`) and identifier suffixes (`ximport("…")`); a string that
 // merely CONTAINS `import("dependency-root")` can still match, but only
 // production-dependency roots flag, and the error names the culprit for a
@@ -37,11 +41,10 @@ function assertNoRuntimeExternals(): void {
   };
   const dependencies = new Set(Object.keys(pkg.dependencies ?? {}));
   const importLine = /^(?:import|export)\s[^;]*?from\s*["']([^"']+)["']/u;
-  const dynamicImport = /(?<![.\w$])import\s*\(\s*["']([^"']+)["']\s*\)/u;
+  const sideEffectImport = /^import\s*["']([^"']+)["']/u;
+  const dynamicImport = /(?<![.\w$])import\s*\(\s*["']([^"']+)["']\s*\)/gu;
   const externals = new Set<string>();
-  const check = (line: string): void => {
-    const match = importLine.exec(line) ?? dynamicImport.exec(line);
-    const specifier = match?.[1];
+  const flag = (specifier: string | undefined): void => {
     if (specifier === undefined || specifier === "") return;
     if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("#")) return;
     if (specifier.startsWith("node:") || isBuiltin(specifier)) return;
@@ -50,6 +53,14 @@ function assertNoRuntimeExternals(): void {
       .slice(0, specifier.startsWith("@") ? 2 : 1)
       .join("/");
     if (dependencies.has(root)) externals.add(specifier);
+  };
+  const check = (line: string): void => {
+    // At most one line-anchored import/export statement heads a rollup line
+    // (from-clause or bare side-effect); dynamic imports can appear many
+    // times mid-line, so every match's specifier is checked, not just the
+    // first.
+    flag((importLine.exec(line) ?? sideEffectImport.exec(line))?.[1]);
+    for (const match of line.matchAll(dynamicImport)) flag(match[1]);
   };
   const walk = (directory: string): void => {
     if (!existsSync(directory)) return;
