@@ -73,7 +73,7 @@
       <div class="flex gap-2">
         <a
           href={mixSearch(params, RECOMMENDED_MIX)}
-          data-sveltekit-noscroll
+          data-sveltekit-reset="false"
           aria-current={isRecommended ? "true" : undefined}
           class={[chip, isRecommended ? chipOn : chipOff]}
         >
@@ -81,7 +81,7 @@
         </a>
         <a
           href={mixSearch(params, CURRENT_MIX)}
-          data-sveltekit-noscroll
+          data-sveltekit-reset="false"
           aria-current={isCurrent ? "true" : undefined}
           class={[chip, isCurrent ? chipOn : chipOff]}
         >
@@ -100,7 +100,7 @@
                 {@const on = mix[axis.key] === option.id}
                 <a
                   href={axisSearch(params, mix, axis.key, option.id)}
-                  data-sveltekit-noscroll
+                  data-sveltekit-reset="false"
                   aria-current={on ? "true" : undefined}
                   title={option.note}
                   class={[chip, on ? chipOn : chipOff]}
@@ -142,7 +142,7 @@
           {@const on = set.ids.join(",") === shownIds}
           <a
             href={translationsSearch(params, mix, set.ids)}
-            data-sveltekit-noscroll
+            data-sveltekit-reset="false"
             aria-current={on ? "true" : undefined}
             class={[chip, on ? chipOn : chipOff]}
           >

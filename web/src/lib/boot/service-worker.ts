@@ -2,7 +2,10 @@ const SW_URL = "/service-worker.js";
 
 const SW_OPTIONS: RegistrationOptions = {
   scope: "/",
-  type: import.meta.env.DEV ? "module" : "classic",
+  // Kit 3 always emits the service worker as an ES module (the SW build's
+  // rolldown output format is 'es'), so dev and prod both register it as a
+  // module — a 'classic' registration would fail evaluation in production.
+  type: "module",
   updateViaCache: "none",
 };
 
