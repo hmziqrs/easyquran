@@ -1,23 +1,19 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Button, Icon, MetricCard } from "#lib/components/index.js";
+  import { Button, Container, Icon } from "#lib/components/index.js";
   import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
-  import { marketingLocaleFromPath, marketingReaderHomeHref } from "#lib/i18n/marketing-copy.js";
-  import { marketingHref } from "#lib/i18n/marketing.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
   import { surahPathFor } from "#lib/data/quran.js";
   import { readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
-  import { authState } from "#lib/auth/auth-state.svelte.js";
-  import type { BookmarksStore } from "#lib/bookmarks/store.svelte.js";
-  import type { ReaderApi } from "#lib/stores/reader.svelte.js";
   import type { LandingHue } from "#lib/i18n/marketing-copy.js";
 
   /**
-   * Landing rebuilt to the boards (plan 05): eight full-bleed bands — header and
-   * footer live in the marketing layout, this page owns hero / metric strip /
-   * index / why / roadmap / closing. The hero pill search is the primary action:
-   * a real form submitting to /app/search; ⌘K stays owned by GlobalSearch (the
+   * The home page is the index, not a pitch: bismillah, one search field, a few
+   * shortcuts and every surah. It shares the header's frame (Container: 1200px,
+   * 24px gutter) so the logo, the search and the first card line up. The search
+   * is a real form submitting to /search; ⌘K stays owned by GlobalSearch (the
    * shared TanStack registry), this page adds only an Escape-clear chord for the
    * field itself through the same registerHotkey path.
    */
@@ -26,18 +22,15 @@
   const arabicCtx = { kind: "arabic" } as const;
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const landing = $derived(resolveLandingCopy(locale));
-  const aboutHref = $derived(marketingHref("about", locale));
-  // The metric strip doubles as the index hub: each card opens its dedicated
-  // index page (/app/surah, /app/juz, /app/pages, /app/yours).
-  const indexHrefs = $derived([
-    publicHref(readerHrefFor(locale, "/surah")),
-    publicHref(readerHrefFor(locale, "/juz")),
-    publicHref(readerHrefFor(locale, "/pages")),
-    publicHref(yoursPageHref()),
+  // The sibling indexes. The surah index is this page, so it is the current tab.
+  const indexLinks = $derived([
+    { label: landing.indexJuz, href: publicHref(readerHrefFor(locale, "/juz")) },
+    { label: landing.indexPages, href: publicHref(readerHrefFor(locale, "/pages")) },
+    { label: landing.indexYours, href: publicHref(yoursPageHref()) },
   ]);
 
-  /* Hue slots resolve through the palette tokens (§61 — no colour literals).
-     Boards cycle the four hues by position, never by surah number. */
+  /* Hue slots resolve through the palette tokens (§61 — no colour literals),
+     cycled by position like the app's surah index. */
   const HUE_SOFT = {
     1: "var(--hue-1-soft)",
     2: "var(--hue-2-soft)",
@@ -50,25 +43,13 @@
     3: "var(--hue-3-legible)",
     4: "var(--hue-4-legible)",
   } as const satisfies Record<LandingHue, string>;
-  const HUE_FILL = {
-    1: "var(--hue-1)",
-    2: "var(--hue-2)",
-    3: "var(--hue-3)",
-    4: "var(--hue-4)",
-  } as const satisfies Record<LandingHue, string>;
-  const ON_HUE = {
-    1: "var(--on-hue-1)",
-    2: "var(--on-hue-2)",
-    3: "var(--on-hue-3)",
-    4: "var(--on-hue-4)",
-  } as const satisfies Record<LandingHue, string>;
 
   function hueAt(position: number): LandingHue {
     // SAFETY: position % 4 is 0–3 for any integer, so +1 is exactly the 1–4 hue-slot union; the assertion only re-narrows the widened number.
     return ((position % 4) + 1) as LandingHue;
   }
 
-  /* Boards' "Often opened" row — the five surahs readers open most. */
+  /* The five surahs readers open most. */
   const OFTEN_OPENED = [1, 18, 36, 55, 67];
 
   // Route data can lack `surahs` for one render (dev hot swap keeps the old load
@@ -81,15 +62,7 @@
     ),
   );
 
-  // Same stale-payload guard for the metric strip; these mirror RANGE_COUNTS,
-  // the same constants the server load falls back to.
-  const FALLBACK_JUZ_COUNT = 30;
-  const FALLBACK_PAGE_COUNT = 604;
-  let surahCount = $derived(data.surahCount ?? surahs.length);
-  let juzCount = $derived(data.juzCount ?? FALLBACK_JUZ_COUNT);
-  let quranPageCount = $derived(data.pageCount ?? FALLBACK_PAGE_COUNT);
-
-  /* ── Hero search ─────────────────────────────────────────────────────────── */
+  /* ── Search ──────────────────────────────────────────────────────────────── */
   const SEARCH_ACTION = publicHref("/search");
   let query = $state("");
   let searchInput = $state<HTMLInputElement | undefined>();
@@ -127,85 +100,23 @@
       cleanup?.();
     };
   });
-
-  /* ── Bookmarks metric (real data, never fabricated samples) ──────────────── */
-  let bookmarksStore = $state<BookmarksStore | null>(null);
-  let readerStore = $state<ReaderApi | null>(null);
-
-  // Client-only: both stores arrive behind a dynamic import (the sync engine and
-  // reader persistence never belong in the landing's initial bundle), hydrate,
-  // then feed the derived count below.
-  $effect(() => {
-    let dead = false;
-    void Promise.all([
-      import("#lib/stores/reader.svelte.js"),
-      import("#lib/bookmarks/store.svelte.js"),
-    ]).then(([readerModule, bookmarksModule]) => {
-      if (dead) return;
-      readerModule.reader.hydrate();
-      bookmarksModule.bookmarks.hydrate();
-      readerStore = readerModule.reader;
-      bookmarksStore = bookmarksModule.bookmarks;
-    });
-    return () => {
-      dead = true;
-    };
-  });
-
-  // An authed reader's server view needs the auth edge to start syncing — the
-  // marketing page has no app layout to drive onAuthChanged.
-  $effect(() => {
-    if (authState.authenticated && bookmarksStore) bookmarksStore.onAuthChanged(true);
-  });
-
-  let bookmarkCount = $derived.by(() => {
-    if (bookmarksStore?.authed) return bookmarksStore.bookmarks.length;
-    return readerStore?.bookmarkedKeys.length ?? 0;
-  });
-  let bookmarkCountKnown = $derived(bookmarksStore !== null && readerStore !== null);
-
-  function bookmarkValue(): string {
-    if (bookmarkCount > 0) return String(bookmarkCount);
-    return landing.metricYours;
-  }
-  function bookmarkCaption(): string {
-    if (bookmarkCountKnown && bookmarkCount === 0) return landing.metricBookmarksEmpty;
-    return landing.metricBookmarksNote;
-  }
-  let bookmarksValue = $derived(bookmarkValue());
-  let bookmarksCaption = $derived(bookmarkCaption());
 </script>
 
 <MarketingSeo {locale} />
 
-<!-- ── band 2: hero ─────────────────────────────────────────────────────── -->
-<Band
-  width="wide"
-  class="py-16 md:py-[72px] xl:py-[88px]"
-  contentClass="flex flex-col items-center"
->
-  <h1
-    aria-label={landing.heroTitleFull}
-    class="max-w-[17ch] text-balance text-center text-display-xl"
-  >
-    {landing.heroTitleLead}<span
-      class="mx-2 inline-block rounded-highlight bg-primary px-5 pb-2 pt-[2px] text-primary-foreground"
-      >{landing.heroTitleHighlight}</span
-    >{landing.heroTitleTail}
-  </h1>
-  <p
-    class="mt-[26px] max-w-[55ch] text-pretty text-center text-body-xl text-foreground-secondary"
-  >
-    {landing.heroIntro}
+<Container class="flex flex-col items-center pt-10 pb-10 sm:pt-14 md:pt-16">
+  <h1 class="sr-only">{landing.heroTitleFull}</h1>
+  <p lang="ar" dir="rtl" class="font-arabic text-[26px] leading-[1.9] text-foreground sm:text-[32px]">
+    {landing.bismillah}
   </p>
 
   <form
     method="GET"
     action={SEARCH_ACTION}
     role="search"
-    class="mt-10 flex h-[64px] w-full max-w-[820px] items-center gap-4 rounded-pill border border-border bg-surface ps-[22px] pe-2 sm:h-[68px] sm:ps-[30px] xl:h-[76px]"
+    class="mt-6 flex h-14 w-full max-w-[720px] items-center gap-3 rounded-pill border border-border bg-surface ps-5 pe-1.5 transition-colors focus-within:border-border-strong sm:h-16 sm:ps-6 sm:pe-2"
   >
-    <Icon name="search" size={23} class="flex-none text-muted" />
+    <Icon name="search" size={20} class="flex-none text-muted" />
     <label class="sr-only" for="hero-search">{landing.searchLabel}</label>
     <input
       id="hero-search"
@@ -215,93 +126,58 @@
       name="q"
       placeholder={landing.searchPlaceholder}
       autocomplete="off"
-      class="min-w-0 flex-grow bg-transparent text-[17px] font-semibold text-foreground outline-none placeholder:text-muted sm:text-[19px]"
+      class="min-w-0 flex-grow bg-transparent text-[16px] font-medium text-foreground outline-none placeholder:text-muted sm:text-[17px] [&::-webkit-search-cancel-button]:hidden"
     />
     <Button
       type="submit"
       variant="primary"
-      size="lg"
-      class="h-12 flex-none px-6 text-[16px] font-extrabold sm:h-14 sm:px-[34px] sm:text-[18px] xl:h-[60px]"
+      class="h-11 flex-none px-5 text-[15px] font-bold sm:h-12 sm:px-6"
     >{landing.searchButton}</Button>
   </form>
 
-  <div class="mt-[22px] flex flex-wrap items-center justify-center gap-2">
-    <span class="me-1.5 text-body text-muted">{landing.oftenOpened}</span>
+  <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+    <span class="me-1 text-caption text-muted">{landing.oftenOpened}</span>
     {#each oftenOpened as s (s.num)}
       <a
         href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
-        class="rounded-pill border border-border bg-surface px-4 py-[9px] text-[14.5px] font-bold text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="rounded-pill border border-border px-3.5 py-1.5 text-[14px] font-semibold text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >{#if locale === "ar"}<span lang="ar" dir="rtl" class="font-arabic">{s.arabic}</span>{:else}{s.name}{/if}</a
       >
     {/each}
   </div>
-</Band>
+</Container>
 
-<!-- ── band 3: metric strip — gapless, edge to edge, four hues; each card opens
-     its dedicated index page ───────────────────────────────────────────── -->
-<Band pad="none" width="full" contentClass="px-0 md:px-0 lg:px-0 xl:px-0">
-  <div class="grid grid-cols-1 gap-0 md:grid-cols-2 lg:grid-cols-4">
-    <a
-      href={indexHrefs[0]}
-      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+<Container id="surahs" class="scroll-mt-20 pb-16">
+  <!-- Tab row: this page is the surah index, so "Surahs" is the current tab and
+       the sibling indexes are plain links — the only way to Juz/Pages on phones,
+       where the header hides its index links. -->
+  <div
+    class="mb-4 flex items-end gap-1 overflow-x-auto overflow-y-hidden border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+  >
+    <h2
+      class="-mb-px inline-flex h-11 flex-none items-center border-b-2 border-foreground px-3 text-[15px] font-bold text-foreground"
+    >{landing.indexSurahs}</h2>
+    <nav aria-label={landing.indexLabel} class="flex flex-none items-end gap-1">
+      {#each indexLinks as link (link.href)}
+        <a
+          href={link.href}
+          data-sveltekit-preload-data="hover"
+          class="-mb-px inline-flex h-11 items-center border-b-2 border-transparent px-3 text-[15px] font-semibold text-muted transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >{link.label}</a>
+      {/each}
+    </nav>
+    <span class="ms-auto flex h-11 flex-none items-center px-1 text-caption tabular-nums text-muted"
+      >{surahs.length}</span
     >
-      <MetricCard hue={1} value={String(surahCount)} label={landing.metricSurahs} caption={landing.metricSurahsNote}>
-        <Icon name="book" />
-      </MetricCard>
-    </a>
-    <a
-      href={indexHrefs[1]}
-      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      <MetricCard hue={2} value={String(juzCount)} label={landing.metricJuz} caption={landing.metricJuzNote}>
-        <Icon name="continuous" />
-      </MetricCard>
-    </a>
-    <a
-      href={indexHrefs[2]}
-      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      <MetricCard hue={3} value={String(quranPageCount)} label={landing.metricPages} caption={landing.metricPagesNote}>
-        <Icon name="note" />
-      </MetricCard>
-    </a>
-    <a
-      href={indexHrefs[3]}
-      class="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      <MetricCard hue={4} value={bookmarksValue} label={landing.metricBookmarks} caption={bookmarksCaption}>
-        <Icon name="bookmark" />
-      </MetricCard>
-    </a>
   </div>
-</Band>
 
-<!-- ── band 4: index ────────────────────────────────────────────────────── -->
-<Band id="surahs" width="wide" class="scroll-mt-20">
-  <div class="mb-[34px] flex flex-wrap items-end justify-between gap-6">
-    <div class="flex flex-col gap-3">
-      <span class="text-micro text-primary">{landing.indexEyebrow}</span>
-      <h2 class="max-w-[22ch] text-h1">{landing.indexTitle}</h2>
-      <p class="max-w-[58ch] text-pretty text-body-l text-foreground-secondary">
-        {landing.indexIntro}
-      </p>
-    </div>
-    <a
-      href="#surahs"
-      class="flex h-12 flex-none items-center gap-[9px] rounded-pill border border-border px-[22px] text-[15.5px] font-extrabold text-foreground transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      {landing.indexSeeAll}
-      <!-- Icon mirrors arrow-right under RTL itself (plan 06) — no per-call flip. -->
-      <Icon name="arrow-right" size={17} />
-    </a>
-  </div>
-  <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  <ul class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
     {#each surahs as s, i (s.num)}
       {@const hue = hueAt(i)}
       <li>
         <a
           href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
-          class="group flex items-center gap-[15px] rounded-md border border-border bg-surface px-[18px] py-[15px] transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="group flex items-center gap-3.5 rounded-md border border-border px-4 py-3 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
             class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
@@ -309,113 +185,22 @@
             style:color={HUE_LEGIBLE[hue]}
             >{s.num}</span
           >
-          <span class="flex min-w-0 flex-col gap-[2px]">
-            <span class="truncate text-[16.5px] font-extrabold tracking-[-0.02em] text-foreground"
+          <span class="flex min-w-0 flex-col gap-0.5">
+            <span class="truncate text-[16px] font-bold tracking-[-0.01em] text-foreground"
               >{s.name}</span
             >
             <span class="truncate text-caption text-muted">
-              {s.meaning} · {s.ayahCount} ayahs
+              {s.meaning} · {landing.ayahCount(s.ayahCount)}
             </span>
           </span>
           <span
+            lang="ar"
             dir="rtl"
-            class="ms-auto shrink-0 font-arabic text-[24px] leading-[1.6] text-foreground-secondary transition-colors group-hover:text-primary"
+            class="ms-auto shrink-0 font-arabic text-[22px] leading-[1.6] text-foreground-secondary transition-colors group-hover:text-foreground"
             >{s.arabic}</span
           >
         </a>
       </li>
     {/each}
   </ul>
-</Band>
-
-<!-- ── band 5: why — the band that used to be a card ────────────────────── -->
-<Band id="why" tone="panel" width="wide" class="scroll-mt-20">
-  <div class="grid grid-cols-1 items-start gap-10 lg:grid-cols-2 lg:gap-20">
-    <div class="flex flex-col gap-5">
-      <span class="text-micro text-primary">{landing.whyEyebrow}</span>
-      <h2 class="max-w-[18ch] text-h1">{landing.whyTitle}</h2>
-      <p class="max-w-[52ch] text-pretty text-body-l text-foreground-secondary">
-        {landing.whyIntro}
-      </p>
-      {#if aboutHref}
-        <Button
-          variant="primary"
-          size="lg"
-          href={publicHref(aboutHref)}
-          class="mt-1.5 self-start text-[16.5px] font-extrabold"
-        >{landing.secondaryCta}</Button>
-      {/if}
-    </div>
-    <div class="flex flex-col">
-      {#each landing.steps as step, i (step.id)}
-        <div
-          class="flex items-start gap-5 py-[26px] {i > 0 ? 'border-t border-border' : ''}"
-        >
-          <span
-            class="flex size-10 flex-none items-center justify-center rounded-sm text-[16px] font-extrabold"
-            style:background={HUE_FILL[step.hue]}
-            style:color={ON_HUE[step.hue]}
-            >{i + 1}</span
-          >
-          <span class="flex flex-col gap-[5px]">
-            <span class="text-h3">{step.title}</span>
-            <span class="text-body text-muted">{step.body}</span>
-          </span>
-        </div>
-      {/each}
-    </div>
-  </div>
-</Band>
-
-<!-- ── band 6: roadmap — columns divided by rules, not cards ────────────── -->
-<Band id="roadmap" width="wide" class="scroll-mt-20">
-  <div class="mb-10 flex flex-col gap-3">
-    <span class="text-micro text-primary">{landing.roadmapEyebrow}</span>
-    <h2 class="text-h1">{landing.roadmapTitle}</h2>
-    <p class="max-w-[60ch] text-pretty text-body-l text-foreground-secondary">
-      {landing.roadmapIntro}
-    </p>
-  </div>
-  <div class="grid grid-cols-1 gap-0 border-t border-border sm:grid-cols-2 lg:grid-cols-4">
-    {#each landing.roadmap as item, i (item.id)}
-      <div
-        class="flex flex-col gap-3.5 px-0 pb-2 pt-8 {i > 0 ? 'lg:border-s lg:border-border lg:ps-8' : ''}"
-      >
-        <span
-          class="flex size-10 items-center justify-center rounded-sm text-[15px] font-extrabold"
-          style:background={HUE_SOFT[item.hue]}
-          style:color={HUE_LEGIBLE[item.hue]}
-          >{String(i + 1).padStart(2, "0")}</span
-        >
-        <span class="text-h3">{item.title}</span>
-        <p class="text-body text-muted">{item.body}</p>
-      </div>
-    {/each}
-  </div>
-</Band>
-
-<!-- ── band 7: closing — full-bleed colour ──────────────────────────────── -->
-<Band tone="accent" width="wide" class="py-16 md:py-[72px] xl:py-[84px]">
-  <div class="flex flex-col items-center gap-[22px]">
-    <span
-      lang="ar"
-      dir="rtl"
-      class="font-arabic text-[36px] leading-[1.9]">{landing.closingBismillah}</span
-    >
-    <h2 class="max-w-[24ch] text-balance text-center text-h1">{landing.closingTitle}</h2>
-    <p class="max-w-[52ch] text-pretty text-center text-body-l opacity-85">
-      {landing.closingIntro}
-    </p>
-    <Button
-      variant="ink"
-      size="lg"
-      href={publicHref(marketingReaderHomeHref(locale))}
-      data-visual="cta-closing"
-      class="mt-2.5 gap-2.5 text-[17.5px] font-extrabold focus-visible:outline-primary-foreground"
-    >
-      {landing.closingCta}
-      <Icon name="arrow-right" size={19} />
-    </Button>
-    <span class="text-body opacity-80">{landing.closingNote}</span>
-  </div>
-</Band>
+</Container>

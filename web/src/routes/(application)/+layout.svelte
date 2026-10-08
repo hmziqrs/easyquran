@@ -7,13 +7,13 @@
   import { Footer } from "#lib/components/footer/index.js";
   import { Tweaks } from "#lib/components/tweaks/index.js";
   import { SITE } from "#lib/config/site.js";
-  import { SUPPORTED_UI_LOCALES, UI_LOCALES, type UiLocale } from "#lib/i18n/locales.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
   import { footerLinksFor } from "#lib/i18n/footer-links.js";
   import { setAppLocale } from "#lib/i18n/app-locale.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { bookmarksPageHref, readerHrefFor, yoursPageHref, type QuranReaderHref } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
-  import { marketingHomeHref, type LocaleLink } from "#lib/i18n/marketing-copy.js";
+  import { marketingHomeHref } from "#lib/i18n/marketing-copy.js";
   import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
@@ -49,9 +49,9 @@
     `${barePathname}${bareUrl.search}${bareUrl.hash}` as QuranReaderHref,
   );
   /**
-   * Locale-switcher + footer reader target, resolved per locale. Reader routes
-   * switch in place through readerHrefFor. /search and /settings have real /ar
-   * twins (Q1): the switcher links the sibling product URL directly —
+   * Footer reader target, resolved per locale. Reader routes
+   * resolve in place through readerHrefFor. /search and /settings have real /ar
+   * twins (Q1): the footer links the sibling product URL directly —
    * deliberately NOT through readerHrefFor, whose validator rejects product
    * paths (that throw is what 500'd the first preview cut). /bookmarks and
    * /yours stay personal en-only routes: every chrome link falls back to the
@@ -67,15 +67,6 @@
     return readerHrefFor(locale, canonicalReaderHref);
   }
   const currentReaderHref = $derived(chromeLocaleHrefFor(copy.locale, barePathname));
-  const localeLinks = $derived.by<LocaleLink[]>(() =>
-    SUPPORTED_UI_LOCALES.map((locale) => ({
-      locale,
-      direction: UI_LOCALES[locale].direction,
-      label: UI_LOCALES[locale].endonym,
-      href: chromeLocaleHrefFor(locale, barePathname),
-      current: locale === copy.locale,
-    })),
-  );
   const footerLinks = $derived(
     footerLinksFor(copy.locale, copy.footerLinks, currentReaderHref, bookmarksPageHref()),
   );
@@ -228,7 +219,6 @@
     brandCopy={{ homeLabel: copy.nav.homeLabel(SITE.name) }}
     brandHomeHref={marketingHomeHref(copy.locale)}
     {indexLinks}
-    {localeLinks}
     direction={copy.direction}
   />
   <main

@@ -20,8 +20,6 @@ import {
   footer_terms,
   footer_whats_inside,
   nav_bookmarks,
-  nav_change_language,
-  nav_language,
   nav_search_page,
   nav_settings,
   skip_to_content,
@@ -604,8 +602,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       appearance: noArgs(reader_appearance),
       toggleTheme: noArgs(reader_toggle_theme),
       theme: noArgs(reader_theme),
-      language: noArgs(nav_language),
-      changeLanguage: noArgs(nav_change_language),
       settings: noArgs(nav_settings),
       bookmarks: noArgs(nav_bookmarks),
       themeNames: {

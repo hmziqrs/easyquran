@@ -14,7 +14,6 @@
   import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import type {
     BrandResolvedCopy,
-    LocaleLink,
     MarketingDirection,
     NavResolvedCopy,
   } from "#lib/i18n/marketing-copy.js";
@@ -39,8 +38,6 @@
     appearance: "Appearance",
     toggleTheme: "Toggle theme",
     theme: "Theme",
-    language: "Language",
-    changeLanguage: "Change language",
     themeNames: { dark: "Dark", light: "Light" },
   };
 
@@ -57,16 +54,14 @@
     brandCopy = DEFAULT_BRAND_COPY,
     brandHomeHref = "/",
     indexLinks = [],
-    localeLinks = [],
     direction = "ltr",
   }: {
     collapsible?: boolean;
     copy?: NavResolvedCopy;
     brandCopy?: BrandResolvedCopy;
     brandHomeHref?: `/${string}`;
-    /** Inline desktop links (reader indexes) — the same grammar MarketingHeader renders. */
+    /** Inline desktop links (reader indexes) — identical on marketing and reader pages. */
     indexLinks?: readonly NavIndexLink[];
-    localeLinks?: LocaleLink[];
     direction?: MarketingDirection;
   } = $props();
 
@@ -131,9 +126,6 @@
   );
   let accountLabel = $derived(authState.authenticated ? copy.account : copy.signIn);
   let panelOffset = $derived(direction === "rtl" ? -360 : 360);
-  // The locale switch lives in the site panel on small screens; on desktop the
-  // header shows the other-locale link directly, like the marketing header.
-  let otherLocaleLink = $derived(localeLinks.find((link) => !link.current) ?? null);
 
   const SETTINGS_PATH = "/settings";
   const SEARCH_PATH = "/search";
@@ -229,19 +221,6 @@
         </span>
       {/if}
       <SearchTrigger label={copy.searchQuran} inert={open} class="lg:hidden" />
-      {#if otherLocaleLink}
-        <a
-          href={publicHref(otherLocaleLink.href)}
-          hreflang={otherLocaleLink.locale}
-          lang={otherLocaleLink.locale}
-          dir={otherLocaleLink.direction}
-          aria-label={copy.changeLanguage}
-          data-sveltekit-reload
-          inert={open || undefined}
-          aria-hidden={open || undefined}
-          class="hidden flex-none text-[15px] font-bold text-muted transition-colors hover:text-primary lg:inline-flex"
-        >{otherLocaleLink.label}</a>
-      {/if}
       <button
         type="button"
         onclick={() => prefs.toggleTheme()}
@@ -351,29 +330,6 @@
         </a>
       </section>
 
-      {#if localeLinks.length > 0}
-        <section class="flex flex-col gap-3">
-          <h2 class="eyebrow mb-0">{copy.language}</h2>
-          <div class="grid grid-cols-2 gap-2" aria-label={copy.changeLanguage}>
-            {#each localeLinks as item (item.locale)}
-              <a
-                href={publicHref(item.href)}
-                lang={item.locale}
-                dir={item.direction}
-                aria-current={item.current ? "page" : undefined}
-                aria-label={`${copy.changeLanguage}: ${item.label}`}
-                data-sveltekit-reload
-                class={cn(
-                  "rounded-pill border px-3 py-2 text-center text-body transition-colors",
-                  item.current
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border-strong text-foreground-secondary hover:bg-surface-hover hover:text-foreground",
-                )}
-              >{item.label}</a>
-            {/each}
-          </div>
-        </section>
-      {/if}
 
       {#if online.hydrated && !online.online}
         <p

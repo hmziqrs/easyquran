@@ -22,21 +22,23 @@ import {
   nav_account,
   nav_appearance,
   nav_bookmarks,
-  nav_change_language,
   nav_close_panel,
-  nav_language,
+  nav_juz,
   nav_offline_detail,
   nav_offline_label,
   nav_offline_title,
   nav_open_panel,
+  nav_pages,
   nav_primary_label,
   nav_search_quran,
   nav_search_page,
   nav_settings,
   nav_sign_in,
   nav_site_panel,
+  nav_surahs,
   nav_theme,
   nav_toggle_theme,
+  nav_yours,
   skip_to_content,
   tweaks_customize_appearance,
 } from "#lib/i18n/m/chrome.js";
@@ -63,6 +65,8 @@ export interface ChromeResolvedCopy {
   skipToContent: string;
   brand: BrandResolvedCopy;
   nav: NavResolvedCopy;
+  /** Header index links — the same four reader indexes the app header links. */
+  index: { surahs: string; juz: string; pages: string; yours: string };
   footer: FooterResolvedCopy;
   /** Label on the closed appearance trigger. The panel copy itself is loaded on open. */
   appearanceTrigger: string;
@@ -114,12 +118,16 @@ export function resolveChromeCopy(locale: MarketingLocale): ChromeResolvedCopy {
       appearance: nav_appearance(undefined, { locale }),
       toggleTheme: nav_toggle_theme(undefined, { locale }),
       theme: nav_theme(undefined, { locale }),
-      language: nav_language(undefined, { locale }),
-      changeLanguage: nav_change_language(undefined, { locale }),
       themeNames: {
         dark: theme_dark(undefined, { locale }),
         light: theme_light(undefined, { locale }),
       },
+    },
+    index: {
+      surahs: nav_surahs(undefined, { locale }),
+      juz: nav_juz(undefined, { locale }),
+      pages: nav_pages(undefined, { locale }),
+      yours: nav_yours(undefined, { locale }),
     },
     footer: {
       blurb: footer_blurb(undefined, { locale }),

@@ -63,7 +63,12 @@
     {#if active === "storage"}
       <StorageSection id="storage" heading={copy.nav.storage} copy={copy.storage} />
     {:else if active === "appearance"}
-      <AppearanceSection id="appearance" heading={copy.nav.appearance} copy={copy.appearance} />
+      <AppearanceSection
+        id="appearance"
+        heading={copy.nav.appearance}
+        copy={copy.appearance}
+        locale={copy.locale}
+      />
     {:else if active === "reading"}
       <ReadingSection id="reading" heading={copy.nav.reading} copy={copy.reading} />
     {:else if active === "privacy"}

@@ -70,7 +70,7 @@ describe("marketing localization boundaries", () => {
   it("routes landing reader links through the reader home helper", () => {
     const landing = source("../../../routes/(marketing)/+page.svelte");
 
-    expect(landing).toContain("marketingReaderHomeHref(locale)");
+    expect(landing).toContain("readerHrefFor(locale, surahPathFor(arabicCtx, s))");
     expect(landing).not.toMatch(/href=["']\/(?:en|ar)?\/?app/);
   });
 
@@ -82,82 +82,41 @@ describe("marketing localization boundaries", () => {
   });
 });
 
-describe("landing surface (plan 05)", () => {
-  /** Every band's copy, flattened through the typed shape — new sections join this list. */
+describe("landing surface (index-first home)", () => {
+  /** Every string the home renders, flattened through the typed shape. */
   function landingStrings(copy: LandingResolvedCopy): string[] {
     return [
       copy.heroTitleFull,
-      copy.heroTitleLead,
-      copy.heroTitleHighlight,
-      copy.heroTitleTail,
-      copy.heroIntro,
-      copy.secondaryCta,
+      copy.bismillah,
       copy.searchLabel,
       copy.searchPlaceholder,
       copy.searchButton,
       copy.oftenOpened,
-      copy.metricSurahs,
-      copy.metricSurahsNote,
-      copy.metricJuz,
-      copy.metricJuzNote,
-      copy.metricPages,
-      copy.metricPagesNote,
-      copy.metricBookmarks,
-      copy.metricBookmarksNote,
-      copy.metricBookmarksEmpty,
-      copy.metricYours,
-      copy.indexEyebrow,
-      copy.indexTitle,
-      copy.indexIntro,
-      copy.indexSeeAll,
-      copy.whyEyebrow,
-      copy.whyTitle,
-      copy.whyIntro,
-      ...copy.steps.flatMap((step) => [step.title, step.body]),
-      copy.roadmapEyebrow,
-      copy.roadmapTitle,
-      copy.roadmapIntro,
-      ...copy.roadmap.flatMap((item) => [item.title, item.body]),
-      copy.closingBismillah,
-      copy.closingTitle,
-      copy.closingIntro,
-      copy.closingCta,
-      copy.closingNote,
+      copy.indexLabel,
+      copy.indexSurahs,
+      copy.indexJuz,
+      copy.indexPages,
+      copy.indexYours,
+      copy.ayahCount(7),
     ];
   }
 
-  it("resolves every new band's copy in both locales", () => {
+  it("resolves every string in both locales", () => {
     for (const locale of ["en", "ar"] as const) {
-      const copy = resolveLandingCopy(locale);
-      const strings = landingStrings(copy);
-      // New sections resolve to real text in BOTH catalogs (i18n:check covers
-      // parity; this catches a key that resolves to "" and renders nothing).
-      expect(copy.metricSurahs.length, locale).toBeGreaterThan(0);
-      expect(copy.metricBookmarksEmpty.length, locale).toBeGreaterThan(0);
-      expect(copy.searchPlaceholder.length, locale).toBeGreaterThan(0);
-      expect(copy.indexSeeAll.length, locale).toBeGreaterThan(0);
-      expect(copy.closingBismillah.length, locale).toBeGreaterThan(0);
-      expect(copy.steps, locale).toHaveLength(3);
-      expect(copy.roadmap, locale).toHaveLength(4);
+      // i18n:check covers parity; this catches a key that resolves to "" and renders nothing.
       expect(
-        strings.every((s) => s.trim().length > 0),
+        landingStrings(resolveLandingCopy(locale)).every((s) => s.trim().length > 0),
         locale,
       ).toBe(true);
     }
   });
 
-  it("carries hue slots as numbers only — presentation never lives in the copy layer", () => {
+  it("keeps presentation out of the copy layer", () => {
     const TAILWIND_CLASS = /\b(?:bg|text)-[a-z][a-z0-9-]*\b/;
 
     for (const locale of ["en", "ar"] as const) {
-      const copy = resolveLandingCopy(locale);
-      for (const leaf of landingStrings(copy)) {
+      for (const leaf of landingStrings(resolveLandingCopy(locale))) {
         expect(leaf, `${locale}: ${leaf}`).not.toMatch(TAILWIND_CLASS);
-      }
-      for (const entry of [...copy.steps, ...copy.roadmap]) {
-        expect(Number.isInteger(entry.hue), `${locale}: ${entry.id}`).toBe(true);
-        expect(entry.hue, `${locale}: ${entry.id}`).toBeGreaterThanOrEqual(1);
-        expect(entry.hue, `${locale}: ${entry.id}`).toBeLessThanOrEqual(4);
       }
     }
   });
@@ -179,23 +138,24 @@ describe("landing surface (plan 05)", () => {
     expect(landing).not.toContain("addEventListener");
   });
 
-  it("draws the metric strip gapless and edge to edge with real bookmark data", () => {
+  it("is the index, not a pitch: no marketing bands, same frame as the header", () => {
     const landing = source("../../../routes/(marketing)/+page.svelte");
 
-    expect(landing).toContain('contentClass="px-0 md:px-0 lg:px-0 xl:px-0"');
-    expect(landing).toContain("md:grid-cols-2 lg:grid-cols-4");
-    expect(landing).toContain("gap-0");
-    expect((landing.match(/<MetricCard /g) ?? []).length).toBeGreaterThanOrEqual(4);
-    // Real data only: the store arrives behind a dynamic import, never fabricated samples.
-    expect(landing).toContain('import("#lib/bookmarks/store.svelte.js")');
-    expect(landing).not.toMatch(/bookmark(s)?[\s\S]{0,40}example/i);
+    expect(landing).toContain("<Container");
+    for (const band of ["<Band", "<MetricCard", "roadmap", "closing", "whyTitle"]) {
+      expect(landing, band).not.toContain(band);
+    }
   });
 
-  it("renders the board header and footer from the marketing layout", () => {
+  it("renders the shared Nav and the footer from the marketing layout", () => {
     const layout = source("../../../routes/(marketing)/+layout.svelte");
+    const nav = source("../../components/nav/Nav.svelte");
 
-    expect(layout).toContain("MarketingHeader");
-    expect(layout).not.toContain("MarketingNav");
+    expect(layout).toContain("<Nav");
+    expect(layout).not.toContain("MarketingHeader");
     expect(layout).toContain("MarketingFooter");
+    // The interface language is switched from Settings only — never from the header.
+    expect(nav).not.toContain("hreflang");
+    expect(nav).not.toContain("localeLinks");
   });
 });

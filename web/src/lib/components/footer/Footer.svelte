@@ -34,9 +34,10 @@
 </script>
 
 <footer class="border-t border-border bg-surface">
-  <div class="mx-auto w-full max-w-[1440px] px-5 md:px-8 lg:px-12 xl:px-18">
+  <!-- Same frame as Nav and the page column (Container default: 1200px, 24px gutter). -->
+  <div class="mx-auto w-full max-w-[1200px] px-6">
     <div
-      class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[380px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-10"
+      class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-10"
     >
       <div class="col-span-2 flex flex-col gap-3 md:col-span-1">
         <div class="flex items-center gap-2.5">

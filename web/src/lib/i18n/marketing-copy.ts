@@ -42,8 +42,6 @@ export interface NavResolvedCopy {
   appearance: string;
   toggleTheme: string;
   theme: string;
-  language: string;
-  changeLanguage: string;
   themeNames: Record<ThemeMode, string>;
 }
 
@@ -113,58 +111,20 @@ export interface TweaksResolvedCopy {
 /** Hue slot index into the --hue-N / --on-hue-N / --hue-N-soft token set (plan 05: presentation never lives in copy). */
 export type LandingHue = 1 | 2 | 3 | 4;
 
-export interface LandingStep {
-  id: string;
-  hue: LandingHue;
-  title: string;
-  body: string;
-}
-
-export interface LandingRoadmapItem {
-  id: string;
-  hue: LandingHue;
-  title: string;
-  body: string;
-}
-
+/** The home page: a search, a few shortcuts and the surah index. No marketing bands. */
 export interface LandingResolvedCopy {
   heroTitleFull: string;
-  heroTitleLead: string;
-  heroTitleHighlight: string;
-  heroTitleTail: string;
-  heroIntro: string;
-  secondaryCta: string;
+  bismillah: string;
   searchLabel: string;
   searchPlaceholder: string;
   searchButton: string;
   oftenOpened: string;
-  metricSurahs: string;
-  metricSurahsNote: string;
-  metricJuz: string;
-  metricJuzNote: string;
-  metricPages: string;
-  metricPagesNote: string;
-  metricBookmarks: string;
-  metricBookmarksNote: string;
-  metricBookmarksEmpty: string;
-  metricYours: string;
-  indexEyebrow: string;
-  indexTitle: string;
-  indexIntro: string;
-  indexSeeAll: string;
-  whyEyebrow: string;
-  whyTitle: string;
-  whyIntro: string;
-  steps: LandingStep[];
-  roadmapEyebrow: string;
-  roadmapTitle: string;
-  roadmapIntro: string;
-  roadmap: LandingRoadmapItem[];
-  closingBismillah: string;
-  closingTitle: string;
-  closingIntro: string;
-  closingCta: string;
-  closingNote: string;
+  indexLabel: string;
+  indexSurahs: string;
+  indexJuz: string;
+  indexPages: string;
+  indexYours: string;
+  ayahCount: (count: number) => string;
 }
 
 export interface MarketingSeoCopy {

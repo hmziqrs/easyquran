@@ -71,10 +71,9 @@ describe("landing href discipline (nav-guard complement)", () => {
     expect(landing).not.toMatch(/href=\{?["']\/(?:en\/)?app\//);
   });
 
-  it("keeps the strip and cards on the shared primitives", () => {
+  it("keeps the page on the shared primitives, in the header's frame", () => {
     expect(landing).toContain('from "#lib/components/index.js"');
-    expect(landing).toContain("<Band");
-    expect(landing).toContain("<MetricCard");
+    expect(landing).toContain("<Container");
   });
 });
 
@@ -85,58 +84,44 @@ describe("landing i18n keys", () => {
 
   const NEW_KEYS = [
     "landing_hero_title_full",
-    "landing_hero_title_lead",
-    "landing_hero_title_highlight",
-    "landing_hero_title_tail",
+    "landing_bismillah",
+    "landing_search_label",
     "landing_search_placeholder",
     "landing_search_button",
     "landing_often_opened",
-    "landing_metric_surahs",
-    "landing_metric_surahs_note",
-    "landing_metric_juz",
-    "landing_metric_juz_note",
-    "landing_metric_pages",
-    "landing_metric_pages_note",
-    "landing_metric_bookmarks",
-    "landing_metric_bookmarks_note",
-    "landing_metric_bookmarks_empty",
-    "landing_metric_yours",
-    "landing_index_eyebrow",
-    "landing_index_title",
-    "landing_index_intro",
-    "landing_index_see_all",
-    "landing_why_eyebrow",
-    "landing_why_title",
-    "landing_why_intro",
-    "landing_why_step1_title",
-    "landing_why_step2_title",
-    "landing_why_step3_title",
-    "landing_closing_bismillah",
-    "landing_closing_title",
-    "landing_closing_intro",
-    "landing_closing_cta",
-    "landing_closing_note",
+    "landing_index_label",
+    "landing_index_surahs",
+    "landing_index_juz",
+    "landing_index_pages",
+    "landing_index_yours",
     "nav_surahs",
     "nav_juz",
     "nav_pages",
-    "nav_about",
-    "nav_header_search",
-    "nav_start_reading",
+    "nav_yours",
   ];
 
-  it("ships every new key in both locales with the bismillah verbatim", () => {
+  it("ships every key in both locales with the bismillah verbatim", () => {
     const en = catalog("en");
     const ar = catalog("ar");
     for (const key of NEW_KEYS) {
       expect(en[key], `en: ${key}`).toBeTruthy();
       expect(ar[key], `ar: ${key}`).toBeTruthy();
     }
-    expect(en.landing_closing_bismillah).toBe(ar.landing_closing_bismillah);
+    expect(en.landing_bismillah).toBe(ar.landing_bismillah);
   });
 
-  it("retired the pre-band keys so the catalogs carry no dead sections", () => {
+  it("retired the marketing bands so the catalogs carry no dead sections", () => {
     const en = catalog("en");
     for (const key of [
+      "landing_hero_intro",
+      "landing_metric_surahs_note",
+      "landing_index_see_all",
+      "landing_why_title",
+      "landing_roadmap_title",
+      "landing_closing_title",
+      "landing_closing_cta",
+      "nav_header_search",
+      "nav_change_language",
       "landing_badge",
       "landing_hero_title",
       "landing_primary_cta",

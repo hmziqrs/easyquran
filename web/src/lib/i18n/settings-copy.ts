@@ -38,6 +38,7 @@ import {
   settings_account_signed_in_heading,
   settings_account_signed_out_note,
   settings_appearance_intro,
+  settings_language,
   settings_palette,
   settings_palette_ink_label,
   settings_palette_ink_note,
@@ -246,6 +247,8 @@ export interface SettingsCopy {
    */
   readonly appearance: {
     readonly intro: string;
+    /** Interface language. The switcher lives here only — never in the header. */
+    readonly language: string;
     readonly panel: ReaderSettingsCopy & AppearancePanelCopy;
   };
   readonly reading: {
@@ -431,6 +434,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
     },
     appearance: {
       intro: noArgs(settings_appearance_intro),
+      language: noArgs(settings_language),
       panel: {
         ...getReaderSettingsCopy(locale),
         appearanceLabel: noArgs(settings_section_appearance),

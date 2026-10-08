@@ -6,12 +6,32 @@
   import type { CustomSeeds } from "#lib/theme/derive.js";
   import { cn } from "#lib/utils.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
+  import { SUPPORTED_UI_LOCALES, UI_LOCALES, type UiLocale } from "#lib/i18n/locales.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
 
   let {
     id,
     heading,
     copy,
-  }: { id: string; heading: string; copy: SettingsCopy["appearance"] } = $props();
+    locale,
+  }: { id: string; heading: string; copy: SettingsCopy["appearance"]; locale: UiLocale } = $props();
+
+  /* Interface language lives here and nowhere else (the header carries no switcher): each option
+     opens this same section in the other locale's /settings twin. A full reload, because the
+     message catalog and document direction are chosen at load. */
+  function settingsHrefFor(target: UiLocale): `/${string}` {
+    if (target === "en") return `/settings#${id}`;
+    return `/${target}/settings#${id}`;
+  }
+  const languages = $derived(
+    SUPPORTED_UI_LOCALES.map((target) => ({
+      locale: target,
+      label: UI_LOCALES[target].endonym,
+      direction: UI_LOCALES[target].direction,
+      href: publicHref(settingsHrefFor(target)),
+      current: target === locale,
+    })),
+  );
 
   const panel = $derived(copy.panel);
   const seeds: { key: keyof CustomSeeds; fallbackVar: string }[] = [
@@ -88,6 +108,25 @@
     class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface"
   >
     <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+      <span id="settings-language-label" class="text-[14.5px] font-medium text-foreground"
+        >{copy.language}</span
+      >
+      <div class="flex shrink-0 gap-1.5" role="group" aria-labelledby="settings-language-label">
+        {#each languages as option (option.locale)}
+          <a
+            href={option.href}
+            hreflang={option.locale}
+            lang={option.locale}
+            dir={option.direction}
+            aria-current={option.current ? "true" : undefined}
+            data-sveltekit-reload
+            class={pillClass(option.current)}>{option.label}</a
+          >
+        {/each}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
       <span class="text-[14.5px] font-medium text-foreground">{panel.appearanceLabel}</span>
       <div class="flex shrink-0 gap-1.5">
         {#each APPEARANCE_MODES as m (m)}
@@ -103,7 +142,7 @@
 
     <div class="px-4 py-3.5 sm:px-5">
       <span class="text-[14.5px] font-medium text-foreground">{panel.paletteLabel}</span>
-      <div class="mt-2.5 grid gap-2 sm:grid-cols-2">
+      <div class="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {#each PALETTES as p (p.id)}
           <button
             type="button"

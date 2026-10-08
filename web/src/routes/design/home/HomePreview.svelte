@@ -31,7 +31,7 @@
   } = $props();
 
   const ctx = $derived(routeContextFromParams(page.params));
-  const bismillah = resolveLandingCopy("en").closingBismillah;
+  const bismillah = resolveLandingCopy("en").bismillah;
   const opening = $derived(surahs.find((surah) => surah.num === 1));
   const openingHref = $derived(opening ? publicHref(surahPathFor(ctx, opening)) : publicHref("/surah"));
   const categories = ["Often opened", "In order", "Short surahs"] as const;

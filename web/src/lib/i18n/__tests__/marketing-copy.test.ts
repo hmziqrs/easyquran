@@ -89,12 +89,15 @@ describe("marketing copy resolvers", () => {
     expect(resolveLandingSeoCopy("ar").title).not.toBe(resolveLandingSeoCopy("en").title);
   });
 
-  it("keeps stable structural IDs across locales", () => {
+  it("pluralizes the surah card ayah count per locale", () => {
     const english = resolveLandingCopy("en");
     const arabic = resolveLandingCopy("ar");
 
-    expect(arabic.steps.map((item) => item.id)).toEqual(english.steps.map((item) => item.id));
-    expect(arabic.roadmap.map((item) => item.id)).toEqual(english.roadmap.map((item) => item.id));
+    expect(english.ayahCount(1)).toBe("1 ayah");
+    expect(english.ayahCount(7)).toBe("7 ayahs");
+    expect(arabic.ayahCount(2)).toBe("آيتان");
+    expect(arabic.ayahCount(7)).toBe("7 آيات");
+    expect(arabic.ayahCount(286)).toBe("286 آية");
   });
 
   it("keeps the appearance panel out of the chrome resolver", () => {
@@ -108,6 +111,7 @@ describe("marketing copy resolvers", () => {
       "brand",
       "direction",
       "footer",
+      "index",
       "locale",
       "nav",
       "skipToContent",
