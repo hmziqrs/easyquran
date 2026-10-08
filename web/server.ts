@@ -42,6 +42,7 @@ interface BunServeOptions {
 
 interface BunGlobal {
   readonly version: string;
+  readonly semver: { order(a: string, b: string): number };
   readonly env: Record<string, string | undefined>;
   file(path: string): BunFile;
   serve(options: BunServeOptions): BunFetchServer;
@@ -60,6 +61,15 @@ declare global {
 }
 
 const bun = globalThis.Bun;
+
+// adapter-bun's stock entry refuses to boot on a Bun older than the adapter's
+// floor (node_modules/@sveltejs/adapter-bun/src/index.js:11-15); this custom
+// entry replaced that file, so the same gate lives here — a stale local bun
+// must fail loudly, not serve a build it cannot run. order() rather than a
+// satisfies() range so canary builds (1.5.0-canary.1) still pass.
+if (bun !== undefined && bun.semver.order(bun.version, "1.4.0") < 0) {
+  throw new Error(`[server] requires Bun 1.4 or newer, but this is Bun ${bun.version}`);
+}
 
 // The kit Server instance re-exported by the adapter hand-off. SAFETY: the
 // hand-off module is untyped build output; this interface spells the two
@@ -468,6 +478,7 @@ function serveFile(request: Request, file: string, meta: AssetMeta, immutable: b
 // `decodedPath` (not the raw pathname) feeds applyHeaders so the CSP hash
 // lookup matches the scanned page keys even for percent-encoded spellings.
 function staticResponse(request: Request, key: string, decodedPath: string): Response | null {
+  if (!isStaticMethod(request.method)) return null;
   const route = staticRoutes.get(key);
   if (route === undefined) return null;
   let response: Response | null = null;
@@ -485,17 +496,88 @@ function staticResponse(request: Request, key: string, decodedPath: string): Res
   return response;
 }
 
+// The static layer mirrors adapter-bun's GET-only native routes: serving file
+// bodies for any other method would answer 200 with the page where the old
+// stack let kit answer (405 on SSR routes; prerendered-only paths get kit's
+// 404 — kit 3's server instance excludes prerendered routes). Every
+// non-GET/HEAD request falls through to the kit handler instead.
+export function isStaticMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
 // Artifacts written after the adapter ran (the offline pack + its manifest,
 // postbuild) are not in the hand-off table. Serve them from disk with the same
 // freshness/encoding semantics, bounded to build/client.
 async function lateStaticResponse(request: Request, pathname: string): Promise<Response | null> {
   if (bun === undefined || kitServer === null) return null;
+  if (!isStaticMethod(request.method)) return null;
   if (!pathname.startsWith("/offline/")) return null;
   if (!isSafeClientCandidate(pathname)) return null;
   const file = join(clientDir, pathname);
   const meta = await lateAssetMeta(file);
   if (meta === null) return null;
   const response = serveFile(request, file, meta, packPattern.test(pathname));
+  applyHeaders(response, pathname);
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// /_app/env.js — kit 3's runtime env module. With dynamic public vars declared
+// in src/env.ts, kit compiles `import { env } from "/_app/env.js"` into the
+// built client output (the service worker; pages receive their values through
+// the SSR pass). adapter-node materializes that module from the running
+// process; adapter-bun 1.0.0 never calls builder.generateEnvModule(), so this
+// entry serves it instead — built per request from process.env, restricted to
+// exactly the declared dynamic public set (unset reads as "", like the
+// optionalString schema in src/env.ts). Deliberate sync: this list must mirror
+// src/env.ts's `public: true` vars; server-headers.test.ts asserts the two
+// stay in step (src/env.ts itself is NOT importable here — the web image ships
+// no node_modules, so no @sveltejs/kit/env at runtime).
+export const DYNAMIC_PUBLIC_ENV_VARS: readonly string[] = [
+  "PUBLIC_API_BASE_URL",
+  "PUBLIC_QURAN_API_BASE",
+  "PUBLIC_ENV",
+  "PUBLIC_FCM_VAPID_KEY",
+];
+
+// Same module shape kit's own builder.generateEnvModule() writes —
+// `export const env={…}` (node_modules/@sveltejs/kit/src/core/adapt/builder.js).
+// JSON.stringify output is a valid JS object literal for string values;
+// U+2028/U+2029 are escaped because raw they predate ES2019 string literals.
+export function buildEnvModule(
+  names: readonly string[],
+  source: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  const values: Record<string, string> = {};
+  for (const name of names) values[name] = source[name] ?? "";
+  const payload = JSON.stringify(values).replace(/[\u2028\u2029]/gu, (char) =>
+    char === "\u2028" ? "\\u2028" : "\\u2029",
+  );
+  return `export const env=${payload}`;
+}
+
+function envModulePath(): string {
+  if (handoff === null) return "/_app/env.js";
+  // kit normalizes an empty base to "/" (build/adapter-bun.js: `base = "/"`);
+  // strip the trailing slash so the joined path keeps a single leading one —
+  // the exact spelling the built service worker imports.
+  return `${handoff.base.replace(/\/+$/u, "")}/${handoff.app_dir}/env.js`;
+}
+
+// Served before the static table and the kit handler (adapter-node semantics:
+// a runtime module, never a build artifact), and through the same
+// applyHeaders security pass as every other response.
+export function envModuleResponse(request: Request, pathname: string): Response | null {
+  if (!isStaticMethod(request.method)) return null;
+  if (pathname !== envModulePath()) return null;
+  const body = request.method === "HEAD" ? null : buildEnvModule(DYNAMIC_PUBLIC_ENV_VARS);
+  const response = new Response(body, {
+    headers: {
+      "content-type": "application/javascript",
+      // never cached stale: a pinned copy would freeze a previous deploy's env
+      "cache-control": "no-cache",
+    },
+  });
   applyHeaders(response, pathname);
   return response;
 }
@@ -601,7 +683,7 @@ async function servePrerenderedMd(pathname: string, mdPath: string): Promise<Res
 }
 
 async function routeNegotiated(request: Request, decodedPath: string): Promise<Response | null> {
-  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (!isStaticMethod(request.method)) return null;
   if (isReaderMdPath(decodedPath)) {
     const md = await servePrerenderedMd(decodedPath, decodedPath);
     if (md !== null) return md;
@@ -627,7 +709,7 @@ async function routeNegotiated(request: Request, decodedPath: string): Promise<R
 }
 
 // ---------------------------------------------------------------------------
-// The fetch pipeline: markdown negotiation → static asset table → kit SSR.
+// The fetch pipeline: env module → markdown negotiation → static asset table → kit SSR.
 async function handleRequest(request: Request, server: BunFetchServer): Promise<Response> {
   const url = new URL(request.url);
   let decodedPath = url.pathname;
@@ -636,6 +718,11 @@ async function handleRequest(request: Request, server: BunFetchServer): Promise<
   } catch {
     // keep the raw path for lookups
   }
+
+  // kit 3's dynamic-public env module, served from the running process before
+  // any static/SSR layer can 404 it — the built service worker imports it.
+  const envModule = envModuleResponse(request, decodedPath);
+  if (envModule !== null) return envModule;
 
   const negotiated = await routeNegotiated(request, decodedPath);
   if (negotiated !== null) return negotiated;

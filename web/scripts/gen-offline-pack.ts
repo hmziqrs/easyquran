@@ -15,13 +15,20 @@ const MANIFEST_PATH = path.join(OFFLINE_DIR, "manifest.json");
 // adapter-bun externalizes package.json `dependencies` in the SSR build; the
 // web image ships no node_modules, so vite.config.ts lists everything the
 // server bundle may import under ssr.noExternal. If a bare specifier ever leaks
-// into build/server as a real import statement, the container would crash at
-// startup — fail the build here instead, naming the culprit.
+// into build/server as a real import, the container would crash at startup —
+// fail the build here instead, naming the culprit.
 //
-// Statement-position matching only (line-anchored import/export): the bundle
-// legitimately CONTAINS module-ish strings inside kit's emitted code and
-// JSDoc, and those must not trip the guard. Only production dependencies are
-// flaggable — that is exactly the set the adapter externalizes.
+// Static import/export statements stay line-anchored (rollup always emits them
+// at line start). Dynamic imports do NOT: the bundle carries them mid-line and
+// await-prefixed (`fn(a, await import("firebase/analytics"))`), so `import(`
+// is matched anywhere on the line. The lookbehind rejects member access
+// (`foo.import("…")`) and identifier suffixes (`ximport("…")`); a string that
+// merely CONTAINS `import("dependency-root")` can still match, but only
+// production-dependency roots flag, and the error names the culprit for a
+// human to confirm. Subpaths must reduce to their package root
+// (`firebase/messaging` → `firebase`), scoped or not — package.json lists
+// roots, never subpaths. Only production dependencies are flaggable — that is
+// exactly the set the adapter externalizes.
 function assertNoRuntimeExternals(): void {
   // SAFETY: package.json is repo-owned; the assertion spells exactly the one
   // field read, and Object.keys tolerates its absence below.
@@ -30,15 +37,18 @@ function assertNoRuntimeExternals(): void {
   };
   const dependencies = new Set(Object.keys(pkg.dependencies ?? {}));
   const importLine = /^(?:import|export)\s[^;]*?from\s*["']([^"']+)["']/u;
-  const sideEffectImport = /^import\s*\(\s*["']([^"']+)["']\s*\)/u;
+  const dynamicImport = /(?<![.\w$])import\s*\(\s*["']([^"']+)["']\s*\)/u;
   const externals = new Set<string>();
   const check = (line: string): void => {
-    const match = importLine.exec(line) ?? sideEffectImport.exec(line);
+    const match = importLine.exec(line) ?? dynamicImport.exec(line);
     const specifier = match?.[1];
     if (specifier === undefined || specifier === "") return;
     if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("#")) return;
     if (specifier.startsWith("node:") || isBuiltin(specifier)) return;
-    const root = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier;
+    const root = specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/");
     if (dependencies.has(root)) externals.add(specifier);
   };
   const walk = (directory: string): void => {
