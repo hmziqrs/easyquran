@@ -21,6 +21,12 @@
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { Icon } from "#lib/components/icon/index.js";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "#lib/components/ui/tooltip/index.js";
   import { hrefFor, liveReaderPosition } from "./translation-nav";
   import type { ReadPick } from "./reading-flow";
   import { translationMatchesQuery } from "./translation-search";
@@ -39,6 +45,13 @@
     qul: "QUL",
     quranenc: "QuranEnc",
     tanzil: "Tanzil",
+  } satisfies Record<TranslationProvenance, string>;
+  // Provenance colour identity lives only inside the row's metadata tooltip:
+  // the dot reads on the inverted (bg-foreground) surface in both modes.
+  const PROVENANCE_DOT = {
+    qul: "bg-violet-500",
+    quranenc: "bg-sky-500",
+    tanzil: "bg-emerald-500",
   } satisfies Record<TranslationProvenance, string>;
 
   let {
@@ -319,6 +332,11 @@
     return hrefFor(position, { id: t.id, lang: seg.lang, translator: seg.translator });
   }
 
+  function formatSize(bytes: number): string {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
   function selectLanguage(language: string): void {
     railLanguage = language;
     mobilePane = true;
@@ -521,6 +539,7 @@
         {/if}
       </div>
 
+      <TooltipProvider delayDuration={400}>
       <div
         class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
       >
@@ -529,13 +548,30 @@
           {@const disabled = !picking && isFull && !checked}
           {@const href = picking ? null : rowHref(t)}
           {@const source = translationSourceOf(t.id)}
+          {@const native = nativeNameFor(t.languageCode)}
           <!-- One row anatomy everywhere: a fixed two-line block (name, then a muted
                meta line — language when searching, translator when it differs from
                the name, and always the source), so every row has the same height and
                the list reads as one rhythm. The row body is a <label> tied to the row
                checkbox (S9/S10), so the whole surface is one >=44px toggle target;
                the go-to link is a separate trailing control beside it. -->
+          <!-- Metadata tooltip (translator, language, size, direction, source)
+               triggers from the whole row on hover, and from keyboard focus on the
+               row's checkbox/link via the bubbling focusin/focusout. The row itself
+               is not a tab stop (tabindex -1). SAFETY: the child-snippet props bag
+               is untyped, so the forwarded handlers carry a FocusEvent cast — they
+               are bits-ui's own onfocus/onblur. -->
+          <Tooltip>
+            <TooltipTrigger tabindex={-1}>
+              {#snippet child({ props })}
+                <!-- omit-pattern destructure: bits-ui merges a button-only
+                     `type` into the trigger props; it is meaningless on an li
+                     and must not reach the DOM. -->
+                {@const { type: _triggerType, ...rowProps } = props}
           <li
+            {...rowProps}
+            onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
+            onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
             data-translation-row={t.id}
             class="group/row flex rounded-lg transition-colors {checked
               ? 'bg-primary/10'
@@ -634,6 +670,56 @@
               </a>
             {/if}
           </li>
+              {/snippet}
+            </TooltipTrigger>
+            <TooltipContent
+              class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
+            >
+              <span class="text-[12px] font-semibold"><bdi>{t.name}</bdi></span>
+              <span
+                class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
+              >
+                <span class="size-1.5 flex-none rounded-full {PROVENANCE_DOT[source]}" aria-hidden="true"
+                ></span>
+                {copy.translations.sourceLabel(source)}
+              </span>
+              <dl class="flex w-full flex-col gap-0.5 text-[11px]">
+                {#if t.translator !== null}
+                  <div class="flex w-full gap-2">
+                    <dt class="w-[4.5rem] flex-none text-background/60">
+                      {copy.translations.tooltipTranslator}
+                    </dt>
+                    <dd class="min-w-0 flex-1"><bdi>{t.translator}</bdi></dd>
+                  </div>
+                {/if}
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipLanguage}
+                  </dt>
+                  <dd class="min-w-0 flex-1">
+                    <span aria-hidden="true">{flagFor(t.languageCode).flag}</span>
+                    {t.language}
+                    {#if native !== null}
+                      <!-- dir=auto: RTL/script autonyms must render in their own direction -->
+                      (<span dir="auto">{native}</span>)
+                    {/if}
+                  </dd>
+                </div>
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipSize}
+                  </dt>
+                  <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                </div>
+                <div class="flex w-full gap-2">
+                  <dt class="w-[4.5rem] flex-none text-background/60">
+                    {copy.translations.tooltipDirection}
+                  </dt>
+                  <dd class="min-w-0 flex-1">{copy.translations.dirLabel(t.direction)}</dd>
+                </div>
+              </dl>
+            </TooltipContent>
+          </Tooltip>
         {/snippet}
 
         <nav
@@ -745,6 +831,7 @@
           {/if}
         </section>
       </div>
+      </TooltipProvider>
 
       <div
         class="flex flex-none items-center justify-between gap-3 border-t border-border px-4 py-3 md:px-5"

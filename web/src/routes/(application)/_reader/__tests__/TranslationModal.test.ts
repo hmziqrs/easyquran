@@ -371,13 +371,13 @@ describe("TranslationModal — master-detail layout", () => {
     // translator mirrors the name: no duplicated second line
     const sahih = pane().querySelector('li[data-translation-row="en.sahih"]');
     expect(sahih?.querySelector("[data-author-line]")).toBeNull();
-    // every row carries an 18px theme-styled checkbox and no hover tooltip:
-    // everything the row has to say is on the row itself
+    // every row carries an 18px theme-styled checkbox and is itself the
+    // metadata-tooltip trigger (hover anywhere / keyboard focus inside the row)
     const box = pickthall?.querySelector('input[type="checkbox"]');
     expect(box?.className).toContain("size-[18px]");
     expect(box?.className).toContain("appearance-none");
     expect(box?.className).toContain("checked:bg-primary");
-    expect(pickthall?.hasAttribute("data-tooltip-trigger")).toBe(false);
+    expect(pickthall?.hasAttribute("data-tooltip-trigger")).toBe(true);
     // no colored source dot anywhere in the rows
     expect(document.querySelectorAll("li[data-translation-row] span.size-2")).toHaveLength(0);
   });
