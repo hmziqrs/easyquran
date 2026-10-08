@@ -7,6 +7,7 @@
   import { STACKED_MAX_EXTRAS } from "#lib/data/quran-types.js";
   import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
   import { withMoreParam } from "#lib/reader/more-param.js";
+  import { visibleUrl } from "#lib/reader/visible-url.js";
   import {
     TRANSLATION_CATALOGUE,
     TRANSLATION_CATALOGUE_BY_ID,
@@ -261,9 +262,11 @@
   const paneVisible = $derived(mobilePane || searchActive);
 
   // Selection changes only touch the stacked store + the ?more= URL param; the
-  // reader layout's effects keep worker pinning in sync from there.
+  // reader layout's effects keep worker pinning in sync from there. The URL is
+  // read via visibleUrl: kit 3 shallow writes never land in page.url, and a
+  // stale page.url here would drop params that only exist in the visible URL.
   function syncUrl(): void {
-    replaceState(withMoreParam(page.url, stackedTranslations.ids), page.state);
+    replaceState(withMoreParam(visibleUrl(page), stackedTranslations.ids), page.state);
   }
   function toggle(id: string): void {
     stackedTranslations.toggle(id);

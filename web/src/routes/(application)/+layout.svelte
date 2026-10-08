@@ -21,6 +21,7 @@
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { modeParamMatches, parseModeParam, withModeParam } from "#lib/reader/mode-param.js";
   import { moreParamMatches, parseMoreParam, withMoreParam } from "#lib/reader/more-param.js";
+  import { visibleUrl } from "#lib/reader/visible-url.js";
   import { quranWorker } from "#lib/quran/worker-client.js";
   import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
   import { translationIdFromSegments } from "#lib/data/quran.js";
@@ -93,9 +94,9 @@
   }
 
   onMount(() => {
-    reader.hydrate(parseModeParam(page.url) ?? undefined);
+    reader.hydrate(parseModeParam(visibleUrl(page)) ?? undefined);
     bookmarks.hydrate();
-    const moreIds = knownMoreIds(parseMoreParam(page.url));
+    const moreIds = knownMoreIds(parseMoreParam(visibleUrl(page)));
     if (moreIds.length) stackedTranslations.setIds(moreIds);
     document.documentElement.dataset.readerHydrated = "true";
 
@@ -111,7 +112,9 @@
 
   $effect(() => {
     if (isNonReaderAppRoute) return;
-    const url = page.url;
+    // kit 3: shallow writes land in page.shallow.url, never page.url — read the
+    // visible URL or this effect loops re-issuing its own write forever.
+    const url = visibleUrl(page);
     const current = untrack(() => reader.mode);
     const param = parseModeParam(url);
     if (param && param !== current) reader.setMode(param);
@@ -127,7 +130,8 @@
 
   $effect(() => {
     if (isNonReaderAppRoute) return;
-    const url = page.url;
+    // Same kit 3 shallow-routing rule as the mode effect above.
+    const url = visibleUrl(page);
     const parsed = parseMoreParam(url);
     if (parsed.length > 0) {
       const ids = untrack(() => stackedTranslations.ids);

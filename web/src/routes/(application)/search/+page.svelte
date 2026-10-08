@@ -3,6 +3,7 @@
   import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import { loadQuranData } from "#lib/data/quran-data-client.js";
+  import { visibleUrl } from "#lib/reader/visible-url.js";
   import type { QuranData } from "#lib/data/quran-data.js";
   import { Icon } from "#lib/components/icon/index.js";
   import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
@@ -99,10 +100,13 @@
 
   $effect(() => {
     if (!adoptedSelection || engine.inputQuery.trim() !== engine.committedQuery) return;
+    // kit 3: shallow writes land in page.shallow.url, never page.url — compare
+    // against the visible URL or this effect loops on its own write forever.
+    const url = visibleUrl(page);
     const next = serializeSearchState(engine.committedQuery, searchSelection.ids);
-    if (next === page.url.search) return;
+    if (next === url.search) return;
     try {
-      replaceState(`${page.url.pathname}${next}`, page.state);
+      replaceState(`${url.pathname}${next}`, page.state);
     } catch {
       return;
     }
