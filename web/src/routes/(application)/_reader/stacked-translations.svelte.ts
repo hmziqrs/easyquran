@@ -29,7 +29,7 @@ export interface CreateStackedTranslationsOptions {
   readonly from: () => number;
   readonly to: () => number;
   readonly validator: () => AyahCoordinateValidator | null;
-  readonly primarySourceId: () => string | null;
+  readonly routeSourceId: () => string | null;
   readonly catalogue: () => readonly TranslationCatalogueEntry[];
   readonly routeKey: () => string;
   /** Ids to fetch; defaults to the reader's stacked list. Reading uses its own one-id list. */
@@ -214,8 +214,8 @@ export function createStackedTranslations(
     const route = opts.routeKey();
     const fromVal = opts.from();
     const toVal = opts.to();
-    const primary = opts.primarySourceId();
-    const extras = (opts.ids?.() ?? stackedTranslations.ids).filter((id) => id !== primary);
+    const routeSourceId = opts.routeSourceId();
+    const extras = (opts.ids?.() ?? stackedTranslations.ids).filter((id) => id !== routeSourceId);
 
     const prevOrder = untrack(() => order);
     const sameOrder =

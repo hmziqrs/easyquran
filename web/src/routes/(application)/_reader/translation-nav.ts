@@ -92,7 +92,7 @@ export function positionOf(pathname: string): ReaderPosition {
 }
 
 /**
- * Where the reader ACTUALLY is, for position-preserving primary switches.
+ * Where the reader ACTUALLY is, for position-preserving translation navigation.
  * The path never moves while scrolling (one URL per surah), so live and
  * page-store urls only diverge by fragment/query — reading the live url first
  * still carries a fresh ?v= position into the switch, and browser-only callers

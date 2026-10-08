@@ -28,7 +28,7 @@
 
   let headerTop = $derived(stickyNav.collapsed ? "0px" : `${stickyNav.height}px`);
 
-  const primaryId = $derived(
+  const routeTranslationId = $derived(
     page.params.lang && page.params.translator
       ? translationIdFromSegments(page.params.lang, page.params.translator)
       : null,
@@ -53,7 +53,7 @@
       <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-3 px-6">
         {#if mounted}
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
-          <TranslationButton {primaryId} />
+          <TranslationButton {routeTranslationId} />
         {/if}
         {@render header()}
         {#if position}

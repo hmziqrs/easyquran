@@ -13,7 +13,6 @@
     storageReport,
     type DeleteOutcome,
   } from "#lib/stores/storage-report.svelte.js";
-  import { readerSource } from "#lib/stores/reader-settings.svelte.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { formatBytes } from "#lib/utils.js";
   import { cn } from "#lib/utils.js";
@@ -49,9 +48,7 @@
       .filter((a) => !isArabicSourceId(a.id))
       .toSorted((a, b) => b.sizeBytes - a.sizeBytes),
   );
-  const inUseIds = $derived(
-    new Set([...(readerSource.sourceId ? [readerSource.sourceId] : []), ...stackedTranslations.ids]),
-  );
+  const inUseIds = $derived(new Set(stackedTranslations.ids));
   function opfsSupported(): boolean {
     // eslint-disable-next-line anti-slop/no-runtime-typeof -- capability probe mirroring hasOpfs(); `navigator` is absent in some runtimes and getDirectory is an optional member, so typeof is the honest check
     return typeof navigator !== "undefined" && !!navigator.storage?.getDirectory;

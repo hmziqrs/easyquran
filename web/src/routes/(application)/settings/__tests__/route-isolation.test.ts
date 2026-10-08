@@ -164,11 +164,10 @@ describe("settings storage delete-flow guards", () => {
     expect(section![1]).toContain("disabled={!hasController || clearingPages}");
   });
 
-  it("the in-use guard joins reader primary and stacked translation ids", () => {
+  it("the in-use guard pins stacked translation ids", () => {
     const section = findSource("StorageSection.svelte");
     expect(section, "StorageSection.svelte should exist").toBeDefined();
-    expect(section![1]).toContain("readerSource.sourceId");
-    expect(section![1]).toContain("stackedTranslations.ids");
+    expect(section![1]).toContain("new Set(stackedTranslations.ids)");
     expect(section![1]).toContain("inUse={inUseIds.has(artifact.id)}");
     const row = findSource("StorageArtifactRow.svelte");
     expect(row, "StorageArtifactRow.svelte should exist").toBeDefined();

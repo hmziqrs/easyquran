@@ -38,7 +38,6 @@ const ENGAGEMENT_KEY = "eq:engagement";
 const SESSION_KEY = "eq:reader-session-views";
 const LEGACY_KEY = "eq:reader-views";
 const READER_KEY = "easyquran.reader";
-const SOURCE_KEY = "easyquran.reader.source";
 
 async function importEngagement() {
   return import("#lib/quran/engagement.js");
@@ -123,7 +122,6 @@ function seedReaderState(opts: {
   bookmarks?: Record<string, boolean>;
   notes?: Record<string, string>;
   lastRead?: unknown;
-  sourceId?: string | null;
 }): void {
   window.localStorage.setItem(
     READER_KEY,
@@ -137,9 +135,6 @@ function seedReaderState(opts: {
       lastRead: opts.lastRead === undefined ? null : opts.lastRead,
     }),
   );
-  if (opts.sourceId !== undefined) {
-    window.localStorage.setItem(SOURCE_KEY, JSON.stringify({ v: 1, sourceId: opts.sourceId }));
-  }
 }
 
 describe("reader engagement", () => {
@@ -351,43 +346,27 @@ describe("reader engagement", () => {
       expect(d?.lastDay).toBe(todayStr());
     });
 
-    it("bookmarks/notes qualify the reader and the chosen translation seeds only its source", async () => {
+    it("bookmarks qualify the reader and only the routed translation is viewed", async () => {
       seedReaderState({
         bookmarks: { "1:1": true },
-        sourceId: TRANSLATION,
       });
       const { noteReaderView } = await importEngagement();
       await noteReaderView("fr.hamidullah");
       await flush();
       const d = readDurable();
       expect(d?.qualified).toBe(true);
-      expect(d?.sourceViews[TRANSLATION]).toBe(1);
       expect(d?.sourceViews["fr.hamidullah"]).toBe(1);
-
-      seedReaderState({
-        bookmarks: { "1:1": true },
-        sourceId: QuranSourceId.TanzilUthmani,
-      });
-      window.localStorage.removeItem(ENGAGEMENT_KEY);
-      sessionStorage.removeItem(LEGACY_KEY);
-      await noteReaderView("fr.hamidullah");
-      await flush();
-      const d2 = readDurable();
-      expect(d2?.sourceViews[QuranSourceId.TanzilUthmani]).toBeUndefined();
-      expect(d2?.sourceViews["fr.hamidullah"]).toBe(1);
     });
 
-    it("a notes-only reader (no bookmarks) qualifies the reader and seeds the chosen translation", async () => {
+    it("a notes-only reader (no bookmarks) qualifies the reader", async () => {
       seedReaderState({
         notes: { "2:255": "remember this verse" },
-        sourceId: TRANSLATION,
       });
       const { noteReaderView } = await importEngagement();
       await noteReaderView("fr.hamidullah");
       await flush();
       const d = readDurable();
       expect(d?.qualified).toBe(true);
-      expect(d?.sourceViews[TRANSLATION]).toBe(1);
       expect(d?.sourceViews["fr.hamidullah"]).toBe(1);
     });
   });
@@ -536,23 +515,6 @@ describe("reader engagement", () => {
       await noteReaderView(TRANSLATION);
       await flush();
       expect(ensureTranslation).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe("explicit translation choice", () => {
-    it("prefetches immediately when the reader picks a translation by hand", async () => {
-      const { noteTranslationChosen } = await importEngagement();
-      await noteTranslationChosen(TRANSLATION);
-      await flush();
-      expect(ensureTranslation).toHaveBeenCalledWith(TRANSLATION);
-    });
-
-    it("does not re-download a hand-picked translation that is cached", async () => {
-      hasTranslation.mockResolvedValue(true);
-      const { noteTranslationChosen } = await importEngagement();
-      await noteTranslationChosen(TRANSLATION);
-      await flush();
-      expect(ensureTranslation).not.toHaveBeenCalled();
     });
   });
 });

@@ -64,7 +64,7 @@ interface Inputs {
   from: number;
   to: number;
   routeKey: string;
-  primary: string | null;
+  routeSourceId: string | null;
 }
 
 function rangeText(id: string, from: number, to: number) {
@@ -85,7 +85,7 @@ function makeController(inputs: Inputs) {
     from: () => inputs.from,
     to: () => inputs.to,
     routeKey: () => inputs.routeKey,
-    primarySourceId: () => inputs.primary,
+    routeSourceId: () => inputs.routeSourceId,
     catalogue: () => CATALOGUE,
     validator: () => validator,
   } satisfies CreateStackedTranslationsOptions);
@@ -112,7 +112,7 @@ describe("createStackedTranslations", () => {
       (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
     );
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     expect(loadingFor(ctrl.state, "1:1")).toEqual(["en.sahih", "ur.jalandhry"]);
     await flush();
@@ -131,7 +131,7 @@ describe("createStackedTranslations", () => {
       (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
     );
-    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
+    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", routeSourceId: null };
     const ctrl = makeController(inputs);
     ctrl.sync();
     await flush();
@@ -153,7 +153,7 @@ describe("createStackedTranslations", () => {
       (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
     );
-    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
+    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", routeSourceId: null };
     const ctrl = makeController(inputs);
     ctrl.sync();
     await flush();
@@ -179,7 +179,7 @@ describe("createStackedTranslations", () => {
       from: () => 1,
       to: () => 1,
       routeKey: () => "s",
-      primarySourceId: () => null,
+      routeSourceId: () => null,
       catalogue: () => CATALOGUE,
       validator: () => v,
     });
@@ -196,10 +196,15 @@ describe("createStackedTranslations", () => {
     ctrl.dispose();
   });
 
-  it("dedupes the route primary so it is never fetched as an extra", () => {
+  it("dedupes the route translation so it is never fetched as an extra", () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry"]);
     workerStub.readRange.mockResolvedValue({ ayahs: [], normalizations: [] });
-    const ctrl = makeController({ from: 1, to: 1, routeKey: "t:en.sahih", primary: "en.sahih" });
+    const ctrl = makeController({
+      from: 1,
+      to: 1,
+      routeKey: "t:en.sahih",
+      routeSourceId: "en.sahih",
+    });
     ctrl.sync();
     expect(ctrl.state.order).toEqual(["ur.jalandhry"]);
     expect(workerStub.readRange).toHaveBeenCalledTimes(1);
@@ -223,7 +228,7 @@ describe("createStackedTranslations", () => {
           resolveRead = res;
         }),
     );
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     expect(loadingFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
 
@@ -239,7 +244,7 @@ describe("createStackedTranslations", () => {
   it("a thrown readRange (offline + cold extra) surfaces as erroredFor, not loadingFor", async () => {
     stackedTranslations.setIds(["en.sahih"]);
     workerStub.readRange.mockRejectedValue(new Error("offline + cold"));
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     expect(loadingFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
     await flush();
@@ -256,7 +261,7 @@ describe("createStackedTranslations", () => {
         Promise.resolve(rangeText(id, f, t)),
     );
     workerStub.readRange.mockRejectedValueOnce(new Error("cold"));
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
     expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
@@ -280,7 +285,7 @@ describe("createStackedTranslations", () => {
       (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
     );
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
     expect(stackedFor(ctrl.state, "1:1").length).toBe(1);
@@ -301,7 +306,7 @@ describe("createStackedTranslations", () => {
       (f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
     );
-    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
+    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", routeSourceId: null };
     const ctrl = makeController(inputs);
     ctrl.sync();
     await flush();
@@ -327,7 +332,7 @@ describe("createStackedTranslations", () => {
       from: () => 1,
       to: () => 3,
       routeKey: () => "surah:1",
-      primarySourceId: () => null,
+      routeSourceId: () => null,
       catalogue: () => CATALOGUE.filter((entry) => entry.id !== "en.sahih"),
       validator: () => validator,
     });
@@ -348,7 +353,7 @@ describe("createStackedTranslations", () => {
         .mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
           Promise.resolve(rangeText(id, f, t)),
         );
-      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
       ctrl.sync();
       await flush();
       expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
@@ -369,7 +374,7 @@ describe("createStackedTranslations", () => {
     workerStub.readRange.mockImplementation(
       () => new Promise<ReturnType<typeof rangeText>>((res) => pending.push(res)),
     );
-    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", primary: null };
+    const inputs: Inputs = { from: 1, to: 3, routeKey: "surah:1", routeSourceId: null };
     const ctrl = makeController(inputs);
     ctrl.sync();
     expect(pending.length).toBe(1);
@@ -391,7 +396,7 @@ describe("createStackedTranslations", () => {
   it("passes the hedge budget so a cold extra is served by the read API", () => {
     stackedTranslations.setIds(["en.sahih"]);
     workerStub.readRange.mockResolvedValue({ ayahs: [], normalizations: [] });
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     const options = workerStub.readRange.mock.calls[0]?.[5];
     expect(options).toMatchObject({ hedgeAfterMs: LOCAL_HEDGE_BUDGET_MS });
@@ -407,7 +412,7 @@ describe("createStackedTranslations", () => {
       .mockImplementation((f: number, t: number, _v: AyahCoordinateValidator, id: string) =>
         Promise.resolve(rangeText(id, f, t)),
       );
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
     expect(erroredFor(ctrl.state, "1:1")).toEqual(["en.sahih"]);
@@ -422,7 +427,7 @@ describe("createStackedTranslations", () => {
   it("a warm-up retry never re-flips to loading (no skeleton over existing text)", async () => {
     stackedTranslations.setIds(["en.sahih"]);
     workerStub.readRange.mockRejectedValue(new Error("cold miss"));
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
 
@@ -436,7 +441,7 @@ describe("createStackedTranslations", () => {
   it("caps warm-up retries so a worker ready-storm cannot loop", async () => {
     stackedTranslations.setIds(["en.sahih"]);
     workerStub.readRange.mockRejectedValue(new Error("cold miss"));
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
     workerStub.readRange.mockClear();
@@ -452,7 +457,7 @@ describe("createStackedTranslations", () => {
   it("dispose() unsubscribes from worker status", async () => {
     stackedTranslations.setIds(["en.sahih"]);
     workerStub.readRange.mockRejectedValue(new Error("cold miss"));
-    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+    const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
     ctrl.sync();
     await flush();
 
@@ -469,7 +474,7 @@ describe("createStackedTranslations", () => {
     try {
       stackedTranslations.setIds(["en.sahih"]);
       workerStub.readRange.mockRejectedValue(new Error("cold miss"));
-      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", primary: null });
+      const ctrl = makeController({ from: 1, to: 3, routeKey: "surah:1", routeSourceId: null });
       ctrl.sync();
       await flush();
 

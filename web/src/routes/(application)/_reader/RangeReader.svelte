@@ -64,7 +64,7 @@
     from: () => data.startGlobal,
     to: () => data.endGlobal,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
-    primarySourceId: () => {
+    routeSourceId: () => {
       const lang = page.params.lang;
       const translator = page.params.translator;
       return lang && translator ? translationIdFromSegments(lang, translator) : null;

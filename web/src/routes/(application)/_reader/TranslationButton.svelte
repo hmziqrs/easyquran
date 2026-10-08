@@ -4,13 +4,15 @@
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import TranslationModal from "./TranslationModal.svelte";
 
-  let { primaryId = null }: { primaryId?: string | null } = $props();
+  let { routeTranslationId = null }: { routeTranslationId?: string | null } = $props();
 
   const copy = getReaderUiCopy();
   let open = $state(false);
 
+  // The route's own translation is already on screen, so the badge counts the
+  // stacked texts that are not.
   const hiddenCount = $derived(
-    stackedTranslations.ids.filter((id) => id !== primaryId).length,
+    stackedTranslations.ids.filter((id) => id !== routeTranslationId).length,
   );
 
   // Registered asynchronously so `@tanstack/hotkeys` stays out of the initial
@@ -89,5 +91,5 @@
     <ChevronDownIcon class="hidden size-4 flex-none text-foreground-secondary sm:block" />
   </button>
 
-  <TranslationModal bind:open {primaryId} />
+  <TranslationModal bind:open />
 </div>

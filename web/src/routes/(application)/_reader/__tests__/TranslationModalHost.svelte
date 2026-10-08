@@ -6,10 +6,8 @@
   // modal component stays mounted while `open` toggles, exactly like the
   // TranslationButton binding in the reader header.
   let {
-    primaryId,
     expose,
   }: {
-    primaryId: string | null;
     expose: (setter: (open: boolean) => void) => void;
   } = $props();
 
@@ -21,4 +19,4 @@
   );
 </script>
 
-<TranslationModal bind:open {primaryId} />
+<TranslationModal bind:open />

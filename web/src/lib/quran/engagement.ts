@@ -89,32 +89,6 @@ export async function noteReaderView(
   }
 }
 
-export async function noteTranslationChosen(sourceId: QuranReaderSource): Promise<void> {
-  if (!browser) return;
-  if (isArabicSourceId(sourceId)) return;
-  if (settled.has(sourceId) || deciding.has(sourceId)) return;
-  if (readRaw("session", `${PREFETCH_PREFIX}${sourceId}`)) {
-    settled.add(sourceId);
-    return;
-  }
-  if (!connectionAllowsPrefetch()) return;
-
-  deciding.add(sourceId);
-  try {
-    if (await isCached(sourceId)) {
-      markSettled(sourceId);
-      return;
-    }
-    markSettled(sourceId);
-    whenIdle(() => {
-      void quranWorker.ensureTranslation(sourceId).catch(() => allowRetry(sourceId));
-    });
-  } catch {
-  } finally {
-    deciding.delete(sourceId);
-  }
-}
-
 export function __resetEngagementState(): void {
   settled.clear();
   deciding.clear();

@@ -190,7 +190,6 @@ import {
   reader_stacked_move_up,
   reader_stacked_none_selected,
   reader_stacked_open,
-  reader_stacked_primary_badge,
   reader_stacked_remove,
   reader_stacked_search_placeholder,
   reader_stacked_selected,
@@ -216,10 +215,9 @@ import {
   reader_translations_languages_label,
   reader_translations_no_matches,
   reader_translations_open,
-  reader_translations_primary_tip,
   reader_translations_results,
   reader_translations_results_one,
-  reader_translations_switch,
+  reader_translations_go_to,
   reader_your_note,
 } from "#lib/i18n/m/reader.js";
 import type { FooterResolvedCopy, NavResolvedCopy } from "#lib/i18n/marketing-copy.js";
@@ -413,7 +411,6 @@ export interface ReaderUiCopy {
     readonly moveUp: string;
     readonly moveDown: string;
     readonly remove: string;
-    readonly primaryBadge: string;
     readonly open: string;
     readonly loading: string;
     readonly error: string;
@@ -426,10 +423,9 @@ export interface ReaderUiCopy {
     readonly done: string;
     readonly back: string;
     readonly languagesLabel: string;
-    readonly switchTo: string;
+    readonly goTo: string;
     readonly noMatches: string;
     readonly results: (count: number) => string;
-    readonly primaryTip: string;
     readonly capNote: (max: number) => string;
     readonly tooltipTranslator: string;
     readonly tooltipLanguage: string;
@@ -704,7 +700,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       moveUp: noArgs(reader_stacked_move_up),
       moveDown: noArgs(reader_stacked_move_down),
       remove: noArgs(reader_stacked_remove),
-      primaryBadge: noArgs(reader_stacked_primary_badge),
       open: noArgs(reader_stacked_open),
       loading: noArgs(reader_stacked_loading),
       error: noArgs(reader_stacked_error),
@@ -717,13 +712,12 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       description: noArgs(reader_translations_description),
       done: noArgs(reader_translations_done),
       languagesLabel: noArgs(reader_translations_languages_label),
-      switchTo: noArgs(reader_translations_switch),
+      goTo: noArgs(reader_translations_go_to),
       noMatches: noArgs(reader_translations_no_matches),
       results: (count) =>
         count === 1
           ? reader_translations_results_one(options)
           : reader_translations_results({ count }, options),
-      primaryTip: noArgs(reader_translations_primary_tip),
       capNote: (max) => reader_translations_cap_note({ max }, options),
       tooltipTranslator: noArgs(reader_tooltip_translator),
       tooltipLanguage: noArgs(reader_tooltip_language),

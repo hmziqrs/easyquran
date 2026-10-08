@@ -18,7 +18,6 @@ const KEY = "eq:engagement";
 const SESSION_KEY = "eq:reader-session-views";
 const LEGACY_KEY = "eq:reader-views";
 const READER_KEY = "easyquran.reader";
-const SOURCE_KEY = "easyquran.reader.source";
 const SCHEMA_VERSION = 1;
 
 export interface EngagementState {
@@ -122,14 +121,6 @@ function seedFromReaderEvidence(s: EngagementState): void {
       ) {
         s.qualified = true;
       }
-    }
-  }
-  const srcRaw = readJSON(SOURCE_KEY);
-  if (!isFutureSchema(srcRaw, 1)) {
-    const src = asObject(srcRaw);
-    const sid = src ? asString(src.sourceId) : undefined;
-    if (sid && !isArabicSourceId(sid)) {
-      s.sourceViews[sid] = Math.max(s.sourceViews[sid] ?? 0, 1);
     }
   }
 }

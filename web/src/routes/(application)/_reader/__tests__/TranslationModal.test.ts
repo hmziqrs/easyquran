@@ -41,7 +41,6 @@ const h = vi.hoisted(() => {
       state: {},
     },
     replaceState: vi.fn(),
-    setSourceId: vi.fn(),
     readerStub: {
       isVerseMode: true,
       isReadingMode: false,
@@ -53,12 +52,6 @@ vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.readerStub }));
-vi.mock("#lib/stores/reader-settings.svelte.js", () => ({
-  readerSource: { sourceId: null, setSourceId: h.setSourceId },
-}));
-vi.mock("#lib/quran/engagement.js", () => ({
-  noteTranslationChosen: vi.fn(() => Promise.resolve()),
-}));
 vi.mock("#lib/paraglide/runtime.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#lib/paraglide/runtime.js")>();
   // Mirrors the real deLocalizeUrl contract (string | URL in, URL out) — the
@@ -134,7 +127,6 @@ beforeEach(() => {
   h.readerStub.isReadingMode = false;
   h.nav.url = new URL("https://example.test/al-fatihah");
   h.replaceState.mockClear();
-  h.setSourceId.mockClear();
   localStorage.clear();
   stackedTranslations.clear();
   scrolledIntoView = [];
@@ -192,6 +184,13 @@ const paneRowIds = (): string[] =>
     (li) => li.getAttribute("data-translation-row") ?? "",
   );
 
+// The rail defaults to Arabic on open; tests reading English rows or switch
+// links first select the English rail option exactly like a user would.
+async function selectEnglish(): Promise<void> {
+  railOption("English")?.click();
+  await settle();
+}
+
 // bits-ui portals dialog content in after mount (presence transition) — let a
 // macrotask tick land before querying the portaled DOM.
 function settle(): Promise<void> {
@@ -205,10 +204,10 @@ async function setSearch(query: string): Promise<void> {
   await settle();
 }
 
-async function open(props: { primaryId?: string | null } = {}): Promise<void> {
+async function open(): Promise<void> {
   instance = mount(TranslationModal, {
     target,
-    props: { open: true, primaryId: props.primaryId ?? null },
+    props: { open: true },
   });
   await settle();
 }
@@ -281,19 +280,28 @@ describe("TranslationModal — master-detail layout", () => {
     );
   });
 
-  it("auto-selects the primary translation's language on open", async () => {
-    await open({ primaryId: "qul.ur.bayan" });
+  it("defaults the rail to Arabic on open", async () => {
+    await open();
     const active = railOptions().find((b) => b.getAttribute("aria-current") === "true");
-    expect(active?.getAttribute("data-language-option")).toBe("Urdu");
+    expect(active?.getAttribute("data-language-option")).toBe("Arabic");
     // the pane header names the language with a quiet count
-    expect(pane().querySelector("h3")?.textContent).toContain("Urdu");
-    expect(paneRowIds()).toEqual(["qul.ur.bayan", "ur.jalandhry"]);
+    expect(pane().querySelector("h3")?.textContent).toContain("Arabic");
+    expect(paneRowIds()).toEqual(["ar.muyassar"]);
   });
 
   it("scrolls the selected rail row into view (open auto-select and keyboard moves)", async () => {
-    await open({ primaryId: "qul.ur.bayan" });
-    // Urdu sits last in the fixture rail: the auto-selection must be revealed
-    // instead of resting below the fold.
+    // The Arabic default is already visible at the rail's top, so the
+    // auto-select scroll needs an anchor far down: Reading's picker anchors
+    // on the text it flows (Urdu), which sits last in the fixture rail.
+    const onPick = vi.fn();
+    instance = mount(TranslationModal, {
+      target,
+      props: {
+        open: true,
+        readPick: { current: "qul.ur.bayan", quick: [], onPick },
+      },
+    });
+    await settle();
     const scrolledOnOpen = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
     expect(scrolledOnOpen).toContain("Urdu");
 
@@ -306,7 +314,8 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("pluralizes the count line: 4 translations vs 1 translation", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
       "4 translations",
     );
@@ -326,7 +335,7 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("moves keyboard focus through the rail with arrow keys", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
     const english = railOption("English");
     english?.focus();
     expect(document.activeElement).toBe(english);
@@ -342,7 +351,8 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("uses one row anatomy: name first, author line only when it differs", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const pickthall = pane().querySelector('li[data-translation-row="en.pickthall"]');
     expect(pickthall?.textContent).toContain("Pickthall");
     expect(pickthall?.querySelector("[data-author-line]")?.textContent).toContain(
@@ -360,13 +370,13 @@ describe("TranslationModal — master-detail layout", () => {
     expect(document.querySelectorAll("li[data-translation-row] span.size-2")).toHaveLength(0);
   });
 
-  it("shows the Primary badge instead of a checkbox on the primary row", async () => {
-    await open({ primaryId: "en.sahih" });
+  it("gives every non-picking row a toggleable checkbox and no Primary text anywhere", async () => {
+    await open();
+    await selectEnglish();
+    expect(checkboxes()).toHaveLength(4);
     const sahih = pane().querySelector('li[data-translation-row="en.sahih"]');
-    expect(sahih?.querySelector('input[type="checkbox"]')).toBeNull();
-    expect(sahih?.textContent).toContain("Primary");
-    // non-primary rows stay toggleable
-    expect(checkboxes().length).toBe(3);
+    expect(sahih?.querySelector('input[type="checkbox"]')).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Primary");
   });
 
   it("keeps the whole-wrapper search focus ring and offers a clear button", async () => {
@@ -450,24 +460,33 @@ describe("TranslationModal — master-detail layout", () => {
     expect(url.searchParams.get("more")).toBe("ur.jalandhry");
   });
 
-  it("navigates to another translation preserving position and records the source", async () => {
+  it("navigates to another translation preserving position and closes the modal", async () => {
     h.nav.url = new URL("https://example.test/t/en/sahih/juz/30");
-    await open({ primaryId: "en.sahih" });
-    // The route primary has no switch of its own: it is already the page.
-    expect(
-      switchLinks().some((a) => a.getAttribute("aria-label")?.includes("Saheeh International")),
-    ).toBe(false);
+    await open();
+    await selectEnglish();
     const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
     expect(link?.getAttribute("href")).toContain("/t/en/pickthall/juz/30");
     link?.click();
-    expect(h.setSourceId).toHaveBeenCalledWith("en.pickthall");
     await settle();
-    // modal closed after the primary switch
+    // the link is pure navigation: it only closes the modal
+    expect(document.querySelector("input[type='search']")).toBeNull();
+  });
+
+  it("closing also holds for the current route's own row link (same URL)", async () => {
+    h.nav.url = new URL("https://example.test/t/en/sahih/juz/30");
+    await open();
+    await selectEnglish();
+    // Every row gets the trailing link now, including the route's own.
+    const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Saheeh"));
+    expect(link?.getAttribute("href")).toContain("/t/en/sahih/juz/30");
+    link?.click();
+    await settle();
     expect(document.querySelector("input[type='search']")).toBeNull();
   });
 
   it("checks a row when its name is tapped and keeps the modal open", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const row = pane().querySelector('li[data-translation-row="en.pickthall"]');
     // The name sits inside the toggle label, never inside a link.
     const label = row?.querySelector("label[data-row-target]");
@@ -478,13 +497,12 @@ describe("TranslationModal — master-detail layout", () => {
     name?.click();
     await settle();
     expect([...stackedTranslations.ids]).toEqual(["en.pickthall"]);
-    expect(h.setSourceId).not.toHaveBeenCalled();
     expect(document.querySelector("input[type='search']")).not.toBeNull();
   });
 
   it("disables unselected rows when the cap of five extras is reached", async () => {
     stackedTranslations.setIds(FILLER_IDS);
-    await open({ primaryId: "en.sahih" });
+    await open();
     railOptions()
       .find((b) => b.getAttribute("data-language-option") === "Indonesian")
       ?.click();
@@ -500,7 +518,7 @@ describe("TranslationModal — master-detail layout", () => {
   it("carries the quiet cap note and Done button in the footer; Done closes", async () => {
     await open();
     expect(document.querySelector("[data-cap-note]")?.textContent).toContain(
-      "Up to 5 translations alongside the primary",
+      "Up to 5 translations",
     );
     // SAFETY: selector matches only the footer Done button element
     const done = document.querySelector("button[data-done]") as HTMLButtonElement | null;
@@ -524,7 +542,8 @@ describe("TranslationModal — live reader position (stress S1)", () => {
     // page.url still holds an earlier route (replaceState never updates it).
     h.nav.url = new URL("https://example.test/al-fatihah");
     window.history.replaceState({}, "", "/al-baqarah");
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
     expect(link?.getAttribute("href")).toContain("/al-baqarah/t/en/pickthall");
   });
@@ -533,7 +552,8 @@ describe("TranslationModal — live reader position (stress S1)", () => {
     // window.location stays at the default "/": the page-store url carries
     // the position (the juz kind never gets scroll-rewritten).
     h.nav.url = new URL("https://example.test/juz/2");
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const link = switchLinks().find((a) => a.getAttribute("aria-label")?.includes("Pickthall"));
     expect(link?.getAttribute("href")).toContain("/t/en/pickthall/juz/2");
   });
@@ -547,18 +567,19 @@ describe("TranslationModal — live reader position (stress S1)", () => {
     instance = mount(TranslationModalHost, {
       target,
       props: {
-        primaryId: "en.sahih",
         expose: (setter: (open: boolean) => void) => {
           setOpen = setter;
         },
       },
     });
     await settle();
-    const pickthallHref = (): string | null | undefined =>
-      switchLinks()
+    const pickthallHref = async (): Promise<string | null | undefined> => {
+      await selectEnglish();
+      return switchLinks()
         .find((a) => a.getAttribute("aria-label")?.includes("Pickthall"))
         ?.getAttribute("href");
-    expect(pickthallHref()).toContain("/al-baqarah/t/en/pickthall");
+    };
+    expect(await pickthallHref()).toContain("/al-baqarah/t/en/pickthall");
     // Close the SAME mounted instance (as the header button binding does),
     // move the live url to another reader route, then reopen: the cached
     // position from the previous open must not survive.
@@ -567,31 +588,21 @@ describe("TranslationModal — live reader position (stress S1)", () => {
     window.history.replaceState({}, "", "/ar-rum");
     setOpen(true);
     await settle();
-    expect(pickthallHref()).toContain("/ar-rum/t/en/pickthall");
+    expect(await pickthallHref()).toContain("/ar-rum/t/en/pickthall");
   });
 });
 
 describe("TranslationModal — selected chips", () => {
-  it("pins chips in current order, primary first with a badged tooltip trigger", async () => {
+  it("pins chips in stacked-store order with reorder arrows + remove on every chip", async () => {
     stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     const chips = [...document.querySelectorAll("[data-selected-chips] [data-chip]")];
-    expect(chips.map((c) => c.getAttribute("data-chip"))).toEqual([
-      "en.sahih",
-      "ur.jalandhry",
-      "ms.basmeih",
-    ]);
-    const primaryChip = chips[0];
-    expect(primaryChip?.textContent).toContain("Primary");
-    // the badge is a tooltip trigger explaining the primary's role
-    expect(primaryChip?.querySelector("button[aria-label]")?.getAttribute("aria-label")).toContain(
-      "reading mode",
-    );
-    // extras carry hover-revealed reorder arrows + remove
-    const extraChip = chips[1];
-    expect(extraChip?.querySelector('button[aria-label="Move up"]')).toBeTruthy();
-    expect(extraChip?.querySelector('button[aria-label="Move down"]')).toBeTruthy();
-    expect(extraChip?.querySelector('button[aria-label="Remove"]')).toBeTruthy();
+    expect(chips.map((c) => c.getAttribute("data-chip"))).toEqual(["ur.jalandhry", "ms.basmeih"]);
+    for (const chip of chips) {
+      expect(chip.querySelector('button[aria-label="Move up"]')).toBeTruthy();
+      expect(chip.querySelector('button[aria-label="Move down"]')).toBeTruthy();
+      expect(chip.querySelector('button[aria-label="Remove"]')).toBeTruthy();
+    }
     // right-aligned meta: cap indicator + clear-all
     const meta = document.querySelector("[data-selected-chips]");
     expect(meta?.textContent).toContain("2/5");
@@ -600,7 +611,7 @@ describe("TranslationModal — selected chips", () => {
 
   it("reorders, removes, and clears extras from the chips row, syncing ?more=", async () => {
     stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     const chip = document.querySelector('[data-chip="ms.basmeih"]');
     chip
       ?.querySelector('button[aria-label="Move up"]')
@@ -639,7 +650,8 @@ describe("TranslationModal — selected chips", () => {
 
 describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
   it("makes the whole row the toggle target via a label cover over checkbox+name+author", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const row = pane().querySelector('li[data-translation-row="en.pickthall"]');
     // SAFETY: selector matches only the row's label cover element
     const label = row?.querySelector("label[data-row-target]") as HTMLLabelElement | null;
@@ -651,7 +663,7 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
     // >=44px cover + no double-tap-zoom window on it
     expect(label?.className).toContain("min-h-11");
     expect(label?.className).toContain("touch-manipulation");
-    // the trailing primary-switch link stretches to the full row height (>=44px
+    // the trailing route link stretches to the full row height (>=44px
     // target) and sits beside the label, never inside it
     const link = row?.querySelector("a[data-switch]");
     expect(link?.closest("label")).toBeNull();
@@ -660,15 +672,16 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
     label?.click();
     await settle();
     expect([...stackedTranslations.ids]).toEqual(["en.pickthall"]);
-    // primary rows keep a plain cover: no checkbox to associate, no dead label
-    const primaryRow = pane().querySelector('li[data-translation-row="en.sahih"]');
-    expect(primaryRow?.querySelector("label[data-row-target]")).toBeNull();
-    expect(primaryRow?.querySelector("div[data-row-cover]")).toBeTruthy();
+    // uniform rows: the current route's own row is a toggle row like any
+    // other — checkbox + label, no static cover
+    const routeRow = pane().querySelector('li[data-translation-row="en.sahih"]');
+    expect(routeRow?.querySelector("label[data-row-target]")).toBeTruthy();
+    expect(routeRow?.querySelector("div[data-row-cover]")).toBeNull();
   });
 
   it("keeps chip reorder arrows focusable and revealed without hover", async () => {
     stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     // SAFETY: selector matches only the named chip control button
     const up = document.querySelector(
       '[data-chip="ms.basmeih"] button[aria-label="Move up"]',
@@ -699,14 +712,14 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
 
   it("lays the chips out as a single horizontal scroll row, never a wall", async () => {
     stackedTranslations.setIds(["ur.jalandhry", "ms.basmeih"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     // SAFETY: the chips strip is the first div child of the chips row
     const strip = document.querySelector("[data-selected-chips] > div") as HTMLElement | null;
     expect(strip?.className).toContain("overflow-x-auto");
     expect(strip?.className).not.toContain("flex-wrap");
     expect(strip?.className).toContain("overscroll-contain");
     const chips = [...document.querySelectorAll("[data-selected-chips] [data-chip]")];
-    expect(chips).toHaveLength(3);
+    expect(chips).toHaveLength(2);
     for (const chip of chips) {
       expect(chip.className).toContain("flex-none");
       expect(chip.className).toContain("h-11");
@@ -718,7 +731,8 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
   });
 
   it("shows the provenance label as an inline muted line on coarse pointers only", async () => {
-    await open({ primaryId: "en.sahih" });
+    await open();
+    await selectEnglish();
     const source = pane().querySelector(
       'li[data-translation-row="en.pickthall"] [data-row-source]',
     );
@@ -739,7 +753,7 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
 
   it("gives Clear all, Done, Close, and the search clear ≥44px effective targets", async () => {
     stackedTranslations.setIds(["ur.jalandhry"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     const clearAll = [...document.querySelectorAll("[data-selected-chips] button")].find(
       (b) => b.textContent?.trim() === "Clear all",
     );
@@ -768,7 +782,7 @@ describe("TranslationModal — reading mode", () => {
     h.readerStub.isVerseMode = false;
     h.readerStub.isReadingMode = true;
     stackedTranslations.setIds(["ur.jalandhry"]);
-    await open({ primaryId: "en.sahih" });
+    await open();
     expect(checkboxes().length).toBeGreaterThan(0);
     for (const box of checkboxes()) {
       expect(box.disabled).toBe(false);
@@ -787,7 +801,6 @@ describe("TranslationModal — Reading's picker", () => {
       target,
       props: {
         open: true,
-        primaryId: null,
         readPick: { current: "ur.jalandhry", quick: ["ur.jalandhry", "en.sahih"], onPick },
       },
     });
@@ -830,9 +843,9 @@ describe("TranslationModal — mobile collapse", () => {
 });
 
 describe("TranslationButton badge", () => {
-  it("shows the stacked count excluding the route primary", () => {
+  it("shows the stacked count excluding the route translation", () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry", "ms.basmeih"]);
-    instance = mount(TranslationButton, { target, props: { primaryId: "en.sahih" } });
+    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
     const badge = target.querySelector("[data-translation-count]");
     expect(badge?.textContent?.trim()).toBe("2");
   });
@@ -841,13 +854,13 @@ describe("TranslationButton badge", () => {
     stackedTranslations.setIds(["en.sahih", "ur.jalandhry"]);
     h.readerStub.isVerseMode = false;
     h.readerStub.isReadingMode = true;
-    instance = mount(TranslationButton, { target, props: { primaryId: "en.sahih" } });
+    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
     const badge = target.querySelector("[data-translation-count]");
     expect(badge?.getAttribute("title")).toBeNull();
   });
 
   it("opens the modal on click", async () => {
-    instance = mount(TranslationButton, { target, props: { primaryId: "en.sahih" } });
+    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
     // SAFETY: selector matches only the trigger button element
     const button = target.querySelector("button[aria-haspopup='dialog']") as HTMLButtonElement;
     expect(document.querySelector("input[type='search']")).toBeNull();

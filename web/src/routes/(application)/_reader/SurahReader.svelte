@@ -155,7 +155,7 @@
     from: () => readFrom,
     to: () => readTo,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
-    primarySourceId: () => (isTranslationSource ? sourceId : null),
+    routeSourceId: () => (isTranslationSource ? sourceId : null),
     catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${sourceId}:${initial.surah.num}`,
     ids: () => {
@@ -390,7 +390,7 @@
     from: () => readFrom,
     to: () => readTo,
     validator: () => (stackedQuranData ? ayahIndexValidator(stackedQuranData) : null),
-    primarySourceId: () => (isTranslationSource ? sourceId : null),
+    routeSourceId: () => (isTranslationSource ? sourceId : null),
     catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${sourceId}:${initial.surah.num}`,
     ids: () => readingFetchIds,

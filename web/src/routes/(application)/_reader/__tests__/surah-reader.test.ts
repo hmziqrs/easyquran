@@ -30,7 +30,6 @@ const {
   mountStub,
   headerProps,
   rowProps,
-  setSourceIdSpy,
 } = vi.hoisted(() => ({
   nav: { state: {}, url: new URL("https://example.test/al-fatihah") },
   workerStub: {
@@ -77,7 +76,6 @@ const {
     arabicPending?: boolean;
     stacked?: readonly { sourceId: string }[];
   }[],
-  setSourceIdSpy: vi.fn(),
 }));
 
 vi.mock("$app/env", () => ({ browser: true }));
@@ -116,12 +114,6 @@ vi.mock("#lib/quran/catalogue.js", () => {
     translationSourceOf: () => "tanzil",
   };
 });
-vi.mock("#lib/stores/reader-settings.svelte.js", () => ({
-  readerSource: { sourceId: null, setSourceId: setSourceIdSpy },
-}));
-vi.mock("#lib/quran/engagement.js", () => ({
-  noteTranslationChosen: vi.fn(() => Promise.resolve()),
-}));
 vi.mock("#lib/stores/quran.svelte.js", () => ({ quran: quranStore }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({
   reader: readerStub,
@@ -254,7 +246,6 @@ beforeEach(() => {
     readerStub.isVerseMode = m === "verse";
   });
   headerProps.current = null;
-  setSourceIdSpy.mockReset();
   nav.url = new URL("https://example.test/al-fatihah");
   localStorage.clear();
 

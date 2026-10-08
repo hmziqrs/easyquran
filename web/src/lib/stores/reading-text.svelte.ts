@@ -14,7 +14,7 @@ import {
  * What Reading mode flows: the Arabic, or one translation. Ayah-by-Ayah always shows the
  * Arabic plus every stacked translation; Reading shows exactly one text, and this store is
  * the reader's standing choice of which. It is a setting, never a route: switching it does
- * not navigate (quran.com's model), so there is no "primary translation" to manage.
+ * not navigate (quran.com's model), and Reading flows exactly one text at a time.
  */
 export type ReadingText = "arabic" | "translation";
 

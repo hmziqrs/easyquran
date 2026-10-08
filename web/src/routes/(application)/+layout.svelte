@@ -25,6 +25,7 @@
   import { quranWorker } from "#lib/quran/worker-client.js";
   import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
   import { translationIdFromSegments } from "#lib/data/quran.js";
+  import { removeJSON } from "#lib/storage/index.js";
 
   let { data, children } = $props();
   let menuOpen = $state(false);
@@ -85,6 +86,9 @@
   }
 
   onMount(() => {
+    // One-shot cleanup of the retired primary-translation store's key; the
+    // no-op read keeps users' localStorage free of the dead blob.
+    removeJSON("easyquran.reader.source");
     reader.hydrate(parseModeParam(visibleUrl(page)) ?? undefined);
     bookmarks.hydrate();
     const moreIds = knownMoreIds(parseMoreParam(visibleUrl(page)));
@@ -151,8 +155,8 @@
     const ids = stackedTranslations.ids;
     const lang = page.params.lang;
     const translator = page.params.translator;
-    const primary = lang && translator ? translationIdFromSegments(lang, translator) : null;
-    const pinned = primary ? [primary, ...ids] : [...ids];
+    const routeTranslationId = lang && translator ? translationIdFromSegments(lang, translator) : null;
+    const pinned = routeTranslationId ? [routeTranslationId, ...ids] : [...ids];
     void quranWorker.setPinnedTranslations(pinned).catch(() => {});
   });
 
