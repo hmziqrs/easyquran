@@ -177,7 +177,7 @@ Each runs against `translated-surah` by default; `--deep` extends the set to the
 
 | id                | setup                                                                                                                                                                  | question                                                                                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cold`            | cache dir wiped, no warmup priming                                                                                                                                     | miss-storm cost; how much SSR+Axum a runtime sustains with 0% hit ratio                                                                                                                   |
+| `cold`            | cache dir wiped, no warmup priming                                                                                                                                     | miss-storm cost; how much SSR+Axum the server sustains with 0% hit ratio                                                                                                                  |
 | `warm`            | cache pre-primed with the **distinct keys the stage's Zipf stream actually touches** (not the 76k key space — priming that is 5+ min per run), TTL 7 d, budget 256 MiB | hit-path ceiling; disk read + HTTP throughput                                                                                                                                             |
 | `zipf-steady`     | cache starts empty, natural Zipf traffic, prod TTL/budget                                                                                                              | realistic hit-ratio curve over time; the headline number                                                                                                                                  |
 | `ttl-expiry`      | `QURAN_SSR_CACHE_TTL_MS=15000`, primed cache                                                                                                                           | re-render waves as entries age out mid-ladder                                                                                                                                             |
@@ -285,8 +285,8 @@ bench/
 │   ├── targets.ts         # vegeta targets-file generator
 │   ├── server.ts          # spawn/health-probe/kill web + axum, env matrix, port guards
 │   ├── sampler.ts         # 1 Hz process/health sampling
-│   ├── runner.ts          # matrix driver: interleave, repeat, warmup, cooldown, preflight
-│   ├── collect.ts         # vegeta report parsing → results.json
+│   ├── runner.ts          # matrix driver: interleave, repeat, warmup, cooldown, preflight; vegeta report → results.json
+│   ├── sample-proc.ts     # standalone 1 Hz ps-sampler process (runner's loop blocks during attacks)
 │   └── report.ts          # results.json → report.html
 └── results/
 ```
@@ -314,7 +314,7 @@ just bench-report     # rebuild report.html from an existing results dir
 - **The bun shim is retired** — every row exercises the same `node:sqlite` binding bun runs in
   production, so there is no per-row binding difference to disclose.
 - **Axum is in the path** for every translated miss. Its CPU is reported; if it saturates, that
-  stage's conclusion is about the pair, not the runtime.
+  stage's conclusion is about the pair, not the server.
 - **12 s stages** weaken p999 confidence at 100 req/s (~1,200 samples). p999 is reported but marked
   low-confidence below stage 3.
 - Quran data is untouched: read-only sqlite, no hashing anywhere in the harness, cache dirs are

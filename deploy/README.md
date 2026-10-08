@@ -239,6 +239,20 @@ entry that imports the adapter's emitted hand-off (`build/adapter-bun.js`) and:
 - adds a bounded on-disk fallback under `build/client` for artifacts written
   after the adapter froze its table (the offline pack + manifest, `postbuild`)
   — same freshness/encoding semantics, path-contained, dotfiles excluded;
+- serves `GET/HEAD /_app/env.js` itself, before the static table — kit 3
+  compiles `import { env } from "/_app/env.js"` into the built service worker
+  when dynamic public vars are declared, and that module is a runtime value,
+  never a build artifact. The body is built per request from `process.env`
+  (unset reads as `""`) for exactly the four dynamic public vars declared in
+  `web/src/env.ts` (`PUBLIC_API_BASE_URL`, `PUBLIC_QURAN_API_BASE`,
+  `PUBLIC_ENV`, `PUBLIC_FCM_VAPID_KEY` — mirrored as
+  `DYNAMIC_PUBLIC_ENV_VARS` in `web/server.ts`, machine-enforced by
+  `server-headers.test.ts`), answered `application/javascript` +
+  `cache-control: no-cache` so no cache can pin a previous deploy's env.
+  kit's own handler does answer this URL too (from the `env` passed to
+  `Server.init`) but ships only an etag with no cache-control — the custom
+  entry pre-empts it to own the caching. The service worker imports the
+  module: if the URL ever 404s, SW registration dies;
 - derives the public origin from `PROTOCOL_HEADER`/`HOST_HEADER`/`PORT_HEADER`
   (replacing adapter-node's `ORIGIN` env — compose sets `x-forwarded-proto`
   and relies on Traefik preserving Host), and supports `ADDRESS_HEADER` +
