@@ -32,6 +32,9 @@ web-dev environment="local":
     @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
     cd web && PUBLIC_ENV="{{environment}}" pnpm dev
 
+# SvelteKit build (host). adapter-bun runs Bun.build during adapt(), so the
+# build script shells out to `bun run --bun vp build` — the host needs bun >= 1.4
+# on PATH (the sqlite prerender also runs under bun; 1.4+ implements node:sqlite).
 web-build environment="prod":
     @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
     cd web && PUBLIC_ENV="{{environment}}" pnpm build

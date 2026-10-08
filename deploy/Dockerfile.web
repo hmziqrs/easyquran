@@ -1,15 +1,19 @@
 # EasyQuran Web — packaging only. NOTHING is compiled here.
 #
 # The SvelteKit build runs outside Docker (on the CI runner or your machine via
-# `just image-web`, which shells out to `pnpm --filter web build`), because building it
+# `just image-web`, which shells out to `pnpm --filter web build`) because building it
 # inside Docker meant re-installing the toolchain, re-downloading CA certs, and re-running
 # the sqlite prerender on every image — the single most fragile step in this repo.
-# adapter-node emits a self-contained bundle (`web/build`); `server.ts` imports node
-# builtins + that bundle + two pure-TS src modules (accept-parse -> site-structure),
-# copied from web/src below and whitelisted in Dockerfile.web.dockerignore. Those src
-# imports must stay in sync with the ignore-file whitelist — a missed line builds fine
-# and crashes at container start. The output is pure TS/JS: arch-independent,
-# no node_modules, no network.
+# adapter-bun emits a self-contained output (`web/build`: server bundle + client +
+# prerendered + the adapter-bun.js hand-off); `server.ts` is a custom Bun.serve entry
+# importing that hand-off (kit server + build-time asset table) and applies the §6.1
+# delivery contract on top — the stock `bun ./build` entry cannot be intercepted, which
+# is why the custom entry exists. It imports node builtins + the hand-off + two pure-TS
+# src modules (accept-parse -> site-structure), copied from web/src below and whitelisted
+# in Dockerfile.web.dockerignore. Those src imports must stay in sync with the ignore-file
+# whitelist — a missed line builds fine and crashes at container start. The output is pure
+# TS/JS: arch-independent, no node_modules, no network (vite.config.ts ssr.noExternal +
+# the postbuild guard in scripts/gen-offline-pack.ts keep the server bundle import-clean).
 #
 # Build via `just image-web` — it guarantees the artifacts exist and are fresh. A bare
 # `docker build -f deploy/Dockerfile.web .` fails on the missing `web/build` COPY, by design.
@@ -17,7 +21,7 @@
 # Context = repo root, filtered by deploy/Dockerfile.web.dockerignore (BuildKit reads the
 # per-Dockerfile ignore file in preference to the root .dockerignore, which excludes
 # web/build for the api/source builds).
-FROM oven/bun:1.4.0-slim
+FROM oven/bun:1.4.2-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -33,7 +37,7 @@ COPY --chown=bun:bun web/src /app/src
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="EasyQuran Web" \
-      org.opencontainers.image.description="EasyQuran SvelteKit adapter-node frontend (Arabic SSG + translation SSR)" \
+      org.opencontainers.image.description="EasyQuran SvelteKit adapter-bun frontend (Arabic SSG + translation SSR)" \
       org.opencontainers.image.source="https://github.com/hmziqrs/easyquran" \
       org.opencontainers.image.version="${VERSION}" \
       easyquran.component="web"

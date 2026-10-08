@@ -78,6 +78,13 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # adapter-bun calls Bun.build during adapt(), so the web build itself must
+      # run under bun (`bun run --bun vp build` in the build script). Pinned to the
+      # runtime the image ships (oven/bun:1.4.2-slim).
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
       # The Quran corpus is immutable and unversioned, so the cache key tracks the baked
       # maps that name the artifacts, not the bytes.
       - name: Cache Quran databases
@@ -93,8 +100,9 @@ jobs:
       - name: Check Quran publisher
         run: pnpm quran:check
 
-      # adapter-node output is pure JS (arch-independent); the sqlite prerender runs on Node
-      # here because bun does not implement node:sqlite.
+      # adapter-bun output is pure JS (arch-independent). The whole build — vite,
+      # the Arabic sqlite prerender (bun 1.4+ implements node:sqlite), and the
+      # adapter's Bun.build pass — runs under bun via the build script.
       - run: pnpm --filter web build
         env:
           PUBLIC_ENV: prod

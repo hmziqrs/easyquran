@@ -51,7 +51,11 @@ services:
     environment:
       HOST: "0.0.0.0"
       PORT: "8080"
-      ORIGIN: https://${DOMAIN}
+      # adapter-bun replaced adapter-node's ORIGIN env with proxy headers: kit 3
+      # derives the public origin per request. Traefik (TLS terminator) sets
+      # X-Forwarded-Proto and preserves the original Host, which the bun entry
+      # reads exactly like @sveltejs/adapter-bun's stock server would.
+      PROTOCOL_HEADER: x-forwarded-proto
       # Co-located invariant: web + api share one Docker network. Server-side
       # translation SSR hits the api container directly (bypassing the edge) and
       # sends INTERNAL_QURAN_API_TOKEN on this base only.
@@ -72,8 +76,8 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      # `bun`, not `node`: the web image runs the adapter-node server on the bun runtime and
-      # carries no node binary.
+      # `bun`, not `node`: the web image runs the adapter-bun server (custom
+      # Bun.serve entry over the adapter hand-off) and carries no node binary.
       test:
         [
           "CMD",
@@ -163,7 +167,11 @@ services:
       proxy:
         aliases: [api]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/healthz && curl -fsS http://localhost:8888/quran/health/ready || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8888/healthz && curl -fsS http://localhost:8888/quran/health/ready || exit 1",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

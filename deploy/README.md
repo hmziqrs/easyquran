@@ -1,6 +1,6 @@
 # EasyQuran — deploy
 
-Two images — **web** (SvelteKit adapter-node: Arabic SSG + translation SSR) + **api** (Rust/Axum) — that
+Two images — **web** (SvelteKit adapter-bun: Arabic SSG + translation SSR) + **api** (Rust/Axum) — that
 sit behind your **external Traefik** reverse proxy. No Traefik config lives here;
 the containers carry the labels your proxy auto-discovers.
 
@@ -72,13 +72,14 @@ fails on pull.
   `Dockerfile.<name>.dockerignore` each. BuildKit prefers the per-Dockerfile ignore over the
   root `.dockerignore`, which is what lets these builds see `web/build` and `rust/target/…`
   (both blanket-excluded at the root) while shipping nothing else.
-- `Dockerfile.web` runs the standalone adapter-node server **on the bun runtime**
-  (`oven/bun:1.4.0-slim`). The SvelteKit build still runs on Node, just on the host now:
-  prerendering reads the sqlite corpus via `node:sqlite`, which bun does not implement, and
-  every sqlite route is `prerender = true` — a build-time dependency the runtime never loads.
-  bun holds roughly half Node's resident memory under translation SSR (see `bench/`). Its
-  persistent `web_quran_cache` volume stores only translated-page HTML (7-day TTL, 256 MiB
-  LRU budget).
+- `Dockerfile.web` runs the adapter-bun server **on the bun runtime**
+  (`oven/bun:1.4.2-slim`). The SvelteKit build also runs under bun — on the host/CI now:
+  adapter-bun calls `Bun.build` during `adapt()`, and bun 1.4+ implements `node:sqlite`,
+  so the Arabic prerender reads the sqlite corpus under bun too. `web/server.ts` is a
+  custom `Bun.serve` entry over the adapter's emitted hand-off (`build/adapter-bun.js`:
+  the kit server + the build-time asset table) — see "Web delivery contract" below for
+  why the stock `bun ./build` entry is not used. Its persistent `web_quran_cache` volume
+  stores only translated-page HTML (7-day TTL, 256 MiB LRU budget).
 - `../docker-compose.yml` (repo root) — web + api + Traefik labels, on the
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
@@ -216,11 +217,38 @@ PR can build and validate but can never move `latest` (a same-repo collaborator
 PR included — it executes its own copy of the workflow); fork PRs don't build
 at all.
 
-The web image runs SvelteKit's standalone adapter-node server on bun. `hooks.server.ts` owns
+The web image runs the adapter-bun server on bun. `hooks.server.ts` owns
 translated-page disk caching and dynamic response headers; `server.ts` applies
-the same `Cache-Control`/`X-Robots-Tag` contract to adapter-node's static bypass. Traefik's
-compression middleware handles dynamic SSR while adapter-node serves precompressed
-Arabic output and immutable assets.
+the same `Cache-Control`/`X-Robots-Tag`/CSP-script-hash contract to the static
+layer. Traefik's compression middleware handles dynamic SSR while the static
+layer serves precompressed Arabic output and immutable assets.
+
+### Web delivery contract under adapter-bun (divergences from the stock adapter)
+
+adapter-bun registers client assets and prerendered pages as **native
+`Bun.serve` routes** with no interception point, so the §6.1 per-response header
+contract (boot-scanned CSP script hashes on prerendered HTML, the security set,
+Cache-Control tiers, `.md` Accept negotiation, Vary rules) cannot ride on the
+stock `bun ./build` entry. `web/server.ts` is therefore a custom `Bun.serve`
+entry that imports the adapter's emitted hand-off (`build/adapter-bun.js`) and:
+
+- serves the same build-time asset table itself from the fetch layer — the
+  ETag / `If-None-Match` / brotli-gzip negotiation semantics are a port of
+  `@sveltejs/adapter-bun`'s `routes-util.js` (blake2b256 build-time hashes,
+  304s, per-variant ETags, immutable headers for `/_app/immutable/`);
+- adds a bounded on-disk fallback under `build/client` for artifacts written
+  after the adapter froze its table (the offline pack + manifest, `postbuild`)
+  — same freshness/encoding semantics, path-contained, dotfiles excluded;
+- derives the public origin from `PROTOCOL_HEADER`/`HOST_HEADER`/`PORT_HEADER`
+  (replacing adapter-node's `ORIGIN` env — compose sets `x-forwarded-proto`
+  and relies on Traefik preserving Host), and supports `ADDRESS_HEADER` +
+  `XFF_DEPTH` for `getClientAddress()`;
+- keeps the graceful-shutdown drain + `sveltekit:shutdown` emit.
+
+Deliberate divergences from the stock entry: static assets are served from the
+fetch layer rather than native routes (the price of the header contract — same
+table, same semantics, one JS hop more), and HEAD static responses carry the
+full header set with an empty body.
 
 ## Release
 
@@ -440,7 +468,7 @@ mail with SPF+DKIM pass.
   provision script + manifest COPY in `Dockerfile.api` and the `quran-init` service are a
   coupled pair — ship and revert together.
 - The web runtime reads `quran-data.json` from the build's `client/quran-meta/` output
-  (adapter-node copies `static/` → `build/client/`).
+  (adapter-bun copies `static/` → `build/client/`).
 - `web_quran_cache` is disposable derived HTML; removing it causes cold SSR only.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
 - Nothing builds on the VPS in the CI + Dokploy flow — it only pulls. The ≥2 GB RAM
