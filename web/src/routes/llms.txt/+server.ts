@@ -1,6 +1,6 @@
 export const prerender = true;
 
-import { renderLlmsIndex } from "$lib/seo/render";
+import { renderLlmsIndex } from "#lib/seo/render.js";
 
 import type { RequestHandler } from "./$types";
 

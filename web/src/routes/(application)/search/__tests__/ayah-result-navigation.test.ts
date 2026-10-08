@@ -1,18 +1,25 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createQuranData } from "$lib/data/quran-data";
+
 import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { createQuranData } from "#lib/data/quran-data.js";
+
 const h = vi.hoisted(() => ({ opened: vi.fn(), factory: vi.fn() }));
-vi.mock("$lib/search/page/navigate", () => ({
+vi.mock("#lib/search/page/navigate.js", () => ({
   ayahHrefFor: () => "/al-baqarah#ayah-2-64",
   openVerse: (surah: number, ayah: number, sourceId?: string) => {
     h.factory(surah, ayah, sourceId);
     return h.opened;
   },
 }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import AyahResult from "../_components/AyahResult.svelte";
 

@@ -1,3 +1,4 @@
+import type { ReadonlyURLSearchParams } from "$app/state";
 /**
  * Reader mix: each axis is one part of the reader chrome, each option one take on it.
  * Option "a" is always today's live look, so any axis can be compared against it.
@@ -170,7 +171,7 @@ function pick<const T extends readonly MixOption[]>(
 }
 
 /** Unknown or missing params fall back to the recommended pick for that axis. */
-export function readMix(params: URLSearchParams): MixState {
+export function readMix(params: URLSearchParams | ReadonlyURLSearchParams): MixState {
   return {
     head: pick(HEAD_OPTIONS, params.get("head"), RECOMMENDED_MIX.head),
     bar: pick(BAR_OPTIONS, params.get("bar"), RECOMMENDED_MIX.bar),
@@ -183,20 +184,23 @@ export function readMix(params: URLSearchParams): MixState {
 }
 
 /** `?…` for `params` with every axis of `mix` written out (so the URL names the whole mix). */
-export function mixSearch(params: URLSearchParams, mix: MixState): string {
-  const next = new URLSearchParams(params);
+export function mixSearch(
+  params: URLSearchParams | ReadonlyURLSearchParams,
+  mix: MixState,
+): string {
+  const next = new URLSearchParams([...params]);
   for (const axis of MIX_AXES) next.set(axis.key, mix[axis.key]);
   return `?${next.toString()}`;
 }
 
 /** `?…` for the current mix with one axis switched to `id`. Lists links also open the drawer. */
 export function axisSearch(
-  params: URLSearchParams,
+  params: URLSearchParams | ReadonlyURLSearchParams,
   mix: MixState,
   key: MixAxisKey,
   id: string,
 ): string {
-  const next = new URLSearchParams(params);
+  const next = new URLSearchParams([...params]);
   for (const axis of MIX_AXES) next.set(axis.key, mix[axis.key]);
   next.set(key, id);
   if (key === "lists") next.set("drawer", "1");
@@ -205,11 +209,11 @@ export function axisSearch(
 
 /** `?…` for the current mix with a different translation set. */
 export function translationsSearch(
-  params: URLSearchParams,
+  params: URLSearchParams | ReadonlyURLSearchParams,
   mix: MixState,
   ids: readonly string[],
 ): string {
-  const next = new URLSearchParams(params);
+  const next = new URLSearchParams([...params]);
   for (const axis of MIX_AXES) next.set(axis.key, mix[axis.key]);
   next.set("t", ids.join(","));
   return `?${next.toString()}`;

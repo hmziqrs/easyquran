@@ -7,18 +7,18 @@ import {
   type AuthClient,
   type JsonValue,
   type UserProfile,
-} from "$lib/auth/auth-client";
-import type { SessionProbeResult } from "$lib/auth/auth-client";
-import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
+} from "#lib/auth/auth-client.js";
+import type { SessionProbeResult } from "#lib/auth/auth-client.js";
+import type { AuthErrorEnvelope } from "#lib/auth/auth-client.js";
 import {
   GENERIC_TRY_AGAIN,
   NETWORK_ERROR,
   VERIFY_EMAIL_NEXT,
   classifyAuthError,
   isVerifiedOnlyError,
-} from "$lib/auth/auth-copy";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
+} from "#lib/auth/auth-copy.js";
+import { authState } from "#lib/auth/auth-state.svelte.js";
+import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 
 export interface PasskeyInfo {
   readonly id: string;

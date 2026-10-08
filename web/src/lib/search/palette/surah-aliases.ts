@@ -1,6 +1,6 @@
-import { translitKey, type TranslitKey } from "$lib/quran/search/translit";
+import { translitKey, type TranslitKey } from "#lib/quran/search/translit.js";
 
-export { JUZ_KEYWORDS, JUZ_KEYWORD_BY_KEY, juzKeywordFor } from "$lib/search/nav/juz-nicknames";
+export { JUZ_KEYWORDS, JUZ_KEYWORD_BY_KEY, juzKeywordFor } from "#lib/search/nav/juz-nicknames.js";
 
 /**
  * Curated surah nicknames that `translitKey` cannot derive from the catalogue's

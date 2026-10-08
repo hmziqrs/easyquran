@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-  import type { SearchCopy } from "$lib/i18n/search-copy";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { TRANSLATION_CATALOGUE } from "$lib/quran/catalogue";
-  import { quranWorker } from "$lib/quran/worker-client";
-  import { searchSelection } from "$lib/stores/search-selection.svelte";
-  import { storageReport } from "$lib/stores/storage-report.svelte";
+  import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
+  import { quranWorker } from "#lib/quran/worker-client.js";
+  import { searchSelection } from "#lib/stores/search-selection.svelte.js";
+  import { storageReport } from "#lib/stores/storage-report.svelte.js";
 
   import TranslationRow from "./TranslationRow.svelte";
 

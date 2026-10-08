@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { building } from "$app/environment";
-  import { publicHref, type PublicHref } from "$lib/i18n/public-href";
+  import { building } from "$app/env";
+  import { publicHref, type PublicHref } from "#lib/i18n/public-href.js";
 
   interface Props {
     hrefs: readonly PublicHref[];

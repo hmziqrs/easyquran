@@ -1,3 +1,6 @@
+import { mount, unmount } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import type {
   Ayah,
   QuranRangeText,
@@ -5,20 +8,18 @@ import type {
   RangePageData,
   SurahLink,
   SurahNormalization,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 import {
   createRangeReaderCoordinator,
   equalRangeKey,
   quranWorker,
   rangeRouteKey,
   type RangeDisplaySnapshot,
-} from "$lib/quran/worker-client";
-import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/quran/worker-client.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 import RangeReader from "../RangeReader.svelte";
 import RangeReaderHost from "./RangeReaderHost.svelte";
-import { reader } from "$lib/stores/reader.svelte";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   siteConfig: { apiBase: "https://api.test/quran" },
@@ -36,11 +37,11 @@ const { nav, loadQuranDataStub, gotoSpy, verseRowStub, tooltipStub } = vi.hoiste
   tooltipStub: () => {},
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: siteConfig }));
-vi.mock("$lib/quran/api-client", () => ({
+vi.mock("#lib/config/site.js", () => ({ QURAN: siteConfig }));
+vi.mock("#lib/quran/api-client.js", () => ({
   quranApi: { readRange: apiReads.readRange },
 }));
-vi.mock("$lib/quran/wire", () => ({
+vi.mock("#lib/quran/wire.js", () => ({
   decodeQuranRangeText: wireMocks.decodeArabicRange,
   decodeTranslationRangeText: vi.fn(),
   decodeQuranSurahText: vi.fn(),
@@ -55,15 +56,16 @@ vi.mock("$lib/quran/wire", () => ({
 // quranApi.readRange when the worker is not started), and real view helpers
 // (groupRangeAyahs/bodyText) run unmodified.
 vi.mock("$app/navigation", () => ({ goto: gotoSpy }));
-vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
+// kit 3: base is gone; resolve() prefixes the (always-empty) base with a slash.
+vi.mock("$app/paths", () => ({ resolve: (p: string) => `/${p}` }));
 vi.mock("$app/state", () => ({ page: nav }));
-vi.mock("$lib/data/quran-data-client", () => ({
+vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: loadQuranDataStub,
   peekQuranData: () => undefined,
 }));
-vi.mock("$lib/quran/track-view.svelte", () => ({ trackReaderView: () => {} }));
+vi.mock("#lib/quran/track-view.svelte.js", () => ({ trackReaderView: () => {} }));
 vi.mock("../VerseRow.svelte", () => ({ default: verseRowStub }));
-vi.mock("$lib/components/ui/tooltip", () => ({ TooltipProvider: tooltipStub }));
+vi.mock("#lib/components/ui/tooltip/index.js", () => ({ TooltipProvider: tooltipStub }));
 
 function ayah(surahNum: number, n: number, globalIndex: number): Ayah {
   return {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import TranslationModal from "./TranslationModal.svelte";
 
   let { primaryId = null }: { primaryId?: string | null } = $props();
@@ -20,7 +20,7 @@
     let destroyed = false;
     let cleanup: (() => void) | undefined;
 
-    void import("$lib/hotkeys.svelte").then(({ registerHotkey }) => {
+    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
       if (destroyed) return;
       const translationsHotkey = registerHotkey("T", (event) => {
         // IME: don't let a composition session's chord hijack the page.

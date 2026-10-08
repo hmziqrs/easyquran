@@ -1,4 +1,4 @@
-import type { OfflineStatus } from "$lib/offline/offline-store.svelte";
+import type { OfflineStatus } from "#lib/offline/offline-store.svelte.js";
 
 export interface OfflinePackStatusInput {
   readonly status: OfflineStatus;

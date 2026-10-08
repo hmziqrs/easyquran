@@ -1,5 +1,5 @@
-import type { VerseKey } from "$lib/data/quran";
-import { peekQuranData } from "$lib/data/quran-data-client";
+import { peekQuranData } from "#lib/data/quran-data-client.js";
+import type { VerseKey } from "#lib/data/quran.js";
 
 import type { LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";

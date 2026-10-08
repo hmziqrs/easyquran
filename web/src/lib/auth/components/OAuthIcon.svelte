@@ -1,6 +1,6 @@
 <script lang="ts">
   import { siDiscord, siGithub, siGoogle, type SimpleIcon } from "simple-icons";
-  import type { OAuthProvider } from "$lib/auth/oauth-flow.svelte";
+  import type { OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
 
   type Props = {
     provider: OAuthProvider;

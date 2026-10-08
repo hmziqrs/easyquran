@@ -1,5 +1,5 @@
-import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
-import type { QuranCoordinateRow } from "$lib/quran/sql";
+import type { CanonicalQuranCoordinates } from "#lib/data/quran-types.js";
+import type { QuranCoordinateRow } from "#lib/quran/sql.js";
 
 export function isCanonicalAyahCoordinate(
   globalIndex: number,

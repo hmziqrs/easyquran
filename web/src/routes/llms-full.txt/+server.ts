@@ -1,7 +1,7 @@
 export const prerender = true;
 
-import { MARKETING_PAGES } from "$lib/config/site-structure";
-import { htmlToMarkdown } from "$lib/seo/render";
+import { MARKETING_PAGES } from "#lib/config/site-structure.js";
+import { htmlToMarkdown } from "#lib/seo/render.js";
 
 import type { RequestHandler } from "./$types";
 

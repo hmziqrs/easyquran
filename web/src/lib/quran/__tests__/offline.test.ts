@@ -10,15 +10,15 @@ const { startMock, onStatusMock, onProgressMock, disposeMock, loadQuranDataMock 
   }),
 );
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$lib/config/site", () => ({
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("#lib/config/site.js", () => ({
   QURAN: {
     apiBase: "https://api.test/quran",
     artifactBase: "/_quran",
     scripts: [{ id: "uthmani", sizeBytes: 1, downloadUrl: "/_quran/uthmani.sqlite" }],
   },
 }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: {
     start: startMock,
     onStatus: onStatusMock,
@@ -26,7 +26,7 @@ vi.mock("$lib/quran/worker-client", () => ({
     dispose: disposeMock,
   },
 }));
-vi.mock("$lib/data/quran-data-client", () => ({ loadQuranData: loadQuranDataMock }));
+vi.mock("#lib/data/quran-data-client.js", () => ({ loadQuranData: loadQuranDataMock }));
 
 const COORDS = Object.freeze({ rowCount: 6236, surahs: [1], pages: [1], juzs: [1] });
 
@@ -50,8 +50,8 @@ describe("bootOfflineEngine", () => {
 
   it("starts from baked manifest and catalogue without metadata requests", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const { bootOfflineEngine } = await import("$lib/quran/offline");
-    const { quran } = await import("$lib/stores/quran.svelte");
+    const { bootOfflineEngine } = await import("#lib/quran/offline.js");
+    const { quran } = await import("#lib/stores/quran.svelte.js");
 
     bootOfflineEngine();
     await flush();
@@ -75,7 +75,7 @@ describe("bootOfflineEngine", () => {
     const detachProgress = vi.fn();
     onStatusMock.mockReturnValue(detachStatus);
     onProgressMock.mockReturnValue(detachProgress);
-    const { bootOfflineEngine } = await import("$lib/quran/offline");
+    const { bootOfflineEngine } = await import("#lib/quran/offline.js");
 
     const teardown = bootOfflineEngine();
     teardown();

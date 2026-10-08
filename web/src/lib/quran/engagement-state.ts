@@ -1,5 +1,7 @@
-import { browser } from "$app/environment";
-import { isArabicSourceId, type QuranReaderSource } from "$lib/data/quran-types";
+import { browser } from "$app/env";
+
+import { isArabicSourceId, type QuranReaderSource } from "#lib/data/quran-types.js";
+import { asNumberRecord } from "#lib/storage/decoders.js";
 import {
   asNumber,
   asObject,
@@ -10,8 +12,7 @@ import {
   removeRaw,
   writeJSON,
   writeRaw,
-} from "$lib/storage";
-import { asNumberRecord } from "$lib/storage/decoders";
+} from "#lib/storage/index.js";
 
 const KEY = "eq:engagement";
 const SESSION_KEY = "eq:reader-session-views";

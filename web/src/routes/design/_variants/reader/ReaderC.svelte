@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { toArabicDigits, surahMeta } from "$lib/data/quran";
-  import type { Surah } from "$lib/data/quran";
+  import { toArabicDigits, surahMeta } from "#lib/data/quran.js";
+  import type { Surah } from "#lib/data/quran.js";
   import { displayVerses } from "../verses";
-  import { headerText } from "$lib/quran/view/presentation";
+  import { headerText } from "#lib/quran/view/presentation.js";
 
   let { surah }: { surah: Surah } = $props();
 

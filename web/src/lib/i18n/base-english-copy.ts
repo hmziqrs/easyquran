@@ -1,4 +1,4 @@
-import { MARKETING_PAGES, type MarketingPageId } from "$lib/config/site-structure";
+import { MARKETING_PAGES, type MarketingPageId } from "#lib/config/site-structure.js";
 
 export type BaseEnglishPageId = MarketingPageId;
 

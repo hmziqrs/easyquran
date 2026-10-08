@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { SITE } from "$lib/config/site";
-  import { externalLinkAttrs } from "$lib/utils";
-  import type { OwnerPublic } from "$lib/types/owner";
+  import { SITE } from "#lib/config/site.js";
+  import { externalLinkAttrs } from "#lib/utils.js";
+  import type { OwnerPublic } from "#lib/types/owner.js";
   import type {
     FooterLink,
     FooterResolvedCopy,
     MarketingFooterLinks,
-  } from "$lib/i18n/marketing-copy";
-  import { publicHref } from "$lib/i18n/public-href";
+  } from "#lib/i18n/marketing-copy.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
 
   /**
    * Board band 8: surface ground, hairline rule, a 380px brand column plus three

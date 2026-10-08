@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { offline } from "$lib/offline/offline-store.svelte";
-  import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
-  import { cn, formatBytes } from "$lib/utils";
+  import { offline } from "#lib/offline/offline-store.svelte.js";
+  import type { OfflinePackCopy } from "#lib/components/status/offline-pack-copy.js";
+  import { cn, formatBytes } from "#lib/utils.js";
 
   const pill = "rounded-pill border px-3 py-1.5 text-caption transition-colors duration-150";
 

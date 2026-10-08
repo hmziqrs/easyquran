@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Bismillah from "$lib/components/brand/Bismillah.svelte";
-  import { Icon, type IconName } from "$lib/components/icon";
-  import { toArabicDigits } from "$lib/data/quran";
+  import Bismillah from "#lib/components/brand/Bismillah.svelte";
+  import { Icon, type IconName } from "#lib/components/icon/index.js";
+  import { toArabicDigits } from "#lib/data/quran.js";
   import type { StackId } from "./axes";
   import type { Tweaks } from "./tweaks";
   import type { MixTranslation } from "./types";

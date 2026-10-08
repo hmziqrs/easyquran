@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Seo, Icon } from "$lib/components";
-  import { juzPathFor, resumeCtxFor, rubPathFor } from "$lib/data/quran";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { readerCanonicalEntryPath } from "$lib/i18n/seo";
-  import { publicHref } from "$lib/i18n/public-href";
+  import { Seo, Icon } from "#lib/components/index.js";
+  import { juzPathFor, resumeCtxFor, rubPathFor } from "#lib/data/quran.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { readerCanonicalEntryPath } from "#lib/i18n/seo.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
   import ReaderShell from "../_reader/ReaderShell.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
+  import { reader } from "#lib/stores/reader.svelte.js";
   import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
   let { data } = $props();
 

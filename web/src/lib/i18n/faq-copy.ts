@@ -19,8 +19,8 @@ import {
   faq_seo_title,
   faq_translations_answer,
   faq_translations_question,
-} from "$lib/i18n/m/faq";
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/faq.js";
+import type { MarketingLocale, MarketingSeoCopy } from "#lib/i18n/marketing-copy.js";
 
 export interface FaqEntry {
   /** Stable across locales: DOM keys and structured-data order must not depend on translation. */

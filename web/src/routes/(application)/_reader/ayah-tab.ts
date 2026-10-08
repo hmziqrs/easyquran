@@ -1,5 +1,5 @@
-import type { QuranData } from "$lib/data/quran-data";
-import type { CatalogEntry } from "$lib/data/quran-types";
+import type { QuranData } from "#lib/data/quran-data.js";
+import type { CatalogEntry } from "#lib/data/quran-types.js";
 
 /**
  * Which surah the sidebar Ayah tab shows — from ANY reader route (D7): the

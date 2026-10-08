@@ -1,6 +1,7 @@
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { surahLocalRedirectTarget } from "$lib/server/reader-route";
 import { describe, expect, it } from "vite-plus/test";
+
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { surahLocalRedirectTarget } from "#lib/server/reader-route.js";
 
 /**
  * Exhaustive over the baked surah-local page map: every removed /page/N shape

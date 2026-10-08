@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/offline/messages", () => ({
+vi.mock("#lib/offline/messages.js", () => ({
   purgeUserCaches: vi.fn().mockResolvedValue(undefined),
 }));
 
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
-import { installPurgeHook, makePurgeHook } from "$lib/auth/purge-hook";
-import { purgeUserCaches } from "$lib/offline/messages";
-import { reader } from "$lib/stores/reader.svelte";
+import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import { installPurgeHook, makePurgeHook } from "#lib/auth/purge-hook.js";
+import { purgeUserCaches } from "#lib/offline/messages.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 function fakeState() {
   return { setOnAuthTransition: vi.fn() };

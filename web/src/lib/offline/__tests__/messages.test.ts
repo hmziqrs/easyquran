@@ -1,3 +1,5 @@
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
 import {
   STORAGE_STATS,
   STORAGE_STATS_ACK,
@@ -5,8 +7,7 @@ import {
   VERSION_RESULT,
   requestStorageStats,
   requestWorkerVersion,
-} from "$lib/offline/messages";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/offline/messages.js";
 
 interface FakePort {
   // eslint-disable-next-line anti-slop/no-unknown-parameters -- FakePort mirrors the MessagePort surface the SUT exercises; postMessage payloads are the same untyped SW acks requestStorageStats validates, heterogeneous by design

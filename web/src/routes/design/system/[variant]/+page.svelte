@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
   import SystemReader from "../../_variants/system/SystemReader.svelte";
   import { systemById } from "../../_variants/system/systems";
 

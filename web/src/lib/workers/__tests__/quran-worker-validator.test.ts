@@ -1,7 +1,8 @@
-import { QuranSourceId } from "$lib/data/quran-types";
-import type { QuranCoordinateRow } from "$lib/quran/sql";
-import { QURAN_ROW_COUNT } from "$lib/workers/opfs-cache";
 import { describe, expect, it, vi } from "vite-plus/test";
+
+import { QuranSourceId } from "#lib/data/quran-types.js";
+import type { QuranCoordinateRow } from "#lib/quran/sql.js";
+import { QURAN_ROW_COUNT } from "#lib/workers/opfs-cache.js";
 
 // quran.worker.ts statically imports resolveSourceProfile, so the mock must be
 // in place before the worker module first loads. Default to the real resolver;
@@ -9,8 +10,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 // SAFETY: the override starts unset; null is a valid member of the union
 // ({ canonicalRowCount: number } | null) and each test assigns the object shape before reading .value.
 const profileOverride = vi.hoisted(() => ({ value: null as { canonicalRowCount: number } | null }));
-vi.mock("$lib/quran/view/source-profiles", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("$lib/quran/view/source-profiles")>();
+vi.mock("#lib/quran/view/source-profiles.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#lib/quran/view/source-profiles.js")>();
   return {
     ...actual,
     resolveSourceProfile: (id: QuranSourceId) =>
@@ -19,7 +20,7 @@ vi.mock("$lib/quran/view/source-profiles", async (importOriginal) => {
 });
 
 async function realValidator() {
-  const mod = await import("$lib/workers/quran.worker");
+  const mod = await import("#lib/workers/quran.worker.js");
   return mod.assertStagedQuranContent;
 }
 

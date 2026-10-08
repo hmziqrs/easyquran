@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { layerTotal, layoutUsageSegments, type StorageLayer } from "$lib/stores/storage-report.svelte";
-  import { formatBytes } from "$lib/utils";
+  import { layerTotal, layoutUsageSegments, type StorageLayer } from "#lib/stores/storage-report.svelte.js";
+  import { formatBytes } from "#lib/utils.js";
 
   const TRACK_UNITS = 400;
   const TRACK_HEIGHT = 14;

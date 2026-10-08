@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
-import type { QuranSourceId } from "$lib/data/quran-types";
+import { browser } from "$app/env";
+
+import type { ArabicFontId, TranslationFamily } from "#lib/config/reader-fonts.js";
+import type { QuranSourceId } from "#lib/data/quran-types.js";
 import {
   asObject,
   asString,
@@ -8,7 +9,7 @@ import {
   onStorageKey,
   readJSON,
   writeJSON,
-} from "$lib/storage";
+} from "#lib/storage/index.js";
 
 import {
   ARABIC_FONT_MAX,

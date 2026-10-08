@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Tweaks } from "$lib/components/tweaks";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { DEFAULT_UI_LOCALE, isUiLocale } from "$lib/i18n/locales";
+  import { Tweaks } from "#lib/components/tweaks/index.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { DEFAULT_UI_LOCALE, isUiLocale } from "#lib/i18n/locales.js";
   import { VARIANTS, type VariantKind } from "./_variants/registry";
-  import { cn } from "$lib/utils";
+  import { cn } from "#lib/utils.js";
 
   let { children } = $props();
 
@@ -22,7 +22,7 @@
   const tabOff = "border-transparent text-fg-3 hover:text-fg";
 
   const loadTweaksCopy = async () => {
-    const { getReaderSettingsCopy } = await import("$lib/i18n/reader-settings-copy");
+    const { getReaderSettingsCopy } = await import("#lib/i18n/reader-settings-copy.js");
     const locale = getLocale();
     return getReaderSettingsCopy(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
   };

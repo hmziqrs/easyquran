@@ -1,14 +1,14 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Eyebrow, Icon, Seo } from "$lib/components";
+  import { Band, Eyebrow, Icon, Seo } from "#lib/components/index.js";
   import {
     Accordion,
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-  } from "$lib/components/ui/accordion";
-  import { resolveFaqCopy } from "$lib/i18n/faq-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
+  } from "#lib/components/ui/accordion/index.js";
+  import { resolveFaqCopy } from "#lib/i18n/faq-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
 
   let value = $state<string | undefined>(undefined);
 

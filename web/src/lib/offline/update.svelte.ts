@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
 import { updated } from "$app/state";
-import { registerServiceWorker } from "$lib/boot/service-worker";
+
+import { registerServiceWorker } from "#lib/boot/service-worker.js";
 import {
   PREPARE_RELOAD,
   PREPARE_RELOAD_EVENT,
@@ -9,8 +10,8 @@ import {
   SW_BROADCAST_CHANNEL,
   UPDATE_BROADCAST_CHANNEL,
   UPDATE_TAKEOVER,
-} from "$lib/offline/messages";
-import { readRaw, removeRaw, writeRaw } from "$lib/storage";
+} from "#lib/offline/messages.js";
+import { readRaw, removeRaw, writeRaw } from "#lib/storage/index.js";
 
 const RELOAD_GUARD = "easyquran.reload-guard";
 // Legacy paint key from the pre-rev3 design: nothing reads it anymore; boot

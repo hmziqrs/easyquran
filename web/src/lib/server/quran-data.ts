@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { createQuranData } from "$lib/data/quran-data";
-import type { CatalogEntry, SurahLink, SurahRenderMetadata } from "$lib/data/quran-types";
+import { createQuranData } from "#lib/data/quran-data.js";
+import type { CatalogEntry, SurahLink, SurahRenderMetadata } from "#lib/data/quran-types.js";
 
 const roots = [
   path.resolve(process.cwd(), "static/quran-meta"),

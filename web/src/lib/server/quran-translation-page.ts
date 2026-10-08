@@ -1,7 +1,8 @@
-import { env } from "$env/dynamic/private";
-import { QURAN } from "$lib/config/site";
-import { hizbOfPage, juzOfPage } from "$lib/data/mushaf-divisions";
-import { translationIdFromSegments } from "$lib/data/quran";
+import { INTERNAL_QURAN_API_BASE, INTERNAL_QURAN_API_TOKEN } from "$app/env/private";
+import { error } from "@sveltejs/kit";
+
+import { QURAN } from "#lib/config/site.js";
+import { hizbOfPage, juzOfPage } from "#lib/data/mushaf-divisions.js";
 import type {
   Ayah,
   CatalogEntry,
@@ -11,26 +12,26 @@ import type {
   SurahLocalPageData,
   SurahRouteData,
   SurahNormalization,
-} from "$lib/data/quran-types";
-import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
+} from "#lib/data/quran-types.js";
+import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
+import { translationIdFromSegments } from "#lib/data/quran.js";
+import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
 import {
   FetchHttpError,
   FetchTimeoutError,
   MalformedDataError,
   RANGE_CHUNK_TIMEOUT_MS,
-} from "$lib/quran/fetch";
-import { fetchRangeChunks, type RangeJsonFetcher } from "$lib/quran/range-fetch";
-import { decodeTranslationRangeText, type AyahCoordinateValidator } from "$lib/quran/wire";
-import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
-import { requireRangeEntry, surahRouteNav, toRangePageData } from "$lib/server/quran-page-shape";
-import { getCachedTranslationRange } from "$lib/server/translation-range-cache";
-import { error } from "@sveltejs/kit";
+} from "#lib/quran/fetch.js";
+import { fetchRangeChunks, type RangeJsonFetcher } from "#lib/quran/range-fetch.js";
+import { decodeTranslationRangeText, type AyahCoordinateValidator } from "#lib/quran/wire.js";
+import { QURAN_DATA, toSurahRenderMetadata } from "#lib/server/quran-data.js";
+import { requireRangeEntry, surahRouteNav, toRangePageData } from "#lib/server/quran-page-shape.js";
+import { getCachedTranslationRange } from "#lib/server/translation-range-cache.js";
 
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 function requireApiBase(): string {
-  const base = (env.INTERNAL_QURAN_API_BASE || QURAN.apiBase).replace(/\/+$/, "");
+  const base = (INTERNAL_QURAN_API_BASE || QURAN.apiBase).replace(/\/+$/, "");
   if (!base) {
     throw new Error(
       "[quran-translation] INTERNAL_QURAN_API_BASE or PUBLIC_QURAN_API_BASE not configured",
@@ -43,11 +44,11 @@ function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
   // Server-only shared secret proving this is trusted Docker-internal SSR to the
   // API's identity gate. Read from private runtime env; never logged, never
   // exposed in a public env var or response, sent only to INTERNAL_QURAN_API_BASE.
-  const internalToken = env.INTERNAL_QURAN_API_TOKEN;
+  const internalToken = INTERNAL_QURAN_API_TOKEN;
   // Only send the secret to the internal Docker base. When INTERNAL_QURAN_API_BASE
   // is unset, requireApiBase() falls back to the public CF-fronted base, which
   // must never receive the shared internal token.
-  const usingInternal = !!env.INTERNAL_QURAN_API_BASE;
+  const usingInternal = !!INTERNAL_QURAN_API_BASE;
   return async (url, init) => {
     const ctrl = new AbortController();
     const external = init?.signal;

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { SITE } from "$lib/config/site";
-  import { MARKETING_PAGES } from "$lib/config/site-structure";
+  import { SITE } from "#lib/config/site.js";
+  import { MARKETING_PAGES } from "#lib/config/site-structure.js";
   import {
     baseEnglishPageCopy,
     baseEnglishPageCopyForPath,
-  } from "$lib/i18n/base-english-copy";
+  } from "#lib/i18n/base-english-copy.js";
 
   type FaqItem = { q: string; a: string };
   type Crumb = { name: string; href: string };

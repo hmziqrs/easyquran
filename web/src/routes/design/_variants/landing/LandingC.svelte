@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Icon } from "$lib/components";
+  import { Button, Icon } from "#lib/components/index.js";
   import { HERO, VALUES, ROADMAP, FACTS, SECTIONS } from "../copy";
 
   let {

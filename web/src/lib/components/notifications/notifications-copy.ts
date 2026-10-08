@@ -1,4 +1,4 @@
-import type { PermissionState } from "$lib/firebase/messaging";
+import type { PermissionState } from "#lib/firebase/messaging.js";
 
 export interface NotificationsState {
   readonly configured: boolean;

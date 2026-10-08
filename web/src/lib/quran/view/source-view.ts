@@ -1,4 +1,4 @@
-import type { FirstAyahRow } from "$lib/quran/sql";
+import type { FirstAyahRow } from "#lib/quran/sql.js";
 
 import type { PrefixCut, SurahNormalization } from "../../data/quran-types.ts";
 import {

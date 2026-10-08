@@ -28,7 +28,7 @@ describe("HighlightedText renders translation previews", () => {
   it("GlobalSearchPalette imports it and gates it on the preview dir", () => {
     const palette = requireSource("GlobalSearchPalette.svelte");
     expect(palette).toMatch(
-      /import\s+HighlightedText\s+from\s+["']\$lib\/components\/text\/HighlightedText\.svelte["']/,
+      /import\s+HighlightedText\s+from\s+["']#lib\/components\/text\/HighlightedText\.svelte["']/,
     );
     expect(palette).toMatch(/\{#if entry\.preview\?\.dir\}[\s\S]*?<HighlightedText/);
     expect(palette).toMatch(/\{:else if entry\.preview\}[\s\S]*?<HighlightedArabic/);

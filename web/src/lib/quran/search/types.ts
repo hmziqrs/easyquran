@@ -1,4 +1,4 @@
-import type { Ayah } from "$lib/data/quran-types";
+import type { Ayah } from "#lib/data/quran-types.js";
 
 export interface SearchOpts {
   limit?: number;

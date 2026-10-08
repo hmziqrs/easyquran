@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({ browser: true, dev: false }));
+vi.mock("$app/env", () => ({ browser: true, dev: false }));
 
 const fontFake = vi.hoisted(() => {
   const state = {
@@ -23,7 +23,7 @@ const fontFake = vi.hoisted(() => {
   };
 });
 
-vi.mock("$lib/config/reader-fonts", () => ({ arabicFontDef: fontFake.arabicFontDef }));
+vi.mock("#lib/config/reader-fonts.js", () => ({ arabicFontDef: fontFake.arabicFontDef }));
 
 const constructed: FakeFontFace[] = [];
 const registered: FakeFontFace[] = [];
@@ -65,7 +65,7 @@ afterEach(() => {
 
 describe("loadArabicFont", () => {
   it("imports the file, constructs a woff2 FontFace, loads it, then registers it in document.fonts", async () => {
-    const { loadArabicFont } = await import("$lib/fonts/arabic-fonts");
+    const { loadArabicFont } = await import("#lib/fonts/arabic-fonts.js");
     await loadArabicFont("scheherazade-new");
     expect(fontFake.state.fileCalls).toBe(1);
     expect(constructed.length).toBe(1);
@@ -76,7 +76,7 @@ describe("loadArabicFont", () => {
   });
 
   it("dedupes concurrent and sequential calls to a single import + register", async () => {
-    const { loadArabicFont } = await import("$lib/fonts/arabic-fonts");
+    const { loadArabicFont } = await import("#lib/fonts/arabic-fonts.js");
     const concurrent = await Promise.all([
       loadArabicFont("scheherazade-new"),
       loadArabicFont("scheherazade-new"),
@@ -90,7 +90,7 @@ describe("loadArabicFont", () => {
 
   it("drops the cache entry when the load fails so the next call retries", async () => {
     fontFake.state.rejectFaceLoad = true;
-    const { loadArabicFont } = await import("$lib/fonts/arabic-fonts");
+    const { loadArabicFont } = await import("#lib/fonts/arabic-fonts.js");
     await loadArabicFont("scheherazade-new");
     expect(fontFake.state.fileCalls).toBe(1);
     expect(registered.length).toBe(0);
@@ -102,7 +102,7 @@ describe("loadArabicFont", () => {
   });
 
   it("resolves the default amiri id without constructing or registering a face", async () => {
-    const { loadArabicFont } = await import("$lib/fonts/arabic-fonts");
+    const { loadArabicFont } = await import("#lib/fonts/arabic-fonts.js");
     await loadArabicFont("amiri");
     expect(fontFake.state.fileCalls).toBe(0);
     expect(constructed.length).toBe(0);

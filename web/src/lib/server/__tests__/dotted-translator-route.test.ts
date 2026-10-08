@@ -1,4 +1,5 @@
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+import type { RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const cache = vi.hoisted(() => ({
@@ -6,9 +7,9 @@ const cache = vi.hoisted(() => ({
   set: vi.fn<(key: string, html: string) => Promise<void>>(),
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
 
-vi.mock("$lib/data/translations.json", async (importOriginal) => {
+vi.mock("#lib/data/translations.json", async (importOriginal) => {
   const original = await importOriginal<{ default: unknown[] }>();
   return {
     default: [
@@ -39,12 +40,12 @@ vi.mock("$lib/data/translations.json", async (importOriginal) => {
   };
 });
 
-vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
-  const original = await importOriginal<typeof import("$lib/server/quran-disk-cache")>();
+vi.mock("#lib/server/quran-disk-cache.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("#lib/server/quran-disk-cache.js")>();
   return { ...original, getCachedHtml: cache.get, setCachedHtml: cache.set };
 });
 
-import { parseReaderPath, parseReaderRoute } from "$lib/server/reader-route";
+import { parseReaderPath, parseReaderRoute } from "#lib/server/reader-route.js";
 
 import { reroute } from "../../../hooks";
 import { handle } from "../../../hooks.server";

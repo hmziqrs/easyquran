@@ -3,7 +3,7 @@
   import EyeIcon from "phosphor-svelte/lib/EyeIcon";
   import EyeSlashIcon from "phosphor-svelte/lib/EyeSlashIcon";
   import AuthField from "./AuthField.svelte";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
   const copy = getAuthCopy();
 

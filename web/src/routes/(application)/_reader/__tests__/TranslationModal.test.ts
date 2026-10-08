@@ -49,26 +49,26 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
-vi.mock("$lib/stores/reader.svelte", () => ({ reader: h.readerStub }));
-vi.mock("$lib/stores/reader-settings.svelte", () => ({
+vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.readerStub }));
+vi.mock("#lib/stores/reader-settings.svelte.js", () => ({
   readerSource: { sourceId: null, setSourceId: h.setSourceId },
 }));
-vi.mock("$lib/quran/engagement", () => ({
+vi.mock("#lib/quran/engagement.js", () => ({
   noteTranslationChosen: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("$lib/paraglide/runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("$lib/paraglide/runtime")>();
+vi.mock("#lib/paraglide/runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#lib/paraglide/runtime.js")>();
   // Mirrors the real deLocalizeUrl contract (string | URL in, URL out) — the
   // live-position helper passes window.location.href as a string.
   return { ...actual, deLocalizeUrl: (url: URL | string) => new URL(url) };
 });
-vi.mock("$lib/hotkeys.svelte", () => ({
+vi.mock("#lib/hotkeys.svelte.js", () => ({
   registerHotkey: () => ({ unregister: () => {} }),
 }));
-vi.mock("$lib/quran/catalogue", () => {
+vi.mock("#lib/quran/catalogue.js", () => {
   const byId = new Map(h.catalogue.map((t) => [t.id, t]));
   const translationSourceOf = (id: string): string => {
     if (id.startsWith("qul.")) return "qul";
@@ -106,7 +106,7 @@ vi.mock("$lib/quran/catalogue", () => {
   };
 });
 
-import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import TranslationButton from "../TranslationButton.svelte";
 import TranslationModal from "../TranslationModal.svelte";

@@ -1,4 +1,4 @@
-import type { TranslationDirection } from "$lib/data/quran-types";
+import type { TranslationDirection } from "#lib/data/quran-types.js";
 
 /** One stacked translation for the demo surah, read straight from its local sqlite. */
 export interface MixTranslation {

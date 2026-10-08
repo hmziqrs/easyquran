@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { Tweaks } from "$lib/components/tweaks";
-  import type { MarketingLocale } from "$lib/i18n/marketing-copy";
+  import { Tweaks } from "#lib/components/tweaks/index.js";
+  import type { MarketingLocale } from "#lib/i18n/marketing-copy.js";
 
   let { locale, triggerLabel }: { locale: MarketingLocale; triggerLabel: string } = $props();
 
   // Dynamic import on purpose: the appearance panel owns the largest block of chrome copy and
   // nothing renders it until the user opens the panel. See docs/quran-system.md (Part 2, Message chunking).
   const loadCopy = async () => {
-    const { resolveAppearanceCopy } = await import("$lib/i18n/appearance-copy");
+    const { resolveAppearanceCopy } = await import("#lib/i18n/appearance-copy.js");
     return resolveAppearanceCopy(locale);
   };
 </script>

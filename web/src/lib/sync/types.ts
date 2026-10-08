@@ -4,7 +4,7 @@
  * A "domain" (e.g. bookmarks) owns its wire transport and its local store; the
  * engine owns queueing, ordering, retry/backoff, and status. Connectivity is
  * intentionally NOT part of SyncStatus — consumers read the OnlineStore
- * ($lib/offline/online.svelte) separately.
+ * (#lib/offline/online.svelte.js) separately.
  */
 
 /** Identifier of a queued mutation (crypto.randomUUID() when available). */

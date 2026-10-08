@@ -1,15 +1,20 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
-import type { AuthClient, AuthRequestResult, UserProfile } from "$lib/auth/auth-client";
+import type { AuthClient, AuthRequestResult, UserProfile } from "#lib/auth/auth-client.js";
 import {
   createOAuthFlow,
   OAUTH_START_FAILED,
   type OAuthFlowStateLike,
   type OAuthProvider,
-} from "$lib/auth/oauth-flow.svelte";
-import { consumeReturnTarget, getReturnTarget } from "$lib/auth/return-target";
+} from "#lib/auth/oauth-flow.svelte.js";
+import { consumeReturnTarget, getReturnTarget } from "#lib/auth/return-target.js";
 
 const PROFILE: UserProfile = {
   id: 9,

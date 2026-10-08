@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { onMount } from "svelte";
-  import { Container } from "$lib/components";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { installPurgeHook } from "$lib/auth/purge-hook";
-  import { protectedRouteRedirect } from "$lib/auth/route-guard";
+  import { Container } from "#lib/components/index.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { installPurgeHook } from "#lib/auth/purge-hook.js";
+  import { protectedRouteRedirect } from "#lib/auth/route-guard.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
 
   let { children } = $props();
   let ready = $state(false);
@@ -16,7 +16,7 @@
     await authState.probe();
     const target = protectedRouteRedirect(authState.status);
     if (target) {
-      await goto(resolve(target), { replaceState: true });
+      await goto(publicHref(target), { replace: true });
       return;
     }
     ready = true;

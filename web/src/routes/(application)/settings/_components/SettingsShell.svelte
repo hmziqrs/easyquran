@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { cn } from "$lib/utils";
-  import { Icon, type IconName } from "$lib/components/icon";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  import { cn } from "#lib/utils.js";
+  import { Icon, type IconName } from "#lib/components/icon/index.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
   let {
     copy,

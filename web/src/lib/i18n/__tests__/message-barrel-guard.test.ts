@@ -8,14 +8,14 @@ const SELF = fileURLToPath(import.meta.url);
 const SRC = resolve(dirname(SELF), "../../..");
 const GENERATED_BARRELS = join(SRC, "lib/i18n/m");
 
-// `$lib/paraglide/messages.js` re-exports every message. A barrel imported from more than one route
+// `#lib/paraglide/messages.js` re-exports every message. A barrel imported from more than one route
 // is a tree-shaking pinch point: the bundler hoists the union of all app-wide-used messages into one
 // shared chunk that every page downloads (paraglide-js#668). Only the generated per-namespace
 // barrels may reach into the compiled message modules; everything else imports a namespace.
 const FORBIDDEN = [
-  '$lib/paraglide/messages.js"',
-  '$lib/paraglide/messages"',
-  "$lib/paraglide/messages/_index",
+  '#lib/paraglide/messages.js"',
+  '#lib/paraglide/messages"',
+  "#lib/paraglide/messages/_index.js",
 ];
 
 function walk(dir: string, found: string[] = []): string[] {
@@ -47,14 +47,14 @@ describe("message barrel boundaries", () => {
 
     expect(
       offenders.map((file) => relative(SRC, file)),
-      "import a namespace from $lib/i18n/m/* instead — see docs/quran-system.md (Part 2, Message chunking)",
+      "import a namespace from #lib/i18n/m/* instead — see docs/quran-system.md (Part 2, Message chunking)",
     ).toEqual([]);
   });
 
   it("reaches compiled message modules only from generated namespace barrels", () => {
     const offenders = files.filter((file) => {
       if (file.startsWith(GENERATED_BARRELS)) return false;
-      return readFileSync(file, "utf8").includes("$lib/paraglide/messages/");
+      return readFileSync(file, "utf8").includes("#lib/paraglide/messages/");
     });
 
     expect(offenders.map((file) => relative(SRC, file))).toEqual([]);
@@ -64,7 +64,7 @@ describe("message barrel boundaries", () => {
     for (const file of readdirSync(GENERATED_BARRELS)) {
       const source = readFileSync(join(GENERATED_BARRELS, file), "utf8");
       expect(source, `${file} must stay generated`).toContain("AUTO-GENERATED");
-      expect(source).toMatch(/^export \{ \w+ \} from "\$lib\/paraglide\/messages\/\w+\.js";$/m);
+      expect(source).toMatch(/^export \{ \w+ \} from "#lib\/paraglide\/messages\/\w+\.js";$/m);
     }
   });
 });

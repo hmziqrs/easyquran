@@ -1,4 +1,4 @@
-import { createAccountClient, type AccountClient } from "$lib/auth/account-client";
+import { createAccountClient, type AccountClient } from "#lib/auth/account-client.js";
 import {
   authClient,
   decodeUserProfile,
@@ -7,7 +7,7 @@ import {
   type SessionProbeResult,
   type UnsafeRequestInit,
   type UserProfile,
-} from "$lib/auth/auth-client";
+} from "#lib/auth/auth-client.js";
 import {
   ACCOUNT_EXISTS_RESEND,
   ALREADY_SIGNED_IN_RESET,
@@ -21,20 +21,20 @@ import {
   RESET_SUCCESS,
   TWO_FA_NEXT,
   VERIFY_EMAIL_NEXT,
-} from "$lib/auth/auth-copy";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
+} from "#lib/auth/auth-copy.js";
+import { authState } from "#lib/auth/auth-state.svelte.js";
+import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import {
   createOAuthFlow,
   type OAuthFlow,
   type OAuthFlowDeps,
   type OAuthProvider,
-} from "$lib/auth/oauth-flow.svelte";
+} from "#lib/auth/oauth-flow.svelte.js";
 import {
   createPasskeyFlow,
   type PasskeyFlow,
   type PasskeyFlowDeps,
-} from "$lib/auth/passkey-flow.svelte";
+} from "#lib/auth/passkey-flow.svelte.js";
 
 export interface FlowStateLike {
   transition(ctx: AuthTransitionContext): Promise<void>;

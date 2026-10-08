@@ -2,8 +2,8 @@
   import { tick } from "svelte";
   import { page } from "$app/state";
   import { replaceState } from "$app/navigation";
-  import { getSettingsCopy } from "$lib/i18n/settings-copy";
-  import type { IconName } from "$lib/components/icon";
+  import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
+  import type { IconName } from "#lib/components/icon/index.js";
   import AppearanceSection from "./_components/AppearanceSection.svelte";
   import StorageSection from "./_components/StorageSection.svelte";
   import ReadingSection from "./_components/ReadingSection.svelte";

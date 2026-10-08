@@ -1,11 +1,12 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+
 import {
   authClient,
   type AuthClient,
   type SessionProbeResult,
   type UserProfile,
-} from "$lib/auth/auth-client";
-import { readRaw, removeRaw, writeRaw } from "$lib/storage/safe-storage";
+} from "#lib/auth/auth-client.js";
+import { readRaw, removeRaw, writeRaw } from "#lib/storage/safe-storage.js";
 
 /**
  * Client-side "this browser has signed in before" marker. Public reader pages

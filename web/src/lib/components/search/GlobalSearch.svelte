@@ -2,16 +2,16 @@
   /**
    * Always-mounted, deliberately tiny: it owns only the global shortcuts and
    * fetches the real palette on first use. Keep this file free of imports from
-   * `$lib/search/palette`, `bits-ui`, the Quran stores, AND `@tanstack/hotkeys`
+   * `#lib/search/palette/index.js`, `bits-ui`, the Quran stores, AND `@tanstack/hotkeys`
    * — anything static here lands in the initial bundle on every page. The
    * hotkeys dependency is dynamically imported below so it lives in its own
    * chunk instead of weighing down first paint.
    */
   import type { Component } from "svelte";
   import { page } from "$app/state";
-  import { commandPalette } from "$lib/stores/command-palette.svelte";
+  import { commandPalette } from "#lib/stores/command-palette.svelte.js";
   import { loadPalette } from "./palette-loader";
-  import type { HotkeyHandle } from "$lib/hotkeys.svelte";
+  import type { HotkeyHandle } from "#lib/hotkeys.svelte.js";
 
   let Palette = $state<Component | null>(null);
   let slashHandle: HotkeyHandle | undefined;
@@ -38,7 +38,7 @@
     let destroyed = false;
     let cleanup: (() => void) | undefined;
 
-    void import("$lib/hotkeys.svelte").then(({ registerHotkey }) => {
+    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
       if (destroyed) return;
       const modK = registerHotkey("Mod+K", () => {
         if (commandPalette.open) commandPalette.hide();
@@ -54,7 +54,7 @@
 
       const resume = registerHotkey("`", (event) => {
         if (event.isComposing) return;
-        void Promise.all([import("$lib/reader/resume"), import("$lib/data/quran")]).then(
+        void Promise.all([import("#lib/reader/resume.js"), import("#lib/data/quran.js")]).then(
           ([{ resumeToLastRead }, { routeContextFromParams }]) => {
             void resumeToLastRead(routeContextFromParams(page.params));
           },

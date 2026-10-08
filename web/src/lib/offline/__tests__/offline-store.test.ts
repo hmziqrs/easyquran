@@ -1,5 +1,6 @@
-import type { ActivePack } from "$lib/offline/meta";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { ActivePack } from "#lib/offline/meta.js";
 
 const { metaMock } = vi.hoisted(() => ({
   metaMock: {
@@ -9,10 +10,10 @@ const { metaMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$lib/offline/meta", () => metaMock);
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("#lib/offline/meta.js", () => metaMock);
 
-import { createOfflineStore } from "$lib/offline/offline-store.svelte";
+import { createOfflineStore } from "#lib/offline/offline-store.svelte.js";
 
 const MIRROR_KEY = "easyquran.offline.pack";
 

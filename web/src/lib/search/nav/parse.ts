@@ -1,4 +1,4 @@
-import { normalizeArabic } from "$lib/quran/search/normalize";
+import { normalizeArabic } from "#lib/quran/search/normalize.js";
 
 export interface ParsedQuery {
   /** Trimmed, whitespace-collapsed. */
@@ -10,7 +10,7 @@ export interface ParsedQuery {
   afterKeyword: string;
   /** Numbers from a trailing `2:255` / `2 255` / `255` reference, in order. */
   numbers: readonly number[];
-  /** `text` normalized for Arabic matching (see `$lib/quran/search/normalize`). */
+  /** `text` normalized for Arabic matching (see `#lib/quran/search/normalize.js`). */
   arabic: string;
   isEmpty: boolean;
 }

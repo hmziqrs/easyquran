@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$env/dynamic/public", () => ({
-  env: { PUBLIC_API_BASE_URL: "https://eq.test/api" },
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
 }));
 
 import {
@@ -9,7 +12,7 @@ import {
   createAuthClient,
   decodeErrorEnvelope,
   decodeUserProfile,
-} from "$lib/auth/auth-client";
+} from "#lib/auth/auth-client.js";
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- body is an arbitrary mocked JSON payload; jsonRes only serializes it via JSON.stringify, so there is no boundary contract to parse here.
 function jsonRes(body: unknown, init: ResponseInit = {}): Response {

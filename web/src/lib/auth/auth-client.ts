@@ -1,7 +1,7 @@
-import { env } from "$env/dynamic/public";
+import { PUBLIC_API_BASE_URL } from "$app/env/public";
 
 const DEFAULT_BASE = "/api";
-const AUTH_API_BASE = (env.PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "") || DEFAULT_BASE;
+const AUTH_API_BASE = (PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "") || DEFAULT_BASE;
 const CSRF_HEADER = "csrf-token";
 const ROTATED_HEADER = "x-eq-session-rotated";
 const DEFAULT_TIMEOUT_MS = 12_000;

@@ -1,15 +1,16 @@
 import { readFileSync } from "node:fs";
 
-import { resolveAppearanceCopy } from "$lib/i18n/appearance-copy";
-import { marketingFooterLinks, resolveChromeCopy } from "$lib/i18n/chrome-copy";
-import { resolveLandingCopy, resolveLandingSeoCopy } from "$lib/i18n/landing-copy";
+import { describe, expect, it } from "vite-plus/test";
+
+import { resolveAppearanceCopy } from "#lib/i18n/appearance-copy.js";
+import { marketingFooterLinks, resolveChromeCopy } from "#lib/i18n/chrome-copy.js";
+import { resolveLandingCopy, resolveLandingSeoCopy } from "#lib/i18n/landing-copy.js";
 import {
   marketingHomeHref,
   marketingLocaleFromPath,
   marketingLocaleLinks,
   marketingReaderHomeHref,
-} from "$lib/i18n/marketing-copy";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/i18n/marketing-copy.js";
 
 type Variant = {
   readonly declarations?: readonly string[];

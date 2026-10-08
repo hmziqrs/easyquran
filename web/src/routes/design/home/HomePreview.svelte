@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import Brand from "$lib/components/brand/Brand.svelte";
-  import Icon from "$lib/components/icon/Icon.svelte";
-  import { routeContextFromParams, surahPathFor } from "$lib/data/quran";
-  import { resolveLandingCopy } from "$lib/i18n/landing-copy";
-  import { publicHref } from "$lib/i18n/public-href";
+  import Brand from "#lib/components/brand/Brand.svelte";
+  import Icon from "#lib/components/icon/Icon.svelte";
+  import { routeContextFromParams, surahPathFor } from "#lib/data/quran.js";
+  import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
   import type { SurahCard } from "../../(marketing)/+page.server";
   import type { HomeAccent, HomeFont, HomeSurface, HomeVariant } from "./variants";
 

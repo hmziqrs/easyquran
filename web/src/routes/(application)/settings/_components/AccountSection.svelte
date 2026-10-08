@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { publicHref } from "$lib/i18n/public-href";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
   let {
     id,

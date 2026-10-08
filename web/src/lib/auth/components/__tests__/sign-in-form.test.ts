@@ -1,10 +1,15 @@
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
-import type { AuthClient } from "$lib/auth/auth-client";
-import { createLoginFlow } from "$lib/auth/flows.svelte";
-import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
+import type { AuthClient } from "#lib/auth/auth-client.js";
+import { createLoginFlow } from "#lib/auth/flows.svelte.js";
+import { getAuthValidationCopy } from "#lib/i18n/auth-validation-copy.js";
 
 import SignInForm from "../SignInForm.svelte";
 

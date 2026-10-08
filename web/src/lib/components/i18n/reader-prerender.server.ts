@@ -1,15 +1,15 @@
-import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
-import type { SurahRouteContext } from "$lib/data/quran";
+import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+import type { SurahRouteContext } from "#lib/data/quran.js";
 import {
   globalPagePathFor,
   hizbPathFor,
   juzPathFor,
   rubPathFor,
   surahPathFor,
-} from "$lib/data/quran";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import type { PublicHref } from "$lib/i18n/public-href";
-import type { QuranReaderHref } from "$lib/i18n/reader";
+} from "#lib/data/quran.js";
+import type { PublicHref } from "#lib/i18n/public-href.js";
+import type { QuranReaderHref } from "#lib/i18n/reader.js";
 
 const ARABIC: SurahRouteContext = { kind: "arabic" };
 

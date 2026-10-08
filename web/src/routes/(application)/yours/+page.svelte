@@ -1,24 +1,24 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
-  import type { QuranData } from "$lib/data/quran-data";
+  import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
+  import type { QuranData } from "#lib/data/quran-data.js";
   import {
     parseKey,
     surahAyahPathFor,
     surahRouteContext,
     surahPathFor,
     type SurahRouteContext,
-  } from "$lib/data/quran";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { bookmarksPageHref, readerHrefFor, yoursPageHref } from "$lib/i18n/reader";
-  import { appLocale } from "$lib/i18n/app-locale";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { Seo, Icon } from "$lib/components";
-  import { Button } from "$lib/components/ui/button";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { bookmarks } from "$lib/bookmarks/store.svelte";
-  import { parseVerseKey } from "$lib/bookmarks/schema";
-  import { resumeToLastRead, resumeToVerse } from "$lib/reader/resume";
+  } from "#lib/data/quran.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { bookmarksPageHref, readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
+  import { appLocale } from "#lib/i18n/app-locale.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { Seo, Icon } from "#lib/components/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { parseVerseKey } from "#lib/bookmarks/schema.js";
+  import { resumeToLastRead, resumeToVerse } from "#lib/reader/resume.js";
 
   // Reader nav context for opening saved places: like /app/bookmarks, a personal
   // app route has no translation segments, so it always resolves the Arabic reader.

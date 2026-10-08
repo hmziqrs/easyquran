@@ -1,10 +1,11 @@
-import type { SurahLocalPageData } from "$lib/data/quran";
-import type { QuranReaderSource } from "$lib/data/quran-types";
-import type { ReadTierStatus } from "$lib/quran/fetch";
-import type { AyahCoordinateValidator } from "$lib/quran/wire";
 import { mount, unmount } from "svelte";
 import type { ComponentProps } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { QuranReaderSource } from "#lib/data/quran-types.js";
+import type { SurahLocalPageData } from "#lib/data/quran.js";
+import type { ReadTierStatus } from "#lib/quran/fetch.js";
+import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
 
 // Minimal surface of the ReaderHeader props the tests drive.
 interface HeaderStubProps {
@@ -22,7 +23,7 @@ const {
   workerStub,
   loadQuranDataStub,
   quranStore,
-  invalidateAllSpy,
+  refreshAllSpy,
   gotoSpy,
   replaceStateSpy,
   readerStub,
@@ -41,7 +42,7 @@ const {
   loadQuranDataStub: vi.fn(),
   // SAFETY: the double mirrors the real store contract; beforeEach reassigns status to arbitrary status strings and error to string | null, and both seed values are members of those unions.
   quranStore: { status: "idle" as string, error: null as string | null },
-  invalidateAllSpy: vi.fn().mockResolvedValue(undefined),
+  refreshAllSpy: vi.fn().mockResolvedValue(undefined),
   gotoSpy: vi.fn().mockResolvedValue(undefined),
   replaceStateSpy: vi.fn(),
   readerStub: {
@@ -79,22 +80,23 @@ const {
   setSourceIdSpy: vi.fn(),
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/navigation", () => ({
   beforeNavigate: () => {},
   goto: gotoSpy,
-  invalidateAll: invalidateAllSpy,
+  refreshAll: refreshAllSpy,
   replaceState: replaceStateSpy,
 }));
-vi.mock("$app/paths", () => ({ resolve: (p: string) => p, base: "" }));
+// kit 3: base is gone; resolve() prefixes the (always-empty) base with a slash.
+vi.mock("$app/paths", () => ({ resolve: (p: string) => `/${p}` }));
 vi.mock("$app/state", () => ({ page: nav }));
 
-vi.mock("$lib/data/quran-data-client", () => ({
+vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: loadQuranDataStub,
   peekQuranData: () => undefined,
 }));
-vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
-vi.mock("$lib/quran/catalogue", () => {
+vi.mock("#lib/quran/worker-client.js", () => ({ quranWorker: workerStub }));
+vi.mock("#lib/quran/catalogue.js", () => {
   const entry = (id: string) => ({
     id,
     language: id.startsWith("ur.") ? "Urdu" : "English",
@@ -114,14 +116,14 @@ vi.mock("$lib/quran/catalogue", () => {
     translationSourceOf: () => "tanzil",
   };
 });
-vi.mock("$lib/stores/reader-settings.svelte", () => ({
+vi.mock("#lib/stores/reader-settings.svelte.js", () => ({
   readerSource: { sourceId: null, setSourceId: setSourceIdSpy },
 }));
-vi.mock("$lib/quran/engagement", () => ({
+vi.mock("#lib/quran/engagement.js", () => ({
   noteTranslationChosen: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("$lib/stores/quran.svelte", () => ({ quran: quranStore }));
-vi.mock("$lib/stores/reader.svelte", () => ({
+vi.mock("#lib/stores/quran.svelte.js", () => ({ quran: quranStore }));
+vi.mock("#lib/stores/reader.svelte.js", () => ({
   reader: readerStub,
   ReaderMode: { Reading: "reading", Verse: "verse" },
 }));
@@ -234,7 +236,7 @@ beforeEach(() => {
     surahByNum: () => SURAH,
     surahLocalPageForAyah: () => ({ localPage: 1 }),
   });
-  invalidateAllSpy.mockReset().mockResolvedValue(undefined);
+  refreshAllSpy.mockReset().mockResolvedValue(undefined);
   gotoSpy.mockReset().mockResolvedValue(undefined);
   replaceStateSpy.mockClear();
   quranStore.status = "idle";
@@ -316,7 +318,7 @@ describe("SurahReader anchor history", () => {
 });
 
 describe("SurahReader W7 single-page empty recovery", () => {
-  it("calls invalidateAll exactly once then falls back to W5 readRange (no goto)", async () => {
+  it("calls refreshAll exactly once then falls back to W5 readRange (no goto)", async () => {
     const empty = pageData({ ayahs: 0, pageCount: 1 });
     // readRange resolves with content so the W5 fallback is observable.
     workerStub.readRange.mockResolvedValue({
@@ -327,7 +329,7 @@ describe("SurahReader W7 single-page empty recovery", () => {
     mount(SurahReader, { target, props: propsFor(empty) });
     await flushMicrotasks(20);
 
-    expect(invalidateAllSpy).toHaveBeenCalledTimes(1);
+    expect(refreshAllSpy).toHaveBeenCalledTimes(1);
     expect(workerStub.readRange).toHaveBeenCalled();
     // Recovery never performs document navigation.
     expect(gotoSpy).not.toHaveBeenCalled();
@@ -335,16 +337,16 @@ describe("SurahReader W7 single-page empty recovery", () => {
 
   it("does not re-enter retryInitialPage while one is already in flight", async () => {
     const empty = pageData({ ayahs: 0, pageCount: 1 });
-    // Block invalidateAll so initialRetryInFlight stays true across triggers.
+    // Block refreshAll so initialRetryInFlight stays true across triggers.
     let resolveInvalidate!: () => void;
-    invalidateAllSpy.mockReturnValue(new Promise<void>((r) => (resolveInvalidate = r)));
+    refreshAllSpy.mockReturnValue(new Promise<void>((r) => (resolveInvalidate = r)));
 
     mount(SurahReader, { target, props: propsFor(empty) });
     await flushMicrotasks();
     await flushMicrotasks();
 
-    // Even after several flushes, only a single invalidateAll is in flight.
-    expect(invalidateAllSpy).toHaveBeenCalledTimes(1);
+    // Even after several flushes, only a single refreshAll is in flight.
+    expect(refreshAllSpy).toHaveBeenCalledTimes(1);
     resolveInvalidate!();
     await flushMicrotasks();
   });
@@ -426,7 +428,7 @@ describe("SurahReader W7 distinct, clearable degradation state", () => {
 
     // No document navigation on failure.
     expect(gotoSpy).not.toHaveBeenCalled();
-    expect(invalidateAllSpy).not.toHaveBeenCalled();
+    expect(refreshAllSpy).not.toHaveBeenCalled();
     // Inline retry affordance is shown with the failed page number.
     const region = target.querySelector('[role="status"]');
     expect(region?.textContent ?? "").toMatch(/couldn't be loaded/i);
@@ -729,9 +731,9 @@ describe("SurahReader W7-R2-1 retry-button gate", () => {
   });
 });
 
-import { readingText } from "$lib/stores/reading-text.svelte";
+import { readingText } from "#lib/stores/reading-text.svelte.js";
 // ---- reading mode: Arabic or one translation, never a dialog -----------------
-import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 describe("SurahReader reading mode", () => {
   function translationPageData(): ReturnType<typeof pageData> {

@@ -1,6 +1,6 @@
-import { QURAN } from "$lib/config/site";
-import { verseKey } from "$lib/data/quran";
-import { loadQuranData } from "$lib/data/quran-data-client";
+import { QURAN } from "#lib/config/site.js";
+import { loadQuranData } from "#lib/data/quran-data-client.js";
+import { verseKey } from "#lib/data/quran.js";
 
 import { quranApi } from "./api-client";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, normalizeArabic } from "./search/normalize";

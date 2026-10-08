@@ -1,6 +1,6 @@
-import { QURAN } from "$lib/config/site";
-import { loadQuranData } from "$lib/data/quran-data-client";
-import { quran } from "$lib/stores/quran.svelte";
+import { QURAN } from "#lib/config/site.js";
+import { loadQuranData } from "#lib/data/quran-data-client.js";
+import { quran } from "#lib/stores/quran.svelte.js";
 
 import { TRANSLATION_CATALOGUE } from "./catalogue";
 import { quranWorker } from "./worker-client";

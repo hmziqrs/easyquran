@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import { registerServiceWorker } from "$lib/boot/service-worker";
+import { browser } from "$app/env";
 import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
+
+import { registerServiceWorker } from "#lib/boot/service-worker.js";
 
 import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
 

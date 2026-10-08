@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { BrowseMode, reader } from "$lib/stores/reader.svelte";
+  import { BrowseMode, reader } from "#lib/stores/reader.svelte.js";
   import {
     globalPagePathFor,
     juzPathFor,
@@ -10,17 +10,17 @@
     surahPathFor,
     parseKey,
     type SurahRouteContext,
-  } from "$lib/data/quran";
-  import { loadQuranData } from "$lib/data/quran-data-client";
-  import { RangeKind, type QuranData } from "$lib/data/quran-data";
-  import { hizbRange, juzOfPage } from "$lib/data/mushaf-divisions";
-  import type { CatalogEntry, RangeEntry } from "$lib/data/quran-types";
-  import { Icon } from "$lib/components/icon";
-  import { Input } from "$lib/components/ui/input";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { cn } from "$lib/utils";
+  } from "#lib/data/quran.js";
+  import { loadQuranData } from "#lib/data/quran-data-client.js";
+  import { RangeKind, type QuranData } from "#lib/data/quran-data.js";
+  import { hizbRange, juzOfPage } from "#lib/data/mushaf-divisions.js";
+  import type { CatalogEntry, RangeEntry } from "#lib/data/quran-types.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { cn } from "#lib/utils.js";
   import type { Snippet } from "svelte";
   import {
     Sidebar,
@@ -30,7 +30,7 @@
     SidebarGroupContent,
     SidebarMenuButton,
     useSidebar,
-  } from "$lib/components/ui/sidebar";
+  } from "#lib/components/ui/sidebar/index.js";
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
   import { ayahTabSurah } from "./ayah-tab";
 

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { Brand } from "$lib/components/brand";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { installPurgeHook } from "$lib/auth/purge-hook";
-  import { guestOnlyRedirect } from "$lib/auth/route-guard";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
-  import { marketingHomeHref } from "$lib/i18n/marketing-copy";
+  import { Brand } from "#lib/components/brand/index.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { installPurgeHook } from "#lib/auth/purge-hook.js";
+  import { guestOnlyRedirect } from "#lib/auth/route-guard.js";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { marketingHomeHref } from "#lib/i18n/marketing-copy.js";
 
   let { children } = $props();
   let ready = $state(false);
@@ -21,7 +21,7 @@
     await authState.probe();
     const target = guestOnlyRedirect(page.url.pathname, authState.status, authState.user);
     if (target) {
-      await goto(resolve(target), { replaceState: true });
+      await goto(publicHref(target), { replace: true });
       ready = true;
       return;
     }

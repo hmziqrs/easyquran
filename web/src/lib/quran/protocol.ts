@@ -4,7 +4,7 @@ import type {
   ArtifactSpec,
   QuranReaderSource,
   TranslationCatalogueEntry,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 
 import type { SearchOpts } from "./search/types";
 

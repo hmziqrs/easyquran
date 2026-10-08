@@ -1,5 +1,6 @@
-import { highlightSegments } from "$lib/quran/search/highlights";
 import { describe, expect, it } from "vite-plus/test";
+
+import { highlightSegments } from "#lib/quran/search/highlights.js";
 
 describe("search highlight presentation", () => {
   it("partitions exact UTF-16 ranges without rewriting text", () => {

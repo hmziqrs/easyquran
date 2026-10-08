@@ -1,14 +1,15 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+
 import {
   authClient,
   decodeUserProfile,
   type AuthClient,
   type UserProfile,
-} from "$lib/auth/auth-client";
-import type { SessionProbeResult } from "$lib/auth/auth-client";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
-import { consumeReturnTarget, setReturnTarget } from "$lib/auth/return-target";
+} from "#lib/auth/auth-client.js";
+import type { SessionProbeResult } from "#lib/auth/auth-client.js";
+import { authState } from "#lib/auth/auth-state.svelte.js";
+import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import { consumeReturnTarget, setReturnTarget } from "#lib/auth/return-target.js";
 
 export type OAuthProvider = "google" | "github" | "discord";
 

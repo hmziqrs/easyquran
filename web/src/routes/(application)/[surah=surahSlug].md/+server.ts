@@ -1,10 +1,11 @@
-import { surahPathFor, type SurahRouteContext } from "$lib/data/quran";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
-import { renderSurahPageMarkdown } from "$lib/server/reader-markdown";
-import { requireSurah } from "$lib/server/reader-route-guards";
 import { error } from "@sveltejs/kit";
+
+import { surahPathFor, type SurahRouteContext } from "#lib/data/quran.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { readSurahLocalPageData } from "#lib/server/quran-surah-page.js";
+import { renderSurahPageMarkdown } from "#lib/server/reader-markdown.js";
+import { requireSurah } from "#lib/server/reader-route-guards.js";
 
 import type { RequestHandler } from "./$types";
 

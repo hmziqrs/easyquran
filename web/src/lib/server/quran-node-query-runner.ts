@@ -1,6 +1,6 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 
-import type { QuranQueryRunner, SqlRow, SqlValue } from "$lib/quran/sql";
+import type { QuranQueryRunner, SqlRow, SqlValue } from "#lib/quran/sql.js";
 
 export function createNodeQueryRunner(database: DatabaseSync): QuranQueryRunner {
   const statements = new Map<string, StatementSync>();

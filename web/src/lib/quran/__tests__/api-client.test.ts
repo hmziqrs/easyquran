@@ -1,14 +1,15 @@
-import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/config/site", () => ({
+import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
+import type { Ayah, QuranRangeText, SurahNormalization } from "#lib/data/quran-types.js";
+
+vi.mock("#lib/config/site.js", () => ({
   QURAN: { apiBase: "https://api.test/quran" },
 }));
 
-import { quranApiAvailability } from "$lib/quran/api-availability";
-import { quranApi } from "$lib/quran/api-client";
-import { FetchHttpError, MalformedDataError, RESPONSE_CAP } from "$lib/quran/fetch";
+import { quranApiAvailability } from "#lib/quran/api-availability.js";
+import { quranApi } from "#lib/quran/api-client.js";
+import { FetchHttpError, MalformedDataError, RESPONSE_CAP } from "#lib/quran/fetch.js";
 
 type ApiEnvelopeBody = { data: object };
 

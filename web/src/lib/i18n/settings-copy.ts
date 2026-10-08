@@ -1,10 +1,11 @@
-import { offlinePackStatus, type OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
-import type { AppearanceMode, PaletteId } from "$lib/config/site";
-import { QuranScript } from "$lib/data/quran-types";
-import type { UiDirection, UiLocale } from "$lib/i18n/locales";
-import { uiDirection } from "$lib/i18n/locales";
-import { reader_new_version_ready, reader_reload_open_tabs } from "$lib/i18n/m/reader";
-import { reader_arabic_text_size, reader_ayah_by_ayah, reader_reading } from "$lib/i18n/m/reader";
+import {
+  offlinePackStatus,
+  type OfflinePackCopy,
+} from "#lib/components/status/offline-pack-copy.js";
+import type { AppearanceMode, PaletteId } from "#lib/config/site.js";
+import { QuranScript } from "#lib/data/quran-types.js";
+import type { UiDirection, UiLocale } from "#lib/i18n/locales.js";
+import { uiDirection } from "#lib/i18n/locales.js";
 import {
   reader_analytics,
   reader_mode,
@@ -21,7 +22,13 @@ import {
   reader_on,
   reader_performance,
   reader_performance_reload,
-} from "$lib/i18n/m/reader-settings";
+} from "#lib/i18n/m/reader-settings.js";
+import { reader_new_version_ready, reader_reload_open_tabs } from "#lib/i18n/m/reader.js";
+import {
+  reader_arabic_text_size,
+  reader_ayah_by_ayah,
+  reader_reading,
+} from "#lib/i18n/m/reader.js";
 import {
   settings_account_device_note,
   settings_account_intro,
@@ -146,11 +153,11 @@ import {
   settings_storage_usage,
   settings_storage_used_of,
   settings_title,
-} from "$lib/i18n/m/settings";
-import { theme_dark, theme_light, theme_system } from "$lib/i18n/m/theme";
-import type { SurfaceResolvedCopy } from "$lib/i18n/marketing-copy";
-import { getReaderSettingsCopy, type ReaderSettingsCopy } from "$lib/i18n/reader-settings-copy";
-import { getLocale } from "$lib/paraglide/runtime.js";
+} from "#lib/i18n/m/settings.js";
+import { theme_dark, theme_light, theme_system } from "#lib/i18n/m/theme.js";
+import type { SurfaceResolvedCopy } from "#lib/i18n/marketing-copy.js";
+import { getReaderSettingsCopy, type ReaderSettingsCopy } from "#lib/i18n/reader-settings-copy.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 export type { ReaderSettingsCopy };
 

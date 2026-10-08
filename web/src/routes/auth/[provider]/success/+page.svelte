@@ -2,8 +2,8 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { createOAuthFlow, isOAuthProvider } from "$lib/auth/oauth-flow.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
+  import { createOAuthFlow, isOAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
   import { successDestination } from "./success-destination";
 
   let status = $state<"working" | "error">("working");

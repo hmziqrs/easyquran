@@ -1,5 +1,10 @@
-import { hizbRange, positionForGlobal } from "$lib/data/mushaf-divisions";
-import { RangeKind, SURAH_COUNT } from "$lib/data/quran-data";
+// Shared shape builders for the SSR loaders (Arabic/translation × surah/range). They
+// differ only in where the ayah text comes from; the navigation and range envelope around it are
+// identical, so they live here once.
+import { error } from "@sveltejs/kit";
+
+import { hizbRange, positionForGlobal } from "#lib/data/mushaf-divisions.js";
+import { RangeKind, SURAH_COUNT } from "#lib/data/quran-data.js";
 import type {
   Ayah,
   CatalogEntry,
@@ -9,12 +14,8 @@ import type {
   RangeRouteKind,
   SurahLink,
   SurahNormalization,
-} from "$lib/data/quran-types";
-import { QURAN_DATA, toSurahLink } from "$lib/server/quran-data";
-// Shared shape builders for the SSR loaders (Arabic/translation × surah/range). They
-// differ only in where the ayah text comes from; the navigation and range envelope around it are
-// identical, so they live here once.
-import { error } from "@sveltejs/kit";
+} from "#lib/data/quran-types.js";
+import { QURAN_DATA, toSurahLink } from "#lib/server/quran-data.js";
 
 export interface SurahRouteNav {
   previousPage: MushafPageLink | null;

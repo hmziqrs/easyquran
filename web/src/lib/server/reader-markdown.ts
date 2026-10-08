@@ -1,14 +1,14 @@
-import { SITE } from "$lib/config/site";
-import { surahMeta, QuranScript } from "$lib/data/quran";
+import { SITE } from "#lib/config/site.js";
 import type {
   RangePageData,
   SurahLocalPageData,
   SurahLink,
   SurahNormalization,
-} from "$lib/data/quran-types";
-import { TRANSLATION_BY_ID } from "$lib/data/translations";
-import { groupRangeAyahs, headerText } from "$lib/quran/view/presentation";
-import { bodyText } from "$lib/quran/view/source-view";
+} from "#lib/data/quran-types.js";
+import { surahMeta, QuranScript } from "#lib/data/quran.js";
+import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
+import { groupRangeAyahs, headerText } from "#lib/quran/view/presentation.js";
+import { bodyText } from "#lib/quran/view/source-view.js";
 
 function attributionLines(sourceId: string): string[] {
   const lines = [`Source: Tanzil — ${SITE.tanzilUrl}`];

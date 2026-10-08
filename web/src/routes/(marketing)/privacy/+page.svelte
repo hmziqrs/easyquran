@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Eyebrow, Panel, Seo } from "$lib/components";
-  import { resolvePrivacyCopy, resolvePrivacySummary } from "$lib/i18n/privacy-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
+  import { Band, Eyebrow, Panel, Seo } from "#lib/components/index.js";
+  import { resolvePrivacyCopy, resolvePrivacySummary } from "#lib/i18n/privacy-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
 
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const copy = $derived(resolvePrivacyCopy(locale));

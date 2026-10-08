@@ -9,7 +9,7 @@ import {
   type JsonValue,
   type UserProfile,
   type WireObject,
-} from "$lib/auth/auth-client";
+} from "#lib/auth/auth-client.js";
 
 export interface SessionInfo {
   readonly id: string;

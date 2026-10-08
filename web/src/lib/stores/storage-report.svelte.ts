@@ -1,10 +1,15 @@
-import { browser } from "$app/environment";
-import { isArabicSourceId } from "$lib/data/quran-types";
-import { requestStorageStats, type StorageLayerStats } from "$lib/offline/messages";
-import { offline } from "$lib/offline/offline-store.svelte";
-import type { StorageArtifactInfo } from "$lib/quran/protocol";
-import { quranWorker, StorageAdminError, type StorageAdminFailure } from "$lib/quran/worker-client";
+import { browser } from "$app/env";
 import { sumBy } from "es-toolkit";
+
+import { isArabicSourceId } from "#lib/data/quran-types.js";
+import { requestStorageStats, type StorageLayerStats } from "#lib/offline/messages.js";
+import { offline } from "#lib/offline/offline-store.svelte.js";
+import type { StorageArtifactInfo } from "#lib/quran/protocol.js";
+import {
+  quranWorker,
+  StorageAdminError,
+  type StorageAdminFailure,
+} from "#lib/quran/worker-client.js";
 
 export const TRANSLATION_CAP_BYTES = 256 * 1024 * 1024;
 

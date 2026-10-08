@@ -1,4 +1,4 @@
-import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
+import type { AuthErrorEnvelope } from "#lib/auth/auth-client.js";
 
 export const CREDENTIAL_FAILURE = "Email or password is incorrect.";
 export const RESET_CODE_SENT = "A reset code is on its way to your email.";

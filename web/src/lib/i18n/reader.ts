@@ -1,5 +1,5 @@
-import { assertUiLocale, type UiLocale } from "$lib/i18n/locales";
-import { localizeHref } from "$lib/paraglide/runtime";
+import { assertUiLocale, type UiLocale } from "#lib/i18n/locales.js";
+import { localizeHref } from "#lib/paraglide/runtime.js";
 
 /** Validated unprefixed reader href (en canonical). `isCanonicalReaderHref`
  * enforces the path grammar at the public boundary; the type is deliberately

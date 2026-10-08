@@ -72,7 +72,7 @@ describe("landing href discipline (nav-guard complement)", () => {
   });
 
   it("keeps the strip and cards on the shared primitives", () => {
-    expect(landing).toContain('from "$lib/components"');
+    expect(landing).toContain('from "#lib/components/index.js"');
     expect(landing).toContain("<Band");
     expect(landing).toContain("<MetricCard");
   });

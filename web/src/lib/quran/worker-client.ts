@@ -1,5 +1,5 @@
-import { QURAN } from "$lib/config/site";
-import { isArabicSourceId } from "$lib/data/quran-types";
+import { QURAN } from "#lib/config/site.js";
+import { isArabicSourceId } from "#lib/data/quran-types.js";
 import type {
   Ayah,
   CanonicalQuranCoordinates,
@@ -13,8 +13,8 @@ import type {
   SurahLink,
   SurahNormalization,
   RangeRouteKind,
-} from "$lib/data/quran-types";
-import { DOWNLOAD_BUDGET_MS } from "$lib/workers/download";
+} from "#lib/data/quran-types.js";
+import { DOWNLOAD_BUDGET_MS } from "#lib/workers/download.js";
 
 import { quranApi } from "./api-client";
 import {

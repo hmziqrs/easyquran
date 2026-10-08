@@ -2,9 +2,10 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { version as appBuildId } from "$app/environment";
-import { diskCacheKey, QuranDiskCache } from "$lib/server/quran-disk-cache";
+import { version as appBuildId } from "$app/env";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+
+import { diskCacheKey, QuranDiskCache } from "#lib/server/quran-disk-cache.js";
 
 const directories: string[] = [];
 

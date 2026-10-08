@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { browser } from "$app/environment";
-  import { prefs } from "$lib/stores/prefs.svelte";
-  import { APPEARANCE_MODES, PALETTES } from "$lib/config/site";
-  import type { CustomSeeds } from "$lib/theme/derive";
-  import { cn } from "$lib/utils";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  import { browser } from "$app/env";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
+  import { APPEARANCE_MODES, PALETTES } from "#lib/config/site.js";
+  import type { CustomSeeds } from "#lib/theme/derive.js";
+  import { cn } from "#lib/utils.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
   let {
     id,

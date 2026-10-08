@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import RegisterForm from "$lib/auth/components/RegisterForm.svelte";
-  import OAuthButtons from "$lib/auth/components/OAuthButtons.svelte";
-  import { createRegisterFlow } from "$lib/auth/flows.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
+  import RegisterForm from "#lib/auth/components/RegisterForm.svelte";
+  import OAuthButtons from "#lib/auth/components/OAuthButtons.svelte";
+  import { createRegisterFlow } from "#lib/auth/flows.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
 
   const flow = createRegisterFlow();
 

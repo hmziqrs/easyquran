@@ -52,7 +52,12 @@ describe("global search palette stays out of the initial bundle", () => {
     expect(entry, "GlobalSearch.svelte should exist").toBeDefined();
     // Only import statements count — the file's own comment names these on purpose.
     const imports = (entry![1].match(/^\s*import\s.*$/gm) ?? []).join("\n");
-    for (const heavy of ["bits-ui", "$lib/search/palette", "$lib/quran/", "$lib/data/quran"]) {
+    for (const heavy of [
+      "bits-ui",
+      "#lib/search/palette/index.js",
+      "#lib/quran/",
+      "#lib/data/quran.js",
+    ]) {
       expect(imports, `GlobalSearch.svelte must not import ${heavy}`).not.toContain(heavy);
     }
   });

@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
-import { createAccountClient, decodeSessionList } from "$lib/auth/account-client";
-import type { AuthClient, AuthRequestResult } from "$lib/auth/auth-client";
+import { createAccountClient, decodeSessionList } from "#lib/auth/account-client.js";
+import type { AuthClient, AuthRequestResult } from "#lib/auth/auth-client.js";
 
 function mockClient(): AuthClient & {
   unsafeRequest: ReturnType<typeof vi.fn>;

@@ -1,8 +1,14 @@
-import { OpenerKind, OpenerPackaging, QuranScript, type ArtifactSpec } from "$lib/data/quran-types";
-import { ReadChainError } from "$lib/quran/fetch";
-import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import {
+  OpenerKind,
+  OpenerPackaging,
+  QuranScript,
+  type ArtifactSpec,
+} from "#lib/data/quran-types.js";
+import { ReadChainError } from "#lib/quran/fetch.js";
+import type { WorkerOutbound, WorkerRequest } from "#lib/quran/protocol.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   siteConfig: { apiBase: "https://api.test/quran" },
@@ -20,11 +26,11 @@ const { siteConfig, apiReads, wireMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: siteConfig }));
-vi.mock("$lib/quran/api-client", () => ({
+vi.mock("#lib/config/site.js", () => ({ QURAN: siteConfig }));
+vi.mock("#lib/quran/api-client.js", () => ({
   quranApi: { readSurah: apiReads.readSurah, readRange: apiReads.readRange },
 }));
-vi.mock("$lib/quran/wire", () => ({
+vi.mock("#lib/quran/wire.js", () => ({
   decodeTranslationSurahText: wireMocks.decodeTranslationSurah,
   decodeTranslationRangeText: wireMocks.decodeTranslationRange,
   decodeQuranSurahText: wireMocks.decodeArabicSurah,
@@ -33,7 +39,7 @@ vi.mock("$lib/quran/wire", () => ({
   unwrapEnvelope: wireMocks.unwrap,
 }));
 
-import { quranWorker } from "$lib/quran/worker-client";
+import { quranWorker } from "#lib/quran/worker-client.js";
 
 const TRANSLATION = "en.pickthall";
 

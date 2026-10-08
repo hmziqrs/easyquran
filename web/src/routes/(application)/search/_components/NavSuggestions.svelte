@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { QuranData } from "$lib/data/quran-data";
-  import type { SearchCopy } from "$lib/i18n/search-copy";
-  import type { NavMatch } from "$lib/search/nav/types";
-  import { ayahHrefFor, juzHrefFor, pageHrefFor, surahHrefFor } from "$lib/search/page/navigate";
+  import type { QuranData } from "#lib/data/quran-data.js";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import type { NavMatch } from "#lib/search/nav/types.js";
+  import { ayahHrefFor, juzHrefFor, pageHrefFor, surahHrefFor } from "#lib/search/page/navigate.js";
 
   let {
     copy,

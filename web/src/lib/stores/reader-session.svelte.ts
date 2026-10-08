@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
-import type { VerseKey } from "$lib/data/quran";
+import { browser } from "$app/env";
+
+import type { ReaderPositionState } from "#lib/data/mushaf-divisions.js";
+import type { VerseKey } from "#lib/data/quran.js";
 
 import type { BrowseMode, LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";

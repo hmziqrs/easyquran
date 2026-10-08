@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
   import {
     globalPagePathFor,
     surahPathFor,
     type MushafPageLink,
     type SurahLink,
     type SurahRouteContext,
-  } from "$lib/data/quran";
+  } from "#lib/data/quran.js";
 
   let {
     currentSurah,

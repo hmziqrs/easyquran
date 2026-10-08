@@ -17,13 +17,13 @@ const { messaging, firebaseCore, analytics } = vi.hoisted(() => ({
   analytics: { track: vi.fn<() => void>() },
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$lib/firebase", () => firebaseCore);
-vi.mock("$lib/firebase/messaging", () => messaging);
-vi.mock("$lib/firebase/analytics", () => analytics);
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("#lib/firebase/index.js", () => firebaseCore);
+vi.mock("#lib/firebase/messaging.js", () => messaging);
+vi.mock("#lib/firebase/analytics.js", () => analytics);
 
-import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
-import { createNotifications } from "$lib/stores/notifications.svelte";
+import { notificationsStatus } from "#lib/components/notifications/notifications-copy.js";
+import { createNotifications } from "#lib/stores/notifications.svelte.js";
 
 const STORAGE_KEY = "easyquran.fcm";
 let foregroundCb: ((p: MessagePayload) => void) | undefined;

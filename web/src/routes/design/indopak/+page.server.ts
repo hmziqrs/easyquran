@@ -3,10 +3,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 
-import { dev } from "$app/environment";
-import { QuranScript } from "$lib/data/quran-types";
+import { dev } from "$app/env";
 import { error } from "@sveltejs/kit";
 import { clamp } from "es-toolkit";
+
+import { QuranScript } from "#lib/data/quran-types.js";
 
 import inventory from "../../../../../scripts/fonts/indopak/inventory.json";
 import mapping from "../../../../../scripts/fonts/indopak/mapping.json";

@@ -1,6 +1,7 @@
-import corpus from "$lib/quran/__fixtures__/parity.json";
-import { isEligibleQuery, normalizeArabic } from "$lib/quran/search/normalize";
 import { describe, expect, it } from "vite-plus/test";
+
+import corpus from "#lib/quran/__fixtures__/parity.json";
+import { isEligibleQuery, normalizeArabic } from "#lib/quran/search/normalize.js";
 
 describe("normalize parity (shared corpus)", () => {
   expect(corpus.normalize.length).toBeGreaterThan(0);

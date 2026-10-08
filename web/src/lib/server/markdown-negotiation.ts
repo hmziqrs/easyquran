@@ -1,5 +1,5 @@
-import { mdSiblingPathFor } from "$lib/accept-parse";
-import { SITE } from "$lib/config/site";
+import { mdSiblingPathFor } from "#lib/accept-parse.js";
+import { SITE } from "#lib/config/site.js";
 
 export {
   appendVaryAccept,
@@ -7,8 +7,8 @@ export {
   parseAccept,
   preferredType,
   varyWithAccept,
-} from "$lib/accept-parse";
-export type { AcceptEntry, MdNegotiation } from "$lib/accept-parse";
+} from "#lib/accept-parse.js";
+export type { AcceptEntry, MdNegotiation } from "#lib/accept-parse.js";
 
 export interface MdSibling {
   readonly canonicalPath: string;

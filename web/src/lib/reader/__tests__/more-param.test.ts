@@ -1,6 +1,7 @@
-import { STACKED_MAX_EXTRAS } from "$lib/stores/stacked-translations.svelte";
 import { uniq } from "es-toolkit";
 import { describe, it, expect } from "vite-plus/test";
+
+import { STACKED_MAX_EXTRAS } from "#lib/stores/stacked-translations.svelte.js";
 
 import { READER_MORE_PARAM, moreParamMatches, parseMoreParam, withMoreParam } from "../more-param";
 

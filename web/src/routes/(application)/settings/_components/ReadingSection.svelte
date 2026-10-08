@@ -5,18 +5,18 @@
     arabicFontStack,
     type ArabicFontId,
     type TranslationFamily,
-  } from "$lib/config/reader-fonts";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+  } from "#lib/config/reader-fonts.js";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
   import {
     ARABIC_FONT_MAX,
     ARABIC_FONT_MIN,
     TRANSLATION_FONT_MAX,
     TRANSLATION_FONT_MIN,
-  } from "$lib/stores/reader-core.svelte";
-  import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "$lib/data/quran-types";
-  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
-  import { cn } from "$lib/utils";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  } from "#lib/stores/reader-core.svelte.js";
+  import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "#lib/data/quran-types.js";
+  import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import { cn } from "#lib/utils.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
   let {
     id,

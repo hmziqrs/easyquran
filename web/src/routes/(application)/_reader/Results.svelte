@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { routeContextFromParams, surahAyahPathFor } from "$lib/data/quran";
-  import { loadQuranData } from "$lib/data/quran-data-client";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import type { QuranData } from "$lib/data/quran-data";
-  import { quranSearch } from "$lib/quran/search";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { routeContextFromParams, surahAyahPathFor } from "#lib/data/quran.js";
+  import { loadQuranData } from "#lib/data/quran-data-client.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import type { QuranData } from "#lib/data/quran-data.js";
+  import { quranSearch } from "#lib/quran/search.js";
   import {
     SearchHitKind,
     SearchProvider,
@@ -18,8 +18,8 @@
     searchHitText,
     type SearchHit,
     type SearchResponse,
-  } from "$lib/quran/search/types";
-  import { HighlightedArabic } from "$lib/components/text";
+  } from "#lib/quran/search/types.js";
+  import { HighlightedArabic } from "#lib/components/text/index.js";
 
   interface SearchState {
     result: SearchResponse;

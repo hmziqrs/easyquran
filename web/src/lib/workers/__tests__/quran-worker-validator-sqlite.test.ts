@@ -1,7 +1,8 @@
-import { QuranSourceId } from "$lib/data/quran-types";
-import { QURAN_ROW_COUNT } from "$lib/workers/opfs-cache";
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+
+import { QuranSourceId } from "#lib/data/quran-types.js";
+import { QURAN_ROW_COUNT } from "#lib/workers/opfs-cache.js";
 
 // These tests exercise the REAL SQLite-opening validator path:
 // assertStagedQuranBytes -> openReadOnly (sqlite3_deserialize) -> wasm query runner
@@ -18,8 +19,8 @@ import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 // SAFETY: the override starts unset; null is a valid member of the union
 // ({ canonicalRowCount: number } | null) and each test assigns the object shape before reading .value.
 const profileOverride = vi.hoisted(() => ({ value: null as { canonicalRowCount: number } | null }));
-vi.mock("$lib/quran/view/source-profiles", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("$lib/quran/view/source-profiles")>();
+vi.mock("#lib/quran/view/source-profiles.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#lib/quran/view/source-profiles.js")>();
   return {
     ...actual,
     resolveSourceProfile: (id: QuranSourceId) =>
@@ -95,13 +96,13 @@ function contiguousRows(count: number, startIndex = 1): BuildRow[] {
   return rows;
 }
 
-type WorkerModule = typeof import("$lib/workers/quran.worker");
+type WorkerModule = typeof import("#lib/workers/quran.worker.js");
 let worker: WorkerModule;
 let validBytes: Uint8Array;
 
 beforeAll(async () => {
   builder = await init();
-  worker = await import("$lib/workers/quran.worker");
+  worker = await import("#lib/workers/quran.worker.js");
   await worker.__initValidatorRuntime();
   validBytes = serializeQuranDb(contiguousRows(QURAN_ROW_COUNT));
 });

@@ -1,4 +1,4 @@
-import type { ReadingText } from "$lib/stores/reading-text.svelte";
+import type { ReadingText } from "#lib/stores/reading-text.svelte.js";
 
 /** One-tap picks the Reading picker shows above its search. */
 export const READING_QUICK_MAX = 8;

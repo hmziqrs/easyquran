@@ -1,5 +1,7 @@
-import { browser } from "$app/environment";
-import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
+import { browser } from "$app/env";
+import { uniq } from "es-toolkit";
+
+import { STACKED_MAX_EXTRAS } from "#lib/data/quran-types.js";
 import {
   asArray,
   asObject,
@@ -8,8 +10,7 @@ import {
   onStorageKey,
   readJSON,
   writeJSON,
-} from "$lib/storage";
-import { uniq } from "es-toolkit";
+} from "#lib/storage/index.js";
 
 export { STACKED_MAX_EXTRAS };
 

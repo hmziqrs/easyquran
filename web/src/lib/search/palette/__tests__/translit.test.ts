@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { createQuranData, type QuranData } from "$lib/data/quran-data";
+import { describe, expect, it } from "vite-plus/test";
+
+import { createQuranData, type QuranData } from "#lib/data/quran-data.js";
 import {
   ARTICLE_TOKENS,
   makeTranslitScorer,
@@ -10,8 +12,7 @@ import {
   surahTranslitKeys,
   translitKey,
   type TranslitKey,
-} from "$lib/quran/search/translit";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/quran/search/translit.js";
 
 const DATA_PATH = [
   path.resolve(process.cwd(), "static/quran-meta/quran-data.json"),

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { commandPalette } from "$lib/stores/command-palette.svelte";
+  import { commandPalette } from "#lib/stores/command-palette.svelte.js";
   import { loadPalette } from "./palette-loader";
-  import { Icon } from "$lib/components/icon";
-  import { cn } from "$lib/utils";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { cn } from "#lib/utils.js";
 
   /** `pill` renders the marketing header's wide search affordance (label + ⌘K). */
   let {

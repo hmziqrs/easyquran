@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 
 const { workerStub, workerStatusListeners } = vi.hoisted(() => {
   const listeners = new Set<(status: string, detail?: string) => void>();
@@ -20,12 +20,12 @@ const { workerStub, workerStatusListeners } = vi.hoisted(() => {
 function emitWorkerStatus(status: string, detail?: string): void {
   for (const cb of new Set(workerStatusListeners)) cb(status, detail);
 }
-vi.mock("$lib/quran/worker-client", () => ({ quranWorker: workerStub }));
+vi.mock("#lib/quran/worker-client.js", () => ({ quranWorker: workerStub }));
 
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
-import type { AyahCoordinateValidator } from "$lib/quran/wire";
-import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+import { LOCAL_HEDGE_BUDGET_MS } from "#lib/quran/fetch.js";
+import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
+import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import {
   createStackedTranslations,

@@ -1,10 +1,10 @@
 import {
   notificationsStatus,
   type NotificationsCopy,
-} from "$lib/components/notifications/notifications-copy";
-import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
-import { offlinePackStatus } from "$lib/components/status/offline-pack-copy";
-import type { UiLocale } from "$lib/i18n/locales";
+} from "#lib/components/notifications/notifications-copy.js";
+import type { OfflinePackCopy } from "#lib/components/status/offline-pack-copy.js";
+import { offlinePackStatus } from "#lib/components/status/offline-pack-copy.js";
+import type { UiLocale } from "#lib/i18n/locales.js";
 import {
   tweaks_accent_option,
   tweaks_colour_input,
@@ -12,8 +12,7 @@ import {
   tweaks_preset,
   tweaks_reset_to_preset,
   tweaks_toggle_status,
-} from "$lib/i18n/m/controls";
-import { reader_copied, reader_dark, reader_light, reader_theme } from "$lib/i18n/m/reader";
+} from "#lib/i18n/m/controls.js";
 import {
   reader_accent,
   reader_accent_azure,
@@ -58,7 +57,8 @@ import {
   reader_surface_slate,
   reader_surface_slate_note,
   reader_theme_derived_note,
-} from "$lib/i18n/m/reader-settings";
+} from "#lib/i18n/m/reader-settings.js";
+import { reader_copied, reader_dark, reader_light, reader_theme } from "#lib/i18n/m/reader.js";
 import {
   settings_notifications_blocked,
   settings_notifications_busy,
@@ -81,8 +81,8 @@ import {
   settings_storage_pack_toggle_off,
   settings_storage_pack_toggle_on,
   settings_storage_pack_usage,
-} from "$lib/i18n/m/settings";
-import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/settings.js";
+import type { TweaksResolvedCopy } from "#lib/i18n/marketing-copy.js";
 
 export type ReaderSettingsCopy = TweaksResolvedCopy & {
   readonly offlinePack: OfflinePackCopy;

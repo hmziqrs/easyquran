@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { reader } from "$lib/stores/reader.svelte";
 import { describe, expect, it } from "vite-plus/test";
+
+import { reader } from "#lib/stores/reader.svelte.js";
 
 import { PageHeightCache } from "../page-heights";
 

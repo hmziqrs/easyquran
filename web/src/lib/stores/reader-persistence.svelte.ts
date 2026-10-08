@@ -1,5 +1,5 @@
-import { ARABIC_FONT_IDS, type ArabicFontId } from "$lib/config/reader-fonts";
-import type { QuranSourceId } from "$lib/data/quran-types";
+import { ARABIC_FONT_IDS, type ArabicFontId } from "#lib/config/reader-fonts.js";
+import type { QuranSourceId } from "#lib/data/quran-types.js";
 import {
   asArray,
   asBooleanRecord,
@@ -13,7 +13,7 @@ import {
   readJSON,
   trailingDebounce,
   writeJSON,
-} from "$lib/storage";
+} from "#lib/storage/index.js";
 
 import {
   ARABIC_FONT_MAX,

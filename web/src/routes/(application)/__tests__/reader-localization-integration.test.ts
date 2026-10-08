@@ -1,7 +1,8 @@
-import { surahAyahPathFor, surahPathFor } from "$lib/data/quran";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { deLocalizeUrl } from "$lib/paraglide/runtime";
 import { describe, expect, it } from "vite-plus/test";
+
+import { surahAyahPathFor, surahPathFor } from "#lib/data/quran.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
 
 const TRANSLATION = {
   kind: "translation",

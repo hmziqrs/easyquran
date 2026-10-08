@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({ browser: true, dev: false }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env", () => ({ browser: true, dev: false }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import { prefs } from "../prefs.svelte";
 

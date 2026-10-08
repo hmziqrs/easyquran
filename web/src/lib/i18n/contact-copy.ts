@@ -10,8 +10,8 @@ import {
   contact_seo_title,
   contact_x_body,
   contact_x_title,
-} from "$lib/i18n/m/contact";
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/contact.js";
+import type { MarketingLocale, MarketingSeoCopy } from "#lib/i18n/marketing-copy.js";
 
 export interface ContactResolvedCopy {
   seo: MarketingSeoCopy;

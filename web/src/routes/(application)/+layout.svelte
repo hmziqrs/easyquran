@@ -3,27 +3,27 @@
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
   import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
-  import { Nav } from "$lib/components/nav";
-  import { Footer } from "$lib/components/footer";
-  import { Tweaks } from "$lib/components/tweaks";
-  import { SITE } from "$lib/config/site";
-  import { SUPPORTED_UI_LOCALES, UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
-  import { footerLinksFor } from "$lib/i18n/footer-links";
-  import { setAppLocale } from "$lib/i18n/app-locale";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { bookmarksPageHref, readerHrefFor, yoursPageHref, type QuranReaderHref } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { marketingHomeHref, type LocaleLink } from "$lib/i18n/marketing-copy";
-  import { deLocalizeUrl } from "$lib/paraglide/runtime";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { bookmarks } from "$lib/bookmarks/store.svelte";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { modeParamMatches, parseModeParam, withModeParam } from "$lib/reader/mode-param";
-  import { moreParamMatches, parseMoreParam, withMoreParam } from "$lib/reader/more-param";
-  import { quranWorker } from "$lib/quran/worker-client";
-  import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-  import { translationIdFromSegments } from "$lib/data/quran";
+  import { Nav } from "#lib/components/nav/index.js";
+  import { Footer } from "#lib/components/footer/index.js";
+  import { Tweaks } from "#lib/components/tweaks/index.js";
+  import { SITE } from "#lib/config/site.js";
+  import { SUPPORTED_UI_LOCALES, UI_LOCALES, type UiLocale } from "#lib/i18n/locales.js";
+  import { footerLinksFor } from "#lib/i18n/footer-links.js";
+  import { setAppLocale } from "#lib/i18n/app-locale.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { bookmarksPageHref, readerHrefFor, yoursPageHref, type QuranReaderHref } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { marketingHomeHref, type LocaleLink } from "#lib/i18n/marketing-copy.js";
+  import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { modeParamMatches, parseModeParam, withModeParam } from "#lib/reader/mode-param.js";
+  import { moreParamMatches, parseMoreParam, withMoreParam } from "#lib/reader/more-param.js";
+  import { quranWorker } from "#lib/quran/worker-client.js";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+  import { translationIdFromSegments } from "#lib/data/quran.js";
 
   let { data, children } = $props();
   let menuOpen = $state(false);
@@ -39,7 +39,7 @@
       (page.route.id ?? "").endsWith("/yours"),
   );
 
-  const bareUrl = $derived(deLocalizeUrl(page.url));
+  const bareUrl = $derived(deLocalizeUrl(page.url.href));
   const barePathname = $derived(bareUrl.pathname.replace(/\/+$/, "") || "/");
   const canonicalReaderHref = $derived(
     // SAFETY: this layout only mounts on (application) routes and deLocalizeUrl
@@ -182,7 +182,7 @@
     let destroyed = false;
     let cleanup: (() => void) | undefined;
 
-    void import("$lib/hotkeys.svelte").then(({ registerHotkey }) => {
+    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
       if (destroyed) return;
       const openSettingsHotkey = registerHotkey("Mod+,", (event) => {
         // IME: don't let a composition session's chord hijack the page.
@@ -204,7 +204,7 @@
   // namespaces (reader-settings, controls, settings, reader) and nothing renders until the user
   // opens the panel. See docs/quran-system.md (Part 2, Message chunking).
   const loadReaderSettingsCopy = async () => {
-    const { getReaderSettingsCopy } = await import("$lib/i18n/reader-settings-copy");
+    const { getReaderSettingsCopy } = await import("#lib/i18n/reader-settings-copy.js");
     return getReaderSettingsCopy(copy.locale);
   };
 </script>

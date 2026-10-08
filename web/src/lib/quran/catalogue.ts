@@ -1,6 +1,6 @@
-import { QURAN } from "$lib/config/site";
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-import { TRANSLATIONS } from "$lib/data/translations";
+import { QURAN } from "#lib/config/site.js";
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+import { TRANSLATIONS } from "#lib/data/translations.js";
 
 export const TRANSLATION_CATALOGUE: readonly TranslationCatalogueEntry[] = Object.freeze(
   TRANSLATIONS.map((translation) =>

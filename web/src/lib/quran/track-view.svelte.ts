@@ -1,4 +1,4 @@
-import type { QuranReaderSource } from "$lib/data/quran-types";
+import type { QuranReaderSource } from "#lib/data/quran-types.js";
 
 import { noteReaderView } from "./engagement";
 

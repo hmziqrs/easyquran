@@ -3,22 +3,22 @@
   import { fly, fade } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { page } from "$app/state";
-  import { cn } from "$lib/utils";
-  import { prefs } from "$lib/stores/prefs.svelte";
-  import { online } from "$lib/offline/online.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { Icon } from "$lib/components/icon";
-  import { Brand } from "$lib/components/brand";
-  import { SearchTrigger } from "$lib/components/search";
-  import { stickyNav } from "$lib/stores/sticky-nav.svelte";
+  import { cn } from "#lib/utils.js";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
+  import { online } from "#lib/offline/online.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { Brand } from "#lib/components/brand/index.js";
+  import { SearchTrigger } from "#lib/components/search/index.js";
+  import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import type {
     BrandResolvedCopy,
     LocaleLink,
     MarketingDirection,
     NavResolvedCopy,
-  } from "$lib/i18n/marketing-copy";
-  import { publicHref } from "$lib/i18n/public-href";
+  } from "#lib/i18n/marketing-copy.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
 
   const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 

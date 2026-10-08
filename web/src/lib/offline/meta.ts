@@ -1,5 +1,6 @@
-import { browser } from "$app/environment";
-import { idbDelete, idbGet, idbPut, openIdb } from "$lib/workers/idb";
+import { browser } from "$app/env";
+
+import { idbDelete, idbGet, idbPut, openIdb } from "#lib/workers/idb.js";
 
 const META_DB = "easyquran-sw-meta";
 const META_STORE = "meta";

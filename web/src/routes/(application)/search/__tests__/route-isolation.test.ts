@@ -98,7 +98,7 @@ describe("search route chunk isolation", () => {
   it("search route files never import palette modules", () => {
     const offenders = [...sources]
       .filter(([path]) => path.includes(SEARCH_DIR) && !path.includes("__tests__"))
-      .filter(([, src]) => src.includes("$lib/search/palette"))
+      .filter(([, src]) => src.includes("#lib/search/palette/index.js"))
       .map(([path]) => path);
     expect(
       offenders,
@@ -124,7 +124,7 @@ describe("search route chunk isolation", () => {
         /import\([^)]*app\/search/,
       );
       expect(src, `${suffix} must not import the lazy search copy chunk`).not.toContain(
-        "$lib/i18n/search-copy",
+        "#lib/i18n/search-copy.js",
       );
     }
   });
@@ -133,7 +133,7 @@ describe("search route chunk isolation", () => {
     const page = [...sources].find(([path]) => path.endsWith(`${SEARCH_DIR}+page.svelte`));
     expect(page, "search +page.svelte should exist").toBeDefined();
     expect(page![1]).toContain("getSearchCopy");
-    expect(page![1]).not.toContain("$lib/paraglide");
+    expect(page![1]).not.toContain("#lib/paraglide");
     expect(page![1]).not.toContain("messages.js");
   });
 

@@ -12,11 +12,11 @@
     surahPathFor,
     translationIdFromSegments,
     type SurahLink,
-  } from "$lib/data/quran";
-  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
-  import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-  import { HIZB_COUNT, positionForGlobal, RUB_COUNT } from "$lib/data/mushaf-divisions";
-  import { trackReaderView } from "$lib/quran/track-view.svelte";
+  } from "#lib/data/quran.js";
+  import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
+  import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+  import { HIZB_COUNT, positionForGlobal, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+  import { trackReaderView } from "#lib/quran/track-view.svelte.js";
   import VerseRow from "./VerseRow.svelte";
   import {
     createStackedTranslations,
@@ -24,28 +24,28 @@
     loadingFor,
     stackedFor,
   } from "./stacked-translations.svelte";
-  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { TooltipProvider } from "$lib/components/ui/tooltip";
-  // Direct import: the brand barrel pulls Brand -> config/site -> $env/dynamic,
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { TooltipProvider } from "#lib/components/ui/tooltip/index.js";
+  // Direct import: the brand barrel pulls Brand -> config/site -> $app/env/public,
   // which must not enter this module graph.
-  import Bismillah from "$lib/components/brand/Bismillah.svelte";
-  import type { Ayah, RangePageData, SurahNormalization } from "$lib/data/quran-types";
-  import { bodyText } from "$lib/quran/view/source-view";
-  import { groupRangeAyahs } from "$lib/quran/view/presentation";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { publicHref } from "$lib/i18n/public-href";
+  import Bismillah from "#lib/components/brand/Bismillah.svelte";
+  import type { Ayah, RangePageData, SurahNormalization } from "#lib/data/quran-types.js";
+  import { bodyText } from "#lib/quran/view/source-view.js";
+  import { groupRangeAyahs } from "#lib/quran/view/presentation.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
   import {
     createRangeReaderCoordinator,
     quranWorker,
     rangeRouteKey,
     type RangeDisplaySnapshot,
     type RangeRouteKey,
-  } from "$lib/quran/worker-client";
-  import { ReadChainError } from "$lib/quran/fetch";
+  } from "#lib/quran/worker-client.js";
+  import { ReadChainError } from "#lib/quran/fetch.js";
   import { ayahIndexValidator } from "./range-validate";
 
   let { data }: { data: RangePageData } = $props();

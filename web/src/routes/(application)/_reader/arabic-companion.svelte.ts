@@ -1,10 +1,11 @@
-import type { QuranScript, VerseKey } from "$lib/data/quran-types";
-import { LOCAL_HEDGE_BUDGET_MS } from "$lib/quran/fetch";
-import type { WorkerStatus } from "$lib/quran/protocol";
-import { bodyText } from "$lib/quran/view/source-view";
-import type { AyahCoordinateValidator } from "$lib/quran/wire";
-import { quranWorker } from "$lib/quran/worker-client";
 import { untrack } from "svelte";
+
+import type { QuranScript, VerseKey } from "#lib/data/quran-types.js";
+import { LOCAL_HEDGE_BUDGET_MS } from "#lib/quran/fetch.js";
+import type { WorkerStatus } from "#lib/quran/protocol.js";
+import { bodyText } from "#lib/quran/view/source-view.js";
+import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
+import { quranWorker } from "#lib/quran/worker-client.js";
 
 /**
  * The Arabic for a translation route. A /t/ page's own text is its translation (SSR, SEO),

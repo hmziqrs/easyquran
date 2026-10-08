@@ -21,8 +21,8 @@ import {
   about_stat_growing_value,
   about_stat_script_label,
   about_stat_script_value,
-} from "$lib/i18n/m/about";
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/about.js";
+import type { MarketingLocale, MarketingSeoCopy } from "#lib/i18n/marketing-copy.js";
 
 export interface AboutStat {
   /** Stable across locales so the DOM key never depends on translated text. */

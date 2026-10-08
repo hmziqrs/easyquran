@@ -1,5 +1,5 @@
-import type { UiDirection, UiLocale } from "$lib/i18n/locales";
-import { uiDirection } from "$lib/i18n/locales";
+import type { UiDirection, UiLocale } from "#lib/i18n/locales.js";
+import { uiDirection } from "#lib/i18n/locales.js";
 import {
   search_arabic_only_note,
   search_cached,
@@ -35,8 +35,8 @@ import {
   search_section_surahs,
   search_title,
   search_too_short,
-} from "$lib/i18n/m/search";
-import { getLocale } from "$lib/paraglide/runtime.js";
+} from "#lib/i18n/m/search.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 export interface SearchCopy {
   readonly locale: UiLocale;

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import SignInForm from "$lib/auth/components/SignInForm.svelte";
-  import OAuthButtons from "$lib/auth/components/OAuthButtons.svelte";
-  import { createLoginFlow } from "$lib/auth/flows.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
+  import SignInForm from "#lib/auth/components/SignInForm.svelte";
+  import OAuthButtons from "#lib/auth/components/OAuthButtons.svelte";
+  import { createLoginFlow } from "#lib/auth/flows.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
 
   const flow = createLoginFlow();
 

@@ -289,13 +289,13 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 }
 
-type WorkerModule = typeof import("$lib/workers/quran.worker");
+type WorkerModule = typeof import("#lib/workers/quran.worker.js");
 let worker: WorkerModule;
 
 beforeEach(async () => {
   installFakes();
   resetFakes();
-  worker = await import("$lib/workers/quran.worker");
+  worker = await import("#lib/workers/quran.worker.js");
 });
 
 afterEach(() => {

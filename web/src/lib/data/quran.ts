@@ -4,7 +4,7 @@ import {
   type LoadedSurah,
   type SurahRouteContext,
   type VerseKey,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 
 export type {
   CatalogEntry,
@@ -26,7 +26,7 @@ export type {
   SurahLocalPage,
   SurahLocalPageData,
   SurahRouteData,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 
 export {
   Bismillah,
@@ -35,7 +35,7 @@ export {
   QuranScript,
   QuranSourceId,
   SourceKind,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 
 export type Surah = LoadedSurah;
 

@@ -3,14 +3,18 @@ export const prerender = true;
 import {
   quranHrefForPrerenderEntry,
   readerPrerenderEntries,
-} from "$lib/components/i18n/reader-prerender.server";
-import { SITE } from "$lib/config/site";
-import type { SurahRouteContext } from "$lib/data/quran";
-import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
-import { MARKETING_PUBLICATIONS, marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
-import type { QuranReaderHref } from "$lib/i18n/reader";
-import { marketingSeoLinks, readerCanonicalEntryPath, readerCanonicalPath } from "$lib/i18n/seo";
-import { QURAN_DATA } from "$lib/server/quran-data";
+} from "#lib/components/i18n/reader-prerender.server.js";
+import { SITE } from "#lib/config/site.js";
+import type { SurahRouteContext } from "#lib/data/quran.js";
+import { SUPPORTED_UI_LOCALES, type UiLocale } from "#lib/i18n/locales.js";
+import {
+  MARKETING_PUBLICATIONS,
+  marketingHref,
+  type MarketingPageId,
+} from "#lib/i18n/marketing.js";
+import type { QuranReaderHref } from "#lib/i18n/reader.js";
+import { marketingSeoLinks, readerCanonicalEntryPath, readerCanonicalPath } from "#lib/i18n/seo.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 const XML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
   "&": "&amp;",

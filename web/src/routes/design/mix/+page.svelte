@@ -2,9 +2,9 @@
   import { onMount } from "svelte";
   import { goto, replaceState } from "$app/navigation";
   import { page } from "$app/state";
-  import { Icon } from "$lib/components/icon";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
-  import { trailingDebounce } from "$lib/storage";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
+  import { trailingDebounce } from "#lib/storage/index.js";
   import { BG_COLORS, readMix, translationsSearch } from "../_variants/mix/axes";
   import Browse from "../_variants/mix/Browse.svelte";
   import MixPanel from "../_variants/mix/MixPanel.svelte";
@@ -38,15 +38,14 @@
   function changeTranslations(ids: readonly string[]): void {
     chosenIds = [...ids];
     void goto(translationsSearch(params, mix, ids), {
-      noScroll: true,
-      keepFocus: true,
-      replaceState: true,
+      reset: false,
+      replace: true,
     });
   }
 
   // replaceState does not refresh page.url, so links are built from this merged copy.
   const params = $derived.by(() => {
-    const next = new URLSearchParams(page.url.searchParams);
+    const next = new URLSearchParams([...page.url.searchParams]);
     writeTweaks(next, tweaks);
     if (!browseOpen) next.delete("drawer");
     return next;

@@ -2,22 +2,22 @@
   import { onMount, untrack } from "svelte";
   import { afterNavigate } from "$app/navigation";
   import { page } from "$app/state";
-  import { routeContextFromParams, type SurahRouteContext } from "$lib/data/quran";
-  import { uiDirection, type UiLocale } from "$lib/i18n/locales";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { commandPalette } from "$lib/stores/command-palette.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
+  import { routeContextFromParams, type SurahRouteContext } from "#lib/data/quran.js";
+  import { uiDirection, type UiLocale } from "#lib/i18n/locales.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { commandPalette } from "#lib/stores/command-palette.svelte.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
   import {
     createPaletteEngine,
     registerBuiltinPaletteSources,
     resolveHref,
     type PaletteEntry,
-  } from "$lib/search/palette";
-  import * as Cmd from "$lib/components/ui/command";
-  import { Icon } from "$lib/components/icon";
-  import { HighlightedArabic } from "$lib/components/text";
-  import HighlightedText from "$lib/components/text/HighlightedText.svelte";
+  } from "#lib/search/palette/index.js";
+  import * as Cmd from "#lib/components/ui/command/index.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { HighlightedArabic } from "#lib/components/text/index.js";
+  import HighlightedText from "#lib/components/text/HighlightedText.svelte";
 
   registerBuiltinPaletteSources();
 

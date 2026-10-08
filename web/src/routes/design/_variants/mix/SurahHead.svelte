@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Icon } from "$lib/components/icon";
+  import { Icon } from "#lib/components/icon/index.js";
   import type { HeadId, ResumeId } from "./axes";
   import type { MixSurah } from "./types";
 

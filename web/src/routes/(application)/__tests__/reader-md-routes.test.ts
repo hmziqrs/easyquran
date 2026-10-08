@@ -1,19 +1,25 @@
-import type { SurahRouteData } from "$lib/data/quran-types";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({ dev: false }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+import type { SurahRouteData } from "#lib/data/quran-types.js";
+
+vi.mock("$app/env", () => ({ dev: false }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import { GET as surahMd, entries as surahEntries } from "../[surah=surahSlug].md/+server";
 import { GET as translationSurahMd } from "../[surah]/t/[lang]/[translator].md/+server";
 import { GET as juzMd } from "../juz/[n].md/+server";
 import { GET as pageMd } from "../page/[n].md/+server";
 
-vi.mock("$lib/server/quran-translation-page", () => ({
+vi.mock("#lib/server/quran-translation-page.js", () => ({
   loadTranslationSurahRouteData: vi.fn(),
 }));
 
-import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
+import { loadTranslationSurahRouteData } from "#lib/server/quran-translation-page.js";
 
 const loadTranslationSurahRoute = vi.mocked(loadTranslationSurahRouteData);
 

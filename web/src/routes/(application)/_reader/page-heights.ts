@@ -1,5 +1,6 @@
-import { reader } from "$lib/stores/reader.svelte";
 import { SvelteMap } from "svelte/reactivity";
+
+import { reader } from "#lib/stores/reader.svelte.js";
 
 export function widthBucket(width: number): number {
   return Math.max(320, Math.round(Math.max(width, 320) / 24) * 24);

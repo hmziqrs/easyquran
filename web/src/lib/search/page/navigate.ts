@@ -1,3 +1,4 @@
+import type { QuranData } from "#lib/data/quran-data.js";
 import {
   globalPagePathFor,
   juzPathFor,
@@ -5,9 +6,8 @@ import {
   surahPathFor,
   surahRouteContext,
   type SurahRouteContext,
-} from "$lib/data/quran";
-import type { QuranData } from "$lib/data/quran-data";
-import { reader } from "$lib/stores/reader.svelte";
+} from "#lib/data/quran.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 function contextFor(sectionId: string): SurahRouteContext {
   if (sectionId === "arabic") return { kind: "arabic" };

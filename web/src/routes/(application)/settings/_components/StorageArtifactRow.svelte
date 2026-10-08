@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { StorageArtifactInfo } from "$lib/quran/protocol";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
-  import type { UiLocale } from "$lib/i18n/locales";
-  import type { DeleteOutcome } from "$lib/stores/storage-report.svelte";
-  import { cn, formatBytes } from "$lib/utils";
+  import type { StorageArtifactInfo } from "#lib/quran/protocol.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
+  import type { DeleteOutcome } from "#lib/stores/storage-report.svelte.js";
+  import { cn, formatBytes } from "#lib/utils.js";
 
   const MINUTE_MS = 60_000;
   const HOUR_MS = 60 * MINUTE_MS;

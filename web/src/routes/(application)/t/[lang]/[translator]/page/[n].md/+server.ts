@@ -1,8 +1,8 @@
-import { translationGlobalPagePath, translationIdFromSegments } from "$lib/data/quran";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
-import { renderRangePageMarkdown } from "$lib/server/reader-markdown";
-import { requireRangeIndex } from "$lib/server/reader-route-guards";
+import { translationGlobalPagePath, translationIdFromSegments } from "#lib/data/quran.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { loadTranslationRangeData } from "#lib/server/quran-translation-page.js";
+import { renderRangePageMarkdown } from "#lib/server/reader-markdown.js";
+import { requireRangeIndex } from "#lib/server/reader-route-guards.js";
 
 import type { RequestHandler } from "./$types";
 

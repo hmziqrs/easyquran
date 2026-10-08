@@ -1,3 +1,5 @@
+import { isNumber, isString } from "es-toolkit";
+
 import {
   isOpenerKind,
   isOpenerPackaging,
@@ -10,8 +12,7 @@ import {
   type QuranRangeText,
   type QuranSurahText,
   type SurahNormalization,
-} from "$lib/data/quran-types";
-import { isNumber, isString } from "es-toolkit";
+} from "#lib/data/quran-types.js";
 
 import { SearchHitKind, type SearchHit, type TranslationSearchHit } from "./search/types";
 import { sourceProfile } from "./view/source-profiles";

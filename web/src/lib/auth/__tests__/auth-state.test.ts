@@ -7,19 +7,19 @@ const { envMock, clientMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("$app/environment", () => ({
+vi.mock("$app/env", () => ({
   get browser(): boolean {
     return envMock.browser;
   },
 }));
-vi.mock("$lib/auth/auth-client", () => ({
+vi.mock("#lib/auth/auth-client.js", () => ({
   authClient: clientMock,
   createAuthClient: () => clientMock,
 }));
 
-import type { SessionProbeResult } from "$lib/auth/auth-client";
-import type { AuthTransitionContext } from "$lib/auth/auth-state.svelte";
-import { createAuthState } from "$lib/auth/auth-state.svelte";
+import type { SessionProbeResult } from "#lib/auth/auth-client.js";
+import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import { createAuthState } from "#lib/auth/auth-state.svelte.js";
 
 // SAFETY: createAuthState only invokes getUser() on the client; the hoisted double supplies it as a vi.fn() resolving SessionProbeResult.
 const asClient = clientMock as never;

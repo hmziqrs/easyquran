@@ -1,7 +1,8 @@
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { readSurahRouteData } from "$lib/server/quran-surah-page";
-import { requireSurah } from "$lib/server/reader-route-guards";
 import { error } from "@sveltejs/kit";
+
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { readSurahRouteData } from "#lib/server/quran-surah-page.js";
+import { requireSurah } from "#lib/server/reader-route-guards.js";
 
 import type { PageServerLoad } from "./$types";
 

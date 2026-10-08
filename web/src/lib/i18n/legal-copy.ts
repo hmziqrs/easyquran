@@ -3,8 +3,8 @@ import {
   legal_placeholder_note,
   legal_updated,
   legal_updated_date,
-} from "$lib/i18n/m/legal";
-import type { MarketingLocale, MarketingSeoCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/legal.js";
+import type { MarketingLocale, MarketingSeoCopy } from "#lib/i18n/marketing-copy.js";
 
 export interface LegalSection {
   /** Stable across locales so the DOM key never depends on translated text. */

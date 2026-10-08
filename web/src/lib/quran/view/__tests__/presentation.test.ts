@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   OpenerKind,
   OpenerPackaging,
@@ -5,9 +7,8 @@ import {
   QuranSourceId,
   type Ayah,
   type SurahNormalization,
-} from "$lib/data/quran-types";
-import { displayVerses, groupRangeAyahs } from "$lib/quran/view/presentation";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/quran-types.js";
+import { displayVerses, groupRangeAyahs } from "#lib/quran/view/presentation.js";
 
 const normalization: SurahNormalization = {
   surah: 2,

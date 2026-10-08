@@ -1,17 +1,17 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Button, Icon, MetricCard } from "$lib/components";
-  import { resolveLandingCopy } from "$lib/i18n/landing-copy";
-  import { marketingLocaleFromPath, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
-  import { marketingHref } from "$lib/i18n/marketing";
+  import { Band, Button, Icon, MetricCard } from "#lib/components/index.js";
+  import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
+  import { marketingLocaleFromPath, marketingReaderHomeHref } from "#lib/i18n/marketing-copy.js";
+  import { marketingHref } from "#lib/i18n/marketing.js";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
-  import { surahPathFor } from "$lib/data/quran";
-  import { readerHrefFor, yoursPageHref } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import type { BookmarksStore } from "$lib/bookmarks/store.svelte";
-  import type { ReaderApi } from "$lib/stores/reader.svelte";
-  import type { LandingHue } from "$lib/i18n/marketing-copy";
+  import { surahPathFor } from "#lib/data/quran.js";
+  import { readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import type { BookmarksStore } from "#lib/bookmarks/store.svelte.js";
+  import type { ReaderApi } from "#lib/stores/reader.svelte.js";
+  import type { LandingHue } from "#lib/i18n/marketing-copy.js";
 
   /**
    * Landing rebuilt to the boards (plan 05): eight full-bleed bands — header and
@@ -101,7 +101,7 @@
     let destroyed = false;
     let cleanup: (() => void) | undefined;
 
-    void import("$lib/hotkeys.svelte").then(({ registerHotkey }) => {
+    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
       if (destroyed) return;
       const escape = registerHotkey(
         "Escape",
@@ -138,8 +138,8 @@
   $effect(() => {
     let dead = false;
     void Promise.all([
-      import("$lib/stores/reader.svelte"),
-      import("$lib/bookmarks/store.svelte"),
+      import("#lib/stores/reader.svelte.js"),
+      import("#lib/bookmarks/store.svelte.js"),
     ]).then(([readerModule, bookmarksModule]) => {
       if (dead) return;
       readerModule.reader.hydrate();

@@ -1,4 +1,4 @@
-import { footerLinksFor, type FooterLinkLabels } from "$lib/i18n/footer-links";
+import { footerLinksFor, type FooterLinkLabels } from "#lib/i18n/footer-links.js";
 import {
   brand_home_label,
   footer_about,
@@ -39,8 +39,8 @@ import {
   nav_toggle_theme,
   skip_to_content,
   tweaks_customize_appearance,
-} from "$lib/i18n/m/chrome";
-import { theme_dark, theme_light } from "$lib/i18n/m/theme";
+} from "#lib/i18n/m/chrome.js";
+import { theme_dark, theme_light } from "#lib/i18n/m/theme.js";
 import type {
   BrandResolvedCopy,
   FooterResolvedCopy,
@@ -48,9 +48,9 @@ import type {
   MarketingFooterLinks,
   MarketingLocale,
   NavResolvedCopy,
-} from "$lib/i18n/marketing-copy";
-import { marketingDirection, marketingReaderHomeHref } from "$lib/i18n/marketing-copy";
-import { bookmarksPageHref } from "$lib/i18n/reader";
+} from "#lib/i18n/marketing-copy.js";
+import { marketingDirection, marketingReaderHomeHref } from "#lib/i18n/marketing-copy.js";
+import { bookmarksPageHref } from "#lib/i18n/reader.js";
 
 /**
  * Site chrome: the copy every marketing page renders. This is the localization floor — everything

@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { buttonVariants } from "$lib/components/ui/button/button-variants";
-import { cn, RAMP_TEXT_ROLES } from "$lib/utils";
 import { describe, expect, it } from "vite-plus/test";
+
+import { buttonVariants } from "#lib/components/ui/button/button-variants.js";
+import { cn, RAMP_TEXT_ROLES } from "#lib/utils.js";
 
 /**
  * Machine guard for the §35–§38 primitive contracts (docs/design-system.md), restyled onto

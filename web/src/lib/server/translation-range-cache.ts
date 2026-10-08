@@ -1,5 +1,5 @@
-import type { QuranRangeText } from "$lib/data/quran-types";
-import { QuranApiAvailability } from "$lib/quran/api-availability";
+import type { QuranRangeText } from "#lib/data/quran-types.js";
+import { QuranApiAvailability } from "#lib/quran/api-availability.js";
 
 const DEFAULT_MAX_ENTRIES = 512;
 

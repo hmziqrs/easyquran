@@ -3,7 +3,7 @@ import {
   type Ayah,
   type QuranSurahText,
   type SurahNormalization,
-} from "$lib/data/quran-types";
+} from "#lib/data/quran-types.js";
 
 import { bodyText } from "./source-view.ts";
 import { stripTajweedMarkup } from "./tajweed.ts";

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Footer } from "$lib/components/footer";
-  import { marketingFooterLinks, type ChromeResolvedCopy } from "$lib/i18n/chrome-copy";
-  import type { MarketingLocale } from "$lib/i18n/marketing-copy";
-  import type { OwnerPublic } from "$lib/types/owner";
+  import { Footer } from "#lib/components/footer/index.js";
+  import { marketingFooterLinks, type ChromeResolvedCopy } from "#lib/i18n/chrome-copy.js";
+  import type { MarketingLocale } from "#lib/i18n/marketing-copy.js";
+  import type { OwnerPublic } from "#lib/types/owner.js";
 
   let {
     locale,

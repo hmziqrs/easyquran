@@ -1,4 +1,4 @@
-import type { UiLocale } from "$lib/i18n/locales";
+import type { UiLocale } from "#lib/i18n/locales.js";
 import {
   auth_error_backup_code_invalid,
   auth_error_code_digits,
@@ -13,8 +13,8 @@ import {
   auth_error_password_max,
   auth_error_password_min,
   auth_error_password_required,
-} from "$lib/i18n/m/auth";
-import { getLocale } from "$lib/paraglide/runtime.js";
+} from "#lib/i18n/m/auth.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 export interface AuthValidationCopy {
   nameRequired: string;

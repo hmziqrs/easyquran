@@ -1,4 +1,4 @@
-import type { IconName } from "$lib/components";
+import type { IconName } from "#lib/components/index.js";
 
 export const HERO = {
   badge: "Free forever · no ads · no account needed",

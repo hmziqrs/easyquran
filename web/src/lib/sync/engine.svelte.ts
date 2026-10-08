@@ -1,5 +1,6 @@
-import { browser } from "$app/environment";
-import { trailingDebounce, type Debounced } from "$lib/storage";
+import { browser } from "$app/env";
+
+import { trailingDebounce, type Debounced } from "#lib/storage/index.js";
 
 import { createOutbox, type Outbox } from "./outbox";
 import {

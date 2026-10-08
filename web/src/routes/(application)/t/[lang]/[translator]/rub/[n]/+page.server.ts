@@ -1,5 +1,5 @@
-import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
-import { markTranslationPending, requireRangeIndex } from "$lib/server/reader-route-guards";
+import { loadTranslationRangeData } from "#lib/server/quran-translation-page.js";
+import { markTranslationPending, requireRangeIndex } from "#lib/server/reader-route-guards.js";
 
 import type { PageServerLoad } from "./$types";
 

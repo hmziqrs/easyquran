@@ -2,12 +2,12 @@
 // only needs a type or a URL must be able to import this without pulling a single localized string.
 // Resolved copy lives in the per-namespace modules — chrome-copy.ts, appearance-copy.ts,
 // landing-copy.ts. See docs/quran-system.md (Part 2, Message chunking).
-import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
-import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
-import type { AccentId, SurfaceId, ThemeMode } from "$lib/config/site";
-import { SUPPORTED_UI_LOCALES, UI_LOCALES, uiDirection, type UiLocale } from "$lib/i18n/locales";
-import { marketingHref } from "$lib/i18n/marketing";
-import { readerHrefFor } from "$lib/i18n/reader";
+import type { NotificationsCopy } from "#lib/components/notifications/notifications-copy.js";
+import type { OfflinePackCopy } from "#lib/components/status/offline-pack-copy.js";
+import type { AccentId, SurfaceId, ThemeMode } from "#lib/config/site.js";
+import { SUPPORTED_UI_LOCALES, UI_LOCALES, uiDirection, type UiLocale } from "#lib/i18n/locales.js";
+import { marketingHref } from "#lib/i18n/marketing.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
 
 export const MARKETING_LOCALES = SUPPORTED_UI_LOCALES;
 export type MarketingLocale = UiLocale;

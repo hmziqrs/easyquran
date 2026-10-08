@@ -2,13 +2,13 @@ import { mount, unmount } from "svelte";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/state", () => ({ page: { url: { hash: "" }, params: {} } }));
-vi.mock("$lib/stores/reader.svelte", () => ({
+vi.mock("#lib/stores/reader.svelte.js", () => ({
   reader: { isVerseMode: true, isReadingMode: false },
 }));
 vi.mock("../VerseTools.svelte", () => ({ default: () => {} }));
 
-import { QuranScript } from "$lib/data/quran-types";
-import { indopakEnding } from "$lib/quran/view/indopak";
+import { QuranScript } from "#lib/data/quran-types.js";
+import { indopakEnding } from "#lib/quran/view/indopak.js";
 
 import ReadingAyah from "../ReadingAyah.svelte";
 import VerseRow from "../VerseRow.svelte";

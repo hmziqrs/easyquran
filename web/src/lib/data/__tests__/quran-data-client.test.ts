@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { loadQuranData, resetQuranDataForTests } from "$lib/data/quran-data-client";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { loadQuranData, resetQuranDataForTests } from "#lib/data/quran-data-client.js";
 
 function requestUrl(input: string | URL | Request): string {
   // eslint-disable-next-line anti-slop/no-runtime-typeof -- narrowing the TS union (string | URL | Request) handed in by the fetch mock; no parse seam here, typeof is the correct runtime primitive test

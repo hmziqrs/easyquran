@@ -1,14 +1,20 @@
-import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "$lib/sync/engine.svelte";
-import { createOutbox, memoryQueueStorage, type Outbox, type QueueStorage } from "$lib/sync/outbox";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "#lib/sync/engine.svelte.js";
+import {
+  createOutbox,
+  memoryQueueStorage,
+  type Outbox,
+  type QueueStorage,
+} from "#lib/sync/outbox.js";
 import {
   SyncPausedError,
   type SyncDomain,
   type SyncMutation,
   type SyncRoundResult,
-} from "$lib/sync/types";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/sync/types.js";
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 
 interface FakeDomain {
   readonly domain: SyncDomain<string, string>;

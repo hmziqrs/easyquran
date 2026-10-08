@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
-  import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
+  import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
+  import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 

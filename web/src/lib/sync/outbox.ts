@@ -1,7 +1,8 @@
-import { browser } from "$app/environment";
-import { asNumber, asObject, asString } from "$lib/storage";
-import { runTxVoid } from "$lib/workers/idb";
-import { idbError } from "$lib/workers/idb-error";
+import { browser } from "$app/env";
+
+import { asNumber, asObject, asString } from "#lib/storage/index.js";
+import { idbError } from "#lib/workers/idb-error.js";
+import { runTxVoid } from "#lib/workers/idb.js";
 
 import type { SyncMutation } from "./types";
 
@@ -160,7 +161,7 @@ function putAutoKey<P>(db: IDBDatabase, record: SyncMutationDraft<P>): Promise<S
 }
 
 /**
- * Own open path (not $lib/workers/idb openIdb): the sync DB pins its own
+ * Own open path (not #lib/workers/idb.js openIdb): the sync DB pins its own
  * version and its upgrade recreates the store with `autoIncrement` + a
  * `by_domain` index — shapes the shared one-store-per-db helper never creates.
  * The connection is cached per idbQueueStorage() instance; a close or version

@@ -33,7 +33,7 @@ import {
   tweaks_settings,
   tweaks_surface,
   tweaks_theme,
-} from "$lib/i18n/m/appearance";
+} from "#lib/i18n/m/appearance.js";
 import {
   tweaks_accent_option,
   tweaks_colour_input,
@@ -41,9 +41,9 @@ import {
   tweaks_preset,
   tweaks_reset_to_preset,
   tweaks_toggle_status,
-} from "$lib/i18n/m/controls";
-import { theme_dark, theme_light } from "$lib/i18n/m/theme";
-import type { MarketingLocale, TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
+} from "#lib/i18n/m/controls.js";
+import { theme_dark, theme_light } from "#lib/i18n/m/theme.js";
+import type { MarketingLocale, TweaksResolvedCopy } from "#lib/i18n/marketing-copy.js";
 
 /**
  * Marketing appearance panel copy. Loaded lazily when the panel opens — it is the largest single

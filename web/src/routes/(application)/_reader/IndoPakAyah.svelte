@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { indopakEnding, type IndoPakEndAnnotation } from "$lib/quran/view/indopak";
-  import { indopakFont, loadIndopakFont } from "$lib/quran/view/indopak-font.svelte";
+  import { indopakEnding, type IndoPakEndAnnotation } from "#lib/quran/view/indopak.js";
+  import { indopakFont, loadIndopakFont } from "#lib/quran/view/indopak-font.svelte.js";
   import AyahOrnament from "./AyahOrnament.svelte";
 
   let { text, n, vKey }: { text: string; n: number; vKey: string } = $props();

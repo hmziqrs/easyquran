@@ -1,6 +1,6 @@
 export function startCrashReporting(): () => void {
   const reportException = (description: string): void =>
-    void import("$lib/firebase/analytics")
+    void import("#lib/firebase/analytics.js")
       .then(({ logException }) => logException(description, true))
       .catch(() => {});
 

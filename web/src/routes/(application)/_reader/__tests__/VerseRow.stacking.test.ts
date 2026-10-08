@@ -13,12 +13,12 @@ const { nav, readerStub, mountStub } = vi.hoisted(() => ({
   mountStub: () => {},
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: nav }));
-vi.mock("$lib/stores/reader.svelte", () => ({ reader: readerStub }));
+vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: readerStub }));
 vi.mock("../VerseTools.svelte", () => ({ default: mountStub }));
 
-import type { StackedTranslation } from "$lib/data/quran-types";
+import type { StackedTranslation } from "#lib/data/quran-types.js";
 
 import VerseRow from "../VerseRow.svelte";
 

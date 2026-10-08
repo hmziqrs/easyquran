@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({ dev: false }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env", () => ({ dev: false }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
-import { SITE } from "$lib/config/site";
-import { siteJsonLdGraph } from "$lib/seo/site-schema";
+import { SITE } from "#lib/config/site.js";
+import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
 
 describe("siteJsonLdGraph", () => {
   const graph = siteJsonLdGraph();

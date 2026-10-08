@@ -1,5 +1,6 @@
-import { QuranSourceId } from "$lib/data/quran-types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { QuranSourceId } from "#lib/data/quran-types.js";
 
 const hasTranslation = vi.fn<(source: string) => Promise<boolean>>();
 const ensureTranslation = vi.fn<(source: string) => Promise<void>>();
@@ -7,8 +8,8 @@ const onStatusDetachers: Array<() => void> = [];
 type StatusCallback = (status: string, detail?: string) => void;
 let statusCb: StatusCallback | undefined;
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: {
     whenReady: () => Promise.resolve(),
     hasTranslation: (source: string) => hasTranslation(source),
@@ -27,8 +28,8 @@ vi.mock("$lib/quran/worker-client", () => ({
 // writeJSON is wrapped so the failed-durable-write test can simulate a silent
 // no-op write (the real failure mode: safe-storage catches and returns). All
 // other tests use the real implementation.
-vi.mock("$lib/storage", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("$lib/storage")>();
+vi.mock("#lib/storage/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#lib/storage/index.js")>();
   return { ...actual, writeJSON: vi.fn(actual.writeJSON) };
 });
 
@@ -40,7 +41,7 @@ const READER_KEY = "easyquran.reader";
 const SOURCE_KEY = "easyquran.reader.source";
 
 async function importEngagement() {
-  return import("$lib/quran/engagement");
+  return import("#lib/quran/engagement.js");
 }
 
 function stubIdle(): void {
@@ -265,7 +266,7 @@ describe("reader engagement", () => {
 
     it("retains the legacy key when the durable write fails", async () => {
       sessionStorage.setItem(LEGACY_KEY, "2");
-      const { writeJSON } = await import("$lib/storage");
+      const { writeJSON } = await import("#lib/storage/index.js");
       const mocked = vi.mocked(writeJSON);
       // Simulate the real failure mode: safe-storage swallows the write error
       // and returns, so nothing is persisted — the read-back then fails and the
@@ -577,7 +578,7 @@ describe("downloadBytes", () => {
       });
       return Promise.resolve(new Response(body, { status: 200 }));
     });
-    const { downloadBytes } = await import("$lib/workers/download");
+    const { downloadBytes } = await import("#lib/workers/download.js");
     const buf = await downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" });
     expect(buf.byteLength).toBe(100);
   });
@@ -600,7 +601,7 @@ describe("downloadBytes", () => {
       });
       return Promise.resolve(new Response(body, { status: 200 }));
     });
-    const { downloadBytes, DOWNLOAD_BUDGET_MS } = await import("$lib/workers/download");
+    const { downloadBytes, DOWNLOAD_BUDGET_MS } = await import("#lib/workers/download.js");
     const p = downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" });
     p.catch(() => {});
     await vi.advanceTimersByTimeAsync(DOWNLOAD_BUDGET_MS);
@@ -619,7 +620,7 @@ describe("downloadBytes", () => {
       });
       return Promise.resolve(new Response(body, { status: 200 }));
     });
-    const { downloadBytes } = await import("$lib/workers/download");
+    const { downloadBytes } = await import("#lib/workers/download.js");
     await expect(
       downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" }),
     ).rejects.toThrow(/exceeded declared 100 bytes/);
@@ -640,7 +641,7 @@ describe("downloadBytes", () => {
     };
     // SAFETY: fetch double for the no-body arrayBuffer fallback; downloadBytes reads only ok/body/headers/arrayBuffer, so the Partial<Response> stands in for the full Response
     vi.spyOn(globalThis, "fetch").mockResolvedValue(noBodyResponse as Response);
-    const { downloadBytes } = await import("$lib/workers/download");
+    const { downloadBytes } = await import("#lib/workers/download.js");
     await expect(
       downloadBytes({ url: "https://x.test/d", sizeBytes: 100, label: "d" }),
     ).rejects.toThrow(/Content-Length 200 exceeds declared 100 bytes/);

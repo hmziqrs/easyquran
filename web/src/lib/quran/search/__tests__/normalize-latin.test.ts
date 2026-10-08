@@ -1,12 +1,13 @@
-import { highlightSegments } from "$lib/quran/search/highlights";
+import { describe, expect, it } from "vite-plus/test";
+
+import { highlightSegments } from "#lib/quran/search/highlights.js";
 import {
   containsArabicScript,
   isEligibleLatinQuery,
   normalizeLatin,
   normalizeLatinWithMap,
   type NormalizedLatinMap,
-} from "$lib/quran/search/normalize-latin";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/quran/search/normalize-latin.js";
 
 function spansFor(map: NormalizedLatinMap, needle: string): { start: number; end: number }[] {
   const spans: { start: number; end: number }[] = [];

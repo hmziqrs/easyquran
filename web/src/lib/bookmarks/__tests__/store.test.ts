@@ -1,12 +1,18 @@
-import type { VerseKey } from "$lib/data/quran";
-import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "$lib/sync";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { VerseKey } from "#lib/data/quran.js";
+import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "#lib/sync/index.js";
 
 import type { BookmarksMutation, BookmarksSnapshot } from "../schema";
 import { createBookmarksStore, type SyncEngineLike } from "../store.svelte";
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$env/dynamic/public", () => ({ env: { PUBLIC_API_BASE_URL: "https://eq.test/api" } }));
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const MARKER_KEY = "eq.bookmarks.legacy-migrated.7";
 

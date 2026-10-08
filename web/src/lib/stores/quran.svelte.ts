@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import type { DownloadProgress } from "$lib/data/quran-types";
-import type { WorkerStatus } from "$lib/quran/protocol";
+import { browser } from "$app/env";
+
+import type { DownloadProgress } from "#lib/data/quran-types.js";
+import type { WorkerStatus } from "#lib/quran/protocol.js";
 
 export type QuranStatus = "idle" | "resolving" | "init" | "downloading" | "ready" | "error";
 

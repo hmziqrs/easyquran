@@ -1,4 +1,6 @@
-import type { AuthErrorEnvelope } from "$lib/auth/auth-client";
+import { describe, expect, it } from "vite-plus/test";
+
+import type { AuthErrorEnvelope } from "#lib/auth/auth-client.js";
 import {
   CREDENTIAL_FAILURE,
   classifyAuthError,
@@ -8,8 +10,7 @@ import {
   NO_ACCOUNT_EXISTS,
   RESET_CODE_SENT,
   VERIFY_EMAIL_NEXT,
-} from "$lib/auth/auth-copy";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/auth/auth-copy.js";
 
 function env(over: Partial<AuthErrorEnvelope> = {}): AuthErrorEnvelope {
   return over;

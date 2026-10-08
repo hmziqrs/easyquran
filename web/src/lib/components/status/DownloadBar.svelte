@@ -1,9 +1,9 @@
 <script lang="ts">
   import { sumBy } from "es-toolkit";
-  import { quran } from "$lib/stores/quran.svelte";
-  import { QURAN } from "$lib/config/site";
-  import { isArabicSourceId, QuranScript } from "$lib/data/quran-types";
-  import { sourceProfile } from "$lib/quran/view/source-profiles";
+  import { quran } from "#lib/stores/quran.svelte.js";
+  import { QURAN } from "#lib/config/site.js";
+  import { isArabicSourceId, QuranScript } from "#lib/data/quran-types.js";
+  import { sourceProfile } from "#lib/quran/view/source-profiles.js";
 
   const SCRIPT_LABELS = {
     [QuranScript.Uthmani]: "Uthmani",

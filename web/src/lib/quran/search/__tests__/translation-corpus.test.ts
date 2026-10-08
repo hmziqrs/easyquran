@@ -1,11 +1,12 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   buildTranslationSearchCorpus,
   searchTranslationCorpus,
   type TranslationSearchOpts,
   type TranslationSearchUnit,
-} from "$lib/quran/search/translation-corpus";
-import type { CanonicalQuranRow } from "$lib/quran/sql";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/quran/search/translation-corpus.js";
+import type { CanonicalQuranRow } from "#lib/quran/sql.js";
 
 function row(globalIndex: number, text: string, surah = 1, ayah = globalIndex): CanonicalQuranRow {
   return { globalIndex, surah, ayah, text };

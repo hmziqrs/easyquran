@@ -1,16 +1,17 @@
-import path from "node:path";
 import { existsSync } from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { QuranScript, QuranSourceId } from "$lib/data/quran-types";
-import { sourceProfile } from "$lib/quran/view/source-profiles";
+import { describe, expect, it } from "vite-plus/test";
+
+import { QuranScript, QuranSourceId } from "#lib/data/quran-types.js";
+import { sourceProfile } from "#lib/quran/view/source-profiles.js";
 import {
   isTajweedScript,
   parseTajweedSegments,
   stripTajweedMarkup,
   tajweedRuleColor,
-} from "$lib/quran/view/tajweed";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/quran/view/tajweed.js";
 
 // Real bytes from db/quran/arabic/quran-tajweed.sqlite (1:1, 2:255 excerpt,
 // 4:158, 77:20, 32:3). Byte-verified against read-only sqlite3 SELECTs; do not

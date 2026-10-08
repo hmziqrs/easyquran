@@ -96,7 +96,7 @@ describe("settings route chunk isolation", () => {
     const page = [...sources].find(([path]) => path.endsWith(`${SETTINGS_DIR}+page.svelte`));
     expect(page, "settings +page.svelte should exist").toBeDefined();
     expect(page![1]).toContain("getSettingsCopy");
-    expect(page![1]).not.toContain("$lib/paraglide");
+    expect(page![1]).not.toContain("#lib/paraglide");
     expect(page![1]).not.toContain("messages.js");
   });
 

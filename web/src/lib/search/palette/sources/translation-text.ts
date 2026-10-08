@@ -1,12 +1,12 @@
-import { surahRouteContext, translationIdFromSegments } from "$lib/data/quran";
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-import { peekTranslationName, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-import { MIN_QUERY_LEN } from "$lib/quran/search/normalize";
-import { containsArabicScript } from "$lib/quran/search/normalize-latin";
-import type { AyahCoordinateValidator } from "$lib/quran/wire";
-import { quranWorker } from "$lib/quran/worker-client";
-import { reader } from "$lib/stores/reader.svelte";
-import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+import { surahRouteContext, translationIdFromSegments } from "#lib/data/quran.js";
+import { peekTranslationName, TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+import { containsArabicScript } from "#lib/quran/search/normalize-latin.js";
+import { MIN_QUERY_LEN } from "#lib/quran/search/normalize.js";
+import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
+import { quranWorker } from "#lib/quran/worker-client.js";
+import { reader } from "#lib/stores/reader.svelte.js";
+import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import { ALL_KEYWORD_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";

@@ -3,12 +3,12 @@ import {
   DEFAULT_ARABIC_FONT,
   type ArabicFontId,
   type TranslationFamily,
-} from "$lib/config/reader-fonts";
-import { ACCENTS, DEFAULTS, SURFACES, type ThemeMode } from "$lib/config/site";
-import { QURAN_SOURCE_IDS, type QuranSourceId } from "$lib/data/quran-types";
-import { asLiteral, asNumber, asObject, asString } from "$lib/storage";
-import { consent, decodeConsent, type ConsentFlags } from "$lib/stores/consent.svelte";
-import { prefs, type Prefs } from "$lib/stores/prefs.svelte";
+} from "#lib/config/reader-fonts.js";
+import { ACCENTS, DEFAULTS, SURFACES, type ThemeMode } from "#lib/config/site.js";
+import { QURAN_SOURCE_IDS, type QuranSourceId } from "#lib/data/quran-types.js";
+import { asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
+import { consent, decodeConsent, type ConsentFlags } from "#lib/stores/consent.svelte.js";
+import { prefs, type Prefs } from "#lib/stores/prefs.svelte.js";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -17,10 +17,10 @@ import {
   TRANSLATION_FONT_MAX,
   TRANSLATION_FONT_MIN,
   type ReaderMode,
-} from "$lib/stores/reader-core.svelte";
-import { applyReaderPresentation } from "$lib/stores/reader-presentation";
-import { reader } from "$lib/stores/reader.svelte";
-import type { CustomSeeds } from "$lib/theme/derive";
+} from "#lib/stores/reader-core.svelte.js";
+import { applyReaderPresentation } from "#lib/stores/reader-presentation.js";
+import { reader } from "#lib/stores/reader.svelte.js";
+import type { CustomSeeds } from "#lib/theme/derive.js";
 
 export const SETTINGS_DOC_VERSION = 1;
 

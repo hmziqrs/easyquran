@@ -1,8 +1,8 @@
-import { SITE } from "$lib/config/site";
-import { SUPPORTED_UI_LOCALES, type UiLocale } from "$lib/i18n/locales";
-import { marketingHref, type MarketingPageId } from "$lib/i18n/marketing";
-import type { PublicHref } from "$lib/i18n/public-href";
-import { readerHrefFor, type QuranReaderHref } from "$lib/i18n/reader";
+import { SITE } from "#lib/config/site.js";
+import { SUPPORTED_UI_LOCALES, type UiLocale } from "#lib/i18n/locales.js";
+import { marketingHref, type MarketingPageId } from "#lib/i18n/marketing.js";
+import type { PublicHref } from "#lib/i18n/public-href.js";
+import { readerHrefFor, type QuranReaderHref } from "#lib/i18n/reader.js";
 
 export interface SeoAlternate {
   hreflang: string;

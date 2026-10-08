@@ -13,8 +13,8 @@ describe("marketing localization boundaries", () => {
   it("keeps marketing-copy free of messages so type-only importers stay copy-free", () => {
     const copySource = source("../marketing-copy.ts");
 
-    expect(copySource).not.toContain("$lib/paraglide");
-    expect(copySource).not.toContain("$lib/i18n/m/");
+    expect(copySource).not.toContain("#lib/paraglide");
+    expect(copySource).not.toContain("#lib/i18n/m/");
     expect(copySource).not.toMatch(/messages\/(?:en|ar)\.json/);
   });
 
@@ -23,13 +23,13 @@ describe("marketing localization boundaries", () => {
     const appearance = source("../appearance-copy.ts");
     const landing = source("../landing-copy.ts");
 
-    expect(chrome).toContain('from "$lib/i18n/m/chrome"');
-    expect(chrome).not.toContain('from "$lib/i18n/m/landing"');
-    expect(chrome).not.toContain('from "$lib/i18n/m/appearance"');
-    expect(appearance).toContain('from "$lib/i18n/m/appearance"');
-    expect(appearance).not.toContain('from "$lib/i18n/m/chrome"');
-    expect(landing).toContain('from "$lib/i18n/m/landing"');
-    expect(landing).not.toContain('from "$lib/i18n/m/chrome"');
+    expect(chrome).toContain('from "#lib/i18n/m/chrome.js"');
+    expect(chrome).not.toContain('from "#lib/i18n/m/landing.js"');
+    expect(chrome).not.toContain('from "#lib/i18n/m/appearance.js"');
+    expect(appearance).toContain('from "#lib/i18n/m/appearance.js"');
+    expect(appearance).not.toContain('from "#lib/i18n/m/chrome.js"');
+    expect(landing).toContain('from "#lib/i18n/m/landing.js"');
+    expect(landing).not.toContain('from "#lib/i18n/m/chrome.js"');
     for (const module of [chrome, appearance, landing]) {
       expect(module).toContain("{ locale }");
     }
@@ -42,8 +42,8 @@ describe("marketing localization boundaries", () => {
     const readerLayout = source("../../../routes/(application)/+layout.svelte");
     const tweaks = source("../../components/tweaks/Tweaks.svelte");
 
-    expect(marketingTweaks).toContain('await import("$lib/i18n/appearance-copy")');
-    expect(readerLayout).toContain('await import("$lib/i18n/reader-settings-copy")');
+    expect(marketingTweaks).toContain('await import("#lib/i18n/appearance-copy.js")');
+    expect(readerLayout).toContain('await import("#lib/i18n/reader-settings-copy.js")');
     expect(tweaks).toContain("loadCopy");
     expect(tweaks).not.toContain("DEFAULT_COPY");
   });
@@ -56,7 +56,7 @@ describe("marketing localization boundaries", () => {
       source("../../components/brand/Brand.svelte"),
     ].join("\n");
 
-    expect(shared).not.toContain("$lib/paraglide");
+    expect(shared).not.toContain("#lib/paraglide");
     expect(shared).not.toMatch(/messages\/(?:en|ar)\.json/);
   });
 
@@ -170,7 +170,7 @@ describe("landing surface (plan 05)", () => {
     expect(landing).toContain('name="q"');
     expect(landing).toContain('for="hero-search"');
     // Hotkeys: dynamic import of the shared wrapper, register + unregister, IME guard.
-    expect(landing).toContain('import("$lib/hotkeys.svelte")');
+    expect(landing).toContain('import("#lib/hotkeys.svelte.js")');
     expect(landing).toContain("registerHotkey");
     expect(landing).toContain(".unregister()");
     expect(landing).toContain("event.isComposing");
@@ -187,7 +187,7 @@ describe("landing surface (plan 05)", () => {
     expect(landing).toContain("gap-0");
     expect((landing.match(/<MetricCard /g) ?? []).length).toBeGreaterThanOrEqual(4);
     // Real data only: the store arrives behind a dynamic import, never fabricated samples.
-    expect(landing).toContain('import("$lib/bookmarks/store.svelte")');
+    expect(landing).toContain('import("#lib/bookmarks/store.svelte.js")');
     expect(landing).not.toMatch(/bookmark(s)?[\s\S]{0,40}example/i);
   });
 

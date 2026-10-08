@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   globalPagePathFor,
   hizbPathFor,
@@ -8,8 +10,7 @@ import {
   surahPathFor,
   surahRouteContext,
   translationIdFromSegments,
-} from "$lib/data/quran";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/quran.js";
 
 const ARABIC_ONLY_HELPERS = /\bsurahPath\b|\bsurahLocalPagePath\b|\bsurahAyahPath\b/;
 const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
@@ -35,7 +36,7 @@ const HAND_BUILT_RESERVED_SEGMENT =
 
 /**
  * Everything that can produce reader navigation: route components, shared
- * components, and the global-search palette sources. `$lib/server` is excluded
+ * components, and the global-search palette sources. `#lib/server` is excluded
  * on purpose — prerendered Arabic-only output is the one legitimate caller of
  * the Arabic-only helpers. Glob options must be inline object literals.
  */
@@ -79,7 +80,7 @@ function handBuiltNavHits(src: string): string[] {
 }
 
 describe("reader navigation regression guard", () => {
-  it("the centralized route-aware helpers are exported from $lib/data/quran", () => {
+  it("the centralized route-aware helpers are exported from #lib/data/quran.js", () => {
     expect(surahPathFor).toBeInstanceOf(Function);
     expect(surahAyahPathFor).toBeInstanceOf(Function);
     expect(globalPagePathFor).toBeInstanceOf(Function);

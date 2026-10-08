@@ -1,24 +1,24 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { OfflinePack } from "$lib/components";
-  import { isArabicSourceId, QuranSourceId } from "$lib/data/quran-types";
-  import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-  import { sourceProfile } from "$lib/quran/view/source-profiles";
-  import { purgeUserCaches } from "$lib/offline/messages";
-  import type { StorageArtifactInfo } from "$lib/quran/protocol";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { OfflinePack } from "#lib/components/index.js";
+  import { isArabicSourceId, QuranSourceId } from "#lib/data/quran-types.js";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+  import { sourceProfile } from "#lib/quran/view/source-profiles.js";
+  import { purgeUserCaches } from "#lib/offline/messages.js";
+  import type { StorageArtifactInfo } from "#lib/quran/protocol.js";
   import {
     isQuotaHigh,
     isTranslationCapHigh,
     storageReport,
     type DeleteOutcome,
-  } from "$lib/stores/storage-report.svelte";
-  import { readerSource } from "$lib/stores/reader-settings.svelte";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { formatBytes } from "$lib/utils";
-  import { cn } from "$lib/utils";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
-  import type { UiLocale } from "$lib/i18n/locales";
+  } from "#lib/stores/storage-report.svelte.js";
+  import { readerSource } from "#lib/stores/reader-settings.svelte.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { formatBytes } from "#lib/utils.js";
+  import { cn } from "#lib/utils.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
   import UsageBar from "./UsageBar.svelte";
   import StorageArtifactRow from "./StorageArtifactRow.svelte";
 

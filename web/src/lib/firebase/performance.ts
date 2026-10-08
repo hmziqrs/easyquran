@@ -1,4 +1,4 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
 import type { FirebasePerformance, PerformanceTrace } from "firebase/performance";
 
 import { isConfigured, initApp } from "./index";

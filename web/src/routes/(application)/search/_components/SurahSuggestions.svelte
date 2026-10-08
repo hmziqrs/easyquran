@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { QuranData } from "$lib/data/quran-data";
-  import type { SearchCopy } from "$lib/i18n/search-copy";
-  import { surahHrefFor } from "$lib/search/page/navigate";
-  import type { SurahSuggestion } from "$lib/search/page/types";
+  import type { QuranData } from "#lib/data/quran-data.js";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import { surahHrefFor } from "#lib/search/page/navigate.js";
+  import type { SurahSuggestion } from "#lib/search/page/types.js";
 
   let {
     copy,

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Eyebrow, Seo } from "$lib/components";
-  import { resolveTermsCopy } from "$lib/i18n/terms-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
+  import { Band, Eyebrow, Seo } from "#lib/components/index.js";
+  import { resolveTermsCopy } from "#lib/i18n/terms-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
 
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const copy = $derived(resolveTermsCopy(locale));

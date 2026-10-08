@@ -6,21 +6,21 @@ import {
   type QuranSourceId as QuranSourceIdValue,
   type QuranRangeText,
   type QuranSurahText,
-} from "$lib/data/quran-types";
-import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
-import type { QuranQueryRunner } from "$lib/quran/sql";
+} from "#lib/data/quran-types.js";
+import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "#lib/quran/source-plan.js";
+import type { QuranQueryRunner } from "#lib/quran/sql.js";
 import {
   resolveSourceProfile,
   sourceProfile,
   type QuranSourceProfile,
-} from "$lib/quran/view/source-profiles";
+} from "#lib/quran/view/source-profiles.js";
 import {
   loadQuranSource,
   readSourceRange,
   readSourceSurah,
   type LoadedQuranSource,
-} from "$lib/quran/view/source-runtime";
-import { QURAN_DATA } from "$lib/server/quran-data";
+} from "#lib/quran/view/source-runtime.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 import { createNodeQueryRunner } from "./quran-node-query-runner";
 

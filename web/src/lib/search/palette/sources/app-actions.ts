@@ -1,6 +1,6 @@
-import { resumeCtxFor } from "$lib/data/quran";
-import { prefs } from "$lib/stores/prefs.svelte";
-import { reader } from "$lib/stores/reader.svelte";
+import { resumeCtxFor } from "#lib/data/quran.js";
+import { prefs } from "#lib/stores/prefs.svelte.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 import { PaletteGroups } from "../groups";
 import { ayahHref, openVerse } from "../quran-nav";

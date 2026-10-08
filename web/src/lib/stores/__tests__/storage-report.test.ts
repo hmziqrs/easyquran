@@ -1,5 +1,6 @@
-import type { StorageArtifactInfo } from "$lib/quran/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { StorageArtifactInfo } from "#lib/quran/protocol.js";
 
 interface OfflinePackMirror {
   packId: string;
@@ -55,13 +56,15 @@ function emitStatus(s: string): void {
   statusCb?.(s, "detail");
 }
 
-vi.mock("$app/environment", () => ({ browser: true }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: h.workerMock,
   StorageAdminError: h.AdminErrorMock,
 }));
-vi.mock("$lib/offline/offline-store.svelte", () => ({ offline: h.offlineMock }));
-vi.mock("$lib/offline/messages", () => ({ requestStorageStats: h.statsMock.requestStorageStats }));
+vi.mock("#lib/offline/offline-store.svelte.js", () => ({ offline: h.offlineMock }));
+vi.mock("#lib/offline/messages.js", () => ({
+  requestStorageStats: h.statsMock.requestStorageStats,
+}));
 
 import {
   createStorageReport,
@@ -71,8 +74,8 @@ import {
   layoutUsageSegments,
   stackStorageLayers,
   TRANSLATION_CAP_BYTES,
-} from "$lib/stores/storage-report.svelte";
-import { CAP_BYTES } from "$lib/workers/opfs-retention";
+} from "#lib/stores/storage-report.svelte.js";
+import { CAP_BYTES } from "#lib/workers/opfs-retention.js";
 
 const MB = 1024 * 1024;
 

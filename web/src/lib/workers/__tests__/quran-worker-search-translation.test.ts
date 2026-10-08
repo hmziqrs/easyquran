@@ -1,6 +1,7 @@
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
 import init, { type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
 
 class FakeFileHandle {
   constructor(
@@ -357,7 +358,7 @@ async function seedSources(sources: readonly { id: string; bytes: Uint8Array }[]
   );
 }
 
-type WorkerModule = typeof import("$lib/workers/quran.worker");
+type WorkerModule = typeof import("#lib/workers/quran.worker.js");
 let worker: WorkerModule;
 let validBytes: Uint8Array;
 
@@ -367,7 +368,7 @@ beforeAll(async () => {
   // Window signature demands a targetOrigin, so replace the slot the worker
   // captured before any status emission runs.
   vi.stubGlobal("postMessage", () => {});
-  worker = await import("$lib/workers/quran.worker");
+  worker = await import("#lib/workers/quran.worker.js");
   await worker.__initValidatorRuntime();
   validBytes = serializeQuranDb(ROWS);
 });

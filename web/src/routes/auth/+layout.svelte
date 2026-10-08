@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Container } from "$lib/components";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { installPurgeHook } from "$lib/auth/purge-hook";
+  import { Container } from "#lib/components/index.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { installPurgeHook } from "#lib/auth/purge-hook.js";
 
   let { children } = $props();
 

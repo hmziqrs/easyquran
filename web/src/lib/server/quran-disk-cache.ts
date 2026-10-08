@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { version as appBuildId } from "$app/environment";
+import { version as appBuildId } from "$app/env";
 import { sumBy } from "es-toolkit";
 
 const KINDS = ["surah", "page", "juz", "hizb", "rub"] as const;

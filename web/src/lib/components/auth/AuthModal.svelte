@@ -5,16 +5,16 @@
     List as TabsList,
     Trigger as TabsTrigger,
     Content as TabsContent,
-  } from "$lib/components/ui/tabs";
-  import { Icon } from "$lib/components/icon";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { createLoginFlow, createRegisterFlow } from "$lib/auth/flows.svelte";
+  } from "#lib/components/ui/tabs/index.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { createLoginFlow, createRegisterFlow } from "#lib/auth/flows.svelte.js";
   import { goto } from "$app/navigation";
-  import SignInForm from "$lib/auth/components/SignInForm.svelte";
-  import RegisterForm from "$lib/auth/components/RegisterForm.svelte";
-  import OAuthButtons from "$lib/auth/components/OAuthButtons.svelte";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import SignInForm from "#lib/auth/components/SignInForm.svelte";
+  import RegisterForm from "#lib/auth/components/RegisterForm.svelte";
+  import OAuthButtons from "#lib/auth/components/OAuthButtons.svelte";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
   const copy = getAuthCopy();
 

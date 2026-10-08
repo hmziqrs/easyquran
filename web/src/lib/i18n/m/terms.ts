@@ -3,26 +3,26 @@
 // Terms of service body.
 //
 // 21 messages. Import this barrel, never
-// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
+// #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
-export { legal_terms_acceptance_body } from "$lib/paraglide/messages/legal_terms_acceptance_body.js";
-export { legal_terms_acceptance_heading } from "$lib/paraglide/messages/legal_terms_acceptance_heading.js";
-export { legal_terms_accuracy_body } from "$lib/paraglide/messages/legal_terms_accuracy_body.js";
-export { legal_terms_accuracy_heading } from "$lib/paraglide/messages/legal_terms_accuracy_heading.js";
-export { legal_terms_contact_body } from "$lib/paraglide/messages/legal_terms_contact_body.js";
-export { legal_terms_contact_heading } from "$lib/paraglide/messages/legal_terms_contact_heading.js";
-export { legal_terms_content_body } from "$lib/paraglide/messages/legal_terms_content_body.js";
-export { legal_terms_content_heading } from "$lib/paraglide/messages/legal_terms_content_heading.js";
-export { legal_terms_heading } from "$lib/paraglide/messages/legal_terms_heading.js";
-export { legal_terms_liability_body } from "$lib/paraglide/messages/legal_terms_liability_body.js";
-export { legal_terms_liability_heading } from "$lib/paraglide/messages/legal_terms_liability_heading.js";
-export { legal_terms_privacy_link } from "$lib/paraglide/messages/legal_terms_privacy_link.js";
-export { legal_terms_privacy_prompt } from "$lib/paraglide/messages/legal_terms_privacy_prompt.js";
-export { legal_terms_seo_description } from "$lib/paraglide/messages/legal_terms_seo_description.js";
-export { legal_terms_seo_title } from "$lib/paraglide/messages/legal_terms_seo_title.js";
-export { legal_terms_service_body } from "$lib/paraglide/messages/legal_terms_service_body.js";
-export { legal_terms_service_heading } from "$lib/paraglide/messages/legal_terms_service_heading.js";
-export { legal_terms_third_party_body } from "$lib/paraglide/messages/legal_terms_third_party_body.js";
-export { legal_terms_third_party_heading } from "$lib/paraglide/messages/legal_terms_third_party_heading.js";
-export { legal_terms_use_body } from "$lib/paraglide/messages/legal_terms_use_body.js";
-export { legal_terms_use_heading } from "$lib/paraglide/messages/legal_terms_use_heading.js";
+export { legal_terms_acceptance_body } from "#lib/paraglide/messages/legal_terms_acceptance_body.js";
+export { legal_terms_acceptance_heading } from "#lib/paraglide/messages/legal_terms_acceptance_heading.js";
+export { legal_terms_accuracy_body } from "#lib/paraglide/messages/legal_terms_accuracy_body.js";
+export { legal_terms_accuracy_heading } from "#lib/paraglide/messages/legal_terms_accuracy_heading.js";
+export { legal_terms_contact_body } from "#lib/paraglide/messages/legal_terms_contact_body.js";
+export { legal_terms_contact_heading } from "#lib/paraglide/messages/legal_terms_contact_heading.js";
+export { legal_terms_content_body } from "#lib/paraglide/messages/legal_terms_content_body.js";
+export { legal_terms_content_heading } from "#lib/paraglide/messages/legal_terms_content_heading.js";
+export { legal_terms_heading } from "#lib/paraglide/messages/legal_terms_heading.js";
+export { legal_terms_liability_body } from "#lib/paraglide/messages/legal_terms_liability_body.js";
+export { legal_terms_liability_heading } from "#lib/paraglide/messages/legal_terms_liability_heading.js";
+export { legal_terms_privacy_link } from "#lib/paraglide/messages/legal_terms_privacy_link.js";
+export { legal_terms_privacy_prompt } from "#lib/paraglide/messages/legal_terms_privacy_prompt.js";
+export { legal_terms_seo_description } from "#lib/paraglide/messages/legal_terms_seo_description.js";
+export { legal_terms_seo_title } from "#lib/paraglide/messages/legal_terms_seo_title.js";
+export { legal_terms_service_body } from "#lib/paraglide/messages/legal_terms_service_body.js";
+export { legal_terms_service_heading } from "#lib/paraglide/messages/legal_terms_service_heading.js";
+export { legal_terms_third_party_body } from "#lib/paraglide/messages/legal_terms_third_party_body.js";
+export { legal_terms_third_party_heading } from "#lib/paraglide/messages/legal_terms_third_party_heading.js";
+export { legal_terms_use_body } from "#lib/paraglide/messages/legal_terms_use_body.js";
+export { legal_terms_use_heading } from "#lib/paraglide/messages/legal_terms_use_heading.js";

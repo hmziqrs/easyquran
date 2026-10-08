@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Container } from "$lib/components";
-  import { SITE } from "$lib/config/site";
+  import { Container } from "#lib/components/index.js";
+  import { SITE } from "#lib/config/site.js";
 
   let { status = 404, error }: { status?: number; error?: App.Error } = $props();
   const isNotFound = $derived(status === 404);

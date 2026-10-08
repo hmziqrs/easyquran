@@ -7,8 +7,8 @@ import {
   type SajdaEntry,
   type SurahLocalPage,
   type VerseKey,
-} from "$lib/data/quran-types";
-import { canonicalOpenerKind } from "$lib/quran/view/canonical";
+} from "#lib/data/quran-types.js";
+import { canonicalOpenerKind } from "#lib/quran/view/canonical.js";
 
 export const QuranDataRoot = {
   Source: 0,

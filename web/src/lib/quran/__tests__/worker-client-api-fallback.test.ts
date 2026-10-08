@@ -1,14 +1,15 @@
-import type { ArtifactSpec } from "$lib/data/quran-types";
-import { LOCAL_BOOT_BUDGET_MS } from "$lib/quran/fetch";
-import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/config/site", () => ({
+import type { ArtifactSpec } from "#lib/data/quran-types.js";
+import { LOCAL_BOOT_BUDGET_MS } from "#lib/quran/fetch.js";
+import type { WorkerOutbound, WorkerRequest } from "#lib/quran/protocol.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+
+vi.mock("#lib/config/site.js", () => ({
   QURAN: { apiBase: "https://api.test/quran" },
 }));
 
-import { quranWorker } from "$lib/quran/worker-client";
+import { quranWorker } from "#lib/quran/worker-client.js";
 
 const SURAH1 = {
   data: {

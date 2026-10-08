@@ -1,7 +1,8 @@
-import { SITE } from "$lib/config/site";
-import { MARKETING_PAGES } from "$lib/config/site-structure";
-import { baseEnglishPageCopy } from "$lib/i18n/base-english-copy";
 import TurndownService from "turndown";
+
+import { MARKETING_PAGES } from "#lib/config/site-structure.js";
+import { SITE } from "#lib/config/site.js";
+import { baseEnglishPageCopy } from "#lib/i18n/base-english-copy.js";
 
 const turndown = new TurndownService({
   headingStyle: "atx",

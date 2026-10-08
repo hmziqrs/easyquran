@@ -1,7 +1,8 @@
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+import type { RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/config/site", () => ({
+vi.mock("#lib/config/site.js", () => ({
   QURAN: { apiBase: "" },
   SITE: {
     name: "EasyQuran",
@@ -22,7 +23,7 @@ import {
   mdSiblingRequest,
   parseAccept,
   preferredType,
-} from "$lib/server/markdown-negotiation";
+} from "#lib/server/markdown-negotiation.js";
 
 import { handle } from "../../../hooks.server";
 
@@ -100,6 +101,9 @@ function mdFetchDouble(): MdFetchDouble {
       headers: { "content-type": "text/markdown; charset=utf-8" },
     });
   };
+  // kit 3 types event.fetch as Node's typeof fetch, which carries the
+  // undici preconnect preload hint; the double never warms connections.
+  impl.preconnect = () => {};
   return { fetch: impl, calls };
 }
 

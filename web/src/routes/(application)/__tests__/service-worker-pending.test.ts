@@ -1,12 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$service-worker", () => ({
-  base: "",
-  // SAFETY: $service-worker mock; build is typed string[] but stays empty because no test enumerates built assets.
-  build: [] as string[],
-  // SAFETY: $service-worker mock; files is typed string[] but stays empty because no test enumerates static files.
-  files: [] as string[],
+vi.mock("$app/env", () => ({
+  browser: false,
+  dev: false,
+  building: false,
   version: "test-v1",
+}));
+
+vi.mock("$app/manifest", () => ({
+  // SAFETY: $app/manifest mock; assets/immutable are typed { path }[] but stay empty because no test enumerates them.
+  assets: [],
+  immutable: [],
+  prerendered: [],
+  routes: [],
+}));
+
+vi.mock("$app/paths", () => ({
+  // base is "" in every deployment, so resolve()/asset() mock as a plain "/" prefix.
+  resolve: (id: string) => `/${id}`,
+  asset: (id: string) => `/${id}`,
+  match: async () => null,
 }));
 
 const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unknown>>() }));
@@ -42,11 +55,11 @@ vi.mock("../../../lib/workers/idb", () => ({
   runTxVoid: async () => {},
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
-vi.mock("$lib/data/quran", () => ({
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/data/quran.js", () => ({
   translationIdFromSegments: (lang: string, translator: string) => `${lang}.${translator}`,
 }));
-vi.mock("$lib/server/quran-data", () => ({
+vi.mock("#lib/server/quran-data.js", () => ({
   QURAN_DATA: { rangeByIndex: () => ({ startGlobal: 1, endGlobal: 2 }) },
 }));
 
@@ -60,7 +73,7 @@ const { disk } = vi.hoisted(() => ({
     writes: [] as string[],
   },
 }));
-vi.mock("$lib/server/quran-disk-cache", () => ({
+vi.mock("#lib/server/quran-disk-cache.js", () => ({
   diskCacheKey: disk.diskCacheKey,
   getCachedHtml: async () => {
     disk.reads += 1;

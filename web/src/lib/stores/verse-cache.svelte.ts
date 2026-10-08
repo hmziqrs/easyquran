@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import { parseKey, type VerseKey } from "$lib/data/quran";
-import { stripTajweedMarkup } from "$lib/quran/view/tajweed";
+import { browser } from "$app/env";
+
+import { parseKey, type VerseKey } from "#lib/data/quran.js";
+import { stripTajweedMarkup } from "#lib/quran/view/tajweed.js";
 
 import type { ReaderCore } from "./reader-core.svelte";
 
@@ -36,7 +37,7 @@ export function createVerseCache(core: ReaderCore) {
       if (!browser) return;
       const token = core.nav.token;
       try {
-        const { quranWorker } = await import("$lib/quran/worker-client");
+        const { quranWorker } = await import("#lib/quran/worker-client.js");
         await quranWorker.whenReady();
         const source = await quranWorker.readSurah(num);
         if (token !== core.nav.token) return;

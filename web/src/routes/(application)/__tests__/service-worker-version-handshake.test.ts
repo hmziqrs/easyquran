@@ -1,12 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$service-worker", () => ({
-  base: "",
-  // SAFETY: $service-worker mock; build is typed string[] but stays empty because no test enumerates built assets.
-  build: [] as string[],
-  // SAFETY: $service-worker mock; files is typed string[] but stays empty because no test enumerates static files.
-  files: [] as string[],
+vi.mock("$app/env", () => ({
+  browser: false,
+  dev: false,
+  building: false,
   version: "test-v1",
+}));
+
+vi.mock("$app/manifest", () => ({
+  // SAFETY: $app/manifest mock; assets/immutable are typed { path }[] but stay empty because no test enumerates them.
+  assets: [],
+  immutable: [],
+  prerendered: [],
+  routes: [],
+}));
+
+vi.mock("$app/paths", () => ({
+  // base is "" in every deployment, so resolve()/asset() mock as a plain "/" prefix.
+  resolve: (id: string) => `/${id}`,
+  asset: (id: string) => `/${id}`,
+  match: async () => null,
 }));
 
 const { memIdb } = vi.hoisted(() => ({ memIdb: new Map<string, Map<string, unknown>>() }));

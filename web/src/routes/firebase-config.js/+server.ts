@@ -1,5 +1,6 @@
-import { firebaseConfig } from "$lib/firebase";
 import type { RequestHandler } from "@sveltejs/kit";
+
+import { firebaseConfig } from "#lib/firebase/index.js";
 
 export const prerender = true;
 

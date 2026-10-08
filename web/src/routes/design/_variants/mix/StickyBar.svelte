@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
-  import { Icon } from "$lib/components/icon";
+  import { Icon } from "#lib/components/icon/index.js";
   import TranslateMark from "./TranslateMark.svelte";
   import type { BarId, ResumeId } from "./axes";
   import type { MixSurah, MixTranslation } from "./types";

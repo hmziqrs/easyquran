@@ -1,5 +1,6 @@
-import { deLocalizeUrl, localizeHref } from "$lib/paraglide/runtime";
 import { describe, expect, it } from "vite-plus/test";
+
+import { deLocalizeUrl, localizeHref } from "#lib/paraglide/runtime.js";
 
 /**
  * Scheme A round-trip fixtures for the paraglide default `/:locale/...` URL

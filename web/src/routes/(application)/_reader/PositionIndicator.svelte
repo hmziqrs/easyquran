@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { reader } from "$lib/stores/reader.svelte";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { positionLabel } from "./position-label";
 
   let {

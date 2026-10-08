@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { QuranData } from "$lib/data/quran-data";
-  import type { SearchCopy } from "$lib/i18n/search-copy";
-  import { peekTranslationName } from "$lib/quran/catalogue";
-  import { MAX_OFFSET } from "$lib/quran/search/normalize";
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import type { QuranData } from "#lib/data/quran-data.js";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import { peekTranslationName } from "#lib/quran/catalogue.js";
+  import { MAX_OFFSET } from "#lib/quran/search/normalize.js";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.js";
 
   import AyahResult from "./AyahResult.svelte";
-  import type { SectionHit, SectionState } from "$lib/search/page/types";
+  import type { SectionHit, SectionState } from "#lib/search/page/types.js";
 
   let {
     section,

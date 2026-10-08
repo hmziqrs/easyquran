@@ -1,7 +1,7 @@
 export const prerender = true;
 
-import { MARKETING_ROUTES } from "$lib/config/site-structure";
-import { htmlToMarkdown, mdToPlain, pagePath, textVariantEntries } from "$lib/seo/render";
+import { MARKETING_ROUTES } from "#lib/config/site-structure.js";
+import { htmlToMarkdown, mdToPlain, pagePath, textVariantEntries } from "#lib/seo/render.js";
 
 function matchMarketingText(slug: string): boolean {
   if (slug === "") return false;

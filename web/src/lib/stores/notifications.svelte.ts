@@ -1,6 +1,8 @@
-import { browser } from "$app/environment";
-import { isMessagingConfigured } from "$lib/firebase";
-import { track } from "$lib/firebase/analytics";
+import { browser } from "$app/env";
+import type { MessagePayload } from "firebase/messaging";
+
+import { track } from "#lib/firebase/analytics.js";
+import { isMessagingConfigured } from "#lib/firebase/index.js";
 import {
   deleteFcmToken,
   getFcmToken,
@@ -12,9 +14,8 @@ import {
   requestPermission,
   unregisterTokenFromServer,
   type PermissionState,
-} from "$lib/firebase/messaging";
-import { asObject, asString, readJSON, writeJSON } from "$lib/storage";
-import type { MessagePayload } from "firebase/messaging";
+} from "#lib/firebase/messaging.js";
+import { asObject, asString, readJSON, writeJSON } from "#lib/storage/index.js";
 
 const STORAGE_KEY = "easyquran.fcm";
 

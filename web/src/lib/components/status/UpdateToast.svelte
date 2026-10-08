@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { update } from "$lib/offline/update.svelte";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { reader_dismiss_update, reader_new_version_ready, reader_reload_open_tabs, reader_reload_update } from "$lib/i18n/m/reader";
-  import type { UiLocale } from "$lib/i18n/locales";
+  import { update } from "#lib/offline/update.svelte.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { reader_dismiss_update, reader_new_version_ready, reader_reload_open_tabs, reader_reload_update } from "#lib/i18n/m/reader.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
 
   // Locale changes navigate to a localized URL (full reload), so resolving once at init is sound — same idiom as the search palette.
   // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.

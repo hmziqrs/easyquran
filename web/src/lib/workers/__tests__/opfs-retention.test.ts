@@ -1,6 +1,7 @@
-import { filterSourceFiles, type ActivePointer } from "$lib/workers/opfs-cache";
-import { computeEvictions, type PruneCandidate } from "$lib/workers/opfs-retention";
 import { describe, expect, it } from "vite-plus/test";
+
+import { filterSourceFiles, type ActivePointer } from "#lib/workers/opfs-cache.js";
+import { computeEvictions, type PruneCandidate } from "#lib/workers/opfs-retention.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TTL_MS = 30 * DAY_MS;

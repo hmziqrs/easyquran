@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
-  import { beforeNavigate, goto, invalidateAll, replaceState } from "$app/navigation";
+  import { beforeNavigate, goto, refreshAll, replaceState } from "$app/navigation";
   import { page as appPage } from "$app/state";
   import {
     parseKey,
@@ -10,31 +10,31 @@
     type MushafPageLink,
     type SurahLocalPageData,
     type SurahLink,
-  } from "$lib/data/quran";
-  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
-  import { positionForGlobal } from "$lib/data/mushaf-divisions";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { TooltipProvider } from "$lib/components/ui/tooltip";
-  import { quranWorker } from "$lib/quran/worker-client";
-  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-  import type { ReadTierStatus } from "$lib/quran/fetch";
+  } from "#lib/data/quran.js";
+  import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
+  import { positionForGlobal } from "#lib/data/mushaf-divisions.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { TooltipProvider } from "#lib/components/ui/tooltip/index.js";
+  import { quranWorker } from "#lib/quran/worker-client.js";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+  import type { ReadTierStatus } from "#lib/quran/fetch.js";
   import {
     virtualPageWindow,
-  } from "$lib/quran/virtual-pages";
-  import { bodyText } from "$lib/quran/view/source-view";
-  import { headerText } from "$lib/quran/view/presentation";
-  // Direct import: the brand barrel pulls Brand -> config/site -> $env/dynamic,
+  } from "#lib/quran/virtual-pages.js";
+  import { bodyText } from "#lib/quran/view/source-view.js";
+  import { headerText } from "#lib/quran/view/presentation.js";
+  // Direct import: the brand barrel pulls Brand -> config/site -> $app/env/public,
   // which must not enter this module graph.
-  import Bismillah from "$lib/components/brand/Bismillah.svelte";
-  import { quran } from "$lib/stores/quran.svelte";
-  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
-  import { stickyNav } from "$lib/stores/sticky-nav.svelte";
-  import { withModeParam } from "$lib/reader/mode-param";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { readingText } from "$lib/stores/reading-text.svelte";
-  import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "$lib/offline/messages";
+  import Bismillah from "#lib/components/brand/Bismillah.svelte";
+  import { quran } from "#lib/stores/quran.svelte.js";
+  import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
+  import { withModeParam } from "#lib/reader/mode-param.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { readingText } from "#lib/stores/reading-text.svelte.js";
+  import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "#lib/offline/messages.js";
   import { ayahIndexValidator } from "./range-validate";
   import {
     parseHistoryState,
@@ -56,8 +56,8 @@
   import TranslationModal from "./TranslationModal.svelte";
   import { registerTypographyWrapper } from "./typography-change";
   import { createArabicCompanion } from "./arabic-companion.svelte";
-  import type { Ayah, QuranScript, StackedTranslation } from "$lib/data/quran-types";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+  import type { Ayah, QuranScript, StackedTranslation } from "#lib/data/quran-types.js";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
   import { arabicHrefFor, liveReaderPosition } from "./translation-nav";
   import { positionLabel } from "./position-label";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
@@ -504,7 +504,7 @@
     const href = arabicHrefFor(liveReaderPosition(appPage.url));
     if (href === null) return;
     const target = withModeParam(publicHref(readerHrefFor(copy.locale, href)), "reading", appPage.url);
-    void goto(target, { noScroll: true });
+    void goto(target, { reset: false });
   }
 
   /** Translation pill: flow the last translation, or open the picker when there is none. */
@@ -782,7 +782,7 @@
     initialRetryInFlight = true;
     const startKey = routeKey;
     try {
-      await invalidateAll();
+      await refreshAll();
       if (startKey !== routeKey) return;
       if (initial.ayahs.length === 0) void loadPage(initial.page.localPage);
     } catch {

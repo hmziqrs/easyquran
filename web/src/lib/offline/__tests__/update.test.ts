@@ -1,14 +1,3 @@
-import {
-  PREPARE_RELOAD,
-  PREPARE_RELOAD_EVENT,
-  SKIP_WAITING,
-  SW_BROADCAST_CHANNEL,
-  UPDATE_BROADCAST_CHANNEL,
-  UPDATE_TAKEOVER,
-  VERSION_QUERY,
-  VERSION_RESULT,
-} from "$lib/offline/messages";
-import { createUpdate } from "$lib/offline/update.svelte";
 import { flushSync } from "svelte";
 // SAFETY: Svelte 5 does not export `effect` from the public 'svelte' entry;
 // the internal client effect_root + effect pair is the reactive observer
@@ -20,6 +9,18 @@ import { flushSync } from "svelte";
 // @ts-expect-error no declaration file for svelte/internal/client
 import { effect, effect_root } from "svelte/internal/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import {
+  PREPARE_RELOAD,
+  PREPARE_RELOAD_EVENT,
+  SKIP_WAITING,
+  SW_BROADCAST_CHANNEL,
+  UPDATE_BROADCAST_CHANNEL,
+  UPDATE_TAKEOVER,
+  VERSION_QUERY,
+  VERSION_RESULT,
+} from "#lib/offline/messages.js";
+import { createUpdate } from "#lib/offline/update.svelte.js";
 
 const RELOAD_GUARD = "easyquran.reload-guard";
 const PAINT_KEY = "easyquran.update.waiting";
@@ -36,9 +37,9 @@ const { updatedMock, registerSwMock } = vi.hoisted(() => ({
   registerSwMock: vi.fn<() => Promise<ServiceWorkerRegistration | null>>(),
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ updated: updatedMock }));
-vi.mock("$lib/boot/service-worker", () => ({
+vi.mock("#lib/boot/service-worker.js", () => ({
   registerServiceWorker: registerSwMock,
 }));
 

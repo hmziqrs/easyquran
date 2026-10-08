@@ -1,10 +1,11 @@
-import { env } from "$env/dynamic/private";
-import { SITE } from "$lib/config/site";
-import { fetchWithTimeout } from "$lib/quran/fetch";
-import type { OwnerPublic } from "$lib/types/owner";
+import { OWNER_SOURCE_URL } from "$app/env/private";
+
+import { SITE } from "#lib/config/site.js";
+import { fetchWithTimeout } from "#lib/quran/fetch.js";
+import type { OwnerPublic } from "#lib/types/owner.js";
 
 const DEFAULT_SOURCE_URL = "https://hmziq.rs/me.json";
-const OWNER_SOURCE_URL = env.OWNER_SOURCE_URL || DEFAULT_SOURCE_URL;
+const OWNER_URL = OWNER_SOURCE_URL || DEFAULT_SOURCE_URL;
 const FETCH_TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -48,7 +49,7 @@ export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<Own
   if (!inflight || opts?.force) {
     inflight = (async () => {
       try {
-        const res = await fetchWithTimeout(OWNER_SOURCE_URL, { timeout: FETCH_TIMEOUT_MS });
+        const res = await fetchWithTimeout(OWNER_URL, { timeout: FETCH_TIMEOUT_MS });
         if (!res.ok) throw new Error(`owner fetch HTTP ${res.status}`);
         const data: unknown = await res.json();
         if (!isOwnerProfile(data)) throw new Error("owner payload shape invalid");

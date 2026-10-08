@@ -1,4 +1,4 @@
-import type { QuranData } from "$lib/data/quran-data";
+import type { QuranData } from "#lib/data/quran-data.js";
 
 import {
   JUZ_ALIASES,

@@ -1,5 +1,5 @@
-import { browser } from "$app/environment";
-import { env } from "$env/dynamic/public";
+import { browser } from "$app/env";
+import { PUBLIC_API_BASE_URL, PUBLIC_FCM_VAPID_KEY } from "$app/env/public";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
 
 export const firebaseConfig: FirebaseOptions = {
@@ -14,11 +14,11 @@ export const firebaseConfig: FirebaseOptions = {
 
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.appId);
 
-export const FCM_VAPID_KEY = env.PUBLIC_FCM_VAPID_KEY || "";
+export const FCM_VAPID_KEY = PUBLIC_FCM_VAPID_KEY || "";
 
 export const isMessagingConfigured = isConfigured && Boolean(FCM_VAPID_KEY);
 
-export const API_BASE_URL = (env.PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+export const API_BASE_URL = (PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 
 export const ANALYTICS_DEBUG = false;
 

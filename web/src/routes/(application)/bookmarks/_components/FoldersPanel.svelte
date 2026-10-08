@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Icon } from "$lib/components/icon";
-  import { Input } from "$lib/components/ui/input";
-  import type { BookmarksCopy } from "$lib/i18n/bookmarks-copy";
-  import type { BookmarkFolder } from "$lib/bookmarks/schema";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import type { BookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
+  import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
 
   let {
     copy,

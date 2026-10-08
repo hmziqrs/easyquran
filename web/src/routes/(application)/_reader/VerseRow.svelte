@@ -2,11 +2,11 @@
   import { onMount, type Component } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { page } from "$app/state";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { QuranScript, type QuranScript as QuranScriptValue } from "$lib/data/quran-types";
-  import { parseTajweedSegments, tajweedRuleColor } from "$lib/quran/view/tajweed";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import type { StackedTranslation } from "$lib/data/quran-types";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
+  import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import type { StackedTranslation } from "#lib/data/quran-types.js";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 

@@ -1,4 +1,4 @@
-import { bootOfflineEngine } from "$lib/quran/offline";
+import { bootOfflineEngine } from "#lib/quran/offline.js";
 
 let started = false;
 let teardown: (() => void) | null = null;

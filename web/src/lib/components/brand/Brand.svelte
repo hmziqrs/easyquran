@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { cn } from "$lib/utils";
-  import { SITE } from "$lib/config/site";
-  import { publicHref } from "$lib/i18n/public-href";
+  import { cn } from "#lib/utils.js";
+  import { SITE } from "#lib/config/site.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
 
   let {
     class: className = "",

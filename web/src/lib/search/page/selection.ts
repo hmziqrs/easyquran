@@ -1,6 +1,7 @@
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
 import { chunk } from "es-toolkit";
+
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
 
 /** Worker calls per in-flight batch when searching many translations at once. */
 export const SEARCH_BATCH_SIZE = 3;

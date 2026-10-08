@@ -1,10 +1,11 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   READER_MODE_PARAM,
   modeParamMatches,
   parseModeParam,
   withModeParam,
-} from "$lib/reader/mode-param";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/reader/mode-param.js";
 
 describe("parseModeParam", () => {
   it("returns the mode when the param is a valid reader mode", () => {

@@ -1,5 +1,5 @@
-import { RANGE_COUNTS, RangeKind, type QuranData } from "$lib/data/quran-data";
-import type { RangeEntry } from "$lib/data/quran-types";
+import { RANGE_COUNTS, RangeKind, type QuranData } from "#lib/data/quran-data.js";
+import type { RangeEntry } from "#lib/data/quran-types.js";
 
 /**
  * Mushaf division math over the baked metadata JSON only — no Quran DB access,

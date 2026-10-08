@@ -1,5 +1,5 @@
-import { loadRangeData } from "$lib/server/quran-range";
-import { rangeEntries, requireRangeIndex } from "$lib/server/reader-route-guards";
+import { loadRangeData } from "#lib/server/quran-range.js";
+import { rangeEntries, requireRangeIndex } from "#lib/server/reader-route-guards.js";
 
 import type { PageServerLoad } from "./$types";
 

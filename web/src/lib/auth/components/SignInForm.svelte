@@ -3,16 +3,16 @@
   import AuthForm from "./AuthForm.svelte";
   import AuthField from "./AuthField.svelte";
   import PasswordInput from "./PasswordInput.svelte";
-  import { Icon } from "$lib/components/icon";
-  import type { LoginFlow } from "$lib/auth/flows.svelte";
+  import { Icon } from "#lib/components/icon/index.js";
+  import type { LoginFlow } from "#lib/auth/flows.svelte.js";
   import {
     dynamicValidator,
     fieldError,
     ServerFieldErrors,
-  } from "$lib/auth/form-validation.svelte";
-  import { loginSchema, totpSchema } from "$lib/auth/schemas";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
-  import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
+  } from "#lib/auth/form-validation.svelte.js";
+  import { loginSchema, totpSchema } from "#lib/auth/schemas.js";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
+  import { getAuthValidationCopy } from "#lib/i18n/auth-validation-copy.js";
 
   const copy = getAuthCopy();
   const validationCopy = getAuthValidationCopy();

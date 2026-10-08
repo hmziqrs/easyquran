@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { offline } from "$lib/offline/offline-store.svelte";
-  import type { OfflinePackCopy } from "$lib/components/status/offline-pack-copy";
+  import { offline } from "#lib/offline/offline-store.svelte.js";
+  import type { OfflinePackCopy } from "#lib/components/status/offline-pack-copy.js";
 
   let { copy }: { copy: OfflinePackCopy } = $props();
 

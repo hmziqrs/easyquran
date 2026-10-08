@@ -1,6 +1,7 @@
-import { dev } from "$app/environment";
-import { createQuranData, RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
+import { dev } from "$app/env";
 import { error } from "@sveltejs/kit";
+
+import { createQuranData, RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 
 import quranDataRaw from "../../../../../static/quran-meta/quran-data.json";
 import { HOME_VARIANTS, type SurahCard } from "../variants";

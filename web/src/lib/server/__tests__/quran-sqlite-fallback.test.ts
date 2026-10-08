@@ -2,13 +2,14 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
 import {
   QuranScript,
   QuranSourceId,
   type QuranSourceId as QuranSourceIdValue,
-} from "$lib/data/quran-types";
-import { sourceProfile } from "$lib/quran/view/source-profiles";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/data/quran-types.js";
+import { sourceProfile } from "#lib/quran/view/source-profiles.js";
 
 // The fail-soft reader seat (quran-sqlite.ts) resolves DB paths and quran-data.json
 // from process.cwd(), so each scenario stages a temp cwd holding only the artifacts
@@ -39,9 +40,9 @@ async function stage(directory: string, sources: readonly QuranSourceIdValue[]):
   }
 }
 
-async function importSqliteModule(): Promise<typeof import("$lib/server/quran-sqlite")> {
+async function importSqliteModule(): Promise<typeof import("#lib/server/quran-sqlite.js")> {
   vi.resetModules();
-  return await import("$lib/server/quran-sqlite");
+  return await import("#lib/server/quran-sqlite.js");
 }
 
 afterEach(async () => {

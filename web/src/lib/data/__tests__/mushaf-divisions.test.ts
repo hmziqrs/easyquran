@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   HIZB_COUNT,
   hizbOfPage,
@@ -7,10 +9,9 @@ import {
   positionForGlobal,
   quarterOfPage,
   RUB_COUNT,
-} from "$lib/data/mushaf-divisions";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/mushaf-divisions.js";
+import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 describe("mushaf divisions from the baked JSON", () => {
   it("derives 60 hizbs from 240 quarters with no remainder", () => {

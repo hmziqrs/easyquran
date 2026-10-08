@@ -1,4 +1,4 @@
-import { normalizeArabic } from "$lib/quran/search/normalize";
+import { normalizeArabic } from "#lib/quran/search/normalize.js";
 
 function isSubsequence(haystack: string, needle: string): boolean {
   let i = 0;

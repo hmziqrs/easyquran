@@ -1,3 +1,5 @@
+import { describe, expect, it, vi } from "vite-plus/test";
+
 import {
   OpenerKind,
   OpenerPackaging,
@@ -6,12 +8,16 @@ import {
   type RangePageData,
   type SurahLocalPageData,
   type SurahNormalization,
-} from "$lib/data/quran-types";
-import { renderRangePageMarkdown, renderSurahPageMarkdown } from "$lib/server/reader-markdown";
-import { describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/data/quran-types.js";
+import { renderRangePageMarkdown, renderSurahPageMarkdown } from "#lib/server/reader-markdown.js";
 
-vi.mock("$app/environment", () => ({ dev: false }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env", () => ({ dev: false }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const UTHMANI: SurahNormalization = {
   surah: 1,

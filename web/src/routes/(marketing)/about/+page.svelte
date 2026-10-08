@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Button, Eyebrow, Seo } from "$lib/components";
-  import { SITE } from "$lib/config/site";
-  import { resolveAboutCopy } from "$lib/i18n/about-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
-  import { externalLinkAttrs } from "$lib/utils";
+  import { Band, Button, Eyebrow, Seo } from "#lib/components/index.js";
+  import { SITE } from "#lib/config/site.js";
+  import { resolveAboutCopy } from "#lib/i18n/about-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
+  import { externalLinkAttrs } from "#lib/utils.js";
 
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const copy = $derived(resolveAboutCopy(locale));

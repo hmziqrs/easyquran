@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Highlight } from "$lib/quran/search/types";
-  import { highlightSegments } from "$lib/quran/search/highlights";
-  import { cn } from "$lib/utils";
+  import type { Highlight } from "#lib/quran/search/types.js";
+  import { highlightSegments } from "#lib/quran/search/highlights.js";
+  import { cn } from "#lib/utils.js";
 
   let {
     text,

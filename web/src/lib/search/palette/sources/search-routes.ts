@@ -1,4 +1,4 @@
-import type { Pathname } from "$app/types";
+import type { Path } from "$app/types";
 
 import { PaletteGroups } from "../groups";
 import { byScore, scoreFields } from "../scoring";
@@ -7,11 +7,11 @@ import type { PaletteEntry, PaletteSource } from "../types";
 const SOURCE_ID = "search.routes";
 const SEARCH_PATH = "/search";
 
-function searchHref(): Pathname {
+function searchHref(): Path {
   // SAFETY: canonical search pathname (/ar/search reroutes onto it with
   // Arabic chrome; the /en and /app shapes are 308s); the palette's
   // resolveHref applies the base, so the raw path is what the cast brands it as.
-  return SEARCH_PATH as Pathname;
+  return SEARCH_PATH as Path;
 }
 
 /** Search page navigation. Labels stay English — see the palette-label precedent in site-routes.ts. */

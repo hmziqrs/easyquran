@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/config/site", () => ({
+vi.mock("#lib/config/site.js", () => ({
   QURAN: { apiBase: "https://api.test/quran", artifactBase: "/_quran", scripts: [] },
 }));
 
-import { RangeKind } from "$lib/data/quran-data";
-import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "$lib/data/quran-types";
-import { MalformedDataError } from "$lib/quran/fetch";
-import { fetchRangeChunks } from "$lib/quran/range-fetch";
-import { SearchHitKind, type SearchHit } from "$lib/quran/search/types";
+import { RangeKind } from "#lib/data/quran-data.js";
+import { OpenerKind, OpenerPackaging, QuranScript, QuranSourceId } from "#lib/data/quran-types.js";
+import { MalformedDataError } from "#lib/quran/fetch.js";
+import { fetchRangeChunks } from "#lib/quran/range-fetch.js";
+import { SearchHitKind, type SearchHit } from "#lib/quran/search/types.js";
 import {
   decodeQuranRangeText,
   decodeQuranSurahText,
@@ -18,13 +18,13 @@ import {
   decodeTranslationSearchResponse,
   decodeTranslationSurahText,
   unwrapEnvelope,
-} from "$lib/quran/wire";
-import { QURAN_DATA } from "$lib/server/quran-data";
+} from "#lib/quran/wire.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 import {
   loadTranslationRangeData,
   loadTranslationSurahRouteData,
   type TranslationFetcher,
-} from "$lib/server/quran-translation-page";
+} from "#lib/server/quran-translation-page.js";
 
 const validateCoordinate = (globalIndex: number, surah: number, ayah: number): boolean =>
   QURAN_DATA.globalIndexOf(surah, ayah) === globalIndex;

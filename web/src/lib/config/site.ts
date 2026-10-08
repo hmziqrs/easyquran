@@ -11,18 +11,19 @@ export const SITE = {
   tanzilUrl: "https://tanzil.net",
 } as const;
 
-import { dev } from "$app/environment";
-import { env } from "$env/dynamic/public";
+import { dev } from "$app/env";
+import { PUBLIC_ENV, PUBLIC_QURAN_API_BASE } from "$app/env/public";
+
 import {
   QuranDataEnvironment,
   resolveQuranArtifactBase,
   resolveQuranDataEnvironment,
-} from "$lib/quran/environment";
-import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
+} from "#lib/quran/environment.js";
+import { registeredSourceProfiles } from "#lib/quran/view/source-profiles.js";
 
-const PUBLIC_API_BASE = (env.PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
+const PUBLIC_API_BASE = (PUBLIC_QURAN_API_BASE ?? "").replace(/\/+$/, "");
 const QURAN_DATA_ENVIRONMENT = resolveQuranDataEnvironment(
-  env.PUBLIC_ENV,
+  PUBLIC_ENV,
   dev ? QuranDataEnvironment.Local : QuranDataEnvironment.Production,
 );
 const QURAN_ARTIFACT_BASE = resolveQuranArtifactBase(QURAN_DATA_ENVIRONMENT);

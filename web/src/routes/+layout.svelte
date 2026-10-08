@@ -1,26 +1,26 @@
 <script lang="ts">
   import "./layout.css";
-  import favicon from "$lib/assets/favicon.svg";
+  import favicon from "#lib/assets/favicon.svg";
   import { onMount } from "svelte";
   import { afterNavigate, beforeNavigate } from "$app/navigation";
   import { updated } from "$app/state";
-  import { prefs } from "$lib/stores/prefs.svelte";
-  import { consent } from "$lib/stores/consent.svelte";
-  import { notifications } from "$lib/stores/notifications.svelte";
-  import { update } from "$lib/offline/update.svelte";
-  import { online } from "$lib/offline/online.svelte";
-  import { offline } from "$lib/offline/offline-store.svelte";
-  import { APP_READY } from "$lib/offline/messages";
-  import { NotificationToast } from "$lib/components/notifications";
-  import { GlobalSearch } from "$lib/components/search";
-  import { AuthModalShell } from "$lib/components/auth";
-  import { DownloadBar, UpdateToast } from "$lib/components/status";
-  import { SITE } from "$lib/config/site";
-  import { siteJsonLdGraph } from "$lib/seo/site-schema";
-  import { startAnalytics } from "$lib/boot/analytics";
-  import { startCrashReporting } from "$lib/boot/crash-reporting";
-  import { deLocalizeUrl } from "$lib/paraglide/runtime";
-  import { copyIndopakSelection } from "$lib/quran/view/indopak-copy";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
+  import { consent } from "#lib/stores/consent.svelte.js";
+  import { notifications } from "#lib/stores/notifications.svelte.js";
+  import { update } from "#lib/offline/update.svelte.js";
+  import { online } from "#lib/offline/online.svelte.js";
+  import { offline } from "#lib/offline/offline-store.svelte.js";
+  import { APP_READY } from "#lib/offline/messages.js";
+  import { NotificationToast } from "#lib/components/notifications/index.js";
+  import { GlobalSearch } from "#lib/components/search/index.js";
+  import { AuthModalShell } from "#lib/components/auth/index.js";
+  import { DownloadBar, UpdateToast } from "#lib/components/status/index.js";
+  import { SITE } from "#lib/config/site.js";
+  import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
+  import { startAnalytics } from "#lib/boot/analytics.js";
+  import { startCrashReporting } from "#lib/boot/crash-reporting.js";
+  import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
+  import { copyIndopakSelection } from "#lib/quran/view/indopak-copy.js";
 
   let { children } = $props();
 
@@ -70,7 +70,7 @@
     if (offlineTeardown || offlineBootPending) return;
     const generation = offlineBootGeneration;
     offlineBootPending = true;
-    void import("$lib/boot/offline-engine")
+    void import("#lib/boot/offline-engine.js")
       .then(({ startOfflineEngine }) => {
         if (generation !== offlineBootGeneration) return;
         offlineTeardown = startOfflineEngine();
@@ -140,7 +140,7 @@
 
   afterNavigate((navigation) => {
     if (navigation.type !== "enter") {
-      void import("$lib/firebase/analytics")
+      void import("#lib/firebase/analytics.js")
         .then(({ pageView }) => pageView(location.pathname))
         .catch(() => {});
     }

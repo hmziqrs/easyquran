@@ -1,7 +1,7 @@
-import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
-import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
-import type { VerseKey } from "$lib/data/quran";
-import type { QuranSourceId } from "$lib/data/quran-types";
+import type { ArabicFontId, TranslationFamily } from "#lib/config/reader-fonts.js";
+import type { ReaderPositionState } from "#lib/data/mushaf-divisions.js";
+import type { QuranSourceId } from "#lib/data/quran-types.js";
+import type { VerseKey } from "#lib/data/quran.js";
 
 import { createAnnotations } from "./annotations.svelte";
 import {

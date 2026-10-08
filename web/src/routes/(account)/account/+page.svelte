@@ -1,15 +1,15 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { createLogoutFlow } from "$lib/auth/flows.svelte";
-  import { createPasskeyFlow } from "$lib/auth/passkey-flow.svelte";
-  import { accountClient, type SessionInfo } from "$lib/auth/account-client";
-  import { GENERIC_TRY_AGAIN } from "$lib/auth/auth-copy";
-  import TwoFactorControls from "$lib/auth/components/TwoFactorControls.svelte";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
+  import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
+  import { accountClient, type SessionInfo } from "#lib/auth/account-client.js";
+  import { GENERIC_TRY_AGAIN } from "#lib/auth/auth-copy.js";
+  import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import {
     resolveAccountView,
     sessionDeviceLabel,

@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 
-import { resolveAboutCopy } from "$lib/i18n/about-copy";
-import { resolveContactCopy } from "$lib/i18n/contact-copy";
-import { resolveFaqCopy } from "$lib/i18n/faq-copy";
-import { resolvePrivacyCopy, resolvePrivacySummary } from "$lib/i18n/privacy-copy";
-import { resolveTermsCopy } from "$lib/i18n/terms-copy";
 import { describe, expect, it } from "vite-plus/test";
+
+import { resolveAboutCopy } from "#lib/i18n/about-copy.js";
+import { resolveContactCopy } from "#lib/i18n/contact-copy.js";
+import { resolveFaqCopy } from "#lib/i18n/faq-copy.js";
+import { resolvePrivacyCopy, resolvePrivacySummary } from "#lib/i18n/privacy-copy.js";
+import { resolveTermsCopy } from "#lib/i18n/terms-copy.js";
 
 function source(path: string): string {
   return readFileSync(new URL(path, import.meta.url), "utf8");
@@ -50,7 +51,7 @@ describe("marketing page copy", () => {
     } as const;
 
     for (const [file, allowed] of Object.entries(modules)) {
-      const used = [...source(`../${file}`).matchAll(/\$lib\/i18n\/m\/([\w-]+)/g)].map((m) => m[1]);
+      const used = [...source(`../${file}`).matchAll(/#lib\/i18n\/m\/([\w-]+)/g)].map((m) => m[1]);
       expect(new Set(used), `${file} may only import ${allowed.join(", ")}`).toEqual(
         new Set(allowed),
       );
@@ -60,7 +61,7 @@ describe("marketing page copy", () => {
   it("keeps localized pages off the deleted English-only content module", () => {
     for (const page of ["about", "faq", "contact", "privacy", "terms"]) {
       const template = source(`../../../routes/(marketing)/${page}/+page.svelte`);
-      expect(template).not.toContain("$lib/data/content");
+      expect(template).not.toContain("#lib/data/content");
       expect(template).toContain("marketingLocaleFromPath");
       expect(template).toContain("inLanguage={locale}");
     }

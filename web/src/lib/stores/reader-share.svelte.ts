@@ -1,7 +1,8 @@
-import { browser } from "$app/environment";
-import { parseKey, type VerseKey } from "$lib/data/quran";
-import { peekQuranData } from "$lib/data/quran-data-client";
-import { stripTajweedMarkup } from "$lib/quran/view/tajweed";
+import { browser } from "$app/env";
+
+import { peekQuranData } from "#lib/data/quran-data-client.js";
+import { parseKey, type VerseKey } from "#lib/data/quran.js";
+import { stripTajweedMarkup } from "#lib/quran/view/tajweed.js";
 
 function verseRef(key: VerseKey): string {
   const { num, n } = parseKey(key);

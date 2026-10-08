@@ -3,7 +3,12 @@ import path from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const { ensureTranslationMock, hasTranslationMock, searchTranslationMock } = vi.hoisted(() => ({
   ensureTranslationMock: vi.fn(),
@@ -11,8 +16,8 @@ const { ensureTranslationMock, hasTranslationMock, searchTranslationMock } = vi.
   searchTranslationMock: vi.fn(),
 }));
 
-vi.mock("$lib/quran/worker-client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("$lib/quran/worker-client")>()),
+vi.mock("#lib/quran/worker-client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#lib/quran/worker-client.js")>()),
   quranWorker: {
     hasTranslation: (...args: unknown[]) => hasTranslationMock(...args),
     ensureTranslation: (...args: unknown[]) => ensureTranslationMock(...args),
@@ -20,10 +25,10 @@ vi.mock("$lib/quran/worker-client", async (importOriginal) => ({
   },
 }));
 
-import { surahRouteContext, type SurahRouteContext } from "$lib/data/quran";
-import { createQuranData, type QuranData } from "$lib/data/quran-data";
-import type { TranslationSearchResponse } from "$lib/quran/search/types";
-import { reader } from "$lib/stores/reader.svelte";
+import { createQuranData, type QuranData } from "#lib/data/quran-data.js";
+import { surahRouteContext, type SurahRouteContext } from "#lib/data/quran.js";
+import type { TranslationSearchResponse } from "#lib/quran/search/types.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 import { PaletteGroups } from "../groups";
 import { BUILTIN_PALETTE_SOURCES } from "../index";

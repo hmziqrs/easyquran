@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
+  import { Button } from "#lib/components/ui/button/index.js";
   import KeyIcon from "phosphor-svelte/lib/KeyIcon";
-  import { createOAuthFlows } from "$lib/auth/flows.svelte";
-  import { createPasskeyFlow } from "$lib/auth/passkey-flow.svelte";
-  import type { OAuthProvider } from "$lib/auth/oauth-flow.svelte";
+  import { createOAuthFlows } from "#lib/auth/flows.svelte.js";
+  import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
+  import type { OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
   import OAuthIcon from "./OAuthIcon.svelte";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
   const copy = getAuthCopy();
 

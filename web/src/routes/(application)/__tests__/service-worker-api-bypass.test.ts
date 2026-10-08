@@ -1,12 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$service-worker", () => ({
-  base: "",
-  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
-  build: [] as string[],
-  // SAFETY: empty array literal has no elements, so it satisfies string[] without any element-type check
-  files: [] as string[],
+vi.mock("$app/env", () => ({
+  browser: false,
+  dev: false,
+  building: false,
   version: "test-v1",
+}));
+
+vi.mock("$app/manifest", () => ({
+  // SAFETY: $app/manifest mock; assets/immutable are typed { path }[] but stay empty because no test enumerates them.
+  assets: [],
+  immutable: [],
+  prerendered: [],
+  routes: [],
+}));
+
+vi.mock("$app/paths", () => ({
+  // base is "" in every deployment, so resolve()/asset() mock as a plain "/" prefix.
+  resolve: (id: string) => `/${id}`,
+  asset: (id: string) => `/${id}`,
+  match: async () => null,
 }));
 
 // happy-dom has no persistent IDB; route every meta read/write through memory.
@@ -52,9 +65,9 @@ vi.mock("../../../lib/workers/idb", () => ({
   },
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
-vi.mock("$lib/data/quran", () => ({ translationIdFromSegments: () => "en.test" }));
-vi.mock("$lib/server/quran-data", () => ({ QURAN_DATA: {} }));
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/data/quran.js", () => ({ translationIdFromSegments: () => "en.test" }));
+vi.mock("#lib/server/quran-data.js", () => ({ QURAN_DATA: {} }));
 
 // Importing the module registers the top-level fetch listener on self.
 await import("../../../service-worker");

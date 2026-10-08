@@ -1,13 +1,14 @@
-import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
-import { MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "$lib/quran/fetch";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
+import type { Ayah, QuranRangeText, SurahNormalization } from "#lib/data/quran-types.js";
+import { MalformedDataError, RESPONSE_CAP, RANGE_CHUNK_TIMEOUT_MS } from "#lib/quran/fetch.js";
 import {
   fetchRangeChunks,
   planRangeChunks,
   stitchRangeChunks,
   type RangeJsonFetcher,
-} from "$lib/quran/range-fetch";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/quran/range-fetch.js";
 
 function norm(surah: number): SurahNormalization {
   return {

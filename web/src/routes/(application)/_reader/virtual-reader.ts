@@ -1,5 +1,6 @@
-import type { Ayah, SurahLocalPageData } from "$lib/data/quran-types";
 import { clamp, uniq } from "es-toolkit";
+
+import type { Ayah, SurahLocalPageData } from "#lib/data/quran-types.js";
 
 export interface ReaderVirtualItem {
   key: string;

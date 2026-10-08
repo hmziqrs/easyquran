@@ -1,13 +1,14 @@
-import { createSyncEngine, type RegisteredSyncDomain } from "$lib/sync/engine.svelte";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+
+import { createSyncEngine, type RegisteredSyncDomain } from "#lib/sync/engine.svelte.js";
 import {
   createOutbox,
   idbQueueStorage,
   memoryQueueStorage,
   type Outbox,
   type SyncMutationDraft,
-} from "$lib/sync/outbox";
-import type { SyncMutation } from "$lib/sync/types";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+} from "#lib/sync/outbox.js";
+import type { SyncMutation } from "#lib/sync/types.js";
 
 async function seed(outbox: Outbox, domain: string, count: number): Promise<SyncMutation[]> {
   const queued: SyncMutation[] = [];

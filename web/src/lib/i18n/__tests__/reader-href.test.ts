@@ -1,11 +1,12 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   translationJuzPath,
   translationSegmentsFromId,
   translationSurahPath,
-} from "$lib/data/quran";
-import { TRANSLATIONS } from "$lib/data/translations";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/quran.js";
+import { TRANSLATIONS } from "#lib/data/translations.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
 
 describe("canonical reader hrefs accept every baked translation id", () => {
   it("produces a canonical localized href for every id in the baked catalogue", () => {

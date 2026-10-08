@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cn, externalLinkAttrs, type WithElementRef } from "$lib/utils";
+  import { cn, externalLinkAttrs, type WithElementRef } from "#lib/utils.js";
   import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
   import type { Snippet } from "svelte";
   import {

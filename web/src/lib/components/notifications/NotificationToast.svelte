@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { notifications } from "$lib/stores/notifications.svelte";
+  import { notifications } from "#lib/stores/notifications.svelte.js";
   import type { Attachment } from "svelte/attachments";
 
   function dismiss(): void {

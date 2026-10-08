@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { commandPalette } from "$lib/stores/command-palette.svelte";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { commandPalette } from "#lib/stores/command-palette.svelte.js";
   import { loadAuthModal } from "./auth-modal-loader";
 
   let Modal = $state<Component | null>(null);

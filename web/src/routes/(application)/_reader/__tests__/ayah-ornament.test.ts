@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
 import { mount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -16,12 +17,12 @@ const { nav, readerStub, mountStub } = vi.hoisted(() => ({
   mountStub: () => {},
 }));
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: nav }));
-vi.mock("$lib/stores/reader.svelte", () => ({ reader: readerStub }));
+vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: readerStub }));
 vi.mock("../VerseTools.svelte", () => ({ default: mountStub }));
 
-import { toArabicDigits } from "$lib/data/quran";
+import { toArabicDigits } from "#lib/data/quran.js";
 
 import VerseRow from "../VerseRow.svelte";
 

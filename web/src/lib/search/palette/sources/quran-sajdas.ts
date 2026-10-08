@@ -1,4 +1,4 @@
-import { matchSajdas } from "$lib/search/nav/match";
+import { matchSajdas } from "#lib/search/nav/match.js";
 
 import { SAJDA_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";

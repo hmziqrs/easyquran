@@ -1,4 +1,5 @@
-import type { Handle, RequestEvent } from "@sveltejs/kit";
+import type { RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const cache = vi.hoisted(() => ({
@@ -7,10 +8,10 @@ const cache = vi.hoisted(() => ({
   set: vi.fn<(key: string, html: string) => Promise<void>>(),
 }));
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
 
-vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
-  const original = await importOriginal<typeof import("$lib/server/quran-disk-cache")>();
+vi.mock("#lib/server/quran-disk-cache.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("#lib/server/quran-disk-cache.js")>();
   return {
     ...original,
     getCachedHtml: cache.get,
@@ -18,7 +19,7 @@ vi.mock("$lib/server/quran-disk-cache", async (importOriginal) => {
   };
 });
 
-import { QURAN_DATA } from "$lib/server/quran-data";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 import { handle } from "../../../hooks.server";
 

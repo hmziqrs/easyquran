@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { resolveChromeCopy } from "$lib/i18n/chrome-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
+  import { resolveChromeCopy } from "#lib/i18n/chrome-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import MarketingFooter from "./_components/MarketingFooter.svelte";
   import MarketingHeader from "./_components/MarketingHeader.svelte";
   import MarketingTweaks from "./_components/MarketingTweaks.svelte";

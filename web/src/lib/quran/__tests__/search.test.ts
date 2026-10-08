@@ -1,7 +1,8 @@
-import { SearchProvider } from "$lib/quran/search/types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "https://api.test/quran" } }));
+import { SearchProvider } from "#lib/quran/search/types.js";
+
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "https://api.test/quran" } }));
 
 const forwarded = vi.fn();
 const searchMock = vi.fn().mockResolvedValue({
@@ -13,15 +14,15 @@ const searchMock = vi.fn().mockResolvedValue({
   source: SearchProvider.Api,
 });
 
-vi.mock("$lib/quran/api-client", () => ({
+vi.mock("#lib/quran/api-client.js", () => ({
   quranApi: { search: (...a: unknown[]) => searchMock(...a) },
 }));
 
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: { ready: false, search: vi.fn() },
 }));
 
-vi.mock("$lib/data/quran-data-client", () => ({
+vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: async () => ({
     surahs: [{ num: 1, name: "Fatiha", arabic: "الفاتحة", startGlobal: 0 }],
     globalIndexOf: (surah: number, ayah: number) => {
@@ -32,7 +33,7 @@ vi.mock("$lib/data/quran-data-client", () => ({
   }),
 }));
 
-import { quranSearch } from "$lib/quran/search";
+import { quranSearch } from "#lib/quran/search.js";
 
 describe("quranSearch api fallback", () => {
   afterEach(() => vi.clearAllMocks());

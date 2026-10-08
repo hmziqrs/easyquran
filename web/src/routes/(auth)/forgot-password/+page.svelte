@@ -1,16 +1,16 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { createForm, revalidateLogic } from "@tanstack/svelte-form";
-  import AuthForm from "$lib/auth/components/AuthForm.svelte";
-  import AuthField from "$lib/auth/components/AuthField.svelte";
-  import PasswordInput from "$lib/auth/components/PasswordInput.svelte";
-  import { createForgotPasswordFlow } from "$lib/auth/flows.svelte";
+  import AuthForm from "#lib/auth/components/AuthForm.svelte";
+  import AuthField from "#lib/auth/components/AuthField.svelte";
+  import PasswordInput from "#lib/auth/components/PasswordInput.svelte";
+  import { createForgotPasswordFlow } from "#lib/auth/flows.svelte.js";
   import {
     dynamicValidator,
     fieldError,
     ServerFieldErrors,
-  } from "$lib/auth/form-validation.svelte";
-  import { forgotRequestSchema, forgotVerifySchema, resetPasswordSchema } from "$lib/auth/schemas";
+  } from "#lib/auth/form-validation.svelte.js";
+  import { forgotRequestSchema, forgotVerifySchema, resetPasswordSchema } from "#lib/auth/schemas.js";
 
   const flow = createForgotPasswordFlow();
 

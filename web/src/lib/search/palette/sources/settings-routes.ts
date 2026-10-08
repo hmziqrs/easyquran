@@ -1,4 +1,4 @@
-import type { Pathname } from "$app/types";
+import type { Path } from "$app/types";
 
 import { PaletteGroups } from "../groups";
 import { byScore, scoreFields } from "../scoring";
@@ -7,11 +7,11 @@ import type { PaletteEntry, PaletteSource } from "../types";
 const SOURCE_ID = "settings.routes";
 const SETTINGS_PATH = "/settings";
 
-function settingsHref(): Pathname {
+function settingsHref(): Path {
   // SAFETY: canonical settings pathname (/ar/settings reroutes onto it with
   // Arabic chrome; the /en and /app shapes are 308s); the palette's
   // resolveHref applies the base, so the raw path is what the cast brands it as.
-  return SETTINGS_PATH as Pathname;
+  return SETTINGS_PATH as Path;
 }
 
 /** Settings navigation. Labels stay English — see the palette-label precedent in site-routes.ts. */

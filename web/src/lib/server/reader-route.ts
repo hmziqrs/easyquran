@@ -1,9 +1,9 @@
-import { hizbRange } from "$lib/data/mushaf-divisions";
-import { translationIdFromSegments } from "$lib/data/quran";
-import { RangeKind } from "$lib/data/quran-data";
-import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "$lib/data/translations";
-import { type UiDirection, type UiLocale } from "$lib/i18n/locales";
-import { QURAN_DATA } from "$lib/server/quran-data";
+import { hizbRange } from "#lib/data/mushaf-divisions.js";
+import { RangeKind } from "#lib/data/quran-data.js";
+import { translationIdFromSegments } from "#lib/data/quran.js";
+import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "#lib/data/translations.js";
+import { type UiDirection, type UiLocale } from "#lib/i18n/locales.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 interface ReaderIndexRoute {
   readonly type: "index";

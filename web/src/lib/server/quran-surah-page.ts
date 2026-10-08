@@ -1,8 +1,8 @@
-import { hizbOfPage, juzOfPage } from "$lib/data/mushaf-divisions";
-import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "$lib/data/quran-types";
-import { QURAN_DATA, toSurahRenderMetadata } from "$lib/server/quran-data";
-import { surahRouteNav } from "$lib/server/quran-page-shape";
-import { readRangeText } from "$lib/server/quran-sqlite";
+import { hizbOfPage, juzOfPage } from "#lib/data/mushaf-divisions.js";
+import type { CatalogEntry, SurahLocalPageData, SurahRouteData } from "#lib/data/quran-types.js";
+import { QURAN_DATA, toSurahRenderMetadata } from "#lib/server/quran-data.js";
+import { surahRouteNav } from "#lib/server/quran-page-shape.js";
+import { readRangeText } from "#lib/server/quran-sqlite.js";
 
 export function readSurahLocalPageData(
   surah: CatalogEntry,

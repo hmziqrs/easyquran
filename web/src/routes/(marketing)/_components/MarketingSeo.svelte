@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { SITE } from "$lib/config/site";
-  import { resolveLandingSeoCopy } from "$lib/i18n/landing-copy";
-  import { marketingHomeHref, type MarketingLocale } from "$lib/i18n/marketing-copy";
-  import { UI_LOCALES } from "$lib/i18n/locales";
+  import { SITE } from "#lib/config/site.js";
+  import { resolveLandingSeoCopy } from "#lib/i18n/landing-copy.js";
+  import { marketingHomeHref, type MarketingLocale } from "#lib/i18n/marketing-copy.js";
+  import { UI_LOCALES } from "#lib/i18n/locales.js";
 
   let { locale }: { locale: MarketingLocale } = $props();
 

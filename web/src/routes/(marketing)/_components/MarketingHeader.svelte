@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { prefs } from "$lib/stores/prefs.svelte";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { authModal } from "$lib/auth/auth-modal.svelte";
-  import { Icon } from "$lib/components";
-  import { SearchTrigger } from "$lib/components/search";
-  import { marketingHomeHref, type MarketingLocale } from "$lib/i18n/marketing-copy";
-  import { marketingHref } from "$lib/i18n/marketing";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { readerHrefFor, yoursPageHref } from "$lib/i18n/reader";
-  import { SITE } from "$lib/config/site";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { Icon } from "#lib/components/index.js";
+  import { SearchTrigger } from "#lib/components/search/index.js";
+  import { marketingHomeHref, type MarketingLocale } from "#lib/i18n/marketing-copy.js";
+  import { marketingHref } from "#lib/i18n/marketing.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
+  import { SITE } from "#lib/config/site.js";
   import {
     brand_home_label,
     nav_about,
@@ -23,8 +23,8 @@
     nav_surahs,
     nav_toggle_theme,
     nav_yours,
-  } from "$lib/i18n/m/chrome";
-  import { UI_LOCALES } from "$lib/i18n/locales";
+  } from "#lib/i18n/m/chrome.js";
+  import { UI_LOCALES } from "#lib/i18n/locales.js";
 
   /**
    * Board band 1 (design/PillLightCobalt.dc.html): a ruled 80px header — wordmark,

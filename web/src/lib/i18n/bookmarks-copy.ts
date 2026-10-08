@@ -1,5 +1,5 @@
-import type { UiDirection, UiLocale } from "$lib/i18n/locales";
-import { uiDirection } from "$lib/i18n/locales";
+import type { UiDirection, UiLocale } from "#lib/i18n/locales.js";
+import { uiDirection } from "#lib/i18n/locales.js";
 import {
   reader_bookmarks_ayah,
   reader_bookmarks_cancel,
@@ -28,8 +28,8 @@ import {
   reader_bookmarks_synced,
   reader_bookmarks_title,
   reader_bookmarks_uncategorized,
-} from "$lib/i18n/m/reader";
-import { getLocale } from "$lib/paraglide/runtime.js";
+} from "#lib/i18n/m/reader.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 export interface BookmarksCopy {
   readonly locale: UiLocale;

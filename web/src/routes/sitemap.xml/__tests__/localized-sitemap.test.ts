@@ -1,11 +1,17 @@
-import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import { QURAN_DATA } from "$lib/server/quran-data";
 import { describe, expect, it, vi } from "vite-plus/test";
+
+import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 import { GET } from "../+server";
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const QURAN_DATA_SURAH_COUNT = QURAN_DATA.surahs.length;
 

@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   globalPagePathFor,
   hizbPathFor,
@@ -14,8 +16,7 @@ import {
   translationJuzPath,
   translationSegmentsFromId,
   translationSurahPath,
-} from "$lib/data/quran";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/quran.js";
 
 const ROUTE_LITERALS = ["t", "page", "juz", "hizb", "rub"] as const;
 

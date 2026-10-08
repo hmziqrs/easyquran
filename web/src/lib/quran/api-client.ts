@@ -1,6 +1,6 @@
-import { QURAN } from "$lib/config/site";
-import { isArabicSourceId } from "$lib/data/quran-types";
-import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "$lib/data/quran-types";
+import { QURAN } from "#lib/config/site.js";
+import { isArabicSourceId } from "#lib/data/quran-types.js";
+import type { QuranRangeText, QuranReaderSource, QuranSurahText } from "#lib/data/quran-types.js";
 
 import { quranApiAvailability } from "./api-availability";
 import { fetchJsonWithTimeout, type JsonDocument, MalformedDataError } from "./fetch";

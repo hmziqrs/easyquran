@@ -1,4 +1,4 @@
-import type { ReadTierStatus } from "$lib/quran/fetch";
+import type { ReadTierStatus } from "#lib/quran/fetch.js";
 
 /**
  * Tracks the "something failed to load" state for a SurahReader instance:

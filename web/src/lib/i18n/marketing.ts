@@ -1,6 +1,6 @@
-import { MARKETING_ROUTES } from "$lib/config/site-structure";
-import { assertUiLocale, type UiLocale } from "$lib/i18n/locales";
-import { localizeHref } from "$lib/paraglide/runtime";
+import { MARKETING_ROUTES } from "#lib/config/site-structure.js";
+import { assertUiLocale, type UiLocale } from "#lib/i18n/locales.js";
+import { localizeHref } from "#lib/paraglide/runtime.js";
 
 export const MARKETING_PATHS = MARKETING_ROUTES;
 

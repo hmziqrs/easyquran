@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "$lib/components";
+  import { Button } from "#lib/components/index.js";
   import { HERO, VALUES, ROADMAP, SECTIONS, FACTS } from "../copy";
 
   let { verses, arabicName }: { verses: string[]; arabicName: string } = $props();

@@ -1,4 +1,4 @@
-import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
+import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
 
 import { idbDelete, idbPut, openIdb } from "./idb";
 import { idbError } from "./idb-error";

@@ -1,5 +1,5 @@
-import { asset } from "$app/paths";
-import { createQuranData, RangeKind } from "$lib/data/quran-data";
+import { QURAN_DATA_URL } from "#lib/data/quran-data-client.js";
+import { createQuranData, RangeKind } from "#lib/data/quran-data.js";
 
 import type { PageLoad } from "./$types";
 
@@ -30,7 +30,7 @@ export interface PageIndexRow {
 }
 
 export const load: PageLoad = async ({ fetch }) => {
-  const response = await fetch(asset("/quran-meta/quran-data.json"), {
+  const response = await fetch(QURAN_DATA_URL, {
     headers: { accept: "application/json" },
   });
   if (!response.ok) {

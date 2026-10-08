@@ -1,8 +1,8 @@
-import { hizbPathFor, type SurahRouteContext } from "$lib/data/quran";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { loadRangeData } from "$lib/server/quran-range";
-import { renderRangePageMarkdown } from "$lib/server/reader-markdown";
-import { rangeEntries, requireRangeIndex } from "$lib/server/reader-route-guards";
+import { hizbPathFor, type SurahRouteContext } from "#lib/data/quran.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { loadRangeData } from "#lib/server/quran-range.js";
+import { renderRangePageMarkdown } from "#lib/server/reader-markdown.js";
+import { rangeEntries, requireRangeIndex } from "#lib/server/reader-route-guards.js";
 
 import type { RequestHandler } from "./$types";
 

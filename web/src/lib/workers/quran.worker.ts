@@ -1,3 +1,6 @@
+import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
+import { uniq } from "es-toolkit";
+
 import {
   isArabicSourceId,
   OpenerKind,
@@ -13,8 +16,8 @@ import {
   type QuranSurahText,
   type SurahNormalization,
   type TranslationCatalogueEntry,
-} from "$lib/data/quran-types";
-import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "$lib/quran/source-plan";
+} from "#lib/data/quran-types.js";
+import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "#lib/quran/source-plan.js";
 import {
   runOne,
   runQuery,
@@ -22,10 +25,8 @@ import {
   type CanonicalQuranRow,
   type QuranCoordinateRow,
   type QuranQueryRunner,
-} from "$lib/quran/sql";
-import { createWasmQueryRunner } from "$lib/quran/wasm-query-runner";
-import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { uniq } from "es-toolkit";
+} from "#lib/quran/sql.js";
+import { createWasmQueryRunner } from "#lib/quran/wasm-query-runner.js";
 
 import type {
   StorageArtifactInfo,

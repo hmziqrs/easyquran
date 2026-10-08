@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cn } from "$lib/utils";
+  import { cn } from "#lib/utils.js";
   import Band from "./Band.svelte";
   import type { HTMLAttributes } from "svelte/elements";
   import type { Snippet } from "svelte";

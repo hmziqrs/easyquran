@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { Icon } from "$lib/components";
-  import { toArabicDigits, surahMeta } from "$lib/data/quran";
-  import type { Surah } from "$lib/data/quran";
-  import { cn } from "$lib/utils";
+  import { Icon } from "#lib/components/index.js";
+  import { toArabicDigits, surahMeta } from "#lib/data/quran.js";
+  import type { Surah } from "#lib/data/quran.js";
+  import { cn } from "#lib/utils.js";
   import { displayVerses } from "../verses";
-  import { headerText } from "$lib/quran/view/presentation";
+  import { headerText } from "#lib/quran/view/presentation.js";
 
   let { surah }: { surah: Surah } = $props();
 

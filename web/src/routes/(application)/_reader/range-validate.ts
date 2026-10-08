@@ -1,4 +1,4 @@
-import type { QuranData } from "$lib/data/quran-data";
+import type { QuranData } from "#lib/data/quran-data.js";
 
 /**
  * Cross-checks a worker/API-fetched ayah's global index against the

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { focusFirstInvalid } from "$lib/auth/components/auth-form-focus";
-  import { cn } from "$lib/utils";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { focusFirstInvalid } from "#lib/auth/components/auth-form-focus.js";
+  import { cn } from "#lib/utils.js";
   import { tick, type Snippet } from "svelte";
-  import { getAuthCopy } from "$lib/i18n/auth-copy";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
   const copy = getAuthCopy();
 

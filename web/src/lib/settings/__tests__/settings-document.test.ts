@@ -1,21 +1,26 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$app/environment", () => ({
+vi.mock("$app/env", () => ({
   browser: false,
   dev: false,
 }));
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const presentation = vi.hoisted(() => ({ apply: vi.fn() }));
-vi.mock("$lib/stores/reader-presentation", () => ({
+vi.mock("#lib/stores/reader-presentation.js", () => ({
   applyReaderPresentation: presentation.apply,
 }));
 
-import type { ArabicFontId, TranslationFamily } from "$lib/config/reader-fonts";
-import { DEFAULTS } from "$lib/config/site";
-import type { QuranSourceId } from "$lib/data/quran-types";
-import { createConsent } from "$lib/stores/consent.svelte";
-import type { Prefs } from "$lib/stores/prefs.svelte";
+import type { ArabicFontId, TranslationFamily } from "#lib/config/reader-fonts.js";
+import { DEFAULTS } from "#lib/config/site.js";
+import type { QuranSourceId } from "#lib/data/quran-types.js";
+import { createConsent } from "#lib/stores/consent.svelte.js";
+import type { Prefs } from "#lib/stores/prefs.svelte.js";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -24,8 +29,8 @@ import {
   TRANSLATION_FONT_MIN,
   TRANSLATION_FONT_STEP,
   type ReaderMode,
-} from "$lib/stores/reader-core.svelte";
-import { createReader } from "$lib/stores/reader.svelte";
+} from "#lib/stores/reader-core.svelte.js";
+import { createReader } from "#lib/stores/reader.svelte.js";
 
 import {
   applySettingsDoc,

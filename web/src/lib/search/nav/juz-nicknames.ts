@@ -1,4 +1,4 @@
-import { translitKey } from "$lib/quran/search/translit";
+import { translitKey } from "#lib/quran/search/translit.js";
 
 /**
  * Juz nicknames in circulation — the divisions people actually name by their

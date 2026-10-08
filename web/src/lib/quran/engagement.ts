@@ -1,6 +1,7 @@
-import { browser } from "$app/environment";
-import { isArabicSourceId, type QuranReaderSource } from "$lib/data/quran-types";
-import { readRaw, removeRaw, writeRaw } from "$lib/storage";
+import { browser } from "$app/env";
+
+import { isArabicSourceId, type QuranReaderSource } from "#lib/data/quran-types.js";
+import { readRaw, removeRaw, writeRaw } from "#lib/storage/index.js";
 
 import { bumpReaderView } from "./engagement-state";
 import { quranWorker } from "./worker-client";

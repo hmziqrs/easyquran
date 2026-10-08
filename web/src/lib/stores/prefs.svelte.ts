@@ -1,4 +1,5 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+
 import {
   ACCENTS,
   DEFAULT_MODE,
@@ -12,9 +13,16 @@ import {
   type PaletteId,
   type SurfaceId,
   type ThemeMode,
-} from "$lib/config/site";
-import { asLiteral, asObject, asString, onStorageKey, readJSON, writeJSON } from "$lib/storage";
-import { deriveTokens, tokensToCss, type CustomSeeds } from "$lib/theme/derive";
+} from "#lib/config/site.js";
+import {
+  asLiteral,
+  asObject,
+  asString,
+  onStorageKey,
+  readJSON,
+  writeJSON,
+} from "#lib/storage/index.js";
+import { deriveTokens, tokensToCss, type CustomSeeds } from "#lib/theme/derive.js";
 
 const STORAGE_KEY = "easyquran.prefs";
 

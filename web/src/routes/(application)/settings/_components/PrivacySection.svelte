@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { updated } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { createLogoutFlow } from "$lib/auth/flows.svelte";
-  import { installPurgeHook } from "$lib/auth/purge-hook";
-  import { isMessagingConfigured } from "$lib/firebase";
-  import { notificationsStatus } from "$lib/components/notifications/notifications-copy";
-  import { update } from "$lib/offline/update.svelte";
-  import { consent } from "$lib/stores/consent.svelte";
-  import { notifications } from "$lib/stores/notifications.svelte";
-  import { cn } from "$lib/utils";
-  import type { SettingsCopy } from "$lib/i18n/settings-copy";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
+  import { installPurgeHook } from "#lib/auth/purge-hook.js";
+  import { isMessagingConfigured } from "#lib/firebase/index.js";
+  import { notificationsStatus } from "#lib/components/notifications/notifications-copy.js";
+  import { update } from "#lib/offline/update.svelte.js";
+  import { consent } from "#lib/stores/consent.svelte.js";
+  import { notifications } from "#lib/stores/notifications.svelte.js";
+  import { cn } from "#lib/utils.js";
+  import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
   let {
     id,

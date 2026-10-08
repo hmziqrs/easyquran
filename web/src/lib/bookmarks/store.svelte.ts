@@ -1,9 +1,10 @@
-import { browser } from "$app/environment";
-import { authClient } from "$lib/auth/auth-client";
-import { authState } from "$lib/auth/auth-state.svelte";
-import type { VerseKey } from "$lib/data/quran";
-import { readRaw, writeRaw } from "$lib/storage/safe-storage";
-import { reader } from "$lib/stores/reader.svelte";
+import { browser } from "$app/env";
+
+import { authClient } from "#lib/auth/auth-client.js";
+import { authState } from "#lib/auth/auth-state.svelte.js";
+import type { VerseKey } from "#lib/data/quran.js";
+import { readRaw, writeRaw } from "#lib/storage/safe-storage.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 import {
   registerDomain,
   syncEngine,
@@ -11,7 +12,7 @@ import {
   type SyncDomain,
   type SyncMutation,
   type SyncStatus,
-} from "$lib/sync";
+} from "#lib/sync/index.js";
 
 import { createBookmarksDomain, type BookmarkAuthLike } from "./domain";
 import {

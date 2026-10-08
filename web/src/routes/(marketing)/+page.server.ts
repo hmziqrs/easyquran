@@ -1,4 +1,4 @@
-import { createQuranData, RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
+import { createQuranData, RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 
 import quranDataRaw from "../../../static/quran-meta/quran-data.json";
 

@@ -1,16 +1,16 @@
 <script lang="ts">
   import { createForm, revalidateLogic } from "@tanstack/svelte-form";
-  import { Button } from "$lib/components/ui/button";
-  import AuthField from "$lib/auth/components/AuthField.svelte";
-  import { createTwoFactorFlow } from "$lib/auth/flows.svelte";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import AuthField from "#lib/auth/components/AuthField.svelte";
+  import { createTwoFactorFlow } from "#lib/auth/flows.svelte.js";
   import {
     dynamicValidator,
     fieldError,
     ServerFieldErrors,
-  } from "$lib/auth/form-validation.svelte";
-  import { twoFactorDisableSchema, twoFactorVerifySchema } from "$lib/auth/schemas";
-  import { authState } from "$lib/auth/auth-state.svelte";
-  import { VERIFY_EMAIL_NEXT } from "$lib/auth/auth-copy";
+  } from "#lib/auth/form-validation.svelte.js";
+  import { twoFactorDisableSchema, twoFactorVerifySchema } from "#lib/auth/schemas.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { VERIFY_EMAIL_NEXT } from "#lib/auth/auth-copy.js";
 
   const flow = createTwoFactorFlow();
 

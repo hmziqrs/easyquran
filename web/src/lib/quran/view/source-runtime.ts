@@ -1,4 +1,4 @@
-import type { CanonicalQuranCoordinates } from "$lib/data/quran-types";
+import type { CanonicalQuranCoordinates } from "#lib/data/quran-types.js";
 
 import { runOne, runQuery, type CanonicalQuranRow, type QuranQueryRunner } from "../sql.ts";
 import { validateCanonicalCoordinates } from "./canonical-coordinates.ts";

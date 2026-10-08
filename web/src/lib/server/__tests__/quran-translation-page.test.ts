@@ -1,19 +1,39 @@
-import { env } from "$env/dynamic/private";
-import { RangeKind } from "$lib/data/quran-data";
-import { OpenerKind, OpenerPackaging, QuranScript } from "$lib/data/quran-types";
-import type { Ayah } from "$lib/data/quran-types";
-import { RESPONSE_CAP } from "$lib/quran/fetch";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { loadTranslationRangeData } from "$lib/server/quran-translation-page";
-import { clearTranslationRangeCache } from "$lib/server/translation-range-cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("$env/dynamic/private", () => ({
-  env: { INTERNAL_QURAN_API_BASE: "https://api.test", INTERNAL_QURAN_API_TOKEN: undefined },
+import { RangeKind } from "#lib/data/quran-data.js";
+import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
+import type { Ayah } from "#lib/data/quran-types.js";
+import { RESPONSE_CAP } from "#lib/quran/fetch.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { loadTranslationRangeData } from "#lib/server/quran-translation-page.js";
+import { clearTranslationRangeCache } from "#lib/server/translation-range-cache.js";
+
+// Kit 3 `$app/env/private` exports immutable named consts; the token-gating
+// specs below flip INTERNAL_QURAN_API_BASE between cases, so the mock reads
+// through getters over this mutable backing object (vi.mock factory values
+// are snapshotted at mock time and cannot be reassigned later).
+const internalEnv = vi.hoisted(() => ({
+  INTERNAL_QURAN_API_BASE: "https://api.test",
+  // SAFETY: the mock mirrors the real module's string-or-unset shape; the
+  // assertion only widens the literal undefined for later token assignment.
+  INTERNAL_QURAN_API_TOKEN: undefined as string | undefined,
 }));
 
-vi.mock("$env/dynamic/public", () => ({
-  env: { PUBLIC_QURAN_API_BASE: "https://public.test", PUBLIC_ENV: "local" },
+vi.mock("$app/env/private", () => ({
+  get INTERNAL_QURAN_API_BASE() {
+    return internalEnv.INTERNAL_QURAN_API_BASE;
+  },
+  get INTERNAL_QURAN_API_TOKEN() {
+    return internalEnv.INTERNAL_QURAN_API_TOKEN;
+  },
+  OWNER_SOURCE_URL: undefined,
+}));
+
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: "https://public.test",
+  PUBLIC_ENV: "local",
+  PUBLIC_FCM_VAPID_KEY: undefined,
 }));
 
 const SOURCE_ID = "en.sahih";
@@ -177,12 +197,12 @@ describe("SSR translation range per-chunk coordinate validation", () => {
 });
 
 describe("SSR internal token gating on the resolved API base", () => {
-  const savedBase = env.INTERNAL_QURAN_API_BASE;
-  const savedToken = env.INTERNAL_QURAN_API_TOKEN;
+  const savedBase = internalEnv.INTERNAL_QURAN_API_BASE;
+  const savedToken = internalEnv.INTERNAL_QURAN_API_TOKEN;
 
   afterEach(() => {
-    env.INTERNAL_QURAN_API_BASE = savedBase;
-    env.INTERNAL_QURAN_API_TOKEN = savedToken;
+    internalEnv.INTERNAL_QURAN_API_BASE = savedBase;
+    internalEnv.INTERNAL_QURAN_API_TOKEN = savedToken;
   });
 
   // Captures every header the SSR layer forwards to the upstream fetcher.
@@ -200,8 +220,8 @@ describe("SSR internal token gating on the resolved API base", () => {
   }
 
   it("attaches the internal token when INTERNAL_QURAN_API_BASE is set", async () => {
-    env.INTERNAL_QURAN_API_BASE = "https://api.test";
-    env.INTERNAL_QURAN_API_TOKEN = "secret-token";
+    internalEnv.INTERNAL_QURAN_API_BASE = "https://api.test";
+    internalEnv.INTERNAL_QURAN_API_TOKEN = "secret-token";
     const { fetcher, seen } = headerCapturingFetcher();
     await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
     expect(seen.get("x-easyquran-internal-token")).toBe("secret-token");
@@ -209,9 +229,9 @@ describe("SSR internal token gating on the resolved API base", () => {
 
   it("sends NO internal token when INTERNAL_QURAN_API_BASE is unset (public fallback)", async () => {
     // Empty string is the falsy stand-in for an unset var: the runtime only branches
-    // on truthiness (`INTERNAL_QURAN_API_BASE || …`, `!!env.INTERNAL_QURAN_API_BASE`).
-    env.INTERNAL_QURAN_API_BASE = "";
-    env.INTERNAL_QURAN_API_TOKEN = "secret-token";
+    // on truthiness (`INTERNAL_QURAN_API_BASE || …`, `!!INTERNAL_QURAN_API_BASE`).
+    internalEnv.INTERNAL_QURAN_API_BASE = "";
+    internalEnv.INTERNAL_QURAN_API_TOKEN = "secret-token";
     const { fetcher, seen } = headerCapturingFetcher();
     await loadTranslationRangeData("juz", 1, "en", "sahih", fetcher);
     expect(seen.has("x-easyquran-internal-token")).toBe(false);

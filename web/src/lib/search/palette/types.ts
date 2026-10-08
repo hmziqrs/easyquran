@@ -1,9 +1,10 @@
-import type { Pathname } from "$app/types";
-import type { IconName } from "$lib/components/icon/icons";
-import type { SurahRouteContext } from "$lib/data/quran";
-import type { QuranData } from "$lib/data/quran-data";
-import type { TranslationDirection } from "$lib/data/quran-types";
-import type { Highlight } from "$lib/quran/search/types";
+import type { Path } from "$app/types";
+
+import type { IconName } from "#lib/components/icon/icons.js";
+import type { QuranData } from "#lib/data/quran-data.js";
+import type { TranslationDirection } from "#lib/data/quran-types.js";
+import type { SurahRouteContext } from "#lib/data/quran.js";
+import type { Highlight } from "#lib/quran/search/types.js";
 
 /**
  * A row heading in the palette. Domains own their groups: the Quran sources
@@ -36,7 +37,7 @@ export interface PaletteEntry {
   /** Relevance in `[0, 1]`. Sources rank within themselves; groups keep order. */
   score: number;
   /** Where selecting this entry navigates. Omit for pure actions. */
-  href?: Pathname;
+  href?: Path;
   /** Side effect to run on select — before navigation, if there is any. */
   run?: () => void;
   /**
@@ -52,7 +53,7 @@ export interface PaletteEntry {
  * (`juz`, `page`, `bukhari`, …) — a source claims it if it recognizes it, and
  * ignores it otherwise, since it is also just the first word of free text.
  */
-import type { ParsedQuery as ParsedQueryType } from "$lib/search/nav/parse";
+import type { ParsedQuery as ParsedQueryType } from "#lib/search/nav/parse.js";
 
 export type ParsedQuery = ParsedQueryType;
 

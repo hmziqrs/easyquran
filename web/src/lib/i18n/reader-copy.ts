@@ -1,5 +1,5 @@
-import type { FooterLinkLabels } from "$lib/i18n/footer-links";
-import { uiDirection, type UiDirection, type UiLocale } from "$lib/i18n/locales";
+import type { FooterLinkLabels } from "#lib/i18n/footer-links.js";
+import { uiDirection, type UiDirection, type UiLocale } from "#lib/i18n/locales.js";
 import {
   footer_about,
   footer_blurb,
@@ -25,7 +25,7 @@ import {
   nav_search_page,
   nav_settings,
   skip_to_content,
-} from "$lib/i18n/m/chrome";
+} from "#lib/i18n/m/chrome.js";
 import {
   reader_account,
   reader_appearance,
@@ -223,10 +223,10 @@ import {
   reader_translations_results_one,
   reader_translations_switch,
   reader_your_note,
-} from "$lib/i18n/m/reader";
-import type { FooterResolvedCopy, NavResolvedCopy } from "$lib/i18n/marketing-copy";
-import { getLocale } from "$lib/paraglide/runtime.js";
-import type { TranslationProvenance } from "$lib/quran/catalogue";
+} from "#lib/i18n/m/reader.js";
+import type { FooterResolvedCopy, NavResolvedCopy } from "#lib/i18n/marketing-copy.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
+import type { TranslationProvenance } from "#lib/quran/catalogue.js";
 
 type BrowseMode = "surah" | "ayah" | "juz" | "page";
 type RangeKind = "juz" | "page" | "hizb" | "rub";

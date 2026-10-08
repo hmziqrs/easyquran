@@ -1,17 +1,18 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import {
   OpenerKind,
   OpenerPackaging,
   QuranScript,
   QuranSourceId,
   type ArtifactSpec,
-} from "$lib/data/quran-types";
-import type { WorkerOutbound, WorkerRequest } from "$lib/quran/protocol";
-import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
-import { quranWorker, StorageAdminError } from "$lib/quran/worker-client";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/data/quran-types.js";
+import type { WorkerOutbound, WorkerRequest } from "#lib/quran/protocol.js";
+import { SearchHitKind, SearchProvider } from "#lib/quran/search/types.js";
+import { quranWorker, StorageAdminError } from "#lib/quran/worker-client.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
-vi.mock("$lib/config/site", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- mirrors the DOM Worker addEventListener callback contract; quranWorker registers its own opaque message listener, so the event shape stays unknown at this fake boundary
 type Listener = (e: unknown) => void;

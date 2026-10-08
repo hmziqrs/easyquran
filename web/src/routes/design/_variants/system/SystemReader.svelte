@@ -2,9 +2,9 @@
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import LanguagesIcon from "@lucide/svelte/icons/languages";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
-  import Bismillah from "$lib/components/brand/Bismillah.svelte";
-  import { Icon, type IconName } from "$lib/components/icon";
-  import { toArabicDigits } from "$lib/data/quran";
+  import Bismillah from "#lib/components/brand/Bismillah.svelte";
+  import { Icon, type IconName } from "#lib/components/icon/index.js";
+  import { toArabicDigits } from "#lib/data/quran.js";
   import type { MixSurah, MixTranslation } from "../mix/types";
   import type { ReaderSystem } from "./systems";
 

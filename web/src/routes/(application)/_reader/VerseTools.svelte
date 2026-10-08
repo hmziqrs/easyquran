@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { bookmarks } from "$lib/bookmarks/store.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { Icon, type IconName } from "$lib/components/icon";
-  import { Tooltip, TooltipTrigger, TooltipContent } from "$lib/components/ui/tooltip";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { cn } from "$lib/utils";
+  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { Icon, type IconName } from "#lib/components/icon/index.js";
+  import { Tooltip, TooltipTrigger, TooltipContent } from "#lib/components/ui/tooltip/index.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { cn } from "#lib/utils.js";
 
   const COPY_FEEDBACK_MS = 1500;
 

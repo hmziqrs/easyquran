@@ -1,27 +1,27 @@
-import type { QuranData } from "$lib/data/quran-data";
-import { loadQuranData } from "$lib/data/quran-data-client";
-import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-import { quranSearch } from "$lib/quran/search";
+import { loadQuranData } from "#lib/data/quran-data-client.js";
+import type { QuranData } from "#lib/data/quran-data.js";
+import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+import { quranSearch } from "#lib/quran/search.js";
+import { containsArabicScript } from "#lib/quran/search/normalize-latin.js";
 import {
   DEFAULT_LIMIT,
   DEFAULT_OFFSET,
   MAX_OFFSET,
   MIN_QUERY_LEN,
-} from "$lib/quran/search/normalize";
-import { containsArabicScript } from "$lib/quran/search/normalize-latin";
+} from "#lib/quran/search/normalize.js";
 import {
   searchHitAnchorAyah,
   searchHitSurah,
   searchHitText,
   type SearchHit,
   type TranslationSearchHit,
-} from "$lib/quran/search/types";
-import type { AyahCoordinateValidator } from "$lib/quran/wire";
-import { quranWorker } from "$lib/quran/worker-client";
-import { isNavCandidate, matchNav, splitPlaceToken } from "$lib/search/nav/match";
-import type { NavMatch } from "$lib/search/nav/types";
-import { searchSelection } from "$lib/stores/search-selection.svelte";
-import { storageReport } from "$lib/stores/storage-report.svelte";
+} from "#lib/quran/search/types.js";
+import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
+import { quranWorker } from "#lib/quran/worker-client.js";
+import { isNavCandidate, matchNav, splitPlaceToken } from "#lib/search/nav/match.js";
+import type { NavMatch } from "#lib/search/nav/types.js";
+import { searchSelection } from "#lib/stores/search-selection.svelte.js";
+import { storageReport } from "#lib/stores/storage-report.svelte.js";
 
 import { batchPlan, partitionSearchable, SEARCH_BATCH_SIZE } from "./selection";
 import { MAX_SUGGESTIONS, suggestSurahs } from "./surah-suggest";

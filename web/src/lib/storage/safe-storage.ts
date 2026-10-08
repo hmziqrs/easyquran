@@ -1,5 +1,6 @@
-import { browser } from "$app/environment";
-import type { JsonValue } from "$lib/storage/decoders";
+import { browser } from "$app/env";
+
+import type { JsonValue } from "#lib/storage/decoders.js";
 
 export function readJSON(key: string): JsonValue | undefined {
   if (!browser) return undefined;

@@ -1,6 +1,7 @@
-import { loadTranslationSurahRouteData } from "$lib/server/quran-translation-page";
-import { markTranslationPending, requireSurah } from "$lib/server/reader-route-guards";
 import { error } from "@sveltejs/kit";
+
+import { loadTranslationSurahRouteData } from "#lib/server/quran-translation-page.js";
+import { markTranslationPending, requireSurah } from "#lib/server/reader-route-guards.js";
 
 import type { PageServerLoad } from "./$types";
 

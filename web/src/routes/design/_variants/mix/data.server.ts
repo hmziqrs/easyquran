@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { parseKey, surahMeta } from "$lib/data/quran";
-import { RangeKind } from "$lib/data/quran-data";
-import type { RangeEntry } from "$lib/data/quran-types";
-import { TRANSLATION_BY_ID } from "$lib/data/translations";
-import { displayVerses, headerText } from "$lib/quran/view/presentation";
-import { bodyText } from "$lib/quran/view/source-view";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { readRangeText, readSurahText } from "$lib/server/quran-sqlite";
+import { RangeKind } from "#lib/data/quran-data.js";
+import type { RangeEntry } from "#lib/data/quran-types.js";
+import { parseKey, surahMeta } from "#lib/data/quran.js";
+import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
+import { displayVerses, headerText } from "#lib/quran/view/presentation.js";
+import { bodyText } from "#lib/quran/view/source-view.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { readRangeText, readSurahText } from "#lib/server/quran-sqlite.js";
 
 import type { MixData, MixRangeRow, MixSurahRow, MixTranslation } from "./types";
 

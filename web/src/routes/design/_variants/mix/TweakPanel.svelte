@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Icon } from "$lib/components/icon";
+  import { Icon } from "#lib/components/icon/index.js";
   import {
     DEFAULT_TWEAKS,
     NUMBER_TWEAKS,

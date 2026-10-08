@@ -1,7 +1,8 @@
-import { getSearchCopy } from "$lib/i18n/search-copy";
-import { searchSelection } from "$lib/stores/search-selection.svelte";
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { getSearchCopy } from "#lib/i18n/search-copy.js";
+import { searchSelection } from "#lib/stores/search-selection.svelte.js";
 
 interface ProgressEvent {
   script: string;
@@ -25,14 +26,19 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: {
     onProgress: (cb: (p: ProgressEvent) => void) => h.subscribe(cb),
     ensureTranslation: (source: string) => h.ensureTranslation(source),
   },
 }));
-vi.mock("$lib/stores/storage-report.svelte", () => ({
+vi.mock("#lib/stores/storage-report.svelte.js", () => ({
   storageReport: {
     get artifacts() {
       return h.artifacts;

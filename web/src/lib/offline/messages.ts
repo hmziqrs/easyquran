@@ -38,7 +38,7 @@ export type UpdateMessage = SwToClientMessage | ClientToClientMessage;
 const DEFAULT_PURGE_TIMEOUT_MS = 5000;
 
 export function purgeUserCaches(timeoutMs: number = DEFAULT_PURGE_TIMEOUT_MS): Promise<void> {
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- navigator is a browser-only global; this file is imported by both client and service-worker bundles, so importing $app/environment (the usual SSR guard) would break SW bundling.
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- navigator is a browser-only global; this file is imported by both client and service-worker bundles, so importing $app/env (the usual SSR guard) would break SW bundling.
   if (typeof navigator === "undefined") return Promise.resolve();
   const ctrl = navigator.serviceWorker?.controller;
   if (!ctrl) return Promise.resolve();
@@ -72,7 +72,7 @@ const DEFAULT_STATS_TIMEOUT_MS = 5000;
 export function requestStorageStats(
   timeoutMs: number = DEFAULT_STATS_TIMEOUT_MS,
 ): Promise<{ pages: StorageLayerStats; data: StorageLayerStats } | null> {
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- navigator is a browser-only global; this file is imported by both client and service-worker bundles, so importing $app/environment would break SW bundling
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- navigator is a browser-only global; this file is imported by both client and service-worker bundles, so importing $app/env would break SW bundling
   if (typeof navigator === "undefined") return Promise.resolve(null);
   const ctrl = navigator.serviceWorker?.controller;
   if (!ctrl) return Promise.resolve(null);

@@ -1,10 +1,10 @@
-import type { CatalogEntry } from "$lib/data/quran-types";
+import type { CatalogEntry } from "#lib/data/quran-types.js";
 import {
   makeTranslitScorer,
   surahTranslitKeys,
   type TranslitKey,
-} from "$lib/quran/search/translit";
-import { splitPlaceToken } from "$lib/search/nav/match";
+} from "#lib/quran/search/translit.js";
+import { splitPlaceToken } from "#lib/search/nav/match.js";
 
 import { SURAH_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";

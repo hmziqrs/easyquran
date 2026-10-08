@@ -1,9 +1,9 @@
-import type { VerseKey } from "$lib/data/quran";
-import { asArray, asNumber, asObject, asString } from "$lib/storage";
+import type { VerseKey } from "#lib/data/quran.js";
+import { asArray, asNumber, asObject, asString } from "#lib/storage/index.js";
 
 /**
  * Bookmarks wire/domain contracts for the offline sync engine's "bookmarks"
- * domain. Wire JSON is decoded defensively at the boundary ($lib/storage
+ * domain. Wire JSON is decoded defensively at the boundary (#lib/storage/index.js
  * decoders); nothing from a response body is trusted past this module.
  */
 
@@ -84,7 +84,7 @@ export function newBookmarkEntityId(): string {
 
 /**
  * Legacy reader VerseKey format: `${surah}:${ayah}` (see verseKey() in
- * $lib/data/quran and Record<VerseKey, boolean> in reader-core).
+ * #lib/data/quran.js and Record<VerseKey, boolean> in reader-core).
  */
 export function verseKeyOf(surah: number, ayah: number): VerseKey {
   return `${surah}:${ayah}`;

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Eyebrow, Icon, Seo } from "$lib/components";
-  import { resolveContactCopy } from "$lib/i18n/contact-copy";
-  import { marketingLocaleFromPath } from "$lib/i18n/marketing-copy";
-  import { externalLinkAttrs } from "$lib/utils";
+  import { Band, Eyebrow, Icon, Seo } from "#lib/components/index.js";
+  import { resolveContactCopy } from "#lib/i18n/contact-copy.js";
+  import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
+  import { externalLinkAttrs } from "#lib/utils.js";
 
   let { data } = $props();
 

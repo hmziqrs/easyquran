@@ -1,6 +1,6 @@
-import type { SurahLocalPageData } from "$lib/data/quran";
-import { asObject, readRaw, writeRaw } from "$lib/storage";
-import type { JsonRecord } from "$lib/storage/decoders";
+import type { SurahLocalPageData } from "#lib/data/quran.js";
+import type { JsonRecord } from "#lib/storage/decoders.js";
+import { asObject, readRaw, writeRaw } from "#lib/storage/index.js";
 
 import type { ViewportAnchor } from "./viewport-anchor";
 

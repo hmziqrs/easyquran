@@ -1,4 +1,5 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+
 import {
   DEFAULT_ARABIC_FONT,
   DEFAULT_TRANSLATION_FAMILY,
@@ -6,8 +7,8 @@ import {
   translationFamilyStack,
   type ArabicFontId,
   type TranslationFamily,
-} from "$lib/config/reader-fonts";
-import { loadArabicFont } from "$lib/fonts/arabic-fonts";
+} from "#lib/config/reader-fonts.js";
+import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
 
 import { READER_DEFAULTS, type ReaderMode } from "./reader-core.svelte";
 

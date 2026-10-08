@@ -2,8 +2,8 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import AuthForm from "$lib/auth/components/AuthForm.svelte";
-  import { clearReturnTarget } from "$lib/auth/return-target";
+  import AuthForm from "#lib/auth/components/AuthForm.svelte";
+  import { clearReturnTarget } from "#lib/auth/return-target.js";
   import { failureMessage, OAUTH_FAILURE_HEADING } from "./oauth-failure";
 
   const errorCode = $derived(page.url.searchParams.get("ec"));

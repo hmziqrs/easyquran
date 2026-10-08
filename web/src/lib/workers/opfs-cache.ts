@@ -1,4 +1,4 @@
-import type { DownloadableSpec } from "$lib/data/quran-types";
+import type { DownloadableSpec } from "#lib/data/quran-types.js";
 
 import { downloadBytes, verifyBytes, type DownloadSpec, type ProgressFn } from "./download";
 import { idbDelete, idbGet, runTxVoid } from "./idb";

@@ -32,17 +32,17 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$app/environment", () => ({ browser: true }));
+vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ goto: h.gotoSpy }));
-vi.mock("$lib/stores/reader.svelte", () => ({
+vi.mock("#lib/stores/reader.svelte.js", () => ({
   reader: h.readerStub,
   ReaderMode: { Reading: "reading", Verse: "verse" },
 }));
-vi.mock("$lib/fonts/arabic-fonts", () => ({ loadArabicFont: vi.fn() }));
+vi.mock("#lib/fonts/arabic-fonts.js", () => ({ loadArabicFont: vi.fn() }));
 
-import { getSettingsCopy } from "$lib/i18n/settings-copy";
-import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
+import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
+import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import ReadingSection from "../_components/ReadingSection.svelte";
 

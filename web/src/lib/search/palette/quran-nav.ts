@@ -1,13 +1,14 @@
-import type { Pathname } from "$app/types";
+import type { Path } from "$app/types";
+
+import type { QuranData } from "#lib/data/quran-data.js";
 import {
   globalPagePathFor,
   juzPathFor,
   surahAyahPathFor,
   surahPathFor,
   type SurahRouteContext,
-} from "$lib/data/quran";
-import type { QuranData } from "$lib/data/quran-data";
-import { reader } from "$lib/stores/reader.svelte";
+} from "#lib/data/quran.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 export const JUZ_COUNT = 30;
 export const MUSHAF_PAGE_COUNT = 604;
@@ -18,15 +19,15 @@ export const SURAH_COUNT = 114;
  * goes through the `*For(ctx, ...)` helpers, so a jump made while reading a
  * translation stays in that translation.
  */
-export const juzHref = (ctx: SurahRouteContext, n: number): Pathname => juzPathFor(ctx, n);
+export const juzHref = (ctx: SurahRouteContext, n: number): Path => juzPathFor(ctx, n);
 
-export const pageHref = (ctx: SurahRouteContext, n: number): Pathname => globalPagePathFor(ctx, n);
+export const pageHref = (ctx: SurahRouteContext, n: number): Path => globalPagePathFor(ctx, n);
 
 export function surahHref(
   ctx: SurahRouteContext,
   quranData: QuranData,
   surah: number,
-): Pathname | null {
+): Path | null {
   const entry = quranData.surahByNum(surah);
   return entry ? surahPathFor(ctx, entry) : null;
 }
@@ -37,7 +38,7 @@ export function ayahHref(
   quranData: QuranData,
   surah: number,
   ayah: number,
-): Pathname | null {
+): Path | null {
   const entry = quranData.surahByNum(surah);
   if (!entry) return null;
   if (!quranData.surahLocalPageForAyah(surah, ayah)) return null;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ICONS, type IconDef, type IconName } from "./icons";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { uiDirection, type UiLocale } from "$lib/i18n/locales";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { uiDirection, type UiLocale } from "#lib/i18n/locales.js";
 
   let {
     name,

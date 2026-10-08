@@ -1,5 +1,6 @@
-import { stickyNav } from "$lib/stores/sticky-nav.svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
 
 // The header-flash fix: reader anchor restores move window.scrollY without user
 // intent, so Nav.svelte's collapse/expand direction logic must be able to see

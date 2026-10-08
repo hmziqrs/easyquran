@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { browser } from "$app/environment";
-  import { prefs } from "$lib/stores/prefs.svelte";
-  import { consent } from "$lib/stores/consent.svelte";
-  import { APPEARANCE_MODES, PALETTES, type PaletteId } from "$lib/config/site";
-  import type { CustomSeeds } from "$lib/theme/derive";
-  import { Notifications } from "$lib/components/notifications";
-  import { OfflinePack, OfflinePackBar } from "$lib/components/status";
-  import { offline } from "$lib/offline/offline-store.svelte";
-  import { cn } from "$lib/utils";
-  import { uiDirection, type UiLocale } from "$lib/i18n/locales";
-  import type { TweaksResolvedCopy } from "$lib/i18n/marketing-copy";
+  import { browser } from "$app/env";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
+  import { consent } from "#lib/stores/consent.svelte.js";
+  import { APPEARANCE_MODES, PALETTES, type PaletteId } from "#lib/config/site.js";
+  import type { CustomSeeds } from "#lib/theme/derive.js";
+  import { Notifications } from "#lib/components/notifications/index.js";
+  import { OfflinePack, OfflinePackBar } from "#lib/components/status/index.js";
+  import { offline } from "#lib/offline/offline-store.svelte.js";
+  import { cn } from "#lib/utils.js";
+  import { uiDirection, type UiLocale } from "#lib/i18n/locales.js";
+  import type { TweaksResolvedCopy } from "#lib/i18n/marketing-copy.js";
 
   let {
     locale,
@@ -56,8 +56,8 @@
       copy = resolved;
     });
     paletteRequest ??= (async () => {
-      const appearance = await import("$lib/i18n/m/appearance");
-      const theme = await import("$lib/i18n/m/theme");
+      const appearance = await import("#lib/i18n/m/appearance.js");
+      const theme = await import("#lib/i18n/m/theme.js");
       const options = { locale } as const;
       paletteCopy = {
         appearanceLabel: appearance.tweaks_appearance(undefined, options),

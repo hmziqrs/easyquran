@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
   import { page } from "$app/state";
-  import { SidebarProvider, SidebarInset, SidebarTrigger } from "$lib/components/ui/sidebar";
-  import { Container } from "$lib/components";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { translationIdFromSegments } from "$lib/data/quran";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { indopakFont } from "$lib/quran/view/indopak-font.svelte";
-  import { stickyNav } from "$lib/stores/sticky-nav.svelte";
+  import { SidebarProvider, SidebarInset, SidebarTrigger } from "#lib/components/ui/sidebar/index.js";
+  import { Container } from "#lib/components/index.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { translationIdFromSegments } from "#lib/data/quran.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { indopakFont } from "#lib/quran/view/indopak-font.svelte.js";
+  import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import AppSidebar from "./Sidebar.svelte";
   import { changeTypography } from "./typography-change";
   import PositionIndicator from "./PositionIndicator.svelte";

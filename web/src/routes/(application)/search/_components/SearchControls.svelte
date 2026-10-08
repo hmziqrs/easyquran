@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SearchCopy } from "$lib/i18n/search-copy";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
 
   let {
     copy,

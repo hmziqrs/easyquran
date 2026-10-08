@@ -1,23 +1,24 @@
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   OpenerKind,
   OpenerPackaging,
   QuranSourceId,
   type QuranSourceId as QuranSourceIdValue,
-} from "$lib/data/quran-types";
-import searchFixtures from "$lib/quran/search/__fixtures__/queries.json";
-import { buildCanonicalSearchCorpus, searchCanonicalCorpus } from "$lib/quran/search/corpus";
-import { normalizeArabic, scalarLength } from "$lib/quran/search/normalize";
-import { SearchHitKind, searchHitKey } from "$lib/quran/search/types";
-import prefixFixtures from "$lib/quran/view/__fixtures__/prefix-cuts.json";
-import { sourceProfile } from "$lib/quran/view/source-profiles";
-import { loadQuranSource, readAllSourceRows } from "$lib/quran/view/source-runtime";
-import { packagingCounts, scalarSlice, scalarToUtf16Index } from "$lib/quran/view/source-view";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { createNodeQueryRunner } from "$lib/server/quran-node-query-runner";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/data/quran-types.js";
+import searchFixtures from "#lib/quran/search/__fixtures__/queries.json";
+import { buildCanonicalSearchCorpus, searchCanonicalCorpus } from "#lib/quran/search/corpus.js";
+import { normalizeArabic, scalarLength } from "#lib/quran/search/normalize.js";
+import { SearchHitKind, searchHitKey } from "#lib/quran/search/types.js";
+import prefixFixtures from "#lib/quran/view/__fixtures__/prefix-cuts.json";
+import { sourceProfile } from "#lib/quran/view/source-profiles.js";
+import { loadQuranSource, readAllSourceRows } from "#lib/quran/view/source-runtime.js";
+import { packagingCounts, scalarSlice, scalarToUtf16Index } from "#lib/quran/view/source-view.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { createNodeQueryRunner } from "#lib/server/quran-node-query-runner.js";
 
 function load(sourceId: QuranSourceIdValue) {
   const profile = sourceProfile(sourceId);

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "$lib/components/ui/tooltip";
-  import { parseKey, toArabicDigits, toEasternDigits } from "$lib/data/quran";
-  import type { CatalogEntry, Place, SajdaEntry } from "$lib/data/quran-types";
-  import { peekQuranData } from "$lib/data/quran-data-client";
-  import { positionForGlobal, type ReaderPositionState } from "$lib/data/mushaf-divisions";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { getSearchCopy } from "$lib/i18n/search-copy";
+  import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "#lib/components/ui/tooltip/index.js";
+  import { parseKey, toArabicDigits, toEasternDigits } from "#lib/data/quran.js";
+  import type { CatalogEntry, Place, SajdaEntry } from "#lib/data/quran-types.js";
+  import { peekQuranData } from "#lib/data/quran-data-client.js";
+  import { positionForGlobal, type ReaderPositionState } from "#lib/data/mushaf-divisions.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { getSearchCopy } from "#lib/i18n/search-copy.js";
   import { positionLabel } from "./position-label";
 
   let {

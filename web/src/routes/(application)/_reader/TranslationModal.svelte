@@ -3,31 +3,31 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { replaceState } from "$app/navigation";
-  import { translationSegmentsFromId } from "$lib/data/quran";
-  import { STACKED_MAX_EXTRAS } from "$lib/data/quran-types";
-  import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-  import { withMoreParam } from "$lib/reader/more-param";
+  import { translationSegmentsFromId } from "#lib/data/quran.js";
+  import { STACKED_MAX_EXTRAS } from "#lib/data/quran-types.js";
+  import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+  import { withMoreParam } from "#lib/reader/more-param.js";
   import {
     TRANSLATION_CATALOGUE,
     TRANSLATION_CATALOGUE_BY_ID,
     flagFor,
     nativeNameFor,
     translationSourceOf,
-  } from "$lib/quran/catalogue";
-  import type { TranslationProvenance } from "$lib/quran/catalogue";
-  import { stackedTranslations } from "$lib/stores/stacked-translations.svelte";
-  import { readerSource } from "$lib/stores/reader-settings.svelte";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { noteTranslationChosen } from "$lib/quran/engagement";
-  import { Icon } from "$lib/components/icon";
+  } from "#lib/quran/catalogue.js";
+  import type { TranslationProvenance } from "#lib/quran/catalogue.js";
+  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { readerSource } from "#lib/stores/reader-settings.svelte.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { noteTranslationChosen } from "#lib/quran/engagement.js";
+  import { Icon } from "#lib/components/icon/index.js";
   import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
-  } from "$lib/components/ui/tooltip";
+  } from "#lib/components/ui/tooltip/index.js";
   import { hrefFor, liveReaderPosition } from "./translation-nav";
   import type { ReadPick } from "./reading-flow";
   import { translationMatchesQuery } from "./translation-search";

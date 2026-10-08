@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Attachment } from "svelte/attachments";
-  import { Icon } from "$lib/components/icon";
+  import { Icon } from "#lib/components/icon/index.js";
   import type { ListsId } from "./axes";
   import type { MixRangeRow, MixSurahRow } from "./types";
 

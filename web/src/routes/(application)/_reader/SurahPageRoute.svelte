@@ -2,8 +2,8 @@
   import { onMount, tick } from "svelte";
   import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
-  import { SITE } from "$lib/config/site";
-  import { Seo } from "$lib/components";
+  import { SITE } from "#lib/config/site.js";
+  import { Seo } from "#lib/components/index.js";
   import {
     QuranScript,
     surahAyahPathFor,
@@ -11,15 +11,15 @@
     surahRouteContext,
     translationSegmentsFromId,
     type SurahRouteData,
-  } from "$lib/data/quran";
-  import { loadQuranData, peekQuranData } from "$lib/data/quran-data-client";
-  import { positionForGlobal } from "$lib/data/mushaf-divisions";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
-  import { publicHref } from "$lib/i18n/public-href";
-  import { trackReaderView } from "$lib/quran/track-view.svelte";
-  import { reader } from "$lib/stores/reader.svelte";
-  import { withModeParam } from "$lib/reader/mode-param";
+  } from "#lib/data/quran.js";
+  import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
+  import { positionForGlobal } from "#lib/data/mushaf-divisions.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
+  import { trackReaderView } from "#lib/quran/track-view.svelte.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
+  import { withModeParam } from "#lib/reader/mode-param.js";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
   import SurahReader from "./SurahReader.svelte";
@@ -117,7 +117,7 @@
       const targetHref = publicHref(
         readerHrefFor(copy.locale, surahAyahPathFor(routeContext, surah, ayah)),
       );
-      if (page.url.href !== new URL(targetHref, page.url).href) {
+      if (page.url.href !== new URL(targetHref, page.url.href).href) {
         replaceState(withModeParam(targetHref, reader.mode, page.url), page.state);
       }
       const row = await ayahRow(ayah);

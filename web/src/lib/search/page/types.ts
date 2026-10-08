@@ -1,4 +1,4 @@
-import type { Highlight } from "$lib/quran/search/types";
+import type { Highlight } from "#lib/quran/search/types.js";
 
 /** Search result row normalized across the Arabic corpus and translation FTS indexes. */
 export interface SectionHit {

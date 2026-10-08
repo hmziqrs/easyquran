@@ -1,4 +1,4 @@
-import type { AuthStatus } from "$lib/auth/auth-state.svelte";
+import type { AuthStatus } from "#lib/auth/auth-state.svelte.js";
 
 export type AccountView = "loading" | "anonymous" | "authenticated";
 

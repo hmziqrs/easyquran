@@ -1,10 +1,11 @@
-import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import type { Ayah, CatalogEntry, RangeRouteKind } from "$lib/data/quran-types";
-import { QURAN_DATA } from "$lib/server/quran-data";
 // Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
 // `RANGE_COUNTS` (plus the hizb derivation), so no route hard-codes 604/30/60/240.
 import { error } from "@sveltejs/kit";
+
+import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+import type { Ayah, CatalogEntry, RangeRouteKind } from "#lib/data/quran-types.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 export function requireSurah(slug: string): CatalogEntry {
   const surah = QURAN_DATA.surahBySlug(slug);

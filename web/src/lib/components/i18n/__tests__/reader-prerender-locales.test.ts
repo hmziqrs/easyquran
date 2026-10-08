@@ -1,19 +1,25 @@
+import { mount, unmount } from "svelte";
+import { describe, expect, it, vi } from "vite-plus/test";
+
 import {
   quranHrefForPrerenderEntry,
   readerPrerenderEntries,
   readerPrerenderHrefs,
-} from "$lib/components/i18n/reader-prerender.server";
-import ReaderPrerenderLinks from "$lib/components/i18n/ReaderPrerenderLinks.svelte";
-import { HIZB_COUNT, RUB_COUNT } from "$lib/data/mushaf-divisions";
-import { RANGE_COUNTS, RangeKind } from "$lib/data/quran-data";
-import { SUPPORTED_UI_LOCALES } from "$lib/i18n/locales";
-import { readerHrefFor } from "$lib/i18n/reader";
-import { readerEntryPath } from "$lib/i18n/seo";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { mount, unmount } from "svelte";
-import { describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/components/i18n/reader-prerender.server.js";
+import ReaderPrerenderLinks from "#lib/components/i18n/ReaderPrerenderLinks.svelte";
+import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
+import { SUPPORTED_UI_LOCALES } from "#lib/i18n/locales.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
+import { readerEntryPath } from "#lib/i18n/seo.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 const READER_ENTRY_COUNT =
   QURAN_DATA.surahs.length +

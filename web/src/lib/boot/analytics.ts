@@ -1,13 +1,13 @@
-import { consent } from "$lib/stores/consent.svelte";
+import { consent } from "#lib/stores/consent.svelte.js";
 
 // Firebase Performance is intentionally NOT initialised: nothing in the app
 // consumes its traces, and its bundled web-vitals auto-instrumentation crashes
 // with "Cannot read properties of undefined (reading 'startTime')" from
 // reportAllChanges in some browsers. Re-enable only together with real trace
-// consumers (see $lib/firebase/performance.ts).
+// consumers (see #lib/firebase/performance.ts).
 
 export function startAnalytics(): () => void {
-  let fbAnalytics: typeof import("$lib/firebase/analytics") | undefined;
+  let fbAnalytics: typeof import("#lib/firebase/analytics.js") | undefined;
 
   const applyConsent = (): void => {
     if (!fbAnalytics) return;
@@ -19,7 +19,7 @@ export function startAnalytics(): () => void {
 
   void (async () => {
     try {
-      fbAnalytics = await import("$lib/firebase/analytics");
+      fbAnalytics = await import("#lib/firebase/analytics.js");
 
       await fbAnalytics.initAnalytics();
       applyConsent();

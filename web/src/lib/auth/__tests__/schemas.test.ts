@@ -1,4 +1,7 @@
-import { issuesToFieldErrors } from "$lib/auth/form-validation.svelte";
+import { safeParse } from "valibot";
+import { describe, expect, it } from "vite-plus/test";
+
+import { issuesToFieldErrors } from "#lib/auth/form-validation.svelte.js";
 import {
   forgotVerifySchema,
   loginSchema,
@@ -7,10 +10,8 @@ import {
   totpSchema,
   twoFactorDisableSchema,
   verifyEmailSchema,
-} from "$lib/auth/schemas";
-import { getAuthValidationCopy } from "$lib/i18n/auth-validation-copy";
-import { safeParse } from "valibot";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/auth/schemas.js";
+import { getAuthValidationCopy } from "#lib/i18n/auth-validation-copy.js";
 
 const copy = getAuthValidationCopy("en");
 

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { QuranData } from "$lib/data/quran-data";
-  import HighlightedArabic from "$lib/components/text/HighlightedArabic.svelte";
-  import HighlightedText from "$lib/components/text/HighlightedText.svelte";
-  import { TRANSLATION_CATALOGUE_BY_ID } from "$lib/quran/catalogue";
-  import { ayahHrefFor, openVerse } from "$lib/search/page/navigate";
-  import type { SectionHit, SectionState } from "$lib/search/page/types";
+  import type { QuranData } from "#lib/data/quran-data.js";
+  import HighlightedArabic from "#lib/components/text/HighlightedArabic.svelte";
+  import HighlightedText from "#lib/components/text/HighlightedText.svelte";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+  import { ayahHrefFor, openVerse } from "#lib/search/page/navigate.js";
+  import type { SectionHit, SectionState } from "#lib/search/page/types.js";
 
   let {
     hit,

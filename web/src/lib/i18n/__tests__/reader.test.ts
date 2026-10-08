@@ -1,3 +1,5 @@
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
+
 import {
   globalPagePathFor,
   hizbPathFor,
@@ -6,15 +8,14 @@ import {
   surahAyahPathFor,
   surahPathFor,
   surahRouteContext,
-} from "$lib/data/quran";
-import type { UiLocale } from "$lib/i18n/locales";
+} from "#lib/data/quran.js";
+import type { UiLocale } from "#lib/i18n/locales.js";
 import {
   bookmarksPageHref,
   readerHrefFor,
   type LocalizedReaderHref,
   type QuranReaderHref,
-} from "$lib/i18n/reader";
-import { describe, expect, expectTypeOf, it } from "vite-plus/test";
+} from "#lib/i18n/reader.js";
 
 const VALID_READER_HREFS = [
   "/surah",

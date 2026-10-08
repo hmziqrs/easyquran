@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
 
   let {
     loadFailed,

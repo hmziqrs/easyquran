@@ -7,7 +7,12 @@ const h = vi.hoisted(() => ({
   search: vi.fn(async () => ({ results: [], total: 0 })),
 }));
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 vi.mock("$app/state", () => ({
   page: {
     get url() {
@@ -17,19 +22,20 @@ vi.mock("$app/state", () => ({
   },
 }));
 vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
-vi.mock("$lib/data/quran-data-client", () => ({
+vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: () => Promise.reject(new Error("Metadata unavailable in isolated search test")),
 }));
-vi.mock("$lib/quran/search", () => ({ quranSearch: h.search }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("#lib/quran/search.js", () => ({ quranSearch: h.search }));
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: { onProgress: () => () => undefined },
 }));
-vi.mock("$lib/stores/storage-report.svelte", () => ({
+vi.mock("#lib/stores/storage-report.svelte.js", () => ({
   storageReport: { artifacts: [], hydrate: () => undefined },
 }));
 
+import { searchSelection } from "#lib/stores/search-selection.svelte.js";
+
 import SearchPage from "../+page.svelte";
-import { searchSelection } from "$lib/stores/search-selection.svelte";
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement | undefined;

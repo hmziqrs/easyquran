@@ -1,4 +1,4 @@
-import type { CatalogEntry } from "$lib/data/quran-types";
+import type { CatalogEntry } from "#lib/data/quran-types.js";
 
 export interface TranslitKey {
   key: string;

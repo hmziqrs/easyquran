@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import RangeReader from "../RangeReader.svelte";
-  import type { RangePageData } from "$lib/data/quran-types";
+  import type { RangePageData } from "#lib/data/quran-types.js";
 
   let {
     initial,

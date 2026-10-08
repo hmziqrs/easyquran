@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { QuranScript } from "$lib/data/quran-types";
-  import { loadArabicFont } from "$lib/fonts/arabic-fonts";
-  import { TooltipProvider } from "$lib/components/ui/tooltip";
+  import { QuranScript } from "#lib/data/quran-types.js";
+  import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
+  import { TooltipProvider } from "#lib/components/ui/tooltip/index.js";
   import ReadingAyah from "../../(application)/_reader/ReadingAyah.svelte";
   import VerseRow from "../../(application)/_reader/VerseRow.svelte";
   import type { PageData } from "./$types";

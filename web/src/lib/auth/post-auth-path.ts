@@ -1,4 +1,4 @@
-import type { UserProfile } from "$lib/auth/auth-client";
+import type { UserProfile } from "#lib/auth/auth-client.js";
 
 /**
  * Where to send the browser right after a successful login/passkey sign-in:

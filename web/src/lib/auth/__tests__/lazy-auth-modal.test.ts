@@ -39,7 +39,7 @@ describe("auth modal stays out of the initial bundle", () => {
     );
     expect(entry, "AuthModalShell.svelte should exist").toBeDefined();
     const imports = (entry![1].match(/^\s*import\s.*$/gm) ?? []).join("\n");
-    for (const heavy of ["bits-ui", "/flows.svelte", "AuthModal.svelte", "$lib/auth/components"]) {
+    for (const heavy of ["bits-ui", "/flows.svelte", "AuthModal.svelte", "#lib/auth/components"]) {
       expect(imports, `AuthModalShell.svelte must not import ${heavy}`).not.toContain(heavy);
     }
   });

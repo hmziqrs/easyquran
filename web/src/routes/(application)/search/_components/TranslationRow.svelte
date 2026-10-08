@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-  import type { SearchCopy } from "$lib/i18n/search-copy";
-  import { quranWorker } from "$lib/quran/worker-client";
-  import { searchSelection } from "$lib/stores/search-selection.svelte";
-  import { formatBytes } from "$lib/utils";
+  import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+  import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import { quranWorker } from "#lib/quran/worker-client.js";
+  import { searchSelection } from "#lib/stores/search-selection.svelte.js";
+  import { formatBytes } from "#lib/utils.js";
 
   let {
     entry,

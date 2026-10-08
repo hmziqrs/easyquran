@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 
 const flag = vi.hoisted(() => ({ value: true }));
-vi.mock("$app/environment", () => ({
+vi.mock("$app/env", () => ({
   get browser() {
     return flag.value;
   },

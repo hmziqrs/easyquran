@@ -1,10 +1,10 @@
 <script lang="ts">
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-  import { surahMeta, type SurahLocalPageData } from "$lib/data/quran";
-  import { Icon } from "$lib/components/icon";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { reader, type ReaderMode } from "$lib/stores/reader.svelte";
-  import type { ReadingText } from "$lib/stores/reading-text.svelte";
+  import { surahMeta, type SurahLocalPageData } from "#lib/data/quran.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import type { ReadingText } from "#lib/stores/reading-text.svelte.js";
 
   let {
     initial,

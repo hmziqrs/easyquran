@@ -1,5 +1,5 @@
-import type { ReaderPositionState } from "$lib/data/mushaf-divisions";
-import type { ReaderUiCopy } from "$lib/i18n/reader-copy";
+import type { ReaderPositionState } from "#lib/data/mushaf-divisions.js";
+import type { ReaderUiCopy } from "#lib/i18n/reader-copy.js";
 
 /** "Page {page} · Juz {juz} · Hizb {hizb}" with the un-known divisions omitted. */
 export function positionLabel(

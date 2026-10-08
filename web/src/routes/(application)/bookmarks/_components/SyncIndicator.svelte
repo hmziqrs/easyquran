@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { SyncStatus } from "$lib/sync";
-  import { cn } from "$lib/utils";
-  import type { BookmarksCopy } from "$lib/i18n/bookmarks-copy";
+  import type { SyncStatus } from "#lib/sync/index.js";
+  import { cn } from "#lib/utils.js";
+  import type { BookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
 
   let {
     copy,

@@ -1,6 +1,7 @@
-import type { AuthRequestResult, UnsafeRequestInit } from "$lib/auth/auth-client";
-import { SyncPausedError, type SyncMutation } from "$lib/sync";
 import { afterEach, describe, expect, it } from "vite-plus/test";
+
+import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
+import { SyncPausedError, type SyncMutation } from "#lib/sync/index.js";
 
 import { createBookmarksDomain, type BookmarkAuthLike } from "../domain";
 import type { BookmarksMutation } from "../schema";

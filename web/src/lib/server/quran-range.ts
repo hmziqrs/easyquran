@@ -1,5 +1,5 @@
-import type { RangePageData, RangeRouteKind } from "$lib/data/quran-types";
-import { requireRangeEntry, toRangePageData } from "$lib/server/quran-page-shape";
+import type { RangePageData, RangeRouteKind } from "#lib/data/quran-types.js";
+import { requireRangeEntry, toRangePageData } from "#lib/server/quran-page-shape.js";
 
 import { readRangeText } from "./quran-sqlite";
 

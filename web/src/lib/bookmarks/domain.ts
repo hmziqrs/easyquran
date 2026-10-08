@@ -1,10 +1,10 @@
-import type { AuthRequestResult, UnsafeRequestInit } from "$lib/auth/auth-client";
+import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
 import {
   SyncPausedError,
   type SyncDomain,
   type SyncMutation,
   type SyncRoundResult,
-} from "$lib/sync";
+} from "#lib/sync/index.js";
 
 import { decodeBookmarksEnvelope, type BookmarksMutation, type BookmarksSnapshot } from "./schema";
 

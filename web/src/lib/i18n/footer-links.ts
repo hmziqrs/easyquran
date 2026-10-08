@@ -1,12 +1,16 @@
+import type {
+  FooterLink,
+  MarketingFooterLinks,
+  MarketingLocale,
+} from "#lib/i18n/marketing-copy.js";
 // Single source for the footer link columns. Both surfaces render the same three columns from the
 // same spec: marketing pages resolve through `marketingHref`, so an unpublished locale drops the
 // link instead of hard-coding "en". Callers supply the labels (message-free module), the reader
 // href, which differs per surface: marketing links at the reader home, the reader keeps its
 // current translation context, and the bookmarks-page href (canonical /bookmarks —
 // /ar/bookmarks reroutes onto it with Arabic chrome; see bookmarksPageHref).
-import { marketingHref } from "$lib/i18n/marketing";
-import type { MarketingPageId } from "$lib/i18n/marketing";
-import type { FooterLink, MarketingFooterLinks, MarketingLocale } from "$lib/i18n/marketing-copy";
+import { marketingHref } from "#lib/i18n/marketing.js";
+import type { MarketingPageId } from "#lib/i18n/marketing.js";
 
 export interface FooterLinkLabels {
   readonly readQuran: string;

@@ -1,7 +1,8 @@
-import type { CatalogEntry } from "$lib/data/quran-types";
-import type { SearchResponse, TranslationSearchResponse } from "$lib/quran/search/types";
-import { SearchHitKind, SearchProvider } from "$lib/quran/search/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import type { CatalogEntry } from "#lib/data/quran-types.js";
+import type { SearchResponse, TranslationSearchResponse } from "#lib/quran/search/types.js";
+import { SearchHitKind, SearchProvider } from "#lib/quran/search/types.js";
 
 interface EngineSeedState {
   artifacts: { id: string }[];
@@ -22,26 +23,31 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$env/dynamic/public", () => ({ env: {} }));
-vi.mock("$lib/quran/worker-client", () => ({
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
+vi.mock("#lib/quran/worker-client.js", () => ({
   quranWorker: {
     searchTranslation: h.searchTranslation,
   },
 }));
-vi.mock("$lib/quran/search", () => ({
+vi.mock("#lib/quran/search.js", () => ({
   quranSearch: h.quranSearch,
 }));
-vi.mock("$lib/data/quran-data-client", () => ({
+vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: h.loadQuranData,
 }));
-vi.mock("$lib/stores/storage-report.svelte", () => ({
+vi.mock("#lib/stores/storage-report.svelte.js", () => ({
   storageReport: {
     get artifacts() {
       return h.state.artifacts;
     },
   },
 }));
-vi.mock("$lib/stores/search-selection.svelte", () => ({
+vi.mock("#lib/stores/search-selection.svelte.js", () => ({
   searchSelection: {
     get ids() {
       return h.state.selectionIds;

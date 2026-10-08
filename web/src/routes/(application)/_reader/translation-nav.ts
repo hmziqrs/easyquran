@@ -1,4 +1,6 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+import type { ReadonlyURL } from "$app/state";
+
 import {
   globalPagePathFor,
   hizbPathFor,
@@ -6,8 +8,8 @@ import {
   rubPathFor,
   surahPathFor,
   type SurahRouteContext,
-} from "$lib/data/quran";
-import { deLocalizeUrl } from "$lib/paraglide/runtime";
+} from "#lib/data/quran.js";
+import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
 
 /**
  * Position-preserving translation navigation, ported from the sidebar
@@ -101,12 +103,14 @@ export function positionOf(pathname: string): ReaderPosition {
  * test environments whose window.location is not a reader route, non-reader
  * live urls — falls back to the passed page-store url.
  */
-export function liveReaderPosition(fallbackUrl: URL): ReaderPosition {
+export function liveReaderPosition(fallbackUrl: URL | ReadonlyURL): ReaderPosition {
   if (browser) {
     const live = positionOf(deLocalizeUrl(window.location.href).pathname);
     if (live !== null) return live;
   }
-  return positionOf(deLocalizeUrl(fallbackUrl).pathname);
+  // Clone: paraglide's deLocalizeUrl treats bare-string input differently from a
+  // URL instance, and kit 3 hands us a ReadonlyURL — clone to keep the URL path.
+  return positionOf(deLocalizeUrl(new URL(fallbackUrl.href)).pathname);
 }
 
 /** The Arabic route at the same reader position (Reading → Arabic from a translation page). */

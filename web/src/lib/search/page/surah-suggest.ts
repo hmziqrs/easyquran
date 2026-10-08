@@ -1,11 +1,11 @@
-import type { CatalogEntry } from "$lib/data/quran-types";
-import { normalizeArabic } from "$lib/quran/search/normalize";
+import type { CatalogEntry } from "#lib/data/quran-types.js";
+import { normalizeArabic } from "#lib/quran/search/normalize.js";
 import {
   makeTranslitScorer,
   surahTranslitKeys,
   translitKey,
   type TranslitKey,
-} from "$lib/quran/search/translit";
+} from "#lib/quran/search/translit.js";
 
 import type { SurahSuggestion } from "./types";
 

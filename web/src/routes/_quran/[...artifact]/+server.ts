@@ -1,7 +1,8 @@
-import { TRANSLATION_BY_ARTIFACT_PATH } from "$lib/data/translations";
-import { QURAN_R2_UPSTREAM_BASE } from "$lib/quran/environment";
-import { registeredSourceProfiles } from "$lib/quran/view/source-profiles";
 import { error } from "@sveltejs/kit";
+
+import { TRANSLATION_BY_ARTIFACT_PATH } from "#lib/data/translations.js";
+import { QURAN_R2_UPSTREAM_BASE } from "#lib/quran/environment.js";
+import { registeredSourceProfiles } from "#lib/quran/view/source-profiles.js";
 
 import type { RequestHandler } from "./$types";
 

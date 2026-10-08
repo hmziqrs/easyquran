@@ -1,4 +1,6 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+import { uniq } from "es-toolkit";
+
 import {
   asArray,
   asObject,
@@ -7,8 +9,7 @@ import {
   onStorageKey,
   readJSON,
   writeJSON,
-} from "$lib/storage";
-import { uniq } from "es-toolkit";
+} from "#lib/storage/index.js";
 
 const SEARCH_SELECTION_STORAGE_KEY = "easyquran.search.selection";
 const SEARCH_SELECTION_SCHEMA_VERSION = 1;

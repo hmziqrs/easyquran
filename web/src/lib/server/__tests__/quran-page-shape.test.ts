@@ -1,7 +1,8 @@
-import type { CatalogEntry } from "$lib/data/quran-types";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { surahRouteNav } from "$lib/server/quran-page-shape";
 import { describe, expect, it } from "vite-plus/test";
+
+import type { CatalogEntry } from "#lib/data/quran-types.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { surahRouteNav } from "#lib/server/quran-page-shape.js";
 
 function surahAt(num: number): CatalogEntry {
   const entry = QURAN_DATA.surahByNum(num);

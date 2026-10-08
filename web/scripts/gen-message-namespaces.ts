@@ -1,6 +1,6 @@
 // Generates one message barrel per namespace from i18n-namespaces.json.
 //
-// Why this exists: `$lib/paraglide/messages.js` re-exports every message, and a barrel that every
+// Why this exists: `#lib/paraglide/messages.js` re-exports every message, and a barrel that every
 // route imports is a tree-shaking pinch point — the bundler hoists the union of all app-wide-used
 // messages into one shared chunk that every page then downloads (paraglide-js#668). Importing each
 // message module individually fixes it but means hand-maintaining hundreds of import lines with no
@@ -20,7 +20,7 @@ const WEB_ROOT = resolve(import.meta.dirname, "..");
 const CONFIG_PATH = join(WEB_ROOT, "i18n-namespaces.json");
 const CATALOGS = ["messages/en.json", "messages/reader/en.json", "messages/auth/en.json"];
 const OUT_DIR = join(WEB_ROOT, "src/lib/i18n/m");
-const MESSAGE_MODULE_BASE = "$lib/paraglide/messages";
+const MESSAGE_MODULE_BASE = "#lib/paraglide/messages";
 
 interface NamespaceConfig {
   id: string;
@@ -119,7 +119,7 @@ function render(namespace: NamespaceConfig, keys: string[]): string {
     `// ${namespace.description}`,
     `//`,
     `// ${keys.length} message${keys.length === 1 ? "" : "s"}. Import this barrel, never`,
-    `// $lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).`,
+    `// #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).`,
     ``,
     exports,
     ``,

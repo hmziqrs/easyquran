@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Seo } from "$lib/components";
-  import { globalPagePathFor, type SurahRouteContext } from "$lib/data/quran";
-  import { getReaderUiCopy } from "$lib/i18n/reader-copy";
-  import { readerHrefFor } from "$lib/i18n/reader";
+  import { Seo } from "#lib/components/index.js";
+  import { globalPagePathFor, type SurahRouteContext } from "#lib/data/quran.js";
+  import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { readerHrefFor } from "#lib/i18n/reader.js";
   import ReaderShell from "../../../../../_reader/ReaderShell.svelte";
   import RangeReader from "../../../../../_reader/RangeReader.svelte";
 

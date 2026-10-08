@@ -1,9 +1,10 @@
-import type { QuranRangeText } from "$lib/data/quran-types";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import type { QuranRangeText } from "#lib/data/quran-types.js";
 import {
   TranslationRangeCache,
   translationRangeCacheKey,
-} from "$lib/server/translation-range-cache";
-import { describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/server/translation-range-cache.js";
 
 const RANGE = { ayahs: [], normalizations: [] } satisfies QuranRangeText;
 

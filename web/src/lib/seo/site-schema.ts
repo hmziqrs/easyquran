@@ -1,5 +1,5 @@
-import { SITE } from "$lib/config/site";
-import { baseEnglishPageCopy } from "$lib/i18n/base-english-copy";
+import { SITE } from "#lib/config/site.js";
+import { baseEnglishPageCopy } from "#lib/i18n/base-english-copy.js";
 
 export interface ContactPointNode {
   "@type": "ContactPoint";

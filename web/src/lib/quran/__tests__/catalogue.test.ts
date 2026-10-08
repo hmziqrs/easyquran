@@ -1,12 +1,13 @@
-import { TRANSLATION_BY_ARTIFACT_PATH, TRANSLATION_BY_ID } from "$lib/data/translations";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import { TRANSLATION_BY_ARTIFACT_PATH, TRANSLATION_BY_ID } from "#lib/data/translations.js";
 import {
   peekTranslationName,
   TRANSLATION_CATALOGUE,
   TRANSLATION_CATALOGUE_BY_ID,
-} from "$lib/quran/catalogue";
-import { describe, expect, it, vi } from "vite-plus/test";
+} from "#lib/quran/catalogue.js";
 
-vi.mock("$lib/config/site", () => ({
+vi.mock("#lib/config/site.js", () => ({
   QURAN: {
     apiBase: "https://api.test/quran",
     artifactBase: "/_quran",

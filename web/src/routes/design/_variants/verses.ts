@@ -1,1 +1,1 @@
-export { displayVerses } from "$lib/quran/view/presentation";
+export { displayVerses } from "#lib/quran/view/presentation.js";

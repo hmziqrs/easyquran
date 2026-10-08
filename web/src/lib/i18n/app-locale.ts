@@ -1,5 +1,6 @@
-import { DEFAULT_UI_LOCALE, type UiLocale } from "$lib/i18n/locales";
 import { getContext, setContext } from "svelte";
+
+import { DEFAULT_UI_LOCALE, type UiLocale } from "#lib/i18n/locales.js";
 
 /**
  * Locale hand-off for the prefix-less app pages (`/bookmarks`, and the

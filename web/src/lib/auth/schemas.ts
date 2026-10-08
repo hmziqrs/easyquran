@@ -1,4 +1,3 @@
-import { getAuthValidationCopy, type AuthValidationCopy } from "$lib/i18n/auth-validation-copy";
 import {
   check,
   forward,
@@ -14,6 +13,8 @@ import {
   trim,
   type InferOutput,
 } from "valibot";
+
+import { getAuthValidationCopy, type AuthValidationCopy } from "#lib/i18n/auth-validation-copy.js";
 
 // Mirrors the server regex in rust/backend/api/src/modules/auth_v1/validator.rs::validate_email.
 // Kept identical so the client never accepts an address the API will reject.

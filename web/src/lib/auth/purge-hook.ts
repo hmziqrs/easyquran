@@ -1,6 +1,6 @@
-import type { AuthTransitionContext, AuthTransitionHook } from "$lib/auth/auth-state.svelte";
-import { purgeUserCaches } from "$lib/offline/messages";
-import { reader } from "$lib/stores/reader.svelte";
+import type { AuthTransitionContext, AuthTransitionHook } from "#lib/auth/auth-state.svelte.js";
+import { purgeUserCaches } from "#lib/offline/messages.js";
+import { reader } from "#lib/stores/reader.svelte.js";
 
 const CLEAR_POSITION_KINDS: ReadonlySet<AuthTransitionContext["kind"]> = new Set([
   "logout",

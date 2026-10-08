@@ -1,4 +1,5 @@
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
+
 import {
   asArray,
   asObject,
@@ -7,7 +8,7 @@ import {
   onStorageKey,
   readJSON,
   writeJSON,
-} from "$lib/storage";
+} from "#lib/storage/index.js";
 
 /**
  * What Reading mode flows: the Arabic, or one translation. Ayah-by-Ayah always shows the

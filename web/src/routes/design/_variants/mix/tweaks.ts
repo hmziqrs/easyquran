@@ -1,3 +1,4 @@
+import type { ReadonlyURLSearchParams } from "$app/state";
 /**
  * Fine-grained reader spacing for the mix page. Each piece of an ayah row — the tools line,
  * the Arabic, every translation — owns its own padding instead of one row-wide padding, so
@@ -235,7 +236,10 @@ export const TWEAK_PARAMS: readonly string[] = [
   READER_PARAM,
 ];
 
-function readNumber(params: URLSearchParams, def: NumberTweakDef): number {
+function readNumber(
+  params: URLSearchParams | ReadonlyURLSearchParams,
+  def: NumberTweakDef,
+): number {
   const raw = params.get(def.param);
   const value = raw === null ? Number.NaN : Number(raw);
   if (!Number.isFinite(value)) return DEFAULT_TWEAKS[def.key];
@@ -255,7 +259,7 @@ function readHex(raw: string | null): string {
 
 type MutableTweaks = { -readonly [K in keyof Tweaks]: Tweaks[K] };
 
-export function readTweaks(params: URLSearchParams): Tweaks {
+export function readTweaks(params: URLSearchParams | ReadonlyURLSearchParams): Tweaks {
   const out: MutableTweaks = { ...DEFAULT_TWEAKS };
   for (const def of NUMBER_TWEAKS) out[def.key] = readNumber(params, def);
   out.label = readLabel(params.get(LABEL_PARAM));

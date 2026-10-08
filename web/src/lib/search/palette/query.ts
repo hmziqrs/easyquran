@@ -1,1 +1,1 @@
-export * from "$lib/search/nav/parse";
+export * from "#lib/search/nav/parse.js";

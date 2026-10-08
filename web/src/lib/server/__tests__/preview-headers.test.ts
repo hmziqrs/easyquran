@@ -1,10 +1,11 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   cspWithScriptTokens,
   pageCandidates,
   parseStaticCsp,
   scriptHashTokens,
-} from "$lib/server/preview-headers";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/server/preview-headers.js";
 
 const CSP = "default-src 'self'; script-src 'self' https://example.com; object-src 'none'";
 

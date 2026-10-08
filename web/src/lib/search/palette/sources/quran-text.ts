@@ -1,5 +1,5 @@
-import { quranSearch } from "$lib/quran/search";
-import { MIN_QUERY_LEN } from "$lib/quran/search/normalize";
+import { quranSearch } from "#lib/quran/search.js";
+import { MIN_QUERY_LEN } from "#lib/quran/search/normalize.js";
 import {
   SearchHitKind,
   SearchProvider,
@@ -7,7 +7,7 @@ import {
   searchHitKey,
   searchHitSurah,
   searchHitText,
-} from "$lib/quran/search/types";
+} from "#lib/quran/search/types.js";
 
 import { QURAN_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
@@ -20,7 +20,7 @@ const LIMIT = 8;
 
 /**
  * Full-text Quran search. Async because it goes to the OPFS worker or the API
- * (see `$lib/quran/search`), so the engine debounces and cancels it; the
+ * (see `#lib/quran/search`), so the engine debounces and cancels it; the
  * catalogue-only sources keep answering on every keystroke meanwhile.
  */
 export const quranTextSource: PaletteSource = {

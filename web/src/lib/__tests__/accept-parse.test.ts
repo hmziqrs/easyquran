@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   appendVaryAccept,
   mdSiblingPathFor,
@@ -6,8 +8,7 @@ import {
   parseAccept,
   preferredType,
   varyWithAccept,
-} from "$lib/accept-parse";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/accept-parse.js";
 
 const CHROME_ACCEPT =
   "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";

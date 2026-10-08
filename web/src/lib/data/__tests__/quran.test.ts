@@ -1,8 +1,9 @@
-import { parseKey, surahAyahPath, surahPath, toArabicDigits, verseKey } from "$lib/data/quran";
-import { RangeKind } from "$lib/data/quran-data";
-import { QURAN_DATA } from "$lib/server/quran-data";
-import { readSurahLocalPageData } from "$lib/server/quran-surah-page";
 import { describe, expect, it } from "vite-plus/test";
+
+import { RangeKind } from "#lib/data/quran-data.js";
+import { parseKey, surahAyahPath, surahPath, toArabicDigits, verseKey } from "#lib/data/quran.js";
+import { QURAN_DATA } from "#lib/server/quran-data.js";
+import { readSurahLocalPageData } from "#lib/server/quran-surah-page.js";
 
 describe("verseKey / parseKey", () => {
   it("round-trips a surah:ayah key", () => {

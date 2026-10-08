@@ -1,5 +1,6 @@
-import { rampTwMergeConfig } from "$lib/utils";
 import { tv, type VariantProps } from "tailwind-variants";
+
+import { rampTwMergeConfig } from "#lib/utils.js";
 
 /**
  * §35 (docs/design-system.md) + plan 03 geometry/state matrix: primary/secondary/ghost

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { isMessagingConfigured } from "$lib/firebase";
-  import { notifications } from "$lib/stores/notifications.svelte";
-  import type { NotificationsCopy } from "$lib/components/notifications/notifications-copy";
-  import { cn } from "$lib/utils";
+  import { isMessagingConfigured } from "#lib/firebase/index.js";
+  import { notifications } from "#lib/stores/notifications.svelte.js";
+  import type { NotificationsCopy } from "#lib/components/notifications/notifications-copy.js";
+  import { cn } from "#lib/utils.js";
 
   const pill = "rounded-pill border px-3 py-1.5 text-xs transition-colors duration-150";
 

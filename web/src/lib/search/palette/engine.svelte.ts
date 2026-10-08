@@ -1,6 +1,6 @@
-import type { SurahRouteContext } from "$lib/data/quran";
-import type { QuranData } from "$lib/data/quran-data";
-import { loadQuranData } from "$lib/data/quran-data-client";
+import { loadQuranData } from "#lib/data/quran-data-client.js";
+import type { QuranData } from "#lib/data/quran-data.js";
+import type { SurahRouteContext } from "#lib/data/quran.js";
 
 import { parseQuery } from "./query";
 import {

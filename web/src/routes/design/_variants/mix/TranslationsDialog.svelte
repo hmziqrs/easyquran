@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
   import { onMount } from "svelte";
-  import { Icon } from "$lib/components/icon";
-  import type { TranslationCatalogueEntry } from "$lib/data/quran-types";
-  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID, flagFor, nativeNameFor } from "$lib/quran/catalogue";
+  import { Icon } from "#lib/components/icon/index.js";
+  import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID, flagFor, nativeNameFor } from "#lib/quran/catalogue.js";
 
   /**
    * The mix page's translation picker: the live TranslationModal's layout (search, chosen

@@ -1,4 +1,4 @@
-import type { Ayah, QuranRangeText, SurahNormalization } from "$lib/data/quran-types";
+import type { Ayah, QuranRangeText, SurahNormalization } from "#lib/data/quran-types.js";
 
 import {
   type JsonDocument,

@@ -1,10 +1,11 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import {
   SURAH_PAGE_WINDOW_MAX,
   SURAH_PAGE_WINDOW_SIZE,
   virtualPageWindow,
   windowSizeForViewport,
-} from "$lib/quran/virtual-pages";
-import { describe, expect, it } from "vite-plus/test";
+} from "#lib/quran/virtual-pages.js";
 
 describe("Surah page virtual window", () => {
   it("keeps all pages until the bounded window is exceeded", () => {
