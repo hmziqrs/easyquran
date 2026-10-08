@@ -65,12 +65,39 @@ export const DATA_MAX = 400;
 export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
 
+// Kit 3 removed `serviceWorker.files` — the precache filter kit 2 carried in
+// svelte.config.js lives here now: dotfiles (.DS_Store et al.) are refused by
+// this server and one failed install-time fetch kills SW install for every
+// client, while _headers/_redirects/robots.txt/og.png and the quran-meta/
+// catalogue are not client precache material (quran-data.json is re-added
+// deliberately below).
+const PRECACHE_EXCLUDED_NAMES = new Set(["_headers", "_redirects", "robots.txt", "og.png"]);
+
+function isPrecacheExcluded(path: string): boolean {
+  const rel = path.replace(/^\/+/, "");
+  if (PRECACHE_EXCLUDED_NAMES.has(rel)) return true;
+  if (rel.startsWith("quran-meta/")) return true;
+  return rel.split("/").some((segment) => segment.startsWith("."));
+}
+
 // kit 2's `$service-worker.build` + `.files` become `manifest.immutable`
 // (Vite output) + `manifest.assets` (static dir); both are `{ path }` objects.
-const PRECACHE_FILES: string[] = [...immutable, ...assets].map((entry) => entry.path);
+// Kit 3 emits those paths WITHOUT a leading slash ("favicon.png") while the
+// fetch handler matches slash-prefixed `url.pathname`, so every entry runs
+// through resolvePath()'s pathname branch (it prefixes "/" plus the base
+// under a non-empty base) — otherwise IMMUTABLE.has(url.pathname) never
+// matches and static assets fall through to SWR on every request.
+const PRECACHE_FILES: string[] = [...immutable, ...assets]
+  .filter((entry) => !isPrecacheExcluded(entry.path))
+  .map((entry) => resolvePath(entry.path.replace(/^\/+/, "")));
 
 const PRECACHE = Array.from(
-  new Set([...PRECACHE_FILES, "/", "/surah", resolvePath("quran-meta/quran-data.json")]),
+  new Set([
+    ...PRECACHE_FILES,
+    resolvePath(""),
+    resolvePath("surah"),
+    resolvePath("quran-meta/quran-data.json"),
+  ]),
 );
 
 const IMMUTABLE = new Set(PRECACHE_FILES);

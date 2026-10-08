@@ -8,9 +8,11 @@ vi.mock("$app/env", () => ({
 }));
 
 vi.mock("$app/manifest", () => ({
-  // SAFETY: $app/manifest mock; assets/immutable are typed { path }[] but stay empty because no test enumerates them.
-  assets: [],
-  immutable: [],
+  // SAFETY: $app/manifest mock; kit 3 emits entry paths WITHOUT a leading
+  // slash, so "favicon.png" doubles as the normalization fixture while
+  // "robots.txt" doubles as the precache-exclusion fixture.
+  assets: [{ path: "robots.txt" }],
+  immutable: [{ path: "favicon.png" }],
   prerendered: [],
   routes: [],
 }));
@@ -132,6 +134,22 @@ class FakeFetchEvent extends Event {
   }
 }
 
+// A minimal InstallEvent: the SW handler hands precache()'s promise to
+// .waitUntil, which the test then awaits.
+class FakeInstallEvent extends Event {
+  promise: Promise<void> | undefined;
+
+  constructor() {
+    super("install");
+  }
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- mocks InstallEvent.waitUntil; captures whatever promise the SW handler hands over
+  waitUntil(p: unknown): void {
+    // SAFETY: the SW install handler hands precache()'s Promise<void> to waitUntil;
+    // `p` is unknown only because the mock's InstallEvent capture slot is untyped.
+    this.promise = p as Promise<void>;
+  }
+}
+
 const ORIGIN = self.location.origin;
 
 function makeRequest(pathname: string, init?: RequestInit): Request {
@@ -217,5 +235,40 @@ describe("W5 same-origin /api/ requests never enter Cache Storage", () => {
   it("ignores non-GET /api/ requests at the top of the handler (method guard)", () => {
     const ev = dispatchFetch(makeRequest("/api/quran/search", { method: "POST" }));
     expect(ev.respondWithCalled).toBe(false);
+  });
+});
+
+describe("kit 3 manifest entries normalize to leading-slash, filtered precache", () => {
+  it("precache() installs manifest entries under slash-prefixed keys and drops excluded files", async () => {
+    const ev = new FakeInstallEvent();
+    self.dispatchEvent(ev);
+    await ev.promise;
+    const app = fakeCaches.caches.get("eq-app-test-v1");
+    expect(app).toBeDefined();
+    const keys = [...app!.entries.keys()];
+    // Kit 3 emits "favicon.png" (no slash); the precache key must be "/favicon.png".
+    expect(keys).toContain("/favicon.png");
+    expect(keys).not.toContain("favicon.png");
+    // The hand-added entries normalize through the same pathname branch.
+    expect(keys).toContain("/");
+    expect(keys).toContain("/surah");
+    // robots.txt (named exclusion), and dotfiles/quran-meta/** by the same filter.
+    expect(keys).not.toContain("/robots.txt");
+  });
+
+  it("serves a precached manifest asset cache-first with no background revalidate", async () => {
+    const app = await fakeCaches.open("eq-app-test-v1");
+    await app.put("/favicon.png", new Response("cached-favicon"));
+    const ev = dispatchFetch(makeRequest("/favicon.png"));
+    expect(ev.respondWithCalled).toBe(true);
+    // SAFETY: the fetch handler passed cacheFirstApp()'s Response to respondWith();
+    // ev.response is unknown only because the mock's capture slot is untyped.
+    const res = (await ev.response) as Response;
+    expect(await res.text()).toBe("cached-favicon");
+    await flush();
+    // Cache-first must not fire the SWR background fetch (the kit 2-era bug:
+    // IMMUTABLE held "favicon.png" so "/favicon.png" never matched and every
+    // static asset revalidated per request).
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 });

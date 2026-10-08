@@ -71,6 +71,7 @@
         </p>
       </div>
       <div class="flex gap-2">
+        <!-- kit 3 maps the old scroll-only `noscroll` to data-sveltekit-reset="false", which also preserves focus — accepted drift on this internal design route. -->
         <a
           href={mixSearch(params, RECOMMENDED_MIX)}
           data-sveltekit-reset="false"

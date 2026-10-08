@@ -26,10 +26,12 @@ export async function resumeToVerse(
     reader.openVerse(num, n, sourceId);
     if (options.anchor) reader.setPendingAnchor(options.anchor);
     // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
-    // kit 3 merged keepFocus/noScroll into one `reset` flag. The old options kept
-    // focus only when replacing while scroll-to-anchor always ran; one flag cannot
-    // split the two, and every current caller passes replaceState: false (both old
-    // flags meant "reset"), so reset stays true and only `replace` varies.
+    // kit 3 merged keepFocus/noScroll into one `reset` flag. Kit 2 passed
+    // keepFocus: !replaceState, and every live caller omits options — so focus
+    // was always KEPT while scroll still reset to the pending anchor. Kit 3
+    // cannot express that split (reset: false would also skip the anchor
+    // scroll), so reset stays true: anchor scrolling is preserved and the
+    // focus reset is an accepted, documented drift; only `replace` varies.
     await goto(
       publicHref(readerHrefFor(getLocale() as UiLocale, surahAyahPathFor(resumeCtx, surah, n))),
       {
