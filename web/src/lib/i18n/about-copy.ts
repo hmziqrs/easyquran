@@ -1,93 +1,75 @@
 import {
-  about_body_approach,
-  about_body_sources,
-  about_body_today,
   about_credit_built_by,
-  about_credit_note,
   about_credit_project_by,
   about_cta,
-  about_eyebrow,
+  about_feature_scripts,
+  about_feature_tools,
+  about_feature_translations,
   about_heading,
   about_intro,
   about_seo_description,
   about_seo_title,
+  about_sources_arabic,
   about_sources_heading,
-  about_sources_lead,
-  about_sources_tail,
-  about_sources_tanzil_label,
-  about_stat_free_label,
-  about_stat_free_value,
-  about_stat_growing_label,
-  about_stat_growing_value,
-  about_stat_script_label,
-  about_stat_script_value,
+  about_sources_note,
+  about_sources_translations,
 } from "#lib/i18n/m/about.js";
 import type { MarketingLocale, MarketingSeoCopy } from "#lib/i18n/marketing-copy.js";
 
-export interface AboutStat {
+export interface AboutFeature {
   /** Stable across locales so the DOM key never depends on translated text. */
-  id: "free" | "script" | "growing";
-  value: string;
-  label: string;
+  id: "scripts" | "translations" | "tools";
+  body: string;
+}
+
+/** Catalogue totals, counted at build time so the page never states a stale number. */
+export interface AboutCounts {
+  translations: number;
+  languages: number;
 }
 
 export interface AboutResolvedCopy {
   seo: MarketingSeoCopy;
-  eyebrow: string;
   heading: string;
   intro: string;
-  paragraphs: { id: string; body: string }[];
-  stats: AboutStat[];
+  features: AboutFeature[];
+  sourcesHeading: string;
+  sourcesArabic: string;
+  sourcesTranslations: string;
+  sourcesNote: string;
   creditProjectBy: string;
   creditBuiltBy: string;
-  creditNote: string;
   cta: string;
-  sourcesHeading: string;
-  sourcesLead: string;
-  sourcesTanzilLabel: string;
-  sourcesTail: string;
 }
 
 /** About page copy. Imported only by the about route, so it chunks with that route. */
-export function resolveAboutCopy(locale: MarketingLocale): AboutResolvedCopy {
+export function resolveAboutCopy(locale: MarketingLocale, counts: AboutCounts): AboutResolvedCopy {
+  const options = { locale } as const;
   return {
     seo: {
-      title: about_seo_title(undefined, { locale }),
-      description: about_seo_description(undefined, { locale }),
-      imageAlt: about_seo_title(undefined, { locale }),
+      title: about_seo_title(undefined, options),
+      description: about_seo_description(undefined, options),
+      imageAlt: about_seo_title(undefined, options),
     },
-    eyebrow: about_eyebrow(undefined, { locale }),
-    heading: about_heading(undefined, { locale }),
-    intro: about_intro(undefined, { locale }),
-    paragraphs: [
-      { id: "approach", body: about_body_approach(undefined, { locale }) },
-      { id: "today", body: about_body_today(undefined, { locale }) },
-      { id: "sources", body: about_body_sources(undefined, { locale }) },
+    heading: about_heading(undefined, options),
+    intro: about_intro(undefined, options),
+    features: [
+      { id: "scripts", body: about_feature_scripts(undefined, options) },
+      {
+        id: "translations",
+        body: about_feature_translations(
+          { translations: String(counts.translations), languages: String(counts.languages) },
+          options,
+        ),
+      },
+      { id: "tools", body: about_feature_tools(undefined, options) },
     ],
-    stats: [
-      {
-        id: "free",
-        value: about_stat_free_value(undefined, { locale }),
-        label: about_stat_free_label(undefined, { locale }),
-      },
-      {
-        id: "script",
-        value: about_stat_script_value(undefined, { locale }),
-        label: about_stat_script_label(undefined, { locale }),
-      },
-      {
-        id: "growing",
-        value: about_stat_growing_value(undefined, { locale }),
-        label: about_stat_growing_label(undefined, { locale }),
-      },
-    ],
-    creditProjectBy: about_credit_project_by(undefined, { locale }),
-    creditBuiltBy: about_credit_built_by(undefined, { locale }),
-    creditNote: about_credit_note(undefined, { locale }),
-    cta: about_cta(undefined, { locale }),
-    sourcesHeading: about_sources_heading(undefined, { locale }),
-    sourcesLead: about_sources_lead(undefined, { locale }),
-    sourcesTanzilLabel: about_sources_tanzil_label(undefined, { locale }),
-    sourcesTail: about_sources_tail(undefined, { locale }),
+    sourcesHeading: about_sources_heading(undefined, options),
+    sourcesArabic: about_sources_arabic(undefined, options),
+    sourcesTranslations: about_sources_translations(undefined, options),
+    sourcesNote: about_sources_note(undefined, options),
+    creditProjectBy: about_credit_project_by(undefined, options),
+    creditBuiltBy: about_credit_built_by(undefined, options),
+    cta: about_cta(undefined, options),
   };
 }

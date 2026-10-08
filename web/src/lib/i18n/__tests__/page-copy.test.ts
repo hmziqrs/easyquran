@@ -14,7 +14,8 @@ function source(path: string): string {
 
 describe("marketing page copy", () => {
   it("translates every page and keeps structural IDs locale-independent", () => {
-    const about = { en: resolveAboutCopy("en"), ar: resolveAboutCopy("ar") };
+    const counts = { translations: 378, languages: 105 };
+    const about = { en: resolveAboutCopy("en", counts), ar: resolveAboutCopy("ar", counts) };
     const faq = { en: resolveFaqCopy("en"), ar: resolveFaqCopy("ar") };
     const contact = { en: resolveContactCopy("en"), ar: resolveContactCopy("ar") };
     const privacy = { en: resolvePrivacyCopy("en"), ar: resolvePrivacyCopy("ar") };
@@ -27,7 +28,11 @@ describe("marketing page copy", () => {
     expect(terms.ar.sections[0]?.body).not.toBe(terms.en.sections[0]?.body);
     expect(resolvePrivacySummary("ar")).not.toBe(resolvePrivacySummary("en"));
 
-    expect(about.ar.stats.map((stat) => stat.id)).toEqual(about.en.stats.map((stat) => stat.id));
+    expect(about.ar.features.map((f) => f.id)).toEqual(about.en.features.map((f) => f.id));
+    // Catalogue totals reach the copy through the build-time counts, never a hard-coded number.
+    expect(about.en.features.find((f) => f.id === "translations")?.body).toContain(
+      "378 translations in 105 languages",
+    );
     expect(faq.ar.entries.map((entry) => entry.id)).toEqual(
       faq.en.entries.map((entry) => entry.id),
     );

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Band, Eyebrow, Icon, Seo } from "#lib/components/index.js";
+  import { Container, Icon, Seo } from "#lib/components/index.js";
   import { resolveContactCopy } from "#lib/i18n/contact-copy.js";
   import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import { externalLinkAttrs } from "#lib/utils.js";
@@ -9,6 +9,9 @@
 
   const locale = $derived(marketingLocaleFromPath(page.url.pathname));
   const copy = $derived(resolveContactCopy(locale));
+
+  const row =
+    "group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring";
 </script>
 
 <Seo
@@ -19,60 +22,42 @@
   inLanguage={locale}
 />
 
-<Band contentClass="flex w-full flex-col gap-12">
-  <div class="flex w-full flex-col gap-3 text-center">
-    <Eyebrow>{copy.eyebrow}</Eyebrow>
-    <h1 class="text-h1">{copy.heading}</h1>
-    <p class="mx-auto max-w-[60ch] text-body-xl text-foreground-secondary">{copy.intro}</p>
-  </div>
+<Container class="py-12 md:py-16">
+  <div class="flex max-w-[680px] flex-col gap-8">
+    <div class="flex flex-col gap-3">
+      <h1 class="text-h1">{copy.heading}</h1>
+      <p class="text-body-l text-foreground-secondary">{copy.intro}</p>
+    </div>
 
-  <div class="grid w-full gap-4 md:grid-cols-2">
-    <a
-      href="mailto:{data.owner.email}"
-      class="group flex flex-col gap-4 rounded-lg border border-border bg-background-subtle p-7 transition-colors hover:border-primary"
-    >
-      <div class="flex size-9 items-center justify-center rounded-md bg-primary-soft text-primary">
-        <Icon name="mail" size={17} />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <div class="text-body-l font-semibold">{copy.emailTitle}</div>
-        <p class="text-body leading-[1.6] text-foreground-secondary">{copy.emailBody}</p>
-      </div>
-      <div class="mt-auto flex items-center gap-2 text-body font-medium text-primary">
-        {data.owner.email}
-        <Icon
-          name="arrow-right"
-          size={15}
-          class="transition-transform group-hover:translate-x-0.5"
-        />
-      </div>
-    </a>
-
-    <a
-      href={data.owner.x}
-      {...externalLinkAttrs(data.owner.x, { me: true })}
-      class="group flex flex-col gap-4 rounded-lg border border-border bg-background-subtle p-7 transition-colors hover:border-primary"
-    >
-      <div class="flex size-9 items-center justify-center rounded-md bg-foreground text-background">
-        <Icon name="x-brand" size={15} />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <div class="text-body-l font-semibold">{copy.xTitle}</div>
-        <p class="text-body leading-[1.6] text-foreground-secondary">{copy.xBody}</p>
-      </div>
-      <div class="mt-auto flex items-center gap-2 text-body font-medium text-primary">
-        {data.owner.xHandle}
-        <Icon
-          name="arrow-right"
-          size={15}
-          class="transition-transform group-hover:translate-x-0.5"
-        />
-      </div>
-    </a>
+    <ul class="divide-y divide-border overflow-hidden rounded-lg border border-border">
+      <li>
+        <a href="mailto:{data.owner.email}" class={row}>
+          <span
+            class="flex size-9 flex-none items-center justify-center rounded-md bg-background-subtle text-foreground"
+          >
+            <Icon name="mail" size={17} />
+          </span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-caption text-muted">{copy.emailTitle}</span>
+            <span class="truncate text-body font-semibold text-foreground">{data.owner.email}</span>
+          </span>
+          <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
+        </a>
+      </li>
+      <li>
+        <a href={data.owner.x} {...externalLinkAttrs(data.owner.x, { me: true })} class={row}>
+          <span
+            class="flex size-9 flex-none items-center justify-center rounded-md bg-background-subtle text-foreground"
+          >
+            <Icon name="x-brand" size={15} />
+          </span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-caption text-muted">{copy.xTitle}</span>
+            <span class="truncate text-body font-semibold text-foreground">{data.owner.xHandle}</span>
+          </span>
+          <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
+        </a>
+      </li>
+    </ul>
   </div>
-
-  <div class="flex w-full flex-col gap-[3px] rounded-md border border-border bg-background-subtle px-[30px] py-5 text-center">
-    <span class="text-caption text-muted">{copy.replyLabel}</span>
-    <span class="text-body text-foreground">{copy.replyValue}</span>
-  </div>
-</Band>
+</Container>

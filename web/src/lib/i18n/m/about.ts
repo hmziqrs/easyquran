@@ -2,28 +2,20 @@
 //
 // About page.
 //
-// 22 messages. Import this barrel, never
+// 14 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
-export { about_body_approach } from "#lib/paraglide/messages/about_body_approach.js";
-export { about_body_sources } from "#lib/paraglide/messages/about_body_sources.js";
-export { about_body_today } from "#lib/paraglide/messages/about_body_today.js";
 export { about_credit_built_by } from "#lib/paraglide/messages/about_credit_built_by.js";
-export { about_credit_note } from "#lib/paraglide/messages/about_credit_note.js";
 export { about_credit_project_by } from "#lib/paraglide/messages/about_credit_project_by.js";
 export { about_cta } from "#lib/paraglide/messages/about_cta.js";
-export { about_eyebrow } from "#lib/paraglide/messages/about_eyebrow.js";
+export { about_feature_scripts } from "#lib/paraglide/messages/about_feature_scripts.js";
+export { about_feature_tools } from "#lib/paraglide/messages/about_feature_tools.js";
+export { about_feature_translations } from "#lib/paraglide/messages/about_feature_translations.js";
 export { about_heading } from "#lib/paraglide/messages/about_heading.js";
 export { about_intro } from "#lib/paraglide/messages/about_intro.js";
 export { about_seo_description } from "#lib/paraglide/messages/about_seo_description.js";
 export { about_seo_title } from "#lib/paraglide/messages/about_seo_title.js";
+export { about_sources_arabic } from "#lib/paraglide/messages/about_sources_arabic.js";
 export { about_sources_heading } from "#lib/paraglide/messages/about_sources_heading.js";
-export { about_sources_lead } from "#lib/paraglide/messages/about_sources_lead.js";
-export { about_sources_tail } from "#lib/paraglide/messages/about_sources_tail.js";
-export { about_sources_tanzil_label } from "#lib/paraglide/messages/about_sources_tanzil_label.js";
-export { about_stat_free_label } from "#lib/paraglide/messages/about_stat_free_label.js";
-export { about_stat_free_value } from "#lib/paraglide/messages/about_stat_free_value.js";
-export { about_stat_growing_label } from "#lib/paraglide/messages/about_stat_growing_label.js";
-export { about_stat_growing_value } from "#lib/paraglide/messages/about_stat_growing_value.js";
-export { about_stat_script_label } from "#lib/paraglide/messages/about_stat_script_label.js";
-export { about_stat_script_value } from "#lib/paraglide/messages/about_stat_script_value.js";
+export { about_sources_note } from "#lib/paraglide/messages/about_sources_note.js";
+export { about_sources_translations } from "#lib/paraglide/messages/about_sources_translations.js";

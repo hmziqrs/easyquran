@@ -88,7 +88,7 @@
         > · <a
           class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
           href={owner.x}
-          {...externalLinkAttrs(owner.x, { me: true })}>@{owner.xHandle}</a
+          {...externalLinkAttrs(owner.x, { me: true })}>{owner.xHandle}</a
         >
       </span>
       <span lang="ar" dir="rtl" class="ms-auto font-arabic text-body-l leading-none text-muted">
