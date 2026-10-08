@@ -21,9 +21,10 @@ a bun-version A/B — which this document does not make.
 
 ## 1. What this answers
 
-1. Requests/sec and latency distribution per runtime at a fixed set of offered rates.
+1. Requests/sec and latency distribution of the production bun server at a fixed set of
+   offered rates.
 2. Cost of a translated-page **cache miss** (full SSR + Axum range fetch) vs **cache hit**
-   (disk read) — and the ratio at which each runtime falls over.
+   (disk read) — and the rate at which that server falls over.
 3. How TTL expiry, LRU budget eviction, and Zipf popularity interact — specifically whether a hot
    head starves the long tail out of the cache.
 4. Settled by the SvelteKit 3 migration: bun runs this production server (adapter-bun,
@@ -64,8 +65,8 @@ before each run and fails loudly otherwise.
 
 **Axum is a fixed constant, not a variable.** Built once with `cargo build -p ruxlog --release`,
 started once for the whole matrix, pre-warmed with the full hot-key set before stage 1, and never
-restarted between runtimes. Its own CPU use is sampled and reported so a saturated upstream is
-visible rather than silently attributed to the runtime.
+restarted across scenarios. Its own CPU use is sampled and reported so a saturated upstream is
+visible rather than silently attributed to the web server.
 
 ---
 
@@ -124,8 +125,8 @@ stack but skip SSR entirely, so translated-page cost is `translated-* minus cont
 
 ## 5. Popularity model
 
-Zipf over a realistic key space, deterministic (seeded, same key stream for every runtime — this is
-what makes the comparison an A/B rather than three separate experiments).
+Zipf over a realistic key space, deterministic (seeded, same key stream for every scenario and
+repeat — this is what makes runs comparable rather than separate experiments).
 
 **Key = (translation source × navigation index).** Sampled independently:
 
@@ -183,7 +184,7 @@ Each runs against `translated-surah` by default; `--deep` extends the set to the
 | `lru-evict`       | `QURAN_SSR_CACHE_BUDGET_BYTES=16MiB` (~forces churn), Zipf traffic                                                                                                     | eviction rate, write amplification, whether budget enforcement itself costs                                                                                                               |
 | `tail-starvation` | shrunk budget + Zipf(α=1.3) hot head, tail requests tagged separately                                                                                                  | **does the hot head evict the tail?** Hit ratio reported separately for head / body / tail cohorts                                                                                        |
 | `stampede`        | primed single key, TTL set to expire exactly at t=0, N concurrent requests for that one key                                                                            | do concurrent misses collapse to one render, or does every request render? (Today's `hooks.server.ts` has no single-flight — this scenario is expected to expose that, and quantifies it) |
-| `compression`     | `warm` run twice: `Accept-Encoding: gzip, br` vs identity                                                                                                              | compression cost as a runtime differentiator (bun vs node zlib)                                                                                                                           |
+| `compression`     | `warm` run twice: `Accept-Encoding: gzip, br` vs identity                                                                                                              | compression cost on the warm hit path (gzip/br vs identity)                                                                                                                               |
 
 Between every scenario: server killed, cache dir wiped, fresh dir created, server restarted, health
 probe polled until ready.
@@ -218,7 +219,7 @@ The `15m` profile is a **directional** ranking tool, not a publishable measureme
 means no spread, so every cell is emitted with `"confidence": "unverified"` and the report renders
 those cells muted with an explicit banner. p999 is suppressed entirely at this profile — 8 s at
 200 req/s is ~1,600 samples, far too few. It does still produce the cold-vs-warm miss-cost delta,
-the hit-ratio curve, saturation point, and mem/CPU traces for both runtimes.
+the hit-ratio curve, saturation point, and mem/CPU traces for the server.
 
 **Deep scope is per-suite, not cross-product.** The five extra cache scenarios (`ttl-expiry`,
 `lru-evict`, `tail-starvation`, `stampede`, `compression`) run on `translated-surah` only — running
@@ -245,8 +246,8 @@ bytes in/out, latency p50 / p90 / p95 / p99 / p999 / max / mean, full latency hi
 generator-bound stages are identifiable), system load average, cache-dir size on disk.
 
 **Derived:** hit-ratio-over-time per stage; cost-per-miss (`p50 miss − p50 hit` from the cold/warm
-delta); RPS-vs-p99 knee per runtime; head/body/tail hit ratio for `tail-starvation`; achieved-rate
-ceiling per runtime; bytes-written per eviction cycle.
+delta); RPS-vs-p99 knee for the server; head/body/tail hit ratio for `tail-starvation`;
+achieved-rate ceiling; bytes-written per eviction cycle.
 
 ---
 
@@ -261,7 +262,7 @@ bench/results/<timestamp>/
 └── report.html         # self-contained page (inline CSS/JS/SVG), published via Artifact
 ```
 
-`report.html` carries: matrix summary table, RPS-vs-latency knee curves per runtime, achieved-vs-
+`report.html` carries: matrix summary table, RPS-vs-latency knee curves, achieved-vs-
 offered rate bars per stage, hit-ratio-over-time lines per scenario, head/body/tail starvation
 chart, memory/CPU traces, and a plain-language findings section. Theme-aware, no external assets.
 
@@ -276,6 +277,7 @@ bench/
 ├── .tools/                # vegeta via brew
 ├── .run/                  # per-scenario cache dirs, pid files, target files (disposable)
 ├── shims/bun-node-sqlite.ts   # retired by the kit 3 migration — never created
+├── tsconfig.json          # harness-only TS config (node types, explicit .ts imports, noEmit)
 ├── src/
 │   ├── config.ts          # runtimes, suites, scenarios, ladder, seeds
 │   ├── keyspace.ts        # catalogue + metadata load, family index spaces
@@ -304,9 +306,9 @@ just bench-report     # rebuild report.html from an existing results dir
 
 ## 12. Known limits, stated up front
 
-- **Generator shares the host.** All numbers are _relative between runtimes_, not absolute capacity.
-  Stages where vegeta CPU% is the ceiling are marked generator-bound in the report and excluded from
-  runtime conclusions.
+- **Generator shares the host.** All numbers are _relative_ (across scenarios and stages), not
+  absolute capacity. Stages where vegeta CPU% is the ceiling are marked generator-bound in the
+  report and excluded from conclusions about the server.
 - **100k RPS will not be reached** for SSR suites on this topology. Those stages measure overload
   and failure behavior, which is the point of keeping them.
 - **The bun shim is retired** — every row exercises the same `node:sqlite` binding bun runs in
@@ -317,7 +319,3 @@ just bench-report     # rebuild report.html from an existing results dir
   low-confidence below stage 3.
 - Quran data is untouched: read-only sqlite, no hashing anywhere in the harness, cache dirs are
   disposable HTML only. Per `AGENTS.MD`, no SHA-256 over Quran data in any bench path.
-
-```
-
-```

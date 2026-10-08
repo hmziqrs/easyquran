@@ -38,8 +38,9 @@ function arabicUrl(ks: Keyspace, sIndex: number, roll: number): string {
 }
 
 /**
- * Builds one stage's request stream. Deterministic in `seed`, so every runtime replays the exact
- * same key order — this is what makes the comparison an A/B rather than three experiments.
+ * Builds one stage's request stream. Deterministic in `seed`, so every scenario and repeat
+ * replays the exact same key order — this is what makes runs comparable rather than
+ * separate experiments.
  */
 export function buildTargets(suite: string, count: number, file: string, seed = SEED): TargetSet {
   if (!SUITES.includes(suite as Suite)) throw new Error(`[targets] unsupported suite ${suite}`);
