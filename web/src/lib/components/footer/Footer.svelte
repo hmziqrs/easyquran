@@ -8,13 +8,8 @@
     MarketingFooterLinks,
   } from "#lib/i18n/marketing-copy.js";
   import { publicHref } from "#lib/i18n/public-href.js";
+  import BrandMark from "#lib/components/brand/BrandMark.svelte";
 
-  /**
-   * Board band 8: surface ground, hairline rule, a 380px brand column plus three
-   * link columns under text-micro headings, and the credit row (real owner data —
-   * the boards' [YOUR NAME] placeholder never ships). The Qur'an quotation stays:
-   * verbatim, explicitly lang="ar" dir="rtl" (marketing-surface-guard).
-   */
   let {
     owner,
     year,
@@ -34,7 +29,6 @@
 </script>
 
 <footer class="border-t border-border bg-surface">
-  <!-- Same frame as Nav and the page column (Container default: 1200px, 24px gutter). -->
   <div class="mx-auto w-full max-w-[1200px] px-6">
     <div
       class="grid grid-cols-2 gap-8 pt-[52px] pb-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-10"
@@ -42,10 +36,8 @@
       <div class="col-span-2 flex flex-col gap-3 md:col-span-1">
         <div class="flex items-center gap-2.5">
           <span
-            class="flex size-[30px] items-center justify-center rounded-full bg-primary font-arabic text-[16px] font-bold leading-none text-primary-foreground"
-            lang="ar"
-            dir="rtl"
-            aria-hidden="true">ق</span
+            class="flex size-[30px] items-center justify-center rounded-sm bg-primary text-primary-foreground"
+            aria-hidden="true"><BrandMark class="size-[26px]" /></span
           >
           <span class="text-[19px] font-extrabold tracking-[-0.035em] text-foreground"
             >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
