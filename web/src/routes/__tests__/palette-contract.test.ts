@@ -45,8 +45,8 @@ const CONTRACT_TOKENS = [
 const PALETTES = ["sacred", "ink", "sepia", "sapphire"] as const;
 const MODES = ["light", "dark"] as const;
 
-// Additive hue set (plan 01): the four card hues. Identical across palettes, differs by
-// mode only (plan 00 D3 — amber cannot carry white on the dark ground).
+// Additive hue set (plan 01, extended 2026-10): the eight card hues. Identical across
+// palettes, differs by mode only (plan 00 D3 — amber cannot carry white on the dark ground).
 const HUE_TOKENS = [
   "--hue-1",
   "--hue-1-soft",
@@ -60,10 +60,26 @@ const HUE_TOKENS = [
   "--hue-4",
   "--hue-4-soft",
   "--on-hue-4",
+  "--hue-5",
+  "--hue-5-soft",
+  "--on-hue-5",
+  "--hue-6",
+  "--hue-6-soft",
+  "--on-hue-6",
+  "--hue-7",
+  "--hue-7-soft",
+  "--on-hue-7",
+  "--hue-8",
+  "--hue-8-soft",
+  "--on-hue-8",
   "--hue-1-legible",
   "--hue-2-legible",
   "--hue-3-legible",
   "--hue-4-legible",
+  "--hue-5-legible",
+  "--hue-6-legible",
+  "--hue-7-legible",
+  "--hue-8-legible",
 ] as const;
 
 // Ground tokens (plan 01): identical across palettes within a mode — the check that

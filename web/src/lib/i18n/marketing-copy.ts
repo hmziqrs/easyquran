@@ -109,7 +109,7 @@ export interface TweaksResolvedCopy {
 }
 
 /** Hue slot index into the --hue-N / --on-hue-N / --hue-N-soft token set (plan 05: presentation never lives in copy). */
-export type LandingHue = 1 | 2 | 3 | 4;
+export type LandingHue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 /** The home page: a search, a few shortcuts and the surah index. No marketing bands. */
 export interface LandingResolvedCopy {

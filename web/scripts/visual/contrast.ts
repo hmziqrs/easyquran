@@ -36,7 +36,7 @@ export interface PairSpec {
  */
 const BORDER_FLOOR = 1.1;
 
-const huePairs: PairSpec[] = [1, 2, 3, 4].map((n) => ({
+const huePairs: PairSpec[] = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
   fg: `--on-hue-${n}`,
   bg: `--hue-${n}`,
   min: 4.5,

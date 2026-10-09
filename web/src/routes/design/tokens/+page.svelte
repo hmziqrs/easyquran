@@ -45,8 +45,12 @@
 
   // Additive hue set (plan 01) — undefined until that plan lands; rendered as "not defined"
   // so the sweep turns green-to-colourful exactly when the tokens appear.
-  const HUE_TOKENS = [1, 2, 3, 4].flatMap((n) => [`--hue-${n}`, `--hue-${n}-soft`, `--on-hue-${n}`]);
-  const LEGIBLE_TOKENS = [1, 2, 3, 4].map((n) => `--hue-${n}-legible`);
+  const HUE_TOKENS = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => [
+    `--hue-${n}`,
+    `--hue-${n}-soft`,
+    `--on-hue-${n}`,
+  ]);
+  const LEGIBLE_TOKENS = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `--hue-${n}-legible`);
 
   const GROUPS: TokenGroup[] = [
     {
@@ -90,7 +94,7 @@
 
   const PAIR_CHIPS: { label: string; fill: string; fg: string }[] = [
     { label: "--primary-foreground on --primary", fill: "--primary", fg: "--primary-foreground" },
-    ...[1, 2, 3, 4].map((n) => ({
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
       label: `--on-hue-${n} on --hue-${n}`,
       fill: `--hue-${n}`,
       fg: `--on-hue-${n}`,

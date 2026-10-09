@@ -291,6 +291,24 @@
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
   --hue-4-legible: oklch(0.78 0.19 25);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     These run brighter in dark mode with a dark on-color; the legacy four stay deep. */
+  --hue-5: oklch(0.66 0.15 85);
+  --hue-5-soft: oklch(0.3 0.06 85);
+  --on-hue-5: oklch(0.2 0.02 85);
+  --hue-6: oklch(0.66 0.16 50);
+  --hue-6-soft: oklch(0.3 0.06 50);
+  --on-hue-6: oklch(0.2 0.02 50);
+  --hue-7: oklch(0.66 0.11 205);
+  --hue-7-soft: oklch(0.3 0.055 205);
+  --on-hue-7: oklch(0.2 0.02 205);
+  --hue-8: oklch(0.66 0.17 340);
+  --hue-8-soft: oklch(0.3 0.06 340);
+  --on-hue-8: oklch(0.2 0.02 340);
+  --hue-5-legible: oklch(0.82 0.15 85);
+  --hue-6-legible: oklch(0.78 0.16 50);
+  --hue-7-legible: oklch(0.78 0.11 205);
+  --hue-8-legible: oklch(0.78 0.17 340);
 
   color-scheme: dark;
 }
@@ -353,6 +371,24 @@
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
   --hue-4-legible: var(--hue-4);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     Deeper than the dark-mode values so white on-fill stays above 4.5:1. */
+  --hue-5: oklch(0.52 0.14 85);
+  --hue-5-soft: oklch(0.95 0.045 85);
+  --on-hue-5: #ffffff;
+  --hue-6: oklch(0.52 0.16 50);
+  --hue-6-soft: oklch(0.95 0.045 50);
+  --on-hue-6: #ffffff;
+  --hue-7: oklch(0.5 0.11 205);
+  --hue-7-soft: oklch(0.95 0.045 205);
+  --on-hue-7: #ffffff;
+  --hue-8: oklch(0.5 0.17 340);
+  --hue-8-soft: oklch(0.95 0.045 340);
+  --on-hue-8: #ffffff;
+  --hue-5-legible: var(--hue-5);
+  --hue-6-legible: var(--hue-6);
+  --hue-7-legible: var(--hue-7);
+  --hue-8-legible: var(--hue-8);
 
   color-scheme: light;
 }
@@ -411,6 +447,24 @@
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
   --hue-4-legible: var(--hue-4);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     Deeper than the dark-mode values so white on-fill stays above 4.5:1. */
+  --hue-5: oklch(0.52 0.14 85);
+  --hue-5-soft: oklch(0.95 0.045 85);
+  --on-hue-5: #ffffff;
+  --hue-6: oklch(0.52 0.16 50);
+  --hue-6-soft: oklch(0.95 0.045 50);
+  --on-hue-6: #ffffff;
+  --hue-7: oklch(0.5 0.11 205);
+  --hue-7-soft: oklch(0.95 0.045 205);
+  --on-hue-7: #ffffff;
+  --hue-8: oklch(0.5 0.17 340);
+  --hue-8-soft: oklch(0.95 0.045 340);
+  --on-hue-8: #ffffff;
+  --hue-5-legible: var(--hue-5);
+  --hue-6-legible: var(--hue-6);
+  --hue-7-legible: var(--hue-7);
+  --hue-8-legible: var(--hue-8);
 
   color-scheme: light;
 }
@@ -468,6 +522,24 @@
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
   --hue-4-legible: oklch(0.78 0.19 25);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     These run brighter in dark mode with a dark on-color; the legacy four stay deep. */
+  --hue-5: oklch(0.66 0.15 85);
+  --hue-5-soft: oklch(0.3 0.06 85);
+  --on-hue-5: oklch(0.2 0.02 85);
+  --hue-6: oklch(0.66 0.16 50);
+  --hue-6-soft: oklch(0.3 0.06 50);
+  --on-hue-6: oklch(0.2 0.02 50);
+  --hue-7: oklch(0.66 0.11 205);
+  --hue-7-soft: oklch(0.3 0.055 205);
+  --on-hue-7: oklch(0.2 0.02 205);
+  --hue-8: oklch(0.66 0.17 340);
+  --hue-8-soft: oklch(0.3 0.06 340);
+  --on-hue-8: oklch(0.2 0.02 340);
+  --hue-5-legible: oklch(0.82 0.15 85);
+  --hue-6-legible: oklch(0.78 0.16 50);
+  --hue-7-legible: oklch(0.78 0.11 205);
+  --hue-8-legible: oklch(0.78 0.17 340);
 
   color-scheme: dark;
 }
@@ -528,6 +600,24 @@
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
   --hue-4-legible: var(--hue-4);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     Deeper than the dark-mode values so white on-fill stays above 4.5:1. */
+  --hue-5: oklch(0.52 0.14 85);
+  --hue-5-soft: oklch(0.95 0.045 85);
+  --on-hue-5: #ffffff;
+  --hue-6: oklch(0.52 0.16 50);
+  --hue-6-soft: oklch(0.95 0.045 50);
+  --on-hue-6: #ffffff;
+  --hue-7: oklch(0.5 0.11 205);
+  --hue-7-soft: oklch(0.95 0.045 205);
+  --on-hue-7: #ffffff;
+  --hue-8: oklch(0.5 0.17 340);
+  --hue-8-soft: oklch(0.95 0.045 340);
+  --on-hue-8: #ffffff;
+  --hue-5-legible: var(--hue-5);
+  --hue-6-legible: var(--hue-6);
+  --hue-7-legible: var(--hue-7);
+  --hue-8-legible: var(--hue-8);
 
   color-scheme: light;
 }
@@ -586,6 +676,24 @@
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
   --hue-4-legible: oklch(0.78 0.19 25);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     These run brighter in dark mode with a dark on-color; the legacy four stay deep. */
+  --hue-5: oklch(0.66 0.15 85);
+  --hue-5-soft: oklch(0.3 0.06 85);
+  --on-hue-5: oklch(0.2 0.02 85);
+  --hue-6: oklch(0.66 0.16 50);
+  --hue-6-soft: oklch(0.3 0.06 50);
+  --on-hue-6: oklch(0.2 0.02 50);
+  --hue-7: oklch(0.66 0.11 205);
+  --hue-7-soft: oklch(0.3 0.055 205);
+  --on-hue-7: oklch(0.2 0.02 205);
+  --hue-8: oklch(0.66 0.17 340);
+  --hue-8-soft: oklch(0.3 0.06 340);
+  --on-hue-8: oklch(0.2 0.02 340);
+  --hue-5-legible: oklch(0.82 0.15 85);
+  --hue-6-legible: oklch(0.78 0.16 50);
+  --hue-7-legible: oklch(0.78 0.11 205);
+  --hue-8-legible: oklch(0.78 0.17 340);
 
   color-scheme: dark;
 }
@@ -644,6 +752,24 @@
   --hue-2-legible: var(--hue-2);
   --hue-3-legible: var(--hue-3);
   --hue-4-legible: var(--hue-4);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     Deeper than the dark-mode values so white on-fill stays above 4.5:1. */
+  --hue-5: oklch(0.52 0.14 85);
+  --hue-5-soft: oklch(0.95 0.045 85);
+  --on-hue-5: #ffffff;
+  --hue-6: oklch(0.52 0.16 50);
+  --hue-6-soft: oklch(0.95 0.045 50);
+  --on-hue-6: #ffffff;
+  --hue-7: oklch(0.5 0.11 205);
+  --hue-7-soft: oklch(0.95 0.045 205);
+  --on-hue-7: #ffffff;
+  --hue-8: oklch(0.5 0.17 340);
+  --hue-8-soft: oklch(0.95 0.045 340);
+  --on-hue-8: #ffffff;
+  --hue-5-legible: var(--hue-5);
+  --hue-6-legible: var(--hue-6);
+  --hue-7-legible: var(--hue-7);
+  --hue-8-legible: var(--hue-8);
 
   color-scheme: light;
 }
@@ -701,6 +827,24 @@
   --hue-2-legible: oklch(0.78 0.14 162);
   --hue-3-legible: oklch(0.78 0.21 300);
   --hue-4-legible: oklch(0.78 0.19 25);
+  /* Extended card hues (2026-10): gold, orange, teal, magenta — eight-color card cycle.
+     These run brighter in dark mode with a dark on-color; the legacy four stay deep. */
+  --hue-5: oklch(0.66 0.15 85);
+  --hue-5-soft: oklch(0.3 0.06 85);
+  --on-hue-5: oklch(0.2 0.02 85);
+  --hue-6: oklch(0.66 0.16 50);
+  --hue-6-soft: oklch(0.3 0.06 50);
+  --on-hue-6: oklch(0.2 0.02 50);
+  --hue-7: oklch(0.66 0.11 205);
+  --hue-7-soft: oklch(0.3 0.055 205);
+  --on-hue-7: oklch(0.2 0.02 205);
+  --hue-8: oklch(0.66 0.17 340);
+  --hue-8-soft: oklch(0.3 0.06 340);
+  --on-hue-8: oklch(0.2 0.02 340);
+  --hue-5-legible: oklch(0.82 0.15 85);
+  --hue-6-legible: oklch(0.78 0.16 50);
+  --hue-7-legible: oklch(0.78 0.11 205);
+  --hue-8-legible: oklch(0.78 0.17 340);
 
   color-scheme: dark;
 }

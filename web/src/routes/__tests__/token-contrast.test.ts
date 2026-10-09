@@ -25,12 +25,12 @@ describe("token contrast gate", () => {
   it("asserts the contract pairs everywhere — only additive hue pairs may be skipped", () => {
     const skipped = report.rows.filter((r) => r.status === "skipped");
     for (const row of skipped) {
-      expect(row.fg, `${row.palette} ${row.mode}: unexpected skip`).toMatch(/^--on-hue-[1-4]$/);
+      expect(row.fg, `${row.palette} ${row.mode}: unexpected skip`).toMatch(/^--on-hue-[1-8]$/);
     }
     // 8 asserted pairs per block (reading, secondary, muted ×2, primary, translation,
-    // border floor); the 4 hue pairs join automatically once plan 01 defines them.
+    // border floor) + the 8 hue pairs.
     const asserted = report.rows.filter((r) => r.status !== "skipped");
-    expect(asserted.length).toBeGreaterThanOrEqual(64);
+    expect(asserted.length).toBeGreaterThanOrEqual(128);
   });
 
   it("computes a ratio for every asserted pair (no unparseable token values)", () => {
@@ -89,10 +89,10 @@ describe("hue-pair auto-activation (judge round 1: no per-block silent skip)", (
     ].join("\n");
     const result = evaluateContrast(synthetic);
     const skipped = result.rows.filter((r) => r.status === "skipped");
-    // 4 hue pairs × 2 blocks; every skip is a hue pair, never a contract pair.
-    expect(skipped.length).toBe(8);
+    // 8 hue pairs × 2 blocks; every skip is a hue pair, never a contract pair.
+    expect(skipped.length).toBe(16);
     for (const row of skipped) {
-      expect(row.fg).toMatch(/^--on-hue-[1-4]$/);
+      expect(row.fg).toMatch(/^--on-hue-[1-8]$/);
     }
   });
 });

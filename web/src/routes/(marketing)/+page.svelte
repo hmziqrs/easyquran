@@ -36,17 +36,25 @@
     2: "var(--hue-2)",
     3: "var(--hue-3)",
     4: "var(--hue-4)",
+    5: "var(--hue-5)",
+    6: "var(--hue-6)",
+    7: "var(--hue-7)",
+    8: "var(--hue-8)",
   } as const satisfies Record<LandingHue, string>;
   const HUE_DIM = {
     1: "color-mix(in oklab, var(--hue-1) 30%, transparent)",
     2: "color-mix(in oklab, var(--hue-2) 30%, transparent)",
     3: "color-mix(in oklab, var(--hue-3) 30%, transparent)",
     4: "color-mix(in oklab, var(--hue-4) 30%, transparent)",
+    5: "color-mix(in oklab, var(--hue-5) 30%, transparent)",
+    6: "color-mix(in oklab, var(--hue-6) 30%, transparent)",
+    7: "color-mix(in oklab, var(--hue-7) 30%, transparent)",
+    8: "color-mix(in oklab, var(--hue-8) 30%, transparent)",
   } as const satisfies Record<LandingHue, string>;
 
   function hueAt(position: number): LandingHue {
-    // SAFETY: position % 4 is 0–3 for any integer, so +1 is exactly the 1–4 hue-slot union; the assertion only re-narrows the widened number.
-    return ((position % 4) + 1) as LandingHue;
+    // SAFETY: position % 8 is 0–7 for any integer, so +1 is exactly the 1–8 hue-slot union; the assertion only re-narrows the widened number.
+    return ((position % 8) + 1) as LandingHue;
   }
 
   /* The five surahs readers open most. */
