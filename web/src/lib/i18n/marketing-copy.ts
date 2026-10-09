@@ -115,6 +115,12 @@ export type LandingHue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export interface LandingResolvedCopy {
   heroTitleFull: string;
   bismillah: string;
+  /** English rendering of the bismillah under the calligraphy (same text in every locale). */
+  bismillahMeaning: string;
+  /** Qur'an 96:1, verbatim (same text in every locale). */
+  iqra: string;
+  /** English rendering of 96:1 (same text in every locale). */
+  iqraMeaning: string;
   searchLabel: string;
   searchPlaceholder: string;
   searchButton: string;

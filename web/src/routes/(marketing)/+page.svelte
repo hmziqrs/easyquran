@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button, Container, Icon } from "#lib/components/index.js";
+  import { Bismillah, Button, Container, Icon } from "#lib/components/index.js";
   import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
   import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
@@ -114,9 +114,16 @@
 
 <Container class="flex flex-col items-center pt-10 pb-10 sm:pt-14 md:pt-16">
   <h1 class="sr-only">{landing.heroTitleFull}</h1>
-  <p lang="ar" dir="rtl" class="font-arabic text-[26px] leading-[1.9] text-foreground sm:text-[32px]">
-    {landing.bismillah}
+  <Bismillah class="w-52 text-foreground sm:w-64" title={landing.bismillah} />
+  <p class="mt-3 text-caption text-muted">{landing.bismillahMeaning}</p>
+  <p
+    lang="ar"
+    dir="rtl"
+    class="mt-7 font-arabic text-[24px] leading-[1.9] text-foreground sm:text-[30px]"
+  >
+    {landing.iqra}
   </p>
+  <p class="mt-2 text-caption text-muted">{landing.iqraMeaning}</p>
 
   <form
     method="GET"

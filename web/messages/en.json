@@ -123,6 +123,9 @@
     }
   ],
   "landing_bismillah": "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+  "landing_bismillah_meaning": "In the Name of Allah, the Most Gracious, the Most Merciful.",
+  "landing_iqra": "ٱقْرَأْ بِٱسْمِ رَبِّكَ ٱلَّذِى خَلَقَ",
+  "landing_iqra_meaning": "Read! In the Name of your Lord Who created.",
   "about_seo_title": "About easyquran",
   "about_seo_description": "A free Qur'an reader with no ads: the Arabic text in five scripts, hundreds of translations, search and bookmarks.",
   "about_heading": "About easyquran",

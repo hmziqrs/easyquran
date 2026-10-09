@@ -85,6 +85,9 @@ describe("landing i18n keys", () => {
   const NEW_KEYS = [
     "landing_hero_title_full",
     "landing_bismillah",
+    "landing_bismillah_meaning",
+    "landing_iqra",
+    "landing_iqra_meaning",
     "landing_search_label",
     "landing_search_placeholder",
     "landing_search_button",
@@ -100,7 +103,7 @@ describe("landing i18n keys", () => {
     "nav_yours",
   ];
 
-  it("ships every key in both locales with the bismillah verbatim", () => {
+  it("ships every key in both locales with the bismillah and iqra verbatim", () => {
     const en = catalog("en");
     const ar = catalog("ar");
     for (const key of NEW_KEYS) {
@@ -108,6 +111,9 @@ describe("landing i18n keys", () => {
       expect(ar[key], `ar: ${key}`).toBeTruthy();
     }
     expect(en.landing_bismillah).toBe(ar.landing_bismillah);
+    expect(en.landing_iqra).toBe(ar.landing_iqra);
+    expect(en.landing_bismillah_meaning).toBe(ar.landing_bismillah_meaning);
+    expect(en.landing_iqra_meaning).toBe(ar.landing_iqra_meaning);
   });
 
   it("retired the marketing bands so the catalogs carry no dead sections", () => {
