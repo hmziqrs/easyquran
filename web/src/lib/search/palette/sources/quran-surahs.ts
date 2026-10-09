@@ -40,7 +40,7 @@ function rank(
     const translit = scorer ? scorer(keysFor(keyTable, surah.num)) : 0;
     const score = Math.max(
       scoreFields([surah.name, surah.transliteration, surah.meaning, surah.slug], needle),
-      scoreArabic(surah.arabic, arabicNeedle),
+      scoreArabic(surah.arabicPlain, arabicNeedle),
       translit,
     );
     if (score > 0) scored.push({ surah, score });

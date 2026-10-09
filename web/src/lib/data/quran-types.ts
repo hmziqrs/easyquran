@@ -89,7 +89,10 @@ export interface CatalogEntry {
   num: number;
   slug: string;
   name: string;
+  /** Diacritized display name (Al Quran Cloud lineage, baked via web/scripts/gen-surah-names.ts). */
   arabic: string;
+  /** Plain Tanzil name — the matching form; tashkeel never reaches search. */
+  arabicPlain: string;
   transliteration: string;
   meaning: string;
   place: Place;

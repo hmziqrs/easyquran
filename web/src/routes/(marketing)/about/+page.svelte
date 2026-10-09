@@ -19,6 +19,7 @@
     { name: "quran.com", href: "https://quran.com" },
     { name: "Dar Al-Islam" },
     { name: "Naveed Ahmad" },
+    { name: "Al Quran Cloud", href: "https://alquran.cloud" },
   ];
   const TRANSLATION_SOURCES: Source[] = [
     { name: "Tanzil.net", href: SITE.tanzilUrl },

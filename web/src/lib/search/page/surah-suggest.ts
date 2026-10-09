@@ -70,7 +70,7 @@ export function suggestSurahs(
       scoreText(surah.transliteration, query),
       scoreText(surah.meaning, query),
       scoreText(surah.slug, query),
-      scoreArabic(surah.arabic, arabicNeedle),
+      scoreArabic(surah.arabicPlain, arabicNeedle),
       translit,
     );
     if (score > 0) {

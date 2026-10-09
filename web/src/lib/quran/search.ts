@@ -24,9 +24,9 @@ async function nameNumberFallback(query: string, opts: SearchOpts): Promise<Sear
   for (const s of catalog.surahs) {
     const hit =
       s.name.toLowerCase().includes(qLower) ||
-      s.arabic.includes(q) ||
+      s.arabicPlain.includes(q) ||
       String(s.num) === qLower ||
-      (norm.length > 0 && normalizeArabic(s.arabic).includes(norm));
+      (norm.length > 0 && normalizeArabic(s.arabicPlain).includes(norm));
     if (hit)
       all.push({
         kind: SearchHitKind.Ayah,

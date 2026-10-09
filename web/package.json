@@ -24,6 +24,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.worker.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "anti-slop:sync": "node scripts/sync-anti-slop.ts",
+    "quran:names": "node scripts/gen-surah-names.ts",
     "prelint": "pnpm anti-slop:sync && pnpm i18n:check",
     "lint": "vp lint --deny-warnings",
     "format": "vp fmt",

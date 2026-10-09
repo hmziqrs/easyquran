@@ -68,6 +68,13 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - `quran-data.xml` supplies metadata only: 114 surahs, 6,236 ayahs, 604 pages, 30 juz, 556
   ruku, 240 hizb quarters, 7 manzil, and 15 sajda. Web consumes the compact generated JSON;
   Rust parses XML at boot.
+- Diacritized surah display names are a separate baked source: Al Quran Cloud (Islamic
+  Network, `api.alquran.cloud/v1/surah`), mirrored verbatim under gitignored
+  `db/quran/surah-names/` and baked into tracked `web/src/lib/data/surah-names.json` by
+  `pnpm quran:names` (run in `web/`). Tanzil's plain names stay the search-matching form
+  (`CatalogEntry.arabicPlain`); reader and index render the diacritized form
+  (`CatalogEntry.arabic`). The generator folds both to base letters and refuses to write on
+  any mismatch; redistribution is non-commercial with acknowledgement (about page lists it).
 - `quran_text."index"` is canonical global ayah order: `1..6236`, unique, ordered by surah
   then ayah, and equal to XML's zero-based surah start plus one-based ayah number.
 - Page, juz, ruku, hizb-quarter, and manzil ranges tile the corpus without gaps or overlap.

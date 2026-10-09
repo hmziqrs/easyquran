@@ -86,6 +86,24 @@ describe("immutable Quran metadata", () => {
   });
 });
 
+describe("baked diacritized surah names", () => {
+  // Same fold as web/scripts/gen-surah-names.ts: marks, tatweel and alef forms differ; base letters must not.
+  const fold = (value: string): string =>
+    value
+      .replace(/\u0640/gu, "")
+      .replace(/\p{M}/gu, "")
+      .replace(/[\u0622\u0623\u0625\u0671]/gu, "\u0627")
+      .replace(/\u0649/gu, "\u064A")
+      .replace(/\s+/gu, "");
+
+  it("folds to the plain Tanzil name for every surah", () => {
+    for (const surah of QURAN_DATA.surahs) {
+      const body = surah.arabic.replace(/^\u0633\u064F\u0648\u0631\u064E\u0629\u064F\s*/u, "");
+      expect(fold(body), `surah ${surah.num}`).toBe(fold(surah.arabicPlain));
+    }
+  });
+});
+
 describe("routing and formatting helpers", () => {
   it("builds a Surah path from selected route metadata", () => {
     const fatihah = QURAN_DATA.surahByNum(1)!;

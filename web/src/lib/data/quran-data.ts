@@ -10,6 +10,8 @@ import {
 } from "#lib/data/quran-types.js";
 import { canonicalOpenerKind } from "#lib/quran/view/canonical.js";
 
+import { SURAH_NAMES_ARABIC } from "./surah-names.js";
+
 export const QuranDataRoot = {
   Source: 0,
   Surahs: 1,
@@ -151,6 +153,9 @@ export function createQuranData(raw: QuranDataJson): QuranData {
     );
   }
   const rows: readonly QuranDataJson[] = rawRows;
+  if (SURAH_NAMES_ARABIC.length !== EXPECTED_SURAHS) {
+    fail(`expected ${EXPECTED_SURAHS} baked diacritized names, got ${SURAH_NAMES_ARABIC.length}`);
+  }
 
   let startGlobal = 1;
   const surahs = rows.map((rawRow, i) => {
@@ -162,7 +167,8 @@ export function createQuranData(raw: QuranDataJson): QuranData {
       num,
       slug: nonemptyString(row[SurahField.Slug], `Surah ${num} slug`),
       name: nonemptyString(row[SurahField.DisplayName], `Surah ${num} display name`),
-      arabic: nonemptyString(row[SurahField.ArabicName], `Surah ${num} Arabic name`),
+      arabic: nonemptyString(SURAH_NAMES_ARABIC[i], `Surah ${num} diacritized Arabic name`),
+      arabicPlain: nonemptyString(row[SurahField.ArabicName], `Surah ${num} Arabic name`),
       transliteration: nonemptyString(
         row[SurahField.TanzilTransliteration],
         `Surah ${num} transliteration`,
