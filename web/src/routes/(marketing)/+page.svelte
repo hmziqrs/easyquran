@@ -185,20 +185,23 @@
             style:color={HUE_LEGIBLE[hue]}
             >{s.num}</span
           >
-          <span class="flex min-w-0 flex-col gap-0.5">
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="truncate text-[16px] font-bold tracking-[-0.01em] text-foreground"
               >{s.name}</span
             >
-            <span class="truncate text-caption text-muted">
-              {s.meaning} · {landing.ayahCount(s.ayahCount)}
+            <span class="flex min-w-0 items-baseline justify-between gap-3">
+              <span class="truncate text-caption text-muted">{s.meaning}</span>
+              <span
+                lang="ar"
+                dir="rtl"
+                class="shrink-0 font-arabic text-[22px] leading-[1.6] text-foreground-secondary transition-colors group-hover:text-foreground"
+                >{s.arabic}</span
+              >
             </span>
+            <span class="truncate text-caption tabular-nums text-muted"
+              >{landing.ayahCount(s.ayahCount)}</span
+            >
           </span>
-          <span
-            lang="ar"
-            dir="rtl"
-            class="ms-auto shrink-0 font-arabic text-[22px] leading-[1.6] text-foreground-secondary transition-colors group-hover:text-foreground"
-            >{s.arabic}</span
-          >
         </a>
       </li>
     {/each}
