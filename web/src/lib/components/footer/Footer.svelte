@@ -72,6 +72,10 @@
         © {year} {brand}. {copy.builtBy}
         <a
           class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
+          href={SITE.makerUrl}
+          {...externalLinkAttrs(SITE.makerUrl)}>oxlabs.dev</a
+        > & <a
+          class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
           href={SITE.ownerUrl}
           {...externalLinkAttrs(SITE.ownerUrl, { me: true })}>{SITE.owner}</a
         >
