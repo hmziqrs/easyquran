@@ -45,8 +45,8 @@ describe("canonical reader hrefs accept every baked translation id", () => {
     expect(readerHrefFor("en", "/al-baqarah/t/quranenc/en.hilali_khan")).toBe(
       "/al-baqarah/t/quranenc/en.hilali_khan",
     );
-    expect(readerHrefFor("en", "/t/quranenc/en.hilali_khan/rub/240")).toBe(
-      "/t/quranenc/en.hilali_khan/rub/240",
+    expect(readerHrefFor("en", "/t/quranenc/en.hilali_khan/hizb/60")).toBe(
+      "/t/quranenc/en.hilali_khan/hizb/60",
     );
   });
 

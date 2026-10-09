@@ -25,6 +25,7 @@ import { diskCacheKey, getCachedHtml, setCachedHtml } from "#lib/server/quran-di
 import {
   localizedReaderLocale,
   parseReaderRoute,
+  rubRedirectTarget,
   surahLocalRedirectTarget,
   type ParsedReaderRoute,
 } from "#lib/server/reader-route.js";
@@ -198,7 +199,7 @@ function legacyPrefixRedirect(event: RequestEvent): Response | null {
   else if (target.startsWith("/app/")) target = target.slice(4);
 
   // One-hop composition on the normalized target: numeric alias, then the D1
-  // surah-local collapse. Both are pure path rewrites whose outputs match no
+  // surah-local / retired-rubʿ collapse. Both are pure path rewrites whose outputs match no
   // rule input (slugs are letter-initial, indexes are reserved words). The D1
   // ayah anchor rides along unless the inbound URL carries its own fragment.
   const search = building ? "" : event.url.search;
@@ -207,7 +208,7 @@ function legacyPrefixRedirect(event: RequestEvent): Response | null {
   const prefix = arPrefixed ? "/ar" : "";
   const rel = arPrefixed ? target.slice(3) : target;
   const aliased = numericAliasPath(rel);
-  const local = aliased ? null : surahLocalRedirectTarget(rel);
+  const local = aliased ? null : (surahLocalRedirectTarget(rel) ?? rubRedirectTarget(rel));
   let location = prefix + (aliased ?? local?.path ?? rel);
   if (local && !inboundHash) location += local.fragment;
   const tail = `${search}${inboundHash}`;
@@ -268,13 +269,13 @@ function numericChapterRedirect(event: RequestEvent): Response | null {
 }
 
 /**
- * Surah-local page URLs are gone (D1); every removed shape 308s to the surah
- * root, landing on the spread's first ayah when no explicit fragment travels
- * with the request.
+ * Surah-local page URLs are gone (D1), and so are rubʿ (hizb-quarter) URLs; every
+ * removed shape 308s to the surah root, landing on the spread's / quarter's first
+ * ayah when no explicit fragment travels with the request.
  */
 function surahLocalPageRedirect(event: RequestEvent): Response | null {
   const base = readerRequestBase(event.url.pathname);
-  const target = surahLocalRedirectTarget(base.rel);
+  const target = surahLocalRedirectTarget(base.rel) ?? rubRedirectTarget(base.rel);
   if (!target) return null;
   const search = building ? "" : event.url.search;
   const inboundHash = building ? "" : event.url.hash;

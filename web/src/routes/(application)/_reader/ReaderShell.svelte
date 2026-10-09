@@ -17,11 +17,14 @@
   let {
     header,
     position = null,
+    textTools = true,
     children,
   }: {
     header: Snippet;
     /** Route-known mushaf position for the sticky bar's live indicator; absent on non-content routes. */
     position?: { globalPage: number; juz?: number | null; hizb?: number | null } | null;
+    /** Translations, Ayah-by-Ayah/Reading and A−/A+: off on index pages, which show no text. */
+    textTools?: boolean;
     children: Snippet;
   } = $props();
   let mounted = $state(false);
@@ -54,7 +57,9 @@
       <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-2 px-6 sm:gap-3">
         {#if mounted}
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
-          <TranslationButton {routeTranslationId} />
+          {#if textTools}
+            <TranslationButton {routeTranslationId} />
+          {/if}
         {/if}
         <!-- Title + live position may clip and truncate, never push the text-size
              control off a phone screen (that widened the whole page on range routes). -->
@@ -64,7 +69,7 @@
             <PositionIndicator initial={position} />
           {/if}
         </div>
-        {#if mounted}
+        {#if mounted && textTools}
           <ReaderModeToggle />
           <div
             class="flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"

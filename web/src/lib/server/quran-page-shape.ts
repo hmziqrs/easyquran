@@ -56,7 +56,6 @@ function rangeKindFor(kind: RangeRouteKind): RangeKind {
     case "page":
       return RangeKind.Page;
     case "hizb":
-    case "rub":
       return RangeKind.HizbQuarter;
   }
 }
@@ -69,8 +68,6 @@ function rangeLabel(kind: RangeRouteKind, index: number): string {
       return `Page ${index}`;
     case "hizb":
       return `Hizb ${index}`;
-    case "rub":
-      return `Rubʿ ${index}`;
   }
 }
 

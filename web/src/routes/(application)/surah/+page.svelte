@@ -46,7 +46,7 @@
 />
 <ReaderPrerenderLinks hrefs={prerenderHrefs} />
 
-<ReaderShell>
+<ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.surahsTitle}</h1>
     <span class="ms-auto font-mono text-[12px] text-muted">{data.surahs.length}</span>

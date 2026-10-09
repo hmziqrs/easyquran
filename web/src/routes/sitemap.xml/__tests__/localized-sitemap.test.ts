@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { HIZB_COUNT } from "#lib/data/mushaf-divisions.js";
 import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 import { QURAN_DATA } from "#lib/server/quran-data.js";
 
@@ -63,7 +63,6 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
       RANGE_COUNTS[RangeKind.Page] +
       RANGE_COUNTS[RangeKind.Juz] +
       HIZB_COUNT +
-      RUB_COUNT +
       3; // juz/surah/pages browse indexes
     expect(readerLocs).toHaveLength(expectedReaderLocs);
     // Scheme A: locs are unprefixed en forms; no legacy /app or /en spelling.
@@ -75,7 +74,7 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
     expect(readerLocs).toContain("https://easyquran.fyi/pages");
   });
 
-  it("carries no surah-local page locs and the full hizb/rub families", async () => {
+  it("carries no surah-local page or rubʿ locs and the full hizb family", async () => {
     const xml = await GET().text();
     const readerLocs = readerLocsOf(xml);
 
@@ -87,14 +86,14 @@ describe("localized sitemap", { timeout: 30_000 }, () => {
     for (let hizb = 1; hizb <= HIZB_COUNT; hizb += 8) {
       expect(readerLocs).toContain(`https://easyquran.fyi/hizb/${hizb}`);
     }
-    expect(readerLocs).toContain(`https://easyquran.fyi/rub/${RUB_COUNT}`);
+    expect(readerLocs.some((href) => new URL(href).pathname.startsWith("/rub/"))).toBe(false);
     expect(readerLocs).toContain("https://easyquran.fyi/juz/30");
   });
 
   it("carries the en/ar/x-default UI-locale hreflang triple on every reader url", async () => {
     const xml = await GET().text();
     const readerLocs = readerLocsOf(xml);
-    expect(readerLocs.length).toBeGreaterThan(1000);
+    expect(readerLocs.length).toBeGreaterThan(800);
     for (const loc of readerLocs) {
       const block = xml.split("<url>").find((candidate) => candidate.includes(`<loc>${loc}</loc>`));
       expect(block, `missing block for ${loc}`).toBeDefined();

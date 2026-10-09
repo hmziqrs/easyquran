@@ -9,7 +9,7 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 // underscore translator segments, e.g. quranenc.en.hilali_khan).
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
-const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
+const RANGE_SEGMENT = "(?:page|juz|hizb)";
 // Scheme A: reader routes live at the site root (no `/app` marker). The
 // bounded app pages join the same mechanism (Q1 default): /ar/search,
 // /ar/settings, /ar/bookmarks and /ar/yours reroute onto their unprefixed

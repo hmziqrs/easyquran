@@ -5,7 +5,6 @@ import {
   hizbPathFor,
   juzPathFor,
   routeContextFromParams,
-  rubPathFor,
   surahAyahPathFor,
   surahPathFor,
   surahRouteContext,
@@ -86,7 +85,6 @@ describe("reader navigation regression guard", () => {
     expect(globalPagePathFor).toBeInstanceOf(Function);
     expect(juzPathFor).toBeInstanceOf(Function);
     expect(hizbPathFor).toBeInstanceOf(Function);
-    expect(rubPathFor).toBeInstanceOf(Function);
     expect(surahRouteContext).toBeInstanceOf(Function);
   });
 
@@ -201,12 +199,9 @@ describe("translated range-route fixtures preserve active source context across 
     expect(path).not.toBe(surahAyahPathFor(ARABIC, surah, 12));
   });
 
-  it("hizb and rub navigation keeps /t/<lang>/<translator> via hizbPathFor/rubPathFor", () => {
+  it("hizb navigation keeps /t/<lang>/<translator> via hizbPathFor", () => {
     expect(hizbPathFor(ctx, 60)).toBe("/t/ms/basmeih/hizb/60");
     expect(hizbPathFor(ARABIC, 1)).toBe("/hizb/1");
-    expect(rubPathFor(ctx, 240)).toBe("/t/ms/basmeih/rub/240");
-    expect(rubPathFor(ARABIC, 1)).toBe("/rub/1");
-    expect(rubPathFor(ctx, 4)).not.toBe(rubPathFor(ARABIC, 4));
   });
 
   it("translationIdFromSegments round-trips the active source id used by the reader", () => {

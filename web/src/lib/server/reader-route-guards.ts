@@ -1,8 +1,8 @@
 // Param guards every reader `+page.server.ts` repeats. Range bounds come from the baked
-// `RANGE_COUNTS` (plus the hizb derivation), so no route hard-codes 604/30/60/240.
+// `RANGE_COUNTS` (plus the hizb derivation), so no route hard-codes 604/30/60.
 import { error } from "@sveltejs/kit";
 
-import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { HIZB_COUNT } from "#lib/data/mushaf-divisions.js";
 import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 import type { Ayah, CatalogEntry, RangeRouteKind } from "#lib/data/quran-types.js";
 import { QURAN_DATA } from "#lib/server/quran-data.js";
@@ -17,7 +17,6 @@ const RANGE_COUNT_BY_KIND: Readonly<Record<RangeRouteKind, number>> = Object.fre
   juz: RANGE_COUNTS[RangeKind.Juz],
   page: RANGE_COUNTS[RangeKind.Page],
   hizb: HIZB_COUNT,
-  rub: RUB_COUNT,
 });
 
 export function requireRangeIndex(kind: RangeRouteKind, raw: string): number {

@@ -5,7 +5,6 @@ import {
   hizbPathFor,
   juzPathFor,
   resumeCtxFor,
-  rubPathFor,
   surahAyahPath,
   surahAyahPathFor,
   surahPath,
@@ -18,7 +17,7 @@ import {
   translationSurahPath,
 } from "#lib/data/quran.js";
 
-const ROUTE_LITERALS = ["t", "page", "juz", "hizb", "rub"] as const;
+const ROUTE_LITERALS = ["t", "page", "juz", "hizb"] as const;
 
 function segmentAfterSlug(path: string, slug: string): string | undefined {
   const prefix = `/${slug}/`;
@@ -197,12 +196,10 @@ describe("sitemap emits every indexable route class (canonical-seo guard)", () =
     expect(globalPagePathFor(ctx, 42).includes("/t/ms/basmeih/")).toBe(true);
   });
 
-  it("emits both arabic and translated hizb/rub routes, kept distinct", () => {
+  it("emits both arabic and translated hizb routes, kept distinct", () => {
     expect(hizbPathFor(ARABIC, 60)).toBe("/hizb/60");
     expect(hizbPathFor(ctx, 60)).toBe("/t/ms/basmeih/hizb/60");
-    expect(rubPathFor(ARABIC, 240)).toBe("/rub/240");
-    expect(rubPathFor(ctx, 240)).toBe("/t/ms/basmeih/rub/240");
-    expect(rubPathFor(ctx, 4)).not.toBe(rubPathFor(ARABIC, 4));
+    expect(hizbPathFor(ctx, 4)).not.toBe(hizbPathFor(ARABIC, 4));
   });
 
   it("translation route classes are not silently collapsed to their arabic counterparts", () => {
@@ -313,7 +310,6 @@ describe("translated range-route canonical is helper-built, not page.url.pathnam
     expect(globalPagePathFor(ctx, 7)).toBe(globalPagePathFor(ctx, 7));
     expect(juzPathFor(ctx, 30)).toBe(juzPathFor(ctx, 30));
     expect(hizbPathFor(ctx, 7)).toBe(hizbPathFor(ctx, 7));
-    expect(rubPathFor(ctx, 7)).toBe(rubPathFor(ctx, 7));
   });
 
   it("helper-built canonical matches the sitemap route form for all range classes", () => {

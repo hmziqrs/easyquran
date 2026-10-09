@@ -7,11 +7,11 @@ describe("reader position parsing", () => {
     expect(positionOf("/al-fatihah")).toEqual({ kind: "surah", slug: "al-fatihah" });
   });
 
-  it("parses an arabic global page, juz, hizb, and rub", () => {
+  it("parses an arabic global page, juz, and hizb — never a retired rubʿ", () => {
     expect(positionOf("/page/42")).toEqual({ kind: "globalPage", n: 42 });
     expect(positionOf("/juz/30")).toEqual({ kind: "juz", n: 30 });
     expect(positionOf("/hizb/60")).toEqual({ kind: "hizb", n: 60 });
-    expect(positionOf("/rub/240")).toEqual({ kind: "rub", n: 240 });
+    expect(positionOf("/rub/240")).toBeNull();
   });
 
   it("parses a translated juz route keeping lang/translator", () => {
@@ -53,14 +53,10 @@ describe("hrefFor position-preserving translation switch", () => {
     );
   });
 
-  it("rebuilds a hizb and rub position for another translation", () => {
+  it("rebuilds a hizb position for another translation", () => {
     const hizb = positionOf("/t/ms/basmeih/hizb/3");
     expect(hrefFor(hizb, { id: "ur.jalandhry", lang: "ur", translator: "jalandhry" })).toBe(
       "/t/ur/jalandhry/hizb/3",
-    );
-    const rub = positionOf("/rub/9");
-    expect(hrefFor(rub, { id: "en.sahih", lang: "en", translator: "sahih" })).toBe(
-      "/t/en/sahih/rub/9",
     );
   });
 

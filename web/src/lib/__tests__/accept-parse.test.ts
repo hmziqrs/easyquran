@@ -93,13 +93,16 @@ describe("accept-parse mdSiblingPathFor", () => {
     "/hizb/2",
     "/juz/30",
     "/page/604",
-    "/rub/240",
     "/al-fatihah/t/en/sahih",
     "/t/en/sahih/juz/1",
     "/t/en/sahih/page/42",
     "/t/en/sahih/hizb/3",
   ])("maps reader path %s to its .md sibling", (pathname) => {
     expect(mdSiblingPathFor(pathname)).toBe(`${pathname}.md`);
+  });
+
+  it("has no .md sibling for a retired rubʿ path", () => {
+    expect(mdSiblingPathFor("/rub/240")).toBeNull();
   });
 
   it.each(["", "/ar"])("maps localized reader path %s/al-fatihah", (prefix) => {

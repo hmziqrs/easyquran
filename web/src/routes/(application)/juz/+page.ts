@@ -5,13 +5,17 @@ import type { PageLoad } from "./$types";
 
 export const prerender = true;
 
-export interface JuzQuarterRow {
-  /** First verse key of the quarter, e.g. "2:22". */
+/** One of the juz's two hizbs — a real reader route (/hizb/N). */
+export interface JuzHizbRow {
+  index: number;
+  /** First verse key of the hizb, e.g. "2:75". */
   first: string;
-  /** Last verse key of the quarter, e.g. "3:11". */
-  last: string;
-  /** Mushaf page containing the quarter's opening verse. */
-  page: number;
+}
+
+/** A verse key with its surah's name, for "Al-Fatihah 1:1"-style labels. */
+export interface JuzBound {
+  key: string;
+  surahName: string;
 }
 
 export interface JuzSajdaRef {
@@ -22,10 +26,10 @@ export interface JuzSajdaRef {
 
 export interface JuzIndexRow {
   index: number;
-  first: string;
-  last: string;
+  first: JuzBound;
+  last: JuzBound;
   sajdas: readonly JuzSajdaRef[];
-  quarters: readonly JuzQuarterRow[];
+  hizbs: readonly JuzHizbRow[];
 }
 
 export const load: PageLoad = async ({ fetch }) => {
@@ -38,21 +42,18 @@ export const load: PageLoad = async ({ fetch }) => {
   const quran = createQuranData(await response.json());
   const ajz = quran.ranges(RangeKind.Juz);
   const hizbQuarters = quran.ranges(RangeKind.HizbQuarter);
-  const pages = quran.ranges(RangeKind.Page);
 
-  function pageContaining(globalIndex: number): number {
-    const found = pages.findIndex(
-      (page) => globalIndex >= page.startGlobal && globalIndex <= page.endGlobal,
-    );
-    return found + 1;
+  function bound(key: string): JuzBound {
+    const surah = quran.surahByNum(Number(key.split(":")[0]));
+    return { key, surahName: surah?.name ?? "" };
   }
 
-  // 240 hizb quarters = 30 juz x 8; a rub' al-juz (quarter) pairs two of them.
-  function quarterFor(juzIndex: number, quarter: number): JuzQuarterRow {
-    const base = (juzIndex - 1) * 8 + (quarter - 1) * 2;
-    const first = hizbQuarters[base]!;
-    const second = hizbQuarters[base + 1]!;
-    return { first: first.first, last: second.last, page: pageContaining(first.startGlobal) };
+  // 240 hizb quarters = 30 juz x 2 hizb x 4 quarters; a hizb opens on its first quarter.
+  function hizbsFor(juzIndex: number): JuzHizbRow[] {
+    return [1, 2].map((half) => {
+      const index = (juzIndex - 1) * 2 + half;
+      return { index, first: hizbQuarters[(index - 1) * 4]!.first };
+    });
   }
 
   const sajdaByJuz = new Map<number, JuzSajdaRef[]>();
@@ -68,10 +69,10 @@ export const load: PageLoad = async ({ fetch }) => {
 
   const ajzur: JuzIndexRow[] = ajz.map((juz) => ({
     index: juz.index,
-    first: juz.first,
-    last: juz.last,
+    first: bound(juz.first),
+    last: bound(juz.last),
     sajdas: sajdaByJuz.get(juz.index) ?? [],
-    quarters: [1, 2, 3, 4].map((quarter) => quarterFor(juz.index, quarter)),
+    hizbs: hizbsFor(juz.index),
   }));
   return { ajzur };
 };

@@ -60,7 +60,6 @@ import {
   reader_index_juz_title,
   reader_index_page_sajda_legend,
   reader_index_pages_title,
-  reader_index_quarter,
   reader_index_sajda,
   reader_index_sajda_count,
   reader_index_surahs_title,
@@ -86,7 +85,6 @@ import {
   reader_position_page,
   reader_prev_surah,
   reader_read_again,
-  reader_rub_item,
   reader_network_unavailable,
   reader_new_version_ready,
   reader_no_translations,
@@ -157,8 +155,6 @@ import {
   reader_seo_pages_index_description,
   reader_seo_pages_index_title,
   reader_seo_quran,
-  reader_seo_rub_description,
-  reader_seo_rub_title,
   reader_seo_surah_index_description,
   reader_seo_surah_index_title,
   reader_seo_surah_description_translation,
@@ -167,7 +163,6 @@ import {
   reader_seo_translation_hizb_description,
   reader_seo_translation_juz_description,
   reader_seo_translation_page_description,
-  reader_seo_translation_rub_description,
   reader_seo_yours_description,
   reader_seo_yours_title,
   reader_share,
@@ -225,7 +220,7 @@ import { getLocale } from "#lib/paraglide/runtime.js";
 import type { TranslationProvenance } from "#lib/quran/catalogue.js";
 
 type BrowseMode = "surah" | "ayah" | "juz" | "page";
-type RangeKind = "juz" | "page" | "hizb" | "rub";
+type RangeKind = "juz" | "page" | "hizb";
 
 export interface ReaderUiCopy {
   readonly locale: UiLocale;
@@ -315,7 +310,6 @@ export interface ReaderUiCopy {
     readonly yoursViewAll: string;
     readonly yoursEmpty: string;
     readonly pageCount: (count: number) => string;
-    readonly quarter: (index: number) => string;
     readonly sajda: string;
     readonly sajdaCount: (count: number) => string;
     readonly pageSajdaLegend: string;
@@ -392,10 +386,7 @@ export interface ReaderUiCopy {
     readonly surahTitle: (surah: number, name: string) => string;
     readonly hizbTitle: (index: number, first: string, last: string) => string;
     readonly hizbDescription: (index: number, first: string, last: string) => string;
-    readonly rubTitle: (index: number, first: string, last: string) => string;
-    readonly rubDescription: (index: number, first: string, last: string) => string;
     readonly translationHizbDescription: (index: number, first: string, last: string) => string;
-    readonly translationRubDescription: (index: number, first: string, last: string) => string;
     readonly surahDescriptionUthmani: (name: string, arabic: string) => string;
     readonly surahDescriptionTranslation: (name: string, arabic: string) => string;
     readonly breadcrumbSurah: (name: string) => string;
@@ -463,8 +454,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
         return reader_page_item({ index }, options);
       case "hizb":
         return reader_hizb_item({ index }, options);
-      case "rub":
-        return reader_rub_item({ index }, options);
     }
   };
 
@@ -554,7 +543,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       yoursViewAll: noArgs(reader_index_yours_view_all),
       yoursEmpty: noArgs(reader_index_yours_empty),
       pageCount: (count) => reader_page_count({ count }, options),
-      quarter: (index) => reader_index_quarter({ index }, options),
       sajda: noArgs(reader_index_sajda),
       sajdaCount: (count) => reader_index_sajda_count({ count }, options),
       pageSajdaLegend: noArgs(reader_index_page_sajda_legend),
@@ -676,13 +664,8 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       hizbTitle: (index, first, last) => reader_seo_hizb_title({ index, first, last }, options),
       hizbDescription: (index, first, last) =>
         reader_seo_hizb_description({ index, first, last }, options),
-      rubTitle: (index, first, last) => reader_seo_rub_title({ index, first, last }, options),
-      rubDescription: (index, first, last) =>
-        reader_seo_rub_description({ index, first, last }, options),
       translationHizbDescription: (index, first, last) =>
         reader_seo_translation_hizb_description({ index, first, last }, options),
-      translationRubDescription: (index, first, last) =>
-        reader_seo_translation_rub_description({ index, first, last }, options),
       surahDescriptionUthmani: (name, arabic) =>
         reader_seo_surah_description_uthmani({ name, arabic }, options),
       surahDescriptionTranslation: (name, arabic) =>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Seo, Icon } from "#lib/components/index.js";
-  import { juzPathFor, resumeCtxFor, rubPathFor } from "#lib/data/quran.js";
+  import { hizbPathFor, juzPathFor, resumeCtxFor } from "#lib/data/quran.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { readerCanonicalEntryPath } from "#lib/i18n/seo.js";
@@ -8,6 +8,7 @@
   import ReaderShell from "../_reader/ReaderShell.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
+  import type { JuzBound, JuzSajdaRef } from "./+page";
   let { data } = $props();
 
   // Rows carry the reader's active source after hydration; prerendered HTML stays Arabic.
@@ -21,8 +22,13 @@
     return readerHrefFor(copy.locale, juzPathFor(ctx, n));
   }
 
-  function rubHref(juzIndex: number, quarterIndex: number): `/${string}` {
-    return readerHrefFor(copy.locale, rubPathFor(ctx, (juzIndex - 1) * 4 + quarterIndex + 1));
+  function hizbHref(n: number): `/${string}` {
+    return readerHrefFor(copy.locale, hizbPathFor(ctx, n));
+  }
+
+  /** "Al-Fatihah 1:1" — the surah name reads faster than a bare verse key. */
+  function boundLabel(bound: JuzBound): string {
+    return `${bound.surahName} ${bound.key}`;
   }
 
   function sajdaLabel(count: number): string {
@@ -30,7 +36,7 @@
     return copy.index.sajdaCount(count);
   }
 
-  function sajdaTitle(refs: readonly { surah: number; ayah: number }[]): string {
+  function sajdaTitle(refs: readonly JuzSajdaRef[]): string {
     return refs.map((ref) => `${ref.surah}:${ref.ayah}`).join(", ");
   }
 </script>
@@ -42,7 +48,7 @@
   includeTextVariants={false}
 />
 
-<ReaderShell>
+<ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.juzTitle}</h1>
     <span class="ms-auto font-mono text-[12px] text-muted"
@@ -50,56 +56,58 @@
     >
   {/snippet}
 
-  <ul class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+  <!-- One card per juz: the juz itself (number, where it starts and ends, sajdas), then its
+       two hizbs — the half-juz units with their own reader routes. -->
+  <ul class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
     {#each data.ajzur as juz (juz.index)}
       {@const hue = hueSlotFor(juz.index)}
-      <li class="overflow-hidden rounded-lg border border-border">
-        <div class="flex items-center gap-3 px-4 py-3">
-          <a
-            href={publicHref(juzHref(juz.index))}
-            data-sveltekit-preload-data="hover"
-            aria-label={copy.range.item("juz", juz.index)}
-            class="flex min-w-0 flex-1 items-center gap-3 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      <li
+        class="flex flex-col overflow-hidden rounded-lg border border-border transition-colors hover:border-border-strong"
+      >
+        <a
+          href={publicHref(juzHref(juz.index))}
+          data-sveltekit-preload-data="hover"
+          class="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <span
+            class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
+            style:background={HUE_SOFT[hue]}
+            style:color={HUE_LEGIBLE[hue]}
           >
-            <span
-              class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
-              style:background={HUE_SOFT[hue]}
-              style:color={HUE_LEGIBLE[hue]}
+            {juz.index}
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-[15px] font-semibold text-foreground"
+              >{copy.range.item("juz", juz.index)}</span
             >
-              {juz.index}
+            <span class="truncate text-[12.5px] text-muted">
+              {boundLabel(juz.first)} – {boundLabel(juz.last)}
             </span>
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span class="text-sm font-medium text-foreground"
-                >{copy.range.item("juz", juz.index)}</span
-              >
-              <span class="font-mono text-[11px] text-muted">{juz.first} – {juz.last}</span>
-            </span>
-          </a>
+          </span>
           {#if juz.sajdas.length > 0}
             <span
-              class="flex flex-none items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11.5px] font-medium"
-              style:background={HUE_SOFT[hue]}
-              style:color={HUE_LEGIBLE[hue]}
+              class="flex flex-none items-center gap-1 rounded-pill bg-background-subtle px-2 py-1 text-[11px] font-medium text-foreground-secondary"
               title={sajdaTitle(juz.sajdas)}
             >
-              <Icon name="moon" size={12} />
+              <Icon name="moon" size={11} />
               {sajdaLabel(juz.sajdas.length)}
             </span>
           {/if}
-        </div>
-        <div class="grid grid-cols-2 gap-px border-t border-border bg-border lg:grid-cols-4">
-          {#each juz.quarters as quarter, qi (quarter.first)}
+        </a>
+        <div class="grid grid-cols-2 border-t border-border">
+          {#each juz.hizbs as hizb, hi (hizb.index)}
             <a
-              href={publicHref(rubHref(juz.index, qi))}
+              href={publicHref(hizbHref(hizb.index))}
               data-sveltekit-preload-data="hover"
-              class="flex flex-col gap-0.5 bg-surface px-3 py-2 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              class={[
+                "flex min-h-11 items-center justify-between gap-2 px-4 py-2 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+                hi > 0 && "border-s border-border",
+              ]}
             >
-              <span class="text-[11.5px] font-semibold text-foreground-secondary"
-                >{copy.index.quarter(qi + 1)}</span
+              <span class="text-[12.5px] font-medium text-foreground-secondary"
+                >{copy.range.item("hizb", hizb.index)}</span
               >
-              <span class="truncate font-mono text-[10.5px] text-muted"
-                >{quarter.first} – {quarter.last}</span
-              >
+              <span class="font-mono text-[11px] text-muted">{hizb.first}</span>
             </a>
           {/each}
         </div>

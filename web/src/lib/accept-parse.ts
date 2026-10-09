@@ -26,7 +26,7 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 // e.g. quranenc.en.hilali_khan).
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
-const RANGE_SEGMENT = "(?:page|juz|hizb|rub)";
+const RANGE_SEGMENT = "(?:page|juz|hizb)";
 // Scheme A: reader content paths are prefix-less; only `ar` requests carry a
 // locale prefix. The same four families serve both the html→md sibling lookup
 // (optionally /ar-prefixed) and the raw .md request gate (isReaderMdPath).

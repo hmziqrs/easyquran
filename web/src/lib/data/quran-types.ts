@@ -252,7 +252,7 @@ export type SurahRouteContext =
   | { readonly kind: "translation"; readonly lang: string; readonly translator: string };
 
 /** Addressable range families: global pages, juz, and the baked hizb-quarter series. */
-export type RangeRouteKind = "juz" | "page" | "hizb" | "rub";
+export type RangeRouteKind = "juz" | "page" | "hizb";
 
 export interface RangePageData {
   kind: RangeRouteKind;

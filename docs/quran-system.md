@@ -309,7 +309,7 @@ changes Arabic scripture or translation-content semantics.
 
 1. Translated pages use SSR plus seven-day disk cache and are never SSG. Their surah and
    surah-local shapes alone would create about 76,000 routes before juz/global pages.
-2. Translation context spans surah, global page, juz, hizb, and rub routes. Navigation
+2. Translation context spans surah, global page, juz, and hizb routes (rubʿ URLs are retired: `/rub/N` and `/t/{lang}/{translator}/rub/N` 308 to the quarter's first ayah on the surah root). Navigation
    may never fall back to Arabic context.
 3. “SSG-last” applies only to Arabic. Translation recovery is local DB → API → matching server
    data.

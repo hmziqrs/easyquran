@@ -88,7 +88,6 @@
 
   const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
   const isHizbRoute = $derived((page.route.id ?? "").includes("/hizb/"));
-  const isRubRoute = $derived((page.route.id ?? "").includes("/rub/"));
 
   function toIndex(v: string | undefined): number | null {
     const n = v ? Number(v) : Number.NaN;
@@ -131,7 +130,6 @@
     const n = toIndex(page.params.n);
     if (n === null) return null;
     if (isHizbRoute) return hizbRange(quranData, n)?.startGlobal ?? null;
-    if (isRubRoute) return quranData.rangeByIndex(RangeKind.HizbQuarter, n)?.startGlobal ?? null;
     const kind = isJuzRoute ? RangeKind.Juz : RangeKind.Page;
     return quranData.rangeByIndex(kind, n)?.startGlobal ?? null;
   }

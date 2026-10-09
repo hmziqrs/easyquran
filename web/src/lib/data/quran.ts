@@ -84,9 +84,6 @@ export const translationJuzPath = (lang: string, translator: string, n: number):
 export const translationHizbPath = (lang: string, translator: string, n: number): `/${string}` =>
   `/t/${lang}/${translator}/hizb/${n}`;
 
-export const translationRubPath = (lang: string, translator: string, n: number): `/${string}` =>
-  `/t/${lang}/${translator}/rub/${n}`;
-
 export const surahRouteContext = (sourceId: string): SurahRouteContext => {
   if (isArabicSourceId(sourceId)) return { kind: "arabic" };
   const { lang, translator } = translationSegmentsFromId(sourceId);
@@ -137,9 +134,6 @@ export const juzPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
 
 export const hizbPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
   ctx.kind === "arabic" ? `/hizb/${n}` : translationHizbPath(ctx.lang, ctx.translator, n);
-
-export const rubPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
-  ctx.kind === "arabic" ? `/rub/${n}` : translationRubPath(ctx.lang, ctx.translator, n);
 
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 

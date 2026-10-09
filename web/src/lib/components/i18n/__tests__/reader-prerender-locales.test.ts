@@ -7,7 +7,7 @@ import {
   readerPrerenderHrefs,
 } from "#lib/components/i18n/reader-prerender.server.js";
 import ReaderPrerenderLinks from "#lib/components/i18n/ReaderPrerenderLinks.svelte";
-import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { HIZB_COUNT } from "#lib/data/mushaf-divisions.js";
 import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 import { SUPPORTED_UI_LOCALES } from "#lib/i18n/locales.js";
 import { readerHrefFor } from "#lib/i18n/reader.js";
@@ -25,17 +25,17 @@ const READER_ENTRY_COUNT =
   QURAN_DATA.surahs.length +
   RANGE_COUNTS[RangeKind.Page] +
   RANGE_COUNTS[RangeKind.Juz] +
-  HIZB_COUNT +
-  RUB_COUNT;
+  HIZB_COUNT;
 const INDEX_COUNT = 3; // juz/surah/pages indexes, per UI locale — the /app hub is gone
 
 describe("localized reader prerender discovery", () => {
   it("matches every existing Arabic-source entry exactly once", () => {
     const entries = readerPrerenderEntries(QURAN_DATA);
     expect(entries.filter((entry) => entry.kind === "surah")).toHaveLength(114);
-    // The surah-local page scheme is gone (its kind no longer exists); hizb/rub joined.
+    // The surah-local page scheme and rubʿ URLs are gone (their kinds no longer exist).
     const kinds = new Set<string>(entries.map((entry) => entry.kind));
     expect(kinds.has("surah-local-page")).toBe(false);
+    expect(kinds.has("rub")).toBe(false);
     expect(entries.filter((entry) => entry.kind === "global-page")).toHaveLength(
       RANGE_COUNTS[RangeKind.Page],
     );
@@ -43,9 +43,7 @@ describe("localized reader prerender discovery", () => {
       RANGE_COUNTS[RangeKind.Juz],
     );
     expect(entries.filter((entry) => entry.kind === "hizb")).toHaveLength(HIZB_COUNT);
-    expect(entries.filter((entry) => entry.kind === "rub")).toHaveLength(RUB_COUNT);
     expect(HIZB_COUNT).toBe(60);
-    expect(RUB_COUNT).toBe(240);
     expect(entries).toHaveLength(READER_ENTRY_COUNT);
   });
 
@@ -73,7 +71,8 @@ describe("localized reader prerender discovery", () => {
     expect(hrefs.every((href) => !href.includes("/t/"))).toBe(true);
     expect(hrefs.every((href) => !href.includes("/page/") || /\/page\/\d+$/.test(href))).toBe(true);
     expect(hrefs).toContain("/hizb/1");
-    expect(hrefs).toContain("/ar/rub/240");
+    expect(hrefs).toContain("/ar/hizb/60");
+    expect(hrefs.every((href) => !href.includes("/rub/"))).toBe(true);
     expect(hrefs.every((href) => !href.endsWith(".md") && !href.endsWith(".txt"))).toBe(true);
   });
 
@@ -114,14 +113,14 @@ describe("localized reader prerender discovery", () => {
       }),
     ).toBe("/ar-rum/t/ms/basmeih");
 
-    const rub = readerPrerenderEntries(QURAN_DATA).find((entry) => entry.kind === "rub");
-    expect(rub).toBeDefined();
+    const hizb = readerPrerenderEntries(QURAN_DATA).find((entry) => entry.kind === "hizb");
+    expect(hizb).toBeDefined();
     expect(
-      quranHrefForPrerenderEntry(rub!, {
+      quranHrefForPrerenderEntry(hizb!, {
         kind: "translation",
         lang: "ms",
         translator: "basmeih",
       }),
-    ).toBe("/t/ms/basmeih/rub/1");
+    ).toBe("/t/ms/basmeih/hizb/1");
   });
 });

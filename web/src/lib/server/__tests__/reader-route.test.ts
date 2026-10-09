@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { RangeKind } from "#lib/data/quran-data.js";
 import { QURAN_DATA } from "#lib/server/quran-data.js";
 import {
   parseReaderPath,
   parseReaderRoute,
+  rubRedirectTarget,
   surahLocalRedirectTarget,
 } from "#lib/server/reader-route.js";
 
@@ -34,11 +36,8 @@ describe("prefix-less reader semantic route parser", () => {
       cacheKind: "hizb",
       index: 60,
     });
-    expect(parseReaderPath("/rub/240")).toMatchObject({
-      type: "arabic",
-      cacheKind: "rub",
-      index: 240,
-    });
+    // Rubʿ (hizb-quarter) URLs are retired: they 308 to their first ayah, never parse.
+    expect(parseReaderPath("/rub/240")).toBeNull();
   });
 
   it("accepts baked translations but never derives a source from UI locale", () => {
@@ -68,12 +67,13 @@ describe("prefix-less reader semantic route parser", () => {
       cacheKind: "hizb",
       index: 1,
     });
-    expect(parseReaderPath("/t/en/sahih/rub/240")).toMatchObject({
+    expect(parseReaderPath("/t/en/sahih/hizb/60")).toMatchObject({
       type: "translation",
       sourceId: "en.sahih",
-      cacheKind: "rub",
-      index: 240,
+      cacheKind: "hizb",
+      index: 60,
     });
+    expect(parseReaderPath("/t/en/sahih/rub/240")).toBeNull();
   });
 
   it("rejects the deleted hub, unknown sources, removed surah-local shapes, malformed segments, and bad bounds", () => {
@@ -89,7 +89,6 @@ describe("prefix-less reader semantic route parser", () => {
     expect(parseReaderPath("/page/605")).toBeNull();
     expect(parseReaderPath("/juz/31")).toBeNull();
     expect(parseReaderPath("/hizb/61")).toBeNull();
-    expect(parseReaderPath("/rub/241")).toBeNull();
     expect(parseReaderPath("/hizb/0")).toBeNull();
     expect(parseReaderPath("/al-fatihah/page/0")).toBeNull();
     expect(parseReaderPath("//al-fatihah")).toBeNull();
@@ -122,12 +121,19 @@ describe("prefix-less reader semantic route parser", () => {
       index: 60,
     });
     expect(
+      parseReaderRoute("/(application)/t/[lang]/[translator]/hizb/[n]", {
+        lang: "en",
+        translator: "sahih",
+        n: "60",
+      }),
+    ).toMatchObject({ type: "translation", cacheKind: "hizb", index: 60 });
+    expect(
       parseReaderRoute("/(application)/t/[lang]/[translator]/rub/[n]", {
         lang: "en",
         translator: "sahih",
         n: "240",
       }),
-    ).toMatchObject({ type: "translation", cacheKind: "rub", index: 240 });
+    ).toBeNull();
     // .md twins resolve through the same parser after the twin suffix is dropped.
     expect(
       parseReaderRoute("/(application)/[surah=surahSlug].md", { surah: "al-fatihah" }),
@@ -149,7 +155,9 @@ describe("reroute table (scheme A)", () => {
     expect(await route("/ar/al-fatihah")).toBe("/al-fatihah");
     expect(await route("/ar/t/en/sahih/page/42")).toBe("/t/en/sahih/page/42");
     expect(await route("/ar/juz")).toBe("/juz");
-    expect(await route("/ar/rub/12.md")).toBe("/rub/12.md");
+    expect(await route("/ar/hizb/12.md")).toBe("/hizb/12.md");
+    // retired rubʿ URLs are not rerouted onto a route: the server hook 308s them to their ayah
+    expect(await route("/ar/rub/12.md")).toBe("/ar/rub/12.md");
     expect(await route("/ar/search")).toBe("/search");
     expect(await route("/ar/settings")).toBe("/settings");
     expect(await route("/ar/bookmarks")).toBe("/bookmarks");
@@ -176,6 +184,36 @@ describe("reroute table (scheme A)", () => {
     expect(await route("/surah")).toBe("/surah");
     expect(await route("/search")).toBe("/search");
     expect(await route("/about")).toBe("/about");
+  });
+});
+
+describe("rubRedirectTarget (retired rubʿ URLs 308 to the quarter's first ayah)", () => {
+  it("lands an Arabic rubʿ on its surah anchored at the quarter's first ayah", () => {
+    const quarter = QURAN_DATA.rangeByIndex(RangeKind.HizbQuarter, 19);
+    if (!quarter) throw new Error("missing hizb quarter 19");
+    const [surah, ayah] = quarter.first.split(":").map(Number);
+    const slug = QURAN_DATA.surahByNum(surah!)?.slug;
+    expect(rubRedirectTarget("/rub/19")).toEqual({
+      path: `/${slug}`,
+      fragment: `#ayah-${surah}-${ayah}`,
+    });
+  });
+
+  it("keeps the translation on the translated shape and drops the anchor on page 1 of a surah", () => {
+    expect(rubRedirectTarget("/t/en/sahih/rub/1")).toEqual({
+      path: "/al-fatihah/t/en/sahih",
+      fragment: "",
+    });
+  });
+
+  it("sends the .md twin to the surah's text variant", () => {
+    expect(rubRedirectTarget("/rub/1.md")).toEqual({ path: "/al-fatihah.md", fragment: "" });
+  });
+
+  it("returns null for out-of-range quarters and unknown translations", () => {
+    expect(rubRedirectTarget("/rub/241")).toBeNull();
+    expect(rubRedirectTarget("/t/en/not-in-catalogue/rub/1")).toBeNull();
+    expect(rubRedirectTarget("/hizb/1")).toBeNull();
   });
 });
 

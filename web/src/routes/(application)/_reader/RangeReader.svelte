@@ -8,14 +8,13 @@
     hizbPathFor,
     juzPathFor,
     routeContextFromParams,
-    rubPathFor,
     surahPathFor,
     translationIdFromSegments,
     type SurahLink,
   } from "#lib/data/quran.js";
   import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
   import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
-  import { HIZB_COUNT, positionForGlobal, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+  import { HIZB_COUNT, positionForGlobal } from "#lib/data/mushaf-divisions.js";
   import { trackReaderView } from "#lib/quran/track-view.svelte.js";
   import VerseRow from "./VerseRow.svelte";
   import { keepVisibleVerse, registerTypographyWrapper } from "./typography-change";
@@ -57,7 +56,6 @@
     page: RANGE_COUNTS[RangeKind.Page],
     juz: RANGE_COUNTS[RangeKind.Juz],
     hizb: HIZB_COUNT,
-    rub: RUB_COUNT,
   } satisfies Record<RangePageData["kind"], number>;
 
   const coord = createRangeReaderCoordinator();
@@ -170,9 +168,6 @@
         break;
       case "hizb":
         quranHref = hizbPathFor(ctx, index);
-        break;
-      case "rub":
-        quranHref = rubPathFor(ctx, index);
         break;
     }
     return readerHrefFor(copy.locale, quranHref);

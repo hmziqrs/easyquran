@@ -5,7 +5,6 @@ import {
   globalPagePathFor,
   hizbPathFor,
   juzPathFor,
-  rubPathFor,
   surahPathFor,
   type SurahRouteContext,
 } from "#lib/data/quran.js";
@@ -14,7 +13,7 @@ import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
 /**
  * Position-preserving translation navigation, ported from the sidebar
  * TranslationPicker. Given the current reader pathname it extracts where the
- * reader is (surah / global page / juz / hizb / rub), and hrefFor rebuilds the
+ * reader is (surah / global page / juz / hizb), and hrefFor rebuilds the
  * same position for any target translation via the ctx-aware path helpers —
  * never a hand-built /app/ string (machine-guarded by nav-guard.test.ts).
  */
@@ -23,7 +22,6 @@ export type ReaderPosition =
   | { kind: "globalPage"; n: number; lang?: string; translator?: string }
   | { kind: "juz"; n: number; lang?: string; translator?: string }
   | { kind: "hizb"; n: number; lang?: string; translator?: string }
-  | { kind: "rub"; n: number; lang?: string; translator?: string }
   | null;
 
 export type TranslationTarget = { id: string; lang: string; translator: string };
@@ -64,7 +62,6 @@ export function positionOf(pathname: string): ReaderPosition {
     if (segs[0] === "page") return segs[1] ? { kind: "globalPage", n: toNum(segs[1]) } : null;
     if (segs[0] === "juz") return segs[1] ? { kind: "juz", n: toNum(segs[1]) } : null;
     if (segs[0] === "hizb") return segs[1] ? { kind: "hizb", n: toNum(segs[1]) } : null;
-    if (segs[0] === "rub") return segs[1] ? { kind: "rub", n: toNum(segs[1]) } : null;
     const slug = segs[0];
     if (!slug) return null;
     // Reserved words are indexes/product pages/the dead /app marker — never a
@@ -87,7 +84,6 @@ export function positionOf(pathname: string): ReaderPosition {
     return { kind: "globalPage", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "juz" && rest[1]) return { kind: "juz", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "hizb" && rest[1]) return { kind: "hizb", n: toNum(rest[1]), lang, translator };
-  if (rest[0] === "rub" && rest[1]) return { kind: "rub", n: toNum(rest[1]), lang, translator };
   return null;
 }
 
@@ -120,8 +116,7 @@ export function arabicHrefFor(pos: ReaderPosition): `/${string}` | null {
   if (pos.kind === "surah") return surahPathFor(ctx, pos.slug);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
-  if (pos.kind === "hizb") return hizbPathFor(ctx, pos.n);
-  return rubPathFor(ctx, pos.n);
+  return hizbPathFor(ctx, pos.n);
 }
 
 function ctxFor(target: TranslationTarget): SurahRouteContext {
@@ -134,6 +129,5 @@ export function hrefFor(pos: ReaderPosition, target: TranslationTarget): `/${str
   if (pos.kind === "surah") return surahPathFor(ctx, pos.slug);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
-  if (pos.kind === "hizb") return hizbPathFor(ctx, pos.n);
-  return rubPathFor(ctx, pos.n);
+  return hizbPathFor(ctx, pos.n);
 }

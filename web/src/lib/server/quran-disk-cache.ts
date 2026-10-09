@@ -4,7 +4,7 @@ import path from "node:path";
 import { version as appBuildId } from "$app/env";
 import { sumBy } from "es-toolkit";
 
-const KINDS = ["surah", "page", "juz", "hizb", "rub"] as const;
+const KINDS = ["surah", "page", "juz", "hizb"] as const;
 export type DiskCacheKind = (typeof KINDS)[number];
 
 const HTML_EXT = ".html";

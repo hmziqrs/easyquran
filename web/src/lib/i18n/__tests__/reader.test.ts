@@ -4,7 +4,6 @@ import {
   globalPagePathFor,
   hizbPathFor,
   juzPathFor,
-  rubPathFor,
   surahAyahPathFor,
   surahPathFor,
   surahRouteContext,
@@ -24,7 +23,6 @@ const VALID_READER_HREFS = [
   "/juz",
   "/juz/30",
   "/hizb/60",
-  "/rub/240",
   "/al-fatihah/t/en/sahih",
   "/t/en/sahih/page/604",
   "/t/en/sahih/hizb/12",
@@ -78,7 +76,6 @@ describe("reader localized hrefs", () => {
       globalPagePathFor(context, 42),
       juzPathFor(context, 30),
       hizbPathFor(context, 60),
-      rubPathFor(context, 240),
     ];
 
     for (const quranHref of quranHrefs) {

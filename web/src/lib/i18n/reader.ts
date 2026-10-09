@@ -16,13 +16,14 @@ const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 // which include underscore translator segments like quranenc.en.hilali_khan and qul r158.*).
 const TRANSLATOR_SEGMENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const POSITIVE_INTEGER_SEGMENT = /^[1-9]\d*$/;
-const RANGE_SEGMENT_KINDS = new Set(["page", "juz", "hizb", "rub"]);
+const RANGE_SEGMENT_KINDS = new Set(["page", "juz", "hizb"]);
 /** Site-root reserved words (scheme A): these single segments are reader range
  * kinds, the `t` translation marker, or app index/personal routes — never a
  * surah slug. This is what keeps /t, /page, /juz, /yours, … from being
  * swallowed by the dynamic [surah] route at the site root. */
 const RESERVED_SURAH_SEGMENTS = new Set([
-  // reader range kinds, the translation marker, and reader-owned indexes
+  // reader range kinds, the translation marker, and reader-owned indexes ("rub" stays
+  // reserved: retired rub' URLs 308 to their ayah and must never parse as a surah slug)
   "juz",
   "page",
   "hizb",

@@ -51,7 +51,7 @@ unaffected. These previews return 404 in production and are linked from `/design
     │  ├─ layout.css         # design system: @theme + token values
     │  ├─ +layout.svelte     # global: css, JSON-LD, prefs, analytics boot
     │  ├─ (marketing)/       # public, indexable, prerendered
-    │  ├─ (application)/     # product UI, noindex; Arabic prerendered (surah, page, juz, hizb, rub — scheme A: unprefixed en, /ar ar), translated routes SSR + disk-TTL (see Part 3, divergence #1)
+    │  ├─ (application)/     # product UI, noindex; Arabic prerendered (surah, page, juz, hizb — scheme A: unprefixed en, /ar ar), translated routes SSR + disk-TTL (see Part 3, divergence #1)
     │  ├─ sitemap.xml/ llms.txt/ llms-full.txt/
     │  ├─ [slug=marketingText].md/ [slug].txt/  # marketing text variants (matcher-split from the reader twins)
     │  └─ (application)/[surah=surahSlug].md/   # reader text variants (114 baked slugs)

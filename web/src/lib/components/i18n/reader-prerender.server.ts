@@ -1,13 +1,7 @@
-import { HIZB_COUNT, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
+import { HIZB_COUNT } from "#lib/data/mushaf-divisions.js";
 import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";
 import type { SurahRouteContext } from "#lib/data/quran.js";
-import {
-  globalPagePathFor,
-  hizbPathFor,
-  juzPathFor,
-  rubPathFor,
-  surahPathFor,
-} from "#lib/data/quran.js";
+import { globalPagePathFor, hizbPathFor, juzPathFor, surahPathFor } from "#lib/data/quran.js";
 import type { PublicHref } from "#lib/i18n/public-href.js";
 import type { QuranReaderHref } from "#lib/i18n/reader.js";
 
@@ -16,7 +10,6 @@ const ARABIC: SurahRouteContext = { kind: "arabic" };
 export const READER_GLOBAL_PAGE_COUNT = RANGE_COUNTS[RangeKind.Page];
 export const READER_JUZ_COUNT = RANGE_COUNTS[RangeKind.Juz];
 export const READER_HIZB_COUNT = HIZB_COUNT;
-export const READER_RUB_COUNT = RUB_COUNT;
 
 interface ReaderSurah {
   num: number;
@@ -31,8 +24,7 @@ export type ReaderPrerenderEntry =
   | { kind: "surah"; surah: ReaderSurah }
   | { kind: "global-page"; globalPage: number }
   | { kind: "juz"; juz: number }
-  | { kind: "hizb"; hizb: number }
-  | { kind: "rub"; rub: number };
+  | { kind: "hizb"; hizb: number };
 
 export type ReaderHrefFor<Locale extends string> = (
   locale: Locale,
@@ -60,9 +52,6 @@ export function readerPrerenderEntries(source: ReaderPrerenderSource): ReaderPre
   for (let hizb = 1; hizb <= READER_HIZB_COUNT; hizb += 1) {
     entries.push({ kind: "hizb", hizb });
   }
-  for (let rub = 1; rub <= READER_RUB_COUNT; rub += 1) {
-    entries.push({ kind: "rub", rub });
-  }
 
   return entries;
 }
@@ -81,8 +70,6 @@ export function quranHrefForPrerenderEntry(
       return juzPathFor(context, entry.juz);
     case "hizb":
       return hizbPathFor(context, entry.hizb);
-    case "rub":
-      return rubPathFor(context, entry.rub);
   }
 }
 
