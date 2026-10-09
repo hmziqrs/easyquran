@@ -8,6 +8,8 @@ export const prerender = true;
 export interface PageSurahRef {
   num: number;
   name: string;
+  /** Arabic surah name, shown on the card like the surah index does. */
+  arabic: string;
 }
 
 export interface PageSajdaRef {
@@ -27,6 +29,8 @@ export interface PageIndexRow {
   surahStarts: readonly number[];
   /** Sajda verses falling on this page. */
   sajdas: readonly PageSajdaRef[];
+  /** Juz holding the page's first verse — the index groups pages by juz. */
+  juz: number;
 }
 
 export const load: PageLoad = async ({ fetch }) => {
@@ -38,12 +42,17 @@ export const load: PageLoad = async ({ fetch }) => {
   }
   const quran = createQuranData(await response.json());
   const pages = quran.ranges(RangeKind.Page);
+  const ajz = quran.ranges(RangeKind.Juz);
   const surahs = quran.surahs;
   const sajdas = quran.sajdas();
 
   const rows: PageIndexRow[] = [];
   let sajdaCursor = 0;
+  let juzCursor = 0;
   for (const page of pages) {
+    while (juzCursor < ajz.length - 1 && ajz[juzCursor]!.endGlobal < page.startGlobal) {
+      juzCursor += 1;
+    }
     // Surahs are ordered by startGlobal; the first surah ending before this page
     // bounds the scan for every later page too.
     let first = 0;
@@ -58,7 +67,7 @@ export const load: PageLoad = async ({ fetch }) => {
     for (let i = first; i < surahs.length; i += 1) {
       const surah = surahs[i]!;
       if (surah.startGlobal > page.endGlobal) break;
-      covered.push({ num: surah.num, name: surah.name });
+      covered.push({ num: surah.num, name: surah.name, arabic: surah.arabic });
       if (surah.startGlobal >= page.startGlobal) starts.push(surah.num);
     }
 
@@ -79,6 +88,7 @@ export const load: PageLoad = async ({ fetch }) => {
       surahs: covered,
       surahStarts: starts,
       sajdas: pageSajdas,
+      juz: ajz[juzCursor]?.index ?? 1,
     });
   }
   return { rows };

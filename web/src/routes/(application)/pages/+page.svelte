@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Chip, Icon, Seo } from "#lib/components/index.js";
+  import { groupBy } from "es-toolkit";
+  import { Icon, Seo } from "#lib/components/index.js";
   import { globalPagePathFor, resumeCtxFor } from "#lib/data/quran.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
@@ -8,7 +9,6 @@
   import type { PageIndexRow } from "./+page";
   import ReaderShell from "../_reader/ReaderShell.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
-  import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
 
   let { data } = $props();
 
@@ -37,6 +37,19 @@
     return out;
   }
 
+  /** The surah a card names in Arabic: the one opening on the page, else the first on it. */
+  function leadSurah(page: PageIndexRow): PageIndexRow["surahs"][number] | undefined {
+    const opening = page.surahStarts[0];
+    return page.surahs.find((surah) => surah.num === opening) ?? page.surahs[0];
+  }
+
+  // Pages grouped under their juz, in mushaf order.
+  const sections = $derived(
+    Object.entries(groupBy(data.rows, (row) => row.juz))
+      .map(([juz, pages]) => ({ juz: Number(juz), pages }))
+      .sort((a, b) => a.juz - b.juz),
+  );
+
   function sajdaChipLabel(page: PageIndexRow): string {
     if (page.sajdas.length === 1) {
       const sajda = page.sajdas[0]!;
@@ -53,7 +66,7 @@
   includeTextVariants={false}
 />
 
-<ReaderShell>
+<ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.pagesTitle}</h1>
     <span class="ms-auto font-mono text-[12px] text-muted"
@@ -61,40 +74,76 @@
     >
   {/snippet}
 
-  <!-- Page cards: mushaf page number, the surah(s) it draws from, its verse range,
-       and a chip when it carries a sajda. -->
-  <ul class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-    {#each data.rows as page (page.index)}
-      {@const hue = hueSlotFor(page.index)}
-      <li>
-        <a
-          href={publicHref(pageHref(page.index))}
-          data-sveltekit-preload-data="hover"
-          title={pageMeta(page)}
-          aria-label={pageMeta(page)}
-          class="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <span
-            class="flex h-9 w-11 flex-none items-center justify-center rounded-pill text-[15px] font-extrabold tabular-nums"
-            style:background={HUE_SOFT[hue]}
-            style:color={HUE_LEGIBLE[hue]}
-          >
-            {page.index}
-          </span>
-          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="truncate text-[12.5px] font-semibold text-foreground">
-              {surahNames(page)}
-            </span>
-            <span class="font-mono text-[10.5px] text-muted">{page.first} – {page.last}</span>
-          </span>
-          {#if page.sajdas.length > 0}
-            <Chip accent class="flex-none font-mono">
-              <Icon name="moon" size={11} />
-              {sajdaChipLabel(page)}
-            </Chip>
+  <!-- Page cards grouped under their juz: page tile, the surah(s) the page draws from, its
+       verse range (+ a sajda tag), and the leading surah's Arabic name. -->
+  <div class="flex flex-col gap-8">
+    {#each sections as section (section.juz)}
+      {@const firstPage = section.pages[0]}
+      {@const lastPage = section.pages[section.pages.length - 1]}
+      <section aria-labelledby={`juz-${section.juz}`} class="flex flex-col gap-3">
+        <div class="flex items-baseline justify-between gap-3">
+          <h2 id={`juz-${section.juz}`} class="text-[15px] font-semibold text-foreground">
+            {copy.range.item("juz", section.juz)}
+          </h2>
+          {#if firstPage && lastPage}
+            <span class="text-caption tabular-nums text-muted"
+              >{copy.range.item("page", firstPage.index)}–{lastPage.index}</span
+            >
           {/if}
-        </a>
-      </li>
+        </div>
+        <ul class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {#each section.pages as page (page.index)}
+            {@const opens = page.surahStarts.length > 0}
+            {@const lead = leadSurah(page)}
+            <li>
+              <a
+                href={publicHref(pageHref(page.index))}
+                data-sveltekit-preload-data="hover"
+                title={pageMeta(page)}
+                aria-label={pageMeta(page)}
+                class="group flex min-h-[72px] items-center gap-3.5 rounded-xl border border-border bg-surface/40 px-4 py-3 transition-colors hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              >
+                <!-- Neutral page tile; tinted only on a page where a surah begins, so the
+                     openings stand out down the list instead of an arbitrary colour cycle. -->
+                <span
+                  class={[
+                    "flex size-11 flex-none items-center justify-center rounded-lg text-[15px] font-semibold tabular-nums",
+                    opens ? "bg-primary-soft text-primary" : "bg-background-subtle text-foreground",
+                  ]}
+                >
+                  {page.index}
+                </span>
+                <span class="flex min-w-0 flex-1 flex-col gap-1">
+                  <span class="truncate text-[14px] font-medium leading-tight text-foreground">
+                    {surahNames(page)}
+                  </span>
+                  <span class="flex items-center gap-2 text-[12px] leading-none tabular-nums text-muted">
+                    <span>{page.first} – {page.last}</span>
+                    {#if page.sajdas.length > 0}
+                      <span
+                        data-sajda
+                        class="inline-flex items-center gap-1 text-foreground-secondary"
+                        title={sajdaChipLabel(page)}
+                      >
+                        <Icon name="moon" size={11} />
+                        {copy.index.sajda}
+                      </span>
+                    {/if}
+                  </span>
+                </span>
+                {#if lead}
+                  <span
+                    lang="ar"
+                    dir="rtl"
+                    class="flex-none font-arabic text-[19px] leading-none text-foreground-secondary transition-colors group-hover:text-foreground"
+                    >{lead.arabic}</span
+                  >
+                {/if}
+              </a>
+            </li>
+          {/each}
+        </ul>
+      </section>
     {/each}
-  </ul>
+  </div>
 </ReaderShell>
