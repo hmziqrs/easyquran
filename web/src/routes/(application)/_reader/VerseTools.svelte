@@ -46,12 +46,14 @@
 
 <!-- Constantly visible (user ask): the hover-gated toolbar hid the actions on
      desktop and made them feel unreachable. Muted ink keeps them quiet. -->
+<!-- Touch screens (pointer: coarse) get 40px targets and a toolbar raised to clear the
+     row's 60px text inset; 30px stays the fine-pointer size. -->
 <div
-  class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100"
+  class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 [@media(pointer:coarse)]:top-3"
 >
   <span class="font-mono text-[11.5px] tracking-wide text-foreground-secondary">{vKey}</span>
   <div class="flex items-center gap-0.5">
-    {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string })}
+    {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass, pressed }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string; pressed?: boolean })}
       <Tooltip>
         <TooltipTrigger>
           {#snippet child({ props })}
@@ -60,8 +62,9 @@
               type="button"
               onclick={onclick}
               aria-label={ariaLabel}
+              aria-pressed={pressed}
               class={cn(
-                "flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors hover:bg-surface-hover",
+                "flex size-[30px] touch-manipulation items-center justify-center rounded-md transition-colors hover:bg-surface-hover [@media(pointer:coarse)]:size-10",
                 activeClass ?? "text-foreground-secondary hover:text-foreground",
               )}
             >
@@ -77,8 +80,9 @@
       onclick: () => bookmarks.toggleVerse(vKey),
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
       ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
-      icon: "bookmark",
+      icon: bookmarked ? "bookmark-fill" : "bookmark",
       activeClass: bookmarked ? "text-primary" : undefined,
+      pressed: bookmarked,
     })}
     {@render verseAction({
       onclick: onCopy,

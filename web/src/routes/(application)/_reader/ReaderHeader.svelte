@@ -3,13 +3,12 @@
   import { surahMeta, type SurahLocalPageData } from "#lib/data/quran.js";
   import { Icon } from "#lib/components/icon/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
-  import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
   import type { ReadingText } from "#lib/stores/reading-text.svelte.js";
 
   let {
     initial,
     clientMounted,
-    onChangeMode,
     readingText,
     readingFlowName,
     onReadArabic,
@@ -18,7 +17,6 @@
   }: {
     initial: SurahLocalPageData;
     clientMounted: boolean;
-    onChangeMode: (mode: ReaderMode) => void;
     /** What Reading flows right now. */
     readingText: ReadingText;
     /** Name of the translation flowing in Reading, if any. */
@@ -58,56 +56,39 @@
     <span class="text-[13.5px] text-foreground-secondary">{surahMeta(initial.surah)}</span>
   </div>
 
-  {#if clientMounted}
+  {#if clientMounted && reader.isReadingMode}
+    <!-- Ayah-by-Ayah / Reading lives in the sticky bar (ReaderModeToggle), reachable from
+         anywhere. Here Reading only picks its text (quran.com's model): Arabic or one
+         translation — one tap; tapping Translation again (or ▾) opens the full picker. -->
     <div
       class="flex w-full items-center gap-0.5 rounded-md border border-border p-0.5 sm:ms-auto sm:w-auto"
       role="group"
-      aria-label={copy.shell.readingModeLabel}
+      aria-label={copy.shell.readingTranslationPick}
     >
+      <button type="button" aria-pressed={readingText === "arabic"} onclick={onReadArabic} class={pill}>
+        <Icon name="continuous" size={13} />
+        <span>{copy.shell.readingArabic}</span>
+      </button>
       <button
         type="button"
-        aria-pressed={reader.isVerseMode}
-        onclick={() => onChangeMode("verse")}
+        aria-pressed={readingText === "translation"}
+        onclick={readingText === "translation" ? onPickTranslation : onReadTranslation}
         class={pill}
       >
-        <Icon name="rows" size={13} />
-        <span class="hidden sm:inline">{copy.shell.ayahByAyah}</span>
-        <span class="sm:hidden">{copy.shell.ayahs}</span>
+        <span class="max-w-[11rem] truncate" dir="auto">
+          {readingText === "translation" && readingFlowName ? readingFlowName : copy.shell.readingTranslation}
+        </span>
       </button>
-      {#if reader.isReadingMode}
-        <!-- Reading splits into its two texts (quran.com's model): no dialog, one tap. -->
-        <button type="button" aria-pressed={readingText === "arabic"} onclick={onReadArabic} class={pill}>
-          <Icon name="continuous" size={13} />
-          <span>{copy.shell.readingArabic}</span>
-        </button>
-        <!-- Translation: one tap flows the last translation; tapping it again (or ▾) opens the
-             full Translations picker — search, languages, recent picks. -->
-        <button
-          type="button"
-          aria-pressed={readingText === "translation"}
-          onclick={readingText === "translation" ? onPickTranslation : onReadTranslation}
-          class={pill}
-        >
-          <span class="max-w-[11rem] truncate" dir="auto">
-            {readingText === "translation" && readingFlowName ? readingFlowName : copy.shell.readingTranslation}
-          </span>
-        </button>
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          aria-label={copy.shell.readingTranslationPick}
-          title={copy.shell.readingTranslationPick}
-          onclick={onPickTranslation}
-          class="flex h-8 w-7 flex-none items-center justify-center rounded-sm text-foreground-secondary transition-colors hover:text-foreground"
-        >
-          <ChevronDownIcon class="size-3.5" />
-        </button>
-      {:else}
-        <button type="button" aria-pressed={false} onclick={() => onChangeMode("reading")} class={pill}>
-          <Icon name="continuous" size={13} />
-          <span>{copy.shell.reading}</span>
-        </button>
-      {/if}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={copy.shell.readingTranslationPick}
+        title={copy.shell.readingTranslationPick}
+        onclick={onPickTranslation}
+        class="flex h-8 w-9 flex-none items-center justify-center rounded-sm text-foreground-secondary transition-colors hover:text-foreground"
+      >
+        <ChevronDownIcon class="size-3.5" />
+      </button>
     </div>
   {/if}
 </div>

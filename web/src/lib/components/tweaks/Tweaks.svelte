@@ -204,12 +204,14 @@
 <svelte:window onkeydown={onKeydown} onpointerdown={onPointerDown} />
 
 <!-- data-tweaks-root: layout.css hides this floating trigger while any modal dialog is open —
-     z-[1000] keeps it over page chrome, but it must never float above a modal's overlay. -->
+     z-[1000] keeps it over page chrome, but it must never float above a modal's overlay.
+     Hidden below md: on a phone it sat on top of ayah text and the per-ayah share button;
+     the header's theme toggle and Settings → Appearance cover the same ground there. -->
 <div
   lang={locale}
   dir={direction}
   data-tweaks-root
-  class="fixed end-5 bottom-5 z-[1000] flex flex-col items-end gap-3"
+  class="fixed end-5 bottom-5 z-[1000] hidden flex-col items-end gap-3 md:flex"
 >
   {#if open && copy && paletteCopy}
     <div

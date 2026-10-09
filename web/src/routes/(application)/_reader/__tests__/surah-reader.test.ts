@@ -9,7 +9,6 @@ import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
 
 // Minimal surface of the ReaderHeader props the tests drive.
 interface HeaderStubProps {
-  onChangeMode: (mode: "verse" | "reading") => void;
   readingText: "arabic" | "translation";
   readingFlowName: string | null;
   onReadArabic: () => void;
@@ -65,8 +64,8 @@ const {
     setMode: vi.fn(),
   },
   mountStub: () => {},
-  // Real ReaderHeader props captured on mount so tests can drive onChangeMode
-  // exactly like the header's mode pills do.
+  // Real ReaderHeader props captured on mount so tests can drive Reading's text
+  // pills exactly like the header does.
   // SAFETY: null is the not-yet-mounted member of the nullable holder; tests assign the captured HeaderStubProps on mount.
   headerProps: { current: null as HeaderStubProps | null },
   // VerseRow props captured per mount so tests can read what each row was given.
@@ -753,7 +752,8 @@ describe("SurahReader reading mode", () => {
     stackedTranslations.setIds(["en.sahih", "en.arberry"]);
     mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 3 })) });
     await flushMicrotasks();
-    header().onChangeMode("reading");
+    // The mode flips from the sticky bar's ReaderModeToggle; the reader follows the store.
+    readerStub.setMode("reading");
     await settle();
     expect(readerStub.mode).toBe("reading");
     expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);

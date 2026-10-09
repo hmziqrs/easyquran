@@ -29,10 +29,9 @@
   // which must not enter this module graph.
   import Bismillah from "#lib/components/brand/Bismillah.svelte";
   import { quran } from "#lib/stores/quran.svelte.js";
-  import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import { reader } from "#lib/stores/reader.svelte.js";
   import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import { withModeParam } from "#lib/reader/mode-param.js";
-  import { visibleUrl } from "#lib/reader/visible-url.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { readingText } from "#lib/stores/reading-text.svelte.js";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "#lib/offline/messages.js";
@@ -486,16 +485,6 @@
     quick: readingQuickPicks(routeTranslationId, readingText.recent, stackedTranslations.ids),
     onPick: pickReadingTranslation,
   });
-
-  function changeMode(mode: ReaderMode): void {
-    if (reader.mode === mode) return;
-    void preserveViewport(() => {
-      reader.setMode(mode);
-      // visibleUrl: a prior shallow write (e.g. the ?v= verse anchor) lives only in
-      // page.shallow.url under kit 3 — building from page.url would drop it.
-      replaceState(withModeParam(visibleUrl(appPage), mode), appPage.state);
-    }, true);
-  }
 
   function readArabic(): void {
     if (!isTranslationSource) {
@@ -1096,7 +1085,6 @@
     <ReaderHeader
       {initial}
       {clientMounted}
-      onChangeMode={changeMode}
       readingText={flowId === null ? "arabic" : "translation"}
       readingFlowName={flowName}
       onReadArabic={readArabic}

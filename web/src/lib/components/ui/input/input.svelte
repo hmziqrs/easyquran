@@ -24,7 +24,7 @@
 	   (never removed without replacement). px-4 keeps clear of the pill curve.
 	   Semantic tokens only (§61) — works across all 4 palettes × light/dark. */
 	const inputClass =
-		"border-border bg-surface text-foreground placeholder:text-muted-foreground h-11 w-full min-w-0 rounded-pill border px-4 text-body-s transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
+		"border-border bg-surface text-foreground placeholder:text-muted-foreground h-11 w-full min-w-0 rounded-pill border px-4 text-base transition-colors sm:text-body-s focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-danger disabled:cursor-not-allowed disabled:opacity-50";
 </script>
 
 {#if type === "file"}

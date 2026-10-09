@@ -12,6 +12,7 @@
   import { changeTypography } from "./typography-change";
   import PositionIndicator from "./PositionIndicator.svelte";
   import TranslationButton from "./TranslationButton.svelte";
+  import ReaderModeToggle from "./ReaderModeToggle.svelte";
 
   let {
     header,
@@ -50,7 +51,7 @@
       style:top={headerTop}
       class="sticky z-10 border-b border-border bg-background/85 backdrop-blur-xl transition-[top] duration-200 ease-out"
     >
-      <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-3 px-6">
+      <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-2 px-6 sm:gap-3">
         {#if mounted}
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
           <TranslationButton {routeTranslationId} />
@@ -64,8 +65,9 @@
           {/if}
         </div>
         {#if mounted}
+          <ReaderModeToggle />
           <div
-            class="ms-auto flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"
+            class="flex flex-none items-center gap-0.5 rounded-md border border-border p-0.5"
             role="group"
             aria-label={copy.shell.arabicTextSizeLabel}
           >

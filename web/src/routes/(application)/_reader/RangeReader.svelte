@@ -18,6 +18,8 @@
   import { HIZB_COUNT, positionForGlobal, RUB_COUNT } from "#lib/data/mushaf-divisions.js";
   import { trackReaderView } from "#lib/quran/track-view.svelte.js";
   import VerseRow from "./VerseRow.svelte";
+  import { keepVisibleVerse, registerTypographyWrapper } from "./typography-change";
+  import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import {
     createStackedTranslations,
     erroredFor,
@@ -87,6 +89,17 @@
     if (rtl) void loadArabicFont("noto-naskh-arabic");
   });
   onDestroy(() => stackedController.dispose());
+
+  // Mode switch and A−/A+ from the sticky bar keep the first visible ayah in place here too
+  // (the surah reader registers its virtual-list anchor instead). The visible text starts
+  // under the site nav (when expanded) and the 56px reader bar.
+  const READER_BAR_HEIGHT = 56;
+  $effect(() =>
+    registerTypographyWrapper(
+      keepVisibleVerse(() => (stickyNav.collapsed ? 0 : stickyNav.height) + READER_BAR_HEIGHT),
+    ),
+  );
+
   onMount(() => {
     void loadQuranData()
       .then((qd) => {

@@ -20,6 +20,14 @@
 	} = $props();
 
 	const sidebar = useSidebar();
+
+	// Touch screens: focus the sheet itself, not its first field. Auto-focusing the search box
+	// raised the on-screen keyboard over the list the reader opened the sheet to browse.
+	function focusSheetOnTouch(event: Event): void {
+		if (globalThis.matchMedia?.("(pointer: coarse)").matches !== true) return;
+		event.preventDefault();
+		ref?.focus();
+	}
 </script>
 
 {#if collapsible === "none"}
@@ -46,6 +54,7 @@
 			)}
 			style="--sidebar-width: {SIDEBAR_WIDTH_MOBILE};"
 			{side}
+			onOpenAutoFocus={focusSheetOnTouch}
 		>
 			<Sheet.Header class="sr-only">
 				<Sheet.Title>Sidebar</Sheet.Title>
