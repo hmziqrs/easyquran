@@ -15,6 +15,7 @@ use tokio::sync::RwLock;
 use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::oauth;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct IdTokenFields {
@@ -67,7 +68,26 @@ struct CachedJwks {
     keys: Vec<GoogleJwkKey>,
 }
 
-const GOOGLE_JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
+const GOOGLE_DEFAULT_AUTH_BASE: &str = "https://accounts.google.com";
+const GOOGLE_DEFAULT_TOKEN_BASE: &str = "https://oauth2.googleapis.com";
+const GOOGLE_DEFAULT_JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
+const GOOGLE_DEFAULT_USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
+
+pub fn google_auth_base() -> String {
+    oauth::provider_env_base("GOOGLE_AUTH_BASE_URL", GOOGLE_DEFAULT_AUTH_BASE)
+}
+
+pub fn google_token_base() -> String {
+    oauth::provider_env_base("GOOGLE_TOKEN_BASE_URL", GOOGLE_DEFAULT_TOKEN_BASE)
+}
+
+pub fn google_jwks_url() -> String {
+    oauth::provider_env_base("GOOGLE_JWKS_URL", GOOGLE_DEFAULT_JWKS_URL)
+}
+
+pub fn google_userinfo_url() -> String {
+    oauth::provider_env_base("GOOGLE_USERINFO_URL", GOOGLE_DEFAULT_USERINFO_URL)
+}
 const GOOGLE_ISSUERS: [&str; 2] = ["https://accounts.google.com", "accounts.google.com"];
 const JWKS_TTL: Duration = Duration::from_secs(3600);
 
@@ -90,19 +110,18 @@ pub fn get_google_oauth_client() -> Result<GoogleClient, ErrorResponse> {
             .with_message("GOOGLE_REDIRECT_URI not configured")
     })?;
 
-    let auth_url = AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
-        .map_err(|e| {
+    let auth_url =
+        AuthUrl::new(format!("{}/o/oauth2/v2/auth", google_auth_base())).map_err(|e| {
             ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Invalid auth URL")
                 .with_details(e.to_string())
         })?;
 
-    let token_url =
-        TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).map_err(|e| {
-            ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Invalid token URL")
-                .with_details(e.to_string())
-        })?;
+    let token_url = TokenUrl::new(format!("{}/token", google_token_base())).map_err(|e| {
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Invalid token URL")
+            .with_details(e.to_string())
+    })?;
 
     let client = Client::new(ClientId::new(client_id))
         .set_client_secret(ClientSecret::new(client_secret))
@@ -299,10 +318,14 @@ async fn fetch_google_jwks_bypass_cache() -> Result<Vec<GoogleJwkKey>, ErrorResp
             ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
         })?;
 
-    let resp = http_client.get(GOOGLE_JWKS_URL).send().await.map_err(|e| {
-        error!(error = ?e, "Failed to fetch Google JWKS");
-        ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
-    })?;
+    let resp = http_client
+        .get(google_jwks_url())
+        .send()
+        .await
+        .map_err(|e| {
+            error!(error = ?e, "Failed to fetch Google JWKS");
+            ErrorResponse::new(ErrorCode::ExternalServiceError).with_message("JWKS fetch failed")
+        })?;
 
     let status = resp.status();
     let bytes = resp.bytes().await.map_err(|e| {

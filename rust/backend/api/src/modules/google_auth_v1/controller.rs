@@ -23,11 +23,12 @@ use crate::{
 };
 
 use super::{
-    service::{get_google_oauth_client, verify_google_id_token, GoogleIdTokenClaims},
+    service::{
+        get_google_oauth_client, google_userinfo_url, verify_google_id_token, GoogleIdTokenClaims,
+    },
     validator::{GoogleCallbackQuery, GoogleExchangeRequest, GoogleTokenRequest, GoogleUserInfo},
 };
 
-const GOOGLE_USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
 const GOOGLE_USERINFO_MAX_BYTES: usize = 64 * 1024;
 static GOOGLE_USERINFO_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
     LazyLock::new(|| {
@@ -426,7 +427,7 @@ fn google_userinfo_http_client() -> Result<&'static reqwest::Client, ErrorRespon
 
 async fn fetch_google_user_info(access_token: &str) -> Result<GoogleUserInfo, ErrorResponse> {
     let http_client = google_userinfo_http_client()?;
-    fetch_google_user_info_from_url(http_client, GOOGLE_USERINFO_URL, access_token).await
+    fetch_google_user_info_from_url(http_client, &google_userinfo_url(), access_token).await
 }
 
 async fn fetch_google_user_info_from_url(
