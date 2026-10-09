@@ -16,7 +16,7 @@ node scripts/auth-sandbox/oauth-provider.mjs --port 8090
 #    base URLs are needed here.
 cd rust
 set -a && . ../.env && set +a
-RUST_ENV=development WEB_AUTH_ENABLED=true WEB_OAUTH_PROVIDERS=github,discord,google \
+APP_ENV=development WEB_AUTH_ENABLED=true WEB_OAUTH_PROVIDERS=github,discord,google \
 GITHUB_CLIENT_ID=sandbox-gh-client GITHUB_CLIENT_SECRET=sandbox-gh-secret \
 GITHUB_OAUTH_BASE_URL=http://127.0.0.1:8090 GITHUB_API_BASE_URL=http://127.0.0.1:8090 \
 DISCORD_CLIENT_ID=sandbox-dc-client DISCORD_CLIENT_SECRET=sandbox-dc-secret \
