@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Seo } from "#lib/components/index.js";
   import ReaderPrerenderLinks from "#lib/components/i18n/ReaderPrerenderLinks.svelte";
-  import { resumeCtxFor, surahMeta, surahPathFor } from "#lib/data/quran.js";
+  import { resumeCtxFor, surahPathFor } from "#lib/data/quran.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { readerCanonicalEntryPath } from "#lib/i18n/seo.js";
@@ -68,19 +68,20 @@
           >
             {surah.num}
           </span>
-          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="truncate text-sm font-medium text-foreground">
-              {surah.name}
-              {#if surah.transliteration}
-                <span class="font-normal text-foreground-secondary">· {surah.transliteration}</span>
-              {/if}
+          <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="truncate text-sm font-medium text-foreground">{surah.name}</span>
+            <span class="flex min-w-0 items-baseline justify-between gap-3">
+              <span class="truncate text-[11.5px] text-muted">{surah.meaning}</span>
+              <span dir="rtl" lang="ar" class="flex-none font-arabic text-[17px] leading-none">
+                {surah.arabic}
+              </span>
             </span>
-            <span class="truncate text-[11.5px] text-muted">
-              {surah.meaning} · {surahMeta(surah)}
+            <span class="flex items-center gap-1.5 text-accent">
+              <span class="size-1.5 flex-none rounded-full border border-accent" aria-hidden="true"></span>
+              <span class="text-[11.5px] font-medium tabular-nums"
+                >{copy.index.ayahCount(surah.ayahCount)}</span
+              >
             </span>
-          </span>
-          <span dir="rtl" lang="ar" class="flex-none font-arabic text-[17px] leading-none">
-            {surah.arabic}
           </span>
         </a>
       </li>

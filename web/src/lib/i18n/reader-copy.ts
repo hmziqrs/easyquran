@@ -57,6 +57,7 @@ import {
   reader_full_surah,
   reader_hizb_item,
   reader_home_label,
+  reader_index_ayah_count,
   reader_index_juz_title,
   reader_index_page_sajda_legend,
   reader_index_pages_title,
@@ -309,6 +310,7 @@ export interface ReaderUiCopy {
     readonly yoursRecent: string;
     readonly yoursViewAll: string;
     readonly yoursEmpty: string;
+    readonly ayahCount: (count: number) => string;
     readonly pageCount: (count: number) => string;
     readonly sajda: string;
     readonly sajdaCount: (count: number) => string;
@@ -542,6 +544,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       yoursRecent: noArgs(reader_index_yours_recent),
       yoursViewAll: noArgs(reader_index_yours_view_all),
       yoursEmpty: noArgs(reader_index_yours_empty),
+      ayahCount: (count) => reader_index_ayah_count({ count }, options),
       pageCount: (count) => reader_page_count({ count }, options),
       sajda: noArgs(reader_index_sajda),
       sajdaCount: (count) => reader_index_sajda_count({ count }, options),

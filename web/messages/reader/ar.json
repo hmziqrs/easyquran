@@ -282,6 +282,7 @@
   "reader_bookmarks_local_only": "محفوظة في هذا المتصفح",
   "reader_bookmarks_loading": "جارٍ تحميل علاماتك المرجعية…",
   "reader_bookmarks_move_label": "نقل {reference} إلى مجلد",
+  "reader_index_ayah_count": "{count} آيات",
   "reader_index_juz_title": "الأجزاء",
   "reader_index_surahs_title": "السور",
   "reader_index_pages_title": "الصفحات",

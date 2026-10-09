@@ -282,6 +282,7 @@
   "reader_bookmarks_local_only": "Stored in this browser",
   "reader_bookmarks_loading": "Loading your bookmarks…",
   "reader_bookmarks_move_label": "Move {reference} to a folder",
+  "reader_index_ayah_count": "{count} ayahs",
   "reader_index_juz_title": "Juz",
   "reader_index_surahs_title": "Surahs",
   "reader_index_pages_title": "Pages",
