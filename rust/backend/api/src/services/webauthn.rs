@@ -207,34 +207,20 @@ mod tests {
     use super::*;
     use crate::config::settings::{env_class, EnvClass, TEST_ENV_MUTEX};
 
-    // env_class reads RUST_ENV → NODE_ENV → APP_ENV. Snapshot + restore so the
-    // global never leaks into other tests regardless of the host environment.
+    // env_class reads APP_ENV. Snapshot + restore so the global never leaks
+    // into other tests regardless of the host environment.
     struct EnvSnap {
-        rust_env: Option<String>,
-        node_env: Option<String>,
         app_env: Option<String>,
     }
     fn snap() -> EnvSnap {
         EnvSnap {
-            rust_env: std::env::var("RUST_ENV").ok(),
-            node_env: std::env::var("NODE_ENV").ok(),
             app_env: std::env::var("APP_ENV").ok(),
         }
     }
     fn clear_env() {
-        std::env::remove_var("RUST_ENV");
-        std::env::remove_var("NODE_ENV");
         std::env::remove_var("APP_ENV");
     }
     fn restore(s: EnvSnap) {
-        match s.rust_env {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
-        }
-        match s.node_env {
-            Some(v) => std::env::set_var("NODE_ENV", v),
-            None => std::env::remove_var("NODE_ENV"),
-        }
         match s.app_env {
             Some(v) => std::env::set_var("APP_ENV", v),
             None => std::env::remove_var("APP_ENV"),
@@ -246,7 +232,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         assert!(matches!(env_class(), EnvClass::Production));
         // Use .err() (not unwrap_err) — WebauthnService does not impl Debug.
         let err = WebauthnService::new("localhost", "http://localhost:8080", "Test")
@@ -264,7 +250,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         let err = WebauthnService::new("easyquran.fyi", "http://127.0.0.1:8080", "EasyQuran")
             .err()
             .expect("loopback origin must error in production");
@@ -277,7 +263,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         let r = WebauthnService::new("easyquran.fyi", "https://easyquran.fyi", "EasyQuran");
         restore(s);
         assert!(
@@ -294,7 +280,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
         clear_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         assert!(matches!(env_class(), EnvClass::Production));
         let err = WebauthnService::new("easyquran.fyi", "https://easyquran.fyi", "")
             .err()
@@ -317,7 +303,7 @@ mod tests {
         let prev_origin = std::env::var("WEBAUTHN_RP_ORIGIN").ok();
         let prev_name = std::env::var("WEBAUTHN_RP_NAME").ok();
         clear_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         std::env::remove_var("WEBAUTHN_RP_ID");
         std::env::remove_var("WEBAUTHN_RP_ORIGIN");
@@ -349,7 +335,7 @@ mod tests {
         // W8f gate. This test pins the non-production happy path.
         let s = snap();
         clear_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let r = WebauthnService::new("example.com", "https://example.com", "Test");
         restore(s);
         assert!(

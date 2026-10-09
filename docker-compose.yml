@@ -125,7 +125,7 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       # Topology invariants (literal — must NOT be overridable to an insecure
       # value): this stack always runs co-located behind Cloudflare->Traefik.
-      RUST_ENV: production
+      APP_ENV: production
       # Verified client IP behind Cloudflare->Traefik. Origin ingress MUST be
       # restricted to Cloudflare ranges (see deploy/README.md) — the api trusts
       # this header, so only the network path can keep it unforgeable.

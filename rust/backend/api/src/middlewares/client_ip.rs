@@ -358,11 +358,11 @@ mod tests {
 
     #[tokio::test]
     async fn production_rejects_external_request_missing_cf_header() {
-        // RUST_ENV=production flips the gate: an external request without
+        // APP_ENV=production flips the gate: an external request without
         // CF-Connecting-IP is rejected (400), never collapsed into 'unknown'.
         let _g = env_lock();
-        let prev = std::env::var("RUST_ENV").ok();
-        std::env::set_var("RUST_ENV", "production");
+        let prev = std::env::var("APP_ENV").ok();
+        std::env::set_var("APP_ENV", "production");
 
         let app = echo_identity_router();
 
@@ -391,8 +391,8 @@ mod tests {
         assert_eq!(with_cf.status(), axum::http::StatusCode::OK);
 
         match prev {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 
@@ -401,8 +401,8 @@ mod tests {
         // An invalid token must not buy internal treatment; without a CF header
         // the request is treated as external and rejected in production.
         let _g = env_lock();
-        let prev = std::env::var("RUST_ENV").ok();
-        std::env::set_var("RUST_ENV", "production");
+        let prev = std::env::var("APP_ENV").ok();
+        std::env::set_var("APP_ENV", "production");
 
         let app = router_with_token("real-secret");
         let resp = app
@@ -417,8 +417,8 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
 
         match prev {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 
@@ -427,8 +427,8 @@ mod tests {
         // /healthz and /quran/health/ready stay exempt even in production: the
         // Docker healthcheck carries no CF header and must not be rejected.
         let _g = env_lock();
-        let prev = std::env::var("RUST_ENV").ok();
-        std::env::set_var("RUST_ENV", "production");
+        let prev = std::env::var("APP_ENV").ok();
+        std::env::set_var("APP_ENV", "production");
 
         let app: Router = Router::new()
             .route("/healthz", get(|| async { "ok" }))
@@ -455,8 +455,8 @@ mod tests {
         }
 
         match prev {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 

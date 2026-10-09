@@ -329,12 +329,12 @@ mod tests {
     fn field_enc_key_prod_rejects_dev_default_value() {
         let _g = crate::config::settings::TEST_ENV_MUTEX.lock().unwrap();
         let prev = std::env::var("FIELD_ENC_KEY").ok();
-        let prev_env = std::env::var("RUST_ENV").ok();
+        let prev_env = std::env::var("APP_ENV").ok();
         std::env::set_var(
             "FIELD_ENC_KEY",
             String::from_utf8(FIELD_ENC_KEY_DEV_DEFAULT.to_vec()).unwrap(),
         );
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
 
         let result = std::panic::catch_unwind(derive_field_enc_key);
         assert!(
@@ -347,8 +347,8 @@ mod tests {
             None => std::env::remove_var("FIELD_ENC_KEY"),
         }
         match prev_env {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 
@@ -356,10 +356,10 @@ mod tests {
     fn field_enc_key_accepts_32_byte_value() {
         let _g = crate::config::settings::TEST_ENV_MUTEX.lock().unwrap();
         let prev = std::env::var("FIELD_ENC_KEY").ok();
-        let prev_env = std::env::var("RUST_ENV").ok();
+        let prev_env = std::env::var("APP_ENV").ok();
         let key: Vec<u8> = (1..=32u8).collect();
         std::env::set_var("FIELD_ENC_KEY", String::from_utf8(key.clone()).unwrap());
-        std::env::set_var("RUST_ENV", "test");
+        std::env::set_var("APP_ENV", "test");
 
         let loaded = derive_field_enc_key();
         assert_eq!(loaded.as_slice(), key.as_slice());
@@ -369,8 +369,8 @@ mod tests {
             None => std::env::remove_var("FIELD_ENC_KEY"),
         }
         match prev_env {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 

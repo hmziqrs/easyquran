@@ -3,10 +3,10 @@ use ipnet::IpNet;
 
 use crate::config::env::{env_bool, env_u64, env_u8, env_with_fallback};
 
-// ONE production gate. Precedence: RUST_ENV -> NODE_ENV -> APP_ENV (first set
-// wins). `production` is production; development|dev|test|testing|ci|local are
-// non-production; unset/unknown is a configuration error outside tests (cfg!test
-// reads unset/unknown as non-production so unit tests need not seed the env).
+// ONE production gate, ONE variable: APP_ENV. `production` is production;
+// development|dev|test|testing|ci|local are non-production; unset/unknown is a
+// configuration error outside tests (cfg!test reads unset/unknown as
+// non-production so unit tests need not seed the env).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnvClass {
     Production,
@@ -16,10 +16,7 @@ pub enum EnvClass {
 }
 
 pub fn env_class() -> EnvClass {
-    let raw = std::env::var("RUST_ENV")
-        .or_else(|_| std::env::var("NODE_ENV"))
-        .or_else(|_| std::env::var("APP_ENV"))
-        .ok();
+    let raw = std::env::var("APP_ENV").ok();
     match raw.as_deref().map(str::trim) {
         None => EnvClass::Unset,
         Some("production") => EnvClass::Production,
@@ -36,16 +33,12 @@ pub fn is_production() -> Result<bool, String> {
         EnvClass::NonProduction => Ok(false),
         EnvClass::Unset if cfg!(test) => Ok(false),
         EnvClass::Unknown if cfg!(test) => Ok(false),
-        EnvClass::Unset => Err(
-            "RUST_ENV/NODE_ENV/APP_ENV is unset. Set RUST_ENV=production (or one of \
+        EnvClass::Unset => Err("APP_ENV is unset. Set APP_ENV=production (or one of \
              development|dev|test|testing|ci|local)."
-                .to_string(),
-        ),
-        EnvClass::Unknown => Err(
-            "RUST_ENV/NODE_ENV/APP_ENV has an unknown value. Use production or one of \
+            .to_string()),
+        EnvClass::Unknown => Err("APP_ENV has an unknown value. Use production or one of \
              development|dev|test|testing|ci|local."
-                .to_string(),
-        ),
+            .to_string()),
     }
 }
 
@@ -937,12 +930,10 @@ mod tests {
     }
 
     // --- serialized env tests for is_production / env_class -------------------
-    // All env-touching tests hold TEST_ENV_MUTEX so RUST_ENV/NODE_ENV/APP_ENV
-    // never race (state.rs field_enc_key tests take the same lock).
+    // All env-touching tests hold TEST_ENV_MUTEX so APP_ENV never races
+    // (state.rs field_enc_key tests take the same lock).
 
     struct EnvSnapshot {
-        rust_env: Option<String>,
-        node_env: Option<String>,
         app_env: Option<String>,
         ip_source: Option<String>,
         internal_token: Option<String>,
@@ -954,8 +945,6 @@ mod tests {
 
     fn snapshot_env() -> EnvSnapshot {
         EnvSnapshot {
-            rust_env: std::env::var("RUST_ENV").ok(),
-            node_env: std::env::var("NODE_ENV").ok(),
             app_env: std::env::var("APP_ENV").ok(),
             ip_source: std::env::var("IP_SOURCE").ok(),
             internal_token: std::env::var("INTERNAL_QURAN_API_TOKEN").ok(),
@@ -968,8 +957,6 @@ mod tests {
 
     fn clear_env_vars() {
         for k in [
-            "RUST_ENV",
-            "NODE_ENV",
             "APP_ENV",
             "IP_SOURCE",
             "INTERNAL_QURAN_API_TOKEN",
@@ -983,14 +970,6 @@ mod tests {
     }
 
     fn restore_env(snap: EnvSnapshot) {
-        match snap.rust_env {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
-        }
-        match snap.node_env {
-            Some(v) => std::env::set_var("NODE_ENV", v),
-            None => std::env::remove_var("NODE_ENV"),
-        }
         match snap.app_env {
             Some(v) => std::env::set_var("APP_ENV", v),
             None => std::env::remove_var("APP_ENV"),
@@ -1022,26 +1001,13 @@ mod tests {
     }
 
     #[test]
-    fn env_class_reads_rust_env_first() {
+    fn env_class_reads_app_env() {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
-        std::env::set_var("NODE_ENV", "development");
-        std::env::set_var("APP_ENV", "development");
+        std::env::set_var("APP_ENV", "production");
         assert_eq!(env_class(), EnvClass::Production);
         assert!(is_production().unwrap());
-        restore_env(snap);
-    }
-
-    #[test]
-    fn env_class_falls_through_to_app_env() {
-        let _g = TEST_ENV_MUTEX.lock().unwrap();
-        let snap = snapshot_env();
-        clear_env_vars();
-        std::env::set_var("APP_ENV", "development");
-        assert_eq!(env_class(), EnvClass::NonProduction);
-        assert!(!is_production().unwrap());
         restore_env(snap);
     }
 
@@ -1051,7 +1017,7 @@ mod tests {
         let snap = snapshot_env();
         for v in ["dev", "test", "testing", "ci", "local", "development"] {
             clear_env_vars();
-            std::env::set_var("RUST_ENV", v);
+            std::env::set_var("APP_ENV", v);
             assert_eq!(env_class(), EnvClass::NonProduction, "value: {v}");
             assert!(!is_production().unwrap(), "value: {v}");
         }
@@ -1075,7 +1041,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "staging-xyz");
+        std::env::set_var("APP_ENV", "staging-xyz");
         assert_eq!(env_class(), EnvClass::Unknown);
         // cfg!(test) reads Unknown as non-production (never silently production).
         assert!(!is_production().unwrap());
@@ -1087,7 +1053,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "ConnectInfo");
         let err = HttpSettings::from_env().expect_err("prod + ConnectInfo must error");
         assert!(
@@ -1102,7 +1068,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "CfConnectingIp");
         let s = HttpSettings::from_env().expect("prod + CfConnectingIp must succeed");
         assert!(matches!(s.ip_source, ClientIpSource::CfConnectingIp));
@@ -1114,7 +1080,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         std::env::set_var("IP_SOURCE", "ConnectInfo");
         let s = HttpSettings::from_env().expect("dev + ConnectInfo must succeed");
         assert!(matches!(s.ip_source, ClientIpSource::ConnectInfo));
@@ -1126,7 +1092,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         std::env::set_var("IP_SOURCE", "cf-connecting-ip");
         let err = HttpSettings::from_env().expect_err("lowercase cf-connecting-ip must not parse");
         assert!(err.contains("Invalid IP_SOURCE"), "got: {err}");
@@ -1138,7 +1104,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         let err = RateLimitSettings::from_env().expect_err("prod must require internal token");
         assert!(err.contains("INTERNAL_QURAN_API_TOKEN"), "got: {err}");
         restore_env(snap);
@@ -1149,7 +1115,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var(
             "INTERNAL_QURAN_API_TOKEN",
             "prod-internal-token-0123456789abcdef0123",
@@ -1170,7 +1136,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("INTERNAL_QURAN_API_TOKEN", "CHANGE_ME_openssl_rand_hex_32");
         let err =
             RateLimitSettings::from_env().expect_err("shipped placeholder must fail boot in prod");
@@ -1183,7 +1149,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("INTERNAL_QURAN_API_TOKEN", "short-but-nonempty-token");
         let err = RateLimitSettings::from_env().expect_err("short token must fail boot in prod");
         assert!(err.contains("32"), "got: {err}");
@@ -1195,7 +1161,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var(
             "INTERNAL_QURAN_API_TOKEN",
             "9f3a7c1e4b6d820f5a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f",
@@ -1260,7 +1226,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         std::env::remove_var("TRUSTED_PROXY_CIDRS");
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "CfConnectingIp");
         let s = HttpSettings::from_env().expect("unset list must keep presence-only behavior");
         assert!(s.trusted_proxy_cidrs.is_empty());
@@ -1272,7 +1238,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "CfConnectingIp");
         std::env::set_var("TRUSTED_PROXY_CIDRS", "10.0.0.0/8,fd00::/8");
         let s = HttpSettings::from_env().expect("valid CIDR list must boot");
@@ -1285,7 +1251,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let s = RateLimitSettings::from_env().expect("dev must accept missing internal token");
         assert_eq!(s.internal_token, "");
         restore_env(snap);
@@ -1320,7 +1286,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var(
             "ALLOWED_ORIGINS",
             "https://easyquran.fyi,https://hmziq.rs,https://hzmiqrs.com,https://blog.hmziq.rs",
@@ -1344,7 +1310,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         // Every byte is printable ASCII, so this parses cleanly — but the
         // ${...} placeholder must still fail boot before any login is rejected.
         std::env::set_var("ALLOWED_ORIGINS", "https://${DOMAIN}");
@@ -1373,7 +1339,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let cfg = EscalationConfig::from_env(2_000).unwrap();
         assert!(!cfg.enabled, "escalation must default to OFF");
         assert!(cfg.allowlist.is_empty());
@@ -1392,7 +1358,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         std::env::set_var("QURAN_BAN_ESCALATION_ENABLED", "true");
         let err =
             EscalationConfig::from_env(2_000).expect_err("enabled + unset allowlist must fail");
@@ -1406,7 +1372,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         std::env::set_var("QURAN_BAN_ESCALATION_ENABLED", "true");
         std::env::set_var("QURAN_BAN_ALLOWLIST", "");
         let cfg = EscalationConfig::from_env(2_000).unwrap();
@@ -1421,7 +1387,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let err = parse_allowlist("not-a-cidr").expect_err("garbage must not parse");
         assert!(err.contains("invalid CIDR"), "got: {err}");
         restore_env(snap);
@@ -1433,7 +1399,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let err = parse_allowlist("2001:db8::1/128").expect_err("/128 must be rejected");
         assert!(err.contains("narrower than /64"), "got: {err}");
         // /64 and broader (0..=64) are accepted.
@@ -1448,7 +1414,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_escalation_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let nets = parse_allowlist("203.0.113.0/24, 2001:db8::/64,198.51.100.5/32").unwrap();
         assert_eq!(nets.len(), 3);
         restore_env(snap);
@@ -1507,7 +1473,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         let cfg = WebAuthSettings::from_env().expect("defaults must succeed");
         assert!(!cfg.enabled, "WEB_AUTH_ENABLED must default to false");
         assert!(cfg.oauth_providers.is_empty());
@@ -1521,7 +1487,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         std::env::set_var("WEB_OAUTH_PROVIDERS", "google, github");
         std::env::set_var("GOOGLE_CLIENT_ID", "g");
         std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
@@ -1548,7 +1514,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "none");
         let err = WebAuthSettings::from_env().expect_err("prod+auth+MAIL=none must fail");
@@ -1562,7 +1528,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1578,7 +1544,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1600,7 +1566,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1648,7 +1614,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1669,7 +1635,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1694,7 +1660,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1718,7 +1684,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1737,7 +1703,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1755,7 +1721,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         set_valid_smtp_mail();
@@ -1773,7 +1739,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         // MAIL_FROM_ADDRESS intentionally left unset; from-name + smtp creds set
@@ -1793,7 +1759,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
@@ -1812,7 +1778,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smtp");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
@@ -1829,7 +1795,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "cloudflare");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
@@ -1850,7 +1816,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "smptp");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
@@ -1871,7 +1837,7 @@ mod tests {
         let snap = snapshot_env();
         clear_env_vars();
         clear_web_auth_env();
-        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("APP_ENV", "production");
         std::env::set_var("WEB_AUTH_ENABLED", "true");
         std::env::set_var("MAIL_PROVIDER", "cloudflare");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");

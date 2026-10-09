@@ -71,7 +71,7 @@ where
                 .map(|matched| matched.as_str().to_string());
             let pattern = matched_pattern.clone().unwrap_or_else(|| path.clone());
 
-            // ONE production gate (RUST_ENV -> NODE_ENV -> APP_ENV). The blocker
+            // ONE production gate (APP_ENV). The blocker
             // is enabled in production; fail-closed on an unset/unknown env.
             let is_prod = crate::config::settings::is_production().unwrap_or(true);
             if !is_prod {
@@ -299,10 +299,10 @@ mod tests {
     #[tokio::test]
     async fn healthz_exempt_while_db_errors_fail_closed() {
         let _g = env_lock();
-        // RUST_ENV=production so the blocker is ENABLED, then prove /healthz
+        // APP_ENV=production so the blocker is ENABLED, then prove /healthz
         // still succeeds while a non-health private route fails closed (503).
-        let prev = std::env::var("RUST_ENV").ok();
-        std::env::set_var("RUST_ENV", "production");
+        let prev = std::env::var("APP_ENV").ok();
+        std::env::set_var("APP_ENV", "production");
 
         let state = state_with_broken_db().await;
         let app = app(state);
@@ -341,16 +341,16 @@ mod tests {
         );
 
         match prev {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 
     #[tokio::test]
     async fn blocker_disabled_in_non_production() {
         let _g = env_lock();
-        let prev = std::env::var("RUST_ENV").ok();
-        std::env::set_var("RUST_ENV", "development");
+        let prev = std::env::var("APP_ENV").ok();
+        std::env::set_var("APP_ENV", "development");
 
         let state = state_with_broken_db().await;
         let app = app(state);
@@ -367,8 +367,8 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
 
         match prev {
-            Some(v) => std::env::set_var("RUST_ENV", v),
-            None => std::env::remove_var("RUST_ENV"),
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
         }
     }
 }

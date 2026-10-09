@@ -89,7 +89,7 @@ impl TelemetryConfig {
 
 fn build_resource() -> Resource {
     // OTLP resource label only — nothing branches on it. Fed from the one
-    // env-class helper (RUST_ENV -> NODE_ENV -> APP_ENV) for consistency.
+    // env-class helper (APP_ENV) for consistency.
     let deployment_environment = match crate::config::settings::env_class() {
         crate::config::settings::EnvClass::Production => "production",
         crate::config::settings::EnvClass::NonProduction

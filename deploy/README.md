@@ -446,11 +446,11 @@ mailbox or a throwaway you can read), never a real user.
 ### Procedure
 
 1. **Keep production off.** On the production env class, leave `WEB_AUTH_ENABLED`
-   unset/false. The boot gate below runs only under `RUST_ENV=production` +
+   unset/false. The boot gate below runs only under `APP_ENV=production` +
    `WEB_AUTH_ENABLED=true`, so this smoke runs without touching it.
 
 2. **Stand up the mail stack on a non-production instance.** Point a staging
-   container (or a local `cargo run --bin ruxlog` with `RUST_ENV=development`)
+   container (or a local `cargo run --bin ruxlog` with `APP_ENV=development`)
    at the _same_ mail config production will use:
    - `MAIL_PROVIDER=smtp` (or `cloudflare`) + the real credentials
      (`SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`, or
@@ -518,12 +518,12 @@ mail with SPF+DKIM pass.
   requirement (add swap on smaller boxes) applies only if you build images on the box itself.
 - Env normalization: the production `.env` is intentionally minimal (5 required
   vars — see `deploy/.env.example`). Everything else is a co-location invariant
-  hardcoded in `docker-compose.yml` (`RUST_ENV`, `IP_SOURCE`,
+  hardcoded in `docker-compose.yml` (`APP_ENV`, `IP_SOURCE`,
   `INTERNAL_QURAN_API_BASE`), an interpolated compose default overridable via
   `.env` (the `S3_*` dummies, `MAIL_*`, proxy topology, all `QURAN_*` tuning), or
   a code default. `S3_*` / `MAIL_PROVIDER` set in the Dokploy env tab override
   the compose dummies when media/auth are wired — no compose edit needed.
 - `just docker-up prod` (root `.env`, no local override) boots the api with
-  `RUST_ENV=production` and so fails closed unless the root `.env` carries real
+  `APP_ENV=production` and so fails closed unless the root `.env` carries real
   `COOKIE_KEY` / `FIELD_ENC_KEY` / `INTERNAL_QURAN_API_TOKEN` / `ALLOWED_ORIGINS`.
   Use the Dokploy flow for production; use `just docker-up local` for local dev.
