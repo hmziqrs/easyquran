@@ -54,7 +54,9 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
   `scripts/quran/build-uthmani-annotated.ts`; registered as source id
   `uthmani-annotated` and the reader default (`DEFAULT_QURAN_SOURCE_PLAN.reader`), while Arabic
   search stays on the plain Tanzil corpus. Dev/CI provisioning knows it
-  (`deploy/fetch-quran-db.sh`); deployed-server provisioning does not yet.
+  (`deploy/fetch-quran-db.sh`); deployed-server provisioning
+  (`deploy/provision-quran.sh`) fetches it too once the R2 object exists, and
+  skips it while the object 404s.
 - All five expose `quran_text("index", sura, aya, text)` with 6,236 contiguous rows. They are
   read directly and read-only; no consolidated canonical DB is built. Tanzil Uthmani and
   simple-clean embed the bismillah in first ayahs; the IndoPak/Tajweed variants and the

@@ -32,6 +32,7 @@ services:
     container_name: ${PROJECT:-easyquran}_quran-init
     user: "0:0"
     entrypoint: ["/app/provision-quran.sh"]
+    env_file: [.env]
     volumes:
       - ${QURAN_DB_DIR:-quran_data}:/app/quran
     restart: "no"

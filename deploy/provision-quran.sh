@@ -32,6 +32,24 @@ get() {
   echo "  got $key"
 }
 
+# Optional object: still 404 until the artifact is published to R2 (annotated
+# Uthmani); a present local copy is always kept and asserted by the caller.
+get_optional() {
+  local key="$1" out="$2"
+  if [ -s "$out" ] && [ "${FORCE:-0}" != "1" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$out")"
+  if curl -fsSL --retry 3 --retry-connrefused -o "$out.part" "$BASE/$key"; then
+    mv "$out.part" "$out"
+    echo "  got $key"
+    return 0
+  fi
+  rm -f "$out.part"
+  echo "  skip $key (not published yet)"
+  return 1
+}
+
 assert_sqlite() {
   if [ "$(head -c 15 "$1")" != "SQLite format 3" ]; then
     echo "✗ $1 is not a SQLite database" >&2
@@ -70,6 +88,10 @@ write_catalogue() {
 
 echo "$BASE → $DEST"
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
+if get_optional "tanzil/arabic/quran-uthmani-annotated.sqlite" "$DEST/arabic/quran-uthmani-annotated.sqlite"; then
+  assert_sqlite "$DEST/arabic/quran-uthmani-annotated.sqlite"
+  assert_size "$DEST/arabic/quran-uthmani-annotated.sqlite" 1605632
+fi
 get "tanzil/arabic/quran-simple-clean.sqlite" "$DEST/arabic/quran-simple-clean.sqlite"
 get "tanzil/arabic/quran-indopak.sqlite" "$DEST/arabic/quran-indopak.sqlite"
 get "tanzil/arabic/quran-tajweed.sqlite" "$DEST/arabic/quran-tajweed.sqlite"
