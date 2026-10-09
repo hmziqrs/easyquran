@@ -41,6 +41,10 @@ const h = vi.hoisted(() => {
       state: {},
     },
     replaceState: vi.fn(),
+    // The reader's detected countries (timezone + language-tag regions). Mocked
+    // so rail order never depends on the test machine's timezone.
+    // SAFETY: the empty literal only widens to the string[] detectCountries returns; tests assign country codes.
+    countries: [] as string[],
     readerStub: {
       isVerseMode: true,
       isReadingMode: false,
@@ -57,6 +61,10 @@ vi.mock("#lib/paraglide/runtime.js", async (importOriginal) => {
   // Mirrors the real deLocalizeUrl contract (string | URL in, URL out) — the
   // live-position helper passes window.location.href as a string.
   return { ...actual, deLocalizeUrl: (url: URL | string) => new URL(url) };
+});
+vi.mock("../translation-region", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../translation-region")>();
+  return { ...actual, detectCountries: () => h.countries };
 });
 vi.mock("#lib/hotkeys.svelte.js", () => ({
   registerHotkey: () => ({ unregister: () => {} }),
@@ -123,6 +131,7 @@ const originalScrollIntoView: ((arg?: boolean | ScrollIntoViewOptions) => void) 
 let scrolledIntoView: Element[] = [];
 
 beforeEach(() => {
+  h.countries = [];
   h.readerStub.isVerseMode = true;
   h.readerStub.isReadingMode = false;
   h.nav.url = new URL("https://example.test/al-fatihah");
@@ -213,14 +222,13 @@ async function open(): Promise<void> {
 }
 
 describe("TranslationModal — master-detail layout", () => {
-  it("renders the language rail with Arabic pinned, English second, then the alphabetical tail", async () => {
+  it("renders the rail as the suggested head, a divider, then the alphabetical tail", async () => {
     await open();
-    // jsdom's default navigator.languages is ["en-US"], so the only boost
-    // (en) is already pinned — the visible order is Arabic, English, then
-    // alphabetical (U21 priority sort).
+    // jsdom's default navigator.languages is ["en-US"] and no country is
+    // detected: the head is the preferred language (English) then Arabic.
     expect(railNames()).toEqual([
-      "Arabic",
       "English",
+      "Arabic",
       "French",
       "Indonesian",
       "Malay",
@@ -236,9 +244,16 @@ describe("TranslationModal — master-detail layout", () => {
     expect(english?.className).toContain("h-11");
     expect(english?.className).toContain("md:h-9");
     expect(english?.className).toContain("flex-none");
+    // one hairline between the suggested head and the A–Z tail
+    const dividers = [...document.querySelectorAll("[data-language-rail] [data-rail-divider]")];
+    expect(dividers).toHaveLength(1);
+    expect(dividers[0]?.previousElementSibling?.getAttribute("data-language-option")).toBe(
+      "Arabic",
+    );
+    expect(dividers[0]?.nextElementSibling?.getAttribute("data-language-option")).toBe("French");
   });
 
-  it("boosts the user's browser languages after Arabic and English", async () => {
+  it("ranks the preferred language, English, other browser languages, the country's, then Arabic", async () => {
     // SAFETY: configurable in jsdom so the stub restores cleanly; the modal
     // only reads navigator.languages inside onMount (client-only, SSR-safe).
     const originalLanguages = navigator.languages;
@@ -246,18 +261,22 @@ describe("TranslationModal — master-detail layout", () => {
       value: ["tr", "ur-PK", "zz-XX"],
       configurable: true,
     });
+    // timezone says Malaysia: its languages follow the browser's own
+    h.countries = ["MY"];
     try {
       await open();
       expect(railNames()).toEqual([
-        "Arabic",
-        "English",
         "Turkish",
+        "English",
         "Urdu",
+        "Malay",
+        "Arabic",
         "French",
         "Indonesian",
-        "Malay",
         "Spanish",
       ]);
+      // and the modal opens on the preferred language
+      expect(pane().querySelector("h3")?.textContent).toContain("Turkish");
     } finally {
       Object.defineProperty(navigator, "languages", {
         value: originalLanguages,
@@ -300,7 +319,7 @@ describe("TranslationModal — master-detail layout", () => {
   });
 
   it("scrolls the selected rail row into view (open auto-select and keyboard moves)", async () => {
-    // The Arabic default is already visible at the rail's top, so the
+    // The English default is already visible at the rail's top, so the
     // auto-select scroll needs an anchor far down: Reading's picker anchors
     // on the text it flows (Urdu), which sits last in the fixture rail.
     const onPick = vi.fn();
@@ -320,7 +339,7 @@ describe("TranslationModal — master-detail layout", () => {
     english?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     await settle();
     const scrolledOnKey = scrolledIntoView.map((el) => el.getAttribute("data-language-option"));
-    expect(scrolledOnKey).toContain("French");
+    expect(scrolledOnKey).toContain("Arabic");
   });
 
   it("pluralizes the count line: 4 translations vs 1 translation", async () => {
@@ -351,10 +370,11 @@ describe("TranslationModal — master-detail layout", () => {
     expect(document.activeElement).toBe(english);
     english?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     await settle();
-    const french = railOption("French");
-    expect(document.activeElement).toBe(french);
-    expect(french?.getAttribute("aria-current")).toBe("true");
-    french?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    // the divider is not a stop: arrows move option to option
+    const arabic = railOption("Arabic");
+    expect(document.activeElement).toBe(arabic);
+    expect(arabic?.getAttribute("aria-current")).toBe("true");
+    arabic?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     await settle();
     expect(document.activeElement).toBe(english);
     expect(english?.getAttribute("aria-current")).toBe("true");

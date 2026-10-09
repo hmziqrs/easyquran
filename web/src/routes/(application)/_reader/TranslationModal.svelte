@@ -30,6 +30,7 @@
   import { hrefFor, liveReaderPosition } from "./translation-nav";
   import type { ReadPick } from "./reading-flow";
   import { translationMatchesQuery } from "./translation-search";
+  import { detectCountries, languagePriority } from "./translation-region";
 
   type LanguageGroup = {
     language: string;
@@ -92,11 +93,11 @@
     }
   });
 
-  // Client-only browser languages for the rail's priority sort (see
-  // browserBoostCodes above). onMount never runs on the server, so the SSR
-  // render stays alphabetical and hydration cannot mismatch.
+  // Client-only reader signals for the rail's priority sort (see
+  // priorityCodes below). onMount never runs on the server, so the SSR render
+  // keeps the signal-free order and hydration cannot mismatch.
   onMount(() => {
-    browserBoostCodes = browserLanguageCodes(navigator.languages);
+    priorityCodes = languagePriority(navigator.languages, detectCountries());
   });
 
   // Auto-select the rail language on open, where the reader most likely wants
@@ -111,7 +112,7 @@
   });
 
   function defaultLanguage(): string | null {
-    for (const code of [...browserBoostCodes, "en"]) {
+    for (const code of priorityCodes) {
       const group = languages.find((l) => l.code === code);
       if (group) return group.language;
     }
@@ -177,32 +178,22 @@
       .sort((a, b) => languageCollator.compare(a.language, b.language));
   }
 
-  // Browser-language boost for the rail's priority order (U21). Read in
-  // onMount only: navigator does not exist during SSR, and assigning it there
-  // keeps the server render alphabetical — the derived below re-sorts after
-  // hydration with zero mismatch risk (same mounted-gate approach as
-  // ReaderShell's client-only state).
-  let browserBoostCodes = $state.raw<string[]>([]);
+  // Rail priority as language codes (translation-region.ts): the reader's
+  // first browser language, English, their other browser languages, the
+  // languages of the country their timezone / language tags point to, then
+  // Arabic. Starts signal-free (English, Arabic) so SSR and the first client
+  // render agree; onMount swaps in the reader's own signals.
+  let priorityCodes = $state.raw<string[]>(languagePriority([], []));
 
-  // navigator.languages → deduped base language codes ("ur-PK" → "ur").
-  // Unknown codes simply never match a group, so no catalogue filtering here.
-  function browserLanguageCodes(languages: readonly string[]): string[] {
-    const codes: string[] = [];
-    for (const tag of languages) {
-      const base = (tag.split("-")[0] ?? "").toLowerCase();
-      if (base !== "" && !codes.includes(base)) codes.push(base);
-    }
-    return codes;
-  }
-
-  // Rail priority (U21): Arabic always first, English second, then the user's
-  // browser languages in their stated preference order, then alphabetical.
+  // Codes not in the priority list rank after it, alphabetically.
   function railRank(group: LanguageGroup): number {
-    if (group.code === "ar") return 0;
-    if (group.code === "en") return 1;
-    const boostIndex = browserBoostCodes.indexOf(group.code);
-    if (boostIndex !== -1) return 2 + boostIndex;
+    const index = priorityCodes.indexOf(group.code);
+    if (index !== -1) return index;
     return Number.MAX_SAFE_INTEGER;
+  }
+  // The suggested head of the rail, set off from the A–Z tail by a hairline.
+  function isSuggested(group: LanguageGroup | undefined): boolean {
+    return group !== undefined && priorityCodes.includes(group.code);
   }
 
   function compareRailGroups(a: LanguageGroup, b: LanguageGroup): number {
@@ -731,6 +722,9 @@
         >
           {#each languages as l, i (l.language)}
             {@const active = l.language === activeLanguage}
+            {#if i > 0 && isSuggested(languages[i - 1]) && !isSuggested(l)}
+              <div data-rail-divider class="mx-2.5 my-1.5 h-px flex-none bg-border" aria-hidden="true"></div>
+            {/if}
             <!-- One line per language: flag, name, autonym (muted, truncating),
                  an in-use dot when one of its translations is selected, count. -->
             <button
