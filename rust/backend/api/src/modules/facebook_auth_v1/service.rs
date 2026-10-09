@@ -2,6 +2,7 @@ use oauth2::basic::BasicClient;
 use oauth2::{AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl, TokenUrl};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::oauth::redirect_uri;
 
 pub const FACEBOOK_GRAPH_API_VERSION: &str = "v26.0";
 
@@ -45,10 +46,7 @@ pub type FacebookClient =
 
 pub fn get_facebook_oauth_client() -> Result<FacebookClient, ErrorResponse> {
     let credentials = load_facebook_credentials()?;
-    let redirect_url = std::env::var("FACEBOOK_REDIRECT_URI").map_err(|_| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("FACEBOOK_REDIRECT_URI not configured")
-    })?;
+    let redirect_url = redirect_uri("FACEBOOK_REDIRECT_URI", "facebook")?;
 
     let auth_url = AuthUrl::new(facebook_web_url("dialog/oauth")).map_err(|e| {
         ErrorResponse::new(ErrorCode::InternalServerError)

@@ -10,22 +10,21 @@ so a green run proves our state/CSRF + PKCE + token-exchange path works.
 # 1. Fake provider (GitHub + Discord + Google on one port)
 node scripts/auth-sandbox/oauth-provider.mjs --port 8090
 
-# 2. API with sandbox overrides (development only; production ignores them)
+# 2. API with sandbox overrides (development only; production ignores them).
+#    Redirect URIs / allowed origins / WebAuthn RP derive from FRONTEND_URL —
+#    unset, dev defaults to http://localhost:5173, so only the fake-provider
+#    base URLs are needed here.
 cd rust
 set -a && . ../.env && set +a
 RUST_ENV=development WEB_AUTH_ENABLED=true WEB_OAUTH_PROVIDERS=github,discord,google \
 GITHUB_CLIENT_ID=sandbox-gh-client GITHUB_CLIENT_SECRET=sandbox-gh-secret \
-GITHUB_REDIRECT_URI=http://localhost:5173/api/auth/github/v1/callback \
 GITHUB_OAUTH_BASE_URL=http://127.0.0.1:8090 GITHUB_API_BASE_URL=http://127.0.0.1:8090 \
 DISCORD_CLIENT_ID=sandbox-dc-client DISCORD_CLIENT_SECRET=sandbox-dc-secret \
-DISCORD_REDIRECT_URI=http://localhost:5173/api/auth/discord/v1/callback \
 DISCORD_OAUTH_BASE_URL=http://127.0.0.1:8090 DISCORD_API_BASE_URL=http://127.0.0.1:8090/api \
 GOOGLE_CLIENT_ID=sandbox-google-client GOOGLE_CLIENT_SECRET=sandbox-google-secret \
-GOOGLE_REDIRECT_URI=http://localhost:5173/api/auth/google/v1/callback \
 GOOGLE_AUTH_BASE_URL=http://127.0.0.1:8090 GOOGLE_TOKEN_BASE_URL=http://127.0.0.1:8090 \
 GOOGLE_JWKS_URL=http://127.0.0.1:8090/oauth2/v3/certs \
 GOOGLE_USERINFO_URL=http://127.0.0.1:8090/oauth2/v2/userinfo \
-FRONTEND_URL=http://localhost:5173 OAUTH_ALLOWED_REDIRECT_ORIGINS=http://localhost:5173 \
 cargo run -p ruxlog
 
 # 3. Web dev server (separate shell)

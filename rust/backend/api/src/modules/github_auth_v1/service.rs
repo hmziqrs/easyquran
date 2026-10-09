@@ -3,6 +3,7 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, Redir
 
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::services::oauth;
+use crate::services::oauth::redirect_uri;
 
 const GITHUB_DEFAULT_OAUTH_BASE: &str = "https://github.com";
 const GITHUB_DEFAULT_API_BASE: &str = "https://api.github.com";
@@ -41,10 +42,7 @@ pub type GithubClient =
 
 pub fn get_github_oauth_client() -> Result<GithubClient, ErrorResponse> {
     let credentials = load_github_credentials()?;
-    let redirect_url = std::env::var("GITHUB_REDIRECT_URI").map_err(|_| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("GITHUB_REDIRECT_URI not configured")
-    })?;
+    let redirect_url = redirect_uri("GITHUB_REDIRECT_URI", "github")?;
 
     let auth_url =
         AuthUrl::new(format!("{}/login/oauth/authorize", github_oauth_base())).map_err(|e| {

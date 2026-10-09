@@ -571,14 +571,10 @@ impl WebAuthSettings {
                 }
             }
             // Redirect-origin match: each provider callback origin must be in the
-            // allowed list or equal FRONTEND_URL.
-            let allowed: Vec<String> = std::env::var("OAUTH_ALLOWED_REDIRECT_ORIGINS")
-                .unwrap_or_default()
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            let frontend_origin = origin_of(&std::env::var("FRONTEND_URL").unwrap_or_default());
+            // allowed list or equal FRONTEND_URL. Both default to the frontend
+            // origin when unset — FRONTEND_URL is the one site-URL knob.
+            let allowed = oauth_allowed_redirect_origins();
+            let frontend_origin = frontend_origin().unwrap_or_default();
             // W8F-3: OAuth redirects must never cross to an http:// origin — the
             // authorization code + session cookie would traverse cleartext. Reject
             // any non-HTTPS entry in the allowlist or FRONTEND_URL before the
@@ -599,15 +595,10 @@ impl WebAuthSettings {
                      https:// origins"
                 ));
             }
-            // Presence gate: the HTTPS-scheme check above is a no-op when FRONTEND_URL
-            // is unset/empty (empty origin parses as neither http:// nor https://). An
-            // absent FRONTEND_URL boots successfully then breaks every OAuth
-            // success/failure redirect at runtime, so reject it explicitly here.
-            if std::env::var("FRONTEND_URL")
-                .unwrap_or_default()
-                .trim()
-                .is_empty()
-            {
+            // Presence gate: an absent FRONTEND_URL boots successfully then breaks
+            // every OAuth success/failure redirect at runtime, so reject it
+            // explicitly here. (frontend_url() has no dev fallback in production.)
+            if frontend_url().is_none() {
                 return Err(
                     "Production with WEB_AUTH_ENABLED=true requires FRONTEND_URL to be set \
                      (the OAuth success/failure redirect target; without it every post-login \
@@ -618,6 +609,11 @@ impl WebAuthSettings {
             for p in &oauth_providers {
                 let rk = provider_redirect_key(p);
                 let redirect = std::env::var(rk).unwrap_or_default();
+                if redirect.trim().is_empty() {
+                    // Unset → derived from FRONTEND_URL as
+                    // {origin}/api/auth/{provider}/v1/callback; already https + origin-matched.
+                    continue;
+                }
                 // W8F-R2: an explicit https:// scheme gate on the raw redirect URI.
                 // origin_of returns "" for a scheme-less value (e.g. "host/cb"), and
                 // the membership test below is gated on !origin.is_empty(), so a
@@ -651,32 +647,11 @@ impl WebAuthSettings {
 
 fn provider_required_keys(p: &str) -> &'static [&'static str] {
     match p {
-        "google" => &[
-            "GOOGLE_CLIENT_ID",
-            "GOOGLE_CLIENT_SECRET",
-            "GOOGLE_REDIRECT_URI",
-        ],
-        "apple" => &[
-            "APPLE_CLIENT_ID",
-            "APPLE_TEAM_ID",
-            "APPLE_KEY_ID",
-            "APPLE_REDIRECT_URI",
-        ],
-        "facebook" => &[
-            "FACEBOOK_CLIENT_ID",
-            "FACEBOOK_CLIENT_SECRET",
-            "FACEBOOK_REDIRECT_URI",
-        ],
-        "github" => &[
-            "GITHUB_CLIENT_ID",
-            "GITHUB_CLIENT_SECRET",
-            "GITHUB_REDIRECT_URI",
-        ],
-        "discord" => &[
-            "DISCORD_CLIENT_ID",
-            "DISCORD_CLIENT_SECRET",
-            "DISCORD_REDIRECT_URI",
-        ],
+        "google" => &["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+        "apple" => &["APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID"],
+        "facebook" => &["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"],
+        "github" => &["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
+        "discord" => &["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"],
         _ => &[],
     }
 }
@@ -745,6 +720,84 @@ fn origin_of(url: &str) -> String {
     } else {
         format!("{scheme}{host_port}")
     }
+}
+
+// ── One-knob site URL derivation ────────────────────────────────────────────
+// FRONTEND_URL is the single domain knob: OAuth callback URIs, allowed redirect
+// origins and WebAuthn RP values all default to it. Development falls back to
+// the local Vite origin, so local runs need no URL variables at all.
+
+/// `FRONTEND_URL` (trimmed), or the local dev origin outside production.
+pub fn frontend_url() -> Option<String> {
+    if let Ok(value) = std::env::var("FRONTEND_URL") {
+        let value = value.trim().to_string();
+        if !value.is_empty() {
+            return Some(value);
+        }
+    }
+    if !matches!(env_class(), EnvClass::NonProduction) {
+        return None;
+    }
+    let port = std::env::var("CONSUMER_PORT")
+        .ok()
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .unwrap_or(5173);
+    Some(format!("http://localhost:{port}"))
+}
+
+/// scheme://host[:port] of [`frontend_url`], or an error message when unset/invalid.
+pub fn frontend_origin() -> Result<String, String> {
+    let url = frontend_url().ok_or_else(|| {
+        "FRONTEND_URL is not set (the single site URL: https://your-domain)".to_string()
+    })?;
+    let origin = origin_of(&url);
+    if origin.is_empty() {
+        return Err(format!(
+            "FRONTEND_URL '{url}' is not an absolute http(s) URL (e.g. https://example.com)"
+        ));
+    }
+    Ok(origin)
+}
+
+/// Explicit `OAUTH_ALLOWED_REDIRECT_ORIGINS` (comma-separated) or the frontend origin.
+pub fn oauth_allowed_redirect_origins() -> Vec<String> {
+    let explicit: Vec<String> = std::env::var("OAUTH_ALLOWED_REDIRECT_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .collect();
+    if !explicit.is_empty() {
+        return explicit;
+    }
+    frontend_origin()
+        .map(|origin| vec![origin])
+        .unwrap_or_default()
+}
+
+/// Provider callback URL: explicit env override, else derived from the frontend
+/// origin as `{origin}/api/auth/{provider}/v1/callback`.
+pub fn provider_redirect_uri(env_key: &str, provider: &str) -> Result<String, String> {
+    if let Ok(value) = std::env::var(env_key) {
+        let value = value.trim().to_string();
+        if !value.is_empty() {
+            return Ok(value);
+        }
+    }
+    let origin = frontend_origin().map_err(|error| format!("{env_key} is not set and {error}"))?;
+    Ok(format!("{origin}/api/auth/{provider}/v1/callback"))
+}
+
+/// WebAuthn Relying Party defaults derived from the frontend origin: the domain
+/// (`easyquran.fyi`) and the full origin (`https://easyquran.fyi`).
+pub fn webauthn_frontend_defaults() -> (Option<String>, Option<String>) {
+    let Some(origin) = frontend_origin().ok() else {
+        return (None, None);
+    };
+    let host = reqwest::Url::parse(&origin)
+        .ok()
+        .and_then(|url| url.host_str().map(|host| host.to_string()));
+    (host, Some(origin))
 }
 
 /// Do NOT add `derive(Debug)` — `cookie_key` is a raw secret and would leak.
@@ -1538,6 +1591,54 @@ mod tests {
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         let err = WebAuthSettings::from_env().expect_err("redirect-origin mismatch must fail");
         assert!(err.contains("GOOGLE_REDIRECT_URI"), "got: {err}");
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_boots_with_frontend_url_as_the_only_url_knob() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("RUST_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "smtp");
+        set_valid_smtp_mail();
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        std::env::set_var("WEB_OAUTH_PROVIDERS", "github,discord,google");
+        std::env::set_var("GITHUB_CLIENT_ID", "g");
+        std::env::set_var("GITHUB_CLIENT_SECRET", "s");
+        std::env::set_var("DISCORD_CLIENT_ID", "d");
+        std::env::set_var("DISCORD_CLIENT_SECRET", "s");
+        std::env::set_var("GOOGLE_CLIENT_ID", "o");
+        std::env::set_var("GOOGLE_CLIENT_SECRET", "s");
+        // No <PROVIDER>_REDIRECT_URI, no OAUTH_ALLOWED_REDIRECT_ORIGINS, no WEBAUTHN_*.
+        let cfg = WebAuthSettings::from_env().expect("derived URL config must boot");
+        assert!(cfg.enabled);
+        assert!(cfg.providers_status.iter().all(|p| p.ready));
+        assert_eq!(
+            provider_redirect_uri("GITHUB_REDIRECT_URI", "github").unwrap(),
+            "https://easyquran.fyi/api/auth/github/v1/callback"
+        );
+        assert_eq!(
+            provider_redirect_uri("DISCORD_REDIRECT_URI", "discord").unwrap(),
+            "https://easyquran.fyi/api/auth/discord/v1/callback"
+        );
+        assert_eq!(
+            provider_redirect_uri("GOOGLE_REDIRECT_URI", "google").unwrap(),
+            "https://easyquran.fyi/api/auth/google/v1/callback"
+        );
+        assert_eq!(
+            oauth_allowed_redirect_origins(),
+            vec!["https://easyquran.fyi".to_string()]
+        );
+        assert_eq!(
+            webauthn_frontend_defaults(),
+            (
+                Some("easyquran.fyi".to_string()),
+                Some("https://easyquran.fyi".to_string())
+            )
+        );
         restore_env(snap);
     }
 

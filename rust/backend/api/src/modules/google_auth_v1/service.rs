@@ -16,6 +16,7 @@ use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::services::oauth;
+use crate::services::oauth::redirect_uri;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct IdTokenFields {
@@ -105,10 +106,7 @@ pub fn get_google_oauth_client() -> Result<GoogleClient, ErrorResponse> {
             .with_message("GOOGLE_CLIENT_SECRET not configured")
     })?;
 
-    let redirect_url = std::env::var("GOOGLE_REDIRECT_URI").map_err(|_| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("GOOGLE_REDIRECT_URI not configured")
-    })?;
+    let redirect_url = redirect_uri("GOOGLE_REDIRECT_URI", "google")?;
 
     let auth_url =
         AuthUrl::new(format!("{}/o/oauth2/v2/auth", google_auth_base())).map_err(|e| {

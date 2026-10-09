@@ -14,32 +14,23 @@ pub struct WebauthnService {
 
 impl WebauthnService {
     pub fn from_env() -> Result<Self, ErrorResponse> {
+        // One-knob defaults: the frontend URL supplies both the passkey domain
+        // (rp_id) and its origin. Explicit WEBAUTHN_* vars still win.
+        let (derived_id, derived_origin) = crate::config::settings::webauthn_frontend_defaults();
         let rp_id = std::env::var("WEBAUTHN_RP_ID")
             .ok()
             .filter(|s| !s.trim().is_empty())
+            .or(derived_id)
             .unwrap_or_else(|| "localhost".to_string());
         let rp_origin = std::env::var("WEBAUTHN_RP_ORIGIN")
             .ok()
             .filter(|s| !s.trim().is_empty())
+            .or(derived_origin)
             .unwrap_or_else(|| "http://localhost:8080".to_string());
         let rp_name = std::env::var("WEBAUTHN_RP_NAME")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| {
-                // W8F-001: a missing WEBAUTHN_RP_NAME must NOT silently become the
-                // literal "Ruxlog" in production — that presents the wrong brand in
-                // passkey prompts. Pass an empty value through so new()'s production
-                // gate rejects it (mirroring localhost rp_id/origin). dev/test keep
-                // the localhost-era fallback.
-                if matches!(
-                    crate::config::settings::env_class(),
-                    crate::config::settings::EnvClass::Production
-                ) {
-                    String::new()
-                } else {
-                    "Ruxlog".to_string()
-                }
-            });
+            .unwrap_or_else(|| "EasyQuran".to_string());
         Self::new(&rp_id, &rp_origin, &rp_name)
     }
 
@@ -316,25 +307,25 @@ mod tests {
     }
 
     #[test]
-    fn prod_from_env_rejects_unset_rp_name() {
-        // The masking bug: an unset WEBAUTHN_RP_NAME used to fall back to the
-        // literal "Ruxlog" and boot. With real rp_id/origin set so the localhost
-        // gate does not fire first, from_env must surface the empty-name Err.
+    fn prod_from_env_derives_rp_from_frontend_url() {
+        // One-knob flow: with only FRONTEND_URL set, the passkey RP id/origin
+        // derive from it and the brand name defaults to EasyQuran.
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let s = snap();
+        let prev_frontend = std::env::var("FRONTEND_URL").ok();
         let prev_id = std::env::var("WEBAUTHN_RP_ID").ok();
         let prev_origin = std::env::var("WEBAUTHN_RP_ORIGIN").ok();
         let prev_name = std::env::var("WEBAUTHN_RP_NAME").ok();
         clear_env();
         std::env::set_var("RUST_ENV", "production");
-        std::env::set_var("WEBAUTHN_RP_ID", "easyquran.fyi");
-        std::env::set_var("WEBAUTHN_RP_ORIGIN", "https://easyquran.fyi");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        std::env::remove_var("WEBAUTHN_RP_ID");
+        std::env::remove_var("WEBAUTHN_RP_ORIGIN");
         std::env::remove_var("WEBAUTHN_RP_NAME");
-        let err = WebauthnService::from_env()
-            .err()
-            .expect("unset WEBAUTHN_RP_NAME must error in production (no Ruxlog fallback)");
+        let result = WebauthnService::from_env();
         restore(s);
         for (k, v) in [
+            ("FRONTEND_URL", prev_frontend),
             ("WEBAUTHN_RP_ID", prev_id),
             ("WEBAUTHN_RP_ORIGIN", prev_origin),
             ("WEBAUTHN_RP_NAME", prev_name),
@@ -345,8 +336,8 @@ mod tests {
             }
         }
         assert!(
-            matches!(err.code, ErrorCode::ConfigurationError),
-            "unset RP name must be a ConfigurationError in production"
+            result.is_ok(),
+            "production must derive a real RP from FRONTEND_URL alone"
         );
     }
 

@@ -19,6 +19,14 @@ pub use state::{
     NATIVE_TOKEN_NONCE_TTL_SECS,
 };
 
+/// Provider callback URL: explicit `<PROVIDER>_REDIRECT_URI` env override, else
+/// derived from `FRONTEND_URL` as `{origin}/api/auth/{provider}/v1/callback`.
+/// Shared mapping so provider services stay one-liners.
+pub fn redirect_uri(env_key: &str, provider: &str) -> Result<String, ErrorResponse> {
+    crate::config::settings::provider_redirect_uri(env_key, provider)
+        .map_err(|error| ErrorResponse::new(ErrorCode::ConfigurationError).with_message(error))
+}
+
 /// Sandbox seam: non-production runs may point a provider at a local fake OAuth
 /// server via `<PROVIDER>_OAUTH_BASE_URL` / `<PROVIDER>_API_BASE_URL`. Production
 /// always uses the real endpoints — the overrides are ignored there.

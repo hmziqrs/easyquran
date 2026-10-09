@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::oauth::redirect_uri;
 
 use super::validator::AppleIdTokenClaims;
 
@@ -78,10 +79,7 @@ pub fn load_apple_config() -> Result<AppleConfig, ErrorResponse> {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("APPLE_KEY_ID not configured")
     })?;
-    let redirect_uri = std::env::var("APPLE_REDIRECT_URI").map_err(|_| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("APPLE_REDIRECT_URI not configured")
-    })?;
+    let redirect_uri = redirect_uri("APPLE_REDIRECT_URI", "apple")?;
 
     let private_key_pem = match std::env::var("APPLE_PRIVATE_KEY") {
         Ok(raw) if !raw.trim().is_empty() => unescape_pem_newlines(&raw),

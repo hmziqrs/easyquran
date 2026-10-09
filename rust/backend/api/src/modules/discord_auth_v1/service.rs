@@ -3,6 +3,7 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, Redir
 
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::services::oauth;
+use crate::services::oauth::redirect_uri;
 
 const DISCORD_DEFAULT_OAUTH_BASE: &str = "https://discord.com";
 const DISCORD_DEFAULT_API_BASE: &str = "https://discord.com/api";
@@ -41,10 +42,7 @@ pub type DiscordClient =
 
 pub fn get_discord_oauth_client() -> Result<DiscordClient, ErrorResponse> {
     let credentials = load_discord_credentials()?;
-    let redirect_url = std::env::var("DISCORD_REDIRECT_URI").map_err(|_| {
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("DISCORD_REDIRECT_URI not configured")
-    })?;
+    let redirect_url = redirect_uri("DISCORD_REDIRECT_URI", "discord")?;
 
     let auth_url =
         AuthUrl::new(format!("{}/oauth2/authorize", discord_oauth_base())).map_err(|e| {
