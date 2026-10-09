@@ -18,7 +18,8 @@ function tileSvg(radius: number, inset: number): string {
 }
 
 async function writePng(svg: string, size: number, filename: string): Promise<Buffer> {
-  const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
+  const density = Math.max(72, (size / 512) * 72);
+  const png = await sharp(Buffer.from(svg), { density }).resize(size, size).png().toBuffer();
   await writeFile(new URL(filename, staticRoot), png);
   return png;
 }
@@ -42,6 +43,7 @@ function faviconIco(images: { size: number; png: Buffer }[]): Buffer {
 }
 
 await mkdir(new URL("icons/", staticRoot), { recursive: true });
+await mkdir(new URL("icons/oauth/", staticRoot), { recursive: true });
 const regular = tileSvg(112, 32);
 const maskable = tileSvg(0, 80);
 const logo = markSvg(cobalt);
@@ -68,4 +70,12 @@ await writePng(tileSvg(0, 32), 180, "apple-touch-icon.png");
 await writePng(markSvg("#fff"), 96, "icons/badge-96.png");
 await writePng(logo, 512, "logo.png");
 await writeFile(new URL("favicon.ico", staticRoot), faviconIco(faviconImages));
+const oauthTile = tileSvg(0, 80);
+for (const [provider, size] of [
+  ["github", 512],
+  ["google", 120],
+  ["discord", 1024],
+] as const) {
+  await writePng(oauthTile, size, `icons/oauth/easyquran-${provider}.png`);
+}
 console.log("Generated web icons from src/lib/assets/open-pages.svg");

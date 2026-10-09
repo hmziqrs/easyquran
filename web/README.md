@@ -33,6 +33,8 @@ the surrounding component's CSS color; web components draw their own square and 
 radius. `pnpm icons:generate` renders committed exports under `static/` from this master.
 Maskable app icons keep artwork inside the safe circle; Apple icons have an opaque square
 background for the OS to mask. Notification badges use white artwork on transparency.
+OAuth upload PNGs live under `static/icons/oauth/`: GitHub (512px), Google (120px),
+and Discord (1024px), with opaque cobalt backgrounds and padding for circular crops.
 
 Development-only IndoPak font specimen: `/design/indopak`, using provisioned IndoPak/Uthmani
 DBs and packaged OFL compatibility font. Version 4 (SIL Lateef base, Quran.com-style word
