@@ -9,7 +9,7 @@
   import type { PageData } from "./$types";
   import ReaderShell from "../_reader/ReaderShell.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
-  import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
+  import { HUE_FILL, HUE_ON, hueSlotFor } from "../_reader/hue-slot";
 
   let { data } = $props();
   // The universal +page.ts load spreads the server load's result through, so
@@ -59,24 +59,26 @@
         <a
           href={publicHref(surahHref(surah.slug))}
           data-sveltekit-preload-data="hover"
-          class="flex items-center gap-3 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-surface-hover"
+          class="flex items-center gap-3.5 rounded-lg border border-border p-4 transition-colors hover:bg-surface-hover"
         >
           <span
-            class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
-            style:background={HUE_SOFT[hue]}
-            style:color={HUE_LEGIBLE[hue]}
+            class="flex size-10 flex-none items-center justify-center rounded-full text-[15px] font-extrabold tabular-nums"
+            style:background={HUE_FILL[hue]}
+            style:color={HUE_ON[hue]}
           >
             {surah.num}
           </span>
-          <span class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-sm font-medium text-foreground">{surah.name}</span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="truncate text-sm font-medium leading-tight text-foreground"
+              >{surah.name}</span
+            >
             <span class="flex min-w-0 items-baseline justify-between gap-3">
-              <span class="truncate text-[11.5px] text-muted">{surah.meaning}</span>
+              <span class="truncate text-[11.5px] leading-none text-muted">{surah.meaning}</span>
               <span dir="rtl" lang="ar" class="flex-none font-arabic text-[17px] leading-none">
                 {surah.arabic}
               </span>
             </span>
-            <span class="truncate text-[11.5px] text-muted tabular-nums"
+            <span class="truncate text-[11.5px] leading-none text-muted tabular-nums"
               >{copy.index.ayahCount(surah.ayahCount)}</span
             >
           </span>

@@ -18,6 +18,21 @@ export const HUE_LEGIBLE = {
   4: "var(--hue-4-legible)",
 } as const;
 
+/** Solid hue fill + its on-color — the round number medallion on surah cards. */
+export const HUE_FILL = {
+  1: "var(--hue-1)",
+  2: "var(--hue-2)",
+  3: "var(--hue-3)",
+  4: "var(--hue-4)",
+} as const;
+
+export const HUE_ON = {
+  1: "var(--on-hue-1)",
+  2: "var(--on-hue-2)",
+  3: "var(--on-hue-3)",
+  4: "var(--on-hue-4)",
+} as const;
+
 export type HueSlot = keyof typeof HUE_SOFT;
 
 export function hueSlotFor(index: number): HueSlot {

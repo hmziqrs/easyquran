@@ -31,17 +31,17 @@
 
   /* Hue slots resolve through the palette tokens (§61 — no colour literals),
      cycled by position like the app's surah index. */
-  const HUE_SOFT = {
-    1: "var(--hue-1-soft)",
-    2: "var(--hue-2-soft)",
-    3: "var(--hue-3-soft)",
-    4: "var(--hue-4-soft)",
+  const HUE_FILL = {
+    1: "var(--hue-1)",
+    2: "var(--hue-2)",
+    3: "var(--hue-3)",
+    4: "var(--hue-4)",
   } as const satisfies Record<LandingHue, string>;
-  const HUE_LEGIBLE = {
-    1: "var(--hue-1-legible)",
-    2: "var(--hue-2-legible)",
-    3: "var(--hue-3-legible)",
-    4: "var(--hue-4-legible)",
+  const HUE_ON = {
+    1: "var(--on-hue-1)",
+    2: "var(--on-hue-2)",
+    3: "var(--on-hue-3)",
+    4: "var(--on-hue-4)",
   } as const satisfies Record<LandingHue, string>;
 
   function hueAt(position: number): LandingHue {
@@ -177,20 +177,20 @@
       <li>
         <a
           href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
-          class="group flex items-center gap-3.5 rounded-md border border-border px-4 py-3 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="group flex items-center gap-3.5 rounded-md border border-border p-4 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
-            style:background={HUE_SOFT[hue]}
-            style:color={HUE_LEGIBLE[hue]}
+            class="flex size-10 flex-none items-center justify-center rounded-full text-[15px] font-extrabold tabular-nums"
+            style:background={HUE_FILL[hue]}
+            style:color={HUE_ON[hue]}
             >{s.num}</span
           >
-          <span class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-[16px] font-bold tracking-[-0.01em] text-foreground"
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="truncate text-[16px] font-bold leading-tight tracking-[-0.01em] text-foreground"
               >{s.name}</span
             >
             <span class="flex min-w-0 items-baseline justify-between gap-3">
-              <span class="truncate text-caption text-muted">{s.meaning}</span>
+              <span class="truncate text-caption leading-none text-muted">{s.meaning}</span>
               <span
                 lang="ar"
                 dir="rtl"
@@ -198,7 +198,7 @@
                 >{s.arabic}</span
               >
             </span>
-            <span class="truncate text-caption tabular-nums text-muted"
+            <span class="truncate text-caption leading-none tabular-nums text-muted"
               >{landing.ayahCount(s.ayahCount)}</span
             >
           </span>
