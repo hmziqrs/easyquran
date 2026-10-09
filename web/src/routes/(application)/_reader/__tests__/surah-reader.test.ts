@@ -511,7 +511,9 @@ describe("SurahReader W7 degradation state lifecycle", () => {
     }
     await jump;
     expect(workerStub.whenReady).toHaveBeenCalledOnce();
-    expect(workerStub.readRange.mock.calls.filter(([from]) => from === 15)).toHaveLength(2);
+    // loadPage's boot gate waits for whenReady before reading, so the cold
+    // worker's first attempt succeeds — no failed read + ensureAyah re-read.
+    expect(workerStub.readRange.mock.calls.filter(([from]) => from === 15)).toHaveLength(1);
     expect(target.querySelector('[role="status"]')?.textContent ?? "").not.toMatch(
       /couldn't be loaded/i,
     );

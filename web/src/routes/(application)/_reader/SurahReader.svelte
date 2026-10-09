@@ -706,6 +706,11 @@
     const readRouteKey = routeKey;
     try {
       const quranData = await loadQuranData();
+      // A mount-time read (script pref ≠ SSG page) can run before the layout's deferred
+      // engine boot reaches quranWorker.start(); the read ladder would probe a
+      // not-yet-started worker and page-fail what a boot-wait serves. Same gate as
+      // ensureAyah/verse-cache.
+      if (!quranWorker.ready) await quranWorker.whenReady().catch(() => undefined);
       const pageDataRange = quranData.surahLocalPage(initial.surah.num, localPage);
       if (!pageDataRange) {
         throw new Error(`Unknown Surah page ${initial.surah.num}:${localPage}`);

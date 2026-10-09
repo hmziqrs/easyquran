@@ -184,6 +184,10 @@
     readStatus = "loading";
     try {
       const quranData = await loadQuranData();
+      // Same boot gate as SurahReader.loadPage: a hydration read can beat the
+      // layout's deferred quranWorker.start(), and the ladder would fail a
+      // worker that is milliseconds from ready.
+      if (!quranWorker.ready) await quranWorker.whenReady().catch(() => undefined);
       const range = await quranWorker.readRange(
         serverData.startGlobal,
         serverData.endGlobal,

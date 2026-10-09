@@ -64,6 +64,17 @@ vi.mock("#lib/data/quran-data-client.js", () => ({
   peekQuranData: () => undefined,
 }));
 vi.mock("#lib/quran/track-view.svelte.js", () => ({ trackReaderView: () => {} }));
+// The real module stays live (coordinator + read ladder run unmodified); only
+// whenReady is overridden because this harness never starts the worker, while
+// RangeReader's boot gate asks whenReady whenever the worker is not ready.
+vi.mock("#lib/quran/worker-client.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("#lib/quran/worker-client.js")>();
+  // SAFETY: Object.create links the real singleton as prototype, so live getters (ready)
+  // and every method keep reading the real module state; only whenReady is shadowed.
+  const workerProxy = Object.create(real.quranWorker) as typeof real.quranWorker;
+  workerProxy.whenReady = () => Promise.resolve();
+  return { ...real, quranWorker: workerProxy };
+});
 vi.mock("../VerseRow.svelte", () => ({ default: verseRowStub }));
 vi.mock("#lib/components/ui/tooltip/index.js", () => ({ TooltipProvider: tooltipStub }));
 
