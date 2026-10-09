@@ -76,12 +76,9 @@
                 {surah.arabic}
               </span>
             </span>
-            <span class="flex items-center gap-1.5 text-accent">
-              <span class="size-1.5 flex-none rounded-full border border-accent" aria-hidden="true"></span>
-              <span class="text-[11.5px] font-medium tabular-nums"
-                >{copy.index.ayahCount(surah.ayahCount)}</span
-              >
-            </span>
+            <span class="truncate text-[11.5px] text-muted tabular-nums"
+              >{copy.index.ayahCount(surah.ayahCount)}</span
+            >
           </span>
         </a>
       </li>
