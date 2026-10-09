@@ -74,16 +74,54 @@ impl std::fmt::Debug for ObjectStorageConfig {
 impl ObjectStorageConfig {
     pub fn from_env() -> Self {
         let bucket = env_with_fallback(&["S3_BUCKET", "AWS_S3_BUCKET"], None)
-            .expect("S3_BUCKET or AWS_S3_BUCKET must be set");
-        let access_key = env_with_fallback(&["S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID"], None)
-            .expect("S3_ACCESS_KEY or AWS_ACCESS_KEY_ID must be set");
-        let secret_key = env_with_fallback(&["S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"], None)
-            .expect("S3_SECRET_KEY or AWS_SECRET_ACCESS_KEY must be set");
-        let endpoint =
-            env_with_fallback(&["S3_ENDPOINT", "AWS_ENDPOINT", "GARAGE_S3_ENDPOINT"], None)
-                .expect("S3_ENDPOINT, AWS_ENDPOINT, or GARAGE_S3_ENDPOINT must be set");
-        let public_url = env_with_fallback(&["S3_PUBLIC_URL", "AWS_S3_PUBLIC_URL"], None)
-            .unwrap_or_else(|| endpoint.clone());
+            .expect("S3_BUCKET (the media bucket) must be set");
+        let access_key = env_with_fallback(
+            &["S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID"],
+            None,
+        )
+        .expect("S3_ACCESS_KEY or R2_ACCESS_KEY_ID must be set");
+        let secret_key = env_with_fallback(
+            &[
+                "S3_SECRET_KEY",
+                "AWS_SECRET_ACCESS_KEY",
+                "R2_SECRET_ACCESS_KEY",
+            ],
+            None,
+        )
+        .expect("S3_SECRET_KEY or R2_SECRET_ACCESS_KEY must be set");
+        let account_id = env_with_fallback(&["S3_ACCOUNT_ID", "R2_ACCOUNT_ID"], None);
+        // Endpoint: explicit override wins, else derive Cloudflare R2's from the
+        // account id, else fall back to the local MinIO dummy (a reader-only
+        // deploy never touches storage; media deployments set R2_ACCOUNT_ID or
+        // S3_ENDPOINT).
+        let endpoint = env_with_fallback(
+            &[
+                "S3_ENDPOINT",
+                "AWS_ENDPOINT",
+                "GARAGE_S3_ENDPOINT",
+                "R2_ENDPOINT",
+            ],
+            None,
+        )
+        .or_else(|| {
+            account_id
+                .as_deref()
+                .filter(|id| *id != "local")
+                .map(|id| format!("https://{id}.r2.cloudflarestorage.com"))
+        })
+        .unwrap_or_else(|| {
+            tracing::warn!(
+                "No S3_ENDPOINT/S3_ACCOUNT_ID/R2_ACCOUNT_ID set; using the local \
+                 http://localhost:9000 storage dummy"
+            );
+            "http://localhost:9000".to_string()
+        });
+        let public_url = env_with_fallback(
+            &["S3_PUBLIC_URL", "AWS_S3_PUBLIC_URL", "R2_PUBLIC_BASE"],
+            None,
+        )
+        .unwrap_or_else(|| endpoint.clone());
+        // Cloudflare R2 signs with region "auto"; an explicit override stays possible.
         let region = env_with_fallback(
             &[
                 "S3_REGION",
@@ -94,7 +132,7 @@ impl ObjectStorageConfig {
             Some("auto"),
         )
         .unwrap();
-        let account_id = std::env::var("S3_ACCOUNT_ID").unwrap_or_else(|_| "local".to_string());
+        let account_id = account_id.unwrap_or_else(|| "local".to_string());
 
         Self {
             region,
@@ -862,6 +900,7 @@ mod tests {
 
     #[test]
     fn object_storage_panics_when_bucket_missing() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
         let prev_bucket = std::env::var("S3_BUCKET").ok();
         let prev_aws = std::env::var("AWS_S3_BUCKET").ok();
         std::env::remove_var("S3_BUCKET");
@@ -881,6 +920,73 @@ mod tests {
             Some(v) => std::env::set_var("AWS_S3_BUCKET", v),
             None => std::env::remove_var("AWS_S3_BUCKET"),
         }
+    }
+
+    const STORAGE_KEYS: [&str; 10] = [
+        "S3_BUCKET",
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY",
+        "S3_ENDPOINT",
+        "S3_ACCOUNT_ID",
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_PUBLIC_BASE",
+        "S3_PUBLIC_URL",
+    ];
+
+    fn clear_storage_env() -> Vec<(&'static str, Option<String>)> {
+        let prev = STORAGE_KEYS
+            .iter()
+            .map(|key| (*key, std::env::var(key).ok()))
+            .collect();
+        for key in STORAGE_KEYS {
+            std::env::remove_var(key);
+        }
+        prev
+    }
+
+    fn restore_storage_env(prev: Vec<(&'static str, Option<String>)>) {
+        for (key, value) in prev {
+            match value {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+
+    #[test]
+    fn object_storage_derives_r2_endpoint_from_account_id() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let prev = clear_storage_env();
+        std::env::set_var("S3_BUCKET", "easyquran-assets");
+        std::env::set_var("R2_ACCOUNT_ID", "acct123");
+        std::env::set_var("R2_ACCESS_KEY_ID", "r2-key");
+        std::env::set_var("R2_SECRET_ACCESS_KEY", "r2-secret");
+        std::env::set_var("R2_PUBLIC_BASE", "https://cdn.example.test");
+
+        let cfg = ObjectStorageConfig::from_env();
+        assert_eq!(cfg.endpoint, "https://acct123.r2.cloudflarestorage.com");
+        assert_eq!(cfg.public_url, "https://cdn.example.test");
+        assert_eq!(cfg.region, "auto");
+        assert_eq!(cfg.access_key, "r2-key");
+        assert_eq!(cfg.secret_key, "r2-secret");
+        assert_eq!(cfg.account_id, "acct123");
+        restore_storage_env(prev);
+    }
+
+    #[test]
+    fn object_storage_falls_back_to_local_dummy_without_endpoint() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let prev = clear_storage_env();
+        std::env::set_var("S3_BUCKET", "easyquran-assets");
+        std::env::set_var("S3_ACCESS_KEY", "devkey");
+        std::env::set_var("S3_SECRET_KEY", "devsecret");
+
+        let cfg = ObjectStorageConfig::from_env();
+        assert_eq!(cfg.endpoint, "http://localhost:9000");
+        assert_eq!(cfg.public_url, "http://localhost:9000");
+        restore_storage_env(prev);
     }
 
     #[test]
