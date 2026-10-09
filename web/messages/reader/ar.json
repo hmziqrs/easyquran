@@ -304,7 +304,5 @@
   "reader_surah_nav_label": "التنقل بين السور",
   "reader_prev_surah": "السورة السابقة",
   "reader_next_surah": "السورة التالية",
-  "reader_nav_manual_pages": "تعذّر تحميل المزيد — انتقل إلى صفحة",
-  "reader_end_of_surah": "نهاية سورة {name}",
-  "reader_read_again": "اقرأ مرة أخرى"
+  "reader_nav_manual_pages": "تعذّر تحميل المزيد — انتقل إلى صفحة"
 }

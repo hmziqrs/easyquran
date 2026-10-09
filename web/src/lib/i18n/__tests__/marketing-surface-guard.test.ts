@@ -60,11 +60,11 @@ describe("marketing localization boundaries", () => {
     expect(shared).not.toMatch(/messages\/(?:en|ar)\.json/);
   });
 
-  it("keeps Quran quotation verbatim and explicitly Arabic RTL", () => {
+  it("keeps the footer free of the retired Quran quotation", () => {
     const footer = source("../../components/footer/Footer.svelte");
 
-    expect(footer).toContain('lang="ar" dir="rtl"');
-    expect(footer).toContain("وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ");
+    expect(footer).not.toContain("وَنَزَّلْنَا");
+    expect(footer).not.toContain('lang="ar"');
   });
 
   it("routes landing reader links through the reader home helper", () => {

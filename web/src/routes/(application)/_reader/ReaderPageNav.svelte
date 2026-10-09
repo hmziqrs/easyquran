@@ -11,7 +11,6 @@
   } from "#lib/data/quran.js";
 
   let {
-    currentSurah,
     ctx,
     previousSurah,
     nextSurah,
@@ -19,8 +18,6 @@
     previousPage = null,
     nextPage = null,
   }: {
-    /** The surah being read — read-again target; the reader header already carries the rest. */
-    currentSurah: Pick<SurahLink, "num" | "slug" | "name">;
     /** Active translation context, so every generated link keeps the source. */
     ctx: SurahRouteContext;
     /** Cross-surah navigation — always rendered, infinite scroll never crosses it. */
@@ -72,23 +69,12 @@
     </div>
   {/if}
 
-  <!-- End-of-surah band: same surface ground as the footer. The breakout margins cancel the
+  <!-- Cross-surah band: same surface ground as the footer. The breakout margins cancel the
        Container gutter + 1200px centering, so the band meets both viewport edges (body clips
        the vw overshoot). Content stays on the reader column measure inside. -->
   <div class="mx-[calc(50%_-_50vw)] border-t border-border bg-surface px-6 py-9">
-    <div class="mx-auto flex w-full max-w-[42rem] flex-col items-center gap-5 text-center">
-      <h2 class="text-[17px] font-semibold text-foreground">
-        {copy.shell.endOfSurah(currentSurah.name)}
-      </h2>
-      <a
-        href={publicHref(surahHref(currentSurah))}
-        data-sveltekit-preload-data="hover"
-        class="rounded-pill border border-border px-4 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        {copy.shell.readAgain}
-      </a>
-      <div class="grid w-full gap-2 sm:grid-cols-2">
-        {#if previousSurah}
+    <div class="mx-auto grid w-full max-w-[42rem] gap-2 sm:grid-cols-2">
+      {#if previousSurah}
           <a
             href={publicHref(surahHref(previousSurah))}
             data-sveltekit-preload-data="hover"
@@ -142,7 +128,6 @@
             <span aria-hidden="true" class="flex-none">{endArrow}</span>
           </a>
         {/if}
-      </div>
     </div>
   </div>
 </nav>

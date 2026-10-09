@@ -232,7 +232,7 @@
     aria-hidden={menuOpen || undefined}
     class="flex-1 pb-28"
   >{@render children()}</main>
-  <Footer owner={data.owner} year={data.year} copy={copy.footer} links={footerLinks} />
+  <Footer year={data.year} copy={copy.footer} links={footerLinks} />
 </div>
 <Tweaks
   locale={copy.locale}

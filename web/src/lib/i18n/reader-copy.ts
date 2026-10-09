@@ -53,7 +53,6 @@ import {
   reader_dismiss_update,
   reader_downloading_offline_pack,
   reader_downloading_quran,
-  reader_end_of_surah,
   reader_full_surah,
   reader_hizb_item,
   reader_home_label,
@@ -85,7 +84,6 @@ import {
   reader_position_juz,
   reader_position_page,
   reader_prev_surah,
-  reader_read_again,
   reader_network_unavailable,
   reader_new_version_ready,
   reader_no_translations,
@@ -240,8 +238,6 @@ export interface ReaderUiCopy {
     readonly prevSurahLabel: string;
     readonly nextSurahLabel: string;
     readonly manualPagesLabel: string;
-    readonly endOfSurah: (name: string) => string;
-    readonly readAgain: string;
     readonly positionPage: (page: number) => string;
     readonly positionJuz: (juz: number) => string;
     readonly positionHizb: (hizb: number) => string;
@@ -475,8 +471,6 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       prevSurahLabel: noArgs(reader_prev_surah),
       nextSurahLabel: noArgs(reader_next_surah),
       manualPagesLabel: noArgs(reader_nav_manual_pages),
-      endOfSurah: (name) => reader_end_of_surah({ name }, options),
-      readAgain: noArgs(reader_read_again),
       positionPage: (page) => reader_position_page({ page }, options),
       positionJuz: (juz) => reader_position_juz({ juz }, options),
       positionHizb: (hizb) => reader_position_hizb({ hizb }, options),

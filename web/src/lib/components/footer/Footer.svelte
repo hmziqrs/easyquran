@@ -1,7 +1,6 @@
 <script lang="ts">
   import { SITE } from "#lib/config/site.js";
   import { externalLinkAttrs } from "#lib/utils.js";
-  import type { OwnerPublic } from "#lib/types/owner.js";
   import type {
     FooterLink,
     FooterResolvedCopy,
@@ -11,12 +10,10 @@
   import BrandMark from "#lib/components/brand/BrandMark.svelte";
 
   let {
-    owner,
     year,
     copy,
     links,
   }: {
-    owner: OwnerPublic;
     year: number;
     copy: FooterResolvedCopy;
     links: MarketingFooterLinks;
@@ -75,16 +72,9 @@
         © {year} {brand}. {copy.builtBy}
         <a
           class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
-          href={SITE.makerUrl}
-          {...externalLinkAttrs(SITE.makerUrl)}>oxlabs.dev</a
-        > · <a
-          class="text-foreground-secondary underline underline-offset-2 hover:text-foreground"
-          href={owner.x}
-          {...externalLinkAttrs(owner.x, { me: true })}>{owner.xHandle}</a
+          href={SITE.ownerUrl}
+          {...externalLinkAttrs(SITE.ownerUrl, { me: true })}>{SITE.owner}</a
         >
-      </span>
-      <span lang="ar" dir="rtl" class="ms-auto font-arabic text-body-l leading-none text-muted">
-        وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ
       </span>
     </div>
   </div>

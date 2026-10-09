@@ -37,7 +37,7 @@
     direction={chrome.direction}
   />
   <main id="main" tabindex="-1">{@render children()}</main>
-  <MarketingFooter {locale} {chrome} owner={data.owner} year={data.year} />
+  <MarketingFooter {locale} {chrome} year={data.year} />
   <MarketingTweaks {locale} triggerLabel={chrome.appearanceTrigger} />
 </div>
 

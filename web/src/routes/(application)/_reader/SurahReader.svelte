@@ -1137,7 +1137,6 @@
     {/if}
 
     <ReaderPageNav
-      currentSurah={initial.surah}
       ctx={routeContext}
       {previousSurah}
       {nextSurah}

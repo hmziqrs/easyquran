@@ -304,7 +304,5 @@
   "reader_surah_nav_label": "Surah navigation",
   "reader_prev_surah": "Previous surah",
   "reader_next_surah": "Next surah",
-  "reader_nav_manual_pages": "Couldn't load more — jump to a page",
-  "reader_end_of_surah": "End of Surah {name}",
-  "reader_read_again": "Read again"
+  "reader_nav_manual_pages": "Couldn't load more — jump to a page"
 }
