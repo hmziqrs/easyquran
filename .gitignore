@@ -58,3 +58,8 @@ rust/data/
 
 # zflow chain evidence + reports (session material, never repo material).
 .zflow/
+
+# Local tool state (ZCode plugin roots, Claude desktop launch config) — machine-local.
+.claude/launch.json
+.v2c/
+.video_agent/
