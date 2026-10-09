@@ -24,8 +24,15 @@ In `web/`:
     pnpm start      # bun server.ts — production build + static/dynamic header policy
     pnpm check      # svelte-check + worker tsconfig
     vp lint | fmt | check
+    pnpm icons:generate  # regenerate favicon, app, Apple, pinned-tab, badge and logo exports
 
 Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`.
+
+Brand artwork lives in `src/lib/assets/open-pages.svg`. `BrandMark` uses that SVG with
+the surrounding component's CSS color; web components draw their own square and corner
+radius. `pnpm icons:generate` renders committed exports under `static/` from this master.
+Maskable app icons keep artwork inside the safe circle; Apple icons have an opaque square
+background for the OS to mask. Notification badges use white artwork on transparency.
 
 Development-only IndoPak font specimen: `/design/indopak`, using provisioned IndoPak/Uthmani
 DBs and packaged OFL compatibility font. Version 4 (SIL Lateef base, Quran.com-style word

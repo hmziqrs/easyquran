@@ -1,6 +1,5 @@
 <script lang="ts">
   import "./layout.css";
-  import favicon from "#lib/assets/favicon.svg";
   import { onMount } from "svelte";
   import { afterNavigate, beforeNavigate } from "$app/navigation";
   import { updated } from "$app/state";
@@ -153,9 +152,11 @@
 <svelte:document oncopy={copyIndopakSelection} />
 
 <svelte:head>
+  <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
-  <link rel="icon" type="image/svg+xml" href={favicon} />
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+  <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#315bd6" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content={SITE.name} />

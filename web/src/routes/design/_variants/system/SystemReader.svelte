@@ -3,6 +3,7 @@
   import LanguagesIcon from "@lucide/svelte/icons/languages";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
   import Bismillah from "#lib/components/brand/Bismillah.svelte";
+  import BrandMark from "#lib/components/brand/BrandMark.svelte";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
   import { toArabicDigits } from "#lib/data/quran.js";
   import type { MixSurah, MixTranslation } from "../mix/types";
@@ -67,7 +68,7 @@
   <nav class="sys-nav" aria-label="Site">
     <div class="sys-frame sys-nav-row">
       <span class="sys-brand">
-        <span class="sys-mark" aria-hidden="true">ق</span>
+        <span class="sys-mark" aria-hidden="true"><BrandMark class="size-7" /></span>
         <span class="sys-word">easyquran</span>
       </span>
       <span class="sys-links">
@@ -236,8 +237,6 @@
     border-radius: var(--sys-radius);
     color: var(--sys-on-accent);
     display: flex;
-    font-family: var(--font-arabic);
-    font-size: 18px;
     height: 32px;
     justify-content: center;
     width: 32px;
