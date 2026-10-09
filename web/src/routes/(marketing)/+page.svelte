@@ -31,17 +31,23 @@
 
   /* Hue slots resolve through the palette tokens (§61 — no colour literals),
      cycled by position like the app's surah index. */
-  const HUE_FILL = {
+  const HUE_EDGE = {
     1: "var(--hue-1)",
     2: "var(--hue-2)",
     3: "var(--hue-3)",
     4: "var(--hue-4)",
   } as const satisfies Record<LandingHue, string>;
-  const HUE_ON = {
-    1: "var(--on-hue-1)",
-    2: "var(--on-hue-2)",
-    3: "var(--on-hue-3)",
-    4: "var(--on-hue-4)",
+  const HUE_DIM = {
+    1: "color-mix(in oklab, var(--hue-1) 15%, transparent)",
+    2: "color-mix(in oklab, var(--hue-2) 15%, transparent)",
+    3: "color-mix(in oklab, var(--hue-3) 15%, transparent)",
+    4: "color-mix(in oklab, var(--hue-4) 15%, transparent)",
+  } as const satisfies Record<LandingHue, string>;
+  const HUE_LEGIBLE = {
+    1: "var(--hue-1-legible)",
+    2: "var(--hue-2-legible)",
+    3: "var(--hue-3-legible)",
+    4: "var(--hue-4-legible)",
   } as const satisfies Record<LandingHue, string>;
 
   function hueAt(position: number): LandingHue {
@@ -171,7 +177,7 @@
     >
   </div>
 
-  <ul class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+  <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {#each surahs as s, i (s.num)}
       {@const hue = hueAt(i)}
       <li>
@@ -180,9 +186,10 @@
           class="group flex items-center gap-3.5 rounded-md border border-border p-4 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="flex size-10 flex-none items-center justify-center rounded-full text-[15px] font-extrabold tabular-nums"
-            style:background={HUE_FILL[hue]}
-            style:color={HUE_ON[hue]}
+            class="flex size-10 flex-none items-center justify-center rounded-full border text-[15px] font-extrabold tabular-nums"
+            style:border-color={HUE_EDGE[hue]}
+            style:background={HUE_DIM[hue]}
+            style:color={HUE_LEGIBLE[hue]}
             >{s.num}</span
           >
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">

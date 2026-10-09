@@ -18,19 +18,20 @@ export const HUE_LEGIBLE = {
   4: "var(--hue-4-legible)",
 } as const;
 
-/** Solid hue fill + its on-color — the round number medallion on surah cards. */
-export const HUE_FILL = {
+/** Accent hue stroke for the round number medallion on surah cards. */
+export const HUE_EDGE = {
   1: "var(--hue-1)",
   2: "var(--hue-2)",
   3: "var(--hue-3)",
   4: "var(--hue-4)",
 } as const;
 
-export const HUE_ON = {
-  1: "var(--on-hue-1)",
-  2: "var(--on-hue-2)",
-  3: "var(--on-hue-3)",
-  4: "var(--on-hue-4)",
+/** Dim transparent hue wash behind the medallion numeral. */
+export const HUE_DIM = {
+  1: "color-mix(in oklab, var(--hue-1) 15%, transparent)",
+  2: "color-mix(in oklab, var(--hue-2) 15%, transparent)",
+  3: "color-mix(in oklab, var(--hue-3) 15%, transparent)",
+  4: "color-mix(in oklab, var(--hue-4) 15%, transparent)",
 } as const;
 
 export type HueSlot = keyof typeof HUE_SOFT;
