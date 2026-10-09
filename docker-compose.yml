@@ -116,6 +116,11 @@ services:
     environment:
       HOST: "0.0.0.0"
       PORT: "8888"
+      # One site-URL knob: OAuth callback URIs, allowed redirect origins and the
+      # WebAuthn RP id/origin all derive from this. Defaulted from DOMAIN so an
+      # existing deployment needs no new variables; override in .env only for a
+      # non-DOMAIN origin (e.g. a www alias).
+      FRONTEND_URL: ${FRONTEND_URL:-https://${DOMAIN}}
       DATABASE_URL: "sqlite:./data/easyquran.db?mode=rwc"
       RUST_LOG: ${RUST_LOG:-info}
       # Topology invariants (literal — must NOT be overridable to an insecure

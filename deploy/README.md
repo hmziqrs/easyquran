@@ -164,6 +164,10 @@ that path — a relative or name-like value is read as a volume name, not a path
 3. Environment tab: the 5 required vars from `.env.example` (`DOMAIN`,
    `COOKIE_KEY`, `FIELD_ENC_KEY`, `INTERNAL_QURAN_API_TOKEN`,
    `ALLOWED_ORIGINS` — literal CSV, no `${DOMAIN}` expansion).
+   Web-auth URL variables all derive from `DOMAIN` — compose sets
+   `FRONTEND_URL=https://${DOMAIN}` and the API derives OAuth callback URIs,
+   allowed redirect origins and the WebAuthn RP id/origin from it. Only the
+   provider client id/secret pairs + mail transport vars need adding.
 4. **Don't** set a domain in the Dokploy UI — the `traefik.*` labels already
    define the routing (Host + `/api` PathPrefix + stripPrefix). Prefer the UI
    anyway? Delete the labels and configure domains there: web → `easyquran.fyi`,
@@ -400,6 +404,31 @@ semantics: lift the edge block no later than `expiresAt`, and re-poll export
 after an operator `DELETE /admin/bans` so a lifted ban is not kept at the edge.
 The export never contains PII (no email, user-id, or raw path) — only canonical
 CIDR units.
+
+## Auth env migration (per-provider mapping → one knob)
+
+`FRONTEND_URL` is the single site-URL knob; OAuth callback URIs
+(`{origin}/api/auth/{provider}/v1/callback`), `OAUTH_ALLOWED_REDIRECT_ORIGINS`
+and the WebAuthn RP id/origin/name derive from it. Compose defaults it from
+`DOMAIN`, so a deployed stack needs no new variables. Every legacy variable is
+still honored as an explicit override.
+
+Rollout order (an image built before this change still requires the explicit
+vars at boot):
+
+1. Deploy the new images with the environment unchanged — both old and new
+   configs boot, because the legacy vars are still read as overrides.
+2. Confirm healthy (`/healthz`, one login). Then optionally delete the now
+   redundant vars from the Dokploy environment: `<PROVIDER>_REDIRECT_URI`,
+   `OAUTH_ALLOWED_REDIRECT_ORIGINS`, `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`,
+   `WEBAUTHN_RP_NAME`. Keep: `DOMAIN`, `COOKIE_KEY`, `WEB_AUTH_ENABLED`,
+   `WEB_OAUTH_PROVIDERS`, each provider's client id/secret, mail transport vars.
+3. Rollback caveat: rolling back to an image built before this change re-adds
+   the old boot gate — re-add the deleted vars first, or keep a copy of the
+   pre-cleanup environment.
+4. Nothing else changes: no DB migration, and `COOKIE_KEY`/`DOMAIN` stay put, so
+   sessions and passkeys remain valid (the derived WebAuthn RP values match the
+   previous explicit ones whenever they pointed at the same origin).
 
 ## Mail delivery smoke test (before enabling WEB_AUTH_ENABLED)
 
