@@ -9,7 +9,7 @@
   import type { PageData } from "./$types";
   import ReaderShell from "../_reader/ReaderShell.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
-  import { HUE_DIM, HUE_EDGE, HUE_LEGIBLE, hueSlotFor } from "../_reader/hue-slot";
+  import { HUE_DIM, HUE_EDGE, hueSlotFor } from "../_reader/hue-slot";
 
   let { data } = $props();
   // The universal +page.ts load spreads the server load's result through, so
@@ -62,10 +62,10 @@
           class="flex items-center gap-3.5 rounded-lg border border-border p-4 transition-colors hover:bg-surface-hover"
         >
           <span
-            class="flex size-10 flex-none items-center justify-center rounded-full border text-[15px] font-extrabold tabular-nums"
+            class="flex size-10 flex-none items-center justify-center rounded-full border-2 text-[15px] font-extrabold tabular-nums"
             style:border-color={HUE_EDGE[hue]}
             style:background={HUE_DIM[hue]}
-            style:color={HUE_LEGIBLE[hue]}
+            style:color={HUE_EDGE[hue]}
           >
             {surah.num}
           </span>

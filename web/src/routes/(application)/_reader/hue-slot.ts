@@ -28,10 +28,10 @@ export const HUE_EDGE = {
 
 /** Dim transparent hue wash behind the medallion numeral. */
 export const HUE_DIM = {
-  1: "color-mix(in oklab, var(--hue-1) 15%, transparent)",
-  2: "color-mix(in oklab, var(--hue-2) 15%, transparent)",
-  3: "color-mix(in oklab, var(--hue-3) 15%, transparent)",
-  4: "color-mix(in oklab, var(--hue-4) 15%, transparent)",
+  1: "color-mix(in oklab, var(--hue-1) 30%, transparent)",
+  2: "color-mix(in oklab, var(--hue-2) 30%, transparent)",
+  3: "color-mix(in oklab, var(--hue-3) 30%, transparent)",
+  4: "color-mix(in oklab, var(--hue-4) 30%, transparent)",
 } as const;
 
 export type HueSlot = keyof typeof HUE_SOFT;
