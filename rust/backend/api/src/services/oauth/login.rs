@@ -21,6 +21,7 @@ pub enum OAuthProvider {
     Apple,
     Facebook,
     Github,
+    Discord,
 }
 
 impl OAuthProvider {
@@ -30,6 +31,7 @@ impl OAuthProvider {
             OAuthProvider::Apple => "apple",
             OAuthProvider::Facebook => "facebook",
             OAuthProvider::Github => "github",
+            OAuthProvider::Discord => "discord",
         }
     }
 
@@ -40,6 +42,7 @@ impl OAuthProvider {
             OAuthProvider::Apple => "Apple",
             OAuthProvider::Facebook => "Facebook",
             OAuthProvider::Github => "GitHub",
+            OAuthProvider::Discord => "Discord",
         }
     }
 }

@@ -28,6 +28,7 @@ pub mod search_v1;
 pub mod apple_auth_v1;
 pub mod bookmark_v1;
 pub mod device_v1;
+pub mod discord_auth_v1;
 pub mod facebook_auth_v1;
 pub mod github_auth_v1;
 pub mod notification_v1;

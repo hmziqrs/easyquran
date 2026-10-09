@@ -125,7 +125,7 @@ impl TranslationPool {
                     let m = metrics_for_listener.clone();
                     Box::pin(async move {
                         let bytes = v.bytes() as u64;
-                        let _ = m.resident_bytes.fetch_update(
+                        let _ = m.resident_bytes.try_update(
                             Ordering::Relaxed,
                             Ordering::Relaxed,
                             |resident| Some(resident.saturating_sub(bytes)),

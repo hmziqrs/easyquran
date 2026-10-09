@@ -550,7 +550,7 @@ impl WebAuthSettings {
             for p in &oauth_providers {
                 if provider_required_keys(p).is_empty() {
                     return Err(format!(
-                        "Unknown provider '{p}' in WEB_OAUTH_PROVIDERS; valid: google, apple, facebook, github"
+                        "Unknown provider '{p}' in WEB_OAUTH_PROVIDERS; valid: google, apple, facebook, github, discord"
                     ));
                 }
                 for k in provider_required_keys(p) {
@@ -672,6 +672,11 @@ fn provider_required_keys(p: &str) -> &'static [&'static str] {
             "GITHUB_CLIENT_SECRET",
             "GITHUB_REDIRECT_URI",
         ],
+        "discord" => &[
+            "DISCORD_CLIENT_ID",
+            "DISCORD_CLIENT_SECRET",
+            "DISCORD_REDIRECT_URI",
+        ],
         _ => &[],
     }
 }
@@ -698,6 +703,7 @@ fn provider_redirect_key(p: &str) -> &'static str {
         "apple" => "APPLE_REDIRECT_URI",
         "facebook" => "FACEBOOK_REDIRECT_URI",
         "github" => "GITHUB_REDIRECT_URI",
+        "discord" => "DISCORD_REDIRECT_URI",
         _ => "",
     }
 }

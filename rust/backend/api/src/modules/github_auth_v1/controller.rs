@@ -23,13 +23,12 @@ use crate::{
 };
 
 use super::{
-    service::{get_github_oauth_client, load_github_credentials},
+    service::{get_github_oauth_client, github_api_base, load_github_credentials},
     validator::{
         GitHubCallbackQuery, GitHubEmail, GitHubExchangeRequest, GitHubTokenRequest, GitHubUserInfo,
     },
 };
 
-const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const GITHUB_API_VERSION: &str = "2026-03-10";
 const GITHUB_API_MAX_BYTES: usize = 64 * 1024;
 const GITHUB_USER_AGENT: &str = "EasyQuran";
@@ -289,7 +288,7 @@ fn github_api_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuild
 }
 
 fn github_app_token_url(client_id: &str) -> Result<reqwest::Url, ErrorResponse> {
-    let mut url = reqwest::Url::parse(GITHUB_API_BASE_URL).map_err(|e| {
+    let mut url = reqwest::Url::parse(&github_api_base()).map_err(|e| {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Invalid GitHub API URL")
             .with_details(e.to_string())
@@ -369,7 +368,7 @@ async fn fetch_github_user_info(access_token: &str) -> Result<GitHubUserInfo, Er
     let http_client = github_api_http_client()?;
     fetch_github_user_info_from_url(
         http_client,
-        &format!("{GITHUB_API_BASE_URL}/user"),
+        &format!("{}/user", github_api_base()),
         access_token,
     )
     .await
@@ -397,7 +396,7 @@ async fn fetch_github_primary_verified_email(
     let http_client = github_api_http_client()?;
     fetch_github_primary_verified_email_from_url(
         http_client,
-        &format!("{GITHUB_API_BASE_URL}/user/emails"),
+        &format!("{}/user/emails", github_api_base()),
         access_token,
     )
     .await

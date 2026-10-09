@@ -2,6 +2,18 @@ use oauth2::basic::BasicClient;
 use oauth2::{AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl, TokenUrl};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::oauth;
+
+const GITHUB_DEFAULT_OAUTH_BASE: &str = "https://github.com";
+const GITHUB_DEFAULT_API_BASE: &str = "https://api.github.com";
+
+pub fn github_oauth_base() -> String {
+    oauth::provider_env_base("GITHUB_OAUTH_BASE_URL", GITHUB_DEFAULT_OAUTH_BASE)
+}
+
+pub fn github_api_base() -> String {
+    oauth::provider_env_base("GITHUB_API_BASE_URL", GITHUB_DEFAULT_API_BASE)
+}
 
 pub struct GitHubCredentials {
     pub client_id: String,
@@ -35,12 +47,12 @@ pub fn get_github_oauth_client() -> Result<GithubClient, ErrorResponse> {
     })?;
 
     let auth_url =
-        AuthUrl::new("https://github.com/login/oauth/authorize".to_string()).map_err(|e| {
+        AuthUrl::new(format!("{}/login/oauth/authorize", github_oauth_base())).map_err(|e| {
             ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Invalid GitHub auth URL")
                 .with_details(e.to_string())
         })?;
-    let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())
+    let token_url = TokenUrl::new(format!("{}/login/oauth/access_token", github_oauth_base()))
         .map_err(|e| {
             ErrorResponse::new(ErrorCode::InternalServerError)
                 .with_message("Invalid GitHub token URL")

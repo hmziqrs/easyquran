@@ -64,6 +64,7 @@ fn is_csrf_exempt(path: &str) -> bool {
             | "/auth/apple/v1/token/nonce"
             | "/auth/facebook/v1/token"
             | "/auth/github/v1/token"
+            | "/auth/discord/v1/token"
             | "/csrf/v1/generate"
     ) {
         return true;
@@ -192,6 +193,7 @@ mod tests {
         assert!(is_csrf_exempt("/auth/apple/v1/token/nonce"));
         assert!(is_csrf_exempt("/auth/facebook/v1/token"));
         assert!(is_csrf_exempt("/auth/github/v1/token"));
+        assert!(is_csrf_exempt("/auth/discord/v1/token"));
         assert!(!is_csrf_exempt("/auth/google/v1/token-evil"));
         // Browser SPA code-exchange endpoints stay CSRF-gated.
         assert!(!is_csrf_exempt("/auth/apple/v1/exchange"));

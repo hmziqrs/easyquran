@@ -38,7 +38,7 @@ use crate::modules::seed_v1;
 use crate::modules::billing_v1;
 
 use crate::modules::passkey_v1;
-use crate::modules::{apple_auth_v1, facebook_auth_v1, github_auth_v1};
+use crate::modules::{apple_auth_v1, discord_auth_v1, facebook_auth_v1, github_auth_v1};
 use crate::modules::{bookmark_v1, device_v1, notification_v1};
 
 use crate::utils::sanitize::xml_escape;
@@ -93,6 +93,10 @@ pub fn router(state: AppState) -> Router<AppState> {
             .nest(
                 "/auth/github/v1",
                 github_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            )
+            .nest(
+                "/auth/discord/v1",
+                discord_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
             )
             .nest(
                 "/auth/apple/v1",

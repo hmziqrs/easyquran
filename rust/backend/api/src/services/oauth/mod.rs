@@ -19,6 +19,20 @@ pub use state::{
     NATIVE_TOKEN_NONCE_TTL_SECS,
 };
 
+/// Sandbox seam: non-production runs may point a provider at a local fake OAuth
+/// server via `<PROVIDER>_OAUTH_BASE_URL` / `<PROVIDER>_API_BASE_URL`. Production
+/// always uses the real endpoints — the overrides are ignored there.
+pub fn provider_env_base(key: &str, default: &str) -> String {
+    if !matches!(crate::config::settings::is_production(), Ok(false)) {
+        return default.to_string();
+    }
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
 static TOKEN_EXCHANGE_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> =
     LazyLock::new(|| {
         reqwest::Client::builder()

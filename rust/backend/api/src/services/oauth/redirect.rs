@@ -144,6 +144,10 @@ mod tests {
             "/auth/facebook/success"
         );
         assert_eq!(success_path(OAuthProvider::Github), "/auth/github/success");
+        assert_eq!(
+            success_path(OAuthProvider::Discord),
+            "/auth/discord/success"
+        );
     }
 
     #[test]
@@ -170,6 +174,10 @@ mod tests {
         assert_eq!(
             failure_path(OAuthProvider::Github, FAILURE_SERVER),
             "/auth/github/failure?ec=server"
+        );
+        assert_eq!(
+            failure_path(OAuthProvider::Discord, FAILURE_CANCELLED),
+            "/auth/discord/failure?ec=cancel"
         );
     }
 
