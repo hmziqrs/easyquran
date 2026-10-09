@@ -83,14 +83,14 @@
       {@const m = meta()}
       {#if m}
         <span class="flex flex-wrap items-baseline gap-x-2">
-          <span class="text-[13.5px] font-semibold text-foreground">{m.entry.name}</span>
-          <span class="font-mono text-[12px] tabular-nums text-muted">{vKey}</span>
+          <span class="text-[13.5px] font-medium text-foreground">{m.entry.name}</span>
+          <span class="text-[12.5px] text-muted">{vKey}</span>
           <span class="text-[12px] text-muted">{m.entry.meaning}</span>
         </span>
         <span class="font-arabic text-[15px] text-foreground" lang="ar" dir="rtl"
           >{m.entry.arabic} · {toArabicDigits(m.entry.num)}:{toArabicDigits(n)}</span
         >
-        <span class="text-[11.5px] tabular-nums text-muted">
+        <span class="text-[11.5px] text-muted">
           {placeLabel(m.entry.place)} · {positionLabel(copy, m.position)}
         </span>
         {#if m.sajda}
@@ -101,7 +101,7 @@
           </span>
         {/if}
       {:else}
-        <span class="font-mono text-[12px] text-muted">{vKey}</span>
+        <span class="text-[12.5px] text-muted">{vKey}</span>
       {/if}
     {/if}
   </TooltipContent>

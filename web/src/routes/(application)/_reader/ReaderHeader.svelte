@@ -42,12 +42,12 @@
 <div class="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-reader-divider py-4">
   <span
     aria-hidden="true"
-    class="flex size-9 flex-none items-center justify-center rounded-pill bg-primary text-[13px] font-semibold tabular-nums text-primary-foreground"
+    class="flex size-9 flex-none items-center justify-center rounded-pill bg-primary text-[13px] font-medium text-primary-foreground"
   >
     {initial.surah.num}
   </span>
   <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-    <h1 class="text-[21px] font-semibold tracking-[-0.015em] text-foreground">
+    <h1 class="text-[21px] font-medium tracking-[-0.015em] text-foreground">
       <span class="sr-only">{initial.surah.num}. </span>{initial.surah.name}
     </h1>
     <span dir="rtl" lang="ar" class="font-arabic text-[24px] leading-none text-foreground">

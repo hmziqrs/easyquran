@@ -21,7 +21,7 @@
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
-  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-foreground">{heading}</h2>
+  <h2 class="text-[17px] font-medium tracking-[-0.02em] text-foreground">{heading}</h2>
   <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
 
   <div class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">

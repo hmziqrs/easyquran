@@ -49,7 +49,7 @@
 <ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.surahsTitle}</h1>
-    <span class="ms-auto font-mono text-[12px] text-muted">{data.surahs.length}</span>
+    <span class="ms-auto text-[12.5px] text-muted">{data.surahs.length}</span>
   {/snippet}
 
   <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -62,7 +62,7 @@
           class="flex items-center gap-3.5 rounded-lg border border-border p-4 transition-colors hover:bg-surface-hover"
         >
           <span
-            class="flex size-10 flex-none items-center justify-center rounded-full border-2 text-[15px] font-extrabold tabular-nums"
+            class="flex size-10 flex-none items-center justify-center rounded-full border-2 text-[15px] font-medium"
             style:border-color={HUE_EDGE[hue]}
             style:background={HUE_DIM[hue]}
             style:color={HUE_EDGE[hue]}
@@ -79,7 +79,7 @@
                 {surah.arabic}
               </span>
             </span>
-            <span class="truncate text-[11.5px] leading-none text-muted tabular-nums"
+            <span class="truncate text-[11.5px] leading-none text-muted"
               >{copy.index.ayahCount(surah.ayahCount)}</span
             >
           </span>

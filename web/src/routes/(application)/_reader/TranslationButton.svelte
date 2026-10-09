@@ -83,7 +83,7 @@
     {#if hiddenCount > 0}
       <span
         data-translation-count
-        class="hidden h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-semibold tabular-nums text-primary-foreground sm:flex"
+        class="hidden h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1.5 text-[12px] font-medium text-primary-foreground sm:flex"
       >
         {hiddenCount}
       </span>

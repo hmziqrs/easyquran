@@ -29,7 +29,7 @@
       data-slot="command-group-heading"
       {...headingProps}
       class={cn(
-        "px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-4",
+        "px-2.5 pb-1 pt-1.5 text-[12px] font-medium text-fg-4",
         headingProps?.class,
       )}
     >

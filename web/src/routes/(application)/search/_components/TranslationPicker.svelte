@@ -74,7 +74,7 @@
   <div class="flex max-h-[420px] flex-col gap-3 overflow-y-auto">
     {#each grouped as group (group.language)}
       <section>
-        <div class="px-1 py-1 text-[10.5px] uppercase tracking-wide text-muted">
+        <div class="px-1 py-1 text-[12px] font-medium text-muted">
           {group.language}
         </div>
         <ul class="flex flex-col gap-0.5">

@@ -146,7 +146,7 @@
     <Button
       type="submit"
       variant="primary"
-      class="h-11 flex-none px-5 text-[15px] font-bold sm:h-12 sm:px-6"
+      class="h-11 flex-none px-5 text-[15px] font-medium sm:h-12 sm:px-6"
     >{landing.searchButton}</Button>
   </form>
 
@@ -155,7 +155,7 @@
     {#each oftenOpened as s (s.num)}
       <a
         href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
-        class="rounded-pill border border-border px-3.5 py-1.5 text-[14px] font-semibold text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="rounded-pill border border-border px-3.5 py-1.5 text-[14px] font-medium text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >{#if locale === "ar"}<span lang="ar" dir="rtl" class="font-arabic">{s.arabic}</span>{:else}{s.name}{/if}</a
       >
     {/each}
@@ -170,18 +170,18 @@
     class="mb-4 flex items-end gap-1 overflow-x-auto overflow-y-hidden border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   >
     <h2
-      class="-mb-px inline-flex h-11 flex-none items-center border-b-2 border-foreground px-3 text-[15px] font-bold text-foreground"
+      class="-mb-px inline-flex h-11 flex-none items-center border-b-2 border-foreground px-3 text-[15px] font-medium text-foreground"
     >{landing.indexSurahs}</h2>
     <nav aria-label={landing.indexLabel} class="flex flex-none items-end gap-1">
       {#each indexLinks as link (link.href)}
         <a
           href={link.href}
           data-sveltekit-preload-data="hover"
-          class="-mb-px inline-flex h-11 items-center border-b-2 border-transparent px-3 text-[15px] font-semibold text-muted transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+          class="-mb-px inline-flex h-11 items-center border-b-2 border-transparent px-3 text-[15px] font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
         >{link.label}</a>
       {/each}
     </nav>
-    <span class="ms-auto flex h-11 flex-none items-center px-1 text-caption tabular-nums text-muted"
+    <span class="ms-auto flex h-11 flex-none items-center px-1 text-caption text-muted"
       >{surahs.length}</span
     >
   </div>
@@ -195,14 +195,14 @@
           class="group flex items-center gap-3.5 rounded-md border border-border p-4 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="flex size-10 flex-none items-center justify-center rounded-full border-2 text-[15px] font-extrabold tabular-nums"
+            class="flex size-10 flex-none items-center justify-center rounded-full border-2 text-[15px] font-medium"
             style:border-color={HUE_EDGE[hue]}
             style:background={HUE_DIM[hue]}
             style:color={HUE_EDGE[hue]}
             >{s.num}</span
           >
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="truncate text-[16px] font-bold leading-tight tracking-[-0.01em] text-foreground"
+            <span class="truncate text-[16px] font-medium leading-tight tracking-[-0.01em] text-foreground"
               >{s.name}</span
             >
             <span class="flex min-w-0 items-baseline justify-between gap-3">
@@ -214,7 +214,7 @@
                 >{s.arabic}</span
               >
             </span>
-            <span class="truncate text-caption leading-none tabular-nums text-muted"
+            <span class="truncate text-caption leading-none text-muted"
               >{landing.ayahCount(s.ayahCount)}</span
             >
           </span>

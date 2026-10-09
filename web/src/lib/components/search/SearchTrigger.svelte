@@ -32,7 +32,7 @@
     <Icon name="search" size={17} class="flex-none text-muted" title={label} />
     <span class="min-w-0 flex-grow truncate text-body text-muted">{label}</span>
     <span
-      class="hidden flex-none items-center gap-[3px] rounded-pill bg-background-subtle px-[9px] py-[5px] text-[13px] font-bold text-muted sm:flex"
+      class="hidden flex-none items-center gap-[3px] rounded-pill bg-background-subtle px-[9px] py-[5px] text-[13px] font-medium text-muted sm:flex"
       aria-hidden="true"
     >
       <span>⌘</span><span>K</span>

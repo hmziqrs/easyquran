@@ -272,7 +272,7 @@
                   {#snippet body()}
                     <span
                       class={[
-                        "w-9 flex-none text-[15px] font-semibold tabular-nums",
+                        "w-9 flex-none text-[15px] font-medium tabular-nums",
                         active ? "text-primary" : "text-foreground",
                       ]}
                     >
@@ -363,7 +363,7 @@
                   {#snippet body()}
                     <span
                       class={[
-                        "w-11 flex-none text-[19px] font-semibold tabular-nums",
+                        "w-11 flex-none text-[19px] font-medium tabular-nums",
                         active ? "text-primary" : "text-foreground",
                       ]}
                     >

@@ -123,7 +123,7 @@
 
 <div lang={copy.locale} dir={copy.direction}>
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
-    <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
+    <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
 
     <div class="mt-5 flex flex-col gap-4 sm:mt-6">
       <SearchControls

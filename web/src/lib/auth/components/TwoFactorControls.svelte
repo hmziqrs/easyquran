@@ -58,13 +58,13 @@
 {:else if showVerifyPanel && flow.setupData}
   <section class="flex flex-col gap-4 rounded-xl border border-border-strong bg-background-subtle p-5">
     <div class="flex flex-col gap-1">
-      <h3 class="text-base font-semibold">Enter your authenticator code</h3>
+      <h3 class="text-base font-medium">Enter your authenticator code</h3>
       <p class="text-sm text-foreground-secondary">
         Add this secret to your authenticator app, then enter the 6-digit code it generates.
       </p>
     </div>
     <div class="flex flex-col gap-1">
-      <span class="text-xs font-medium uppercase tracking-wide text-muted">Secret (keep private)</span>
+      <span class="text-xs font-medium text-muted">Secret (keep private)</span>
       <code class="break-all rounded-md bg-surface px-3 py-2 font-mono text-sm">{flow.setupData.secret}</code>
     </div>
     {#if flow.setupData.backupCodes.length > 0}
@@ -116,7 +116,7 @@
 {:else if showSetupCta}
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
-      <h3 class="text-base font-semibold">Two-factor authentication</h3>
+      <h3 class="text-base font-medium">Two-factor authentication</h3>
       <p class="text-sm text-foreground-secondary">Add a second step at sign-in using an authenticator app.</p>
     </div>
     {#if flow.genericError}
@@ -129,7 +129,7 @@
 {:else if showEnabledPanel}
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
-      <h3 class="text-base font-semibold">Two-factor authentication is on</h3>
+      <h3 class="text-base font-medium">Two-factor authentication is on</h3>
       <p class="text-sm text-foreground-secondary">
         Enter your authenticator code to remove the second step at sign-in.
       </p>
@@ -172,7 +172,7 @@
 {:else if showDisabledNotice}
   <section class="flex flex-col gap-3">
     <div class="flex flex-col gap-1">
-      <h3 class="text-base font-semibold">Two-factor authentication is off</h3>
+      <h3 class="text-base font-medium">Two-factor authentication is off</h3>
       <p class="text-sm text-foreground-secondary">Two-factor authentication has been disabled.</p>
     </div>
     {#if flow.genericError}

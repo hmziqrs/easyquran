@@ -39,7 +39,7 @@
           </span>
           <span class="flex min-w-0 flex-col">
             <span class="text-caption text-muted">{copy.emailTitle}</span>
-            <span class="truncate text-body font-semibold text-foreground">{data.owner.email}</span>
+            <span class="truncate text-body font-medium text-foreground">{data.owner.email}</span>
           </span>
           <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
         </a>
@@ -53,7 +53,7 @@
           </span>
           <span class="flex min-w-0 flex-col">
             <span class="text-caption text-muted">{copy.xTitle}</span>
-            <span class="truncate text-body font-semibold text-foreground">{data.owner.xHandle}</span>
+            <span class="truncate text-body font-medium text-foreground">{data.owner.xHandle}</span>
           </span>
           <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
         </a>

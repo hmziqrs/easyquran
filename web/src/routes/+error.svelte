@@ -14,7 +14,7 @@
 </svelte:head>
 
 <Container class="flex min-h-[60vh] flex-col items-center justify-center gap-4 py-24 text-center">
-  <span class="font-mono text-xs uppercase tracking-wide text-fg-3">{status}</span>
+  <span class="text-sm text-fg-3">{status}</span>
   <h1 class="text-3xl font-medium tracking-[-0.02em]">
     {isNotFound ? "Page not found" : "Something went wrong"}
   </h1>
@@ -23,5 +23,5 @@
       ? `The page you're looking for isn't on ${SITE.domain}.`
       : (error?.message ?? "Unexpected error.")}
   </p>
-  <a class="font-mono text-sm text-accent hover:underline" href="/">← Back to {SITE.name}</a>
+  <a class="text-sm text-accent hover:underline" href="/">← Back to {SITE.name}</a>
 </Container>

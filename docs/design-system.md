@@ -11,18 +11,18 @@
 The app moved off the v1 "Sacred Editorial" direction (forest/ivory/antique gold,
 Newsreader + Inter, 10–18px radii, tinted grounds) onto a **pill / cobalt** system:
 
-| Layer       | Now                                                                                                             |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| Ground      | One **zero-chroma neutral ground** shared by every palette, per mode                                            |
-| Accents     | 4 palettes: **sacred = cobalt**, **ink = neutral**, **sepia = magenta**, **sapphire = emerald**                 |
-| Hue slots   | 4 fixed hues (cobalt/emerald/purple/rose), identical across palettes, **mode-dependent**                        |
-| Dark fills  | **White-on-colour**: dark-mode accents are _darker_ than light-mode ones, carrying white text                   |
-| Typography  | **Nunito** (self-hosted, variable) for UI + display; Noto Sans Arabic for Arabic UI; Amiri for the Quran column |
-| Geometry    | **Pill controls** (999px), 8px icon holders, 10px blocks, 14px large panels, 16px headline highlight            |
-| Layout      | Full-bleed **Band** model; responsive ramp as a **utility ladder** (gutter 20/32/48/72, band pad 48/64/80/96)   |
-| Elevation   | **None** — separation is borders and tonal surface steps, never shadows                                         |
-| Muted floor | `--muted` at L 0.52 (light) / 0.625 (dark) is contrast-derived — do not raise                                   |
-| Icons       | Lucide line icons, 18/20/24; directional glyphs mirror automatically under RTL                                  |
+| Layer       | Now                                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Ground      | One **zero-chroma neutral ground** shared by every palette, per mode                                                      |
+| Accents     | 4 palettes: **sacred = cobalt**, **ink = neutral**, **sepia = magenta**, **sapphire = emerald**                           |
+| Hue slots   | 4 fixed hues (cobalt/emerald/purple/rose), identical across palettes, **mode-dependent**                                  |
+| Dark fills  | **White-on-colour**: dark-mode accents are _darker_ than light-mode ones, carrying white text                             |
+| Typography  | **Onest** (self-hosted, variable) at 400/500 for UI + display; Noto Sans Arabic for Arabic UI; Amiri for the Quran column |
+| Geometry    | **Pill controls** (999px), 8px icon holders, 10px blocks, 14px large panels, 16px headline highlight                      |
+| Layout      | Full-bleed **Band** model; responsive ramp as a **utility ladder** (gutter 20/32/48/72, band pad 48/64/80/96)             |
+| Elevation   | **None** — separation is borders and tonal surface steps, never shadows                                                   |
+| Muted floor | `--muted` at L 0.52 (light) / 0.625 (dark) is contrast-derived — do not raise                                             |
+| Icons       | Lucide line icons, 18/20/24; directional glyphs mirror automatically under RTL                                            |
 
 The Quran reading surface stays deliberately quiet: the reading column inherits the
 neutral ground (only **sepia** keeps a warm reader in both modes), and the Quran text
@@ -59,19 +59,19 @@ Every machine guard landed with the change it guards and is enumerated in §61.
 
 ## 2. What changed from v1 (delta)
 
-| v1 (Sacred Editorial)         | v2 (pill/cobalt)                                                                          |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| Per-palette tinted grounds    | One shared **zero-chroma ground**; palette choice moves only the accent family            |
-| `sacred` = forest green       | `sacred` = **cobalt** oklch(0.52 0.21 262)                                                |
-| `sepia` = parchment/umber     | `sepia` = **magenta** 352 accent, warm _reader_ kept                                      |
-| `sapphire` = navy/brass       | `sapphire` = **emerald** 162                                                              |
-| `ink` = graphite accent       | `ink` = **ground-inverted neutral** (white on near-black / near-black on white)           |
-| Editorial gold `--accent`     | `--accent` = the **hue-2 family** (emerald); gold retired as a colour, name kept as alias |
-| Newsreader display + Inter UI | **Nunito Variable** everywhere (self-hosted `@fontsource-variable/nunito`)                |
-| Radii 10–18px                 | **Pill 999** controls; 8/10/14/16 for holders/blocks/panels/highlight                     |
-| Soft shadows                  | `--elev-sm/md = none`; borders + tonal surfaces                                           |
-| Fixed containers per page     | Full-bleed **Band** + responsive utility ladder                                           |
-| Physical CSS directions       | Logical properties everywhere (`ms-`/`pe-`/`start-`/`text-start`), machine-guarded        |
+| v1 (Sacred Editorial)         | v2 (pill/cobalt)                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| Per-palette tinted grounds    | One shared **zero-chroma ground**; palette choice moves only the accent family                 |
+| `sacred` = forest green       | `sacred` = **cobalt** oklch(0.52 0.21 262)                                                     |
+| `sepia` = parchment/umber     | `sepia` = **magenta** 352 accent, warm _reader_ kept                                           |
+| `sapphire` = navy/brass       | `sapphire` = **emerald** 162                                                                   |
+| `ink` = graphite accent       | `ink` = **ground-inverted neutral** (white on near-black / near-black on white)                |
+| Editorial gold `--accent`     | `--accent` = the **hue-2 family** (emerald); gold retired as a colour, name kept as alias      |
+| Newsreader display + Inter UI | **Onest Variable** everywhere (self-hosted `@fontsource-variable/onest`; Nunito until 2026-10) |
+| Radii 10–18px                 | **Pill 999** controls; 8/10/14/16 for holders/blocks/panels/highlight                          |
+| Soft shadows                  | `--elev-sm/md = none`; borders + tonal surfaces                                                |
+| Fixed containers per page     | Full-bleed **Band** + responsive utility ladder                                                |
+| Physical CSS directions       | Logical properties everywhere (`ms-`/`pe-`/`start-`/`text-start`), machine-guarded             |
 
 ---
 
@@ -288,21 +288,29 @@ depends on it.
 
 | Stack        | Token              | Faces                                                                                                                                    |
 | ------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| UI + display | `--font-sans`      | **Nunito Variable**, Nunito, `ui-rounded`, system-ui, -apple-system, "Segoe UI", sans-serif                                              |
+| UI + display | `--font-sans`      | **Onest Variable**, Onest, system-ui, -apple-system, "Segoe UI", sans-serif                                                              |
 | Arabic UI    | `--font-arabic-ui` | Noto Sans Arabic (400/600), Segoe UI, Tahoma                                                                                             |
 | Quran text   | `--font-quran`     | resolves the reader's runtime font choice; Amiri pre-hydration (`--font-arabic`: Amiri, Scheherazade New, Traditional Arabic, Geeza Pro) |
-| Mono         | `--font-mono`      | Geist Mono Variable, ui-monospace, JetBrains Mono, SF Mono, Menlo                                                                        |
+| Mono         | `--font-mono`      | JetBrains Mono Variable, ui-monospace, SF Mono, Menlo — **code only** (2FA secrets, recovery codes, colour values)                       |
 
-- One Latin face: there is **no display face**; headings are Nunito 800 via the ramp.
-  `--font-display`/`--font-serif`/Inter/Newsreader are machine-banned
-  (`fonts.test.ts`).
-- `ui-rounded` is the fallback chosen for character match — a slow font load
-  degrades to something with the same feel.
-- Arabic next to Latin: Amiri renders small next to Nunito at equal nominal size, so
-  the boards run Arabic at ≈1.4×. `--font-size-arabic-ratio: 1.4`; the `.arabic`
-  utility applies family + RTL + ratio (+ lh 2.1). `font-arabic` is family-only for
-  fixed-size cases (the reading column has its own tuned sizing, out of scope here).
-- The offline pack picks up the Nunito woff2 set (5 subsets) through the service
+- One Latin face: there is **no display face**; headings are Onest 500 via the ramp
+  (hmziq brand kit: 400 text, 500 headings, nothing heavier than 600 — the wordmark).
+  A neutral, normal-width face so the Quran's calligraphy carries the page.
+  `--font-display`/`--font-serif`/Inter/Newsreader are machine-banned, and so is any
+  weight above 600 in app source (`font-bold`/`font-extrabold`/`font-black`,
+  `font-weight: 700–900`) (`fonts.test.ts`; the dev-only `/design` lab is exempt and
+  loads Nunito itself for its older studies).
+- Mono is for code only — never labels, verse refs, counts or headings. Labels are
+  sentence case (`.eyebrow`, `text-micro`): no uppercase, no letter-spacing.
+- Numbers use Onest's default (proportional) figures; `tabular-nums` only where digits
+  line up in a column or change live (percentages, steppers, sidebar index).
+- Arabic next to Latin: Amiri renders small next to Latin at equal nominal size, so
+  Arabic runs at a ratio of the adjacent size. Onest's x-height is ≈7% taller than
+  Nunito's (52.7 vs 49.3 per 100px), so the board's 1.4 became
+  `--font-size-arabic-ratio: 1.45`; the `.arabic` utility applies family + RTL + ratio
+  (+ lh 2.1). `font-arabic` is family-only for fixed-size cases (the reading column has
+  its own tuned sizing, out of scope here).
+- The offline pack picks up the Onest woff2 set (7 subsets) through the service
   worker's build manifest; Inter/Newsreader ship nowhere.
 
 ---
@@ -311,24 +319,25 @@ depends on it.
 
 Sizes/line-heights/weights/tracking are one contract; tracking is part of the role,
 not a per-use decision. Per-role weight and tracking ride the `text-*` utility — do
-**not** add `font-semibold`/`tracking-*` next to a ramp class (an explicit `font-*`
-utility wins; that is the override hatch, use it deliberately).
+**not** add `font-medium`/`tracking-*` next to a ramp class (an explicit `font-*`
+utility wins; that is the override hatch, use it deliberately). Sizes and line-heights
+come from the plan 02 boards; weights from the hmziq brand kit.
 
 | Role              | Size/line     | Weight | Tracking |
 | ----------------- | ------------- | ------ | -------- |
-| `text-display-xl` | 76px / 1.06   | 800    | −0.04em  |
-| `text-h1`         | 40px / 1.1    | 800    | −0.035em |
-| `text-h2`         | 26px / 1.2    | 800    | −0.03em  |
-| `text-h3`         | 20px / 1.25   | 800    | −0.025em |
-| `text-body-xl`    | 20px / 1.55   | 600    | —        |
-| `text-body-l`     | 17.5px / 1.6  | 600    | —        |
-| `text-body`       | 15px / 1.5    | 600    | —        |
-| `text-caption`    | 13.5px / 1.45 | 600    | —        |
-| `text-micro`      | 13px / 1.4    | 800    | +0.1em   |
+| `text-display-xl` | 76px / 1.06   | 500    | −0.04em  |
+| `text-h1`         | 40px / 1.1    | 500    | −0.035em |
+| `text-h2`         | 26px / 1.2    | 500    | −0.03em  |
+| `text-h3`         | 20px / 1.25   | 500    | −0.025em |
+| `text-body-xl`    | 20px / 1.55   | 400    | —        |
+| `text-body-l`     | 17.5px / 1.6  | 400    | —        |
+| `text-body`       | 15px / 1.5    | 400    | —        |
+| `text-caption`    | 13.5px / 1.45 | 400    | —        |
+| `text-micro`      | 13px / 1.4    | 500    | 0        |
 
 - `text-display-l` and `text-body-s` are retired roles kept as aliases of their
   nearest neighbours (h1 / body) for one release — prefer the real roles.
-- Base `h1–h4` elements are weight 800; body element weight stays 400 so the Quran
+- Base `h1–h4` elements are weight 500; body element weight stays 400 so the Quran
   column (Amiri 400/700) never gets synthetic bold — ramp weights arrive via role
   classes.
 - Board-only sizes (16.5/15.5/14.5 nav text, 44px metric numerals, 24px row Arabic,
@@ -620,7 +629,7 @@ right-N/text-left|right` are banned in guarded trees.
 
 A neutral, near-grey canvas at every palette; one decisive accent per palette
 (cobalt / neutral / magenta / emerald) plus four fixed hue slots for categorical
-colour; deep dark fills that carry white; Nunito at 800 for display and 600 for
+colour; deep dark fills that carry white; Onest at 500 for display and 400 for
 body; pill controls on 8/10/14px blocks; full-bleed bands on a 20/32/48/72 gutter
 ladder; no shadows; hairlines and tonal steps; logical properties for both
 directions; and a reading surface that stays quieter than the chrome around it —
@@ -643,11 +652,12 @@ For anyone (human or AI) changing UI code:
    Guarded by `prefs.test.ts`.
 3. **Never raise `--muted`** past 0.52/0.625 — contrast floor (§9). Guarded by
    `token-contrast.test.ts`.
-4. **No CDN fonts**, no `--font-display`/`--font-serif`/Inter/Newsreader.
-   Guarded by `fonts.test.ts`.
+4. **No CDN fonts**, no `--font-display`/`--font-serif`/Inter/Newsreader, nothing
+   heavier than 600, mono for code only, no uppercase/tracked labels.
+   Guarded by `fonts.test.ts` (weights, faces, ramp).
 5. **Controls are pills**; `rounded-full` only for dots/spinners/orbs; no
    `rounded-[Npx]` literals in `ui/`. Guarded by `geometry.test.ts`.
-6. **Ramp weight/tracking ride the `text-*` role** — no `font-semibold`/`tracking-*`
+6. **Ramp weight/tracking ride the `text-*` role** — no `font-medium`/`tracking-*`
    beside a ramp class (§11).
 7. **Band owns its container** — never `Container` inside a band; the metric strip
    stays gapless at every width; override the whole §15 ladder or none of it.

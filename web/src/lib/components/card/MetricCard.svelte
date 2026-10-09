@@ -33,7 +33,7 @@
   type Props = {
     /** Which brand hue slot this card fills (1–4). */
     hue: Hue;
-    /** Large numeral (or word) — 44px/800, tabular where numeric. */
+    /** Large numeral (or word) — 44px/500. */
     value: string;
     /** Card title (h3 ramp role). */
     label: string;
@@ -72,7 +72,7 @@
     >
       {@render children?.()}
     </div>
-    <span class="text-[44px] leading-none tracking-[-0.05em] font-extrabold">{value}</span>
+    <span class="text-[44px] leading-none tracking-[-0.05em] font-medium">{value}</span>
   </div>
   <div class="flex flex-col gap-[5px]">
     <span class="text-h3">{label}</span>

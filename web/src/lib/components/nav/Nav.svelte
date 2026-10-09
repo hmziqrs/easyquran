@@ -185,7 +185,7 @@
     </span>
 
     {#if indexLinks.length > 0}
-      <nav class="hidden items-center gap-6 text-[15px] font-bold lg:flex" aria-label={copy.primaryLabel}>
+      <nav class="hidden items-center gap-6 text-[15px] font-medium lg:flex" aria-label={copy.primaryLabel}>
         {#each indexLinks as link (link.href)}
           <a
             href={link.href}

@@ -376,7 +376,7 @@
 
       <div class="flex flex-none flex-col gap-3 px-4 pb-3 pt-1 md:px-5 md:pt-3">
         <div class="flex items-center gap-3">
-          <Dialog.Title class="text-[17px] font-semibold leading-tight">
+          <Dialog.Title class="text-[17px] font-medium leading-tight">
             {picking ? copy.shell.readingTranslationPick : copy.stacked.title}
           </Dialog.Title>
           <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
@@ -666,7 +666,7 @@
             <TooltipContent
               class="flex w-[260px] max-w-[260px] flex-col items-start gap-1.5 whitespace-normal rounded-md px-3 py-2.5 text-start leading-snug"
             >
-              <span class="text-[12px] font-semibold"><bdi>{t.name}</bdi></span>
+              <span class="text-[12px] font-medium"><bdi>{t.name}</bdi></span>
               <span
                 class="inline-flex items-center gap-1.5 rounded-pill bg-background/15 px-2 py-0.5 text-[11px] font-medium"
               >
@@ -742,7 +742,7 @@
               <span class="flex min-w-0 flex-1 items-baseline gap-1.5">
                 <span
                   data-language-name
-                  class="flex-none text-[14px] {active ? 'font-semibold' : 'font-medium'}"
+                  class="flex-none text-[14px] {active ? 'font-medium' : 'font-normal'}"
                   >{l.language}</span
                 >
                 {#if l.autonym !== null}
@@ -812,7 +812,7 @@
               class="sticky top-0 z-10 flex h-12 flex-none items-center gap-2 border-b border-border bg-popover px-4"
             >
               {@render paneBack()}
-              <h3 class="text-[15px] font-semibold text-foreground">{activeLanguage}</h3>
+              <h3 class="text-[15px] font-medium text-foreground">{activeLanguage}</h3>
               <span data-results-count class="text-[13px] text-muted-foreground">
                 {copy.translations.results(activeEntries.length)}
               </span>
@@ -843,7 +843,7 @@
           type="button"
           data-done
           onclick={() => (open = false)}
-          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover md:h-9"
+          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover md:h-9"
         >
           {copy.translations.done}
         </button>

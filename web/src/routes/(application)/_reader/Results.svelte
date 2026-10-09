@@ -107,7 +107,7 @@
           onclick={() => open(r, state.quranData)}
           class="flex flex-col gap-2.5 rounded-md border border-border bg-surface px-6 py-5 text-start transition-colors hover:border-primary"
         >
-          <span class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span class="text-xs font-medium text-muted-foreground">
             {#if r.kind === SearchHitKind.Opener}
               {copy.search.surahOpener(
                 state.quranData.surahByNum(surah)?.name ?? copy.sidebar.mode("surah"),

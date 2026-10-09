@@ -101,7 +101,7 @@
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
-  <h2 class="text-[17px] font-semibold tracking-[-0.02em] text-foreground">{heading}</h2>
+  <h2 class="text-[17px] font-medium tracking-[-0.02em] text-foreground">{heading}</h2>
   <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
 
   <div
@@ -193,7 +193,7 @@
               class="size-8 flex-none cursor-pointer rounded-sm border border-border-strong bg-transparent p-0.5"
             />
             <span class="flex-1 text-caption text-foreground-secondary">{panel.seedNames[s.key]}</span>
-            <span class="font-mono text-caption tabular-nums text-muted">
+            <span class="text-caption tabular-nums text-muted">
               {prefs.custom[s.key] ?? panel.preset}
             </span>
             {#if prefs.custom[s.key]}

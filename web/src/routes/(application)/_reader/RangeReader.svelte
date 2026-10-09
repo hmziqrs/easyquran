@@ -266,7 +266,7 @@
     <!-- No card: each surah in the range is a section divided by rules, like the Surah reader. -->
     <div>
       <div class="flex items-center justify-between gap-3 border-b border-reader-divider py-3">
-        <span class="text-sm font-semibold text-foreground">{g.surah.num}. {g.surah.name}</span>
+        <span class="text-sm font-medium text-foreground">{g.surah.num}. {g.surah.name}</span>
         <button
           type="button"
           onclick={() => openSurah(g.surah)}

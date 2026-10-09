@@ -56,7 +56,7 @@
 
 <section class="mt-6" aria-labelledby="bookmarks-folders">
   <div class="flex items-baseline justify-between gap-3">
-    <h2 id="bookmarks-folders" class="text-[17px] font-semibold tracking-[-0.02em] text-foreground"
+    <h2 id="bookmarks-folders" class="text-[17px] font-medium tracking-[-0.02em] text-foreground"
       >{copy.foldersHeading}</h2
     >
   </div>

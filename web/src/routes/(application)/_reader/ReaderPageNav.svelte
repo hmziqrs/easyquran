@@ -52,7 +52,7 @@
         <a
           href={publicHref(pageHref(previousPage.globalPage))}
           data-sveltekit-preload-data="hover"
-          class="rounded-pill border border-border px-2.5 py-1 font-mono transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="rounded-pill border border-border px-2.5 py-1 transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           {copy.range.item("page", previousPage.globalPage)}
         </a>
@@ -61,7 +61,7 @@
         <a
           href={publicHref(pageHref(nextPage.globalPage))}
           data-sveltekit-preload-data="hover"
-          class="rounded-pill border border-border px-2.5 py-1 font-mono transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="rounded-pill border border-border px-2.5 py-1 transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           {copy.range.item("page", nextPage.globalPage)}
         </a>
@@ -85,7 +85,7 @@
             <span aria-hidden="true" class="flex-none">{startArrow}</span>
             <span class="flex min-w-0 flex-col">
               <span class="flex min-w-0 items-center gap-1.5">
-                <span dir="ltr" class="flex-none text-[12px] font-semibold text-muted"
+                <span dir="ltr" class="flex-none text-[12px] font-medium text-muted"
                   >{previousSurah.num}</span
                 >
                 <span class="truncate text-sm font-medium text-foreground"
@@ -111,7 +111,7 @@
           >
             <span class="flex min-w-0 flex-col">
               <span class="flex min-w-0 items-center justify-end gap-1.5">
-                <span dir="ltr" class="flex-none text-[12px] font-semibold text-primary-foreground/70"
+                <span dir="ltr" class="flex-none text-[12px] font-medium text-primary-foreground/70"
                   >{nextSurah.num}</span
                 >
                 <span class="truncate text-sm font-medium text-primary-foreground"

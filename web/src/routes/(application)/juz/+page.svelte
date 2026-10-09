@@ -51,7 +51,7 @@
 <ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.juzTitle}</h1>
-    <span class="ms-auto font-mono text-[12px] text-muted"
+    <span class="ms-auto text-[12.5px] text-muted"
       >{copy.range.juzCount(data.ajzur.length)}</span
     >
   {/snippet}
@@ -70,14 +70,14 @@
           class="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
         >
           <span
-            class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-extrabold tabular-nums"
+            class="flex h-9 min-w-11 flex-none items-center justify-center rounded-pill px-2.5 text-[15px] font-medium"
             style:background={HUE_SOFT[hue]}
             style:color={HUE_LEGIBLE[hue]}
           >
             {juz.index}
           </span>
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="text-[15px] font-semibold text-foreground"
+            <span class="text-[15px] font-medium text-foreground"
               >{copy.range.item("juz", juz.index)}</span
             >
             <span class="truncate text-[12.5px] text-muted">
@@ -107,7 +107,7 @@
               <span class="text-[12.5px] font-medium text-foreground-secondary"
                 >{copy.range.item("hizb", hizb.index)}</span
               >
-              <span class="font-mono text-[11px] text-muted">{hizb.first}</span>
+              <span class="text-[12px] text-muted">{hizb.first}</span>
             </a>
           {/each}
         </div>

@@ -34,7 +34,7 @@
 </script>
 
 <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
-  <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
+  <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em] text-foreground">{copy.title}</h1>
 
   <nav aria-label={copy.sectionsLabel} class="mt-5 sm:mt-6">
     <ul class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">

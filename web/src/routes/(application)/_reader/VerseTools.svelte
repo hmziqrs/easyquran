@@ -51,7 +51,7 @@
 <div
   class="verse-toolbar absolute inset-x-0 top-[22px] flex items-center justify-between gap-2 opacity-100 [@media(pointer:coarse)]:top-3"
 >
-  <span class="font-mono text-[11.5px] tracking-wide text-foreground-secondary">{vKey}</span>
+  <span class="text-[12.5px] text-foreground-secondary">{vKey}</span>
   <div class="flex items-center gap-0.5">
     {#snippet verseAction({ onclick, label, ariaLabel, icon, activeClass, pressed }: { onclick: (e: MouseEvent) => void; label: string; ariaLabel: string; icon: IconName; activeClass?: string; pressed?: boolean })}
       <Tooltip>

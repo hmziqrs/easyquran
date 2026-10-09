@@ -36,7 +36,7 @@
   <div class="flex items-baseline justify-between gap-3">
     <h2 class="text-[14.5px] font-medium text-foreground">{heading}</h2>
     {#if section.phase === "done" || section.phase === "more"}
-      <span class="text-[12px] tabular-nums text-muted">{copy.count(section.total)}</span>
+      <span class="text-[12px] text-muted">{copy.count(section.total)}</span>
     {/if}
   </div>
 

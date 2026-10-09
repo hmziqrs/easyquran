@@ -34,7 +34,7 @@
   >
   <span
     class={cn(
-      "text-[20px] font-extrabold tracking-[-0.035em]",
+      "text-[20px] font-semibold tracking-[-0.025em]",
       onAccent ? "text-primary-foreground" : "text-foreground",
     )}
     >{#if onAccent}{brand}{:else}{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span

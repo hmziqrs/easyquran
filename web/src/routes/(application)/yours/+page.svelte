@@ -133,7 +133,7 @@
 
 <div class="mx-auto max-w-[860px] px-5 pt-8 sm:px-7">
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
+    <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em] text-foreground">
       {copy.index.yoursTitle}
     </h1>
     <nav aria-label={copy.index.yoursTitle} class="flex flex-wrap items-center gap-1.5">
@@ -161,7 +161,7 @@
         {copy.index.yoursContinue}
       </h2>
       <div class="px-4 py-4 sm:px-5">
-        <p class="text-xl font-semibold text-foreground">
+        <p class="text-xl font-medium text-foreground">
           {lastReadSurah?.name ?? `Surah ${lastRead.num}`}
         </p>
         <p class="mt-1 text-sm text-foreground-secondary">
@@ -218,7 +218,7 @@
               <span class="block truncate text-sm font-medium text-foreground">
                 {quranData?.surahByNum(recent.num)?.name ?? `Surah ${recent.num}`}
               </span>
-              <span class="font-mono text-[12px] text-muted">{recent.num}:{recent.n}</span>
+              <span class="text-[12.5px] text-muted">{recent.num}:{recent.n}</span>
             </button>
             {#if href}
               <a
@@ -239,7 +239,7 @@
     <section aria-labelledby="yours-bookmarks" class="mt-6">
       <div class="flex items-center justify-between gap-3">
         <h2 id="yours-bookmarks" class="eyebrow">{copy.nav.bookmarks}</h2>
-        <span class="font-mono text-[11px] text-muted">{bookmarkCount}</span>
+        <span class="text-[12px] text-muted">{bookmarkCount}</span>
       </div>
       {#if bookmarkRows.length > 0}
         <ul class="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
@@ -251,7 +251,7 @@
                 onclick={() => openBookmark(row)}
               >
                 <span class="truncate text-sm font-medium text-foreground">{row.name}</span>
-                <span class="font-mono text-[12px] text-muted">{row.surah}:{row.ayah}</span>
+                <span class="text-[12.5px] text-muted">{row.surah}:{row.ayah}</span>
                 <Icon name="bookmark" size={14} class="ms-auto flex-none text-muted" />
               </button>
             </li>

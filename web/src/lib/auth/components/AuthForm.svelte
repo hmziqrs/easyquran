@@ -35,8 +35,8 @@
 
   let headingClass = $derived(
     variant === "modal"
-      ? "text-[22px] font-semibold leading-tight tracking-[-0.01em]"
-      : "text-[28px] font-semibold leading-tight tracking-[-0.02em]",
+      ? "text-[22px] font-medium leading-tight tracking-[-0.01em]"
+      : "text-[28px] font-medium leading-tight tracking-[-0.02em]",
   );
   let subheadingClass = $derived(variant === "modal" ? "text-[14px] text-foreground-secondary" : "text-[15px] text-foreground-secondary");
 

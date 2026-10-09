@@ -1,4 +1,7 @@
 <script lang="ts">
+  // The site runs on Onest; the design lab's older studies (systems, Nunito toggle) still
+  // compare against Nunito, so it loads here — dev-only routes, never the app bundle.
+  import "@fontsource-variable/nunito/wght.css";
   import { page } from "$app/state";
   import { Tweaks } from "#lib/components/tweaks/index.js";
   import { getLocale } from "#lib/paraglide/runtime.js";

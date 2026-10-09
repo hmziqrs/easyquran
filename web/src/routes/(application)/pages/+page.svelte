@@ -69,7 +69,7 @@
 <ReaderShell textTools={false}>
   {#snippet header()}
     <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.pagesTitle}</h1>
-    <span class="ms-auto font-mono text-[12px] text-muted"
+    <span class="ms-auto text-[12.5px] text-muted"
       >{copy.index.pageCount(data.rows.length)}</span
     >
   {/snippet}
@@ -82,11 +82,11 @@
       {@const lastPage = section.pages[section.pages.length - 1]}
       <section aria-labelledby={`juz-${section.juz}`} class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
-          <h2 id={`juz-${section.juz}`} class="text-[15px] font-semibold text-foreground">
+          <h2 id={`juz-${section.juz}`} class="text-[15px] font-medium text-foreground">
             {copy.range.item("juz", section.juz)}
           </h2>
           {#if firstPage && lastPage}
-            <span class="text-caption tabular-nums text-muted"
+            <span class="text-caption text-muted"
               >{copy.range.item("page", firstPage.index)}–{lastPage.index}</span
             >
           {/if}
@@ -107,7 +107,7 @@
                      openings stand out down the list instead of an arbitrary colour cycle. -->
                 <span
                   class={[
-                    "flex size-11 flex-none items-center justify-center rounded-lg text-[15px] font-semibold tabular-nums",
+                    "flex size-11 flex-none items-center justify-center rounded-lg text-[15px] font-medium",
                     opens ? "bg-primary-soft text-primary" : "bg-background-subtle text-foreground",
                   ]}
                 >
@@ -117,7 +117,7 @@
                   <span class="truncate text-[14px] font-medium leading-tight text-foreground">
                     {surahNames(page)}
                   </span>
-                  <span class="flex items-center gap-2 text-[12px] leading-none tabular-nums text-muted">
+                  <span class="flex items-center gap-2 text-[12px] leading-none text-muted">
                     <span>{page.first} – {page.last}</span>
                     {#if page.sajdas.length > 0}
                       <span

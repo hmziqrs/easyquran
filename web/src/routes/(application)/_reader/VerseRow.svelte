@@ -291,9 +291,9 @@
   .verse-extra-credit {
     color: var(--foreground-secondary);
     display: block;
-    font-family: "Nunito Variable", "Nunito", "Noto Naskh Arabic", ui-rounded, system-ui, sans-serif;
+    font-family: "Onest Variable", "Onest", "Noto Naskh Arabic", system-ui, sans-serif;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.5;
     margin-top: 4px;
   }

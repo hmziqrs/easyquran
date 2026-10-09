@@ -52,12 +52,12 @@
       class="h-8 w-8 animate-spin rounded-full border-2 border-line-2 border-t-accent"
       aria-hidden="true"></span>
     <div class="flex flex-col gap-1">
-      <h1 class="text-xl font-semibold">Signing you in…</h1>
+      <h1 class="text-xl font-medium">Signing you in…</h1>
       <p class="text-sm text-fg-2">Finishing your sign-in. You'll be redirected shortly.</p>
     </div>
   {:else}
     <div class="flex flex-col gap-3">
-      <h1 class="text-xl font-semibold">Sign-in didn't finish</h1>
+      <h1 class="text-xl font-medium">Sign-in didn't finish</h1>
       <button type="button" class="text-accent hover:underline" onclick={retry}>Try again</button>
     </div>
   {/if}

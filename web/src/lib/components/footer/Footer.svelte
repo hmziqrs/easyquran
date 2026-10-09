@@ -22,7 +22,7 @@
   const brand = SITE.name.toLowerCase();
 
   const colHeading = "text-micro text-muted";
-  const link = "text-[15.5px] font-bold text-foreground-secondary transition-colors hover:text-foreground";
+  const link = "text-[15px] text-foreground-secondary transition-colors hover:text-foreground";
 </script>
 
 <footer class="border-t border-border bg-surface">
@@ -36,7 +36,7 @@
             class="flex size-[30px] items-center justify-center rounded-sm bg-primary text-primary-foreground"
             aria-hidden="true"><BrandMark class="size-[26px]" /></span
           >
-          <span class="text-[19px] font-extrabold tracking-[-0.035em] text-foreground"
+          <span class="text-[19px] font-semibold tracking-[-0.025em] text-foreground"
             >{brand.slice(0, 4)}<span class="text-primary">{brand.slice(4)}</span></span
           >
         </div>

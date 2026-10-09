@@ -177,7 +177,7 @@
 
   <div class="mx-auto max-w-[1180px] px-6 pt-5 pb-10 sm:px-7 sm:pt-6 sm:pb-12">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground"
+      <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em] text-foreground"
         >{copy.title}</h1
       >
       {#if authed}
@@ -220,7 +220,7 @@
                   id="bookmarks-group-{group.id ?? `unfiled`}"
                   class="eyebrow mb-0 border-b border-border px-4 py-3 sm:px-5"
                   >{group.label}
-                  <span class="ms-1 font-mono text-[11px] text-muted">{group.rows.length}</span>
+                  <span class="ms-1 text-[12px] text-muted">{group.rows.length}</span>
                 </h2>
                 {#if group.rows.length === 0}
                   <p class="px-4 py-3.5 text-caption text-muted sm:px-5">{copy.folderEmpty}</p>

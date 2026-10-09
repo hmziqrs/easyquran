@@ -121,7 +121,7 @@
       class="h-8 w-8 animate-spin rounded-full border-2 border-line-2 border-t-accent"
       aria-hidden="true"></span>
     <div class="flex flex-col gap-1">
-      <h1 class="text-xl font-semibold">Loading your account…</h1>
+      <h1 class="text-xl font-medium">Loading your account…</h1>
       <p class="text-sm text-fg-2">Checking your session.</p>
     </div>
     <Button variant="ghost" size="sm" onclick={() => authState.probe()}>Retry</Button>
@@ -129,7 +129,7 @@
 {:else if view === "anonymous"}
   <section class="mx-auto flex w-full max-w-[420px] flex-col gap-5">
     <div class="flex flex-col gap-2">
-      <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em]">Your account</h1>
+      <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">Your account</h1>
       <p class="text-[15px] leading-relaxed text-fg-2">
         Sign in to manage your profile, sessions, and security.
       </p>
@@ -143,7 +143,7 @@
   <div class="flex flex-col gap-10">
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
-        <h1 class="text-[28px] font-semibold leading-tight tracking-[-0.02em]">Your account</h1>
+        <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">Your account</h1>
         <p class="text-sm text-fg-2">Manage your profile, sessions, and security.</p>
       </div>
       <Button variant="ghost" size="sm" disabled={logout.pending} onclick={doLogout}>
@@ -152,7 +152,7 @@
     </div>
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-lg font-semibold">Profile</h2>
+      <h2 class="text-lg font-medium">Profile</h2>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">
           <Label for="account-name">Name</Label>
@@ -187,7 +187,7 @@
 
     <section class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
-        <h2 class="text-lg font-semibold">Sessions</h2>
+        <h2 class="text-lg font-medium">Sessions</h2>
         <p class="text-sm text-fg-2">Devices currently signed in to your account.</p>
       </div>
       {#if sessionsError}
@@ -234,13 +234,13 @@
     </section>
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-lg font-semibold">Security</h2>
+      <h2 class="text-lg font-medium">Security</h2>
       <div class="flex flex-col gap-5">
         <TwoFactorControls />
 
         <div class="flex flex-col gap-3 rounded-xl border border-line-2 bg-bg-2 p-5">
           <div class="flex flex-col gap-1">
-            <h3 class="text-base font-semibold">Passkeys</h3>
+            <h3 class="text-base font-medium">Passkeys</h3>
             <p class="text-sm text-fg-2">Sign in without a password using a passkey.</p>
           </div>
           {#if !passkey.supported}
