@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -72,5 +72,13 @@ test("register doc mentions every restricted asset id and every catalogue id", a
   assert.ok(restricted.length > 0, "expected at least one restricted asset");
   for (const asset of restricted) {
     assert.ok(doc.includes(asset.id), `docs/qurancom-mirror.md missing restricted ${asset.id}`);
+  }
+});
+
+test("committed mirror files match recorded byte sizes verbatim", async () => {
+  for (const asset of QURANCOM_ASSETS) {
+    const info = await stat(mirrorAbsolutePath(asset)).catch(() => null);
+    if (!info || !info.isFile()) assert.fail(`${asset.id}: committed mirror file missing`);
+    assert.equal(info.size, asset.sizeBytes, `${asset.id}: on-disk size drift`);
   }
 });
