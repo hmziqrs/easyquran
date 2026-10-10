@@ -9,6 +9,7 @@ mod m000006_email_code_unique_user;
 mod m000007_bookmarks;
 mod m000008_bookmark_verse_unique;
 mod m000009_lowercase_emails;
+mod m000010_passkey_credentials;
 
 pub struct Migrator;
 
@@ -46,6 +47,10 @@ impl MigratorTrait for Migrator {
             // trim+lowercase identity form used by every lookup since the
             // normalization change; collision pairs are skipped, not merged.
             Box::new(m000009_lowercase_emails::Migration),
+            // m000010 creates passkey_credentials — the WebAuthn code paths
+            // wrote this table but no migration ever created it, so passkey
+            // writes and the identities COUNT(*) failed on every real DB.
+            Box::new(m000010_passkey_credentials::Migration),
         ]
     }
 }
