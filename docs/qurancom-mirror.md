@@ -59,9 +59,10 @@ path (AGENTS.MD hard rule). Any size mismatch exits non-zero listing id/expected
 mismatched bytes never land on disk.
 
 `web/static/qurancom/**` is excluded from `vp fmt` / `vp check` formatting
-(`fmt.ignorePatterns` in `web/vite.config.ts`) so payloads stay byte-verbatim through commit
-hooks. Never remove that ignore — the mirror verify (and its `quran:check` test) fails on any
-byte drift.
+(`fmt.ignorePatterns` in `web/vite.config.ts` and in the root `vite.config.ts` — the staged
+hook formats through the root config) so payloads stay byte-verbatim through commit hooks.
+Never remove those ignores — the mirror verify (and its `quran:check` test) fails on any byte
+drift.
 
 ## Asset table
 

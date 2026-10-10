@@ -15,9 +15,10 @@
     "font:indopak:audit": "python3 scripts/fonts/indopak/audit.py --font web/static/fonts/indopak-reader-compat-v4.ttf --font web/static/fonts/indopak-reader-compat-v4.woff2",
     "font:indopak:test": "python3 -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'",
     "font:indopak:browser": "node scripts/fonts/indopak/browser-check.mjs",
+    "quran:audit": "tsx scripts/quran/audit-qurancom-parity.ts",
     "quran:check": "pnpm quran:typecheck && pnpm quran:test",
     "quran:mirror": "tsx scripts/quran/mirror-qurancom.ts",
-    "quran:test": "tsx --test scripts/quran/upload.test.ts scripts/quran/qurancom-mirror.test.ts",
+    "quran:test": "tsx --test scripts/quran/upload.test.ts scripts/quran/qurancom-mirror.test.ts scripts/quran/qurancom-parity.test.ts",
     "quran:upload": "tsx scripts/quran/upload.ts",
     "quran:typecheck": "tsc --noEmit -p scripts/quran/tsconfig.json",
     "prepare": "vp config"
