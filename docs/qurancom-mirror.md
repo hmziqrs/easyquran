@@ -58,6 +58,11 @@ Node 24 + tsx + global `fetch`. Writes go to `web/static/qurancom/` through `.pa
 path (AGENTS.MD hard rule). Any size mismatch exits non-zero listing id/expected/actual, and
 mismatched bytes never land on disk.
 
+`web/static/qurancom/**` is excluded from `vp fmt` / `vp check` formatting
+(`fmt.ignorePatterns` in `web/vite.config.ts`) so payloads stay byte-verbatim through commit
+hooks. Never remove that ignore — the mirror verify (and its `quran:check` test) fails on any
+byte drift.
+
 ## Asset table
 
 | id                                               | kind   | source URL                                                                                       | license    | notice summary                                                     | target path                                                                    |
