@@ -68,6 +68,19 @@ interface MountProps {
   refreshKey?: string;
 }
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 let target: HTMLElement;
 let unmountComponent: () => void = () => {};
 
@@ -180,6 +193,39 @@ describe("ConnectedAccounts list + last-method protection", () => {
     button("bump").click();
     await settle();
     expect(getIdentities).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a stale load response that resolves after a newer one", async () => {
+    const older = deferred<AccountResult<IdentitySummary>>();
+    const newer = deferred<AccountResult<IdentitySummary>>();
+    const getIdentities = vi
+      .fn()
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    const client = mockClient(getIdentities, vi.fn());
+    const instance = mount(RefreshHarness, { target, props: { client } });
+    unmountComponent = () => {
+      void unmount(instance);
+    };
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(1);
+
+    button("bump").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+
+    newer.resolve(ok(summary({ identities: [identity("github"), identity("google")] })));
+    await settle();
+    expect(button("Unlink").disabled).toBe(false);
+
+    // The older response lands last and must not clobber the newer summary
+    // (which would wrongly re-disable Unlink and re-show the hint).
+    older.resolve(ok(summary({ identities: [identity("github")] })));
+    await settle();
+    expect(button("Unlink").disabled).toBe(false);
+    expect(target.textContent).toContain("Google");
+    expect(target.textContent).not.toContain("before you can unlink");
+    expect(errorTexts()).toEqual([]);
   });
 });
 

@@ -45,6 +45,7 @@
   let unlinkError = $state<string | null>(null);
   let lastRefreshKey: string | undefined;
   let refreshKeySeen = false;
+  let loadSeq = 0;
 
   const canUnlink = $derived(summary ? canUnlinkIdentity(summary) : false);
   const linkableProviders = $derived.by((): IdentityProvider[] => {
@@ -62,9 +63,13 @@
   });
 
   async function load(): Promise<void> {
+    const seq = ++loadSeq;
     loading = true;
     loadError = null;
     const res = await client.getIdentities();
+    // A newer load (refreshKey flip, unlink refresh, Retry) wins; a late response
+    // must never overwrite its summary or error.
+    if (seq !== loadSeq) return;
     loading = false;
     if (res.status === "ok" && res.data) {
       summary = res.data;

@@ -185,6 +185,25 @@ describe("account page link-flow params", () => {
     expect(h.goto).toHaveBeenCalledTimes(1);
   });
 
+  it("navigates to /login when the identities client reports a 401 (onAnonymous wiring)", async () => {
+    h.authClient.get.mockImplementation((path: string) => {
+      if (path === "/user/v1/identities") {
+        return Promise.resolve({ ok: false, status: 401, data: null, error: null, rotated: false });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        data: { data: [] },
+        error: null,
+        rotated: false,
+      });
+    });
+    mountPage();
+    await settle();
+
+    expect(h.goto).toHaveBeenCalledWith("/login");
+  });
+
   it("leaves the URL alone when no link params are present", async () => {
     mountPage();
     await settle();
