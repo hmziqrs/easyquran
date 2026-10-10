@@ -5,6 +5,7 @@ use chrono::{NaiveDate, Timelike, Utc};
 use serde::Serialize;
 use sha2::Digest;
 
+use crate::config::settings::{self, EnvClass};
 use crate::quran::{self, QuranStore, Range, Script, SuraMeta, RESPONSE_CAP, VERSE_COUNT};
 
 use crate::AppState;
@@ -25,14 +26,54 @@ fn range_too_large(requested: u32) -> QuranApiError {
     QuranApiError::range_too_large(requested)
 }
 
+/// Script ids the current environment class serves, in advertisement order.
+/// Production lists only the Uthmani family (see [`Script::available_in`]).
+fn available_script_ids() -> String {
+    let class = settings::env_class();
+    Script::ALL
+        .iter()
+        .copied()
+        .filter(|s| s.available_in(class))
+        .map(Script::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// How many Arabic scripts the environment advertises/serves.
+fn advertised_script_count(class: EnvClass) -> usize {
+    Script::ALL.iter().filter(|s| s.available_in(class)).count()
+}
+
+/// Refuse a script the current environment class does not serve.
+///
+/// Production serves the Uthmani family only (campaign decision): IndoPak and
+/// Tajweed are deliberately withheld here and in `resolve_scripts` /
+/// `resolve_sources` — this reference IS the gate, on purpose, not an accident.
+/// Non-production classes serve all four.
+fn ensure_script_available(script: Script, what: &str) -> Result<(), QuranApiError> {
+    if script.available_in(settings::env_class()) {
+        return Ok(());
+    }
+    Err(invalid(format!(
+        "{what} '{}' is disabled in production; available scripts: {}",
+        script.as_str(),
+        available_script_ids(),
+    )))
+}
+
 fn parse_script(opt: &Option<String>) -> Result<Script, QuranApiError> {
     match opt.as_deref() {
         None => Ok(Script::Uthmani),
-        Some(s) => Script::parse(s).ok_or_else(|| {
-            invalid(format!(
-                "unknown script '{s}'; expected one of: uthmani, simple-clean, indopak, tajweed"
-            ))
-        }),
+        Some(s) => {
+            let script = Script::parse(s).ok_or_else(|| {
+                invalid(format!(
+                    "unknown script '{s}'; expected one of: {}",
+                    available_script_ids(),
+                ))
+            })?;
+            ensure_script_available(script, "script")?;
+            Ok(script)
+        }
     }
 }
 
@@ -41,13 +82,15 @@ fn parse_source(
     pool: &crate::quran::TranslationPool,
 ) -> Result<crate::quran::SourceId, QuranApiError> {
     if let Some(script) = Script::parse(s) {
+        ensure_script_available(script, "source")?;
         return Ok(crate::quran::SourceId::Arabic(script));
     }
     if let Some(id) = pool.parse_id(s) {
         return Ok(crate::quran::SourceId::Translation(id));
     }
     Err(invalid(format!(
-        "unknown source '{s}'; expected an Arabic script (uthmani, simple-clean, indopak, tajweed) or a catalogue translation id"
+        "unknown source '{s}'; expected an Arabic script ({}) or a catalogue translation id",
+        available_script_ids(),
     ))
     .classified(QuranErrorClass::UnknownSource))
 }
@@ -760,6 +803,8 @@ pub async fn scripts(
     headers: HeaderMap,
 ) -> Result<Response<Body>, QuranApiError> {
     let store = &state.quran;
+    let class = settings::env_class();
+    let advertised = advertised_script_count(class);
     let scripts = {
         let mut guard = state.quran_scripts.lock().await;
         match guard.as_ref() {
@@ -771,9 +816,9 @@ pub async fn scripts(
                     .public_url
                     .trim_end_matches('/')
                     .to_string();
-                let resolved = resolve_scripts(&state, &public_url).await;
+                let resolved = resolve_scripts(&state, &public_url, class).await;
                 // Only cache once fully verified: a transient HEAD failure must self-heal, not be pinned incomplete for life.
-                if resolved.len() == Script::ALL.len() {
+                if resolved.len() == advertised {
                     *guard = Some(resolved.clone());
                 }
                 resolved
@@ -783,7 +828,7 @@ pub async fn scripts(
     // Partial responses use no-store and a distinct ETag, or a CDN pins the empty body as complete.
     let verified = scripts.len();
     let canonical = format!("scripts?verified={verified}");
-    let cache_control = if verified == Script::ALL.len() {
+    let cache_control = if verified == advertised {
         cache::ARABIC_CACHE
     } else {
         cache::NO_STORE
@@ -798,10 +843,15 @@ pub async fn scripts(
     ))
 }
 
-async fn resolve_scripts(state: &AppState, public_url: &str) -> Vec<Artifact> {
+async fn resolve_scripts(state: &AppState, public_url: &str, class: EnvClass) -> Vec<Artifact> {
     let store = &state.quran;
-    let mut out = Vec::with_capacity(Script::ALL.len());
+    let mut out = Vec::with_capacity(advertised_script_count(class));
     for script in Script::ALL {
+        // Production withholds IndoPak + Tajweed (see Script::available_in): the
+        // advertised list must match what the read endpoints will actually serve.
+        if !script.available_in(class) {
+            continue;
+        }
         let file = store.artifact(script);
         let filename = QuranStore::artifact_filename(script);
         let id = file.id.as_str().to_string();
@@ -846,7 +896,8 @@ pub async fn sources(
     headers: HeaderMap,
 ) -> Result<Response<Body>, QuranApiError> {
     let store = &state.quran;
-    let total = Script::ALL.len() + state.translation_pool.catalogue().len();
+    let class = settings::env_class();
+    let total = advertised_script_count(class) + state.translation_pool.catalogue().len();
     let sources = {
         let mut guard = state.quran_sources.lock().await;
         match guard.as_ref() {
@@ -858,7 +909,7 @@ pub async fn sources(
                     .public_url
                     .trim_end_matches('/')
                     .to_string();
-                let resolved = resolve_sources(&state, &public_url).await;
+                let resolved = resolve_sources(&state, &public_url, class).await;
                 // Memoize only when fully verified — a transient HEAD failure self-heals rather
                 // than pinning a truncated list.
                 if resolved.len() == total {
@@ -886,16 +937,23 @@ pub async fn sources(
     ))
 }
 
-/// Every readable source — 4 Arabic scripts + every catalogue translation — each HEAD-verified.
+/// Every readable source — the environment's Arabic scripts (production: Uthmani
+/// family only; see [`Script::available_in`]) + every catalogue translation — each HEAD-verified.
 /// A `JoinSet` fans the cold HEADs out concurrently so the checks do not serialize past the
 /// request budget. An unverified entry is omitted; the handler then stamps `no-store` so a CDN
 /// cannot pin a truncated half-list (same discipline as `/scripts`).
-async fn resolve_sources(state: &AppState, public_url: &str) -> Vec<SourceDto> {
+async fn resolve_sources(state: &AppState, public_url: &str, class: EnvClass) -> Vec<SourceDto> {
     let store = &state.quran;
-    let mut candidates: Vec<(SourceDto, u64)> =
-        Vec::with_capacity(Script::ALL.len() + state.translation_pool.catalogue().len());
+    let mut candidates: Vec<(SourceDto, u64)> = Vec::with_capacity(
+        advertised_script_count(class) + state.translation_pool.catalogue().len(),
+    );
 
     for script in Script::ALL {
+        // Production withholds IndoPak + Tajweed (see Script::available_in): the
+        // advertised list must match what the read endpoints will actually serve.
+        if !script.available_in(class) {
+            continue;
+        }
         let file = store.artifact(script);
         let filename = QuranStore::artifact_filename(script);
         let display = QuranStore::script_display_name(script);

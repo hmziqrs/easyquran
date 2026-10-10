@@ -1,3 +1,5 @@
+use crate::config::settings::EnvClass;
+
 pub const VERSE_COUNT: u32 = 6236;
 pub const SURA_COUNT: usize = 114;
 pub const RESPONSE_CAP: u32 = 300;
@@ -37,12 +39,28 @@ impl Script {
     }
 
     /// Every resident Arabic script, in the order `/quran/scripts` advertises them.
+    /// Resident ≠ advertised: production advertises/serves only the Uthmani family
+    /// (see [`Script::available_in`]); `/quran/scripts` and `/quran/sources` filter.
     pub const ALL: [Script; 4] = [
         Script::Uthmani,
         Script::SimpleClean,
         Script::IndoPak,
         Script::Tajweed,
     ];
+
+    /// Whether this script is served in the given environment class.
+    ///
+    /// Production serves the Uthmani family only (campaign decision): IndoPak and
+    /// Tajweed are withheld from reads and from `/quran/scripts` + `/quran/sources`
+    /// so the API never advertises what it will not serve. Non-production classes
+    /// keep all four for development. This gate is referenced deliberately by the
+    /// quran controller — flip it only when the policy clears, not by accident.
+    pub fn available_in(self, class: EnvClass) -> bool {
+        match class {
+            EnvClass::Production => matches!(self, Self::Uthmani | Self::SimpleClean),
+            EnvClass::NonProduction | EnvClass::Unset | EnvClass::Unknown => true,
+        }
+    }
 }
 
 /// A translation source id (e.g. "en.sahih"). Constructed ONLY via [`TranslationId::parse`],
@@ -458,4 +476,35 @@ pub struct AyahView<'a> {
     pub ruku: u16,
     pub hizb_quarter: u16,
     pub manzil: u8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn production_gates_indopak_and_tajweed_only() {
+        for script in Script::ALL {
+            let expected = matches!(script, Script::Uthmani | Script::SimpleClean);
+            assert_eq!(
+                script.available_in(EnvClass::Production),
+                expected,
+                "production availability of {}",
+                script.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn non_production_classes_keep_all_four_scripts() {
+        for class in [EnvClass::NonProduction, EnvClass::Unset, EnvClass::Unknown] {
+            for script in Script::ALL {
+                assert!(
+                    script.available_in(class),
+                    "{class:?} must keep {} available",
+                    script.as_str()
+                );
+            }
+        }
+    }
 }
