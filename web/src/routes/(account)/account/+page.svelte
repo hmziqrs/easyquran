@@ -1,5 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { page } from "$app/state";
+  import { onMount } from "svelte";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Label } from "#lib/components/ui/label/index.js";
@@ -9,13 +11,20 @@
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
   import { accountClient, type SessionInfo } from "#lib/auth/account-client.js";
   import { GENERIC_TRY_AGAIN } from "#lib/auth/auth-copy.js";
+  import { consumeLinkProvider } from "#lib/auth/link-attempt.js";
+  import { getAuthCopy } from "#lib/i18n/auth-copy.js";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
+  import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
   import {
     resolveAccountView,
+    resolveLinkNotice,
     sessionDeviceLabel,
     ANONYMOUS_CTA_HREF,
     REGISTER_HREF,
+    type LinkNotice,
   } from "./account-view";
+
+  const copy = getAuthCopy();
 
   const view = $derived(resolveAccountView(authState.status));
   const user = $derived(authState.user);
@@ -35,7 +44,19 @@
   let terminatePendingId = $state<string | null>(null);
   let terminateError = $state<string | null>(null);
 
+  let linkNotice = $state<LinkNotice | null>(null);
+
   let initialized = false;
+
+  onMount(() => {
+    const params = page.url.searchParams;
+    if (!params.has("linked") && !params.has("link_error")) return;
+    linkNotice = resolveLinkNotice(params, copy, consumeLinkProvider());
+    const url = new URL(page.url.href);
+    url.searchParams.delete("linked");
+    url.searchParams.delete("link_error");
+    void goto(url, { replace: true, reset: false });
+  });
 
   $effect(() => {
     if (view !== "authenticated" || initialized) return;
@@ -150,6 +171,12 @@
         {logout.pending ? "Signing out…" : "Sign out"}
       </Button>
     </div>
+
+    {#if linkNotice?.kind === "success"}
+      <p role="status" aria-live="polite" class="text-sm text-accent">{linkNotice.text}</p>
+    {:else if linkNotice}
+      <p role="alert" aria-live="assertive" class="text-sm text-destructive">{linkNotice.text}</p>
+    {/if}
 
     <section class="flex flex-col gap-4">
       <h2 class="text-lg font-medium">Profile</h2>
@@ -280,5 +307,7 @@
         </div>
       </div>
     </section>
+
+    <ConnectedAccounts />
   </div>
 {/if}
