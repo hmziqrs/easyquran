@@ -8,6 +8,7 @@ mod m000005_device_notification_oauth;
 mod m000006_email_code_unique_user;
 mod m000007_bookmarks;
 mod m000008_bookmark_verse_unique;
+mod m000009_lowercase_emails;
 
 pub struct Migrator;
 
@@ -41,6 +42,10 @@ impl MigratorTrait for Migrator {
             // UNIQUE (user_id, surah, ayah) so two devices can't mint two live
             // rows for one verse.
             Box::new(m000008_bookmark_verse_unique::Migration),
+            // m000009 normalizes stored account emails to the canonical
+            // trim+lowercase identity form used by every lookup since the
+            // normalization change; collision pairs are skipped, not merged.
+            Box::new(m000009_lowercase_emails::Migration),
         ]
     }
 }
