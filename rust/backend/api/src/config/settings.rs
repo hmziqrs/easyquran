@@ -461,7 +461,7 @@ impl RateLimitSettings {
             if KNOWN_INTERNAL_TOKEN_PLACEHOLDERS.contains(&internal_token.as_str()) {
                 return Err(
                     "INTERNAL_QURAN_API_TOKEN is the known placeholder value shipped in \
-                     deploy/.env.example — production must NOT boot on a publicly-known \
+                     .env.example — production must NOT boot on a publicly-known \
                      token. Generate with: openssl rand -hex 32."
                         .to_string(),
                 );
@@ -1314,7 +1314,6 @@ mod tests {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let templates = [
             "../../../.env.example".to_string(),
-            "../../../deploy/.env.example".to_string(),
         ];
         let mut scanned = 0;
         for rel in templates {

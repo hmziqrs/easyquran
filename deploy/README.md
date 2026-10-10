@@ -107,7 +107,7 @@ fails on pull.
 
 ```bash
 git clone <repo> /opt/easyquran && cd /opt/easyquran
-cp deploy/.env.example .env
+cp .env.example .env
 $EDITOR .env                 # DOMAIN, COOKIE_KEY, FIELD_ENC_KEY, INTERNAL_QURAN_API_TOKEN, ALLOWED_ORIGINS
 # Proxy topology defaults to stock Dokploy (PROXY_NETWORK/HTTPS_ENTRYPOINT/ACME_RESOLVER
 # in docker-compose.yml) — override in .env only if your Traefik is non-stock.
@@ -516,8 +516,8 @@ mail with SPF+DKIM pass.
 - The api binary is still named `ruxlog` (a ported backend) — cosmetic.
 - Nothing builds on the VPS in the CI + Dokploy flow — it only pulls. The ≥2 GB RAM
   requirement (add swap on smaller boxes) applies only if you build images on the box itself.
-- Env normalization: the production `.env` is intentionally minimal (5 required
-  vars — see `deploy/.env.example`). Everything else is a co-location invariant
+- Env normalization: the production `.env` is intentionally minimal (required
+  vars — see `.env.example`). Everything else is a co-location invariant
   hardcoded in `docker-compose.yml` (`APP_ENV`, `IP_SOURCE`,
   `INTERNAL_QURAN_API_BASE`), an interpolated compose default overridable via
   `.env` (the `S3_*` dummies, `MAIL_*`, proxy topology, all `QURAN_*` tuning), or

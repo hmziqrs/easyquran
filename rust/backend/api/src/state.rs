@@ -296,7 +296,6 @@ mod tests {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let templates = [
             "../../../.env.example".to_string(),
-            "../../../deploy/.env.example".to_string(),
         ];
         let mut scanned = 0;
         for rel in templates {

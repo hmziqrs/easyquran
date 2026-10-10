@@ -17,10 +17,10 @@ _env:
         cp .env.example .env; \
         KEY=$(openssl rand -hex 32); \
         perl -pi -e "s/^COOKIE_KEY=.*/COOKIE_KEY=$KEY/" .env; \
-        echo "Created .env (COOKIE_KEY generated). Edit S3_/SMTP_* before running."; \
+        echo "Created .env (COOKIE_KEY generated). Single-service dev uses rust/.env + web/.env."; \
     fi
-    @ln -sf ../.env web/.env
-    @ln -sf ../.env rust/.env
+    @if [ ! -f rust/.env ]; then cp rust/.env.example rust/.env; echo "Created rust/.env."; fi
+    @if [ ! -f web/.env ]; then cp web/.env.example web/.env; echo "Created web/.env."; fi
 
 setup: _env
     cd web && pnpm install
