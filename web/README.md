@@ -45,6 +45,11 @@ Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indop
 [compatibility report](../docs/indopak-font-compatibility.md),
 [deep audit and unresolved source differences](../docs/indopak-deep-audit.md).
 
+Development-only quran.com parity specimen: `/design/qurancom`, comparing mirrored quran.com
+script text and fonts against our provisioned DBs per verse (`?script=`, `?verses=`); 404 in
+production. Mirror verify/fetch: `pnpm quran:mirror` (root); parity report: `pnpm quran:audit`
+(root); lane and licence register: [quran.com reference mirror](../docs/qurancom-mirror.md).
+
 Development-only homepage comparisons: `/design/home/cobalt`, `/design/home/mono`,
 `/design/home/slate`, and `/design/home/berry`. Each uses baked surah metadata, with
 local controls for Onest/Nunito/JetBrains Mono, accent, neutral background, and light/dark

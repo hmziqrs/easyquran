@@ -145,7 +145,12 @@ Persisted reader schema v4 includes:
   `uthmani-annotated`. Selected in the Reading section above the font pills. It changes which
   Arabic corpus post-paint reads serve (see `quran-system.md`); first paint of an Arabic route
   remains the prerendered page of the annotated default, served from plain Uthmani where that
-  artifact is absent (fail-soft, `quran-system.md`).
+  artifact is absent (fail-soft, `quran-system.md`). Production serves the Uthmani family only:
+  the IndoPak and Tajweed pills render disabled under one note, “IndoPak and Tajweed are
+  disabled in production.” (en + ar), never hidden. Availability is
+  `web/src/lib/quran/script-availability.ts` (`isScriptEnabled`) against
+  `clientQuranEnvironment()` (`web/src/lib/quran/client-environment.ts`); the setter and
+  persisted-blob hydration refuse a disabled script (see `quran-system.md`, Script availability).
 - `translationSize`, integer 13–28 px; default 17 px.
 
 Schema v4 migration is decode-side only: v3 blobs hydrate with the `uthmani-annotated`

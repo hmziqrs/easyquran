@@ -109,6 +109,26 @@ QUL, metadata, and merged-catalogue objects. Artifact paths and byte sizes come 
 maps; publication never hashes or modifies Quran data. Immutable PUTs are create-only, and
 the mutable catalogue publishes last only after the full immutable set succeeds.
 
+## Script availability
+
+- Production serves the Uthmani family only: `uthmani-annotated` (reader default), `uthmani`
+  (Arabic-search corpus), and `simple-clean`. IndoPak and Tajweed are production-disabled on web
+  (`web/src/lib/quran/script-availability.ts` — `PRODUCTION_DISABLED_SOURCES`, `isScriptEnabled`,
+  `enabledScriptIds`, with `clientQuranEnvironment()`) and on the API (`Script::available_in`),
+  which also filters `/quran/scripts` and `/quran/sources` so it never advertises what it will
+  not serve.
+- The gate is an app environment variable only: no middleware, no route removal, no build
+  exclusion. Disabled scripts stay referenced in code and visible in settings — the Reading
+  section renders their pills disabled under the note “IndoPak and Tajweed are disabled in
+  production.” (en + ar). Hydration, the settings setter, the worker read path, worker staging,
+  and settings-document apply refuse a disabled script in production, so a stale preference
+  cannot activate one.
+- The quran.com script-level mirror under committed `web/static/qurancom/` is the audit lane,
+  not an app dependency: `pnpm quran:mirror` verifies/fetches, `pnpm quran:audit` writes the
+  parity report, and QCF v1/v2 page fonts plus `code_v1`/`code_v2` page-glyph scripts are
+  excluded. Licence register and restricted-asset policy:
+  [`qurancom-mirror.md`](./qurancom-mirror.md).
+
 ## Rust API
 
 Quran routes live under `/quran`; there is no `/quran/v1` or content-version route.
@@ -122,7 +142,7 @@ Quran routes live under `/quran`; there is no `/quran/v1` or content-version rou
   Client fuzzy-name and translation search never cross this API boundary.
 - `GET /quran/random` is deterministic ayah-of-the-day.
 - `GET /quran/scripts` and `/quran/sources` serve mobile/API consumers; web boot uses baked
-  metadata instead.
+  metadata instead. Production filters both to the Uthmani family (see Script availability).
 - `/quran/health/ready` exposes readiness and bounded public counts. OpenAPI is feature-gated.
 - Successful payloads use `{ data: T }`. `QuranApiError` owns Quran 400/404/5xx responses;
   rate-limit and gate middleware retain their app-level error shapes.
@@ -175,7 +195,8 @@ unchanged.
 
 Arabic primary plus up to five client-only stacked translations are supported. The reader's
 mushaf-script preference (annotated Uthmani default; plain Uthmani/Simple-clean/IndoPak/Tajweed,
-reader schema v4) selects the Arabic corpus for post-paint reads: Arabic routes prerender and
+reader schema v4; production serves the Uthmani family only, see Script availability) selects
+the Arabic corpus for post-paint reads: Arabic routes prerender and
 server-render on the annotated Uthmani default, hydration re-reads visible pages through the
 worker/API ladder, and the worker stages variant artifacts
 into OPFS on demand (same download/staging path as translations; runners stay resident once
@@ -332,9 +353,10 @@ changes Arabic scripture or translation-content semantics.
    default mushaf is the annotated Uthmani edition (`uthmani-annotated`, quran.com word
    lineage); Arabic SSG renders that default, plain Uthmani stays the search corpus, and
    Simple-clean/Indopak/Tajweed never prerender — they render through the post-paint
-   worker/API upgrade. The worker boots fail-soft (annotated download failure degrades to
-   plain Uthmani with a console warning, never a rejected init). Translated routes stay
-   SSR + seven-day disk cache, unchanged. Rollout limits: the annotated DB awaits
+   worker/API upgrade. Production gates IndoPak and Tajweed on web and API (Uthmani family
+   only; Part 1, Script availability). The worker boots fail-soft (annotated download failure
+   degrades to plain Uthmani with a console warning, never a rejected init). Translated
+   routes stay SSR + seven-day disk cache, unchanged. Rollout limits: the annotated DB awaits
    `just upload-sqlite`, and rust `Script::parse` lacks `uthmani-annotated`, so the API
    fallback 404s for it.
 9. The surah-local page scheme (`/app/{slug}/page/N` and its translated mirror) is removed:
