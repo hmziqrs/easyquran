@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
-    ARABIC_FONTS,
     TRANSLATION_FAMILIES,
     arabicFontStack,
+    enabledArabicFontIds,
     type ArabicFontId,
     type TranslationFamily,
   } from "#lib/config/reader-fonts.js";
@@ -14,6 +14,8 @@
     TRANSLATION_FONT_MIN,
   } from "#lib/stores/reader-core.svelte.js";
   import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "#lib/data/quran-types.js";
+  import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
+  import { isScriptEnabled } from "#lib/quran/script-availability.js";
   import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
   import { cn } from "#lib/utils.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
@@ -45,10 +47,14 @@
     "flex items-center rounded-pill border px-3.5 py-2 text-start text-caption transition-colors duration-150";
   const pillOn = "border-primary bg-primary-soft text-foreground";
   const pillOff = "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
+  const pillDisabled = "cursor-not-allowed opacity-50";
 
   function pillClass(active: boolean): string {
     return cn(pill, active ? pillOn : pillOff);
   }
+
+  const environment = clientQuranEnvironment();
+  const arabicFonts = enabledArabicFontIds(environment);
 
   const SCRIPTS: readonly QuranSourceIdValue[] = [
     QuranSourceId.AnnotatedUthmani,
@@ -57,6 +63,15 @@
     QuranSourceId.Indopak,
     QuranSourceId.Tajweed,
   ];
+
+  // Production-disabled scripts stay visible on purpose (campaign decision): the pills
+  // render disabled with one note under the group, never hidden. See script-availability.
+  const hasDisabledScripts = SCRIPTS.some((script) => !isScriptEnabled(script, environment));
+
+  function scriptPillClass(script: QuranSourceIdValue, enabled: boolean): string {
+    if (!enabled) return cn(pill, pillOff, pillDisabled);
+    return pillClass(reader.arabicScript === script);
+  }
 
   function scriptLabel(script: QuranSourceIdValue): string {
     if (script === QuranSourceId.AnnotatedUthmani) return copy.scriptNames.annotatedUthmani;
@@ -85,6 +100,11 @@
   // reader's Arabic / Translation toggle picks what Reading flows (stores/reading-text).
   function selectMode(mode: ReaderMode): void {
     reader.setMode(mode);
+  }
+
+  function chooseScript(script: QuranSourceIdValue): void {
+    if (!isScriptEnabled(script, environment)) return;
+    reader.setArabicScript(script);
   }
 
   function chooseArabicFont(fontId: ArabicFontId): void {
@@ -152,26 +172,31 @@
         <span class="text-[14.5px] font-medium text-foreground">{copy.arabicScript}</span>
         <div class="mt-2.5 grid max-w-md gap-1.5">
           {#each SCRIPTS as script (script)}
+            {@const scriptEnabled = isScriptEnabled(script, environment)}
             <button
               type="button"
-              class={pillClass(reader.arabicScript === script)}
+              class={scriptPillClass(script, scriptEnabled)}
               aria-pressed={reader.arabicScript === script}
-              onclick={() => reader.setArabicScript(script)}>{scriptLabel(script)}</button
+              disabled={!scriptEnabled}
+              onclick={() => chooseScript(script)}>{scriptLabel(script)}</button
             >
           {/each}
         </div>
+        {#if hasDisabledScripts}
+          <p class="mt-2 max-w-md text-caption leading-snug text-muted">{copy.scriptDisabledNote}</p>
+        {/if}
       </div>
 
       <div class="px-4 py-3.5 sm:px-5">
         <span class="text-[14.5px] font-medium text-foreground">{copy.arabicFont}</span>
         <div class="mt-2.5 grid max-w-md gap-1.5">
-          {#each ARABIC_FONTS as font (font.id)}
+          {#each arabicFonts as fontId (fontId)}
             <button
               type="button"
-              class={pillClass(reader.arabicFont === font.id)}
-              aria-pressed={reader.arabicFont === font.id}
-              style:font-family={arabicFontStack(font.id)}
-              onclick={() => chooseArabicFont(font.id)}>{fontLabel(font.id)}</button
+              class={pillClass(reader.arabicFont === fontId)}
+              aria-pressed={reader.arabicFont === fontId}
+              style:font-family={arabicFontStack(fontId)}
+              onclick={() => chooseArabicFont(fontId)}>{fontLabel(fontId)}</button
             >
           {/each}
         </div>

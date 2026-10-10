@@ -29,10 +29,20 @@ const h = vi.hoisted(() => {
       params: {} as Record<string, string>,
       state: {},
     },
+    env: { publicEnv: "local" },
   };
 });
 
 vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+  PUBLIC_TURNSTILE_SITE_KEY: undefined,
+  get PUBLIC_ENV() {
+    return h.env.publicEnv;
+  },
+}));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ goto: h.gotoSpy }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({
@@ -61,6 +71,8 @@ beforeEach(() => {
     h.readerStub.isReadingMode = m === "reading";
     h.readerStub.isVerseMode = m === "verse";
   });
+  h.readerStub.setArabicScript.mockClear();
+  h.env.publicEnv = "local";
   h.gotoSpy.mockClear();
   stackedTranslations.clear();
   target = document.createElement("div");
@@ -90,6 +102,12 @@ function modePill(name: string): HTMLButtonElement {
   return pill as HTMLButtonElement;
 }
 
+function pillWithText(name: string): HTMLButtonElement {
+  const pill = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === name);
+  // SAFETY: the query matches only button elements, so the found value is an HTMLButtonElement.
+  return pill as HTMLButtonElement;
+}
+
 describe("ReadingSection mode pills", () => {
   it("switches to reading at once even with translations stacked — no confirmation, no navigation", async () => {
     stackedTranslations.setIds(["en.sahih", "en.arberry"]);
@@ -113,5 +131,34 @@ describe("ReadingSection mode pills", () => {
     await settle();
     expect(h.setModeSpy).toHaveBeenCalledWith("verse");
     expect(h.readerStub.mode).toBe("verse");
+  });
+});
+
+describe("ReadingSection production script gating", () => {
+  it("disables gated pills, swallows clicks and shows the note in production", async () => {
+    h.env.publicEnv = "prod";
+    mountSection();
+    await settle();
+    const indopak = pillWithText(readingCopy.scriptNames.indopak);
+    const tajweed = pillWithText(readingCopy.scriptNames.tajweed);
+    expect(indopak.disabled).toBe(true);
+    expect(tajweed.disabled).toBe(true);
+    expect(pillWithText(readingCopy.scriptNames.uthmani).disabled).toBe(false);
+    expect(pillWithText(readingCopy.scriptNames.simpleClean).disabled).toBe(false);
+    expect(document.body.textContent).toContain(readingCopy.scriptDisabledNote);
+    indopak.click();
+    tajweed.click();
+    await settle();
+    expect(h.readerStub.setArabicScript).not.toHaveBeenCalled();
+  });
+
+  it("keeps every pill enabled and hides the note locally", async () => {
+    h.env.publicEnv = "local";
+    mountSection();
+    await settle();
+    for (const name of Object.values(readingCopy.scriptNames)) {
+      expect(pillWithText(name).disabled, `${name} must stay selectable locally`).toBe(false);
+    }
+    expect(document.body.textContent).not.toContain(readingCopy.scriptDisabledNote);
   });
 });

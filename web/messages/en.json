@@ -341,6 +341,7 @@
   "settings_reading_script_simple_clean": "Simple",
   "settings_reading_script_indopak": "IndoPak",
   "settings_reading_script_tajweed": "Tajweed (colored)",
+  "settings_reading_script_disabled_note": "IndoPak and Tajweed are disabled in production.",
   "settings_reading_font_amiri": "Amiri",
   "settings_reading_font_scheherazade": "Scheherazade New",
   "settings_reading_font_noto": "Noto Naskh Arabic",

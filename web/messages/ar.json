@@ -341,6 +341,7 @@
   "settings_reading_script_simple_clean": "مبسّط",
   "settings_reading_script_indopak": "إندوباك",
   "settings_reading_script_tajweed": "تجويد (ملوّن)",
+  "settings_reading_script_disabled_note": "إندوباك والتجويد معطّلان في الإصدار الإنتاجي.",
   "settings_reading_font_amiri": "أميري",
   "settings_reading_font_scheherazade": "شهرزاد الجديدة",
   "settings_reading_font_noto": "نوتو نسخ عربي",

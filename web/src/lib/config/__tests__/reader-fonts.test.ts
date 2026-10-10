@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { ARABIC_FONTS, ARABIC_FONT_IDS, TRANSLATION_FAMILIES } from "#lib/config/reader-fonts.js";
+import {
+  ARABIC_FONTS,
+  ARABIC_FONT_IDS,
+  enabledArabicFontIds,
+  TRANSLATION_FAMILIES,
+} from "#lib/config/reader-fonts.js";
+import { QuranDataEnvironment } from "#lib/quran/environment.js";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -76,5 +82,19 @@ describe("reader font registry", () => {
     for (const family of TRANSLATION_FAMILIES) {
       expect(family.stack.includes("fontsource")).toBe(false);
     }
+  });
+});
+
+describe("enabledArabicFontIds", () => {
+  it("keeps the full list locally and gates production by productionEnabled", () => {
+    expect(enabledArabicFontIds(QuranDataEnvironment.Local)).toEqual([...ARABIC_FONT_IDS]);
+    expect(enabledArabicFontIds(QuranDataEnvironment.Production)).toEqual(
+      ARABIC_FONTS.filter((font) => font.productionEnabled).map((font) => font.id),
+    );
+  });
+
+  it("pins today's registry: every face is enabled, so prod and local match", () => {
+    const gated = ARABIC_FONTS.filter((font) => !font.productionEnabled).map((font) => font.id);
+    expect(gated, "a script-gated face lands here and updates this expectation").toEqual([]);
   });
 });

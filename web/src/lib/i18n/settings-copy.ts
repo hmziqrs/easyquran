@@ -62,6 +62,7 @@ import {
   settings_reading_script_simple_clean,
   settings_reading_script_indopak,
   settings_reading_script_tajweed,
+  settings_reading_script_disabled_note,
   settings_reading_font_amiri,
   settings_reading_font_hafs,
   settings_reading_font_taha_v1,
@@ -261,6 +262,8 @@ export interface SettingsCopy {
       readonly indopak: string;
       readonly tajweed: string;
     };
+    /** Shown under the script group when any pill is disabled by production gating. */
+    readonly scriptDisabledNote: string;
     readonly arabicFont: string;
     readonly fontNames: {
       readonly amiri: string;
@@ -474,6 +477,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         indopak: noArgs(settings_reading_script_indopak),
         tajweed: noArgs(settings_reading_script_tajweed),
       },
+      scriptDisabledNote: noArgs(settings_reading_script_disabled_note),
       arabicFont: noArgs(settings_reading_arabic_font),
       fontNames: {
         amiri: noArgs(settings_reading_font_amiri),
